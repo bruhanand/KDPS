@@ -78,3 +78,9 @@ Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-desig
 /setup-browser-cookies, /setup-deploy, /setup-gbrain, /sync-gbrain, /retro, /investigate,
 /document-release, /document-generate, /codex, /cso, /autoplan, /plan-devex-review,
 /devex-review, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, /learn.
+
+## Agent skills
+
+- **Issue tracker** — work lives in GitHub Issues for `bruhanand/KDPS`, managed via the `gh` CLI; it is the single source of truth. See `docs/agents/issue-tracker.md`.
+- **Triage labels** — triage states map to GitHub labels; `ready-for-agent` maps to `Sandcastle` (the label the Sandcastle agent picks up). See `docs/agents/triage-labels.md`.
+- **Domain docs** — single-context layout: one root `CONTEXT.md` plus ADRs under `docs/adr/`. See `docs/agents/domain.md`.
