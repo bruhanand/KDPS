@@ -70,10 +70,10 @@
 
 <div class="note-blue">
   <b>How the project is organized now.</b> Two big buckets:
-  <b>my-understanding/</b> = the work Anand produces (system design, requirement write-ups, the as-is workflow) and
-  <b>data-from-kdps/</b> = raw material received from the client (reference files, Q&amp;A answers, bank statements, monthly-report data, store analysis).
-  Everything else: <b>client-requirements-docs/</b> (what the client asked for), <b>04-client-docs/</b> (what we hand back for approval),
-  <b>meetings/</b>, <b>code/</b>, <b>__archive/</b>.
+  <b>docs/my-understanding/</b> = the work Anand produces (system design, requirement write-ups, the as-is workflow) and
+  <b>docs/data-from-kdps/</b> = raw material received from the client (reference files, Q&amp;A answers, bank statements, monthly-report data, store analysis).
+  Everything else: <b>docs/client-requirements-docs/</b> (what the client asked for), <b>docs/04-client-docs/</b> (what we hand back for approval),
+  <b>docs/meetings/</b>, <b>code/</b>, <b>docs/__archive/</b>.
 </div>
 
 <h2><span class="num">⊙</span>Where the project stands right now</h2>
@@ -90,14 +90,14 @@
   <div class="status"><span class="pill paused">Deferred</span><b>D9 · Migration &amp; rollout</b><span>Masters import, opening stock, store-by-store go-live, parallel Tally run. Designed later, before go-live (decided 23 Jun).</span></div>
   <div class="status"><span class="pill next">Building now</span><b>Foundation → slices</b><span>Lock the stack → foundation (repo, DB, login, roles) → then one verified vertical slice at a time; data model + posting entries grow per slice.</span></div>
   <div class="status"><span class="pill paused">Paused</span><b>Invoice → PT code</b><span>code/pdf-to-pt. Resumes once D3–D4 lock the documents it feeds.</span></div>
-  <div class="status"><span class="pill ongoing">Every month</span><b>Month-start brand reports</b><span>Sale/SOH reports in the 1st week of each month (data-from-kdps/monthly-reports…).</span></div>
+  <div class="status"><span class="pill ongoing">Every month</span><b>Month-start brand reports</b><span>Sale/SOH reports in the 1st week of each month (docs/data-from-kdps/monthly-reports…).</span></div>
   <div class="status"><span class="pill dead">Cancelled</span><b>Phase-1 plan</b><span>The pressured 3-month plan. Dropped — now in __archive.</span></div>
 </div>
 
 <h2><span class="num">★</span>my-understanding — the work Anand produces</h2>
 
 <div class="folder">
-  <div class="folder-head"><code>my-understanding/system-design/</code><span class="purpose">The spine — the architecture, designed piece by piece in process order. This is the real deliverable.</span></div>
+  <div class="folder-head"><code>docs/my-understanding/system-design/</code><span class="purpose">The spine — the architecture, designed piece by piece in process order. This is the real deliverable.</span></div>
   <ul class="files">
     <li class="star"><b>00-system-architecture.html</b> — <span>THE master plan: the whole system on one page (5 layers), the 11 rules every module obeys, the discussion plan D3–D9, and "How we build". Read this before any design discussion.</span></li>
     <li class="star"><b>01-vendor-management/Vendor-Management-Module.html</b> — <span>vendors/brands, commercial models, bookings.</span></li>
@@ -114,7 +114,7 @@
 </div>
 
 <div class="folder">
-  <div class="folder-head"><code>my-understanding/req-understanding-docs/</code><span class="purpose">Anand's requirement write-ups and early explainers.</span></div>
+  <div class="folder-head"><code>docs/my-understanding/req-understanding-docs/</code><span class="purpose">Anand's requirement write-ups and early explainers.</span></div>
   <ul class="files">
     <li><b>KDPS-booking-inbound-client.html / -summary.html</b> — <span>the plain-language booking &amp; inbound walkthrough.</span></li>
     <li><b>KDPS-requirements-confirmation-client.html</b> — <span>the tick-and-answer requirements checklist + data-handover list.</span></li>
@@ -122,7 +122,7 @@
 </div>
 
 <div class="folder">
-  <div class="folder-head"><code>my-understanding/workflow/</code><span class="purpose">Ground truth — how KDPS actually works today. The whole design is derived from this. Reference only; never edit to match the design.</span></div>
+  <div class="folder-head"><code>docs/my-understanding/workflow/</code><span class="purpose">Ground truth — how KDPS actually works today. The whole design is derived from this. Reference only; never edit to match the design.</span></div>
   <ul class="files">
     <li class="star"><b>KDPS-current-workflow.pdf</b> — <span>THE as-is workflow: booking → warehouse → store → sale/exchange/transfer/return.</span></li>
     <li><b>conversations.md</b> — <span>raw Hindi staff interviews + English summaries behind the PDF.</span></li>
@@ -131,7 +131,7 @@
 
 <h2><span class="num">in</span>client-requirements-docs — what the client asked for</h2>
 <div class="folder">
-  <div class="folder-head"><code>client-requirements-docs/</code><span class="purpose">The client's own plans and demands. Requirements input only — their system design is NOT the design we follow.</span></div>
+  <div class="folder-head"><code>docs/client-requirements-docs/</code><span class="purpose">The client's own plans and demands. Requirements input only — their system design is NOT the design we follow.</span></div>
   <ul class="files">
     <li class="star"><b>ERP-requirements-register.html</b> — <span>master requirements list by business flow, with Must/Should/Later + AI tags.</span></li>
     <li class="star"><b>client-demands.html</b> — <span>every demand from all docs/meetings, with what/why and priority.</span></li>
@@ -143,7 +143,7 @@
 
 <h2><span class="num">out</span>04-client-docs — documents made for the client</h2>
 <div class="folder">
-  <div class="folder-head"><code>04-client-docs/</code><span class="purpose">Polished per-module documents shared with the client for approval. Living — they change while the architecture isn't final.</span></div>
+  <div class="folder-head"><code>docs/04-client-docs/</code><span class="purpose">Polished per-module documents shared with the client for approval. Living — they change while the architecture isn't final.</span></div>
   <ul class="files">
     <li><b>Vendor-Management-Module-Client</b> · <b>Goods-Inward-Module-Client</b> · <b>Outbound-Module-Client</b> · <b>Payments-Module-Client</b> · <b>Offers-Module-Client</b> — <span>the client-facing version of each designed module (.html + .pdf).</span></li>
     <li><b>POS-Ingestion-Requirements</b> · <b>POS-Integration-Requirements</b> — <span>what the POS (Ten Software) must push/pull for us.</span></li>
@@ -152,7 +152,7 @@
 
 <h2><span class="num">data</span>data-from-kdps — raw material received from the client</h2>
 <div class="folder">
-  <div class="folder-head"><code>data-from-kdps/</code><span class="purpose">Just data the client sent. Read it; don't treat it as design.</span></div>
+  <div class="folder-head"><code>docs/data-from-kdps/</code><span class="purpose">Just data the client sent. Read it; don't treat it as design.</span></div>
   <ul class="files">
     <li class="star"><b>05-reference-data/</b> — <span>pt-file-format.xlsx (the PT template + allowed values) and vendor-files/ (real invoice↔PT↔ledger samples + logo).</span></li>
     <li><b>Q&amp;A-req-recieved/</b> — <span>answers to our questions: LIST OF ALL STORES, SUPPLIER BRAND DETAILS, BRAND OFFERS, ~25 brand PT files (PT FILE/), SALE &amp; SOH report formats, MOM_S.</span></li>
@@ -166,7 +166,7 @@
 
 <h2><span class="num">mtg</span>meetings — every meeting, dated</h2>
 <div class="folder">
-  <div class="folder-head"><code>meetings/</code><span class="purpose">One folder per meeting, YYYY-MM-DD-topic. Audio + transcript + minutes together.</span></div>
+  <div class="folder-head"><code>docs/meetings/</code><span class="purpose">One folder per meeting, YYYY-MM-DD-topic. Audio + transcript + minutes together.</span></div>
   <ul class="files">
     <li><b>2026-05-18-warehouse</b> · <b>2026-05-21-workflow-explanation</b> · <b>2026-05-26-store-visit</b> — <span>how stock/invoices are handled by hand; workflow corrections; live store walkthrough.</span></li>
     <li><b>2026-06-01-offers-and-reporting</b> — <span>how brand offers work (slabs, B2G1, gifts) and how monthly reports are really made.</span></li>
@@ -187,7 +187,7 @@
 
 <h2><span class="num">old</span>__archive — kept but out of the way</h2>
 <div class="folder">
-  <div class="folder-head"><code>__archive/</code><span class="purpose">Nothing here is current. Don't design or build from these.</span></div>
+  <div class="folder-head"><code>docs/__archive/</code><span class="purpose">Nothing here is current. Don't design or build from these.</span></div>
   <ul class="files">
     <li><b>phase-1-cancelled/</b> — <span>the pressured 3-month plan. Cancelled.</span></li>
     <li><b>KDPS-development-timeline-client.html / .pdf</b> — <span>the old month-by-month timeline (superseded by "no fixed timeline").</span></li>
@@ -198,18 +198,18 @@
 <h2><span class="num">·</span>Root files</h2>
 <div class="folder">
   <ul class="files" style="margin-top:0">
-    <li class="star"><b>MOU-KDPS-Anand.pdf</b> — <span>the signed engagement / scope agreement.</span></li>
+    <li class="star"><b>docs/meetings/MOU-KDPS-Anand.pdf</b> — <span>the signed engagement / scope agreement.</span></li>
     <li><b>CLAUDE.md</b> — <span>instructions for Claude Code in this repo (kept in sync with this map).</span></li>
-    <li><b>PROJECT-MAP.html</b> — <span>this file.</span></li>
+    <li><b>docs/PROJECT-MAP.html</b> — <span>this file.</span></li>
   </ul>
 </div>
 
 <h2><span class="num">→</span>House rules — where new things go</h2>
-<div class="rule"><b>New design discussion?</b> New numbered folder under <code>my-understanding/system-design/</code> (e.g. <code>06-tally-sync/</code>).</div>
-<div class="rule"><b>New meeting?</b> <code>meetings/YYYY-MM-DD-topic/</code> with audio + transcript + minutes.</div>
-<div class="rule"><b>New month's report work?</b> Its month folder under <code>data-from-kdps/monthly-reports-april-may-2026/</code> (or the current monthly-reports folder), with a data/ subfolder for raw store files.</div>
-<div class="rule"><b>New client deliverable?</b> <code>04-client-docs/</code>. When superseded, move the old one to <code>__archive/</code>.</div>
-<div class="rule"><b>Something stale?</b> Never delete — move it into <code>__archive/</code> so the active folders stay clean.</div>
+<div class="rule"><b>New design discussion?</b> New numbered folder under <code>docs/my-understanding/system-design/</code> (e.g. <code>06-tally-sync/</code>).</div>
+<div class="rule"><b>New meeting?</b> <code>docs/meetings/YYYY-MM-DD-topic/</code> with audio + transcript + minutes.</div>
+<div class="rule"><b>New month's report work?</b> Its month folder under <code>docs/data-from-kdps/monthly-reports-april-may-2026/</code> (or the current monthly-reports folder), with a data/ subfolder for raw store files.</div>
+<div class="rule"><b>New client deliverable?</b> <code>docs/04-client-docs/</code>. When superseded, move the old one to <code>docs/__archive/</code>.</div>
+<div class="rule"><b>Something stale?</b> Never delete — move it into <code>docs/__archive/</code> so the active folders stay clean.</div>
 
 <footer>KDPS project · updated 23 June 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
 </div>

@@ -6,13 +6,13 @@ Guidance for Claude Code when working in this repository.
 
 Anand is the consultant/architect designing and building an operating system for **KDPS Lifestyle Pvt Ltd** — a multi-brand Indian fashion retailer (Bihar & Jharkhand, 50+ stores/warehouses, 20,000+ SKUs, 40+ brands) that currently runs on per-store POS + Tally + Excel.
 
-**Anand designs the system himself.** The client supplied their own plans (PRD, "Definitive Plan" with 10 AI agents, an 8-month phasing) — those are in `client-requirements-docs/` and are **requirements input only, not the design**. Do not treat the client's architecture, agent list, tech stack, or phasing as decisions. The cancelled "Phase-1" plan is in `__archive/` — never build from it.
+**Anand designs the system himself.** The client supplied their own plans (PRD, "Definitive Plan" with 10 AI agents, an 8-month phasing) — those are in `docs/client-requirements-docs/` and are **requirements input only, not the design**. Do not treat the client's architecture, agent list, tech stack, or phasing as decisions. The cancelled "Phase-1" plan is in `docs/__archive/` — never build from it.
 
 ## Where things stand (23 June 2026)
 
-**The master architecture is `my-understanding/system-design/00-system-architecture.html`** — the whole system on one page (5 layers: master data → documents → ledgers → controls → intelligence), the 11 rules every module must obey (documents-write-ledgers, snapshot masters, flag-don't-block, AI at edges only, etc.), and the ordered discussion plan D3–D9. **Read it before any design discussion; designs that break a rule must change the rule consciously on that page first.**
+**The master architecture is `docs/my-understanding/system-design/00-system-architecture.html`** — the whole system on one page (5 layers: master data → documents → ledgers → controls → intelligence), the 11 rules every module must obey (documents-write-ledgers, snapshot masters, flag-don't-block, AI at edges only, etc.), and the ordered discussion plan D3–D9. **Read it before any design discussion; designs that break a rule must change the rule consciously on that page first.**
 
-The system design ("the spine") is built in process order, one discussion at a time. Each design lives in its own folder under `my-understanding/system-design/`:
+The system design ("the spine") is built in process order, one discussion at a time. Each design lives in its own folder under `docs/my-understanding/system-design/`:
 
 1. **D1 · Vendor management & booking** — designed → `01-vendor-management/`
 2. **D2 · Inbound** (goods arrival → data injection → sellable in store) — designed → `02-inbound/`
@@ -23,30 +23,30 @@ The system design ("the spine") is built in process order, one discussion at a t
 7. **D6 · Tally sync** — designed (locked 20 Jun 2026) → `06-tally-sync/`
 8. **D8 · Master-data & users consolidation** — designed (locked 21 Jun 2026) → `08-master-data/`
 
-**Now building.** All module designs (D1–D8) are done. Decision (23 Jun 2026): start the **foundation build** now (project setup — repo, database, login, user-roles, deployment), not more design. **Deferred to later, by decision (revisit before go-live):** D9 · migration & rollout → `09-migration/`, the deep **roles/access** model (D4 left it thin), and **Attendance & Payroll** — none of these block the foundation. **Stack (researched 23 Jun, pending Anand's confirm):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as `code/pdf-to-pt` and the analytics/AI) + **PostgreSQL**, hosted in an India region. **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `my-understanding/system-design/consolidation/stack-decision.html`.
+**Now building.** All module designs (D1–D8) are done. Decision (23 Jun 2026): start the **foundation build** now (project setup — repo, database, login, user-roles, deployment), not more design. **Deferred to later, by decision (revisit before go-live):** D9 · migration & rollout → `09-migration/`, the deep **roles/access** model (D4 left it thin), and **Attendance & Payroll** — none of these block the foundation. **Stack (researched 23 Jun, pending Anand's confirm):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as `code/pdf-to-pt` and the analytics/AI) + **PostgreSQL**, hosted in an India region. **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `docs/my-understanding/system-design/consolidation/stack-decision.html`.
 
 **Pace (decided 10 June 2026): no fixed timeline — ASAP with quality.** Working plan (revised 23 Jun): lock the stack → build the **foundation** (project setup) → then **one verified vertical slice at a time** with just-in-time per-slice specs (data model, posting entries and golden files grow per slice, not all upfront). Spike the three externals (Ten Software POS API, Tally import, barcode tool) **in parallel** — they have lead time. D9 migration is designed before go-live. Never all PRDs upfront, never module-by-module to completion. Full process: the **"How we build"** section of the architecture doc.
 
 Code work (`code/pdf-to-pt`, the Invoice → PT file maker) is **paused until the full design is done**, then resumes.
 
-Separately, there is a recurring live duty: **month-start brand reports** (1st week of every month) in `data-from-kdps/monthly-reports-april-may-2026/`. Skills exist for this: `kdps-report`, `discount-audit-v2`, `kdps-offer`.
+Separately, there is a recurring live duty: **month-start brand reports** (1st week of every month) in `docs/data-from-kdps/monthly-reports-april-may-2026/`. Skills exist for this: `kdps-report`, `discount-audit-v2`, `kdps-offer`.
 
 ## Folder map
 
-`PROJECT-MAP.html` is the human-readable index — keep it updated whenever folders or project status change.
+`docs/PROJECT-MAP.html` is the human-readable index — keep it updated whenever folders or project status change.
 
 | Folder | What it is |
 |---|---|
-| `my-understanding/` | **Anand's own work.** `system-design/` = the spine (architecture + D1–D9 module designs + `workflow-diagrams/`); `req-understanding-docs/` = requirement write-ups; `workflow/` = **ground truth** (`KDPS-current-workflow.pdf` = how KDPS works today, the design is derived from it; `conversations.md` = raw staff interviews). |
-| `data-from-kdps/` | **Raw material received from the client.** `05-reference-data/` (PT file format + real vendor invoice/PT/ledger samples + logo), `Q&A-req-recieved/` (store list, supplier-brand details, brand offers, ~25 brand PT files, report formats), `bank-statement/`, `monthly-reports-april-may-2026/` (the report duty; `KDPS-DIRECTION.xlsx` = worked example to copy, `FORMAT_SALES_VOUCHERS.xlsx` = blank template), `store-analysis/` (Vaishnavi Deoghar deep-dive). |
-| `client-requirements-docs/` | Client's asks (PRD, Definitive Plan, `client-demands.html`, `ERP-requirements-register.html`, `change-request/`). **Requirements only — not the design.** |
-| `04-client-docs/` | Client-facing per-module deliverables (Vendor, Goods-Inward, Outbound, Payments, Offers, POS requirements). Living documents — they change until the architecture is final. |
-| `meetings/` | One folder per meeting, named `YYYY-MM-DD-topic/` (audio + transcript + minutes). |
+| `docs/my-understanding/` | **Anand's own work.** `system-design/` = the spine (architecture + D1–D9 module designs + `workflow-diagrams/`); `req-understanding-docs/` = requirement write-ups; `workflow/` = **ground truth** (`KDPS-current-workflow.pdf` = how KDPS works today, the design is derived from it; `conversations.md` = raw staff interviews). |
+| `docs/data-from-kdps/` | **Raw material received from the client.** `05-reference-data/` (PT file format + real vendor invoice/PT/ledger samples + logo), `Q&A-req-recieved/` (store list, supplier-brand details, brand offers, ~25 brand PT files, report formats), `bank-statement/`, `monthly-reports-april-may-2026/` (the report duty; `KDPS-DIRECTION.xlsx` = worked example to copy, `FORMAT_SALES_VOUCHERS.xlsx` = blank template), `store-analysis/` (Vaishnavi Deoghar deep-dive). |
+| `docs/client-requirements-docs/` | Client's asks (PRD, Definitive Plan, `client-demands.html`, `ERP-requirements-register.html`, `change-request/`). **Requirements only — not the design.** |
+| `docs/04-client-docs/` | Client-facing per-module deliverables (Vendor, Goods-Inward, Outbound, Payments, Offers, POS requirements). Living documents — they change until the architecture is final. |
+| `docs/meetings/` | One folder per meeting, named `YYYY-MM-DD-topic/` (audio + transcript + minutes). |
 | `code/` | `pdf-to-pt/` Invoice→PT pipeline (see its `BLUEPRINT.md`); ~150 real invoices in `document/` for testing. `scripts/generate-pdf.mjs` = HTML→PDF helper. |
-| `__archive/` | Stale material (cancelled Phase-1, old timeline, old direction doc, old drafts/decks). **Never design or build from here.** |
-| root | `MOU-KDPS-Anand.pdf` (engagement/scope), `PROJECT-MAP.html` (index), `CLAUDE.md`. |
+| `docs/__archive/` | Stale material (cancelled Phase-1, old timeline, old direction doc, old drafts/decks). **Never design or build from here.** |
+| root | `CLAUDE.md` (this file) and `code/`. Everything else lives under `docs/`: `docs/PROJECT-MAP.html` (index), `docs/meetings/MOU-KDPS-Anand.pdf` (engagement/scope). |
 
-House rules: new design discussion → its own numbered folder under `my-understanding/system-design/`; new meeting → `meetings/YYYY-MM-DD-topic/`; new month's reports → month folder under `data-from-kdps/monthly-reports-april-may-2026/`; superseded docs → move to `__archive/`, don't delete.
+House rules: new design discussion → its own numbered folder under `docs/my-understanding/system-design/`; new meeting → `docs/meetings/YYYY-MM-DD-topic/`; new month's reports → month folder under `docs/data-from-kdps/monthly-reports-april-may-2026/`; superseded docs → move to `docs/__archive/`, don't delete.
 
 ## Domain facts that must never be violated
 
@@ -58,15 +58,15 @@ These are properties of the business, independent of any design choice:
 - **Profitability is derived** (cost from PT/invoice at stock-in, revenue from POS at sale), never hand-entered.
 - **GST is mandatory** (GSTIN, HSN, tax breakup); **Tally stays the statutory book of record**. Two GSTINs — Bihar and Jharkhand are separate "distinct persons"; every store/warehouse maps to a state GSTIN; cross-state transfers are taxable supplies. Apparel GST is slab-based and date-effective — model it as data, not code.
 - India context: INR with Lakh/Crore formatting (`₹28,50,000`), low-end Android phones in stores (browser/PWA, no app installs), owners live on WhatsApp, Hindi for training material.
-- Offer/discount logic is brand-specific and slab/condition based (see `meetings/2026-06-01-offers-and-reporting/`): value slabs, B2G1 with lowest-item-free, gifts above thresholds, per-store applicability, start/end dates with fallback rules.
+- Offer/discount logic is brand-specific and slab/condition based (see `docs/meetings/2026-06-01-offers-and-reporting/`): value slabs, B2G1 with lowest-item-free, gifts above thresholds, per-store applicability, start/end dates with fallback rules.
 
 ## Working norms
 
 - **Deliverables are HTML files, never markdown**, for anything Anand will read or share (PDF via `code/scripts/generate-pdf.mjs` when needed).
 - **Plain, non-technical language** in chat and client docs. Short answers; do only what's asked.
-- **Understand before design:** current workflow first (`my-understanding/workflow/`), then client wants, then design.
+- **Understand before design:** current workflow first (`docs/my-understanding/workflow/`), then client wants, then design.
 - **Engineering-led build order:** build by architecture sequence, not the client's wishlist order.
-- When details are ambiguous, check `my-understanding/workflow/KDPS-current-workflow.pdf` and meeting minutes rather than inventing.
+- When details are ambiguous, check `docs/my-understanding/workflow/KDPS-current-workflow.pdf` and meeting minutes rather than inventing.
 - No build/test/lint commands exist yet at repo level; `code/pdf-to-pt` is a Python project (`pyproject.toml`, pytest). Add real commands here when serious code work resumes.
 
 ## gstack
