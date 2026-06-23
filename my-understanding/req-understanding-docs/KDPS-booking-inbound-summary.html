@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Booking &amp; Inbound: What We've Designed</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy-soft:#33415c; --orange:#d2693f; --orange-soft:#e08a5f;
+    --ink:#26303d; --muted:#6b7585; --line:#e4e7ec; --bg:#f7f8fa; --card:#ffffff;
+    --green:#2f7d54; --green-bg:#e9f5ee; --amber-bg:#fbf3e7; --amber:#9a6320;
+    --red:#b4452f; --red-bg:#fbece8; --blue:#1e5fa8; --blue-bg:#e6f0fb;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16px;}
+  .wrap{max-width:940px; margin:0 auto; padding:0 24px 80px;}
+  header.hero{background:var(--navy); color:#fff; padding:50px 0 42px; margin-bottom:36px; border-bottom:5px solid var(--orange);}
+  header.hero .wrap{padding-bottom:0;}
+  .eyebrow{color:var(--orange-soft); font-size:13px; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:12px;}
+  header.hero h1{margin:0 0 10px; font-size:36px; line-height:1.12; letter-spacing:-.5px;}
+  header.hero p{margin:0; color:#c4cbd8; max-width:640px; font-size:16.5px;}
+  h2{font-size:23px; margin:42px 0 6px; color:var(--navy); letter-spacing:-.3px; padding-left:13px; border-left:4px solid var(--orange);}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:8px;}
+  .lead{color:var(--muted); margin:0 0 16px; padding-left:17px;}
+  h3{font-size:17.5px; margin:24px 0 8px; color:var(--navy-soft);}
+  p{margin:9px 0;} ul{margin:9px 0; padding-left:22px;} li{margin:4px 0;}
+  strong{color:var(--navy);}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 22px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,50,.04);}
+  .grid2{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin:16px 0;}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14.5px; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 13px; font-weight:600; font-size:13.5px;}
+  td{padding:10px 13px; border-top:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:14px 0; padding:16px; background:var(--card); border:1px solid var(--line); border-radius:10px;}
+  .step{background:#eef1f6; border:1px solid #d9dee8; color:var(--navy); padding:7px 12px; border-radius:7px; font-size:13.5px; font-weight:600; white-space:nowrap;}
+  .step.start{background:#ece9f6; border-color:#d6cfeb;}
+  .step.done{background:var(--green-bg); border-color:#bfe2cd; color:var(--green);}
+  .arrow{color:var(--orange); font-weight:700;}
+  .callout{border-left:4px solid var(--orange); background:#fff; border-radius:0 10px 10px 0; padding:13px 18px; margin:16px 0; box-shadow:0 1px 2px rgba(20,30,50,.04);}
+  .callout .label{font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--orange); font-weight:700; margin-bottom:3px;}
+  .pill{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 9px; border-radius:20px;}
+  .pill.green{background:var(--green-bg); color:var(--green);} .pill.amber{background:var(--amber-bg); color:var(--amber);}
+  .pill.blue{background:var(--blue-bg); color:var(--blue);} .pill.red{background:var(--red-bg); color:var(--red);}
+  .need{background:var(--amber-bg); border:1px solid #ecd9b8; border-radius:10px; padding:6px 22px; margin:14px 0;}
+  .left-box{background:var(--blue-bg); border:1px solid #bcd6f3; border-radius:10px; padding:6px 22px; margin:14px 0;}
+  .key{display:inline-block; min-width:22px; height:22px; line-height:22px; text-align:center; background:var(--orange); color:#fff; border-radius:50%; font-size:13px; font-weight:700; margin-right:8px;}
+  footer{margin-top:46px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px;}
+  @media(max-width:680px){.grid2{grid-template-columns:1fr;} header.hero h1{font-size:28px;}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">KDPS · Client Summary</div>
+    <h1>Booking &amp; Inbound — What We've Designed</h1>
+    <p>The first half of the system: from placing an order with a vendor, to that stock becoming sellable at the store. Plus what we need from you, and which parts of the full system are still ahead.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <h2><span class="num">1.</span>What this covers</h2>
+  <p class="lead">One clean spine — order placed, goods received and documented, stock live at the store.</p>
+  <div class="flow">
+    <span class="step start">Booking placed</span>
+    <span class="arrow">→</span>
+    <span class="step">Goods + invoice arrive</span>
+    <span class="arrow">→</span>
+    <span class="step">Counted &amp; checked → GRN</span>
+    <span class="arrow">→</span>
+    <span class="step">PT file made</span>
+    <span class="arrow">→</span>
+    <span class="step">Head office inwards</span>
+    <span class="arrow">→</span>
+    <span class="step">Split to stores</span>
+    <span class="arrow">→</span>
+    <span class="step done">Sellable at counter</span>
+  </div>
+  <div class="callout">
+    <div class="label">The one rule behind it all</div>
+    Nothing is trusted until the <strong>physical goods, the invoice and the PT file agree</strong>. The system makes the data clean and traceable, so accounting and payment can rely on it without anyone re-doing it in Excel.
+  </div>
+
+  <h2><span class="num">2.</span>Module 1 — Vendor &amp; Booking</h2>
+  <p class="lead">The record of who we buy from, and every order placed against them — live from the moment it's placed, not only when goods arrive.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Three records</h3>
+      <ul>
+        <li><span class="key">A</span><strong>Agent</strong> — one fixed contact per city, for non-branded vendors. Stays accountable until stock is delivered &amp; verified.</li>
+        <li><span class="key">V</span><strong>Vendor</strong> — a brand (direct, no agent) or a non-branded supplier, with its commercial terms.</li>
+        <li><span class="key">B</span><strong>Booking</strong> — one vendor + one season. Lines are <strong>style-code → per size: quantity</strong>. Never mixes vendors.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Three commercial models</h3>
+      <ul>
+        <li><strong>25-18-10 (SOR)</strong> — commission: 25% full-price, 18% during EOSS, 10% return allowance per season.</li>
+        <li><strong>Buy &amp; Sell (Outright)</strong> — KDPS owns the stock; no returns.</li>
+        <li><strong>Consignment</strong> — vendor's goods in our stores; vendor takes back the unsold.</li>
+      </ul>
+      <p style="font-size:13.5px;color:var(--muted);margin-top:6px">Terms are <strong>snapshotted onto each booking</strong>, so later changes don't rewrite history.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3>How a booking is created &amp; received</h3>
+    <ul>
+      <li><strong>Branded:</strong> upload the vendor's receiving slip → the system reads style/size/quantity and drafts the booking → handler confirms.</li>
+      <li><strong>Non-branded:</strong> typed in by hand (verbal/agent order), with an option to upload a photo to auto-fill.</li>
+      <li><strong>Receiving → GRN:</strong> when goods arrive, the order list pre-fills a screen; the receiver enters what physically came in, notes anything short or damaged, and presses <strong>Generate GRN</strong>. One booking can have <strong>many GRNs</strong> over several arrivals.</li>
+      <li><strong>Over-receipt</strong> (extra items/sizes) → add a line with a required remark. <strong>Damaged</strong> → received but quarantined (not sellable), routed to the defective flow.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Returns &amp; the SOR safety net</h3>
+    <ul>
+      <li><strong>25-18-10 (SOR):</strong> return applied manually within the window; <strong>10% allowance pooled per vendor per season</strong>; system alerts at <strong>30 / 15 / 7 days</strong> before the deadline.</li>
+      <li><strong>Buy &amp; Sell:</strong> no returns — closes at fully-received.</li>
+      <li><strong>Consignment:</strong> vendor collects the unsold.</li>
+    </ul>
+    <p style="font-size:13.5px;color:var(--muted);margin-top:4px">Every edit needs a remark; nothing auto-closes; a full audit trail is kept.</p>
+  </div>
+
+  <h2><span class="num">3.</span>Module 2 — Inbound Ingestion</h2>
+  <p class="lead">Turning a real-world arrival into clean, accounting-ready stock — branded and non-branded handled differently.</p>
+
+  <div class="card">
+    <h3>The Shipment is the anchor</h3>
+    <p>One vendor arrival = one <strong>Shipment</strong>. Its invoice, GRN, PT file, store-split and accounting export all hang off it, each with its own status. (Distinct from the <em>Consignment</em> commercial model.)</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Branded <span class="pill green">mostly automatic</span></h3>
+      <p>Invoice + goods together · every item has a vendor barcode · PT file retrievable when asked.</p>
+      <ul>
+        <li><strong>Store delivery</strong> (common): store counts &amp; checks → sends invoice + details to the warehouse person, who makes the GRN.</li>
+        <li><strong>Warehouse delivery:</strong> counted &amp; GRN'd at the warehouse.</li>
+        <li>Brand PT → KDPS PT is <strong>automatic software</strong> (fixed per-brand rules). Vendor barcode is kept.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Non-branded <span class="pill blue">AI-assisted</span></h3>
+      <p>Arrives at the warehouse with an invoice only.</p>
+      <ul>
+        <li>Upload invoice → <strong>AI reads it</strong> → chat shows what's filled vs missing.</li>
+        <li>Operator fills the gaps in chat — <strong>colour (the invoice's colour if it states one, else Premium/Medium/Economy)</strong>, size, call the vendor — then gets an <strong>editable Excel PT</strong>.</li>
+        <li><strong>Size missing → "Free Size."</strong> <strong>Untagged price</strong> = base + 1.1% transport + GST + 30–35% margin (overridable).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>SKU &amp; barcode</h3>
+    <ul>
+      <li><strong>SKU</strong> = the sellable <em>type</em>: Brand + Style-code + Colour + Size. Used for stock, reorder and dead-stock.</li>
+      <li><strong>The barcode is that identity</strong> — <strong>one barcode covers many identical pieces</strong> (5 identical kurtis share one barcode); stock is a <strong>count</strong> under the barcode, not one barcode per piece. The full key is <strong>barcode + season</strong>.</li>
+      <li><strong>No silent duplicates:</strong> the same non-branded product (vendor + style + size) rolls up to <strong>one SKU / one barcode</strong> and adds to its count. (Follows your requirement for a central SKU registry.)</li>
+      <li><strong>Same style next season</strong> reuses the identity; each season is a separate stock cohort (barcode + season).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Checks, splitting &amp; accounting</h3>
+    <ul>
+      <li><strong>Two human gates</strong> (warehouse approval, then head-office inward): the system auto-checks and flags only problems; a person approves for accountability.</li>
+      <li><strong>Discrepancy never blocks</strong> — goods are physically in and must sell; the gap is logged and chased in parallel (account manager closes it).</li>
+      <li><strong>Store split:</strong> manual now (every split recorded), AI-suggested later from sales history.</li>
+      <li><strong>Nightly reconciliation:</strong> Invoice ↔ GRN ↔ PT. <strong>Accounting export</strong> generated after head-office inward — exact, no manual reshaping.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>How it's built — principles</h3>
+    <ul>
+      <li><strong>AI only at the edges</strong> (reading invoices, the non-branded assistant). Everything to do with money — pricing, tax, accounting export, reconciliation matching — is <strong>exact software</strong>, never guessed.</li>
+      <li><strong>The app is the record</strong>; WhatsApp is the nudge that links back into it.</li>
+      <li><strong>Audit trail is automatic</strong> — every action is logged (who, what, when, before → after).</li>
+      <li><strong>POS is not rebuilt</strong> — we feed it stock and read sales back via its API.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">4.</span>What we need from you — questions</h2>
+  <p class="lead">A few answers and sample files let us lock the design and start building. Grouped by topic.</p>
+  <div class="need">
+    <h3 style="margin-top:10px">A · Brand &amp; vendor terms <span style="font-weight:400;color:var(--muted);font-size:13.5px">(to load into the Vendor Master)</span></h3>
+    <ul>
+      <li>For each brand/vendor, which commercial model — <strong>SOR (25-18-10)</strong>, <strong>Outright (Buy &amp; Sell)</strong>, or <strong>Consignment</strong>?</li>
+      <li>For each SOR brand — what is the <strong>return window</strong> and the <strong>return allowance</strong> (e.g. 10%)?</li>
+      <li>What are the <strong>payment terms</strong> per brand/vendor?</li>
+    </ul>
+
+    <h3>B · POS integration <span style="font-weight:400;color:var(--muted);font-size:13.5px">(tensoftware.in)</span></h3>
+    <ul>
+      <li>Please share <strong>access to the POS API and its documentation</strong>. We'll work out the capabilities we need from the docs.</li>
+    </ul>
+
+    <h3>C · Sample files <span style="font-weight:400;color:var(--muted);font-size:13.5px">(to build &amp; test)</span></h3>
+    <ul>
+      <li>Sample <strong>brand PT files</strong> — one per brand format. <span style="color:var(--muted);font-size:13.5px">(The one set still pending; invoices and formats are already in hand.)</span></li>
+    </ul>
+  </div>
+
+  <h2><span class="num">5.</span>What's still ahead</h2>
+  <p class="lead">Booking → Inbound is the first half. The rest of the system, grouped.</p>
+  <div class="left-box">
+    <table>
+      <tr><th style="width:34%">Area</th><th>What it covers</th></tr>
+      <tr><td><strong>Outbound</strong> <span class="pill green">designed</span></td><td>Counter sale (POS link), manual-billing fallback, customer exchange, inter-store transfer (MBO), defective / GR returns to the brand, SOR seasonal return, <strong>EOSS / discount</strong> control. <em>Now designed — see the Outbound module document.</em></td></tr>
+      <tr><td><strong>Payments</strong></td><td>Vendor payment lifecycle — eligible → approved → executed → bank-reconciled, with approval hierarchy; plus the daily <strong>store collection vs bank</strong> audit.</td></tr>
+      <tr><td><strong>Analytics &amp; agents</strong></td><td>Daily WhatsApp digest, size-level demand forecasting, dead-stock hunter, brand/store profitability, anomaly watchdog.</td></tr>
+      <tr><td><strong>Accounting sync</strong></td><td>Push GST-ready vouchers to Tally as the book of record.</td></tr>
+    </table>
+  </div>
+  <div class="callout">
+    <div class="label">Build order</div>
+    The spine is sequential: <strong>Booking → Inbound → Outbound</strong>. Payments and the analytics/agents sit <em>on top</em> of that spine — they're built alongside but only come alive once stock and sales data are flowing. Get the spine right first.
+  </div>
+
+  <footer>
+    KDPS — Booking &amp; Inbound client summary. Based on the final Current Workflow document and the design discussions of June 2026 (refreshed 17 June). Companion to the detailed design documents (Vendor Management, Inbound Ingestion, Outbound). Working draft; nothing here is locked code.
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Git — the vibe coder's cheat sheet</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --git:#be3d2a; --git-bg:#fef3f0; --git-line:#f6c9bd; --git-deep:#8f2c1e;
+    --see:#1d4ed8; --save:#15803d; --undo:#b45309; --branch:#7c3aed;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; font-size:15px;}
+  .wrap{max-width:840px; margin:0 auto; padding:40px 26px 70px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:30px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:62ch; margin:0 0 8px}
+  .hook{background:var(--git-bg); border:1px solid var(--git-line); border-radius:10px; padding:11px 15px; font-size:14px; color:var(--git-deep); margin:16px 0 28px}
+  .hook b{color:var(--git-deep)}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:620px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff; break-inside:avoid}
+  .card h3{margin:0; padding:11px 16px; color:#fff; font-size:15px; display:flex; align-items:center; gap:8px}
+  .c-see h3{background:var(--see)} .c-save h3{background:var(--save)} .c-undo h3{background:var(--undo)} .c-branch h3{background:var(--branch)}
+  .c-remote h3{background:#0f766e} .c-secret h3{background:var(--git)}
+  .card .body{padding:6px 16px 14px}
+  .row{padding:11px 0; border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:0}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px; background:#0f172a; color:#e2e8f0; padding:3px 8px; border-radius:6px; display:inline-block}
+  .row .what{font-size:13.5px; color:var(--muted); margin:5px 0 0}
+  .row .what b{color:var(--ink)}
+
+  .flow{margin-top:30px; border:1px solid var(--git-line); border-radius:14px; background:#fff; padding:18px 20px}
+  .flow h3{margin:0 0 4px; color:var(--git-deep); font-size:16px}
+  .loop{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:12px 0 2px; font-size:13.5px}
+  .loop .step{background:#f1f5f9; border:1px solid var(--line); border-radius:999px; padding:5px 12px; font-weight:600}
+  .loop .step.save{background:#f0fdf4; border-color:#bbf7d0; color:#14532d}
+  .loop .step.undo{background:#fff7ed; border-color:#fed7aa; color:#7c2d12}
+  .loop .arr{color:var(--muted)}
+
+  .rules{margin-top:26px; background:#1d2433; color:#e7ebf3; border-radius:14px; padding:18px 22px}
+  .rules h3{margin:0 0 8px; color:#ffd9a8; font-size:16px}
+  .rules ul{margin:0; padding-left:20px} .rules li{margin:7px 0; font-size:14px}
+  .rules b{color:#fff}
+  footer{margin-top:30px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--git); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} .hook,.rules{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>Git — the vibe coder's cheat sheet</h1>
+  <p class="lede">The handful of commands that actually matter when you're directing AI to build KDPS. Not all of Git — just enough to never lose work and to undo fearlessly.</p>
+  <div class="hook">🧭 <b>One idea to hold:</b> Git is a <b>ledger for your code</b> — exactly like your stock ledger. Each <b>commit</b> is a movement: nothing is overwritten, the whole history is kept, and you can rewind to any past point. If you understood the stock ledger, you already understand Git.</div>
+
+  <div class="grid">
+    <div class="card c-see">
+      <h3>👀 See — what's going on</h3>
+      <div class="body">
+        <div class="row"><code>git status</code><p class="what">Your most-used command. <b>What's changed since the last save point?</b> Run it constantly.</p></div>
+        <div class="row"><code>git log --oneline</code><p class="what">The list of your save points (commits), newest first — your code's ledger.</p></div>
+        <div class="row"><code>git diff</code><p class="what">Shows the exact lines that changed. Great for <b>reviewing what the AI just did</b>.</p></div>
+      </div>
+    </div>
+
+    <div class="card c-save">
+      <h3>💾 Save — make a checkpoint</h3>
+      <div class="body">
+        <div class="row"><code>git add .</code><p class="what">Stage <b>all</b> your current changes, ready to save.</p></div>
+        <div class="row"><code>git commit -m "add GST to bill total"</code><p class="what">Make the save point, with a short note to your future self. <b>This is the checkpoint you can always return to.</b></p></div>
+        <div class="row"><code>git add . &amp;&amp; git commit -m "…"</code><p class="what">The everyday combo: stage everything, then save it in one go.</p></div>
+      </div>
+    </div>
+
+    <div class="card c-undo">
+      <h3>↩️ Undo — go back</h3>
+      <div class="body">
+        <div class="row"><code>git restore .</code><p class="what"><b>The panic button.</b> Throws away <i>all</i> uncommitted changes → back to your last save point. (Use when the AI made a mess you haven't committed.)</p></div>
+        <div class="row"><code>git restore path/to/file</code><p class="what">Same, but only undo <b>one file</b>.</p></div>
+        <div class="row"><code>git revert &lt;commit&gt;</code><p class="what">Safely undo a commit you <i>already</i> saved, by adding a new "undo" entry — keeps the history honest (very ledger-like).</p></div>
+        <div class="row" style="border-top:1px dashed var(--git-line)"><p class="what" style="margin:0"><b>restore vs revert:</b> not saved yet → <code>restore</code>. &nbsp;Already committed → <code>revert</code>.</p></div>
+      </div>
+    </div>
+
+    <div class="card c-branch">
+      <h3>🌿 Branch — a safe sandbox</h3>
+      <div class="body">
+        <div class="row"><code>git switch -c try-discounts</code><p class="what">Make a <b>side copy</b> to try something risky. Your working version stays untouched.</p></div>
+        <div class="row"><code>git switch main</code><p class="what">Hop back to your main version.</p></div>
+        <div class="row"><code>git merge try-discounts</code><p class="what">If the experiment worked, <b>fold it back in</b>. If it didn't, just delete the branch and walk away.</p></div>
+      </div>
+    </div>
+
+    <div class="card c-remote">
+      <h3>☁️ Remote — your cloud backup</h3>
+      <div class="body">
+        <div class="row"><code>git push</code><p class="what"><b>Send</b> your save points up to the cloud (e.g. GitHub) — a backup, and where the app deploys from.</p></div>
+        <div class="row"><code>git pull</code><p class="what"><b>Bring down</b> changes from the cloud copy.</p></div>
+        <div class="row"><code>git clone &lt;url&gt;</code><p class="what"><b>Copy</b> an existing cloud project onto your machine.</p></div>
+      </div>
+    </div>
+
+    <div class="card c-secret">
+      <h3>🔒 Keep secrets out</h3>
+      <div class="body">
+        <div class="row"><code>.gitignore</code><p class="what">A list of files Git must <b>never</b> save — junk folders, and crucially <b>secrets</b>.</p></div>
+        <div class="row"><p class="what" style="margin:0"><b>Golden rule:</b> never commit a password, API key or DB login. Once in history it's there <i>forever</i> — even after you delete it. Add it to <code>.gitignore</code> <i>before</i> your first commit.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <h3>The fearless loop</h3>
+    <div class="loop">
+      <span class="step save">commit (good state)</span><span class="arr">→</span>
+      <span class="step">let the AI change things</span><span class="arr">→</span>
+      <span class="step">does it work?</span><span class="arr">→</span>
+      <span class="step save">yes: commit again</span>
+      <span class="arr">/</span>
+      <span class="step undo">no: git restore .</span>
+    </div>
+    <p style="font-size:13.5px; color:var(--muted); margin:8px 0 0">Commit <i>before</i> you let the AI loose, and the worst case is always "throw it away and I'm back where I started."</p>
+  </div>
+
+  <div class="rules">
+    <h3>Five habits that keep you safe</h3>
+    <ul>
+      <li><b>Commit before any big AI change.</b> That's your restore point.</li>
+      <li><b>Commit small and often.</b> Tiny save points mean you rewind minutes, not days.</li>
+      <li><b>Write a real message.</b> "add return-window alert" — not "stuff", "wip", or "asdf".</li>
+      <li><b>Run <code>git status</code> and <code>git diff</code></b> before you commit — know what you're saving.</li>
+      <li><b>Risky idea? Make a branch.</b> Experiments never threaten your working version.</li>
+    </ul>
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0003-git-the-undo-button.html">Lesson 3 — Git, your undo button</a>. Source: <a href="https://git-scm.com/book/en/v2">Pro Git book, ch. 1–3</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · 👀 See · 💾 Save · ↩️ Undo · 🌿 Branch</p>
+  </footer>
+</div>
+</body>
+</html>

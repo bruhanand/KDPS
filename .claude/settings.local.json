@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm list *)",
+      "Bash(npx puppeteer *)",
+      "Bash(npm install *)"
+    ]
+  },
+  "disabledMcpjsonServers": [
+    "supabase"
+  ]
+}

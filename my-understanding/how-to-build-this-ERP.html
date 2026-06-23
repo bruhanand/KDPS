@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — How to Build This ERP (Orientation &amp; Build Guide)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1300px; margin:0 auto;}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:268px; flex:0 0 268px; padding:26px 16px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:20px 0 7px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:13.5px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  nav.toc .tag{font-size:10.5px;color:var(--rust-soft);font-weight:700}
+  main{flex:1 1 auto; min-width:0; padding:38px 46px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:920px){ nav.toc{display:none} main{padding:22px 16px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.18; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:70ch}
+  section{margin:40px 0; scroll-margin-top:16px}
+  h2.sec{font-size:22px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 6px}
+  .lead{color:var(--navy2); font-size:15px; margin:8px 0 14px; max-width:78ch}
+  h3{font-size:16.5px; color:var(--navy2); margin:22px 0 8px}
+  p{margin:9px 0} li{margin:5px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-done{background:var(--green-bg); color:var(--green)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-later{background:var(--amber-bg); color:var(--amber)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-no{background:var(--red-bg); color:var(--red)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-green{background:var(--green-bg); border-color:#bfe3cf}
+  .co-amber{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-blue{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-purple{background:#f3f1fb; border-color:#dcd3f3}
+  .co-red{background:var(--red-bg); border-color:#f0c5bf}
+  .callout strong{color:var(--navy)}
+  .pillrow{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}
+  .pill{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:8px;border:1px solid}
+  .pill.do{background:var(--green-bg);border-color:#bfe3cf;color:var(--green)}
+  .pill.buy{background:var(--blue-bg);border-color:#bcd6f3;color:var(--blue)}
+  .pill.no{background:var(--red-bg);border-color:#f0c5bf;color:var(--red)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  ol.steps{counter-reset:s;list-style:none;padding-left:0}
+  ol.steps>li{position:relative;padding:8px 0 8px 42px;border-bottom:1px solid var(--line)}
+  ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:8px;width:28px;height:28px;
+    background:var(--navy);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  .tldr{background:var(--navy);color:#eef1f7;border-radius:14px;padding:18px 20px;margin:14px 0}
+  .tldr b{color:#fff} .tldr .big{font-size:18px;font-weight:700;color:#fff;margin-bottom:6px}
+  footer{margin-top:56px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .src{font-size:12.5px;color:var(--muted)} .src a{color:var(--blue)}
+  .em{color:var(--rust);font-weight:700}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Start</h2>
+  <a href="#answer">The honest answer</a>
+  <a href="#stand">Where you stand</a>
+  <h2>What an ERP is</h2>
+  <a href="#whatis">It's only 5 layers</a>
+  <a href="#contain">What it contains / doesn't</a>
+  <a href="#buildbuy">Build vs buy</a>
+  <a href="#accounting">How much accounting</a>
+  <h2>The intelligence</h2>
+  <a href="#ai">Where AI fits <span class="tag">AI</span></a>
+  <a href="#chat">The chat assistant</a>
+  <a href="#app">The app — lean scope</a>
+  <h2>Building it</h2>
+  <a href="#how">How to build it</a>
+  <a href="#india">India compliance</a>
+  <a href="#submit">What's left + submit</a>
+</nav>
+
+<main>
+<header class="doc" id="answer">
+  <div class="eyebrow">KDPS · Orientation &amp; Build Guide · for Anand</div>
+  <h1>How to build this ERP — and proof you're already on the right track</h1>
+  <p class="sub">You said you feel lost. You're not. This is a map: what an ERP actually is, what yours should and shouldn't contain, where AI fits, what the app should be, how much accounting to do, and the order to build it — each point checked against how real fashion retailers and ERP teams do it.</p>
+</header>
+
+<section>
+  <div class="tldr">
+    <div class="big">One honest sentence: you are further along than it feels.</div>
+    Your architecture doc already makes the hard calls correctly — <b>5 layers, 11 rules, "AI at the edges," vertical slices, a custom spine wrapped around bought edges (POS, Tally).</b> Independent research into apparel-ERP practice, AI-in-retail, and ERP delivery all land on the same answers you already wrote. The remaining work is <b>small relative to what's done:</b> one more design discussion (Tally sync), two wrap-up passes, then build.
+  </div>
+  <p><b>What this guide is for.</b> You have to "submit the whole design" in a day or two and feel you have no anchor. Read this top-to-bottom once — it ties your six finished module designs into one picture, fills the four things you asked about (AI, the app, accounting depth, the agent/chat idea), and ends with exactly what's left and what your submission should contain.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="stand">
+  <h2 class="sec">Where you stand — your work on the standard map</h2>
+  <p class="lead">Every fashion-retail ERP is built from the same ~13 capabilities. Here's the standard list with <em>your</em> design status beside it. The spine is done; only the edges and the wrap-up remain.</p>
+  <table>
+    <tr><th>Standard apparel-ERP capability</th><th>Your module</th><th>Status</th></tr>
+    <tr><td>Master data — SKU = Style×Color×Size matrix, brand, vendor, store, season/age</td><td>D1 + D8 (consolidation)</td><td><span class="badge b-done">designed</span> · D8 pulls it together</td></tr>
+    <tr><td>Buying / booking / open-to-buy</td><td>D1 Vendor mgmt</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Inbound — GRN, quality, priced stock-in (PT)</td><td>D2 Inbound</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Inventory &amp; warehouse — multi-location SOH, transfers, stocktake</td><td>D2 + D3</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Store operations &amp; POS billing</td><td>D3 + POS edge (Ten Software)</td><td><span class="badge b-done">designed</span> · integrate, don't rebuild</td></tr>
+    <tr><td>Allocation &amp; replenishment (size/color curves)</td><td>D2 store-split + D7 forecast</td><td><span class="badge b-done">designed</span> · AI refinement later</td></tr>
+    <tr><td>Pricing / markdown / EOSS / offers</td><td>D5 Offers</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Returns &amp; exchange (incl. SOR/vendor returns)</td><td>D3 Outbound</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Finance — operational (COGS, margin, stock value)</td><td>Ledgers (Layer 2)</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Payments &amp; cash/bank audit + roles</td><td>D4 Payments</td><td><span class="badge b-done">designed</span> (18 Jun)</td></tr>
+    <tr><td>Statutory sync to Tally (vouchers, GST)</td><td>D6 Tally sync</td><td><span class="badge b-next">next — not yet designed</span></td></tr>
+    <tr><td>Reporting / analytics / BI / AI</td><td>D7 Analytics &amp; AI</td><td><span class="badge b-done">designed</span></td></tr>
+    <tr><td>Customer / loyalty / CRM</td><td>—</td><td><span class="badge b-later">later / optional (no data yet)</span></td></tr>
+    <tr><td>Integrations — POS, Tally, bank, WhatsApp (contracts)</td><td>Edges layer</td><td><span class="badge b-done">contracts drafted</span> · endpoints to confirm</td></tr>
+  </table>
+  <div class="callout co-green"><strong>Read this table as reassurance.</strong> 11 of 14 rows are designed. What's left is <b>D6 Tally sync</b> (one discussion), <b>D8 master-data consolidation</b> and <b>D9 migration/rollout</b> (two wrap-up passes) — plus confirming the POS endpoints. There is no missing giant module you forgot.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="whatis">
+  <h2 class="sec">What an ERP actually is — it's only 5 layers</h2>
+  <p class="lead">The reason it feels overwhelming is that "ERP" sounds like one huge thing. It isn't. It's five layers stacked, and you already drew them. <em>Every</em> feature anyone ever asks for slots into one of these five — that's the trick to never feeling lost again.</p>
+  <table>
+    <tr><th>Layer</th><th>Plain meaning</th><th>Rule</th></tr>
+    <tr><td><b>0 · Master data</b> — the nouns</td><td>The things that exist: brands, vendors, stores, SKUs, barcodes, offers, users. Edited only on master screens.</td><td>One owner per fact; documents snapshot it.</td></tr>
+    <tr><td><b>1 · Documents</b> — the verbs</td><td>Every event is a numbered document with a status flow: booking, GRN, PT, sale, transfer, return, payment.</td><td>No document, no event. Money/stock move <em>only</em> through a document.</td></tr>
+    <tr><td><b>2 · Ledgers</b> — derived truth</td><td>Stock, vendor (payables), cash. These are <em>sums of postings</em>, never typed. Stock-on-hand = add up the movements.</td><td>Documents write ledgers; ledgers are never hand-edited. Corrections = reversing entries.</td></tr>
+    <tr><td><b>3 · Controls</b> — keep it honest</td><td>Reconciliations + approvals + exception queues: stocktake vs ledger, bank vs cash, POS vs us, Tally accepted.</td><td>Flag, never block. The floor keeps moving; mismatches go to a named owner.</td></tr>
+    <tr><td><b>4 · Intelligence</b> <span class="badge b-ai">AI</span> — read-only</td><td>Reports, the WhatsApp digest, forecasts, dead-stock hunter, anomaly alerts. Reads everything, writes nothing but messages.</td><td>AI lives here only. A wrong message wastes attention; it can never corrupt the books.</td></tr>
+  </table>
+  <div class="callout co-blue"><strong>The whole system in one line:</strong> master data feeds documents → documents write ledgers → controls keep ledgers honest → intelligence reads everything. The outside world (POS, Tally, banks, WhatsApp) connects only through contracts at the edges. <b>This is your architecture doc, and it is textbook-correct.</b></div>
+</section>
+
+<!-- ============================================================= -->
+<section id="contain">
+  <h2 class="sec">What the ERP must contain — and what it must <em>not</em></h2>
+  <p class="lead">"What goes in an ERP" has a boring, settled answer for apparel retail. Build the core; deliberately leave the rest out of v1.</p>
+
+  <h3>Must contain — the core (you have these)</h3>
+  <ul>
+    <li><b>The apparel data model:</b> Style×Color×Size matrix, season/collection/age tags, size curves, and <b>SOR/Outright/Hybrid as a first-class ownership dimension</b> — these four are the reason a generic ERP doesn't fit and why you're building.</li>
+    <li><b>The spine:</b> booking → inbound (GRN/PT) → outbound (sale/exchange/transfer/return/EOSS/stocktake).</li>
+    <li><b>The three ledgers:</b> stock, vendor (payables), cash.</li>
+    <li><b>Controls:</b> the four reconciliations + approvals + exception queues.</li>
+    <li><b>Intelligence:</b> brand reports, digest, forecast, dead-stock, anomaly.</li>
+  </ul>
+
+  <h3>Must NOT contain — delegate or defer</h3>
+  <div class="pillrow">
+    <span class="pill no">✗ Statutory accounting → Tally</span>
+    <span class="pill no">✗ Payroll / HR → specialist</span>
+    <span class="pill no">✗ e-Invoice &amp; e-Way bill generation → GSP provider</span>
+    <span class="pill no">✗ POS hardware/peripherals</span>
+    <span class="pill no">✗ Heavy warehouse WMS → integrate if scale demands</span>
+    <span class="pill no">✗ E-commerce platform → integrate the sync</span>
+  </div>
+  <div class="pillrow">
+    <span class="pill" style="background:var(--amber-bg);border-color:#ecd9a6;color:var(--amber)">⏳ Defer to later: CRM / loyalty (no customer data captured yet)</span>
+    <span class="pill" style="background:var(--amber-bg);border-color:#ecd9a6;color:var(--amber)">⏳ Defer: advanced forecasting &amp; markdown optimisation</span>
+    <span class="pill" style="background:var(--amber-bg);border-color:#ecd9a6;color:var(--amber)">⏳ Defer: chat assistant <em>writes</em></span>
+  </div>
+  <div class="callout co-amber"><strong>The discipline that saves the project:</strong> the #1 cause of ERP cost overruns is <em>scope creep after requirements freeze</em>. When the client adds an ask mid-build, it goes to a backlog — not into the live slice. "Won't (yet)" is a real, healthy answer.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="buildbuy">
+  <h2 class="sec">Build vs buy — the single most important decision</h2>
+  <p class="lead">"Custom ERP" must NOT mean "build the POS, the warehouse system, the accounting, and the e-invoice too." That's the high-risk path. The winning shape is a <span class="em">custom spine wrapped around bought commodity edges</span>.</p>
+  <div class="grid2">
+    <div class="card"><h4 style="color:var(--green)">✓ Build custom (your real value)</h4>
+      <ul>
+        <li>The master-data model (size matrix, ownership, season)</li>
+        <li>SOR / offer / profitability logic</li>
+        <li>The document → ledger spine</li>
+        <li>Cross-store, cross-brand orchestration</li>
+        <li>The intelligence layer + the report maker</li>
+        <li>The thin "typed tool" API your own data is read through</li>
+      </ul>
+    </div>
+    <div class="card"><h4 style="color:var(--blue)">✓ Buy / keep / integrate (commodity)</h4>
+      <ul>
+        <li><b>POS</b> — keep Ten Software; rebuilding POS is high-risk, low-reward</li>
+        <li><b>Accounting</b> — Tally stays the statutory book</li>
+        <li><b>e-Invoice / e-Way bill</b> — a GSP provider (formats change yearly)</li>
+        <li><b>WMS</b> — only if DC volume demands; integrate, don't build</li>
+        <li>First-pass <b>forecasting</b> — a library/SMB tool before any in-house model</li>
+        <li>Anything an <b>LLM</b> does — a model API (see AI section)</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout co-blue"><strong>Proof point:</strong> even Aditya Birla Fashion (ABFRL), a tier-1 Indian fashion giant, runs <em>bought components stitched around a system-of-record</em> (Dynamics 365 Commerce + SAP) — not one bespoke monolith. Your instinct to own the spine and integrate the edges is the same shape they use, sized down.</div>
+  <p class="src">Build-vs-buy &amp; ABFRL: <a href="https://www.bdc.ca/en/articles-tools/technology/invest-technology/custom-vs-off-the-shelf-erp-systems">BDC</a>, <a href="https://www.microsoft.com/en/customers/story/1708163472667013902-aditya-birla-fashion-retailers-dynamics365-india">Microsoft–ABFRL</a>, <a href="https://www.omniful.ai/blog/erp-vs-best-of-breed-solutions">best-of-breed vs ERP</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="accounting">
+  <h2 class="sec">How much accounting should the system do?</h2>
+  <p class="lead">Exactly one half of it. You do <b>management accounting</b> (cost, margin, stock value). Tally does <b>statutory accounting</b> (GL, GST returns, P&amp;L). They meet at one clean seam.</p>
+  <div class="grid2">
+    <div class="card"><h4>Stays in your ERP</h4>
+      <ul>
+        <li><b>Stock ledger</b> (sub-ledger): per SKU × location, quantity + value</li>
+        <li><b>Inventory valuation</b>: weighted-avg / FIFO, perpetual (COGS posts as the item scans)</li>
+        <li><b>COGS</b>, <b>gross margin / GMROI</b> by SKU/style/brand/store</li>
+        <li><b>Landed cost</b> (price + freight allocated to lines)</li>
+        <li><b>Markdowns / write-downs</b>; <b>vendor liability incl. SOR</b></li>
+      </ul>
+    </div>
+    <div class="card"><h4>Delegated to Tally</h4>
+      <ul>
+        <li>Statutory general ledger &amp; chart of accounts</li>
+        <li>GST returns &amp; tax ledgers</li>
+        <li>P&amp;L + balance sheet, period close, audit trail</li>
+        <li>Payment-level statutory AP/AR</li>
+      </ul>
+    </div>
+  </div>
+  <h3>The seam: post <em>summarised journals</em>, never SKU lines</h3>
+  <p>Your stock ledger keeps every item; Tally receives totals. The stock ledger must reconcile to <b>one inventory control account</b> in Tally.</p>
+  <table>
+    <tr><th>Event (document)</th><th>Journal handed to Tally</th></tr>
+    <tr><td>Purchase / GRN (outright)</td><td>Dr Inventory / Cr Accounts Payable</td></tr>
+    <tr><td>Freight / landed cost</td><td>Dr Inventory / Cr Cash or AP</td></tr>
+    <tr><td>Sale</td><td>Dr Cash/AR · Cr Sales &nbsp;+&nbsp; Dr COGS · Cr Inventory</td></tr>
+    <tr><td>Sales return (exchange)</td><td>Dr Sales Returns · Cr Cash/AR &nbsp;+&nbsp; Dr Inventory · Cr COGS</td></tr>
+    <tr><td>Stock adjustment / shrinkage</td><td>Dr Loss (or COGS) / Cr Inventory</td></tr>
+  </table>
+  <div class="callout co-purple"><strong>The SOR nuance (your first-class ownership rule, in accounting terms):</strong> Outright → at receipt <em>Dr Inventory / Cr AP</em> (it's your asset and your payable immediately). SOR/Consignment → <b>no journal at receipt</b>, only a memo of quantity; the vendor liability is born <b>only at sale</b> (<em>Cr "Due to Consignor"</em>). So consigned stock is <b>counted by quantity</b> in your stock ledger but <b>kept off the inventory-value control account</b> until it sells.</div>
+  <p class="src">Sub-ledger vs GL &amp; consignment accounting: <a href="https://www.sage.com/en-us/blog/subledger-vs-general-ledger/">Sage</a>, <a href="https://www.finaleinventory.com/guides/consignment-inventory-accounting/">Finale</a>, <a href="https://help.tallysolutions.com/integration-methods-and-technologies/">Tally integration methods</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="ai">
+  <h2 class="sec">Where AI fits <span class="badge b-ai">AI</span></h2>
+  <p class="lead">Your rule 8 — "AI at the edges only" — is exactly right, and the research is emphatic about it: <b>AI reads messy inputs and writes read-only outputs. It never posts to a ledger and never sits in an approval path.</b> A wrong forecast wastes attention; a wrong posting corrupts the books.</p>
+  <h3>Use-cases ranked for a small, first-time team</h3>
+  <table>
+    <tr><th>AI use case</th><th>Value</th><th>Difficulty</th><th>When · build or buy</th></tr>
+    <tr><td><b>Invoice / PT extraction</b> (PDF → structured)</td><td>High — your paused pdf-to-pt tool</td><td>Easy*</td><td><span class="badge b-done">do first</span> · <b>buy</b> a model API (Claude rates highest for doc accuracy), enforce a schema, human spot-check</td></tr>
+    <tr><td><b>Dead-stock &amp; aging flags</b></td><td>High — direct KDPS pain</td><td>Easy</td><td><span class="badge b-done">do first</span> · <b>build</b> — it's rules + thresholds, not ML</td></tr>
+    <tr><td><b>Auto-tagging</b> product attributes from images</td><td>Medium — unlocks forecasting later</td><td>Easy</td><td><span class="badge b-done">do first</span> · <b>buy</b> a vision API</td></tr>
+    <tr><td><b>Report narration</b> ("explain this month")</td><td>Medium — productises your monthly reports</td><td>Easy</td><td><span class="badge b-done">do first</span> · compute numbers deterministically, let the LLM only <em>narrate</em></td></tr>
+    <tr><td><b>Discount / return anomaly</b> detection</td><td>Medium — catches abuse rules miss</td><td>Easy–Med</td><td><span class="badge b-done">do first</span> · <b>build</b> — unsupervised + rules, flag-don't-block</td></tr>
+    <tr><td><b>Demand forecast</b> + <b>size/color allocation</b></td><td>Highest — but needs clean history</td><td>Medium</td><td><span class="badge b-next">do next</span> · needs 2–3 yrs clean SKU history first · <b>buy</b> a tool before building</td></tr>
+    <tr><td><b>Markdown / price optimisation</b></td><td>Strong margin ROI</td><td>Med–Hard</td><td><span class="badge b-next">do next</span> · <b>buy/library</b>, keep human approval on margin moves</td></tr>
+    <tr><td><b>Cold-start forecast</b> (no history) · <b>clienteling</b></td><td>Real but data-blocked</td><td>Hard</td><td><span class="badge b-later">defer</span> · cold-start needs tagging first; clienteling needs customer data you don't capture yet</td></tr>
+  </table>
+  <p class="src">*Easy = use a model API, no training. Sources: <a href="https://research.aimultiple.com/invoice-ocr/">invoice OCR benchmark</a>, <a href="https://www.solvoyo.com/blogs/fashion-blogs/smart-fashion-allocation-replenishment-for-better-full-price-sellthrough/">size/color allocation</a>, <a href="https://medium.com/asos-techblog/optimizing-markdown-in-fashion-e-commerce-with-machine-learning-9f173be08ace">ASOS markdown ML</a>, <a href="https://mindit.io/ai-use-cases-retail-roi-benchmarks-dach-2026/">forecasting ROI benchmarks</a>.</p>
+  <div class="callout co-purple"><strong>The rule of thumb:</strong> LLMs are reliable at <b>reading documents</b> and <b>explaining numbers you already computed</b>. They are risky at <b>inventing numbers</b> or <b>writing free database queries</b>. Buy the model (extraction, tagging, narration); build the thin deterministic glue (aging, anomaly) and the typed data layer.</div>
+</section>
+
+<!-- ============================================================= -->
+<section id="chat">
+  <h2 class="sec">The chat assistant &amp; Claude Agent SDK — your "message and get info" idea</h2>
+  <p class="lead">Your idea — staff/owners just <em>message</em> and get answers without opening anything — is sound and modern (it's a 2026 pattern). But it is only safe with deliberate guardrails. Done naively it leaks data or makes up numbers.</p>
+  <h3>The safe pattern (adopt all five)</h3>
+  <ol class="steps">
+    <li><b>Read-only by default.</b> Asking for info is never the same as changing data.</li>
+    <li><b>Typed tools, not free SQL.</b> Expose a fixed set of functions — <code>get_stock(store, brand)</code>, <code>top_sellers(period)</code> — the model fills the parameters; it never writes arbitrary queries. This is the single biggest accuracy + safety win.</li>
+    <li><b>Permissions inside each tool.</b> A store manager's question can only ever return their store's data, because the tool enforces the caller's role — the AI <em>physically cannot</em> see out of scope.</li>
+    <li><b>Human confirmation for any write.</b> Anything that touches money or stock goes through explicit approval — never agent-initiated.</li>
+    <li><b>Audit + treat documents as untrusted.</b> Log every tool call with the permission that allowed it; prompt-injection (malicious text inside an invoice the agent reads) is the #1 LLM risk — never fully solved, so defend in depth.</li>
+  </ol>
+  <div class="callout co-purple"><strong>Where Claude Agent SDK fits — well.</strong> Anthropic's model of tool-use is exactly this pattern: you declare named tools with typed inputs/outputs; Claude only decides <em>when</em> to call them; <em>your</em> code runs and enforces permissions. So the Agent SDK gives you the chat-to-ERP brain, and the safety lives in your tools, not in a prompt. <b>Build it after your read APIs are stable; ship read-only first, writes much later.</b></div>
+  <h3>Channel: don't build a messaging app</h3>
+  <ul>
+    <li><b>Owners → WhatsApp.</b> They already live there. Digest + alerts out; a question-answer assistant on top.</li>
+    <li><b>Store staff → the PWA</b> (the working tool) with the assistant as a helper inside it.</li>
+    <li><b>Slack</b> is fine <em>if</em> the team already uses it for internal brand messaging — but it's a "nice later," not core. Use an existing channel; the assistant is a thin layer of typed tools over your data, on whatever channel.</li>
+  </ul>
+  <p class="src">Safety &amp; SDK: <a href="https://platform.claude.com/docs/en/agent-sdk/overview">Claude Agent SDK</a>, <a href="https://workos.com/blog/agents-need-authorization-not-just-authentication">authorization for agents</a>, <a href="https://www.permit.io/blog/human-in-the-loop-for-ai-agents-best-practices-frameworks-use-cases-and-demo">human-in-the-loop</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="app">
+  <h2 class="sec">The app — keeping it lean and useful</h2>
+  <p class="lead">"The app" is not one screen for everyone. It's one system with three faces, each sized to the person using it. Keep v1 to the working tool + the owner's view.</p>
+  <table>
+    <tr><th>Who</th><th>What they get</th><th>Why it's shaped this way</th></tr>
+    <tr><td><b>Store staff</b></td><td><b>The PWA</b> — receive goods, manual-bill fallback, transfers, returns, stocktake, "what's my pending inward". Browser, low-end Android, offline-tolerant, Hindi, big buttons.</td><td>This is the working tool. It must survive bad networks and cheap phones.</td></tr>
+    <tr><td><b>Owners / managers</b></td><td><b>WhatsApp digest + alerts</b> (no login) and a <b>read-only web dashboard</b> for analytics.</td><td>Owners won't log in daily; they live on WhatsApp. The dashboard is for when they want to dig.</td></tr>
+    <tr><td><b>Back-office / admin</b></td><td>Master screens, payment approvals, Tally sync, exception queues.</td><td>The few power users who maintain masters and clear exceptions.</td></tr>
+  </table>
+  <div class="callout co-green"><strong>Lean v1 app scope:</strong> store PWA for the spine + admin masters + owner dashboard/digest. <b>Not</b> in v1: a customer-facing app, loyalty app, native installs, or a built-from-scratch messaging platform. The chat assistant is a <em>feature</em> inside this, not a separate product.</div>
+  <p class="src">Offline-first PWA / POS: <a href="https://beefed.ai/en/offline-first-pwa-architecture">offline-first architecture</a>, <a href="https://dev.to/crisiscoresystems/sync-conflict-handling-in-offline-first-pwas-how-to-merge-without-lying-to-the-user-59i3">sync conflict handling</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="how">
+  <h2 class="sec">How to build it — module by module, safely</h2>
+  <p class="lead">Your "one verified vertical slice at a time" instinct is the documented best practice. Here's the full shape, with the failure stats that justify each rule.</p>
+
+  <h3>The five build rules</h3>
+  <ol class="steps">
+    <li><b>Phased, never big-bang.</b> 50 stores + 40 brands + low digital maturity → phased is the only sane call. Big-bang here is betting the business on a first ERP.</li>
+    <li><b>Vertical slices (tracer bullets).</b> Each slice cuts through <em>all</em> layers for <em>one</em> workflow — document + posting + screen together — and is demoable. Integration problems then surface in slice 1, not at the end.</li>
+    <li><b>Slice #1 = the walking skeleton:</b> one branded shipment travels booking → GRN → PT → ledger postings → store split → POS push, using real sample files. It proves every layer and every edge before anything widens.</li>
+    <li><b>Pilot cluster before chain-wide.</b> Pick stores that represent <em>real</em> complexity — one high-volume, one standard, one EOSS-heavy — spanning Bihar + Jharkhand and ≥2 ownership models. Prove it end-to-end (incl. Tally recon), then fan out by trading-risk, never during peak/EOSS.</li>
+    <li><b>Freeze scope per slice; the agent verifies its own work.</b> Golden files (your ~150 invoices → expected PT/postings, diffed in CI) and ledger invariants as tests written before the posting code. "CI green" is done; "looks done" never counts. Money code is always a watched session.</li>
+  </ol>
+
+  <h3>Why ERP projects fail — and how your plan already dodges each</h3>
+  <table>
+    <tr><th>Failure cause (industry)</th><th>Your built-in defence</th></tr>
+    <tr><td>~55–75% miss objectives; &gt;60% of failures trace to <b>requirements + selection</b></td><td>You did current-workflow-first, derived from ground truth — not a wishlist</td></tr>
+    <tr><td><b>Scope creep</b> after freeze = the top cost driver</td><td>Scope frozen per slice; new asks → backlog</td></tr>
+    <tr><td><b>Data migration</b> treated as an afterthought (#1 post-launch complaint)</td><td>D9 makes migration a first-class workstream: audit → cleanse → test-load → parallel Tally run</td></tr>
+    <tr><td><b>Over-customisation</b> / rebuilding commodity</td><td>Custom spine, bought edges (POS, Tally, e-invoice)</td></tr>
+    <tr><td><b>Weak adoption</b></td><td>PWA on the phones staff already use, Hindi, per-store champions, "flag don't block" so software never stops the floor</td></tr>
+  </table>
+
+  <h3>Honest timing</h3>
+  <ul>
+    <li><b>Design:</b> nearly done (D6 + two wrap-up passes).</li>
+    <li><b>Build:</b> months, not weeks — a custom ERP is a 6–12-month class of effort. But you <b>ship value early:</b> accurate multi-store stock-on-hand lands after inbound, before POS is even touched. That's your first visible win.</li>
+    <li>Your "no fixed timeline — ASAP with quality" stance is correct. Resist any date that forces a big-bang.</li>
+  </ul>
+  <p class="src">Failure stats &amp; sequencing: <a href="https://www.panorama-consulting.com/panorama-consulting-group-releases-latest-study-of-erp-implementation-outcomes-across-the-globe/">Panorama</a>, <a href="https://sysgenpro.com/implementation/retail-erp-implementation-roadmap-for-scaling-unified-inventory-management">retail ERP roadmap</a>, <a href="https://en.wikipedia.org/wiki/Vertical_slice">vertical slice</a>, <a href="https://www.netsuite.com/portal/resource/articles/erp/minimum-viable-product-mvp.shtml">MVP ERP</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="india">
+  <h2 class="sec">India compliance — the must-knows that shape the design</h2>
+  <p class="lead">Five facts that affect the data model. Don't hand-roll any statutory format — use a GSP and keep Tally as the book of record — but the system must be <em>aware</em> of these.</p>
+  <table>
+    <tr><th>Fact</th><th>Design implication</th></tr>
+    <tr><td><b>Two GSTINs</b> — Bihar and Jharkhand are separate "distinct persons"</td><td>Every store/warehouse maps to a state GSTIN; tax is per-GSTIN; likely <b>two Tally companies</b> → sync routes each voucher to the right one</td></tr>
+    <tr><td><b>Apparel GST is slab-based &amp; changed 22 Sep 2025</b> (≤₹2,500/piece → 5%; above → 18%)</td><td>Build a <b>date-effective, configurable slab table per HSN</b> — rate is data, not code. <span class="badge b-no">flag</span> per-piece vs per-line-after-discount for the tax advisor</td></tr>
+    <tr><td><b>Cross-state stock transfers are taxable supplies</b></td><td>Bihar↔Jharkhand transfer = IGST tax invoice + e-way bill; same-state move = delivery challan. <b>Two transfer document types.</b></td></tr>
+    <tr><td><b>e-Invoice (IRN)</b> mandatory ≥₹5cr turnover, for <b>B2B + transfers, NOT B2C</b></td><td>Store sales (B2C) need no IRN; the Bihar↔Jharkhand transfer invoices do. Generate via a <b>GSP</b>, near-real-time</td></tr>
+    <tr><td><b>e-Way bill</b> thresholds: inter-state ₹50k; intra-state Bihar &amp; Jharkhand both ₹1,00,000</td><td>Make the threshold <b>per-state configurable</b>; attaches to sales, transfers, returns above threshold</td></tr>
+  </table>
+  <p class="src">GST/e-invoice/e-way: <a href="https://cleartax.in/s/impact-stock-transfer-gst">ClearTax stock transfer</a>, <a href="https://www.caclubindia.com/news/gst-rate-on-apparel-rationalised-18-percent-tax-for-garments-above-rs-2500-25945.asp">apparel GST 2.0</a>, <a href="https://cleartax.in/s/time-limit-for-reporting-e-invoices-on-the-irp-portal">IRN rules</a>, <a href="https://busy.in/gst/state-wise-threshold-limits-for-e-way-bills/">e-way thresholds</a>.</p>
+</section>
+
+<!-- ============================================================= -->
+<section id="submit">
+  <h2 class="sec">What's left — and what "the design" you submit is</h2>
+  <p class="lead">You already have the design. You're assembling it, not inventing it. Here's the finish line.</p>
+
+  <h3>Remaining design work</h3>
+  <div class="pillrow">
+    <span class="pill buy">D6 · Tally sync — next discussion</span>
+    <span class="pill buy">D8 · master-data consolidation</span>
+    <span class="pill buy">D9 · migration &amp; rollout</span>
+    <span class="pill buy">Confirm POS endpoints with Ten Software</span>
+  </div>
+  <h3>Then, before code</h3>
+  <ol class="steps">
+    <li><b>Consolidation pass:</b> one unified data model + posting catalog + <b>feature inventory</b> (the master PRD as a pass/fail checklist, not a book).</li>
+    <li><b>Spike the three externals:</b> Ten Software POS API, Tally import, the barcode tool — working tests before the stack is locked.</li>
+    <li><b>Pick the boring stack</b> (modular monolith, one relational DB, PWA). Then build slice #1.</li>
+  </ol>
+
+  <div class="callout co-green"><strong>What to put in "the whole design of the ERP" submission:</strong>
+    <ol style="margin:8px 0 0">
+      <li><b>The architecture doc</b> — 5 layers + 11 rules + edges (your <code>00-system-architecture.html</code>).</li>
+      <li><b>The six module designs</b> — D1 vendor, D2 inbound, D3 outbound, D4 payments, D5 offers, D7 analytics/AI.</li>
+      <li><b>This guide's four framings</b> — build-vs-buy, accounting boundary, AI placement, app scope.</li>
+      <li><b>The India-compliance model</b> — two GSTINs, slab table, transfers, e-invoice/e-way.</li>
+      <li><b>The build plan</b> — phased, vertical slices, pilot cluster, what's MVP.</li>
+      <li><b>What's explicitly out of v1</b> — the deferred list (so the client sees the scope line drawn on purpose).</li>
+    </ol>
+    You can produce that as a short client deck from material you already wrote.
+  </div>
+
+  <div class="tldr" style="margin-top:18px">
+    <div class="big">Bottom line</div>
+    You're not confused about the system — you've designed it well. You're confused because no one had laid the pieces side by side. They're laid out now: <b>custom spine, bought edges; five layers; AI read-only at the edges; a lean PWA + WhatsApp; Tally keeps the statutory books; build it one verified slice at a time, pilot first.</b> Finish D6, do the consolidation pass, and you have a complete, defensible design.
+  </div>
+</section>
+
+<footer>
+  KDPS · Orientation &amp; Build Guide · 19 June 2026 · companion to <code>my-understanding/system-design/00-system-architecture.html</code>.<br>
+  Every recommendation here was cross-checked against apparel-ERP practice, AI-in-retail research, and ERP-delivery evidence (sources linked inline). It validates your architecture rather than replacing it.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

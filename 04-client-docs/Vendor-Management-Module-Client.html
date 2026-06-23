@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — Vendor Management Module</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:22px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:22px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  h3{font-size:11.5pt; margin:14px 0 4px; color:var(--navy); page-break-after:avoid;}
+  p{margin:7px 0;}
+  ul{margin:7px 0; padding-left:20px;}
+  li{margin:3px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .flow{font-size:10.5pt; margin:10px 0; padding:10px 12px; background:var(--soft); border:1px solid var(--line); border-radius:6px;}
+  .flow b{color:var(--navy);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  footer{margin-top:26px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · System Design</div>
+  <h1>Vendor Management Module</h1>
+  <p class="sub">Record of vendors and their brands, and the bookings placed against them — from order to delivery, verification and return.</p>
+</header>
+
+<div class="scope">
+  <strong>Scope — Version 1:</strong> Branded vendors only. Non-branded vendors and the agent record are planned for Version 2.
+</div>
+
+<section>
+<h2><span class="num">1.</span>Records</h2>
+<ul>
+  <li><strong>Vendor</strong> — the company KDPS buys from (the legal entity): contact, statutory and bank identity. One vendor can carry many brands.</li>
+  <li><strong>Brand</strong> — a label under a vendor. The commercial model and return terms are held per brand.</li>
+  <li><strong>Booking</strong> — an order placed with one vendor, for one brand, for one season.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">2.</span>Vendor record</h2>
+<h3>Branded vendor</h3>
+<ul>
+  <li>Direct contact. No agent.</li>
+  <li>Carries one of the four commercial models per brand.</li>
+  <li>Two margins: normal-sale and discount-sale.</li>
+  <li>Return window applies (Correction, SOR, Consignment).</li>
+  <li>Payment-terms field on the record.</li>
+</ul>
+<h3>Statutory &amp; bank identity</h3>
+<ul>
+  <li><strong>GSTIN</strong> — more than one allowed (one per billing state).</li>
+  <li><strong>State and PAN</strong> — read from the GSTIN, not entered separately.</li>
+  <li><strong>Registered address.</strong></li>
+  <li><strong>Bank details</strong> — account name, account number, IFSC.</li>
+  <li>A vendor can be saved with these incomplete; payment requires GSTIN and bank details on file.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">3.</span>Commercial models</h2>
+<p>Set per brand and carried (snapshotted) onto each booking.</p>
+<table>
+  <tr><th>Model</th><th>Ownership</th><th>Returns</th></tr>
+  <tr><td><strong>Buy &amp; Sell (BNS)</strong></td><td>KDPS owns outright. Sub-types: with vendor barcode (MRP capped) or without barcode (KDPS sets MRP).</td><td>None.</td></tr>
+  <tr><td><strong>Correction (25-18-10)</strong></td><td>KDPS owns. Margin 25% full-price, 18% during EOSS/discount. 10% goods-return allowance on delivered goods, stretchable per brand to 12–15%.</td><td>KDPS applies manually, within the window and within the allowance.</td></tr>
+  <tr><td><strong>SOR (Sale or Return)</strong></td><td>Brand owns. KDPS sells and takes commission.</td><td>All unsold returns, no cap. Reorder via a fresh booking.</td></tr>
+  <tr><td><strong>Consignment</strong></td><td>Brand owns. Rolling top-up — KDPS can pull more without a fresh booking each time.</td><td>Vendor takes back unsold stock themselves. No cap.</td></tr>
+</table>
+</section>
+
+<section>
+<h2><span class="num">4.</span>Booking — structure</h2>
+<ul>
+  <li>Belongs to one vendor + one brand + one season. One vendor can have many bookings — one per brand per season.</li>
+  <li>Lines: per style-code, per size, quantity. (No colour at booking.)</li>
+  <li>Quantity-only, plus one optional estimated order value. Pricing/MRP set later at inward.</li>
+  <li>Commercial model and a snapshot of its terms (margins, return window, allowance %) carried on the booking.</li>
+  <li>Auto-generated booking number (e.g. BK-SS26-0012), plus an optional field for the vendor's own order reference.</li>
+  <li>Season chosen from the system season list (not free text).</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">5.</span>How a booking is created</h2>
+<h3>Create flow</h3>
+<ul>
+  <li>Pick the season. If the next season does not exist yet, click <strong>Generate Season</strong> to create it from the pattern. A season can be deleted only while empty.</li>
+  <li>Pick the vendor, then the brand — or upload the document and let the system read the vendor and brand from it.</li>
+  <li>Upload the receiving document → review the draft → confirm. The booking then becomes <strong>Booked</strong>.</li>
+</ul>
+<h3>Branded — upload-driven</h3>
+<ul>
+  <li>Order placed by in-person visit; vendor gives a printed receiving document.</li>
+  <li>The system reads style / size / quantity and drafts the booking.</li>
+  <li>A clear printed document is mostly auto-filled; a clearer photo is requested only when too much is unreadable.</li>
+  <li>The system never creates the booking on its own — the handler reviews and confirms.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">6.</span>Receiving &amp; verification</h2>
+<ul>
+  <li>The booking's order list pre-fills the GRN. On arrival, the receiver enters what physically came in and notes anything short or damaged, then generates the GRN.</li>
+  <li>One booking can have many GRNs — stock can arrive over several shipments.</li>
+  <li>Over-receipt is allowed: unbooked items/sizes can be received on the same screen, flagged as a variance with a required remark.</li>
+  <li>Damaged on arrival: the piece enters stock as quarantined (not sellable) and routes to the defective-return flow.</li>
+  <li>Warehouse-delivered shipments are counted and GRN'd at the warehouse. Store-delivered shipments are received by the store operator against the order; the warehouse person finalises the GRN.</li>
+  <li>The GRN object lives in the Inbound module. Booking provides the order list and receives the close-out.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">7.</span>Booking status</h2>
+<p>Receiving statuses are calculated from the booking's GRNs. Close and cancel are manual and require a remark. Nothing closes automatically.</p>
+<div class="flow"><b>Booked → Partially received → Fully received → Return window open</b> (Correction / SOR / Consignment) <b>→ Closed / Cancelled</b></div>
+<table>
+  <tr><th>Status</th><th>Meaning</th></tr>
+  <tr><td>Booked</td><td>Order confirmed; nothing received yet.</td></tr>
+  <tr><td>Partially received</td><td>Some booked quantity received; the rest pending.</td></tr>
+  <tr><td>Fully received</td><td>Received quantity covers every line.</td></tr>
+  <tr><td>Return window open</td><td>Correction, SOR &amp; Consignment only; booking stays open until the window passes or unsold stock goes back. Buy &amp; Sell closes at fully-received.</td></tr>
+  <tr><td>Closed / Cancelled</td><td>Manual, with a remark.</td></tr>
+</table>
+</section>
+
+<section>
+<h2><span class="num">8.</span>Returns by model</h2>
+<table>
+  <tr><th>Model</th><th>Return mechanism</th></tr>
+  <tr><td><strong>Correction (25-18-10)</strong></td><td>KDPS owns the goods; returns within a capped allowance, applied manually within the window. Allowance budgeted per brand per season. Window alerts at 30 / 15 / 7 days.</td></tr>
+  <tr><td><strong>Buy &amp; Sell (BNS)</strong></td><td>Outright — no returns. Closes at fully-received.</td></tr>
+  <tr><td><strong>SOR</strong></td><td>Brand owns; all unsold returns, no cap. Reorder via a fresh booking. Window alerts at 30 / 15 / 7 days.</td></tr>
+  <tr><td><strong>Consignment</strong></td><td>Brand owns; vendor takes back unsold stock. Rolling top-up. No cap.</td></tr>
+</table>
+
+<h3>Correction return allowance (season GR budget)</h3>
+<ul>
+  <li>One allowance per brand per season. Applies to the Correction model only.</li>
+  <li>Basis is set per brand: <strong>% of delivered value</strong> (e.g. 10% of ₹10,00,000 = ₹1,00,000) <strong>or % of delivered quantity</strong> (e.g. 10% of 2,000 pieces = 200 pieces). Default 10%, stretchable to 12–15%.</li>
+  <li>The allowance builds up as goods are received and reduces as goods are returned.</li>
+  <li>Returns beyond the allowance are still processed and flagged with the over-limit amount.</li>
+  <li>Balance is calculated and shown on the vendor/brand page and on each Correction booking; window alerts include the balance.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">9.</span>Standing rules</h2>
+<ul>
+  <li>Every edit needs a remark — who and why. Full audit trail.</li>
+  <li>Nothing auto-closes. Close and cancel are manual.</li>
+  <li>Changes go through authorisation, not silent direct edits.</li>
+  <li>A booking is tracked from creation — booked-vs-received accounted end to end.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">10.</span>Not in Version 1</h2>
+<ul>
+  <li>Non-branded vendors and the agent record (planned for Version 2).</li>
+  <li>User roles / access / approval hierarchy.</li>
+  <li>Hard pricing / MRP (set at inward).</li>
+  <li>SKU / barcode creation (created at the Inbound stage).</li>
+  <li>Colour at booking line level.</li>
+  <li>Spending cap / order budget.</li>
+</ul>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — Vendor Management Module (Version 1, branded). 16 June 2026.
+</footer>
+
+</div>
+</body>
+</html>

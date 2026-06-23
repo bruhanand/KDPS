@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — D1 · Vendor Management Module</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy-soft:#33415c; --orange:#d2693f; --orange-soft:#e08a5f;
+    --ink:#26303d; --muted:#6b7585; --line:#e4e7ec; --bg:#f7f8fa; --card:#ffffff;
+    --green:#2f7d54; --green-bg:#e9f5ee; --amber-bg:#fbf3e7; --red:#b4452f; --red-bg:#fbece8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16px;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:0 24px 80px;}
+  header.hero{
+    background:var(--navy); color:#fff; padding:54px 0 46px; margin-bottom:40px;
+    border-bottom:5px solid var(--orange);
+  }
+  header.hero .wrap{padding-bottom:0;}
+  .eyebrow{color:var(--orange-soft); font-size:13px; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:14px;}
+  header.hero h1{margin:0 0 12px; font-size:40px; line-height:1.1; letter-spacing:-.5px;}
+  header.hero p{margin:0; color:#c4cbd8; max-width:620px; font-size:17px;}
+  h2{
+    font-size:24px; margin:46px 0 6px; color:var(--navy); letter-spacing:-.3px;
+    padding-left:14px; border-left:4px solid var(--orange);
+  }
+  h2 .num{color:var(--orange); font-weight:700; margin-right:8px;}
+  .lead{color:var(--muted); margin:0 0 18px; padding-left:18px;}
+  h3{font-size:18px; margin:26px 0 8px; color:var(--navy-soft);}
+  p{margin:10px 0;}
+  ul{margin:10px 0; padding-left:22px;}
+  li{margin:5px 0;}
+  strong{color:var(--navy);}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:20px 24px; margin:16px 0; box-shadow:0 1px 2px rgba(20,30,50,.04);
+  }
+  .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin:18px 0;}
+  .grid2{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin:18px 0;}
+  .model{background:var(--card); border:1px solid var(--line); border-top:4px solid var(--orange); border-radius:10px; padding:18px;}
+  .model h4{margin:0 0 6px; color:var(--orange); font-size:17px;}
+  .model .tag{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px;}
+  table{width:100%; border-collapse:collapse; margin:16px 0; font-size:15px; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden;}
+  th{background:var(--navy); color:#fff; text-align:left; padding:11px 14px; font-weight:600; font-size:14px;}
+  td{padding:11px 14px; border-top:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:#fafbfc;}
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:18px 0; padding:18px; background:var(--card); border:1px solid var(--line); border-radius:10px;}
+  .step{background:#eef1f6; border:1px solid #d9dee8; color:var(--navy); padding:7px 12px; border-radius:7px; font-size:14px; font-weight:600; white-space:nowrap;}
+  .step.start{background:#ece9f6; border-color:#d6cfeb;}
+  .step.done{background:var(--green-bg); border-color:#bfe2cd; color:var(--green);}
+  .step.warn{background:var(--amber-bg); border-color:#ecd9b8; color:#9a6320;}
+  .arrow{color:var(--orange); font-weight:700;}
+  .callout{border-left:4px solid var(--orange); background:#fff; border-radius:0 10px 10px 0; padding:14px 20px; margin:18px 0; box-shadow:0 1px 2px rgba(20,30,50,.04);}
+  .callout .label{font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:var(--orange); font-weight:700; margin-bottom:4px;}
+  .pill{display:inline-block; font-size:12px; font-weight:700; padding:2px 9px; border-radius:20px; margin-right:6px;}
+  .pill.green{background:var(--green-bg); color:var(--green);}
+  .pill.amber{background:var(--amber-bg); color:#9a6320;}
+  .pill.red{background:var(--red-bg); color:var(--red);}
+  .scope-out{background:var(--red-bg); border:1px solid #f0cfc6; border-radius:10px; padding:16px 22px;}
+  .scope-out h3{color:var(--red); margin-top:0;}
+  .key{display:inline-block; min-width:22px; height:22px; line-height:22px; text-align:center; background:var(--orange); color:#fff; border-radius:50%; font-size:13px; font-weight:700; margin-right:8px;}
+  footer{margin-top:50px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px;}
+  @media(max-width:680px){.grid3,.grid2{grid-template-columns:1fr;} header.hero h1{font-size:30px;}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">KDPS · D1 · Module Design</div>
+    <h1>Vendor Management Module</h1>
+    <p>Master record of who KDPS buys from, and the bookings placed against them — tracked from order to delivery, verification, and return.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="callout">
+    <div class="label">Scope — decided 10 June 2026</div>
+    <strong>Version 1 manages branded vendors only.</strong> Non-branded vendors — and the Agent record, which exists only for them — are parked for v2. Their design is kept untouched in <strong>§13</strong>, and non-branded vendor records get their own data-input discussion before they enter any version. <em>This is module scope only — the non-branded <strong>inbound</strong> flow (invoice → PT, the PT Mapper) is core v1; see the Inbound design.</em>
+  </div>
+
+  <h2><span class="num">1.</span>What this module is</h2>
+  <p class="lead">Three records: the vendor, the brands under it, and the orders (bookings) placed against them — brand by brand.</p>
+  <div class="card">
+    <p>In v1 the module holds <strong>three records</strong>:</p>
+    <ul>
+      <li><span class="key">V</span><strong>Vendor</strong> — the company KDPS buys from (the legal entity): contact, plus statutory &amp; bank identity. One vendor can carry <strong>many brands</strong>.</li>
+      <li><span class="key">Br</span><strong>Brand</strong> — a label under a vendor. Its <strong>commercial model</strong> and return terms live here, because they are decided <strong>brand by brand</strong>, not vendor-wide.</li>
+      <li><span class="key">B</span><strong>Booking</strong> — an order placed with one vendor for <strong>one brand</strong>, for one season, tracked all the way to delivery and return.</li>
+    </ul>
+    <p>The job: make a booking <strong>real from the moment it is placed</strong> — not only when goods arrive — so booked-vs-received is always accounted.</p>
+    <p style="font-size:13.5px; color:var(--muted); margin-bottom:0;">A fourth record — <span class="key">A</span><strong>Agent</strong> — exists only for non-branded vendors and is parked for v2 (§13).</p>
+  </div>
+
+  <h2><span class="num">2.</span>Vendor</h2>
+  <p class="lead">v1: branded vendors only — direct relationships, no agent.</p>
+  <div class="card">
+    <h3>Branded</h3>
+    <ul>
+      <li>Direct contact. <strong>No agent.</strong></li>
+      <li>Data is fixed / standardised and loaded later (e.g. Madura brands).</li>
+      <li>Runs on one of the <strong>four commercial models</strong> (§3) — <strong>set per brand</strong> (two brands under one vendor can run different models), carried per booking.</li>
+      <li>Two margins: <strong>normal-sale</strong> and <strong>discount-sale</strong>.</li>
+      <li>Return window matters.</li>
+      <li>Payment-terms field on the record; the actual terms per brand are a named input for D4 (§11).</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Statutory &amp; payment identity <span class="pill green">added 10 June</span></h3>
+    <p>Needed for GST paperwork now and for payments (D4) later. Lives on the vendor record; every document <strong>snapshots</strong> what it uses (Rule 3).</p>
+    <ul>
+      <li><strong>GSTIN</strong> — more than one allowed: brands bill from different states, so each billing state's GSTIN is kept.</li>
+      <li><strong>State and PAN</strong> — never typed: read out of the GSTIN itself (first two digits = state code, middle ten characters = PAN). Derived, not entered (Rule 6).</li>
+      <li><strong>Registered address.</strong></li>
+      <li><strong>Bank details</strong> — account name, account number, IFSC.</li>
+    </ul>
+    <p><strong>Flag, never block (Rule 5):</strong></p>
+    <ul>
+      <li>A vendor can be <strong>saved incomplete</strong> — missing GSTIN / PAN / bank raises a flag in the exception queue.</li>
+      <li>The <strong>hard gate sits in D4</strong>: no payment to a vendor without bank details and a GSTIN on file.</li>
+      <li>Day-to-day booking work is <strong>never held up</strong>.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">3.</span>The four commercial models</h2>
+  <p class="lead">Set <strong>per brand</strong> (each brand under a vendor can run a different model), and carried on each booking. Terms are <strong>snapshotted</strong> onto the booking, so later changes don't rewrite history. The models differ on two things: <strong>who owns the goods</strong> and <strong>what return rights exist</strong> (corrected 13 June Q&amp;A).</p>
+  <div class="grid3">
+    <div class="model">
+      <div class="tag">Outright · KDPS owns</div>
+      <h4>Buy &amp; Sell (BNS)</h4>
+      <p>KDPS buys outright and owns the stock. Two sub-types: <strong>with vendor barcode</strong> (MRP capped) or <strong>without barcode</strong> (KDPS sets MRP).</p>
+      <p><strong>Returns:</strong> none.</p>
+    </div>
+    <div class="model">
+      <div class="tag">Correction · KDPS owns</div>
+      <h4>25-18-10</h4>
+      <p>KDPS buys and <strong>owns</strong> the stock, but the brand grants a <strong>capped return allowance</strong>: <strong>25%</strong> full-price margin, <strong>18%</strong> during EOSS/discount, <strong>10%</strong> goods-return allowance — calculated on <strong>delivered (serviced)</strong> goods, not booked. The 10% is <strong>stretchable per brand</strong> (→ 12% / 15%). Return-allowance design in §8.</p>
+      <p><strong>Returns:</strong> KDPS applies for return <strong>manually</strong>, within the window and within the allowance.</p>
+    </div>
+    <div class="model">
+      <div class="tag">SOR · Brand owns</div>
+      <h4>Sale or Return</h4>
+      <p>Goods <strong>belong to the brand</strong>. KDPS sells and takes commission; <strong>all unsold stock goes back, no cap</strong> (old / new / season is not checked). To get more, KDPS raises a <strong>fresh booking</strong>.</p>
+      <p><strong>Returns:</strong> return everything unsold within the window.</p>
+    </div>
+    <div class="model">
+      <div class="tag">Consignment · Brand owns</div>
+      <h4>Consignment</h4>
+      <p>Same core as SOR — goods belong to the brand, unsold goes back, no cap — but the brand <strong>keeps topping up</strong>: KDPS can pull more <strong>without a fresh booking each time</strong>.</p>
+      <p><strong>Returns:</strong> the <strong>vendor takes back</strong> unsold stock themselves.</p>
+    </div>
+  </div>
+  <p style="font-size:13px; color:var(--muted); margin-top:-4px;">SOR and Consignment are the same concept (brand-owned, return the unsold); the only difference is the rolling top-up. Treat as near-identical downstream.</p>
+
+  <h2><span class="num">4.</span>Booking — structure</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Belongs to</strong>: one vendor + <strong>one brand</strong> + one season. <strong>Never mixes brands.</strong> One vendor can have many bookings — one per brand per season.</li>
+      <li><strong>Lines</strong>: per <strong>style-code → per size: quantity</strong>. No colour at booking — a deliberate choice, see §10.</li>
+      <li><strong>Quantity-only</strong>, plus one optional <strong>estimated order value</strong> for planning. No hard pricing — MRP/cost is set later at inward. No spending cap either — also deliberate, see §10.</li>
+      <li><strong>Commercial model + snapshot of its terms</strong> (margins, return window, return allowance %) carried on the booking.</li>
+      <li><strong>Identity</strong>: auto-generated booking number (e.g. <em>BK-SS26-0012</em>), plus an optional field for the vendor's own receiving/order reference.</li>
+      <li><strong>Season</strong>: picked by the handler at booking time <strong>from the system-derived season list</strong> — never free text (inbound Q39).</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">5.</span>How a booking is created</h2>
+  <div class="card">
+    <h3>The create flow — season first</h3>
+    <ol>
+      <li><strong>Pick the season.</strong> Seasons follow a fixed pattern; if next season doesn't exist yet, the handler clicks <strong>Generate Season</strong> and the system creates it from the pattern. A season can be <strong>deleted only while empty</strong> (no bookings against it); once it has data, it can't be deleted.</li>
+      <li><strong>Pick the vendor, then the brand</strong> — or skip straight to upload and let the system read the vendor and brand off the document.</li>
+      <li><strong>Upload the receiving</strong> → review the draft → <strong>confirm</strong>. Only then is it <strong>Booked</strong>.</li>
+    </ol>
+    <p style="font-size:13.5px; color:var(--muted); margin-bottom:0;">Who owns the season list (open/close) is a D8 master-data question; the <em>Generate / delete-empty</em> buttons live here.</p>
+  </div>
+  <div class="card">
+    <h3>Branded — upload-driven</h3>
+    <ul>
+      <li>Order placed by <strong>in-person visit</strong>; vendor gives a printed <strong>receiving</strong> document.</li>
+      <li>Handler <strong>uploads the receiving</strong>; the <strong>Receiving Reader</strong> reads style / size / quantity and drafts the booking.</li>
+      <li>Clear computer-printed doc → mostly auto-filled. Asks for a clearer photo only when too much is unreadable.</li>
+      <li>Even at 70–80% read, it presents what it has; handler completes and confirms.</li>
+    </ul>
+  </div>
+  <div class="callout">
+    <div class="label">Guardrail</div>
+    The Receiving Reader never creates the final order silently. It always produces a <strong>draft</strong> → handler reviews and confirms → only then it becomes <strong>Booked</strong>.
+  </div>
+
+  <h2><span class="num">6.</span>Receiving &amp; verification</h2>
+  <div class="card">
+    <ul>
+      <li>The order list captured here <strong>pre-fills the GRN</strong>. When the shipment arrives, the receiver opens the order list, enters <strong>what physically came in</strong>, and writes a required note on anything short or damaged — then presses <strong>Generate GRN</strong>. It is a confirm-and-adjust screen, not data entry.</li>
+      <li><strong>One booking ↔ many GRNs.</strong> Stock can arrive over several shipments; each arrival creates its own GRN until the booking closes.</li>
+      <li><strong>Over-receipt allowed:</strong> items/sizes that weren't booked can still be received — the <strong>same screen adds a line</strong>, flagged as a variance with a <strong>required remark</strong>. The original order line is kept, flagged.</li>
+      <li><strong>Damaged on arrival = received-but-flagged:</strong> the piece <strong>enters stock as quarantined</strong> (not sellable) and routes to the defective-return flow.</li>
+      <li><strong>Where it happens:</strong> warehouse-delivered shipments are counted + GRN'd at the warehouse; store-delivered shipments are <strong>received by the store operator in their own login</strong> against the order (<em>counted-by</em>, auto-stamped), then the warehouse person finalises the GRN and converts the PT (<em>entered-by</em>) — see inbound Q38.</li>
+    </ul>
+  </div>
+  <div class="callout">
+    <div class="label">Module boundary</div>
+    The <strong>GRN object itself lives in the Inbound module</strong>. Booking <strong>provides the order list</strong> that pre-fills it, and <strong>receives the close-out</strong> when goods are verified. The two modules share the order list and the received result.
+  </div>
+
+  <h2><span class="num">7.</span>Booking status lifecycle</h2>
+  <p class="lead">Receiving statuses are computed from the booking's GRNs — never set by hand. Close and cancel are the only manual steps, always with a remark. Nothing closes automatically.</p>
+  <div class="flow">
+    <span class="step start">Booked</span>
+    <span class="arrow">→</span>
+    <span class="step">Partially received</span>
+    <span class="arrow">→</span>
+    <span class="step">Fully received</span>
+    <span class="arrow">→</span>
+    <span class="step warn">Return window open <span style="font-weight:400">(Correction / SOR / Consignment)</span></span>
+    <span class="arrow">→</span>
+    <span class="step done">Closed</span>
+    <span class="arrow">/</span>
+    <span class="step done">Cancelled</span>
+  </div>
+  <div class="callout">
+    <div class="label">Changed 10 June — arrival belongs to the shipment</div>
+    <strong>"Arrived · not received" used to be a booking status — it isn't any more.</strong>
+    <ul style="margin:8px 0 0;">
+      <li>Arrival is a fact about <strong>one shipment</strong>, and one booking can have several shipments, each at its own stage.</li>
+      <li>So it now lives on the <strong>Shipment</strong> record, owned by Inbound.</li>
+      <li>The booking screen still shows <em>"1 shipment arrived, awaiting count"</em> as live information from Inbound — it just isn't the booking's status.</li>
+    </ul>
+    <p style="margin:8px 0 0;">A booking can never again sit in two states at once.</p>
+  </div>
+  <table>
+    <tr><th>Status</th><th>Meaning</th><th>Set by</th></tr>
+    <tr><td><strong>Booked</strong></td><td>Order confirmed (from the uploaded receiving). Nothing received yet.</td><td>Computed</td></tr>
+    <tr><td><strong>Partially received</strong></td><td>Some booked quantity is GRN'd; the rest is pending and chased (call outcomes in remarks).</td><td>Computed</td></tr>
+    <tr><td><strong>Fully received</strong></td><td>GRN'd quantity covers every line; over-receipts stay flagged on their lines.</td><td>Computed</td></tr>
+    <tr><td><strong>Return window open</strong></td><td>For Correction, SOR &amp; Consignment — follows fully-received; booking stays alive until the window passes or unsold stock goes back. (Buy &amp; Sell closes at fully-received.)</td><td>Computed (model snapshot + window dates)</td></tr>
+    <tr><td><strong>Closed / Cancelled</strong></td><td>Always a human decision, always with a remark.</td><td>Manual</td></tr>
+  </table>
+  <p style="font-size:13.5px; color:var(--muted);">The computation: received quantity per line, summed across this booking's GRNs, against booked quantity — none received → Booked · some → Partially received · all → Fully received.</p>
+
+  <h2><span class="num">8.</span>Returns by model</h2>
+  <table>
+    <tr><th>Model</th><th>Stays open past "received"?</th><th>Return mechanism</th></tr>
+    <tr><td><strong>Correction (25-18-10)</strong></td><td><span class="pill amber">Yes</span></td><td>KDPS owns the goods but returns within a <strong>capped allowance</strong>. Applies for return manually, within the window. <strong>Allowance budgeted per brand per season</strong> — basis is <strong>% of value or % of quantity</strong> (per brand), on delivered goods (10% default, stretchable) — design below. System tracks the window and alerts at <strong>30 / 15 / 7 days</strong>.</td></tr>
+    <tr><td><strong>Buy &amp; Sell (BNS)</strong></td><td><span class="pill green">No</span></td><td>Outright — KDPS owns it. Closes at fully-received. No returns.</td></tr>
+    <tr><td><strong>SOR</strong></td><td><span class="pill amber">Yes</span></td><td>Brand owns the goods. <strong>All unsold returns, no cap</strong>; KDPS raises a fresh booking to reorder. System tracks the window and alerts at <strong>30 / 15 / 7 days</strong>.</td></tr>
+    <tr><td><strong>Consignment</strong></td><td><span class="pill amber">Yes</span></td><td>Brand owns the goods. Vendor takes back unsold stock themselves; rolling top-up (no fresh booking each time). No cap.</td></tr>
+  </table>
+
+  <h3>The Correction return allowance — the season GR budget <span class="pill green">designed 10 June · reassigned to Correction 13 June · basis option added 16 June</span></h3>
+  <div class="card">
+    <p>Think of it as a <strong>refund budget the brand gives KDPS — one budget per brand per season.</strong> It belongs to the <strong>Correction</strong> model only — SOR and Consignment return everything unsold with no cap, so they need no budget. Built so KDPS can tell the brand its own number instead of asking for it (the owner's ask, 21 May: <em>"my purchasing this season was X, so my 10% is Y"</em>).</p>
+    <ul>
+      <li><strong>Basis is chosen per brand — money or quantity:</strong> either <strong>% of the season's delivered value</strong> (e.g. 10% of ₹10,00,000 = ₹1,00,000 of return-room) <strong>or % of the delivered quantity</strong> (e.g. 10% of 2,000 pieces = 200 pieces). Whichever the brand uses, that's how KDPS tracks it. Default 10%, stretchable per brand to 12 / 15.</li>
+      <li><strong>Budget fills as goods arrive (PT by PT):</strong> each priced stock-in adds its share to the budget. It can't fill at booking — bookings carry no prices or final counts yet.</li>
+      <li><strong>Budget empties as goods go back:</strong> every Correction return (the D3 return document) draws it down in the same unit — rupees of stock-in value, or pieces. Later markdowns / EOSS never distort it.</li>
+      <li><strong>Past the limit:</strong> the return still goes (Rule 5 — flag, never block). It lands in the exception queue with the over-limit amount shown; what the over-limit costs in rupees is D4's call (§11).</li>
+      <li><strong>Always computed, never typed (Rule 6):</strong> balance = budget − used. Shown plainly on the vendor/brand page — <em>"Madura · SS26 — used ₹40,000 of ₹1,00,000"</em> — and on every Correction booking; the 30 / 15 / 7-day window alerts include the balance.</li>
+    </ul>
+    <div style="font-size:13.5px; color:#9a6320; background:var(--amber-bg); border-radius:8px; padding:8px 12px; margin:10px 0 0;"><strong>Open:</strong>
+      <ul style="margin:6px 0 0; padding-left:20px;">
+        <li>Confirm with each brand which <strong>basis</strong> it uses (% money or % quantity) and on what figure (delivered value ex-GST, per inbound Q36).</li>
+        <li>The window's <strong>anchor date</strong> (from receipt? from season end?), settled in D3 — because return picking depends on it.</li>
+        <li>Levi's variant computes on <strong>actual buying</strong> — confirm in the "what's fixed vs what changes" discussion.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2><span class="num">9.</span>Standing rules</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Every edit needs a remark</strong> from the handler — who and why. Full audit trail.</li>
+      <li><strong>Nothing auto-closes.</strong> Close and cancel are manual.</li>
+      <li>The system stays <strong>flexible</strong>, but changes go through authorisation rather than silent direct edits.</li>
+      <li><strong>Booking is real from creation</strong> — booked-vs-received is tracked end to end.</li>
+    </ul>
+  </div>
+
+  <h2><span class="num">10.</span>Two deliberate trade-offs</h2>
+  <p class="lead">Both were implicit until now. Written down so they read as chosen, not forgotten.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>(a) No colour on booking lines</h3>
+      <p>Booking lines are style + size, so booked-vs-received is matched at that grain only. It posts to no ledger anyway — full SKU identity (style × colour × size) starts at GRN/PT. And for <strong>branded</strong> orders the colour is already on the vendor's own document; colour is mostly a <strong>non-branded</strong> concern, where the order detail is loose. Recorded as a conscious exception on Rule 9 of the architecture page.</p>
+      <p><strong>Risk:</strong> right styles and sizes in wrong colours is caught by eye at receiving, not by the system.<br>
+      <strong>Rethink when:</strong> colour-level disputes with brands become real, or the Receiving Reader proves it can read colour reliably.</p>
+    </div>
+    <div class="card">
+      <h3>(b) Quantity-only — no spending cap</h3>
+      <p>A booking carries quantities and one optional estimated value, no hard budget gate. KDPS has never run an open-to-buy budget, and a hard gate would block the floor (Rule 5). Over-ordering is held in check the way it is today — by <strong>the people placing the orders</strong> and, later, by <strong>analytics</strong> watching the buy — not by the system refusing a booking.</p>
+      <p><strong>Risk:</strong> over-ordering becomes visible only after the goods and the liability arrive.<br>
+      <strong>Rethink when:</strong> D7 analytics shows season buys drifting from plan — the first step would be a read-only season-buy view, never a blocking control.</p>
+    </div>
+  </div>
+
+  <h2><span class="num">11.</span>Inputs handed to D4 (payments)</h2>
+  <p class="lead">Named here so the payments discussion starts with them already on the table.</p>
+  <table>
+    <tr><th>Input</th><th>What D4 must settle</th></tr>
+    <tr><td><strong>Correction return-allowance settlement</strong></td><td>The allowance (GR budget) is tracked here (§8). D4 decides the money: how a return shows up in the vendor's account, and what an over-the-limit return costs or recovers.</td></tr>
+    <tr><td><strong>Payment terms per brand</strong></td><td>The field exists on the vendor record (§2); the actual terms data is still owed by the client. D4 turns terms into due dates and payment proposals.</td></tr>
+    <tr><td><strong>Bank details &amp; GSTIN as the pay gate</strong></td><td>The vendor record carries them (§2); D4 enforces them: no payment to a vendor without bank details and a GSTIN on file.</td></tr>
+  </table>
+
+  <h2><span class="num">12.</span>Out of scope (for now)</h2>
+  <div class="scope-out">
+    <h3>Deliberately parked</h3>
+    <ul>
+      <li><strong>User roles / access / approval hierarchy</strong> — one person does vendor management today, so the module is built for that single handler. Multi-user roles can come later.</li>
+      <li><strong>Hard pricing / MRP</strong> — set later at inward, not at booking.</li>
+      <li><strong>SKU / barcode creation</strong> — SKUs and barcodes are created at the Inbound stage (PT step), not at booking. Booking is quantity-only.</li>
+    </ul>
+    <p style="margin:10px 0 0; font-size:13.5px; color:var(--muted);"><strong style="color:var(--green)">Now defined (no longer parked):</strong> GRN ownership — the GRN lives in the Inbound module against this order list; Booking provides the list and receives the close-out (see §6).</p>
+  </div>
+
+  <h2><span class="num">13.</span>v2 — parked: non-branded vendors &amp; agents</h2>
+  <p class="lead">Decided 10 June 2026: v1 manages branded vendors only. Everything below is the 8–9 June design, kept whole — parked, not deleted.</p>
+  <div class="scope-out">
+    <h3>Before this enters any version</h3>
+    <p>Non-branded buying runs on verbal orders, agent introductions and handwritten notes. It needs <strong>its own data-input discussion</strong> — how orders, items and prices actually get into the system, and how vendors without a GSTIN are recorded — before it is scheduled into any version.</p>
+  </div>
+
+  <h3><span class="key">A</span>Agent</h3>
+  <p class="lead">Applies to non-branded vendors only. Brands are dealt with directly.</p>
+  <div class="card">
+    <ul>
+      <li><strong>One fixed agent per city.</strong> Full details stored (name, contact, city).</li>
+      <li>Introduces non-branded vendors; once a relationship forms, the vendor contact can become direct — but the agent stays on record.</li>
+      <li><strong>Accountable for a booking until stock is delivered and verified.</strong></li>
+      <li>Surfaced on every <em>open</em> / <em>partially received</em> booking as <strong>"who to call,"</strong> with call outcomes saved in remarks.</li>
+    </ul>
+  </div>
+
+  <h3>Non-branded vendor</h3>
+  <div class="card">
+    <ul>
+      <li>First found through an <strong>agent</strong>; contact may later become direct.</li>
+      <li>Created in the system by the handler.</li>
+      <li>Fields: name, contact, commercial model, margin %, return window, payment terms.</li>
+      <li><strong>Linked to its city's agent.</strong></li>
+    </ul>
+    <p style="font-size:13.5px; color:var(--muted); margin-bottom:0;"><strong>10 June note:</strong> the statutory &amp; bank identity of §2 will apply here too — many non-branded vendors have no GSTIN, and their data-input discussion must settle how that is recorded.</p>
+  </div>
+
+  <h3>Non-branded booking creation</h3>
+  <div class="card">
+    <ul>
+      <li>Verbal/agent order ahead of season — handler <strong>types it manually</strong>.</li>
+      <li>Option to <strong>upload an image</strong> (a note from the vendor) to auto-fill, then review and create.</li>
+    </ul>
+  </div>
+
+  <h3>Booking ties that return with it</h3>
+  <div class="card">
+    <ul>
+      <li>A non-branded booking also belongs to its accountable <strong>agent</strong> (one vendor + one season + the agent).</li>
+      <li>On <em>open</em> / <em>partially received</em> bookings the agent is the chase contact, call outcomes in remarks.</li>
+    </ul>
+  </div>
+
+  <footer>
+    KDPS · D1 · Vendor Management Module — design summary. Based on the final Current Workflow document and discussions of <span style="white-space:nowrap">8–9 June 2026</span>; last revised <span style="white-space:nowrap">16 June 2026</span>. Working draft; nothing here is locked code.<br>
+    <span style="font-size:12px;">Note: <strong>"Consignment"</strong> here is a <em>commercial model</em>. The inbound delivery record is a separate object, now named <strong>Shipment</strong> (see Inbound Ingestion design).</span>
+    <p style="font-size:12.5px; margin:16px 0 4px;"><strong>Change log</strong></p>
+    <ul style="font-size:12.5px; margin:0; padding-left:20px;">
+      <li><strong>16 June 2026</strong> — booking is now <strong>brand-wise</strong>: one vendor + one brand + one season, and the <strong>commercial model lives on the brand</strong> (§1, §3, §4). "Vendor" kept as the word (rename deferred). Return allowance: <strong>basis can be % money or % quantity</strong> per brand, and "pool" reworded to <strong>"return allowance / GR budget"</strong> (§8, §11). §5 create-flow written down (season-first, Generate / delete-empty). Trade-off reasoning added (§10). Footer turned into this list. <strong>Readability:</strong> the §2 pay-gate note, the §7 arrival callout and the §8 open-questions note restructured from prose into lists — no content removed.</li>
+      <li><strong>13 June 2026</strong> — commercial models <strong>3 → 4</strong>: 25-18-10 is the <strong>Correction</strong> model (KDPS owns, capped allowance on delivered goods), not SOR; SOR &amp; Consignment redefined as brand-owned, full return of unsold, no cap (Consignment = SOR + rolling top-up); allowance reassigned SOR → Correction (§3, §7, §8).</li>
+      <li><strong>10 June 2026</strong> — v1 scoped to branded vendors (non-branded + agents parked, §13); statutory &amp; bank identity added (§2); booking status derived from GRNs, arrival moved to the Shipment (§7); return allowance designed (§8); two deliberate trade-offs recorded (§10); D4 input list added (§11); doc numbered D1; evening sync — §4 season from derived list (Q39), §6 store receiving (Q38), §8 basis &amp; window-anchor open notes.</li>
+    </ul>
+  </footer>
+
+</div>
+</body>
+</html>

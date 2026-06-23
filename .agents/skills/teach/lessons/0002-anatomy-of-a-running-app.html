@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 2 — Anatomy of a Running App</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    /* four boxes */
+    --screen:#7c3aed; --screen-bg:#f5f3ff; --screen-line:#ddd6fe; --screen-deep:#5b21b6;
+    --brain:#1d4ed8;  --brain-bg:#eff6ff;  --brain-line:#bfdbfe;  --brain-deep:#1e3a8a;
+    --mem:#15803d;    --mem-bg:#f0fdf4;     --mem-line:#bbf7d0;    --mem-deep:#14532d;
+    --out:#b45309;    --out-bg:#fff7ed;     --out-line:#fed7aa;    --out-deep:#7c2d12;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--ink)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--muted)}
+  p{margin:14px 0}
+  .key{font-weight:600}
+
+  /* four-box grid */
+  .boxes{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:24px 0}
+  @media(max-width:560px){.boxes{grid-template-columns:1fr}}
+  .box{border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#fff}
+  .box .top{padding:13px 16px; color:#fff; display:flex; align-items:center; gap:9px}
+  .box .top .ico{font-size:18px}
+  .box .top .nm{font-weight:700; font-size:16px}
+  .box .top .tech{margin-left:auto; font-size:11.5px; opacity:.85; font-weight:600; letter-spacing:.03em}
+  .box .body{padding:14px 16px 16px}
+  .box .one{font-weight:600; font-size:15px; margin:0 0 8px}
+  .box ul{margin:0; padding-left:18px; font-size:14px; color:var(--muted)}
+  .box li{margin:5px 0}
+  .box .kdps{margin-top:11px; font-size:13px; padding:9px 11px; border-radius:9px; font-weight:600}
+  .b-screen .top{background:var(--screen)} .b-screen .kdps{background:var(--screen-bg); color:var(--screen-deep)}
+  .b-brain  .top{background:var(--brain)}  .b-brain  .kdps{background:var(--brain-bg);  color:var(--brain-deep)}
+  .b-mem    .top{background:var(--mem)}     .b-mem    .kdps{background:var(--mem-bg);     color:var(--mem-deep)}
+  .b-out    .top{background:var(--out)}     .b-out    .kdps{background:var(--out-bg);     color:var(--out-deep)}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:24px 0}
+  .callout.ink{background:#1d2433; color:#fff}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+  .callout b{font-weight:700}
+  .callout.ink b{color:#ffd9a8}
+  .callout p{margin:0; font-size:15px}
+
+  /* the journey */
+  .journey{counter-reset:step; margin:18px 0 4px; padding:0; list-style:none}
+  .journey li{position:relative; padding:13px 16px 13px 52px; margin:9px 0; background:#fff; border:1px solid var(--line); border-radius:12px; font-size:14.5px}
+  .journey li::before{counter-increment:step; content:counter(step); position:absolute; left:12px; top:50%; transform:translateY(-50%); width:26px; height:26px; border-radius:50%; background:var(--ink); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  .journey .tag{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:2px 8px; border-radius:6px; margin-right:7px; vertical-align:1px}
+  .t-screen{background:var(--screen-bg); color:var(--screen-deep)}
+  .t-brain{background:var(--brain-bg); color:var(--brain-deep)}
+  .t-mem{background:var(--mem-bg); color:var(--mem-deep)}
+  .t-out{background:var(--out-bg); color:var(--out-deep)}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#ffd9a8; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#f5f3ff,#eff6ff); border:1px solid var(--screen-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--screen-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--brain); text-decoration:none} footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 2 · ~8 min</div>
+  <h1>Anatomy of a running app</h1>
+  <p class="lede">You designed the spine as <i>ideas</i> — a ledger, a brand master, an AI edge. This lesson shows where those ideas physically live when the software is actually running. It's just <b>four boxes</b>. Once you can see them, "I don't know how any of this works" mostly goes away.</p>
+  <div class="mission"><b>Why this lesson:</b> when you vibe-code, the AI will hand you files. If you know which of the four boxes each file belongs to, you can tell where things go, where they break, and whether the AI's answer even makes sense. That's the end of building blind.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div></div><div></div></div>
+
+  <!-- 1 — THE FOUR BOXES -->
+  <section>
+    <h2><span class="num">1</span> The four boxes</h2>
+    <p class="kicker">Every web app you'll ever build is some version of this</p>
+    <p>Your ERP isn't one thing. It's four pieces that talk to each other. Each has <span class="key">one job</span>. Learn the one job and you'll never mix them up.</p>
+
+    <div class="boxes">
+      <div class="box b-screen">
+        <div class="top"><span class="ico">🖥️</span><span class="nm">The Screen</span><span class="tag tech" style="opacity:.85">FRONTEND</span></div>
+        <div class="body">
+          <p class="one">Shows things & takes taps.</p>
+          <ul>
+            <li>Runs in the <b>browser</b> on the store computer</li>
+            <li>Buttons, lists, the bill on screen</li>
+            <li>Knows <b>nothing</b> on its own — it just shows and sends</li>
+          </ul>
+          <div class="kdps">KDPS: the screen a clerk taps to make a bill</div>
+        </div>
+      </div>
+
+      <div class="box b-brain">
+        <div class="top"><span class="ico">🧠</span><span class="nm">The Brain</span><span class="tag tech" style="opacity:.85">BACKEND</span></div>
+        <div class="body">
+          <p class="one">Decides what's allowed.</p>
+          <ul>
+            <li>Where your <b>rules</b> live</li>
+            <li>Checks every request before it counts</li>
+            <li>The bouncer: "AI proposes, the brain decides"</li>
+          </ul>
+          <div class="kdps">KDPS: the SOR-vs-outright rules, return windows, GST checks</div>
+        </div>
+      </div>
+
+      <div class="box b-mem">
+        <div class="top"><span class="ico">🗄️</span><span class="nm">The Memory</span><span class="tag tech" style="opacity:.85">DATABASE</span></div>
+        <div class="body">
+          <p class="one">Never forgets.</p>
+          <ul>
+            <li>Tables and rows on disk</li>
+            <li>Your <b>ledger physically lives here</b></li>
+            <li>Survives when everything else restarts</li>
+          </ul>
+          <div class="kdps">KDPS: every stock movement row, every bill, the brand master</div>
+        </div>
+      </div>
+
+      <div class="box b-out">
+        <div class="top"><span class="ico">🔌</span><span class="nm">The Outside World</span><span class="tag tech" style="opacity:.85">APIs</span></div>
+        <div class="body">
+          <p class="one">Things you talk to but don't own.</p>
+          <ul>
+            <li>Other systems your app calls</li>
+            <li>You send a request, you get an answer</li>
+            <li>If they're down, you cope — you don't control them</li>
+          </ul>
+          <div class="kdps">KDPS: Ten Software POS, Tally, the AI invoice-reader, WhatsApp</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout soft">
+      <p>📌 <b>The one-line memory hook:</b> the <b style="color:var(--screen-deep)">Screen</b> shows, the <b style="color:var(--brain-deep)">Brain</b> decides, the <b style="color:var(--mem-deep)">Memory</b> remembers, the <b style="color:var(--out-deep)">Outside World</b> is everyone else. Four jobs, never shared.</p>
+    </div>
+  </section>
+
+  <!-- 2 — THE JOURNEY -->
+  <section>
+    <h2><span class="num">2</span> One sale, through all four</h2>
+    <p class="kicker">A clerk sells one pair of shoes</p>
+    <p>Watch a single tap travel through the boxes. This is <i>literally</i> what happens, every time, in every web app — yours included.</p>
+
+    <ol class="journey">
+      <li><span class="tag t-screen">Screen</span>Clerk scans the shoe and taps <b>“Bill”</b>. The screen packs up “sell 1 × this SKU” and sends it off. It does <b>not</b> decide anything.</li>
+      <li><span class="tag t-brain">Brain</span>The request arrives. The brain checks the rules: does this SKU exist? Is the price right? Is GST correct? <b>It's allowed.</b></li>
+      <li><span class="tag t-mem">Memory</span>The brain writes <b>one new movement row</b> — <code>−1</code> for that SKU — into the ledger. Nothing is overwritten; a line is added. (Lesson 1!)</li>
+      <li><span class="tag t-brain">Brain</span>Brain reads back the new balance and builds the bill total.</li>
+      <li><span class="tag t-screen">Screen</span>The screen gets the answer and shows <b>“Sold — stock now 4. Print bill?”</b></li>
+      <li><span class="tag t-out">Outside World</span>Later, a quiet sync pushes that sale to <b>Tally</b> and pulls nothing back. The store never waited on it.</li>
+    </ol>
+
+    <div class="callout ink">
+      <p>🧭 <b>This is the whole game.</b> Almost every feature you'll vibe-code is just a new version of this trip: the Screen asks, the Brain rules on it, the Memory records it, and sometimes the Outside World is looped in. When something's broken, your first question is always: <b>which box?</b></p>
+    </div>
+  </section>
+
+  <!-- 3 — WHY IT MATTERS FOR YOU -->
+  <section>
+    <h2><span class="num">3</span> Why this kills the fear</h2>
+    <p class="kicker">What changes for you, the vibe coder</p>
+    <p>A vibe coder without this map sees one undifferentiated blob of "code" and just hopes. With the map, three things get easier — immediately:</p>
+    <div class="boxes" style="grid-template-columns:1fr">
+      <div class="box b-brain"><div class="body" style="padding:14px 18px"><p class="one" style="margin:0">📂 <b>Placing things.</b> AI gives you a file — you can tell if it's Screen, Brain, or Memory, so you know if it landed in the right place.</p></div></div>
+      <div class="box b-mem"><div class="body" style="padding:14px 18px"><p class="one" style="margin:0">🔧 <b>Fixing things.</b> "The stock number is wrong" → that's the Memory and the Brain that writes to it. You don't go hunting in the Screen.</p></div></div>
+      <div class="box b-out"><div class="body" style="padding:14px 18px"><p class="one" style="margin:0">🚦 <b>Judging the AI.</b> If the AI says "let the Screen calculate the GST," you now <i>know</i> that's wrong — rules live in the Brain. You can push back.</p></div></div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Which box? — 6 quick calls</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">For each KDPS thing, pick the box it belongs in. Instant feedback — that's the loop that makes it stick.</p>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 1</div>
+      <div class="qt">The rows recording every stock movement for a SKU live in…</div>
+      <button class="opt">The Memory (database)</button>
+      <button class="opt">The Brain (backend)</button>
+      <button class="opt">The Screen (frontend)</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 2</div>
+      <div class="qt">The rule that blocks an SOR return after its window has closed lives in…</div>
+      <button class="opt">The Screen — it greys out the button</button>
+      <button class="opt">The Brain — that's where rules are enforced for real</button>
+      <button class="opt">The Outside World</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 3</div>
+      <div class="qt">Pulling today's sales out of the Ten Software POS is talking to…</div>
+      <button class="opt">The Memory</button>
+      <button class="opt">The Screen</button>
+      <button class="opt">The Outside World (an API you don't own)</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 4</div>
+      <div class="qt">The big "New Bill" button a clerk taps is part of…</div>
+      <button class="opt">The Screen</button>
+      <button class="opt">The Brain</button>
+      <button class="opt">The Memory</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 5</div>
+      <div class="qt">The AI says: “Let the Screen calculate each item's GST before sending.” You should…</div>
+      <button class="opt">Agree — it saves a trip to the Brain</button>
+      <button class="opt">Push back — money rules belong in the Brain; the Screen can be faked or wrong</button>
+      <button class="opt">Move GST into the Outside World</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 6</div>
+      <div class="qt">Stock on hand suddenly shows a wrong number. Where do you look <b>first</b>?</div>
+      <button class="opt">The Screen — it must be displaying wrong</button>
+      <button class="opt">The Outside World — Tally probably broke it</button>
+      <button class="opt">The Memory and the Brain that writes to it — that's where the truth is recorded</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 6</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Want to go deeper? Ask me in the chat — “show me what one of these boxes looks like as actual code,” “where does the AI invoice-reader sit in the four boxes?”, or “okay, I'm ready — teach me Lesson 3, Git.” I'll build it on top of this.
+  </div>
+
+  <footer>
+    <p>Pairs with the <a href="../reference/kdps-term-field-guide.html">Term Field Guide</a> · builds on <a href="0001-the-two-spines.html">Lesson 1: The Two Spines</a>.</p>
+    <p>Sources: <a href="https://developer.mozilla.org/en-US/docs/Learn/Server-side/First_steps/Client-Server_overview">MDN — Client-Server overview</a> ·
+    <a href="https://www.postgresql.org/docs/current/tutorial.html">PostgreSQL — the Memory</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0002 · 🖥️ Screen · 🧠 Brain · 🗄️ Memory · 🔌 Outside World</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "Movements are data that must survive forever — that's the Memory's whole job. The Brain writes them, but they live in the database.",
+    "Screens can be bypassed or faked. A rule only truly holds if the Brain enforces it on every request.",
+    "Ten Software is someone else's system. You call it across a wire and take what it gives — classic Outside World.",
+    "Buttons, lists, what the clerk sees and taps — all Screen. It collects the tap and sends it on.",
+    "Anything about money or rules must be decided in the Brain. A Screen-side number can be wrong or tampered with before it arrives.",
+    "Wrong stock = wrong recorded truth. That's the Memory and the Brain that writes to it — never start in the Screen."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){
+          o.disabled = true;
+          if (j === correct) o.classList.add('correct');
+        });
+        if (i === correct){
+          score++;
+          document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok';
+          fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no';
+          fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

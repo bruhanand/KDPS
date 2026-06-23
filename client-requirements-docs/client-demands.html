@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Client Demands</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --card:#1c2029; --line:#2a2f3a;
+    --ink:#e8eaed; --muted:#9aa3b2; --soft:#7b8494;
+    --must:#ef4444; --p1:#3b82f6; --p2:#8b93a4; --nice:#a78bfa; --confirm:#f59e0b;
+    --accent:#22c55e;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  header{
+    padding:34px 24px 22px; max-width:1180px; margin:0 auto;
+  }
+  h1{margin:0 0 6px; font-size:30px; letter-spacing:-.4px}
+  .sub{color:var(--muted); max-width:760px; font-size:15px}
+  .meta{margin-top:14px; color:var(--soft); font-size:13px}
+
+  .toolbar{
+    position:sticky; top:0; z-index:10; background:rgba(15,17,21,.92);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+    padding:12px 24px;
+  }
+  .toolbar-inner{max-width:1180px; margin:0 auto; display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+  .filters{display:flex; gap:7px; flex-wrap:wrap}
+  .chip{
+    border:1px solid var(--line); background:var(--panel); color:var(--muted);
+    padding:5px 12px; border-radius:999px; cursor:pointer; font-size:13px; font-weight:600;
+    transition:.15s;
+  }
+  .chip:hover{color:var(--ink)}
+  .chip.active{background:var(--ink); color:#0f1115; border-color:var(--ink)}
+  .search{
+    margin-left:auto; flex:1; min-width:180px; max-width:320px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    color:var(--ink); padding:7px 11px; font-size:14px;
+  }
+  .search::placeholder{color:var(--soft)}
+
+  main{max-width:1180px; margin:0 auto; padding:8px 24px 80px}
+
+  section{margin-top:34px}
+  .sec-head{display:flex; align-items:baseline; gap:10px; margin-bottom:14px; border-bottom:1px solid var(--line); padding-bottom:8px}
+  .sec-num{color:var(--accent); font-weight:700; font-size:14px; font-variant-numeric:tabular-nums}
+  .sec-head h2{margin:0; font-size:19px; letter-spacing:-.2px}
+  .sec-count{color:var(--soft); font-size:13px; margin-left:auto}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:14px}
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-left:3px solid var(--p2);
+    border-radius:10px; padding:14px 16px;
+  }
+  .card[data-priority="must"]{border-left-color:var(--must)}
+  .card[data-priority="p1"]{border-left-color:var(--p1)}
+  .card[data-priority="p2"]{border-left-color:var(--p2)}
+  .card[data-priority="nice"]{border-left-color:var(--nice)}
+  .card[data-priority="confirm"]{border-left-color:var(--confirm)}
+
+  .card-top{display:flex; gap:8px; align-items:flex-start; margin-bottom:9px}
+  .card h3{margin:0; font-size:15px; font-weight:700; line-height:1.35; flex:1}
+  .badge{
+    flex-shrink:0; font-size:10.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+    padding:3px 7px; border-radius:5px; white-space:nowrap;
+  }
+  .badge.must{background:rgba(239,68,68,.16); color:#fca5a5}
+  .badge.p1{background:rgba(59,130,246,.16); color:#93c5fd}
+  .badge.p2{background:rgba(139,147,164,.16); color:#c2c8d2}
+  .badge.nice{background:rgba(167,139,250,.16); color:#c4b5fd}
+  .badge.confirm{background:rgba(245,158,11,.16); color:#fcd34d}
+
+  .row{display:flex; gap:8px; margin-top:6px; font-size:13.5px}
+  .row .lbl{flex-shrink:0; width:40px; font-weight:800; font-size:11px; letter-spacing:.5px; text-transform:uppercase; padding-top:2px}
+  .row.what .lbl{color:var(--accent)}
+  .row.why .lbl{color:var(--soft)}
+  .row .txt{color:var(--ink)}
+  .row.why .txt{color:var(--muted)}
+
+  .note{
+    background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.3);
+    border-radius:8px; padding:5px 9px; margin-top:9px; font-size:12.5px; color:#fcd34d;
+  }
+
+  .hidden{display:none !important}
+  .empty{color:var(--soft); padding:40px 0; text-align:center; display:none}
+
+  footer{max-width:1180px; margin:0 auto; padding:0 24px 60px; color:var(--soft); font-size:12.5px}
+
+  @media print{
+    body{background:#fff; color:#111}
+    .toolbar{display:none}
+    .card{break-inside:avoid; border-color:#ccc; background:#fff}
+    .badge{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>KDPS — What the Client Wants</h1>
+  <p class="sub">KDPS runs 50+ stores &amp; warehouses, 20,000+ products and 40+ brands across Bihar &amp; Jharkhand on a patchwork of POS, Tally and Excel. They want one system that fixes it. Below is everything they asked for — each item says <b>what</b> to build and <b>why</b> it matters.</p>
+  <div class="meta">Built from the PRD, both Definitive Plans, the Phase-1 / deal docs, the current-workflow notes and 3 meetings (18, 21 &amp; 26 May). <span id="count"></span></div>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <div class="filters" id="filters">
+      <span class="chip active" data-f="all">All</span>
+      <span class="chip" data-f="must">Must-have</span>
+      <span class="chip" data-f="p1">Phase 1</span>
+      <span class="chip" data-f="p2">Later</span>
+      <span class="chip" data-f="nice">Nice-to-have</span>
+      <span class="chip" data-f="confirm">Needs decision</span>
+    </div>
+    <input class="search" id="search" type="text" placeholder="Search demands…">
+  </div>
+</div>
+
+<main id="main"></main>
+<div class="empty" id="empty">No demands match your filter.</div>
+
+<footer>
+  Priority guide — <b>Must-have</b>: non-negotiable. <b>Phase 1</b>: needed for the first 3 months. <b>Later</b>: a future phase. <b>Nice-to-have</b>: optional. <b>Needs decision</b>: the documents conflict, so the client must choose.
+</footer>
+
+<script>
+const DATA = [
+  { name:"Inventory & Stock (Style × Size × Color)", demands:[
+    {p:"must", t:"Real-time stock by style, size & colour", what:"Track every item by its style, size and colour in real time across all stores — never as one lump number.", why:"A sold-out Size 9 is invisible if you only see “11 units total”, so you lose sales and reorder wrong."},
+    {p:"must", t:"One single stock master", what:"Replace the separate Excel tabs (merged by hand) with one shared stock list everyone sees.", why:"Manual merging is slow and error-prone; everyone should work off the same numbers."},
+    {p:"must", t:"Clear status for every item", what:"Give each item a status — in transit, accepted, sold, returned, billed-but-kept, etc.", why:"Staff can always tell where an item is and what they’re allowed to do with it."},
+    {p:"must", t:"Goods-receipt (GRN) step", what:"A proper receiving step where the warehouse confirms what physically arrived and flags shortages or damage.", why:"It’s the checkpoint that catches missing or wrong stock before it pollutes the books."},
+    {p:"must", t:"Invoice first, always", what:"Nothing moves — receipt, PT file, payment — until the invoice is in the system.", why:"The invoice is the source of truth; without it every later step is guesswork."},
+    {p:"p1", t:"Scan-in stock on a phone, offline", what:"Receive stock by scanning on a phone even with no internet; it syncs when the signal returns.", why:"Replaces sending WhatsApp photos and makes stock sellable the moment it’s scanned."},
+    {p:"p1", t:"Block selling before receiving", what:"Warn or stop a sale of items that haven’t been formally received yet.", why:"Prevents negative stock counts that quietly break every report."},
+    {p:"must", t:"Simple per-store stock view", what:"Show each store only its own stock, with just the fields staff actually need.", why:"Less clutter and faster screens on cheap store phones."},
+    {p:"must", t:"Auto-tag season, collection & age", what:"Automatically tag every item with its season, collection and age from its code.", why:"Old stock gets spotted and cleared before it turns into dead stock."},
+    {p:"p1", t:"Defect & replacement workflow", what:"Log defects found after receiving, with photos, and track the replacement or claim.", why:"Recover money on faulty goods instead of silently eating the loss."},
+    {p:"must", t:"Auto-split stock to stores", what:"Distribute warehouse stock to stores automatically, based on each store’s past sales.", why:"Faster than splitting by hand and sends stock where it actually sells."},
+    {p:"must", t:"Load all base data", what:"Set up every store, product, brand (SOR/outright) and vendor, including store-in-store sections.", why:"Everything else depends on this base data being correct."},
+  ]},
+
+  { name:"Invoice → PT File Automation (the #1 ask)", demands:[
+    {p:"must", t:"Read any invoice → build PT in under a minute", what:"Read any invoice (photo or PDF, any vendor) and auto-create the PT file in KDPS’s format.", why:"Manual entry is the single biggest time-sink, freezing the team for days every month."},
+    {p:"must", t:"Map any PT format (or build one)", what:"Convert any brand’s PT file to KDPS format — or build a PT from the invoice + tags when there’s no PT.", why:"Every brand sends a different layout; staff shouldn’t reformat by hand."},
+    {p:"p1", t:"Sync & match brand master PT files", what:"Keep brand master PT files and match incoming invoices to them automatically.", why:"Ends the manual search-and-extract done for each invoice today."},
+    {p:"p1", t:"Check photo quality at capture", what:"Reject blurry or crooked photos, force a retake, then auto-name the file.", why:"Stops bad scans and the Photoshop-straightening workaround."},
+    {p:"must", t:"Train & retrain the reader per vendor", what:"Teach the reader each vendor’s format and retrain every 15 days as new invoices arrive.", why:"A new vendor should be a data update, not a coding job."},
+    {p:"must", t:"Remove the 4-person bottleneck", what:"Cut the chain where four people approve each PT in sequence.", why:"Right now one person’s day off stalls the whole pipeline."},
+    {p:"must", t:"One standard for 10–15 bill types", what:"A single, common way to read every bill format in use.", why:"About 10 new vendor formats arrive each month — chaos without a standard."},
+    {p:"must", t:"Flag anything uncertain for review", what:"Send anything the AI isn’t sure about to a “Needs Review” list before it enters the PT.", why:"Wrong data slipping in silently is worse than asking a human."},
+  ]},
+
+  { name:"Products, Barcodes & Pricing", demands:[
+    {p:"must", t:"One naming system + duplicate catcher", what:"Use one consistent product taxonomy and a registry that flags duplicate SKUs.", why:"The same product under many names breaks every report."},
+    {p:"must", t:"Editable brand rules (no coding)", what:"Per-brand mapping rules anyone can edit without a developer.", why:"New vendors can be onboarded without waiting on engineering."},
+    {p:"must", t:"Auto barcode & price for unbranded goods", what:"Generate barcodes and calculate MRP for unbranded items by a fixed formula.", why:"Removes manual barcoding and the price differences between staff.", note:"Open: sources disagree on the margin (20–25% vs 30–35%) — one rule must be set."},
+    {p:"p1", t:"Fix bad data (colour, duplicates, spelling)", what:"Stop the colour field mixing price tiers with real colours; fix duplicate barcodes and spelling drift.", why:"These quietly corrupt stock counts and sales reports."},
+  ]},
+
+  { name:"SOR vs Outright & Brand Deals", demands:[
+    {p:"must", t:"Treat SOR vs Outright as core", what:"Mark each brand’s deal type; it drives ownership, returns, margin and EOSS rules.", why:"The rules are completely different — this can’t be an afterthought flag."},
+    {p:"must", t:"SOR return alerts at 30 / 15 / 7 days", what:"Track each SOR item’s return window and alert before it expires.", why:"Miss the date and KDPS owns dead stock it never wanted — the single biggest safety net."},
+    {p:"must", t:"All brand rules in one place", what:"Store each brand’s commission model (25-18-10, buy-and-sell, consignment, EBO) and terms centrally.", why:"Set once, applied automatically everywhere."},
+    {p:"must", t:"Credit notes & return-to-brand", what:"Track credit notes and auto-build return lists grouped by brand warehouse.", why:"Make sure money owed on returns actually comes back."},
+    {p:"p2", t:"Escalate non-moving brands", what:"Track slow brands and the owner’s push to return stock, raise support, or swap the range.", why:"Stops capital sitting in stock that won’t sell."},
+  ]},
+
+  { name:"Transfers & Goods Returns", demands:[
+    {p:"must", t:"Scan-based store-to-store transfer", what:"Move stock between stores by scanning, with reservation in transit and accept-at-destination.", why:"Replaces handwritten memos and the blame when items go missing."},
+    {p:"p1", t:"Style-code entry option", what:"Allow style-code entry for brands not keyed by barcode (e.g. Jockey).", why:"Their PT files don’t use barcodes."},
+    {p:"must", t:"Handle all 3 return types", what:"Support seasonal, defective and over-shipment returns, with internal loss absorption.", why:"Each return type books differently and the vendor ledger must stay clean."},
+    {p:"p1", t:"Auto-calculate return entitlement", what:"Work out the return value KDPS is owed from the season’s purchases.", why:"Lets the owner cross-check brand claims instead of trusting their number."},
+    {p:"p1", t:"Route defectives correctly", what:"Madura brands collect defectives from stores; all others go to the warehouse.", why:"Matches how each brand actually takes returns."},
+  ]},
+
+  { name:"Billing (POS) & Sales", demands:[
+    {p:"must", t:"Pull sales every 15 minutes", what:"Read each store’s POS export every 15 minutes and deduct stock automatically.", why:"Keeps stock accurate without anyone deducting sales by hand."},
+    {p:"must", t:"Billing that works offline", what:"Keep billing running with no internet and sync later.", why:"Today an outage stops billing completely."},
+    {p:"must", t:"Fix the daily POS bugs", what:"Stop double-billing on slow networks and crash popups; add a reprint button and printer check.", why:"These bugs cause wrong stock and lost bills every day."},
+    {p:"p1", t:"Keep it familiar + one login", what:"Keep the screen close to today’s POS and give one login across all stores.", why:"Low-skill staff shouldn’t relearn, and the ops lead shouldn’t juggle 5 logins nightly."},
+    {p:"must", t:"Make loyalty points work", what:"Make points actually redeemable with a clear rule; fix the broken wallet and OTP.", why:"Customers are holding thousands of points they can’t use."},
+    {p:"p1", t:"Exchanges at equal MRP only", what:"Allow exchanges at the same MRP only — no cash, no store credit — with an audit trail.", why:"Closes a refund loophole and matches store policy."},
+  ]},
+
+  { name:"EOSS & Discount Control", demands:[
+    {p:"must", t:"Lock the max discount to the barcode", what:"Auto-set each item’s maximum discount; staff can’t go beyond it without approval.", why:"Removes counter discretion that leaks margin."},
+    {p:"p1", t:"Catch discount fraud", what:"Flag any sale where the customer got less discount than they were entitled to.", why:"Closes the scam of pocketing the brand-funded difference in cash."},
+    {p:"must", t:"Offer list + auto-attribution", what:"Store each brand’s offers with dates and auto-tag every sale to the right offer.", why:"Manual offer-matching causes wrong brand bills and lost money."},
+    {p:"must", t:"Automatic markdown ladder", what:"Suggest 10% → 20% → 30% (up to 60–90%) as stock keeps aging.", why:"Clears slow stock steadily instead of guessing."},
+  ]},
+
+  { name:"Payments & Staff Incentives", demands:[
+    {p:"p1", t:"Pay only when everything matches", what:"Release money only when the invoice, GRN and PT all agree and are approved.", why:"Stops informal payments and overpaying."},
+    {p:"must", t:"Approve payments on WhatsApp", what:"Route payments for approval by amount, approved inline in WhatsApp.", why:"Replaces verbal approvals that no one can trace."},
+    {p:"must", t:"Split bulk payments automatically", what:"Spread one lump-sum payment across many part-paid invoices automatically.", why:"Tracking this by hand is a constant headache."},
+    {p:"must", t:"Correct cash-discount maths", what:"Apply cash discount on the pre-tax amount only; the GST line stays whole.", why:"Getting it wrong misstates what’s actually payable."},
+    {p:"p1", t:"Auto-calculate incentives", what:"Work out staff incentives from sales, reduced by absences, and feed payroll.", why:"Ends the monthly Excel disputes."},
+    {p:"must", t:"Staff dashboard + payroll feed", what:"Show staff their targets and earnings; export pay inputs to Tally.", why:"Motivates staff and removes manual payroll prep."},
+  ]},
+
+  { name:"Reconciliation & Cash Audit", demands:[
+    {p:"must", t:"Nightly 3-way reconciliation", what:"Auto-match Invoice ↔ GRN ↔ PT every night.", why:"Mismatches show up immediately instead of weeks later."},
+    {p:"must", t:"Daily cash audit", what:"Match each store’s cash + UPI + card against actual bank deposits, every day.", why:"Directly tackles the owner’s biggest pain — cash leakage."},
+    {p:"p1", t:"Bank statement matching", what:"Match bank entries to the payments that were made.", why:"Confirms money actually moved the way the records say."},
+    {p:"p2", t:"Watch for anomalies", what:"Continuously watch all stores for shrinkage, fraud and stuck transfers.", why:"Catches problems in real time, not at a quarterly audit."},
+    {p:"p1", t:"Clean 2-year data move", what:"Migrate the last 2 years of data in one clean format.", why:"Old bad data shouldn’t pollute the new system."},
+  ]},
+
+  { name:"Reports & Profitability", demands:[
+    {p:"must", t:"Automatic profit per brand & store", what:"Calculate margin automatically — cost from the PT, revenue from the POS — by SKU, brand and store.", why:"Owners can’t currently see which brands or stores make money."},
+    {p:"must", t:"Auto-build brand reports", what:"Generate the daily brand-commission reports with each brand’s offers already applied.", why:"Replaces frantic WhatsApp copy-paste against an 11 PM deadline."},
+    {p:"p1", t:"One dashboard for all stores", what:"See every store’s sales in one place, with a single login.", why:"Ends logging in and out of 5+ store accounts each night."},
+    {p:"must", t:"Weekly profit note on WhatsApp", what:"Send the owner a short weekly P&L summary.", why:"Quick visibility without opening any dashboard."},
+  ]},
+
+  { name:"AI Agents & Forecasting", demands:[
+    {p:"must", t:"10 focused agents on a schedule", what:"Run 10 separate agents (invoice, reconciliation, POS, dead stock, etc.) on set triggers.", why:"Each one replaces a specific manual chore — keep them simple and separate."},
+    {p:"must", t:"AI at the edges, not the core", what:"Use AI to read documents and forecast; use plain code for the actual rules.", why:"Operational rules must be predictable and auditable."},
+    {p:"p2", t:"Forecast demand by size", what:"Predict demand at size and store level, aware of weather and regional size curves.", why:"Order the right sizes instead of guessing."},
+    {p:"p2", t:"Hunt dead stock daily", what:"Classify stock Hot / Warm / Cold / Dead each day, with an action per item.", why:"Act on dead stock before it loses all its value."},
+  ]},
+
+  { name:"Store Open & Close", demands:[
+    {p:"p1", t:"Close a store to zero stock", what:"A 5-step closure that clears all stock and posts clean Tally entries.", why:"No stock or money should go missing when a store shuts."},
+    {p:"p1", t:"Stock a new store smartly", what:"Suggest opening stock from similar stores’ sales and size curves.", why:"Gets a new store stocked right from day one."},
+  ]},
+
+  { name:"Staff Attendance", demands:[
+    {p:"p1", t:"Face + location check-in (no app)", what:"Staff check in by face and GPS, in the browser, with liveness to stop proxies.", why:"Stops fake attendance and feeds incentives and payroll — works on cheap phones."},
+    {p:"must", t:"Attendance rules + employee records", what:"Track hours with rules (shifts, grace, half-days) and keep employee profiles and documents.", why:"Accurate, fair pay and proper HR records."},
+  ]},
+
+  { name:"Accounting, Tally & GST", demands:[
+    {p:"must", t:"Full GST compliance", what:"GSTIN, HSN code and tax breakup on every transaction, filing-ready.", why:"It’s legally mandatory and must not need CA rework."},
+    {p:"p1", t:"Export to Tally (then auto-sync)", what:"Export GST-ready vouchers to Tally now, and auto-sync nightly later.", why:"Tally stays the official book without manual reshaping."},
+  ]},
+
+  { name:"Platform & Foundations", demands:[
+    {p:"must", t:"Browser app, no install", what:"Run in the browser with camera and barcode — no app-store download.", why:"Works on staff’s low-end phones despite high staff turnover."},
+    {p:"must", t:"WhatsApp is the owner’s screen", what:"Do approvals and read digests inside WhatsApp.", why:"That’s where owners and managers already are."},
+    {p:"must", t:"Role-based access", what:"Each role sees only its own data and screens, with approval limits.", why:"Today every login can see everything."},
+    {p:"must", t:"7-year audit trail", what:"Log who changed what, when and why, and keep it for 7 years.", why:"Required for GST/tax and for accountability."},
+    {p:"must", t:"Stay within ₹25–40K / month", what:"Keep running costs inside this band.", why:"Must stay roughly 10× cheaper than hiring data-entry staff."},
+    {p:"must", t:"Reusable for a second client", what:"Keep KDPS-specific logic in settings, not hardcoded.", why:"The system should be resellable later."},
+  ]},
+
+  { name:"Vendors & Sourcing Agents", demands:[
+    {p:"must", t:"Model the sourcing agent", what:"Treat city agents (who guarantee payment and delivery) as proper entities in the system.", why:"They control returns, defects and payment cycles — and are missing from the plan."},
+    {p:"p2", t:"Vendor & agent CRM", what:"Let agents log in to verify receipts and defects; store vendor terms and bank details.", why:"One place for supplier relationships and payment terms."},
+  ]},
+
+  { name:"Timeline, Rollout & Commercials", demands:[
+    {p:"must", t:"First working slice by 1 June", what:"Invoice → PT → Google Sheet working end-to-end on real invoices.", why:"Prove value fast on the biggest pain point."},
+    {p:"must", t:"Live before the August peak", what:"Ship the invoice→PT engine and reports before the Durga Puja rush.", why:"May–July is the only quiet window to build in."},
+    {p:"must", t:"Fix the 1st–7th payroll crunch", what:"Automate brand reports so commission and salaries are paid on time.", why:"The core team works 18–19 hour days for ~7 days every month today."},
+    {p:"must", t:"Roll out 5 → 25 → 50+", what:"Pilot 5 stores by Month 3, all stores by Month 5, full system by Month 8.", why:"Fix issues small before scaling up."},
+    {p:"must", t:"Pay on working demos", what:"Tie each payment to seeing that module actually work.", why:"The client pays for proven progress, not promises."},
+    {p:"must", t:"Warranty + handover", what:"Run a 3-month warranty, then hand over the source code and docs.", why:"The system is KDPS’s to own."},
+    {p:"must", t:"New vendors with zero code", what:"Absorb ~10 new vendors a month through settings only.", why:"Growth shouldn’t add manual work or developer cost."},
+    {p:"p1", t:"Train in 3 batches (Hindi)", what:"Train all stores in 3 batches using Hindi-language videos.", why:"Staff rely on word-of-mouth knowledge today."},
+  ]},
+
+  { name:"Needs a Decision", demands:[
+    {p:"confirm", t:"Non-branded margin %", what:"Pick one margin rule for unbranded goods — the plan says 20–25%, the warehouse says 30–35%.", why:"The auto-price formula can’t work until one number is agreed."},
+    {p:"confirm", t:"EBO in or out of scope", what:"Decide whether brand-owned (EBO) stores are handled — some docs include their commission, others exclude EBO entirely.", why:"It changes how much of the billing and settlement logic gets built."},
+  ]},
+];
+
+const PMAP = {must:"Must-have", p1:"Phase 1", p2:"Later", nice:"Nice-to-have", confirm:"Confirm"};
+const main = document.getElementById('main');
+let total = 0;
+
+DATA.forEach((sec, i) => {
+  const s = document.createElement('section');
+  s.className = 'section';
+  const head = document.createElement('div');
+  head.className = 'sec-head';
+  head.innerHTML = `<span class="sec-num">${String(i+1).padStart(2,'0')}</span>
+    <h2>${sec.name}</h2><span class="sec-count">${sec.demands.length}</span>`;
+  s.appendChild(head);
+
+  const grid = document.createElement('div');
+  grid.className = 'grid';
+  sec.demands.forEach(d => {
+    total++;
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.dataset.priority = d.p;
+    c.dataset.text = (d.t + ' ' + d.what + ' ' + d.why + ' ' + sec.name).toLowerCase();
+    c.innerHTML = `
+      <div class="card-top">
+        <h3>${d.t}</h3>
+        <span class="badge ${d.p}">${PMAP[d.p]}</span>
+      </div>
+      <div class="row what"><span class="lbl">What</span><span class="txt">${d.what}</span></div>
+      <div class="row why"><span class="lbl">Why</span><span class="txt">${d.why}</span></div>
+      ${d.note ? `<div class="note">⚠ ${d.note}</div>` : ''}
+    `;
+    grid.appendChild(c);
+  });
+  s.appendChild(grid);
+  main.appendChild(s);
+});
+
+document.getElementById('count').textContent = `${total} demands in total.`;
+
+// Filtering + search
+let active = 'all';
+const search = document.getElementById('search');
+const empty = document.getElementById('empty');
+
+function apply(){
+  const q = search.value.trim().toLowerCase();
+  document.querySelectorAll('.section').forEach(sec => {
+    let shown = 0;
+    sec.querySelectorAll('.card').forEach(c => {
+      const okP = active === 'all' || c.dataset.priority === active;
+      const okQ = !q || c.dataset.text.includes(q);
+      const show = okP && okQ;
+      c.classList.toggle('hidden', !show);
+      if (show) shown++;
+    });
+    sec.classList.toggle('hidden', shown === 0);
+    sec.querySelector('.sec-count').textContent = shown;
+  });
+  const any = document.querySelector('.card:not(.hidden)');
+  empty.style.display = any ? 'none' : 'block';
+}
+
+document.getElementById('filters').addEventListener('click', e => {
+  if (!e.target.classList.contains('chip')) return;
+  document.querySelectorAll('.chip').forEach(ch => ch.classList.remove('active'));
+  e.target.classList.add('active');
+  active = e.target.dataset.f;
+  apply();
+});
+search.addEventListener('input', apply);
+</script>
+</body>
+</html>

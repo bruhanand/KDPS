@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 1 — The Two Spines of KDPS</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --biz:#b45309; --biz-bg:#fff7ed; --biz-line:#fed7aa; --biz-deep:#7c2d12;
+    --tech:#1d4ed8; --tech-bg:#eff6ff; --tech-line:#bfdbfe; --tech-deep:#1e3a8a;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff}
+  .s-biz h2 .num{background:var(--biz)} .s-tech h2 .num{background:var(--tech)} .s-bridge h2 .num{background:var(--ink)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px}
+  .s-biz .kicker{color:var(--biz)} .s-tech .kicker{color:var(--tech)}
+  p{margin:14px 0}
+  .key{font-weight:600}
+
+  .vs{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:22px 0}
+  @media(max-width:560px){.vs{grid-template-columns:1fr}}
+  .vs .col{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .vs .col h4{margin:0; padding:12px 16px; font-size:15.5px; color:#fff}
+  .col.a h4{background:var(--biz)} .col.b h4{background:#334155}
+  .vs ul{margin:0; padding:14px 16px 16px 32px; font-size:14.5px}
+  .vs li{margin:7px 0}
+
+  .ledger{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:18px 20px; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px; line-height:1.7; margin:20px 0; overflow-x:auto}
+  .ledger .in{color:#86efac} .ledger .out{color:#fca5a5} .ledger .bal{color:#fcd34d} .ledger .c{color:#64748b}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:24px 0}
+  .callout.biz{background:var(--biz-bg); border:1px solid var(--biz-line)}
+  .callout.tech{background:var(--tech-bg); border:1px solid var(--tech-line)}
+  .callout.ink{background:#1d2433; color:#fff}
+  .callout b{font-weight:700}
+  .callout.biz b{color:var(--biz-deep)} .callout.tech b{color:var(--tech-deep)} .callout.ink b{color:#ffd9a8}
+  .callout p{margin:0; font-size:15px}
+
+  .cascade{display:flex; flex-wrap:wrap; gap:8px; margin:16px 0 4px}
+  .cascade span{font-size:13px; background:#fff; border:1px solid var(--biz-line); color:var(--biz-deep); padding:5px 11px; border-radius:999px; font-weight:600}
+
+  /* four-model layout */
+  .owner{border:1px solid var(--biz-line); border-radius:14px; overflow:hidden; background:#fff}
+  .owner > h4{margin:0; padding:11px 16px; font-size:15px; color:#fff; background:var(--biz)}
+  .owner.brand > h4{background:#334155}
+  .owner .m{padding:12px 16px; border-top:1px solid var(--line)}
+  .owner .m .mn{font-weight:700; font-size:15px; color:var(--ink); margin:0}
+  .owner .m .mt{font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-left:7px; white-space:nowrap}
+  .owner .m p.d{margin:4px 0 0; font-size:13.5px; color:var(--muted)}
+  .cmp{width:100%; border-collapse:collapse; margin:22px 0 4px; font-size:13px; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .cmp th,.cmp td{padding:9px 11px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  .cmp th{background:#f1f5f9; font-size:11.5px; letter-spacing:.02em; color:var(--ink); font-weight:700}
+  .cmp tr:last-child td{border-bottom:0}
+  .cmp td:first-child,.cmp th:first-child{font-weight:700; color:var(--biz-deep); background:#fffaf3; white-space:nowrap}
+  .cmp .own-k{color:var(--biz-deep); font-weight:600} .cmp .own-b{color:#334155; font-weight:600}
+  .cmp-wrap{overflow-x:auto; margin:22px 0 4px}
+  .cmp-wrap .cmp{margin:0; min-width:560px}
+
+  /* QUIZ */
+  .quiz{margin-top:40px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#ffd9a8; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#fff7ed,#fffbeb); border:1px solid var(--biz-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--biz-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--tech); text-decoration:none} footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 1 · ~8 min · updated 19 Jun 2026</div>
+  <h1>The two spines of KDPS</h1>
+  <p class="lede">Learn just two ideas — one business, one technical — and most of the jargon in your design suddenly clicks into place. One decides the <i>rules</i> (who owns the stock — now four models). The other keeps the <i>data</i> honest.</p>
+  <div class="mission"><b>Why this lesson:</b> you're the architect. These are the two calls that everything else in KDPS inherits — so they're the two you most need in your own words.</div>
+  <div class="progress"><div class="on"></div><div></div><div></div></div>
+
+  <!-- 1 — BUSINESS SPINE -->
+  <section class="s-biz">
+    <h2><span class="num">1</span> The business spine</h2>
+    <p class="kicker">🟧 Who owns the stock? — four models, still one question</p>
+    <p>Before any software question, one fact decides a brand's entire rulebook: <span class="key">does KDPS own the stock, or does the brand?</span> That question hasn't changed — but each answer now comes in <b>two flavours</b>. So there are <b>four commercial models</b> in all. Set the model on the brand, and the rest follows.</p>
+
+    <div class="vs">
+      <div class="owner">
+        <h4>KDPS owns it &nbsp;→ earns a margin</h4>
+        <div class="m">
+          <p class="mn">Buy &amp; Sell <span class="mt">Outright</span></p>
+          <p class="d">Bought outright. <b>No returns</b> — it's yours to clear.</p>
+        </div>
+        <div class="m">
+          <p class="mn">Correction <span class="mt">25-18-10</span></p>
+          <p class="d">You own it, <i>but</i> the brand grants a <b>capped return allowance</b> (≈10% of goods, stretchable). Return manually — within the window <b>and</b> within the budget.</p>
+        </div>
+      </div>
+      <div class="owner brand">
+        <h4>Brand owns it &nbsp;→ earns a commission</h4>
+        <div class="m">
+          <p class="mn">SOR <span class="mt">Sale or Return</span></p>
+          <p class="d">Brand owns it; you sell on its behalf. <b>All unsold goes back, no cap.</b> To get more, raise a <b>fresh booking</b>.</p>
+        </div>
+        <div class="m">
+          <p class="mn">Consignment</p>
+          <p class="d">Same as SOR — but the brand <b>keeps topping up</b>, so no fresh booking each time.</p>
+        </div>
+      </div>
+    </div>
+    <p style="font-size:13.5px; color:var(--muted); margin-top:-4px">SOR and Consignment are near-identical downstream — the <i>only</i> real difference is the rolling top-up.</p>
+
+    <p>Every model at a glance:</p>
+    <div class="cmp-wrap">
+    <table class="cmp">
+      <tr><th></th><th>Buy &amp; Sell</th><th>Correction<br><span style="font-weight:400">(25-18-10)</span></th><th>SOR</th><th>Consignment</th></tr>
+      <tr><td>Owns it</td><td class="own-k">KDPS</td><td class="own-k">KDPS</td><td class="own-b">Brand</td><td class="own-b">Brand</td></tr>
+      <tr><td>Returns</td><td>None</td><td>Capped allowance</td><td>All unsold, no cap</td><td>All unsold, no cap</td></tr>
+      <tr><td>Reorder</td><td>—</td><td>—</td><td>Fresh booking</td><td>Rolling top-up</td></tr>
+      <tr><td>KDPS earns</td><td>Margin</td><td>Margin</td><td>Commission</td><td>Commission</td></tr>
+      <tr><td>Pays the vendor</td><td>At inward</td><td>At inward</td><td>As each piece sells</td><td>As each piece sells</td></tr>
+      <tr><td>System watches</td><td>Dead stock</td><td>Allowance budget + window</td><td>Return-window exposure</td><td>Stock turnover</td></tr>
+    </table>
+    </div>
+
+    <p>See how one fact — the model — pushes outward into everything downstream:</p>
+    <div class="cascade">
+      <span>the model</span><span>→ who owns it</span><span>→ returns</span><span>→ margin vs commission</span><span>→ when you pay the vendor</span><span>→ which alert fires</span>
+    </div>
+
+    <div class="callout biz">
+      <p>💡 <b>Why it's a "spine":</b> set the model <b>once on the brand</b>, and dozens of rules derive from it automatically — returns, how you earn, when you pay the vendor, which alert fires. Get it wrong and it's the most expensive mistake the system prevents: treat a brand-owned line (SOR / Consignment) as KDPS-owned and you'd book a liability that shouldn't exist; miss a Correction return window — or blow its capped allowance — and unreturnable stock becomes <b>dead stock KDPS now owns</b>.</p>
+    </div>
+  </section>
+
+  <!-- 2 — TECHNICAL SPINE -->
+  <section class="s-tech">
+    <h2><span class="num">2</span> The technical spine</h2>
+    <p class="kicker">🟦 How do you store stock? — Ledger vs Count</p>
+    <p>Now the data question. There are two ways to remember how much stock you have. One is fragile. One is bulletproof.</p>
+
+    <div class="vs">
+      <div class="col b">
+        <h4>❌ A count (fragile)</h4>
+        <ul>
+          <li>Store one number: <b>"size 8 = 3"</b></li>
+          <li>Every sale <i>overwrites</i> it</li>
+          <li>If it goes wrong, you can't tell <b>why</b></li>
+          <li>No history, no audit</li>
+        </ul>
+      </div>
+      <div class="col a" style="border:1px solid var(--tech-line)">
+        <h4 style="background:var(--tech)">✅ A ledger (robust)</h4>
+        <ul>
+          <li>Store the <b>list of movements</b></li>
+          <li>Nothing is ever edited — only added</li>
+          <li>The count is <b>added up</b>, not stored</li>
+          <li>Every unit traces to a document</li>
+        </ul>
+      </div>
+    </div>
+
+    <p>Here's the same SKU as a ledger. The balance on the right is <b>calculated</b>, never typed:</p>
+    <div class="ledger">
+<span class="c"># Nike Air Max 90 · White · Size 8</span><br>
+<span class="in">+5</span>  GRN #41   (received from brand)        <span class="bal">→ 5</span><br>
+<span class="out">−1</span>  Bill #902 (counter sale)             <span class="bal">→ 4</span><br>
+<span class="out">−2</span>  Transfer  (to Store 7)               <span class="bal">→ 2</span><br>
+<span class="in">+1</span>  Return    (customer exchange)        <span class="bal">→ 3</span><br>
+<span class="c">────────────────────────────────────────</span><br>
+<span class="c">Stock on hand = sum of the column =</span> <span class="bal">3</span>
+    </div>
+
+    <div class="callout tech">
+      <p>💡 <b>Why it's a "spine":</b> this is just double-entry accounting applied to stock. It gives you three things for free — a full <b>audit trail</b>, <b>self-healing</b> numbers (your "sell-before-inward / negative SOH" quirk just works), and it <b>scales</b> to millions of rows because each entry is tiny and never changes.</p>
+    </div>
+  </section>
+
+  <!-- 3 — THE BRIDGE -->
+  <section class="s-bridge">
+    <h2><span class="num">3</span> The bridge between them</h2>
+    <p class="kicker">Where AI is allowed to stand</p>
+    <p>The rules live in the business spine. The truth lives in the technical spine. <span class="key">AI is never allowed to write to either directly.</span></p>
+    <div class="callout ink">
+      <p>🤖 <b>AI proposes. The spine records. A rule or a human sits in between.</b><br>The invoice-reader, the PT-mapper, the demand forecast — each one only ever makes a <b>draft</b> with a confidence score. A rule auto-accepts it, or a person taps approve. If the AI is wrong, you've lost a draft — not corrupted your stock or your money.</p>
+    </div>
+    <p>That's the whole shape of KDPS: a <b>boring, bulletproof spine</b> in the middle, a ring of <b>clever, fallible AI</b> on the edge, and <b>rules + humans</b> guarding every door between them.</p>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 6 quick scenarios</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">No pressure. Pick an answer and you'll get instant feedback. This is the feedback loop — it's how the idea sticks.</p>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 1 · Business spine</div>
+      <div class="qt">A brand is on <b>Consignment</b>. Winter stock is sitting unsold at season's end. What happens?</div>
+      <button class="opt">KDPS marks it down and absorbs the loss</button>
+      <button class="opt">It all goes back to the brand — no cap — and the brand tops up next season</button>
+      <button class="opt">Nothing — KDPS owns it now</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 2 · Business spine</div>
+      <div class="qt">A brand is on <b>Correction (25-18-10)</b>. KDPS wants to send unsold stock back. What's the catch?</div>
+      <button class="opt">No catch — return as much as you like</button>
+      <button class="opt">You can't return at all — KDPS owns it</button>
+      <button class="opt">You can return, but only up to a capped allowance, and only inside the window</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 3 · Business spine</div>
+      <div class="qt">A brand is <b>Buy &amp; Sell (Outright)</b> and the stock isn't moving. What does the system watch?</div>
+      <button class="opt">The return window to the brand</button>
+      <button class="opt">Sell-through &amp; dead stock — there are no returns, so KDPS must clear it</button>
+      <button class="opt">The brand's approval to discount</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · Technical spine</div>
+      <div class="qt">Staff sell a piece before it's inwarded, so stock shows <b>−1</b> for a moment. In a ledger system, this is…</div>
+      <button class="opt">Fine — the next movement (the inward) is just added and it evens out</button>
+      <button class="opt">A bug that corrupts the number permanently</button>
+      <button class="opt">Impossible to recover without head office</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 5 · Technical spine</div>
+      <div class="qt">Why store a <b>ledger</b> instead of just a count?</div>
+      <button class="opt">You get audit, self-healing, and scale — the count is re-calculated from the movements</button>
+      <button class="opt">Because counts can't store large numbers</button>
+      <button class="opt">It's faster to type one number than a list</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 6 · The bridge</div>
+      <div class="qt">The invoice-reader AI extracts a vendor bill at 80% confidence. What should happen?</div>
+      <button class="opt">Write it straight into the stock ledger — AI is usually right</button>
+      <button class="opt">Discard it; AI can't be trusted with invoices</button>
+      <button class="opt">Hold it as a draft for a rule or a human to approve before it becomes real</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 6</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Got one wrong, or want to go deeper on SOR, the ledger, or where AI fits? Just ask me in the chat — "give me another SOR scenario," or "show the ledger for a transfer between two stores." I'll build on this.
+  </div>
+
+  <footer>
+    <p>Pairs with the <a href="../reference/kdps-term-field-guide.html">Term Field Guide</a>.
+    Sources: the four models are KDPS's own — <a href="../../../../my-understanding/system-design/01-vendor-management/Vendor-Management-Module.html">D1 Vendor Management §3</a> (commercial models 3→4, 13 Jun 2026) ·
+    <a href="https://en.wikipedia.org/wiki/Sale_or_return">SOR</a> ·
+    <a href="https://martinfowler.com/eaaDev/EventSourcing.html">Ledger / Event Sourcing (Martin Fowler)</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0001 · 🟧 business spine + 🟦 technical spine</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const explmain = {
+      ok: "Correct. ",
+      no: "Not quite. "
+    };
+    const why = [
+      "Consignment is brand-owned — all unsold returns with no cap, and the brand keeps topping up. KDPS never owned it, so there's nothing to mark down or absorb.",
+      "Correction (25-18-10) is the 'KDPS owns it, but can return some' model: returns are allowed only up to a capped allowance and only inside the window. Go past the cap and the rest is yours.",
+      "Buy & Sell is fully KDPS-owned with no returns — the only lever is selling it, so the system watches sell-through and flags dead stock.",
+      "A ledger only ever adds movements, so a temporary negative just gets corrected by the next entry. The truth is the sum.",
+      "The count is derived by adding the movements — which is exactly what gives you audit trail, self-healing and scale.",
+      "AI output is always a draft. A rule or a human promotes it into the spine — never a direct AI write."
+    ];
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){
+          o.disabled = true;
+          if (j === correct) o.classList.add('correct');
+        });
+        if (i === correct){
+          score++;
+          document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok';
+          fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no';
+          fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

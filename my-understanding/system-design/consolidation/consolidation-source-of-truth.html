@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Consolidation & Presentation · Source of Truth</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:var(--maxw);margin:0 auto;padding:40px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust);padding-bottom:20px;margin-bottom:10px}
+  .eyebrow{color:var(--rust);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+  h1{font-size:28px;line-height:1.2;margin:8px 0 6px;color:var(--navy)}
+  .sub{color:var(--muted);font-size:15px;max-width:70ch}
+  .stamp{font-size:12.5px;color:var(--muted);margin-top:8px}
+  section{margin:34px 0}
+  h2{font-size:19px;color:var(--navy);border-left:4px solid var(--rust);padding-left:12px;margin:0 0 12px}
+  h3{font-size:15.5px;color:var(--navy2);margin:18px 0 6px}
+  p{margin:9px 0}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;vertical-align:middle}
+  .b-locked{background:var(--green-bg);color:var(--green)}
+  .b-open{background:var(--amber-bg);color:var(--amber)}
+  .b-ai{background:var(--purple-bg);color:var(--purple)}
+  .b-no{background:#fde8e8;color:#a32a2a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0;box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px;padding:13px 15px;margin:12px 0;border:1px solid}
+  .co-note{background:#f3f1fb;border-color:#dcd3f3}
+  .co-warn{background:var(--amber-bg);border-color:#ecd9a6}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th{background:var(--navy);color:#fff;text-align:left;padding:9px 11px;font-size:12.5px}
+  td{padding:9px 11px;border-top:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul{margin:8px 0 8px 0;padding-left:20px}
+  li{margin:4px 0}
+  code{background:#eef0f4;padding:1px 5px;border-radius:5px;font-size:13px}
+  /* schematic */
+  .arch{margin:14px 0;border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff}
+  .band{border:1.5px solid;border-radius:10px;padding:10px 12px;margin:8px 0}
+  .bname{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .bx{flex:1;min-width:150px;background:#fff;border:1.5px solid;border-radius:9px;padding:9px 11px;font-size:13.5px;font-weight:600}
+  .bx small{display:block;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:2px}
+  .brain{border-color:#9b7bd0;background:var(--purple-bg)} .brain .bname{color:var(--purple)} .brain .bx{border-color:#9b7bd0;color:var(--purple)}
+  .spine{border-color:var(--navy2);background:#eef1f7} .spine .bname{color:var(--navy)} .spine .bx{border-color:var(--navy2);color:var(--navy)}
+  .cross{border-color:var(--rust);background:#fdf1ea} .cross .bname{color:var(--rust)} .cross .bx{border-color:var(--rust);color:#8a3f22}
+  .base{border-color:#b8bfce;background:var(--grey-bg)} .base .bname{color:#41506b} .base .bx{border-color:#9aa7c2;color:var(--navy2)}
+  .ai-tag{display:inline-block;background:var(--purple-bg);color:var(--purple);font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:6px}
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · Consolidation & Client Presentation · Living Document</div>
+  <h1>Source of Truth — this work session</h1>
+  <p class="sub">The single anchor for the consolidation + presentation work. If context is ever lost, <strong>this file is the truth for this chat</strong> — what we are building, every decision made, and what is still open. Nothing here is guessed; recommendations are marked as such until locked.</p>
+  <div class="stamp">Started 21 June 2026 · Living — updated after every decision · Last update: 21 June 2026</div>
+</header>
+
+<section>
+  <h2>1 · What this session is for</h2>
+  <div class="card">
+    <p>The whole system design is finished but <strong>fragmented across eight module documents</strong>. This session does two things:</p>
+    <ul>
+      <li><strong>Consolidate</strong> the design into one whole-system view — so Anand can see it together and judge it as one thing.</li>
+      <li><strong>Build a client presentation</strong> that showcases the system to KDPS (non-technical owners), told <strong>module by module</strong>, showing how it is designed around AI — honestly.</li>
+    </ul>
+    <p>Also in scope this session: <strong>select the technical platform</strong> (stack, hosting, the AI agent + MCP, messaging). <span class="badge b-open">D9 migration & rollout is parked — not part of this session.</span></p>
+  </div>
+</section>
+
+<section>
+  <h2>2 · What we are building (the deliverable)</h2>
+  <div class="card">
+    <p><strong>One scroll-down HTML page</strong> — the presentation/"the whole thing on one page" — with these properties:</p>
+    <ul>
+      <li><strong>Module by module.</strong> Each module shows <em>what it solves</em> (today's pain) + <em>what it has</em> (what it now does) + <em>the AI inside it</em>. Not a single narrative story.</li>
+      <li><strong>Opens with a one-page map</strong> — the whole system as one figure (the spine, with everything hanging off it). Plus a second, more detailed flowchart that a non-technical person can still follow.</li>
+      <li><strong>Plain business language</strong> for the client; a <strong>clearly-marked technical section</strong> (stack, hosting, AI agent + MCP, messaging) that Anand skips while presenting.</li>
+      <li><strong>Honest about AI</strong> — the one rule we never cross: <em>AI suggests; people and the books decide.</em></li>
+      <li><strong>Real artifacts as proof</strong> where we have them (a real invoice → PT, a sample WhatsApp digest, the real offer sheets) — not empty mock-ups.</li>
+      <li><strong>Presents cleanly on a screen</strong> as well as reading well alone — one artifact, not a separate slide deck.</li>
+    </ul>
+  </div>
+  <div class="callout co-note"><strong>Built (21 Jun 2026):</strong>
+    <ul>
+      <li><a href="KDPS-system-design-presentation.html">KDPS-system-design-presentation.html</a> — the client presentation (module by module + the map + AI + cost-ready).</li>
+      <li><a href="KDPS-ai-approach-and-cost.html">KDPS-ai-approach-and-cost.html</a> — AI approach (code vs ML vs LLM, best model per job) + running-cost analysis.</li>
+      <li><a href="cloud-hosting-decision.html">cloud-hosting-decision.html</a> — hosting comparison. · <a href="../07-analytics-ai/ai-technique-selection.html">ai-technique-selection.html</a> — detailed per-task technique note (sourced).</li>
+    </ul>
+    <strong>Pivot:</strong> meeting near → built now. Technical choices shown as <em>overview with what &amp; why</em>; still-open forks (MCP v1 scope; Slack vs WhatsApp) shown as <em>options</em>, not locked.<br>
+    <strong>Running cost:</strong> ~₹25,000/month expected (~₹21k lean, ~₹54k with DB high-availability). <strong>All AI combined &lt; ₹2,000/month</strong> — the cost is the always-on database, not the models.<br>
+    <strong>Residency honesty:</strong> all stored data is in India (Mumbai); Google does not yet formally guarantee generative-AI <em>processing</em> in India — mitigated because AI only ever sees edge data + computed numbers, never raw customer/payment data. Confirm live before go-live.</div>
+</section>
+
+<section>
+  <h2>3 · The architecture shape <span class="badge b-locked">agreed — confirm</span></h2>
+  <p>Anand's own framing of how the system is shaped (this drives the map):</p>
+  <div class="arch">
+    <div class="band brain">
+      <div class="bname">The Brain — AI, reads everything, writes nothing to the books</div>
+      <div class="row"><div class="bx">Reports & intelligence<small>9 PM digest · forecasts · dead-stock · scorecards · anomaly watch · ask-anything assistant</small></div></div>
+    </div>
+    <div class="band spine">
+      <div class="bname">The spine — the flow of goods (left → right)</div>
+      <div class="row">
+        <div class="bx">Vendor &amp; Buying<span class="ai-tag">AI</span><small>orders → booked-vs-received → return windows</small></div>
+        <div class="bx">Goods In<span class="ai-tag">AI</span><small>invoice → GRN → PT → priced stock → store</small></div>
+        <div class="bx">Selling &amp; Stock<span class="ai-tag">AI</span><small>sale · exchange · transfer · returns · stocktake · <strong>Offers/Discounts live inside here</strong></small></div>
+      </div>
+    </div>
+    <div class="band cross">
+      <div class="bname">Tracked at every point along the spine</div>
+      <div class="row">
+        <div class="bx">Money<span class="ai-tag">AI</span><small>from the first order placed to the last rupee settled</small></div>
+        <div class="bx">Accounting (Tally)<span class="badge b-no" style="font-size:9px">NO AI</span><small>ties buying + goods-in + going-out to the official books</small></div>
+      </div>
+    </div>
+    <div class="band base">
+      <div class="bname">Base layer — there first, everything keys off it</div>
+      <div class="row"><div class="bx">Master Records + Users<span class="ai-tag">AI drafts only</span><small>brands · vendors · stores · SKUs · seasons · GST · offers · roles — one owned home, edit-rights, audit</small></div></div>
+    </div>
+  </div>
+  <div class="callout co-note"><strong>The Brain is not a box</strong> — it is the AI sprinkled through every module, plus the read-only reporting layer on top that reads the whole spine. AI sits where things are <em>read and suggested</em>, and is switched off where the <em>books are written</em>.</div>
+</section>
+
+<section>
+  <h2>4 · How much AI is actually there (honest, per module)</h2>
+  <table>
+    <tr><th>Module</th><th>The AI in it</th></tr>
+    <tr><td><strong>Vendor &amp; Buying</strong></td><td>AI reads the brand's order paper → drafts the booking; a person confirms (never silent).</td></tr>
+    <tr><td><strong>Goods In</strong></td><td>AI reads invoices into data; chat-assist builds the non-branded PT; fuzzy item-name match. <strong>Not AI:</strong> the PT conversion, the matching maths, pricing, the Tally export — all plain software.</td></tr>
+    <tr><td><strong>Selling &amp; Stock</strong></td><td>AI suggests markdowns on dead stock (never below a cost floor, with a step-down plan) → a human authors the offer; AI reads messy brand offer sheets into clean rules.</td></tr>
+    <tr><td><strong>Money</strong></td><td>The busiest AI, all read-only: bank-line reader, duplicate-payment guard, vendor bank-change fraud alert, one-line "safe to pay?" brief, cash-to-bank auto-match, brand-statement reconciler, ask-anything.</td></tr>
+    <tr><td><strong>Accounting (Tally)</strong></td><td><strong>Deliberately none.</strong> The books are exact, machine-made, never guessed.</td></tr>
+    <tr><td><strong>The Brain (reports)</strong></td><td>The concentrated layer: 9 PM WhatsApp digest, size-level forecasts, dead-stock hunter, profit &amp; store scorecards, anomaly/leakage watchdog, one-click brand report-maker, a read-only assistant. Reads ledgers/masters/POS, writes only messages, reports, suggestions.</td></tr>
+    <tr><td><strong>Master Records</strong></td><td>AI only <em>drafts</em> (reads offer sheets, suggests category/vendor cleanup); a person always confirms.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>5 · Decisions locked this session</h2>
+  <table>
+    <tr><th>#</th><th>Decision</th><th>Choice</th></tr>
+    <tr><td>1</td><td>Deliverable format</td><td>One scroll-down HTML page that also presents on screen (no separate slide deck).</td></tr>
+    <tr><td>2</td><td>Language / audience</td><td>Plain business words for the client; technical choices in a clearly-marked section Anand skips when presenting.</td></tr>
+    <tr><td>3</td><td>AI honesty</td><td>Shown honestly. The line we never cross: AI suggests; people and the books decide.</td></tr>
+    <tr><td>4</td><td>Proof</td><td>Use real artifacts where available, not mock-ups.</td></tr>
+    <tr><td>5</td><td>Presentation manner</td><td>Module by module — each shows what it solves + what it has + the AI inside it. Not one story.</td></tr>
+    <tr><td>6</td><td>Architecture shape</td><td>Base layer (Master Records + Users) → spine (Vendor &amp; Buying → Goods In → Selling &amp; Stock, with Offers inside Selling &amp; Stock) → Money + Accounting tracked at every point → the Brain (AI) sprinkled across all + reading on top.</td></tr>
+    <tr><td>7</td><td>Scope</td><td>D9 migration parked. Stack / hosting / agent / MCP / messaging are in scope this session.</td></tr>
+    <tr><td>8</td><td>Old design discarded</td><td>The old client-era picture (10 AI agents, 8-month/4-phase plan, IINE/PASCS names, guessed stack) is NOT considered.</td></tr>
+    <tr><td>9</td><td>Data residency</td><td>All data stays in India. AI via a hosted top model run in an Indian region (Google Cloud / Vertex AI, Mumbai). Hosted model + India residency together — not in conflict. AI only at the edges + the assistant.</td></tr>
+    <tr><td>10</td><td>Stack</td><td><strong>TypeScript end-to-end</strong> — one language front + back (React browser PWA on the front, typed server behind), types flow database → screen so money bugs are caught by the compiler. Paused Python PT pipeline to be rebuilt in TS; heavy ML later may use a small Python side-worker.</td></tr>
+    <tr><td>11</td><td>Database</td><td><strong>PostgreSQL</strong> — relational ledgers; row-level security scopes each store / GSTIN so the agent layer physically can't read outside scope; JSON + analytics support.</td></tr>
+    <tr><td>12</td><td>AI / LLM platform</td><td><strong>Vertex AI (Mumbai)</strong> — LLM APIs from India only; model swappable (Gemini now / Claude via Vertex if best at the tool-calling job). AI at the edges + the assistant only.</td></tr>
+    <tr><td>13</td><td>Hosting platform</td><td><strong>Google Cloud, Mumbai (asia-south1)</strong> — Cloud Run (app) + Cloud SQL for PostgreSQL + Cloud Storage + Secret Manager, same region as Vertex AI. Chosen for single-cloud India residency + keyless, free same-region AI calls. <strong>Guardrail:</strong> use the asia-south1 Vertex endpoint and never send raw PII / payment data to the model (Vertex guarantees data at-rest in India; in-region processing not yet guaranteed for India). <strong>Fallback</strong> if an Indian-owned provider is ever required: E2E Networks. Detail: <a href="cloud-hosting-decision.html">cloud-hosting-decision.html</a></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>6 · Module reference (faithful, compact) — built from the eight locked designs</h2>
+  <p class="sub">The content the presentation is built from. The full truth for each module lives in its own design document; this is the essence so it is never re-derived or hallucinated.</p>
+
+  <div class="card"><h3>Master Records &amp; Users <span class="badge b-locked">base layer</span></h3>
+    <p><strong>Solves:</strong> the same lists kept differently everywhere; anyone could change anything; no audit trail.</p>
+    <p><strong>Has:</strong> one owned home for every master — vendor &amp; commercial terms, brand, store/warehouse, SKU (brand+style+colour+size), barcode+season, the season calendar (Open → EOSS → Closed), date-effective GST/HSN, the offer rulebook, users &amp; roles. An edit-rights grid; the "dangerous four" need a second pair of eyes (brand terms, GST slabs, vendor bank/GSTIN, user roles); every change logged; documents snapshot masters so today's edit never rewrites yesterday's bill.</p>
+    <p><strong>AI:</strong> drafts only — reads brand offer sheets, suggests category/vendor cleanup; a person confirms.</p>
+  </div>
+
+  <div class="card"><h3>Vendor &amp; Buying <span class="badge b-locked">spine · start</span></h3>
+    <p><strong>Solves:</strong> orders live in people's heads; no track of booked-vs-received or return deadlines.</p>
+    <p><strong>Has:</strong> a Booking per vendor + brand + season; status derived from goods received (Booked → Partially → Fully received → Return-window → Closed); the four commercial models snapshotted (Outright / Correction 25-18-10 / SOR / Consignment); a return-allowance budget per brand; return-window alarms at 30/15/7 days.</p>
+    <p><strong>AI:</strong> reads the brand's order paper → drafts the booking; you confirm.</p>
+  </div>
+
+  <div class="card"><h3>Goods In <span class="badge b-locked">spine</span></h3>
+    <p><strong>Solves:</strong> every arrival re-typed by hand into Excel; no priced size×colour stock; no reconciliation.</p>
+    <p><strong>Has:</strong> the Shipment as anchor; invoice → GRN (count, flag-don't-block) → PT file (priced stock-in) → store split → Tally export; SKU + barcode+season identity; stock-in cost frozen; postings happen at Patna inward (stock ledger + vendor liability per commercial model).</p>
+    <p><strong>AI:</strong> reads invoices into data; chat-assist builds the non-branded PT; fuzzy item-name match. The PT conversion / recon / pricing / Tally export are plain software.</p>
+  </div>
+
+  <div class="card"><h3>Selling &amp; Stock <span class="badge b-locked">spine · end · Offers inside</span></h3>
+    <p><strong>Solves:</strong> POS per store with no central truth; exchange/transfer/returns/counts all manual; discounts run on memory with no proof the right one applied.</p>
+    <p><strong>Has:</strong> one machine for sale, exchange, inter-store transfer, defective/GR return, seasonal return, EOSS and stocktake; free-to-sell = physical − locked; per-piece states. <strong>Offers/Discounts (inside):</strong> the rulebook (trigger + reward + dials, eight patterns, open model), applied per item, best-for-customer, with a daily applied-vs-rulebook audit. V-flip handles dead/over-window stock.</p>
+    <p><strong>AI:</strong> markdown suggestions on dead stock (cost floor + step-down) → human authors; reads brand offer sheets into rules.</p>
+  </div>
+
+  <div class="card"><h3>Money <span class="badge b-locked">cross-cutting</span></h3>
+    <p><strong>Solves:</strong> what's owed to which brand is guesswork; cash-to-bank unchecked; duplicate/fraud risk.</p>
+    <p><strong>Has:</strong> a two-layer payable + payment model with bill-wise allocation; tiered approvals (maker ≠ checker ≠ payer); the vendor ledger (Opening + Invoices − cash discount − goods return − Payments + Interest = Due); a daily three-rail store-collection audit (cash / card / UPI vs bank); SOR/Consignment payable accrues on sale.</p>
+    <p><strong>AI:</strong> bank-narration reader, duplicate-payment guard, vendor bank-change fraud alert, one-line approver brief, cash-to-bank auto-match, brand-statement reconciler, ask-anything — all read-only, a human approves.</p>
+  </div>
+
+  <div class="card"><h3>Accounting (Tally) <span class="badge b-locked">cross-cutting</span></h3>
+    <p><strong>Solves:</strong> everything re-keyed into Tally by hand.</p>
+    <p><strong>Has:</strong> GST-ready vouchers pushed exactly once (KDPS-owned voucher number as the key); daily consolidated sales per store (per-bill only for GSTIN buyers); the day's tender split; purchase booked at arrival; IGST for cross-state moves; a daily tie-out + a plain-words "needs attention" list. Tally stays the statutory book; GST is computed once, carried, never recomputed downstream.</p>
+    <p><strong>AI:</strong> <span class="badge b-no">none — by design.</span></p>
+  </div>
+
+  <div class="card"><h3>The Brain — Reports &amp; AI <span class="badge b-ai">AI lives here</span></h3>
+    <p><strong>Solves:</strong> month-end built by hand; no daily picture; no early warnings.</p>
+    <p><strong>Has:</strong> a 9 PM WhatsApp digest (an exception feed, not a report); size-level forecasts that feed the store split; a dead-stock &amp; markdown hunter; profit &amp; store scorecards; an anomaly/leakage watchdog; a one-click brand report-maker; and a read-only assistant you can ask. Built on a clean data spine (canonicalization → a metrics layer where every number is defined once → a data-trust score).</p>
+    <p><strong>AI:</strong> reads ledgers, masters and POS; writes only messages, reports and suggestions — never a ledger posting. Code computes, AI narrates, a human decides.</p>
+  </div>
+</section>
+
+<section>
+  <h2>7 · Still open — the grilling agenda</h2>
+  <table>
+    <tr><th>Item</th><th>Status / recommendation</th></tr>
+    <tr><td>Module names (keep engineering names vs softer business names)</td><td><span class="badge b-open">open</span> — leaning softer business names</td></tr>
+    <tr><td>Map placement (up front vs capstone)</td><td><span class="badge b-open">open</span> — leaning up front</td></tr>
+    <tr><td>Tech stack (language, framework, database)</td><td><span class="badge b-locked">locked</span> — TypeScript end-to-end + PostgreSQL (see decisions 10–11)</td></tr>
+    <tr><td>Hosting platform</td><td><span class="badge b-locked">locked</span> — Google Cloud, Mumbai (see decision 13)</td></tr>
+    <tr><td>AI agent runtime</td><td><span class="badge b-locked">locked</span> — hosted on Vertex AI (Mumbai), India-only, model swappable (see decision 12)</td></tr>
+    <tr><td>MCP server for the system (read-only, role-scoped tools an agent calls)</td><td><span class="badge b-open">to grill</span></td></tr>
+    <tr><td>Messaging: WhatsApp (owners + claims reality) vs Slack (Anand's preference) — find the way</td><td><span class="badge b-open">to grill</span></td></tr>
+    <tr><td>WhatsApp API provider</td><td><span class="badge b-open">to grill</span></td></tr>
+    <tr><td>Future KDPS phone app</td><td><span class="badge b-open">noted — later</span></td></tr>
+    <tr><td>Per-module content depth + diagram colour family</td><td><span class="badge b-open">to decide while building</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2>8 · Sources of truth &amp; what is discarded</h2>
+  <div class="card">
+    <p><strong>Build only from:</strong> the eight locked module designs and the real current workflow behind them.</p>
+    <p><strong>Consult only when a decision needs grounding (do not bulk-load):</strong> the real current-workflow PDF; the data folder (real invoices, PT files, brand/vendor/store/warehouse lists, offer sheets).</p>
+  </div>
+  <div class="callout co-warn"><strong>Discarded — not considered:</strong> the old client-era design — the 10 AI agents list, the 8-month / four-phase plan, the IINE/PASCS module names, and the guessed tech stack (ERPNext, Metabase, that hosting). It leaked in through old diagrams and is out.</div>
+</section>
+
+<section>
+  <h2>9 · Best-practice research — verdict & sharpenings <span class="badge b-locked">21 Jun 2026</span></h2>
+  <p class="sub">Four parallel research passes — ERP architecture, fashion-retail ERP, AI-in-ERP, MCP/agent access — each with cited sources. The findings cross-corroborate.</p>
+
+  <div class="callout co-note"><strong>Verdict:</strong> every principle already locked here is the mainstream best-practice shape. <strong>No source recommended a different structure.</strong> The work now is enforcing the rules mechanically, not changing them.</div>
+
+  <h3>Confirmed as best practice</h3>
+  <ul>
+    <li><strong>Modular monolith on one relational database</strong> (not microservices) — the consensus for a single-developer build; the same shape as ERPNext and Odoo. <em>(Fowler "MonolithFirst"; Thoughtworks; Shopify)</em></li>
+    <li><strong>Documents → append-only ledgers</strong>, balances/stock derived not stored, corrections = reversing entries. <em>(Modern Treasury; ERPNext immutable ledger; Kleppmann)</em></li>
+    <li><strong>Snapshot masters onto documents</strong> so history never changes. <em>(Odoo; ERPNext; "Immutable Invoices")</em></li>
+    <li><strong>AI at the edges, never on the books</strong> — exactly what Microsoft, SAP, Oracle, NetSuite and Workday all ship (AI drafts/suggests; a human posts). <em>(vendor AI docs)</em></li>
+    <li><strong>MCP read-only tools over a semantic/metrics layer, never raw SQL.</strong> <em>(Anthropic MCP; dbt; Cube)</em></li>
+  </ul>
+
+  <div class="callout co-note"><strong>The edge — use it in the pitch:</strong> SOR / Outright / Correction / Consignment as a <strong>first-class ownership dimension</strong> (vendor liability posts only on sale) is a structural advantage. The Indian incumbents (Ginesys, GoFrugal) bolt SOR on as a flag — none model it first-class. And both <em>bridge to</em> Tally rather than replace it, validating the Tally approach.</div>
+
+  <h3>Sharpenings to fold into the build</h3>
+  <table>
+    <tr><th>Area</th><th>Sharpening</th></tr>
+    <tr><td>Master data</td><td>Version the masters that drive history (GST slab, GSTIN, cost, price) with effective dates — not only snapshot — so an old bill never changes. <em>(SCD Type 2)</em></td></tr>
+    <tr><td>Tally push</td><td>Make the push idempotent (outbox + KDPS voucher number) so a retry can never double-post. <em>(confirms the D6 direction)</em></td></tr>
+    <tr><td>AI traceability</td><td>Give the AI its own login identity; log the AI suggestion and the human decision separately. <em>(Microsoft's pattern)</em></td></tr>
+    <tr><td>SOR compliance</td><td>Track a <strong>second clock</strong> per consignment lot — India GST deems a supply at ~6 months even if unsold — alarm it alongside the vendor return window. <em>(Section 31(7) CGST)</em></td></tr>
+    <tr><td>Forecast data</td><td>Log stockout windows per store-SKU from day one — without it, size curves and forecasts are quietly wrong. <em>(Increff True ROS; Oracle size profiles)</em></td></tr>
+    <tr><td>The assistant</td><td>Never a raw "ask anything over the database" — it answers through the same defined metrics the reports use, or it gives confident wrong numbers. <em>(dbt; BIRD/Spider benchmarks)</em></td></tr>
+    <tr><td>Don't over-build</td><td>No microservices, no full event-sourcing — one DB, append-only ledgers. <em>(the #1 research warning for an AI-assisted build)</em></td></tr>
+  </table>
+
+  <h3>Agent runtime — a reframe to decide</h3>
+  <p>The earlier instinct was a self-hosted open runner + open model. At ~50-store scale a <strong>hosted top model</strong> is cheaper and more accurate for the assistant (self-hosting only pays off above ~10–30M tokens/day, and hosted models top the function-calling benchmarks). The one strong reason to self-host is <strong>GST data residency</strong> — whether ledger data may leave India. <span class="badge b-open">decide in the stack grill</span></p>
+</section>
+
+<footer>
+  KDPS · Consolidation & Presentation source of truth · 21 June 2026 · Living document — every decision lands here so this chat survives context loss.
+</footer>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Stack — what we build KDPS with</title>
+<style>
+  :root{
+    --ink:#1a1c23; --ink-soft:#454a57; --muted:#6f7585;
+    --line:#e6e8ee; --bg:#f6f7f9; --card:#ffffff;
+    --accent:#4f46e5;
+    --good:#15803d; --good-bg:#eaf6ee; --good-line:#cbe7d4;
+    --warn:#b45309; --warn-bg:#fbf1e3; --warn-line:#f0dcb6;
+    --stop:#b91c1c; --stop-bg:#fbeceb; --stop-line:#f1cfcc;
+    --info:#1d4ed8; --info-bg:#eaf0fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:0 22px 80px}
+  header{background:linear-gradient(135deg,#1a1c23,#2b2f44);color:#fff;margin-bottom:26px;padding:40px 22px 34px}
+  header .wrap{padding-bottom:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;color:#aab0c8;font-weight:600;margin:0 0 10px}
+  h1{font-size:29px;line-height:1.15;margin:0 0 12px;font-weight:700}
+  header p{color:#c9cde0;font-size:15px;margin:0;max-width:680px}
+  .meta{margin-top:16px;font-size:12.5px;color:#9aa0bd}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:700;margin:42px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:14px 0;box-shadow:0 1px 2px rgba(20,22,35,.04)}
+  .pick{border-left:5px solid var(--good);border-radius:0 14px 14px 0}
+  .pick h3{margin:0 0 10px;font-size:19px}
+  .row{display:grid;grid-template-columns:120px 1fr;gap:6px 16px;font-size:14.5px;padding:7px 0;border-top:1px dashed var(--line)}
+  .row:first-of-type{border-top:none}
+  .row b{color:var(--ink)} .row .k{color:var(--muted);font-weight:600}
+  .why{margin-top:14px;font-size:14px;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:12px}
+  ul,ol{margin:8px 0 4px;padding-left:20px} li{margin:7px 0} p{margin:9px 0}
+  .doubt{display:grid;grid-template-columns:1fr;gap:0;margin:12px 0}
+  .doubt .d{border:1px solid var(--line);border-radius:13px;padding:15px 18px;margin:10px 0;background:#fff}
+  .doubt .d h4{margin:0 0 4px;font-size:15.5px}
+  .doubt .d .verdict{font-size:11px;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap}
+  .v-drop{background:var(--stop-bg);color:var(--stop)} .v-keep{background:var(--good-bg);color:var(--good)}
+  table{border-collapse:collapse;width:100%;font-size:13.2px;margin:8px 0;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:#2b2f44;font-weight:600}
+  tr:last-child td{border-bottom:none}
+  td.opt{font-weight:700;color:var(--ink);white-space:nowrap}
+  .tag{font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;white-space:nowrap;display:inline-block}
+  .t-yes{background:var(--good-bg);color:var(--good)} .t-part{background:var(--warn-bg);color:var(--warn)} .t-no{background:var(--stop-bg);color:var(--stop)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:3px 11px}
+  .b-good{background:var(--good-bg);color:var(--good)} .b-warn{background:var(--warn-bg);color:var(--warn)} .b-stop{background:var(--stop-bg);color:var(--stop)}
+  .callout{border-radius:14px;padding:16px 18px;margin:14px 0;font-size:14px;border:1px solid}
+  .c-stop{background:var(--stop-bg);border-color:var(--stop-line)}
+  .c-good{background:var(--good-bg);border-color:var(--good-line)}
+  .c-warn{background:var(--warn-bg);border-color:var(--warn-line)}
+  .callout b{color:var(--ink)}
+  code{background:#eef0f4;border-radius:5px;padding:1px 6px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  footer{margin-top:46px;border-top:1px solid var(--line);padding-top:18px;font-size:12px;color:var(--muted)}
+  @media(max-width:600px){h1{font-size:24px}.row{grid-template-columns:1fr}table{font-size:12px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">KDPS · Stack decision brief</p>
+    <h1>What we build the KDPS system with</h1>
+    <p>The one decision the whole build sits on. Researched against how systems like this are actually built — and against two doubts you raised: a shortcut backend (Supabase), and the language (TypeScript).</p>
+    <p class="meta">23 June 2026 · recommendation, pending your confirmation · written in plain terms</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- RECOMMENDATION -->
+  <h2>The recommendation</h2>
+  <p class="sub">One line each. The "why" is right below.</p>
+  <div class="card pick">
+    <h3>Python engine · React screens · PostgreSQL · India cloud · no shortcut backend</h3>
+    <div class="row"><span class="k">The screens</span><div><b>React</b> — a website that runs in the store browser. Nothing to install, works on any store computer or phone.</div></div>
+    <div class="row"><span class="k">The brain</span><div><b>Python (Django)</b> — where stock, ledgers, GST, payments and the rules live.</div></div>
+    <div class="row"><span class="k">The data</span><div><b>PostgreSQL</b> — the database every serious accounting system uses.</div></div>
+    <div class="row"><span class="k">Where it runs</span><div>A cloud in an <b>India region</b>, so GST data stays in the country.</div></div>
+    <div class="row"><span class="k">Not using</span><div><b>No Supabase / no backend-as-a-service.</b> We run a real backend we control.</div></div>
+    <p class="why"><b>Why this:</b> Django hands us login, user-roles, the entire back-office admin and safe all-or-nothing money-transactions <em>for free</em> — and a system like this is mostly back-office. Python is the <em>same language</em> as your invoice→PT code and the analytics/AI work, so it's one toolbox, not three. React keeps the store screens fast and is exactly where the AI build tools are strongest.</p>
+  </div>
+
+  <!-- YOUR DOUBTS -->
+  <h2>Your two doubts — answered straight</h2>
+  <div class="doubt">
+    <div class="d">
+      <h4>Supabase &nbsp;<span class="verdict v-drop">DROP IT</span></h4>
+      <p>You were right. Three real problems for an accounting-grade system:</p>
+      <ul>
+        <li><b>No clean money-transactions.</b> A ledger needs "all of this happens, or none of it does." Supabase can't do that simply — you'd push the logic into raw database scripts, which is fragile.</li>
+        <li><b>Permissions get slow and tangled</b> at the size of an ERP (many roles, many stores).</li>
+        <li><b>Lock-in.</b> Put your logic inside it and moving off it later means a rewrite.</li>
+      </ul>
+      <p style="margin-bottom:0">Instead: plain PostgreSQL with our own backend. Same database, full control, no lock-in.</p>
+    </div>
+    <div class="d">
+      <h4>TypeScript as the main language &nbsp;<span class="verdict v-drop">NOT THE CORE</span></h4>
+      <p>The engine should be <b>Python (Django)</b>, not TypeScript, because for this project Python wins on three counts: it comes with the back-office and login built in; it's the same language as your existing code and the analytics/AI; and it's the proven choice for complex, data-heavy business systems.</p>
+      <p style="margin-bottom:0">TypeScript still earns its place — but only on the <b>screens</b> (React), where it and the AI design tools are strongest. <b>Python for the engine, TypeScript for the glass.</b></p>
+    </div>
+  </div>
+
+  <!-- COMPARISON -->
+  <h2>What I compared</h2>
+  <p class="sub">Every realistic way to build this, scored on what matters here: do logins/roles/back-office come built-in, is it solid for money + GST, and is it a good fit for building with AI.</p>
+  <div class="card" style="padding:14px">
+  <table>
+    <tr>
+      <th>Option</th><th>What it is</th><th>Login, roles &amp; admin built-in?</th><th>Money + GST fit</th><th>Build-with-AI fit</th><th>Verdict</th>
+    </tr>
+    <tr>
+      <td class="opt">Django (Python)<br>+ React + Postgres</td>
+      <td>General toolkit aimed at exactly this kind of data-heavy business system.</td>
+      <td><span class="tag t-yes">Yes — free</span></td>
+      <td><span class="tag t-yes">Excellent</span></td>
+      <td><span class="tag t-yes">Strong</span></td>
+      <td><b>Recommended.</b> Best all-round fit; matches your existing code + analytics.</td>
+    </tr>
+    <tr>
+      <td class="opt">All-TypeScript<br>(Next.js / NestJS)</td>
+      <td>One language for screens and brain.</td>
+      <td><span class="tag t-part">Partly — you build it</span></td>
+      <td><span class="tag t-yes">Good</span></td>
+      <td><span class="tag t-yes">Strongest</span></td>
+      <td>Real runner-up. Pick only if one-language simplicity beats free admin.</td>
+    </tr>
+    <tr>
+      <td class="opt">ERPNext<br>(ready-made ERP)</td>
+      <td>A free, India-built ERP you configure instead of build.</td>
+      <td><span class="tag t-yes">It is the admin</span></td>
+      <td><span class="tag t-yes">Best for India GST</span></td>
+      <td><span class="tag t-no">Weaker</span></td>
+      <td>Fastest to GST, but bends your design to its rules + clashes with "Tally is the book." Borrow its GST model, don't adopt it.</td>
+    </tr>
+    <tr>
+      <td class="opt">.NET / Java</td>
+      <td>The heavy "big enterprise" choice.</td>
+      <td><span class="tag t-yes">Yes</span></td>
+      <td><span class="tag t-yes">Excellent</span></td>
+      <td><span class="tag t-part">OK</span></td>
+      <td>Overkill for a one-person + AI build. Slower to move, more ceremony.</td>
+    </tr>
+    <tr>
+      <td class="opt">Rails / Laravel</td>
+      <td>Other "batteries-included" toolkits (Ruby / PHP).</td>
+      <td><span class="tag t-yes">Yes</span></td>
+      <td><span class="tag t-yes">Good</span></td>
+      <td><span class="tag t-part">OK</span></td>
+      <td>Genuinely fast. But Python wins here because of your existing code + the AI/analytics layer.</td>
+    </tr>
+  </table>
+  </div>
+
+  <!-- THE FORK -->
+  <h2>The one fork worth your conscious call</h2>
+  <div class="callout c-warn">
+    <b>Build it (recommended) vs. start from ERPNext.</b> ERPNext already has GST, e-invoice and e-way-bill done — the hardest compliance plumbing, free, built in India. The catch: it has its own opinions about stock, pricing and accounting, and your design (documents→ledgers, SOR as a first-class thing, PT-file pricing, Tally as the statutory book, the Ten Software POS) doesn't match those opinions. Bending it to fit can cost as much as building, and it fights the "you design it yourself" approach you've followed all along.
+    <br><br>
+    <b>My call:</b> build it ourselves, but <b>steal ERPNext's GST data model</b> so we don't reinvent the slab/HSN tables. If you'd rather seriously evaluate adopting ERPNext, say so — that's the only thing here that changes the whole plan, so it's worth deciding on purpose, not by default.
+  </div>
+
+  <!-- WHEN I'D CHANGE -->
+  <h2>When I'd change this recommendation</h2>
+  <div class="card">
+    <ul style="margin:0">
+      <li><b>If you want one language everywhere</b> and you're fine building the back-office screens by hand → go all-TypeScript. (You'd still use Python for the AI/analytics bits.)</li>
+      <li><b>If getting GST-compliant fast matters more than full control</b> of the design → reconsider adopting ERPNext.</li>
+      <li><b>If you plan to hire an in-house team later</b> in a specific language → weight the choice toward whatever they'll know.</li>
+    </ul>
+  </div>
+
+  <!-- NEXT -->
+  <h2>Your decision</h2>
+  <div class="callout c-good">
+    <b>Confirm one of these and I start the foundation:</b><br>
+    1. <b>Go with the recommendation</b> — Python engine, React screens, PostgreSQL, India cloud, no Supabase. &nbsp;or<br>
+    2. <b>All-TypeScript instead</b> — if single-language simplicity matters more to you. &nbsp;or<br>
+    3. <b>Stop and evaluate ERPNext</b> first — if you want to weigh the ready-made route.
+  </div>
+
+  <footer>
+    KDPS · Stack decision brief · 23 June 2026 · recommendation pending Anand's confirmation. Supersedes the earlier casual "TypeScript + Supabase" note; once confirmed it becomes the locked decision in CLAUDE.md. Method: researched against current practice for ERP/financial systems, solo + AI builds, and India GST retail.
+  </footer>
+
+</div>
+</body>
+</html>

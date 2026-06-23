@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 4 — The Database, Your Ledger Made Real</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --mem:#15803d; --mem-bg:#f0fdf4; --mem-line:#bbf7d0; --mem-deep:#14532d;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--mem)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--mem-deep)}
+  p{margin:14px 0}
+  .key{font-weight:600}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:14px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px}
+
+  /* db tables */
+  .tbl{margin:16px 0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .tbl .cap{font-family:ui-monospace,Menlo,monospace; font-size:12.5px; font-weight:700; color:var(--mem-deep); background:var(--mem-bg); padding:8px 13px; border-bottom:1px solid var(--mem-line); letter-spacing:.02em}
+  table{width:100%; border-collapse:collapse; font-size:13px}
+  th,td{padding:8px 11px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap}
+  th{background:#f8fafc; font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  tr:last-child td{border-bottom:0}
+  td.mono,th.mono{font-family:ui-monospace,Menlo,monospace}
+  .pk{color:#7c3aed; font-weight:700} .fk{color:#1d4ed8; font-weight:700}
+  .in{color:var(--good); font-weight:700} .out{color:var(--bad); font-weight:700}
+  .tbl-wrap{overflow-x:auto}
+  .legend{font-size:13px; color:var(--muted); margin:8px 0 0}
+  .legend b.pk{color:#7c3aed} .legend b.fk{color:#1d4ed8}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:24px 0}
+  .callout.mem{background:var(--mem-bg); border:1px solid var(--mem-line)}
+  .callout.ink{background:#1d2433; color:#fff}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+  .callout b{font-weight:700}
+  .callout.mem b{color:var(--mem-deep)} .callout.ink b{color:#bbf7d0}
+  .callout p{margin:0; font-size:15px}
+
+  /* good/bad check cards */
+  .checks{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0}
+  @media(max-width:560px){.checks{grid-template-columns:1fr}}
+  .chk{border-radius:12px; padding:14px 16px; font-size:14px}
+  .chk.bad{background:var(--bad-bg); border:1px solid var(--bad-line)}
+  .chk.good{background:var(--good-bg); border:1px solid var(--mem-line)}
+  .chk h4{margin:0 0 6px; font-size:14.5px}
+  .chk.bad h4{color:#991b1b} .chk.good h4{color:var(--mem-deep)}
+  .chk p{margin:0; color:var(--muted)}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#bbf7d0; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#f0fdf4,#eff6ff); border:1px solid var(--mem-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--mem-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--mem); text-decoration:none} footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 4 · ~10 min</div>
+  <h1>The database — your ledger, made real</h1>
+  <p class="lede">In Lesson 2 you met "the Memory" — the box that never forgets. This lesson opens that box. Inside it's just <b>tables</b>, and one of them is the stock ledger you already designed. By the end you'll be able to read the tables the AI builds and check they match your spine.</p>
+  <div class="mission"><b>Why this lesson:</b> when the AI builds KDPS, it will create database tables. If you can read a <i>schema</i> — the list of tables and columns — you can catch the most expensive mistakes (a count pretending to be a ledger, lost size×color) <b>before</b> they're baked in. This is the single highest-leverage thing to check.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — A DATABASE IS JUST TABLES -->
+  <section>
+    <h2><span class="num">1</span> A database is just tables</h2>
+    <p class="kicker">Rows and columns — you already use these every day</p>
+    <p>A database is a set of <span class="key">tables</span>. A table is like one sheet in Excel: <b>columns</b> are the fields, <b>rows</b> are the records. That's it. Your stock ledger from Lesson 1 is literally one table — every movement is a row:</p>
+
+    <div class="tbl">
+      <div class="cap">stock_movement</div>
+      <div class="tbl-wrap"><table>
+        <tr><th class="mono">id</th><th class="mono">sku_id</th><th>type</th><th>qty</th><th>document</th><th>store</th></tr>
+        <tr><td class="mono pk">1001</td><td class="mono fk">NK-AM90-WHT-8</td><td>GRN</td><td class="in">+5</td><td>GRN#41</td><td>Patna-WH</td></tr>
+        <tr><td class="mono pk">1002</td><td class="mono fk">NK-AM90-WHT-8</td><td>SALE</td><td class="out">−1</td><td>BILL#902</td><td>Store-7</td></tr>
+        <tr><td class="mono pk">1003</td><td class="mono fk">NK-AM90-WHT-8</td><td>TRANSFER</td><td class="out">−2</td><td>TR#88</td><td>Store-7</td></tr>
+        <tr><td class="mono pk">1004</td><td class="mono fk">NK-AM90-WHT-8</td><td>RETURN</td><td class="in">+1</td><td>EXCH#5</td><td>Store-7</td></tr>
+      </table></div>
+    </div>
+
+    <div class="callout mem">
+      <p>💡 <b>The number that isn't there:</b> notice there's no "stock on hand" column. On hand = <code>SUM(qty)</code> for that SKU = <b>3</b>. It's <b>calculated, never stored</b> — exactly the ledger rule from Lesson 1. New rows are only ever <i>added</i>; nothing is edited. <b>If you ever see a single <code>stock_qty</code> column that gets updated on each sale, that's a count pretending to be a ledger — the red flag this whole system avoids.</b></p>
+    </div>
+  </section>
+
+  <!-- 2 — HOW TABLES LINK -->
+  <section>
+    <h2><span class="num">2</span> How tables link together</h2>
+    <p class="kicker">Keys & relationships</p>
+    <p>You don't repeat a SKU's full details on every movement row — you'd never keep it consistent. Instead each thing lives in <b>its own table</b>, and rows point at each other by <b>id</b>. Two more tables sit behind that ledger:</p>
+
+    <div class="tbl">
+      <div class="cap">sku <span style="font-weight:400; color:var(--muted)">— one row per Style × Size × Colour</span></div>
+      <div class="tbl-wrap"><table>
+        <tr><th class="mono">id</th><th>style</th><th>colour</th><th>size</th><th class="mono">brand_id</th></tr>
+        <tr><td class="mono pk">NK-AM90-WHT-8</td><td>Air Max 90</td><td>White</td><td>8</td><td class="mono fk">12</td></tr>
+      </table></div>
+    </div>
+
+    <div class="tbl">
+      <div class="cap">brand <span style="font-weight:400; color:var(--muted)">— the master, carrying the commercial model</span></div>
+      <div class="tbl-wrap"><table>
+        <tr><th class="mono">id</th><th>name</th><th>commercial_model</th><th>commission_%</th><th>return_window_days</th></tr>
+        <tr><td class="mono pk">12</td><td>Biba</td><td>SOR</td><td>35</td><td>90</td></tr>
+      </table></div>
+    </div>
+
+    <p class="legend"><b class="pk">Purple = primary key</b> — the row's own unique id. &nbsp; <b class="fk">Blue = foreign key</b> — a pointer to another table's id.</p>
+
+    <div class="callout ink">
+      <p>🔗 <b>Follow the chain:</b> a <code>stock_movement</code> points to a <code>sku</code> (via <span class="fk" style="color:#93c5fd">sku_id</span>), and a <code>sku</code> points to its <code>brand</code> (via <span class="fk" style="color:#93c5fd">brand_id</span>). So from any single sale you can walk: piece → SKU → brand → <b>and the brand carries the commercial model</b>. That's your whole Lesson-1 spine, living as data: set SOR once on the brand row, and every sale of its SKUs inherits it.</p>
+    </div>
+  </section>
+
+  <!-- 3 — READING A SCHEMA -->
+  <section>
+    <h2><span class="num">3</span> Reading a schema &amp; the checks that matter</h2>
+    <p class="kicker">Your job when the AI builds the tables</p>
+    <p>A <span class="key">schema</span> is just the blueprint: the list of tables, their columns, and how they link. When the AI builds KDPS it'll show you one. You don't write it — you <b>read it and sanity-check it</b> against your spine. Four checks catch the costly mistakes:</p>
+
+    <div class="checks">
+      <div class="chk bad">
+        <h4>❌ Red flag — a count</h4>
+        <p>A <code>stock_qty</code> column on the SKU that gets overwritten each sale. No history, no audit. This is the count Lesson 1 warned about.</p>
+      </div>
+      <div class="chk good">
+        <h4>✅ Want to see — a ledger</h4>
+        <p>A separate <code>stock_movement</code> table where rows are only <i>added</i>. On-hand is summed, never stored.</p>
+      </div>
+      <div class="chk bad">
+        <h4>❌ Red flag — lost size×colour</h4>
+        <p>Stock tracked at <i>style</i> level only — no size and colour columns. Breaks "SKU = Style × Size × Colour."</p>
+      </div>
+      <div class="chk good">
+        <h4>✅ Want to see — size×colour survive</h4>
+        <p>The SKU table has its own <code>size</code> and <code>colour</code> columns, end to end.</p>
+      </div>
+    </div>
+
+    <div class="callout soft">
+      <p>🔎 <b>Two more quick checks:</b> ① the <b>commercial model lives on the brand</b> (not copied onto every product), and ② money fields like profit are <b>derived</b> (no hand-typed <code>profit</code> column). If the AI's schema passes these four-plus-two, your spine is intact.</p>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 6 quick scenarios</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">You're reviewing tables the AI just built for KDPS. Pick the right call — instant feedback.</p>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 1 · Ledger vs count</div>
+      <div class="qt">The AI's <code>sku</code> table has one column <code>stock_quantity</code> that it <b>updates on every sale</b>. What is this, and should you accept it?</div>
+      <button class="opt">A ledger — accept it</button>
+      <button class="opt">A schema error that won't run — reject it</button>
+      <button class="opt">A <b>count</b> pretending to be a ledger — reject it; ask for a movement table instead</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 2 · The derived number</div>
+      <div class="qt">Where should "stock on hand" come from?</div>
+      <button class="opt">A stored column you keep updating</button>
+      <button class="opt">Calculated — the <code>SUM</code> of that SKU's movements</button>
+      <button class="opt">Typed in by store staff each morning</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 3 · SKU granularity</div>
+      <div class="qt">A table tracks stock by <b>style only</b> — no size or colour columns. What's wrong?</div>
+      <button class="opt">Size×colour must survive end-to-end — "SKU = Style × Size × Colour". This loses it.</button>
+      <button class="opt">Nothing — style level is enough</button>
+      <button class="opt">Styles aren't allowed as text</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · Keys</div>
+      <div class="qt"><code>stock_movement.sku_id</code> points to <code>sku.id</code>. What is that pointer called, and what's it for?</div>
+      <button class="opt">A primary key — it makes the row unique</button>
+      <button class="opt">A <b>foreign key</b> — it links a movement to its SKU, so you never repeat the SKU's details</button>
+      <button class="opt">A password — it locks the table</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 5 · Where the spine lives</div>
+      <div class="qt">Where should a brand's commercial model (SOR / Buy &amp; Sell / …) be stored?</div>
+      <button class="opt">Copied onto every product row</button>
+      <button class="opt">Typed in fresh at each sale</button>
+      <button class="opt">As one column on the <code>brand</code> table — set once, inherited by all its SKUs</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 6 · Derived money</div>
+      <div class="qt">The AI's schema has a hand-fillable <code>profit</code> column on each sale. Your reaction?</div>
+      <button class="opt">Reject — profit is <b>derived</b> (revenue − cost), never hand-typed</button>
+      <button class="opt">Accept — staff can fill it in</button>
+      <button class="opt">Accept — profit must always be stored</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 6</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Want to go further? Ask me — “show me the SQL that adds up stock on hand,” “what's a database migration?”, or “I'm ready for Lesson 5 — reading what the AI wrote.” I'll build on this.
+  </div>
+
+  <footer>
+    <p>Pairs with the <a href="../reference/schema-sanity-check.html">Schema Sanity-Check card</a> · builds on <a href="0001-the-two-spines.html">Lesson 1 (the ledger)</a> &amp; <a href="0002-anatomy-of-a-running-app.html">Lesson 2 (the Memory box)</a>.</p>
+    <p>Sources: <a href="https://www.postgresql.org/docs/current/tutorial.html">PostgreSQL tutorial</a> · <a href="https://docs.frappe.io/">Frappe/ERPNext — item variants &amp; stock ledger entry</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0004 · 🗄️ inside the Memory box</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "A single column updated in place is a count — it keeps no history, so you lose audit and self-healing. Ask for a separate, append-only movement table.",
+    "On hand is the SUM of movements — derived, never stored. That's what gives you audit trail and self-healing.",
+    "SKU = Style × Size × Colour. Tracking by style alone means you can't tell a size 8 from a size 10 — the domain rule that must never break.",
+    "It's a foreign key: a pointer to another table's id. It keeps each fact in one place and links rows together cleanly.",
+    "The commercial model belongs on the brand — set once, every SKU under it inherits the rule. That's the Lesson-1 spine as data.",
+    "Profitability is derived (revenue from the sale minus cost from the PT/invoice), never hand-entered — a typed profit column is a red flag."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){
+          o.disabled = true;
+          if (j === correct) o.classList.add('correct');
+        });
+        if (i === correct){
+          score++;
+          document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok';
+          fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no';
+          fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schema Sanity-Check — KDPS</title>
+<style>
+  :root{ --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --mem:#15803d; --mem-bg:#f0fdf4; --mem-line:#bbf7d0; --mem-deep:#14532d;
+    --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.55; font-size:15px;}
+  .wrap{max-width:820px; margin:0 auto; padding:40px 26px 70px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:29px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:64ch; margin:0 0 8px}
+  .hook{background:var(--mem-bg); border:1px solid var(--mem-line); border-radius:10px; padding:11px 15px; font-size:14px; color:var(--mem-deep); margin:16px 0 26px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px}
+
+  .check{display:grid; grid-template-columns:34px 1fr; gap:0 14px; align-items:start; border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px 16px; margin:12px 0; break-inside:avoid}
+  .check .n{grid-row:span 3; width:30px; height:30px; border-radius:8px; background:var(--mem); color:#fff; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center}
+  .check h3{margin:0; font-size:16px}
+  .check .ask{color:var(--muted); font-size:13.5px; margin:3px 0 9px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; margin-right:6px}
+  .badge.good{background:var(--mem-bg); color:var(--mem-deep); border:1px solid var(--mem-line)}
+  .badge.bad{background:var(--bad-bg); color:#991b1b; border:1px solid var(--bad-line)}
+  .check .line{font-size:13.5px; margin:5px 0}
+  .check .line b{font-weight:700}
+
+  .rule{background:#1d2433; color:#e7ebf3; border-radius:14px; padding:16px 20px; margin:24px 0 0}
+  .rule b{color:#bbf7d0}
+  footer{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--mem); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} .hook,.rule,.badge{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>Schema sanity-check</h1>
+  <p class="lede">Six things to look for whenever the AI hands you database tables for KDPS. You're not writing the schema — you're checking it doesn't quietly break the spine.</p>
+  <div class="hook">🗄️ <b>Hold this:</b> a database is just tables (rows &amp; columns). Your job is to confirm the most important table — stock — is a <b>ledger you add to</b>, not a <b>count you overwrite</b>, and that the business rules live where they should.</div>
+
+  <div class="check">
+    <div class="n">1</div>
+    <div><h3>Stock is a ledger, not a count</h3>
+      <p class="ask">Is there a separate movements table, append-only?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>A <code>stock_movement</code> table; rows only added; on-hand = <code>SUM(qty)</code>.</p>
+      <p class="line"><span class="badge bad">FLAG</span>A <code>stock_qty</code> column updated in place on each sale — no history, no audit.</p>
+    </div>
+  </div>
+
+  <div class="check">
+    <div class="n">2</div>
+    <div><h3>Size × Colour survive</h3>
+      <p class="ask">Can you tell a size 8 White from a size 10 Black?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>The <code>sku</code> table has its own <code>size</code> and <code>colour</code> columns.</p>
+      <p class="line"><span class="badge bad">FLAG</span>Stock tracked at <i>style</i> level only. "SKU = Style × Size × Colour" — never break it.</p>
+    </div>
+  </div>
+
+  <div class="check">
+    <div class="n">3</div>
+    <div><h3>The commercial model lives on the brand</h3>
+      <p class="ask">Set once, inherited by all its SKUs?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>One <code>commercial_model</code> column on <code>brand</code> (Buy&amp;Sell / Correction / SOR / Consignment).</p>
+      <p class="line"><span class="badge bad">FLAG</span>The model copied onto every product, or typed at each sale — it'll drift out of sync.</p>
+    </div>
+  </div>
+
+  <div class="check">
+    <div class="n">4</div>
+    <div><h3>Money is derived, not typed</h3>
+      <p class="ask">Profit computed from cost &amp; revenue?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>Cost (from PT/invoice) and revenue (from the sale) stored; profit <b>calculated</b>.</p>
+      <p class="line"><span class="badge bad">FLAG</span>A hand-fillable <code>profit</code> column. Profitability is always derived.</p>
+    </div>
+  </div>
+
+  <div class="check">
+    <div class="n">5</div>
+    <div><h3>Tables link by id, facts aren't repeated</h3>
+      <p class="ask">Primary keys &amp; foreign keys in place?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>Each table has an <code>id</code> (primary key); links via <code>brand_id</code>, <code>sku_id</code> (foreign keys).</p>
+      <p class="line"><span class="badge bad">FLAG</span>The same brand/SKU details copy-pasted across many rows — guaranteed to go inconsistent.</p>
+    </div>
+  </div>
+
+  <div class="check">
+    <div class="n">6</div>
+    <div><h3>State &amp; GST are modelled as data</h3>
+      <p class="ask">Two GSTINs, dated tax — not hard-coded?</p></div>
+    <div style="grid-column:2">
+      <p class="line"><span class="badge good">WANT</span>Each store maps to a state GSTIN; tax rates are date-effective rows, not numbers in code.</p>
+      <p class="line"><span class="badge bad">FLAG</span>A single GST rate baked into the code, or stores with no state mapping.</p>
+    </div>
+  </div>
+
+  <div class="rule">
+    <p style="margin:0">🧭 <b>If in doubt, ask the AI to explain a table:</b> "Walk me through this table — what's one row, what gets added vs updated, and how does on-hand get calculated?" If the answer involves <i>updating</i> a stock number in place, push back. The spine wants <b>add, never overwrite</b>.</p>
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0004-the-database-your-ledger-made-real.html">Lesson 4 — The database, your ledger made real</a>. Sources: <a href="https://www.postgresql.org/docs/current/tutorial.html">PostgreSQL</a> · <a href="https://docs.frappe.io/">Frappe/ERPNext</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · schema sanity-check</p>
+  </footer>
+</div>
+</body>
+</html>

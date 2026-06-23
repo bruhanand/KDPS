@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS Warehouse Meeting — Knowledge Base (18 May 2026)</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --panel: #ffffff;
+    --ink: #1a1a1a;
+    --ink-muted: #555;
+    --line: #e6e3da;
+    --accent: #8b2c2c;
+    --accent-soft: #f3e3e0;
+    --good: #2f6f3a;
+    --good-soft: #e3f1e3;
+    --warn: #a06b00;
+    --warn-soft: #fbf0d6;
+    --bad: #8b2c2c;
+    --bad-soft: #f5dad6;
+    --code-bg: #f2efe7;
+    --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 18px rgba(0,0,0,0.04);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    font-size: 16px;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  /* Sidebar */
+  aside {
+    background: #1f1f1f;
+    color: #ddd;
+    padding: 28px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid #000;
+  }
+  aside h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+    margin: 0 0 14px 0;
+    font-weight: 600;
+  }
+  aside .brand {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  aside .subtitle {
+    color: #999;
+    font-size: 12px;
+    margin-bottom: 28px;
+  }
+  aside nav ul { list-style: none; padding: 0; margin: 0 0 24px 0; }
+  aside nav li { margin: 4px 0; }
+  aside nav a {
+    color: #ccc;
+    text-decoration: none;
+    font-size: 13.5px;
+    display: block;
+    padding: 5px 10px;
+    border-radius: 4px;
+    border-left: 2px solid transparent;
+  }
+  aside nav a:hover {
+    background: #2a2a2a;
+    color: #fff;
+    border-left-color: var(--accent);
+  }
+  aside nav a.section-head {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 11px;
+    color: #777;
+    font-weight: 600;
+    margin-top: 18px;
+    pointer-events: none;
+    padding-left: 4px;
+  }
+  /* Main */
+  main {
+    padding: 56px 64px 120px 64px;
+    max-width: 1000px;
+  }
+  header.hero {
+    margin-bottom: 56px;
+    padding-bottom: 32px;
+    border-bottom: 2px solid var(--accent);
+  }
+  header.hero h1 {
+    font-size: 36px;
+    margin: 0 0 8px 0;
+    letter-spacing: -0.5px;
+  }
+  header.hero .meta {
+    color: var(--ink-muted);
+    font-size: 14px;
+  }
+  header.hero .meta span { margin-right: 18px; }
+  header.hero .intro {
+    margin-top: 22px;
+    padding: 18px 22px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    font-size: 15px;
+    color: #333;
+  }
+  section {
+    margin-bottom: 56px;
+    scroll-margin-top: 20px;
+  }
+  section h2 {
+    font-size: 26px;
+    margin: 0 0 6px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  section h2 .id {
+    color: var(--accent);
+    font-weight: 600;
+    margin-right: 12px;
+    font-size: 18px;
+    vertical-align: middle;
+  }
+  section .lead {
+    color: var(--ink-muted);
+    font-size: 15px;
+    margin: 0 0 24px 0;
+    font-style: italic;
+  }
+  section h3 {
+    font-size: 18px;
+    margin: 28px 0 10px 0;
+    color: #222;
+  }
+  section h4 {
+    font-size: 15px;
+    margin: 18px 0 6px 0;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  /* Cards & callouts */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    box-shadow: var(--shadow);
+  }
+  .callout {
+    padding: 14px 18px;
+    border-radius: 6px;
+    margin: 16px 0;
+    font-size: 14.5px;
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+  }
+  .callout.good { background: var(--good-soft); border-left-color: var(--good); }
+  .callout.warn { background: var(--warn-soft); border-left-color: var(--warn); }
+  .callout.bad  { background: var(--bad-soft);  border-left-color: var(--bad);  }
+  .callout .label {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    display: block;
+  }
+  .callout.good .label { color: var(--good); }
+  .callout.warn .label { color: var(--warn); }
+  .callout.bad  .label { color: var(--bad);  }
+  .callout.accent .label { color: var(--accent); }
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 14px;
+    background: var(--panel);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    background: #f0ede4;
+    font-weight: 600;
+    font-size: 12.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: #555;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf2; }
+  /* Misc */
+  code, .mono {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  pre {
+    background: var(--code-bg);
+    padding: 14px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  blockquote {
+    margin: 14px 0;
+    padding: 10px 18px;
+    border-left: 3px solid #bbb;
+    color: #444;
+    background: #f6f4ec;
+    font-style: italic;
+    font-size: 14.5px;
+  }
+  blockquote .speaker {
+    display: block;
+    font-style: normal;
+    color: #888;
+    font-size: 12px;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    background: #eee;
+    color: #555;
+    margin-right: 6px;
+  }
+  .pill.p1 { background: #d9ead2; color: #2f6f3a; }
+  .pill.p2 { background: #fbf0d6; color: #8a6300; }
+  .pill.p3 { background: #e0e7f2; color: #305078; }
+  .pill.p4 { background: #f0e0f2; color: #6a3578; }
+  .pill.new { background: #f5dad6; color: #8b2c2c; }
+  ul.clean, ol.clean { padding-left: 22px; }
+  ul.clean li, ol.clean li { margin: 6px 0; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+  .metric {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 18px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .metric .num {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .metric .label {
+    color: #666;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .flow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0;
+  }
+  .flow .step {
+    background: #fff;
+    border: 1px solid var(--line);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    box-shadow: var(--shadow);
+    flex-shrink: 0;
+  }
+  .flow .arrow {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 18px;
+  }
+  .flow .step.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .flow .step.bad { border-color: var(--bad); background: var(--bad-soft); }
+  hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin: 32px 0;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; }
+    main { padding: 32px 24px; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside>
+  <div class="brand">KDPS Meeting</div>
+  <div class="subtitle">Warehouse Walkthrough · 18 May 2026</div>
+
+  <nav>
+    <a class="section-head">Foundations</a>
+    <ul>
+      <li><a href="#glossary">Glossary</a></li>
+      <li><a href="#business">The Business at a Glance</a></li>
+      <li><a href="#store-formats">Store Formats (EBO/MBO/SIS)</a></li>
+    </ul>
+
+    <a class="section-head">Commercial</a>
+    <ul>
+      <li><a href="#commercial">Commercial Models</a></li>
+      <li><a href="#agent">Agent Guarantor Model</a></li>
+      <li><a href="#margin">MRP &amp; Margin Formula</a></li>
+      <li><a href="#booking">Booking Cycle</a></li>
+    </ul>
+
+    <a class="section-head">Inventory Pipeline</a>
+    <ul>
+      <li><a href="#ptfile">The PT File System</a></li>
+      <li><a href="#branded-flow">Branded Workflow</a></li>
+      <li><a href="#nonbranded-flow">Non-Branded Workflow</a></li>
+      <li><a href="#chain">The 4-Person Chain</a></li>
+      <li><a href="#allocation">Store Allocation</a></li>
+      <li><a href="#barcode">Barcode Rules</a></li>
+    </ul>
+
+    <a class="section-head">Store &amp; POS</a>
+    <ul>
+      <li><a href="#legacy-pos">Legacy POS System</a></li>
+      <li><a href="#receipt">Store Receipt &amp; Scan</a></li>
+      <li><a href="#layout">Layout Psychology</a></li>
+      <li><a href="#season">Season Tagging</a></li>
+    </ul>
+
+    <a class="section-head">EOSS &amp; Discounts</a>
+    <ul>
+      <li><a href="#eoss">EOSS Mechanics</a></li>
+      <li><a href="#fraud">Discount Fraud Loophole</a></li>
+    </ul>
+
+    <a class="section-head">Reporting</a>
+    <ul>
+      <li><a href="#crunch">The 1st–7th Crunch</a></li>
+      <li><a href="#whatsapp">WhatsApp Reporting</a></li>
+    </ul>
+
+    <a class="section-head">The AI Build</a>
+    <ul>
+      <li><a href="#ai-vision">AI Capability Map</a></li>
+      <li><a href="#image">Image Capture Hygiene</a></li>
+      <li><a href="#crm">Vendor + Agent CRM</a></li>
+      <li><a href="#data-migration">Data Migration</a></li>
+    </ul>
+
+    <a class="section-head">Meeting Itself</a>
+    <ul>
+      <li><a href="#what-went-well">What Went Well</a></li>
+      <li><a href="#gaps">Weaknesses &amp; Gaps</a></li>
+      <li><a href="#actions">Recommended Actions</a></li>
+      <li><a href="#quotes">Notable Quotes</a></li>
+    </ul>
+  </nav>
+</aside>
+
+<main>
+
+<header class="hero">
+  <h1>KDPS Warehouse Meeting — Knowledge Base</h1>
+  <div class="meta">
+    <span><strong>Date:</strong> 18 May 2026</span>
+    <span><strong>Location:</strong> KDPS Warehouse, Ranchi</span>
+    <span><strong>Source:</strong> meeting-transcription.md (632 lines)</span>
+  </div>
+  <div class="intro">
+    This document is a structured knowledge base of every KDPS operational concept discussed
+    in the 18 May warehouse meeting. Use the sidebar to navigate. Each section explains
+    one concept end-to-end: what it is today, what the pain is, and what the AI build
+    must address. Read this alongside <code>meeting-report.md</code>, which contains the
+    judgment of how the meeting itself went.
+  </div>
+</header>
+
+<!-- ============ GLOSSARY ============ -->
+<section id="glossary">
+  <h2><span class="id">01</span>Glossary</h2>
+  <p class="lead">Terms used throughout this document and in KDPS daily operations.</p>
+
+  <table>
+    <thead>
+      <tr><th style="width:170px">Term</th><th>Meaning</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>SKU</strong></td><td>Stock Keeping Unit. In fashion: a unique Style × Size × Color combination. <em>Never just a barcode.</em></td></tr>
+      <tr><td><strong>SBU</strong></td><td>Strategic Business Unit. KDPS has 50+ — includes stores, warehouses, franchise outlets.</td></tr>
+      <tr><td><strong>PT File</strong></td><td>Product Tracker file. The internal document that maps an inbound invoice to system-loadable stock entries (with barcodes, MRPs, sizes).</td></tr>
+      <tr><td><strong>Master PT File</strong></td><td>The consolidated PT file that branded vendors send every 15 days covering all dispatches to KDPS in that period.</td></tr>
+      <tr><td><strong>GRN</strong></td><td>Goods Received Note. The receiving SBU's acknowledgment that physical stock arrived.</td></tr>
+      <tr><td><strong>Inward</strong></td><td>The act of formally entering received stock into the system, post-approval.</td></tr>
+      <tr><td><strong>EBO</strong></td><td>Exclusive Brand Outlet. Single brand only; uses the brand's own software.</td></tr>
+      <tr><td><strong>MBO</strong></td><td>Multi-Brand Outlet. KDPS owns the inventory data.</td></tr>
+      <tr><td><strong>SIS</strong></td><td>Store-in-Store. Multiple branded "corners" within one MBO (e.g. Big Shop).</td></tr>
+      <tr><td><strong>EOSS</strong></td><td>End of Season Sale. Brand- or KDPS-funded markdown event.</td></tr>
+      <tr><td><strong>WSP</strong></td><td>Wholesale Selling Price. The price KDPS pays the brand (pre-tax).</td></tr>
+      <tr><td><strong>Gross WSP</strong></td><td>WSP after service tax / GST added.</td></tr>
+      <tr><td><strong>MRP</strong></td><td>Maximum Retail Price. What the customer pays. For non-branded items, KDPS sets this.</td></tr>
+      <tr><td><strong>HSN</strong></td><td>Harmonized System of Nomenclature. India's tax-classification code per product type.</td></tr>
+      <tr><td><strong>SOR</strong></td><td>Sale-or-Return. Commercial model: brand owns stock until sold; KDPS can return unsold within 60–120 days. <em>Not discussed in this meeting but flagged for next.</em></td></tr>
+      <tr><td><strong>Outright</strong></td><td>Commercial model: KDPS buys stock outright at receipt; no return rights.</td></tr>
+      <tr><td><strong>Core (in brand terms)</strong></td><td>Basic categories like men's jeans/t-shirts that are not seasonal. Rarely discounted in first year.</td></tr>
+      <tr><td><strong>Lagan</strong></td><td>Wedding season. Major driver of summer sales (Jan–Jul cycle in this region).</td></tr>
+      <tr><td><strong>Agent (sourcing)</strong></td><td>Local middleman in each sourcing city who guarantees vendor payment + timely shipment for 1–2% commission.</td></tr>
+      <tr><td><strong>"Billed-Retained"</strong></td><td>Stock state during EOSS where customer is billed but item still sits in store. Not covered explicitly in this meeting; flagged in KDPS master plan.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ BUSINESS ============ -->
+<section id="business">
+  <h2><span class="id">02</span>The Business at a Glance</h2>
+  <p class="lead">KDPS in numbers, as understood from the meeting.</p>
+
+  <div class="grid-3">
+    <div class="metric"><span class="num">50+</span><span class="label">SBUs</span></div>
+    <div class="metric"><span class="num">40+</span><span class="label">Brands carried</span></div>
+    <div class="metric"><span class="num">20,000+</span><span class="label">SKUs</span></div>
+    <div class="metric"><span class="num">70 / 30</span><span class="label">Branded / Non-Branded volume</span></div>
+    <div class="metric"><span class="num">~25%</span><span class="label">Branded margin (avg)</span></div>
+    <div class="metric"><span class="num">30–35%</span><span class="label">Non-branded margin</span></div>
+    <div class="metric"><span class="num">4</span><span class="label">People per invoice today</span></div>
+    <div class="metric"><span class="num">18–19h</span><span class="label">Workday during 1st–7th crunch</span></div>
+    <div class="metric"><span class="num">70–72%</span><span class="label">Female share at Sanskar</span></div>
+  </div>
+
+  <div class="card">
+    <h3>The yearly rhythm</h3>
+    <div class="flow">
+      <div class="step">Jan–Feb<br><small>Bookings for summer</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step warn">Mar–Apr<br><small>Lagan rush</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step" style="background:#e3f1e3;border-color:#2f6f3a">May–Jul<br><small>Rest window</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step warn">Aug–Sep<br><small>Winter intake</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step bad">Oct–Dec<br><small>Dussehra · Diwali · Chhath · Winter peak</small></div>
+      <div class="arrow">&rarr;</div>
+      <div class="step warn">Feb<br><small>Winter EOSS</small></div>
+    </div>
+    <p style="font-size:14px;color:var(--ink-muted);margin-top:10px">
+      <strong>Critical timing:</strong> Today is 18 May 2026. The May–July rest window
+      is the only time of year the team has bandwidth to absorb a major systems change.
+      The next rush begins in August.
+    </p>
+  </div>
+</section>
+
+<!-- ============ STORE FORMATS ============ -->
+<section id="store-formats">
+  <h2><span class="id">03</span>Store Formats</h2>
+  <p class="lead">KDPS operates three structurally different store types. Each has different ownership of inventory data and PT-file responsibility.</p>
+
+  <table>
+    <thead>
+      <tr><th>Format</th><th>Meaning</th><th>Who owns inventory data?</th><th>PT-file headache for KDPS?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>EBO</strong><br>Exclusive Brand Outlet</td>
+        <td>Single brand only (e.g. Allen Solly Deoghar, Blackberry Deoghar)</td>
+        <td>The brand (uses brand's own POS software)</td>
+        <td><span class="pill" style="background:#d9ead2;color:#2f6f3a">None</span></td>
+      </tr>
+      <tr>
+        <td><strong>MBO</strong><br>Multi-Brand Outlet</td>
+        <td>KDPS multi-brand store (e.g. KDPS Lifestyle Deoghar)</td>
+        <td>KDPS</td>
+        <td><span class="pill" style="background:#fbf0d6;color:#8a6300">High</span></td>
+      </tr>
+      <tr>
+        <td><strong>SIS</strong><br>Store-in-Store</td>
+        <td>Multiple branded "corners" inside one MBO (e.g. Big Shop)</td>
+        <td>KDPS, but per-brand allocation</td>
+        <td><span class="pill" style="background:#f5dad6;color:#8b2c2c">Maximum</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Why this matters for the build</span>
+    The new system only needs to deeply solve MBO + SIS workflows. EBOs run on brand-owned
+    software and require only sales-data sync upward, not full PT-file ingestion.
+  </div>
+
+  <h3>Brand-code parsing example</h3>
+  <p>Aditya Birla brand codes embedded in style codes — KDPS staff have memorized these:</p>
+  <table style="max-width:500px">
+    <tbody>
+      <tr><td><code>AS</code></td><td>Allen Solly (men's)</td></tr>
+      <tr><td><code>AW</code></td><td>Allen Solly Women</td></tr>
+      <tr><td><code>AK</code></td><td>Allen Solly Kids</td></tr>
+      <tr><td><code>AL</code></td><td>Allen Solly variant</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:14px;color:var(--ink-muted)">
+    The PT-mapper AI must learn these decodes — they are not in any document, just in operator heads.
+  </p>
+</section>
+
+<!-- ============ COMMERCIAL ============ -->
+<section id="commercial">
+  <h2><span class="id">04</span>Commercial Models</h2>
+  <p class="lead">How money flows between KDPS, brands, and vendors.</p>
+
+  <div class="callout bad">
+    <span class="label">Important gap from this meeting</span>
+    The SOR vs Outright distinction — flagged in the KDPS master plan as the single
+    highest-ROI safety net in the system — was <strong>not discussed</strong>.
+    The discussion below covers the commercial mechanics that <em>were</em> covered.
+    Schedule a dedicated session with Priyo ji on SOR before the next schema iteration.
+  </div>
+
+  <h3>Brand-funded vs KDPS-funded discounts</h3>
+  <p>
+    When a brand declares an offer (e.g. Van Heusen says <em>"Flat 40% on jackets / suits / blazers"</em>),
+    the brand reimburses KDPS for the discount. KDPS must report every such sale back to
+    the brand monthly to claim that reimbursement. This is the engine of the 1st–7th crunch.
+  </p>
+  <p>
+    KDPS-funded discounts (typically for ageing or dead stock) come out of KDPS's margin.
+  </p>
+
+  <h3>Commission, payment cycle, payroll dependency</h3>
+  <div class="flow">
+    <div class="step">Brand owes KDPS commission</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step warn">KDPS submits monthly report by ~5th</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Brand releases commission by ~7th</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">KDPS pays staff salaries</div>
+  </div>
+  <p style="font-size:14px;color:var(--ink-muted)">
+    Miss the report deadline → commission delayed → payroll delayed. This is why the
+    crunch week is non-negotiable today and why automating it is the single highest
+    ROI investment.
+  </p>
+</section>
+
+<!-- ============ AGENT ============ -->
+<section id="agent">
+  <h2><span class="id">05</span>The Agent Guarantor Model</h2>
+  <p class="lead">A critical layer of the business that is not in the existing KDPS master plan.</p>
+
+  <div class="card">
+    <h3>How it works</h3>
+    <p>
+      KDPS does <strong>not</strong> pay vendors directly at the point of booking.
+      In every major sourcing city — Mumbai, Kolkata, Indore, Raipur, Bangalore —
+      a <strong>local agent</strong> sits in the middle:
+    </p>
+    <ul class="clean">
+      <li>Agent guarantees to the <strong>vendor</strong> that KDPS will pay within the agreed credit cycle (30 / 45 / 60 / 90 days)</li>
+      <li>Agent guarantees to <strong>KDPS</strong> that the vendor will ship on time and in correct quantity</li>
+      <li>Agent handles <strong>defect / short-shipment adjustments</strong> (e.g. 100 pieces billed but 96 usable → agent updates the ledger or arranges return credit)</li>
+      <li>Agent earns <strong>1–2% commission</strong></li>
+    </ul>
+    <p>
+      Bookings themselves are entirely verbal — no paperwork at the booking stage.
+      KDPS as a "known group" relies on this trust network instead of a formal procurement system.
+    </p>
+  </div>
+
+  <div class="callout warn">
+    <span class="label">Implication for the build</span>
+    Agents must be modeled as a <strong>first-class entity</strong> in the new system —
+    not a text field on the vendor master. They are the de-facto API for vendor management
+    and they are where the Vendor + Agent CRM (see <a href="#crm">§14</a>) needs to live.
+  </div>
+</section>
+
+<!-- ============ MARGIN ============ -->
+<section id="margin">
+  <h2><span class="id">06</span>MRP &amp; Margin Formula</h2>
+  <p class="lead">The deterministic math KDPS applies to set retail prices.</p>
+
+  <pre>MRP = Base Rate
+      + 1.1% (flat transport cost, applied immediately on receipt)
+      + GST (per HSN classification)
+      + Margin
+        ├── 25%       for branded items
+        └── 30–35%    for non-branded items</pre>
+
+  <h3>What can change the margin?</h3>
+  <ul class="clean">
+    <li><strong>Demand signal</strong> from the previous cycle's sell-through
+      (example given: bought 1000 pieces last cycle, sold 800–900 → trend confirmed → can hold margin or raise)</li>
+    <li>Currently calculated from operator memory (<em>"back of mind we know"</em>)</li>
+    <li>Future state: Fashion Demand AI feeds this calculation programmatically</li>
+  </ul>
+
+  <div class="callout good">
+    <span class="label">Why this is automatable now</span>
+    The formula is deterministic and stable. The AI does not need to "decide" the margin —
+    it only needs to apply the rule. The variable input (demand signal) can be served from
+    sales data once it's flowing.
+  </div>
+</section>
+
+<!-- ============ BOOKING ============ -->
+<section id="booking">
+  <h2><span class="id">07</span>Booking Cycle</h2>
+  <p class="lead">How far ahead of a season KDPS commits to inventory.</p>
+
+  <table>
+    <thead>
+      <tr><th>Category</th><th>Lead time</th><th>Vendor stability</th><th>Paperwork</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Branded</strong> (Allen Solly, Van Heusen, Peter England, Louis Philippe, Jockey, etc.)</td>
+        <td>6–8 months ahead of season</td>
+        <td>Stable; same brand year over year</td>
+        <td>Verbal at booking; brand sends formal invoice + master PT file at dispatch</td>
+      </tr>
+      <tr>
+        <td><strong>Non-branded</strong> (sarees, kurtis, kids' wear, petticoats)</td>
+        <td>3–4 months ahead of season</td>
+        <td>Vendor roster rotates every ~6 months</td>
+        <td>Entirely verbal; only invoice arrives with shipment</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <span class="label">Worked example</span>
+    Winter 2026 stock was booked in <strong>March 2026</strong>. Summer 2026 stock was
+    booked in <strong>Jan–Feb 2026</strong>. So at any point in time, KDPS is carrying
+    multi-season commitments with no formal purchase orders behind them.
+  </div>
+</section>
+
+<!-- ============ PT FILE ============ -->
+<section id="ptfile">
+  <h2><span class="id">08</span>The PT File System</h2>
+  <p class="lead">The single most important operational artifact in KDPS. Everything is gated on this.</p>
+
+  <h3>What is a PT file?</h3>
+  <p>
+    A <strong>Product Tracker</strong> file is KDPS's internal representation of an inbound shipment.
+    It maps every line of a vendor invoice to system-loadable stock entries — each with a barcode,
+    MRP, size, HSN code, brand, and style code. Until a PT file exists, the goods cannot be
+    inwarded into the system, cannot be billed to a store, and cannot be scanned at POS.
+  </p>
+
+  <h3>Source: Master PT File (branded only)</h3>
+  <p>
+    For branded vendors, the brand sends a consolidated <strong>master PT file every 15 days</strong>
+    containing every dispatch to KDPS in that period, filtered by zone (East zone covers Bihar,
+    Jharkhand, etc.). It includes:
+  </p>
+  <ul class="clean">
+    <li>Invoice / reference number (matches the line-level invoice)</li>
+    <li>Style code (e.g. <code>AS-...</code>, <code>AW-...</code>)</li>
+    <li>Per-piece barcode (unique)</li>
+    <li>MRP, WSP, Gross WSP</li>
+    <li>HSN code</li>
+  </ul>
+  <p>
+    Operations lead pulls the relevant invoice's lines from this master, generates the
+    store-level PT file, and uploads it to the legacy system.
+  </p>
+
+  <div class="callout warn">
+    <span class="label">Edge case: quantity duplication</span>
+    A PT file with rows like <code>qty: 1, 1, 1, 1</code> for the same style code is
+    <strong>not duplication</strong> — each row is a different unique barcode for the
+    same SKU. A row with <code>qty: 2</code> means two pieces sharing a single barcode
+    (rare). This must not be "deduplicated" by the AI.
+  </div>
+</section>
+
+<!-- ============ BRANDED FLOW ============ -->
+<section id="branded-flow">
+  <h2><span class="id">09</span>Branded Workflow (70% of stock)</h2>
+  <p class="lead">Relatively structured — most data exists upstream, KDPS only needs to map it.</p>
+
+  <div class="flow">
+    <div class="step">Goods arrive at store/warehouse</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Physical counting vs invoice</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Store WhatsApps invoice photo to HO</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Ops lead pulls from master PT file</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Generates store-level PT file</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Tanmay approves</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Rahul inwards (Patna)</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Mahendra ji bills to store</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Store scans every barcode to receive</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>Time today</h4>
+      <ul class="clean">
+        <li><strong>Normal:</strong> 1 working day per invoice</li>
+        <li><strong>Peak (Aug–Dec):</strong> 3–4 days backlog</li>
+        <li><strong>Weekend hit:</strong> +2 days (Patna doesn't work Sundays)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>Volume context</h4>
+      <ul class="clean">
+        <li>~70% of total KDPS stock follows this flow</li>
+        <li>Branded master PT files arrive on a 15-day cycle</li>
+        <li>Special requests get one-off files but break the cycle</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ NON-BRANDED FLOW ============ -->
+<section id="nonbranded-flow">
+  <h2><span class="id">10</span>Non-Branded Workflow (30% of stock — the hard 30%)</h2>
+  <p class="lead">No master PT file. Often no barcode. Often no MRP. Often no size on the invoice.</p>
+
+  <div class="flow">
+    <div class="step">Invoice arrives (often bare-bones Tally PDF)</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step bad">Ops calls vendor by phone for details</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step bad">Manually generates barcode(s)</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step bad">Manually defines MRP</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">PT file created from scratch</div>
+    <div class="arrow">&rarr;</div>
+    <div class="step">Approval → Inward → Billing</div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <h4>What the invoice typically has</h4>
+      <ul class="clean">
+        <li>HSN code</li>
+        <li>GST percentage</li>
+        <li>Quantity</li>
+        <li>Rate per piece</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4>What it typically lacks</h4>
+      <ul class="clean">
+        <li>Barcode (KDPS generates)</li>
+        <li>MRP (KDPS calculates via §6 formula)</li>
+        <li>Size (must be extracted via phone call)</li>
+        <li>Color (sarees: ignored; petticoats: ignored)</li>
+        <li>Item type (kurti vs Patiala dress vs palazzo set — discovered via phone call)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Barcode generation rules in non-branded</h3>
+  <table>
+    <thead><tr><th>Category</th><th>Differentiation</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Saree</td><td>Single barcode for the lot</td><td>Free size; differentiating by color is impractical at this volume</td></tr>
+      <tr><td>Petticoat</td><td>Single barcode for the lot</td><td>No meaningful variation</td></tr>
+      <tr><td>Kurti / Kids' wear</td><td>One barcode per size</td><td>Sizes matter; colors don't get separated</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <span class="label">Routing rule</span>
+    99.9% of non-branded stock is routed through the central warehouse — never direct
+    to store — because stores lack the knowledge to barcode and categorize correctly.
+    The 0.1% that accidentally arrives at a store creates a known problem.
+  </div>
+</section>
+
+<!-- ============ CHAIN ============ -->
+<section id="chain">
+  <h2><span class="id">11</span>The 4-Person Chain</h2>
+  <p class="lead">Why a single invoice takes a day — and why one absence freezes everything.</p>
+
+  <table>
+    <thead><tr><th>Step</th><th>Person</th><th>What they do</th><th>Failure if absent</th></tr></thead>
+    <tbody>
+      <tr><td>1. Generation</td><td>Operations lead</td><td>Pulls master PT file (branded) or calls vendor (non-branded), creates PT file</td><td>Nothing moves</td></tr>
+      <tr><td>2. Verification</td><td>Tanmay</td><td>Checks GST, margin, parameters; approves</td><td>Files queue, unverified</td></tr>
+      <tr><td>3. Inward</td><td>Rahul (Patna office)</td><td>Enters approved PT into the legacy system</td><td>System has no stock record</td></tr>
+      <tr><td>4. Store billing</td><td>Mahendra ji</td><td>Allocates inwarded stock across stores, creates store bills</td><td>Stores cannot receive</td></tr>
+      <tr><td>(+)</td><td>Store staff</td><td>Scans every barcode on store panel to receive</td><td>Stock unsellable</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout bad">
+    <span class="label">Structural fragility</span>
+    A single person on leave during peak season stalls the entire pipeline.
+    During the 1st–7th crunch this chain effectively freezes for 7 days because everyone
+    is locked into brand commission reporting. PT-file backlog then takes another
+    5–8 days to clear (8th–15th).
+  </div>
+
+  <blockquote>
+    "चार लोग involved होते हैं एक invoice पे current infra पे।"
+    <span class="speaker">— Operations side</span>
+  </blockquote>
+</section>
+
+<!-- ============ ALLOCATION ============ -->
+<section id="allocation">
+  <h2><span class="id">12</span>Store Allocation</h2>
+  <p class="lead">How 200 sarees become "60 here, 40 there, 20 there."</p>
+
+  <h3>Today</h3>
+  <ul class="clean">
+    <li>Operations lead carries store performance "in back of mind"</li>
+    <li>Decisions verbalized over the phone as percentages</li>
+    <li>For pictured items (sarees, fashion sensitive): photos shared to store, store managers express preference, ops lead decides</li>
+    <li>No system-driven allocation; sales data is referenced but not programmatically applied</li>
+  </ul>
+
+  <h3>Future</h3>
+  <p>
+    The Fashion Demand AI (Agent #7 in the master plan) automates this:
+    store affinity × historical sell-through × size curves × current stock health.
+    Output: <em>"Send 64 to Store A, 38 to Store B, 22 to Store C, 16 to Store D, ..."</em>
+  </p>
+  <blockquote>
+    "वो data बताएगा... उसके लिए हमको tension नहीं है।"
+    <span class="speaker">— Operations lead, on the proposed demand AI</span>
+  </blockquote>
+</section>
+
+<!-- ============ BARCODE ============ -->
+<section id="barcode">
+  <h2><span class="id">13</span>Barcode Rules &amp; Edge Cases</h2>
+
+  <h3>Source of barcodes</h3>
+  <ul class="clean">
+    <li><strong>Branded:</strong> brand supplies; barcode is the unique identifier per piece</li>
+    <li><strong>Non-branded:</strong> KDPS generates manually (today via the legacy system)</li>
+    <li>About 50% of "non-branded" vendors actually do supply some barcodes — but the other 50% are pure manual</li>
+  </ul>
+
+  <h3>Known failure mode: the Jockey problem</h3>
+  <div class="callout bad">
+    <span class="label">Same barcode, multiple MRPs</span>
+    <p style="margin-top:8px">
+      A barcode shipped in two batches with different MRPs creates an ambiguity in
+      the legacy system. At the POS, scanning the barcode throws <em>"Stock not available"</em>
+      even though the item is physically in the store. The salesperson then:
+    </p>
+    <ol class="clean">
+      <li>Asks customer to wait</li>
+      <li>Calls head office</li>
+      <li>HO instructs: "Do manual billing, we'll fix backend"</li>
+      <li>Customer leaves with goods + manually written bill</li>
+      <li>HO retroactively repairs the system record</li>
+    </ol>
+    <p>
+      This is operationally embarrassing and creates an audit gap (room for fraud — see <a href="#fraud">§17</a>).
+    </p>
+  </div>
+
+  <div class="callout">
+    <span class="label">Design note for the new system</span>
+    The schema must treat barcode + MRP as a composite key when reconciling stock movements,
+    and surface explicit warnings on dual-MRP scans rather than silently failing.
+  </div>
+</section>
+
+<!-- ============ LEGACY POS ============ -->
+<section id="legacy-pos">
+  <h2><span class="id">14</span>The Legacy POS System</h2>
+  <p class="lead">Built ~5–7 years ago for 1–2 stores. Now strained under 50+.</p>
+
+  <h3>Pain points demonstrated live in this meeting</h3>
+  <table>
+    <thead><tr><th>Pain</th><th>What happens today</th><th>What we want instead</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>No global dashboard</td>
+        <td>Ops lead logs in &amp; out across 5+ separate store accounts every night to pull data</td>
+        <td>Single login → dropdown or sidebar of all SBUs, view-only</td>
+      </tr>
+      <tr>
+        <td>Report generation slow</td>
+        <td>Default date is not today; fetching takes minutes; UX feels "5–7 years old"</td>
+        <td>Metabase-style instant filters with cached views</td>
+      </tr>
+      <tr>
+        <td>Same-barcode dual-MRP errors</td>
+        <td>Stock-not-available → manual billing → backend repair</td>
+        <td>Composite-key reconciliation + explicit POS warning</td>
+      </tr>
+      <tr>
+        <td>Data garbage</td>
+        <td>Gender column contains <code>mix</code>, <code>promo</code>; <code>plazo</code> vs <code>plazo set</code> vs <code>plazo&nbsp;</code> all separate</td>
+        <td>Constrained vocab in masters; deduplication / fuzzy matching on import</td>
+      </tr>
+      <tr>
+        <td>Stock-transfer receipt</td>
+        <td>Sent stock sits in "pending" until store scans every barcode; HO must follow up after 24h</td>
+        <td>SLA-based reminders, escalation, dashboard view of pending receipts</td>
+      </tr>
+      <tr>
+        <td>No discount enforcement</td>
+        <td>Promotional discounts run via placards; salesperson applies manually</td>
+        <td>Brand offers loaded at barcode level; system computes discount</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <blockquote>
+    "ये system 5–7 साल पुराना है — एक store, दो store handle करने के लिए ठीक है।"
+    <span class="speaker">— Operations lead</span>
+  </blockquote>
+</section>
+
+<!-- ============ RECEIPT ============ -->
+<section id="receipt">
+  <h2><span class="id">15</span>Store Receipt &amp; Scan</h2>
+  <p class="lead">How stock formally becomes "in store" — and the friction that produces.</p>
+
+  <ol class="clean">
+    <li>HO bills the stock to a target store via the legacy panel</li>
+    <li>Store sees a "pending" stock-transfer record</li>
+    <li>Store opens the transfer and <strong>scans every barcode</strong> to receive</li>
+    <li>Only after scan-receipt can the item be sold at POS (same barcode is re-scanned)</li>
+    <li>If store doesn't receive within 24h, HO follows up: <em>"Bhai receive karo, kab bechoge?"</em></li>
+  </ol>
+
+  <p>
+    The same barcode is therefore scanned at least twice per item lifecycle inside the store
+    (once for receipt, once for sale). This is structurally fine; the friction is in the
+    legacy POS being slow and ambiguous when MRPs collide.
+  </p>
+</section>
+
+<!-- ============ LAYOUT ============ -->
+<section id="layout">
+  <h2><span class="id">16</span>Store Layout Psychology</h2>
+  <p class="lead">Insight from the Sanskar (Ratu Road) outlet that shapes category strategy.</p>
+
+  <div class="card">
+    <h3>The Sanskar finding</h3>
+    <ul class="clean">
+      <li><strong>Ground floor:</strong> 100% women's apparel</li>
+      <li><strong>First floor:</strong> 100% men's apparel</li>
+      <li><strong>Women's share of total sales:</strong> 70–72%</li>
+    </ul>
+    <p>
+      Stated reasoning: men buy clothes only when needed; women shop for ~12 distinct
+      occasions per year. Convenience-first placement keeps women on the ground floor;
+      men will climb stairs if they need to.
+    </p>
+  </div>
+
+  <div class="callout">
+    <span class="label">Implication for the build</span>
+    The non-branded female category (sarees, kurtis, kids' wear, petticoats) is
+    <strong>simultaneously the operational center of gravity and the worst data-hygiene
+    zone</strong>. Prioritize this workflow first — it is the hardest and the highest impact.
+  </div>
+</section>
+
+<!-- ============ SEASON ============ -->
+<section id="season">
+  <h2><span class="id">17</span>Season Tagging</h2>
+  <p class="lead">A recently improved discipline that the new system can lean on.</p>
+
+  <ul class="clean">
+    <li>KDPS has been tagging stock with <strong>season</strong> for the last 8–9 months</li>
+    <li>Goal: floor staff can read the season tag and the barcode to identify stock age, without escalation</li>
+    <li>Floor manager has up to <strong>10% discount discretion</strong> on female-oriented stores; anything beyond requires higher management approval</li>
+    <li>Higher management can authorize larger discounts because they know the product's age and remaining margin</li>
+  </ul>
+
+  <blockquote>
+    "हम लोग चाहते हैं कि सारा dependency यहां पे न हो... सबकी responsibility divide हो जाए।"
+    <span class="speaker">— Operations lead, on the org goal behind season tagging</span>
+  </blockquote>
+
+  <div class="callout warn">
+    <span class="label">Not validated in this meeting</span>
+    The exact taxonomy (SS26 / AW26 / Core / Fresh / Clearance) and auto-detection
+    from style codes was not pressure-tested. This needs an explicit checkpoint.
+  </div>
+</section>
+
+<!-- ============ EOSS ============ -->
+<section id="eoss">
+  <h2><span class="id">18</span>EOSS (End of Season Sale) Mechanics</h2>
+  <p class="lead">When and how markdowns happen, and why physical store size matters.</p>
+
+  <h3>Seasonal rhythm</h3>
+  <table>
+    <thead><tr><th>Period</th><th>What's happening</th></tr></thead>
+    <tbody>
+      <tr><td>Through August</td><td>Summer goods on shelf</td></tr>
+      <tr><td>Aug–Sept</td><td>Summer EOSS for seasonal items; winter intake begins</td></tr>
+      <tr><td>Dec</td><td>Sweatshirt peak</td></tr>
+      <tr><td>Dec–Jan</td><td>Jacket peak</td></tr>
+      <tr><td>Feb</td><td>Winter EOSS</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Category rules</h3>
+  <ul class="clean">
+    <li><strong>"Core" items</strong> (men's t-shirts, basic jeans): rarely discounted in their first year. EOSS runs the year after.</li>
+    <li><strong>Seasonal items</strong> (summer linen shirts): discount at end of same season.</li>
+  </ul>
+
+  <h3>Physical bifurcation constraint</h3>
+  <p>
+    Only <strong>2–3 KDPS stores</strong> (named: Gaya, Hazaribagh) have enough floor area
+    to physically separate "offer" merchandise from "fresh arrivals." Reference: an 8×8
+    wall holds ~800–850 piece-items, leaving no breathing room. In all other stores,
+    the <strong>entire store</strong> goes on sale simultaneously.
+  </p>
+  <p>
+    This matters for the new system because discount enforcement cannot rely on "section"
+    metadata — it must be barcode-level.
+  </p>
+</section>
+
+<!-- ============ FRAUD ============ -->
+<section id="fraud">
+  <h2><span class="id">19</span>Discount Fraud Loophole</h2>
+  <p class="lead">A daily cash leak that does not require AI to solve.</p>
+
+  <div class="card">
+    <h3>The pattern</h3>
+    <ol class="clean">
+      <li>An item is eligible for 40% off (brand-funded EOSS)</li>
+      <li>Salesperson tells the customer the offer is 20% off</li>
+      <li>Customer agrees, pays the discounted price</li>
+      <li>Salesperson bills it manually or at the lower discount</li>
+      <li>The 20% gap is pocketed as cash</li>
+      <li><strong>Laundering via exchange:</strong> if the customer later returns and asks to swap, KDPS policy is MRP-to-MRP exchange. The new item is the same MRP, so there's no discount-history audit trail.</li>
+    </ol>
+  </div>
+
+  <h3>Why it works today</h3>
+  <ul class="clean">
+    <li>Discounts communicated via in-store placards, not enforced at POS</li>
+    <li>Customer often doesn't get a printed bill (<em>"system down, I'll WhatsApp it"</em>)</li>
+    <li>Per-bill human audit impossible at KDPS volume</li>
+    <li>MRP-to-MRP exchange policy ignores discount history</li>
+  </ul>
+
+  <h3>The fix</h3>
+  <div class="callout good">
+    <span class="label">No AI needed</span>
+    Hard-code brand-eligible discounts to the barcode in the new system. The POS computes
+    the discount automatically. Any sale where <code>applied_discount &lt; eligible_discount</code>
+    is flagged. This is rules-based, not ML.
+    <br><br>
+    <strong>Recommendation:</strong> pull this forward from Phase 2 (Anomaly Watchdog)
+    to Phase 1. The leak is daily and the fix is small.
+  </div>
+
+  <blockquote>
+    "India में ही तो... हम लूप होल ढूंढते हैं... तो वो भी loophole ही ढूंढता है system में।
+    क्यों दें scope अगर मेरे पास opportunity है उसको रोकने का?"
+    <span class="speaker">— Operations lead, on why this matters</span>
+  </blockquote>
+</section>
+
+<!-- ============ CRUNCH ============ -->
+<section id="crunch">
+  <h2><span class="id">20</span>The 1st–7th Crunch</h2>
+  <p class="lead">The single highest-value automation target in the entire build.</p>
+
+  <div class="card">
+    <h3>The week of hell</h3>
+    <ul class="clean">
+      <li>Brands require previous month's sales report — with per-SKU per-store discount cross-check — by ~5th of the month</li>
+      <li>If submitted on time, brand releases KDPS's commission by ~7th</li>
+      <li>If commission lands → KDPS staff get paid</li>
+      <li>If delayed → cascading payroll delay → not an option</li>
+    </ul>
+  </div>
+
+  <h3>What the team does</h3>
+  <ul class="clean">
+    <li>Core management (Ops lead, Tanmay, Ankit ji) work <strong>18–19 hours/day</strong>, mostly from home, multiple screens</li>
+    <li>Every sale must be cross-checked: was the brand-eligible discount applied at POS? If not, KDPS retroactively applies it on the report so the brand still reimburses</li>
+    <li><strong>All PT-file work goes on hold for 7 days</strong></li>
+    <li>Days 8–15: clearing the PT-file backlog</li>
+    <li>Effective normal-operations days per month: ~10</li>
+  </ul>
+
+  <div class="callout bad">
+    <span class="label">Cost of doing nothing</span>
+    Half of every month is consumed by activity that AI can fully automate. The current
+    setup also makes the team <em>fragile</em> — one person sick during crunch week and
+    salaries are at risk. This is the highest-priority Phase 1 target alongside PT-file automation.
+  </div>
+</section>
+
+<!-- ============ WHATSAPP ============ -->
+<section id="whatsapp">
+  <h2><span class="id">21</span>WhatsApp-Based Reporting Today</h2>
+
+  <ul class="clean">
+    <li>Operations lead + Tanmay maintain a daily-reports WhatsApp group</li>
+    <li>Per-brand, per-store daily sales reports posted manually each night</li>
+    <li>Weekly brand sales digests assembled separately</li>
+    <li>Submission deadline to brands: <strong>11:00 PM</strong></li>
+    <li>WhatsApp Web "could not find message" failures when looking up older invoice photos</li>
+    <li>Stores send crooked invoice photos → HO opens Photoshop to straighten them before OCR</li>
+  </ul>
+
+  <blockquote>
+    "जब वी हैव सो मच technology at disposal... ये हम लोग का फालतू का मेहनत हो रहा है।"
+    <span class="speaker">— Operations lead, on manual report assembly</span>
+  </blockquote>
+</section>
+
+<!-- ============ AI VISION ============ -->
+<section id="ai-vision">
+  <h2><span class="id">22</span>AI Capability Map</h2>
+  <p class="lead">Every AI capability agreed in this meeting, tagged to the master plan.</p>
+
+  <table>
+    <thead>
+      <tr><th>Capability</th><th>Trigger</th><th>Phase</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Invoice → structured data</td>
+        <td>On upload</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Train per vendor format. Vendors are limited (~40 brands), so one-time training is feasible.</td>
+      </tr>
+      <tr>
+        <td>PT file auto-gen (branded)</td>
+        <td>Post-ingestion</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>~70% of cases — straight match to master PT file</td>
+      </tr>
+      <tr>
+        <td>PT file auto-gen (non-branded)</td>
+        <td>Post-ingestion + post-call</td>
+        <td><span class="pill p1">Phase 1</span> <span class="pill new">New idea</span></td>
+        <td><strong>Raised in this meeting and not in original plan:</strong> AI monitors the vendor phone call, transcribes size/item info, fills the PT file automatically.</td>
+      </tr>
+      <tr>
+        <td>Barcode auto-generation</td>
+        <td>Non-branded only</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Per-size differentiation; free-size for sarees</td>
+      </tr>
+      <tr>
+        <td>MRP auto-calculation</td>
+        <td>At PT creation</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Deterministic formula (see §6)</td>
+      </tr>
+      <tr>
+        <td>Image quality validation</td>
+        <td>At capture (handheld)</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Blur + skew detection; reject and force retake</td>
+      </tr>
+      <tr>
+        <td>Cross-store dashboard</td>
+        <td>Always-on</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Single login → all SBUs</td>
+      </tr>
+      <tr>
+        <td>Discount-fraud detection</td>
+        <td>Per-bill</td>
+        <td><span class="pill p2">Phase 2 → pull to P1</span></td>
+        <td>Rules-based. Recommended pull-forward.</td>
+      </tr>
+      <tr>
+        <td>Daily commission reports</td>
+        <td>Nightly</td>
+        <td><span class="pill p1">Phase 1</span></td>
+        <td>Solves the 1st–7th crunch</td>
+      </tr>
+      <tr>
+        <td>Fashion Demand AI (allocation)</td>
+        <td>Weekly</td>
+        <td><span class="pill p2">Phase 2</span></td>
+        <td>Needs ~3 months of clean data first</td>
+      </tr>
+      <tr>
+        <td>Vendor + Agent CRM</td>
+        <td>Continuous</td>
+        <td><span class="pill p2">Phase 2</span> <span class="pill new">Expanded</span></td>
+        <td>Existing plan didn't model Agents as first-class</td>
+      </tr>
+      <tr>
+        <td>SOR return deadline tracking</td>
+        <td>Scheduled</td>
+        <td><span class="pill p1">Phase 1</span> <span class="pill" style="background:#f5dad6;color:#8b2c2c">Not discussed</span></td>
+        <td>Schedule dedicated meeting with Priyo ji</td>
+      </tr>
+      <tr>
+        <td>Tally XML sync</td>
+        <td>Nightly</td>
+        <td><span class="pill p4">Phase 4</span></td>
+        <td>Not raised in this meeting; flagged for next</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ IMAGE ============ -->
+<section id="image">
+  <h2><span class="id">23</span>Image Capture &amp; File Hygiene</h2>
+
+  <h3>Today's failure mode</h3>
+  <ul class="clean">
+    <li>Store staff send crooked, low-res invoice photos via WhatsApp</li>
+    <li>HO straightens images in <strong>Photoshop</strong> before OCR</li>
+    <li>Folder structure (SS26/, per-store folders, pending folders) is hand-maintained</li>
+    <li>WhatsApp Web search fails: <em>"could not find message"</em></li>
+  </ul>
+
+  <h3>Proposed fix</h3>
+  <ul class="clean">
+    <li>PWA capture screen on receiving handheld validates at capture: blur + skew detection</li>
+    <li>If unreadable: reject + force retake — <em>"Data is not clear, redo it"</em></li>
+    <li>Auto-convert to PDF</li>
+    <li>Auto-rename: <code>{InvoiceName}_{Brand}_{Date}.pdf</code></li>
+    <li>Auto-file into the canonical folder/database structure</li>
+  </ul>
+
+  <div class="callout good">
+    <span class="label">Quick win</span>
+    This is a ~1-week feature that eliminates the Photoshop step and the folder-management
+    tax entirely. Pure front-end discipline + naming convention.
+  </div>
+</section>
+
+<!-- ============ CRM ============ -->
+<section id="crm">
+  <h2><span class="id">24</span>Vendor + Agent CRM</h2>
+  <p class="lead">A module that should be added to the master plan.</p>
+
+  <h3>Requirements raised in the meeting</h3>
+  <ul class="clean">
+    <li>Agents (the local middlemen in each sourcing city) should be able to log in</li>
+    <li>Agent can verify physical receipts against system entries from the field</li>
+    <li>If 100 pieces billed but 96 usable: agent logs the defect, system updates ledger or initiates return-credit-note</li>
+    <li>Supplier metadata: credit-day terms (30/45/60/90), payment status, brand affiliation</li>
+    <li>Existing operations team already maintains an Excel-style supplier record — that becomes the seed for this CRM</li>
+  </ul>
+
+  <h3>Why this is a missing module</h3>
+  <p>
+    The original KDPS master plan treats "Brand" and "Vendor" as masters but does not
+    model the Agent as a first-class entity, even though the entire payment-guarantee
+    and defect-resolution flow runs through agents. This needs to be added to the schema
+    before vendor management is built.
+  </p>
+</section>
+
+<!-- ============ DATA MIGRATION ============ -->
+<section id="data-migration">
+  <h2><span class="id">25</span>Data Migration</h2>
+
+  <ul class="clean">
+    <li><strong>Scope:</strong> last 2 years of data from the legacy POS</li>
+    <li><strong>Pre-2-year data:</strong> can be dropped — operations team explicitly OK with this</li>
+    <li><strong>Pre-condition:</strong> normalize into a single format before migration</li>
+    <li><strong>Known mess to clean:</strong>
+      <ul>
+        <li>"Gender" column polluted with <code>mix</code>, <code>promo</code></li>
+        <li>String drift: <code>plazo</code> / <code>plazo set</code> / <code>plazo&nbsp;</code> all treated as different SKUs</li>
+        <li>Same for <code>dupatta</code> with/without trailing space</li>
+      </ul>
+    </li>
+    <li>New-store data is already clean (8–9 months of better discipline); old-store data is the problem zone</li>
+  </ul>
+</section>
+
+<!-- ============ WHAT WENT WELL ============ -->
+<section id="what-went-well">
+  <h2><span class="id">26</span>What Went Well</h2>
+
+  <ul class="clean">
+    <li><strong>Real artifacts on screen.</strong> Actual invoices (Madura, Aditya Birla, Radha Krishna Silk, Oki Doki, Jockey), the master PT file, the legacy POS panel, the stock-transfer screen, the WhatsApp group, the gender-column garbage.</li>
+    <li><strong>Operations was unusually candid.</strong> Admissions normally taking 3+ meetings to surface came in one session — fragile 4-person chain, Photoshop workaround, Jockey manual-billing loop, discount-skimming fraud, MRP-to-MRP exchange laundering, 18–19 hour crunch days.</li>
+    <li><strong>Concrete numbers, not vibes.</strong> 70/30 split, 213-piece walkthrough, margin formula, 6–8 vs 3–4 month lead times, 1–2% agent commission, 5+ logins/night, 800–850 pieces per 8×8 wall, 70–72% female share.</li>
+    <li><strong>Tech side framed expectations honestly.</strong> 6–7 months to maturity. 3-month prediction lag. Manual continues during education phase.</li>
+    <li><strong>End-to-end workflow traced in one session.</strong> Booking → invoice → counting → PT file → approval → inward → allocation → store receipt → POS → EOSS → commission report.</li>
+    <li><strong>Mutual understanding of constraints.</strong> Tech side understood the May–July rest window and that August begins rush. Ops understood the system needs training data.</li>
+    <li><strong>The agent guarantor model surfaced.</strong> Critical schema input that wasn't in the original master plan.</li>
+    <li><strong>Emotional alignment.</strong> Ops is ready to be educated by the system, not defensive of legacy.</li>
+  </ul>
+</section>
+
+<!-- ============ GAPS ============ -->
+<section id="gaps">
+  <h2><span class="id">27</span>Weaknesses &amp; Structural Gaps</h2>
+
+  <div class="callout bad">
+    <span class="label">Critical</span>
+    <strong>No action items, owners, or dates committed.</strong> The entire session was
+    discovery. Without owner-tagged follow-ups, insight leaks.
+  </div>
+
+  <ul class="clean">
+    <li><strong>Discussion looped.</strong> PT-file pain was revisited 3–4 times. Each pass added a wrinkle; tighter chairing would have crystallized one principle per pass.</li>
+    <li><strong>SOR vs Outright not discussed.</strong> The KDPS master plan flags SOR return-deadline tracking as the single highest-ROI safety net. The 60/120-day return window did not come up. This must be the next meeting's agenda.</li>
+    <li><strong>Season tagging got one line, not pressure-tested.</strong> SS26/AW26/Core/Fresh/Clearance taxonomy and auto-detection from style codes was not validated.</li>
+    <li><strong>Size × color matrix (the core domain invariant) not explicitly validated</strong> for the new system. Sarees came up; jeans/shirts/kids' wear did not.</li>
+    <li><strong>No timeline commitment.</strong> "August से रश शुरू" met no anchored "we will deliver X by August Y" from tech side. The M3 = 18 August 2026 alignment is too important to leave implicit.</li>
+    <li><strong>Priyo ji absent.</strong> Referenced twice as the SOR/booking knowledge holder, but not in this meeting. Must be in the next.</li>
+    <li><strong>Patna inward team discussed only as a bottleneck.</strong> No discussion of their handoff SLA, leadership, or post-automation role.</li>
+    <li><strong>Tally integration not raised.</strong> Tally is the book of record for GST per the master plan. The XML export / TallyPrime API (Phase 4) was not mentioned even though every margin and report lands there.</li>
+    <li><strong>No discussion of staff training or change management.</strong> The team runs on tribal knowledge ("back of mind we know"). Migration needs early attention.</li>
+  </ul>
+</section>
+
+<!-- ============ ACTIONS ============ -->
+<section id="actions">
+  <h2><span class="id">28</span>Recommended Next Steps</h2>
+  <p class="lead">Convert this meeting's insight into committed action.</p>
+
+  <table>
+    <thead><tr><th>#</th><th>Action</th><th>Owner (proposed)</th><th>By</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Collect 10 invoice format samples — one per vendor category (Madura branded, Aditya Birla, Oki Doki, Radha Krishna Silk, generic Tally, kids' wear, saree, petticoat, kurti, EBO)</td><td>Operations lead</td><td>This week</td></tr>
+      <tr><td>2</td><td>Screen-record one full PT-file pipeline run (Mahendra ji's manual creation, Tanmay's approval, Rahul's inward). Time-box each step.</td><td>Tanmay</td><td>Next week</td></tr>
+      <tr><td>3</td><td>Export last 2 years of legacy POS data in raw form; start normalization in parallel with build</td><td>Patna IT</td><td>End of May</td></tr>
+      <tr><td>4</td><td>Decide: pull Anomaly Watchdog (discount-fraud rule) forward from Phase 2 to Phase 1?</td><td>Anand + tech consultant</td><td>This week</td></tr>
+      <tr><td>5</td><td><strong>Schedule SOR-focused meeting with Priyo ji</strong> before any schema work starts</td><td>Anand</td><td>Within 7 days</td></tr>
+      <tr><td>6</td><td>Anchor the M3 commitment in writing: PT-file engine live at 5 SBUs by 18 Aug 2026 (or formally re-baseline)</td><td>Anand + tech consultant</td><td>This week</td></tr>
+      <tr><td>7</td><td>Validate season taxonomy (SS26/AW26/Core/Fresh/Clearance) against actual style-code patterns</td><td>Operations + tech</td><td>Next meeting</td></tr>
+      <tr><td>8</td><td>Confirm size × color matrix per category (branded jeans, branded shirts, kids' wear, sarees, kurtis)</td><td>Operations</td><td>Next meeting</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ QUOTES ============ -->
+<section id="quotes">
+  <h2><span class="id">29</span>Notable Quotes</h2>
+  <p class="lead">Lines that capture the moment.</p>
+
+  <blockquote>
+    "बाप रे। चार-पाँच लोग का..."
+    <span class="speaker">Tech side, on learning a single invoice passes through 4 people</span>
+  </blockquote>
+
+  <blockquote>
+    "मतलब सांस लेने का टाइम नहीं होता... हम वर्क फ्रॉम होम करते हैं सात आठ तारीख तक।"
+    <span class="speaker">Operations lead, on the 1st–7th crunch</span>
+  </blockquote>
+
+  <blockquote>
+    "India में ही तो... हम लूप होल ढूंढते हैं। तो वो भी loophole ही ढूंढता है system में।
+    क्यों दें scope अगर मेरे पास opportunity है उसको रोकने का?"
+    <span class="speaker">Operations lead, on why hard-coding discounts matters</span>
+  </blockquote>
+
+  <blockquote>
+    "जब वी हैव सो मच technology at disposal... ये हम लोग का फालतू का मेहनत हो रहा है।"
+    <span class="speaker">Operations lead, on manual report assembly</span>
+  </blockquote>
+
+  <blockquote>
+    "System को जो input देना पड़ेगा we are ready to give।"
+    <span class="speaker">Operations lead, on commitment to the new build</span>
+  </blockquote>
+
+  <blockquote>
+    "वो data बताएगा... उसके लिए हमको tension नहीं है।"
+    <span class="speaker">Operations lead, on the proposed demand AI for store allocation</span>
+  </blockquote>
+
+  <blockquote>
+    "कोशिश करेंगे आपका नेक्स्ट hard working time आए उससे पहले कुछ अच्छा सा हो जाए।"
+    <span class="speaker">Tech side, implicitly anchoring an August target</span>
+  </blockquote>
+</section>
+
+<hr>
+<p style="text-align:center;color:#999;font-size:13px;margin-top:48px">
+  Companion document to <code>meeting-report.md</code><br>
+  Source: <code>meeting-transcription.md</code> · 18 May 2026
+</p>
+
+</main>
+</div>
+</body>
+</html>

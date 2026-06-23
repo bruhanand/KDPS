@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Inbound Ingestion Design (Vendor Delivery → Sellable at Store)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  /* layout */
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:264px; flex:0 0 264px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  /* header */
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:60ch}
+  .meta-row{display:flex; flex-wrap:wrap; gap:8px; margin-top:16px}
+  /* section */
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  /* badges */
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:#efe7fb; color:#6b3fb0}
+  .b-sw{background:var(--grey-bg); color:#41506b}
+  .b-v2{background:#eef0f4; color:#41506b; border:1.5px dashed #9aa7c2}
+  /* cards */
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .card .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .qref{font-size:12px; color:var(--rust); font-weight:700}
+  /* callout */
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .callout strong{color:var(--navy)}
+  /* flow */
+  .flow{display:flex; flex-wrap:wrap; align-items:stretch; gap:0; margin:10px 0 4px}
+  .step{background:#fff; border:1.5px solid var(--navy2); color:var(--navy); border-radius:10px; padding:9px 12px; font-size:13.5px; font-weight:600; display:flex; align-items:center; text-align:center; max-width:165px}
+  .step.field{border-color:#9aa7c2}
+  .step.ho{border-color:var(--navy); background:#eef1f7}
+  .step.done{border-color:var(--green); background:var(--green-bg); color:var(--green)}
+  .step.ai{border-color:#6b3fb0; background:#efe7fb; color:#5a2e9c}
+  .arrow{display:flex; align-items:center; color:var(--rust); font-weight:800; padding:0 6px}
+  /* table */
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 12px; font-size:13px; letter-spacing:.02em}
+  td{padding:10px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  /* glossary */
+  dl.gloss{margin:0}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  /* footer */
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .pill-row{display:flex; flex-wrap:wrap; gap:14px; margin:10px 0}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin:8px 0 0}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .swatch{width:14px;height:14px;border-radius:4px;display:inline-block;border:1.5px solid}
+  .editbox{background:#fffdf6; border:1px dashed #d8c98f; border-radius:10px; padding:12px 14px; color:#6b5a1f; font-size:13.5px; margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Document</h2>
+  <a href="#overview">Overview &amp; Scope</a>
+  <a href="#boundary">System Boundary</a>
+  <a href="#flow">The Flow (visual)</a>
+  <h2>Design</h2>
+  <a href="#model">Central Data Model</a>
+  <a href="#sku">SKU &amp; Barcode Identity</a>
+  <a href="#branded">Branded PT</a>
+  <a href="#nonbranded">Non-Branded PT</a>
+  <a href="#grn">GRN &amp; Discrepancy</a>
+  <a href="#gates">Validation Gates</a>
+  <a href="#posting">Cost &amp; Posting Spec</a>
+  <a href="#split">Store Split</a>
+  <a href="#crosscut">Cross-Cutting Rules</a>
+  <a href="#pos">POS Integration</a>
+  <a href="#ai">AI vs Software</a>
+  <h2>Reference</h2>
+  <a href="#decisions">All Decisions Table</a>
+  <a href="#open">Open / To Confirm</a>
+  <a href="#glossary">Glossary</a>
+</nav>
+
+<main>
+<header class="doc" id="overview">
+  <div class="eyebrow">KDPS · D2 · Inbound Ingestion · Design — Living Document</div>
+  <h1>Inbound Ingestion Design</h1>
+  <p class="sub">How stock moves from <strong>vendor delivery</strong> to <strong>ready-to-sell at the store</strong> — and the paperwork in between. Covers current-workflow sections 2–5: arrival, branded inbound, non-branded inbound, head-office inwarding.<br><strong>Both inbound paths are v1.</strong> Only non-branded <em>vendor management</em> (records, agents, bookings) waits for its own data-input discussion — see Q35.</p>
+  <div class="meta-row">
+    <span class="badge b-locked">● Locked decision</span>
+    <span class="badge b-open">● Open / needs input</span>
+    <span class="badge b-dep">● Dependency (other chat)</span>
+    <span class="badge b-ai">AI used</span>
+    <span class="badge b-sw">Deterministic software</span>
+  </div>
+  <div class="editbox">
+    📝 <strong>This is a living document.</strong> Every decision shows its status and the reason behind it — a human or an AI can pick it up and continue anywhere.
+    <p style="margin:12px 0 4px;color:#6b5a1f"><strong>Last folded — changelog:</strong></p>
+    <ul style="margin:0 0 0 2px;padding-left:18px">
+      <li><strong>17 Jun 2026 (from the outbound chat):</strong> three corrections folded in — (1) <strong>non-branded colour</strong>: use the invoice's colour if it states one, else P/M/E <span class="qref">Q28</span>; (2) <strong>barcode source</strong>: the POS (Ten Software) generates the barcode today, we integrate that generator <span class="qref">Q8</span>; (3) <strong>season/SKU reuse resolved</strong>: reuse the style identity across seasons, each season is a distinct cohort (barcode+season).</li>
+      <li><strong>16 Jun 2026 (client truths):</strong> several model corrections folded in:
+        <ul style="margin:4px 0 0;padding-left:18px">
+          <li><strong>One barcode → many pieces</strong> — barcode is the product identity, not a per-piece serial; stock is a count <span class="qref">Q41</span> (reverses the earlier per-piece rule)</li>
+          <li><strong>Damage at selling</strong> — arrival is count-only, damage checked in-store at sale; the arrival flag is kept, never blocks <span class="qref">Q42</span></li>
+          <li><strong>Non-branded GRN</strong> = a simple receipt, not ordered-vs-received <span class="qref">Q43</span></li>
+          <li><strong>Branded test</strong> reworded — invoice + barcoded items + retrievable PDF/PT; "arriving together" dropped (lots are fine)</li>
+          <li><strong>Non-branded fill UX</strong> = type-and-select boxes from the Master Sheet, not free text <span class="qref">Q26·Q27</span>; <strong>barcode</strong> present → keep, absent → generate &amp; WH fills the column <span class="qref">Q8</span></li>
+        </ul>
+      </li>
+      <li><strong>13 Jun 2026 (Q&amp;A):</strong> commercial models <strong>3 → 4</strong> — <strong>Correction</strong> split out from SOR (KDPS owns; 25-18-10 allowance on delivered qty; payable books at inward like Outright; allowance nets back on the D3 return). SOR &amp; Consignment are now brand-owned — full return of unsold, no cap. <em>PT-posting table, Q37 lock and glossary updated.</em></li>
+      <li><strong>10 Jun 2026 — scope corrected:</strong> an earlier note wrongly parked the whole non-branded path to v2. Only non-branded <em>vendor management</em> (records, agents, bookings) is parked (Q35); the non-branded inbound flow (AI invoice → PT) is <strong>core v1</strong> — the deal's PT Mapper Type 2. Plus the inbound locks:
+        <ul style="margin:4px 0 0;padding-left:18px">
+          <li>Unit cost = landed, ex-GST <span class="qref">Q36</span></li>
+          <li>PT posting spec per commercial model, all at Patna inward <span class="qref">Q37</span></li>
+          <li>GRN counted-by ≠ entered-by — store operator receives in-app <span class="qref">Q38</span></li>
+          <li>Season = system-derived fixed format; owner flagged D8 critical-path <span class="qref">Q39</span></li>
+          <li>Negative-SOH → explicit D3 agenda <span class="qref">Q40</span></li>
+        </ul>
+      </li>
+      <li><strong>9 Jun 2026:</strong> Consignment → Shipment · SKU registry + reuse · P/M/E &amp; Free Size · branded delivery paths · POS push/pull · barcode per piece.</li>
+    </ul>
+  </div>
+</header>
+
+<section id="boundary">
+  <h2 class="sec">System Boundary <span class="badge b-locked">Locked</span></h2>
+  <p>This is the single most important framing — it decides what we build and what we don't.</p>
+  <div class="callout co-note">
+    <strong>v1 scope (corrected 10 June): both inbound paths build in v1.</strong> <span class="qref">Q35</span>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      <li><strong>In v1 (core):</strong> the non-branded inbound flow — AI invoice reading, the PT chat assistant, P/M/E tiers, Free Size, the MRP formula, barcode generation. This <em>is</em> the deal's PT Mapper Type 2.</li>
+      <li><strong>Waits for its own discussion:</strong> non-branded <em>vendor management</em> — vendor records with terms, agents, bookings (parked in the D1 doc §13).</li>
+      <li><strong>So one consequence:</strong> a v1 non-branded shipment may arrive <strong>without a booking</strong>. Its Shipment + GRN stand alone, with a minimal vendor record (name + city) made on the fly — and no ordered-vs-received check until non-branded booking lands.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>What our system owns</h4>
+    <p>All <strong>inbound truth</strong> — the source of truth up to the moment stock is allocated to a store:</p>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li>Invoice capture, GRN, PT files &amp; conversion</li>
+      <li>Validation &amp; head-office inwarding</li>
+      <li>The per-store allocation</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>What POS owns (external app, talks via API)</h4>
+    <p>We are <strong>not rebuilding POS</strong> — we feed it and read from it.</p>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>POS handles:</strong> scan-to-receive at the store, selling, provisional-sell, and stock-on-hand (including any temporary negatives).</li>
+      <li><strong>We push:</strong> the per-store allocation to POS.</li>
+      <li><strong>We pull:</strong> sales back — for reconciliation and (later) forecasting.</li>
+    </ul>
+  </div>
+  <div class="callout co-dep">
+    <strong>POS = <a href="https://tensoftware.in/">tensoftware.in</a></strong> — online-first, so a REST API is likely. Full push/pull contract in the <a href="#pos">POS Integration</a> section. Two load-bearing answers to confirm with them:
+    <ul style="margin:8px 0 6px;padding-left:18px">
+      <li>Does the API accept a <strong>pending-inward / incoming-transfer</strong> quantity?</li>
+      <li>Can it <strong>export line-item sales</strong> back to us?</li>
+    </ul>
+    Join key both sides agree on: the <strong>barcode</strong>.
+  </div>
+  <div class="callout co-dep"><strong>Dependency on the Booking chat:</strong> GRN is generated <em>against the order list</em>. This chat assumes a structured order list is available to pre-fill the GRN; booking itself is designed elsewhere.</div>
+</section>
+
+<section id="flow">
+  <h2 class="sec">The Flow — Visual</h2>
+
+  <h3>Branded <span class="badge b-locked">Two delivery paths</span></h3>
+  <p><strong>Counts as branded when:</strong> there is an invoice · every item carries a vendor/brand barcode · a retrievable PDF/PT file exists. <em>Arriving "together" is not the test — a shipment may come in several lots.</em> Then one of two paths, by where goods land:</p>
+  <p style="margin:8px 0 2px;font-size:13.5px;color:var(--muted)"><strong>A · Store delivery</strong> (most common — actual brands)</p>
+  <div class="flow">
+    <div class="step field">Goods + invoice at store</div><div class="arrow">→</div>
+    <div class="step field">Store operator logs in — receives against the order</div><div class="arrow">→</div>
+    <div class="step field">Done → to WH person</div><div class="arrow">→</div>
+    <div class="step ho">WH person finalises GRN + converts PT <span class="badge b-sw" style="margin-left:6px">SW</span></div><div class="arrow">→</div>
+    <div class="step ho">WH approves → Patna inwards</div><div class="arrow">→</div>
+    <div class="step done">Store scans → sellable</div>
+  </div>
+  <p style="margin:12px 0 2px;font-size:13.5px;color:var(--muted)"><strong>B · Warehouse delivery</strong> (branded-by-treatment)</p>
+  <div class="flow">
+    <div class="step field">Goods + invoice at warehouse</div><div class="arrow">→</div>
+    <div class="step field">Count &amp; check + GRN at WH</div><div class="arrow">→</div>
+    <div class="step ho">Convert PT → KDPS PT <span class="badge b-sw" style="margin-left:6px">SW</span></div><div class="arrow">→</div>
+    <div class="step ho">WH approves → Patna inwards</div><div class="arrow">→</div>
+    <div class="step done">Allocate → scan → sellable</div>
+  </div>
+  <p class="why" style="color:var(--muted);font-size:13.5px">PT conversion is deterministic software (per-brand mapping rules, built at dev time). <strong>Vendor barcode is kept — no new barcode for branded.</strong> Store-delivered shipments may be redistributed store → store. Provisional selling, if any, is handled inside POS.</p>
+
+  <h3>Non-Branded <span class="badge b-locked">Warehouse only (~99%)</span></h3>
+  <p>Arrives with <strong>invoice only</strong> — just the received goods + the invoice, no order to check against. Only reliable truth is the <strong>style-code</strong>.</p>
+  <div class="flow">
+    <div class="step ai">Upload invoice (PDF/img) — AI reads</div><div class="arrow">→</div>
+    <div class="step field">Simple GRN — count what was received (not against an order)</div><div class="arrow">→</div>
+    <div class="step ai">Chat report: filled vs missing</div><div class="arrow">→</div>
+    <div class="step field">User fills in chat — type-and-select boxes (colour P/M/E, size / Free Size); call vendor for the rest</div><div class="arrow">→</div>
+    <div class="step ho">Registry check — reuse SKU if vendor+style+size seen (just a check) <span class="badge b-sw" style="margin-left:6px">SW</span></div><div class="arrow">→</div>
+    <div class="step ho">Output: editable Excel PT</div><div class="arrow">→</div>
+    <div class="step field">Barcode: keep if present; else POS generates it → WH fills the column</div><div class="arrow">→</div>
+    <div class="step ho">WH approves → Patna inwards</div><div class="arrow">→</div>
+    <div class="step done">Allocated → sellable</div>
+  </div>
+  <p class="why" style="color:var(--muted);font-size:13.5px">MRP when untagged = base + 1.1% transport + GST + per-category margin (30–35%, overridable). Non-branded uses a <strong>central SKU registry with reuse</strong> — no silent duplicates. The arrival GRN just counts what came in; damage is caught later, at selling.</p>
+
+  <div class="legend">
+    <span><span class="swatch" style="border-color:#9aa7c2"></span> Field operation</span>
+    <span><span class="swatch" style="border-color:var(--navy);background:#eef1f7"></span> Head-office step</span>
+    <span><span class="swatch" style="border-color:#6b3fb0;background:#efe7fb"></span> AI step</span>
+    <span><span class="swatch" style="border-color:var(--green);background:var(--green-bg)"></span> Sellable / done</span>
+  </div>
+</section>
+
+<section id="model">
+  <h2 class="sec">Central Data Model <span class="badge b-locked">Locked</span></h2>
+  <div class="card">
+    <h4>The <em>Shipment</em> is the anchor <span class="qref">Q22 · Q33</span></h4>
+    <p><strong>One vendor arrival = one Shipment</strong> (renamed from "Consignment" to avoid clashing with the Consignment <em>commercial model</em>). Created the moment an invoice is uploaded. The <strong>invoice, GRN, PT, store-split, and TIR export all hang off the Shipment</strong>. Invoice is the trigger; GRN is a step — neither is the parent.</p>
+  </div>
+  <div class="card">
+    <h4>Status: Shipment + line-item <span class="qref">Q10</span></h4>
+    <p>The Shipment has one <strong>headline status</strong> for the work queue. Underneath, <strong>each line item carries its own state</strong>, because shortages, damages, and store-splits are per-item. A Shipment is "done" only when all its lines resolve.</p>
+  </div>
+  <div class="card">
+    <h4>GRN granularity = source-driven <span class="qref">Q2</span></h4>
+    <p>Branded = <strong>style-code + size</strong>. Non-branded = <strong>style-code + size + qty</strong> (size missing → "Free Size"). We count at whatever grain the source provides, but <strong>size is always present</strong>.</p>
+  </div>
+  <div class="card">
+    <h4>One barcode → many items <span class="qref">Q41 · changed</span></h4>
+    <p><strong>New client truth:</strong> across the whole database <strong>one barcode can carry many physical pieces</strong> — the barcode is the <em>identity</em> (a product), not a serial number for one piece. A product's identity = <strong>brand + style-code + colour + size</strong>; stock is a <strong>count of pieces under that barcode</strong> per location. This reverses the earlier "one barcode per piece." <em>Happens mostly for non-branded — where colour collapses to a P/M/E tier and size to "Free Size," so many pieces share one identity — but for branded too.</em></p>
+  </div>
+</section>
+
+<section id="sku">
+  <h2 class="sec">SKU &amp; Barcode Identity <span class="badge b-locked">Locked</span></h2>
+  <p>Three different things people often blur together — keeping them separate is what makes stock, reorder, and dead-stock work.</p>
+  <div class="card">
+    <h4>SKU = the sellable identity (the "type") <span class="qref">Q31</span></h4>
+    <p>Key = <strong>Brand + Style-code + Colour + Size</strong> — and this identity <strong>is the barcode</strong>. It's the <em>type</em>; pieces are <strong>not serialised</strong>, they are a count under the identity. For non-branded, "Brand" = the vendor and "Colour" = the P/M/E tier. MRP and season are <strong>attributes with history</strong>, not identity. <strong>The same style next season reuses this identity</strong> (for reorder &amp; carryover); each season is a distinct stock cohort keyed by <strong>barcode + season</strong> (resolved in D3/outbound).</p>
+  </div>
+  <div class="card">
+    <h4>Barcode = the ID of a product identity, shared by its pieces <span class="qref">Q31 · Q41 · changed</span></h4>
+    <p><strong>One barcode covers many pieces</strong> — 5 identical kurtis share <strong>one</strong> barcode and count as quantity 5 (this <strong>reverses</strong> the earlier "5 pieces → 5 barcodes"). The barcode <strong>is</strong> the identity (brand + style + colour + size). <strong>Within a season the barcode is unique to that identity;</strong> some brands <strong>reuse a barcode value in a later season</strong>, so the full key is <strong>barcode + season</strong>. Non-branded: KDPS generates one barcode per identity. Branded: keeps the vendor barcode.</p>
+  </div>
+  <div class="card">
+    <h4>Piece = one unit of an identity; stock is a count <span class="qref">Q32 · Q42</span></h4>
+    <p>Pieces of one identity are <strong>not individually barcoded</strong> — stock rolls up as a <strong>count per identity (barcode) per location</strong>. <strong>Damage is not checked at arrival</strong>: goods are counted in, and the damaged/quarantine check happens later, at <strong>selling</strong> in the store. The arrival damage-flag option stays available but <strong>never blocks</strong> the count (Rule 5).</p>
+  </div>
+  <div class="callout co-dep"><strong>Season is load-bearing — D8 critical path.</strong> Three locked pieces lean on the season value: the booking, the PT (SEASON column), and stock identity itself (unit key = barcode + season) — yet no module owns the season master until D8. <strong>Interim rule <span class="qref">Q39</span>:</strong> seasons are never free text. The <strong>system derives the next season code</strong> from the fixed pattern (season family + month, as in the PT Master Sheet) and presents it at PT-creation; the <strong>WH person — who makes the PT, Patna does not — selects it</strong>. D8 must still settle: the season open/close ritual, who may correct a wrong season, and cross-season barcode reuse. <em>Flagged as a critical-path input to D8.</em></div>
+  <div class="card">
+    <h4>Identity reuse across arrivals</h4>
+    <p>Reuse rolls a new arrival into the <strong>existing identity / barcode</strong> and adds to its count — it does not mint a duplicate. <strong>Branded:</strong> same style+size+colour rolls up to the same SKU across arrivals (enables sell-through &amp; reorder). <strong>Non-branded:</strong> central registry + deterministic reuse on <em>vendor + style-code + size</em> (see Non-Branded PT).</p>
+  </div>
+</section>
+
+<section id="branded">
+  <h2 class="sec">Branded PT <span class="badge b-locked">Locked</span></h2>
+  <div class="card">
+    <h4>What counts as branded · where the GRN is made <span class="qref">Q30</span></h4>
+    <p><strong>Branded when:</strong> there is an invoice · every item carries a vendor/brand barcode · a retrievable PDF/PT exists (it may arrive in several lots — "together" is not the test). <strong>Path A (store delivery, most common):</strong> the store operator logs in and receives against the order — marks what actually arrived, presses Done — then the warehouse person reviews, finalises the GRN and converts the PT; the shipment may then be redistributed store → store <span class="qref">Q38</span>. <strong>Path B (warehouse delivery, branded-by-treatment):</strong> counted and GRN'd at the warehouse.</p>
+  </div>
+  <div class="card">
+    <h4>Conversion = deterministic software <span class="badge b-sw">SW</span> <span class="qref">Q1·Q5</span></h4>
+    <p>Brand PT files are Excel with <strong>fixed per-brand formats</strong>. Conversion uses <strong>per-brand mapping rules built at dev time</strong> (developer owns them, from formats the client provides). No AI on the happy path — fast, free, identical every time, fully auditable.</p>
+  </div>
+  <div class="card">
+    <h4>Unknown / changed format → park &amp; alert <span class="qref">Q6</span></h4>
+    <p>If a file doesn't match a known mapping (new brand, or brand changed format), it <strong>parks in an "unmapped" queue and alerts the developer</strong> to add the rule. Never a risky auto-convert.</p>
+  </div>
+  <div class="card">
+    <h4>Happy path is silent; failures can use chat <span class="qref">Q27</span></h4>
+    <p>Branded conversion is automatic and invisible. Only <strong>failures</strong> may drop into a chat-style review view (same idea as non-branded). The normal path adds no clicks.</p>
+  </div>
+</section>
+
+<section id="nonbranded">
+  <h2 class="sec">Non-Branded PT <span class="badge b-locked">Locked · core v1</span></h2>
+  <p><strong>Build status: v1 — core scope</strong> (the deal's PT Mapper Type 2) <span class="qref">Q35</span>. In v1 these shipments may arrive <strong>without a booking</strong> (non-branded vendor management is parked — D1 §13): the vendor is a minimal record (name + city) created on the fly, and the GRN stands alone with no order list to compare against.</p>
+  <div class="card">
+    <h4>Chat / agent UX, output-driven <span class="badge b-ai">AI</span> <span class="qref">Q26·Q27</span></h4>
+    <p>1) Upload invoice PDF/image → AI reads it. 2) AI replies in chat with a <strong>structured report — what it filled vs what's missing</strong>. 3) User supplies missing data <strong>through type-and-select boxes, not free text</strong> — every field with a master list (size / unit, colour P/M/E, category, season, GST%…) opens a <strong>pick-or-type control</strong> drawn from the Master Sheet, so entries stay standard (anything not on hand is asked of the vendor by call). 4) Output = an <strong>editable Excel PT</strong> the user can download, view, and hand-edit for anything still missing.</p>
+  </div>
+  <div class="card">
+    <h4>Required-field checklist = the PT format itself <span class="qref">Q4</span></h4>
+    <p>The fixed PT format <em>is</em> the checklist; any blank required column triggers the "ask vendor" prompt. Real columns (OWNER Work Sheet): <strong>SEASON · BRAND · COLOR · GENDER · SUB CATEGORY · TYPE · ITEM · FIT · SIZE · BARCODE · DESIGN · HSN · QTY · MRP · BASIC · P RATE · INPUT TAX · OUTPUT TAX · NAG · MARGIN · SUGGESTED SUB CATEGORY · SUGGESTED TYPE</strong>. The Master Sheet supplies the dropdown lists (seasons, brands, colours, categories, sizes, GST%).</p>
+  </div>
+  <div class="card">
+    <h4>Colour = real colour, or a P/M/E tier <span class="qref">Q28</span></h4>
+    <p>The COLOR column holds a <strong>real colour when one is available — from a brand PDF/PT <em>or stated on the invoice</em></strong>. Only when no colour is given (pure non-branded, invoice silent) does the operator pick a <strong>price tier — Premium / Medium / Economy — in the chat</strong>, by their own judgment. <strong>No fixed price bands</strong>; the operator decides. <em>(Resolved 17 Jun: use the invoice's colour if it states one, else P/M/E.)</em></p>
+  </div>
+  <div class="card">
+    <h4>Size — given, or "Free Size" <span class="qref">Q29</span></h4>
+    <p>If the invoice states size, use it. If size is <strong>missing, the line is "Free Size"</strong> — we do not go item-by-item guessing sizes. Size is always present on the SKU, never dropped.</p>
+  </div>
+  <div class="card">
+    <h4>Pricing when untagged <span class="qref">Q7</span></h4>
+    <p>MRP = <strong>base + 1.1% transport + GST + per-category default margin (30–35%)</strong>, person can override within the band. Transport %, GST, and the formula auto-calculate.</p>
+  </div>
+  <div class="card">
+    <h4>Barcode — keep it, or generate then fill the column <span class="qref">Q8 · Q41</span></h4>
+    <p>Two cases:</p>
+    <ul>
+      <li><strong>Barcode already present:</strong> keep it — the PT is built with every item carrying its barcode, then straight to Patna inward and store allocation.</li>
+      <li><strong>No barcode:</strong> the PT is created <strong>editable with the barcode column empty</strong>; once everything else is filled in order, the <strong>POS (Ten Software) generates the code</strong> and the <strong>warehouse operator fills the barcode column</strong>, then on to Patna inward and allocation.</li>
+    </ul>
+    <p class="why">One barcode is generated per <strong>identity</strong>, not per piece (Q41). Barcode generation today is done by the <strong>POS</strong> — we integrate that; native generation can come later.</p>
+  </div>
+  <div class="card">
+    <h4>SKU policy: registry + reuse — follows the PRD <span class="qref">Q16 · changed</span></h4>
+    <p>The PRD asks for a <strong>central SKU registry + reuse</strong> (its named gap was "same product → multiple SKUs, no reuse mechanism"). So we <strong>reverse the earlier "duplicates fine."</strong></p>
+    <ul>
+      <li><strong>Deterministic reuse (now):</strong> key = <em>vendor + style-code + size</em>. Seen before → roll up to the existing <strong>SKU (type) / barcode</strong> and add to its count; don't mint a new identity, and don't create a second barcode for the same identity (Q41).</li>
+      <li><strong>Cross-style similarity (later, suggest-only):</strong> same product under a different style-code is hard with thin invoices — AI <em>suggests</em> a match, handler confirms; never an automatic merge.</li>
+    </ul>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Non-branded invoice has</th><th>Size</th><th>Colour (in chat)</th><th>Barcode</th><th>MRP</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>style + size + price</td><td>as given</td><td>operator picks P/M/E</td><td>KDPS-generated</td><td>KDPS calc</td></tr>
+      <tr><td>2</td><td>style + price only</td><td><strong>Free Size</strong></td><td>operator picks P/M/E</td><td>KDPS-generated</td><td>KDPS calc</td></tr>
+      <tr><td>3</td><td>style + size + a colour word, <em>no brand PDF</em></td><td>as given</td><td><strong>use the invoice's colour</strong></td><td>KDPS-generated</td><td>KDPS calc</td></tr>
+      <tr><td>→</td><td>barcode <em>+</em> detailed invoice <em>+</em> retrievable PT</td><td>as given</td><td>real colour (PT)</td><td>keep vendor</td><td>from tag</td></tr>
+    </tbody>
+  </table>
+  <p class="why" style="color:var(--muted);font-size:13.5px">Last row: all three present → no longer non-branded; it's handled on the <strong>branded</strong> path.</p>
+</section>
+
+<section id="grn">
+  <h2 class="sec">GRN &amp; Discrepancy <span class="badge b-locked">Locked</span></h2>
+  <div class="card">
+    <h4>GRN generated against the order list <span class="qref">Q24-context</span> <span class="badge b-dep">Booking dep.</span></h4>
+    <p>Order list <strong>pre-fills expected items + qty</strong> → person checks <strong>what was physically received</strong> → marks shortage/damage → presses <strong>Generate GRN</strong>. It's a confirm-and-adjust screen, not data entry.</p>
+  </div>
+  <div class="card">
+    <h4>Non-branded GRN = a simple receipt <span class="qref">Q43</span></h4>
+    <p>When there is <strong>no order to check against</strong> (non-branded, often booking-less — Q35), the GRN just <strong>counts what physically arrived</strong> from the invoice + goods — no ordered-vs-received comparison. It still exists as a record (you need it for the PT step and the audit trail), and the over-receipt / damage handling below still applies.</p>
+  </div>
+  <div class="card">
+    <h4>Provenance: counted-by ≠ entered-by <span class="qref">Q38</span></h4>
+    <p>The GRN carries <strong>two separate actors</strong>, both auto-stamped from logins — never typed. <strong>Store delivery:</strong> the store operator logs in, sees the order in their own queue, records received-vs-ordered and presses Done — they are <em>counted by</em>. The WH person who reviews, finalises the GRN and converts the PT is <em>entered / approved by</em>. <strong>Warehouse delivery:</strong> the WH receiver is both. No GRN exists without both names on it (Rule 10) — when a discrepancy surfaces weeks later, accountability lands on a person, not a building.</p>
+  </div>
+  <div class="card">
+    <h4>Discrepancy = soft flag, never blocks <span class="qref">Q3</span></h4>
+    <p>Discrepancy is <strong>ordered vs received</strong>. Goods are physically in and must sell — so the flow continues, the discrepancy is logged and tracked, resolved in parallel.</p>
+  </div>
+  <div class="card">
+    <h4>Over-receipt = same screen, add a line <span class="qref">Q32</span></h4>
+    <p>Items or sizes that weren't booked can still be received — the receiver <strong>adds a line on the same screen</strong>, flagged as a variance with a <strong>required remark</strong>. The original order line is kept, flagged. One order → <strong>many GRNs</strong> as stock arrives over several shipments.</p>
+  </div>
+  <div class="card">
+    <h4>Arrival counts; damage is caught at selling <span class="qref">Q32 · Q42</span></h4>
+    <p><strong>At arrival the goods are just counted</strong> — we do <strong>not</strong> hold up receiving to inspect each piece for damage. The damaged/quarantine check happens later, <strong>at selling</strong> in the store. The arrival damage-flag option <strong>stays available</strong> (added, not removed) but <strong>never blocks</strong> the count (Rule 5).</p>
+    <p class="why">If damage <em>is</em> spotted at arrival, the old handling still applies: the piece is counted as received, enters stock <strong>quarantined</strong> (not sellable), and routes to the defective-return flow — never silently dropped.</p>
+  </div>
+  <div class="card">
+    <h4>Account manager owns closing it <span class="qref">Q24</span></h4>
+    <p>Records a <strong>structured outcome</strong> against the Shipment line — credit note expected / brand acknowledged / write-off — and it <strong>stays open until explicitly closed</strong>. Feeds credit-note tracking later. Every state change logged.</p>
+  </div>
+</section>
+
+<section id="gates">
+  <h2 class="sec">Validation Gates <span class="badge b-locked">Locked</span></h2>
+  <p>Both human gates use the same pattern: <strong>auto-validate, flag exceptions only, human approves for accountability.</strong></p>
+  <div class="card">
+    <h4>Warehouse approval (before Patna) <span class="qref">Q25</span></h4>
+    <p>System auto-checks the converted PT — all required fields filled, taxonomy mapped, GST/HSN present, no blanks — and flags only problems. Person approves clean ones, fixes flagged. Gate kept (don't skip), because non-branded PTs have manual fields that can be wrong.</p>
+  </div>
+  <div class="card">
+    <h4>Patna inward (GST + margin check) <span class="qref">Q19</span></h4>
+    <p>System auto-validates GST (vs HSN) and margin (vs expected band), flags only exceptions; Patna bulk-approves the clean ones, reviews only flags. The <strong>inward action stays with Patna</strong> so accountability is human.</p>
+  </div>
+</section>
+
+<section id="posting">
+  <h2 class="sec">Cost &amp; Posting Spec <span class="badge b-locked">Locked</span></h2>
+  <p>The biggest gap in the first version of this design: the PT priced items but never said <strong>what a piece costs us</strong> or <strong>what it writes into the books</strong>. Fixed here. This section is the wire into the D4 payments module.</p>
+  <div class="card">
+    <h4>Unit cost at stock-in — the canonical COST <span class="qref">Q36</span></h4>
+    <p><strong>Cost of a piece = landed cost, ex-GST.</strong> Built in three steps:</p>
+    <ul>
+      <li><strong>Start with the per-piece payable to the vendor</strong> after all line-level discounts. In the real sample PT this is <strong>P RATE</strong> (exactly MRP − margin%; Status Quo: ₹1,649 × 0.78 = ₹1,286.22). The per-brand mapping declares which column carries it — and whether GST is inside it and must be stripped.</li>
+      <li><strong>Remove GST.</strong> Input GST comes back as credit, so it is never cost.</li>
+      <li><strong>Spread invoice-level amounts:</strong> add this piece's share of invoice-level charges (freight, handling), subtract its share of invoice-level trade discount — both spread across lines <strong>in proportion to line value</strong>, never by piece count.</li>
+    </ul>
+    <p>The result is stamped on the stock-in posting and <strong>frozen</strong> (Rule 3 snapshot) — later master or rate changes never rewrite it. <strong>Profitability reads it</strong> (POS revenue − this cost); aging and dead-stock value with it. One definition for all four commercial models — for SOR and Consignment it is simply the settlement rate (MRP − margin%), ex-GST.</p>
+    <div class="why">Why ex-GST: counting recoverable GST overstates cost and makes every margin report read worse than reality. Why value-weighted spreading: freight follows value, and the rule never needs re-arguing per shipment.</div>
+  </div>
+  <div class="card">
+    <h4>What the PT posts, per commercial model <span class="qref">Q37</span></h4>
+    <p>Every posting fires at <strong>Patna inward</strong> — the one moment the data becomes official (TIR already fires there, Q20). Before that, a GRN is physical custody only, not books. The commercial model is read from the <strong>snapshot on the booking</strong> (Rule 3), never from the live brand master.</p>
+    <table>
+      <thead><tr><th>Model</th><th>Stock ledger</th><th>Vendor ledger</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Outright</strong> <span style="font-size:11px;color:var(--muted)">(KDPS owns)</span></td><td>Stock-in per piece at unit cost (Q36)</td><td>Credit payable = <strong>invoice total incl. GST</strong>, due per brand terms → settled in D4</td></tr>
+        <tr><td><strong>Correction</strong> <span style="font-size:11px;color:var(--muted)">(KDPS owns)</span></td><td>Stock-in per piece at unit cost (Q36)</td><td>Credit payable = <strong>invoice total incl. GST</strong> (owned, like Outright). The <strong>return allowance</strong> (D1 §8 pool, on delivered qty) is debited back only when goods are returned within the window (D3 return posting) → net settled in D4</td></tr>
+        <tr><td><strong>SOR</strong> <span style="font-size:11px;color:var(--muted)">(brand owns)</span></td><td>Stock-in per piece at unit cost (Q36), flagged <em>not owned</em></td><td><strong>Nothing at inward.</strong> Payable accrues per piece when it sells (D3 sale posting, at the settlement rate); all unsold returns with no cap; return-window exposure stays visible via the booking (Rule 11)</td></tr>
+        <tr><td><strong>Consignment</strong> <span style="font-size:11px;color:var(--muted)">(brand owns)</span></td><td>Stock-in per piece at unit cost (Q36), flagged <em>not owned</em></td><td><strong>Nothing from the PT, ever.</strong> Money exists only at sale (D3/D4); rolling top-up, unsold returns with no cap</td></tr>
+      </tbody>
+    </table>
+    <div class="why">Two numbers come off the same PT line, each with one owner: stock carries cost <strong>ex-GST</strong> (profit truth); the payable carries <strong>incl. GST</strong> (what we actually owe). D3 writes the sale-side postings; D4 consumes the payables this table creates.</div>
+  </div>
+</section>
+
+<section id="split">
+  <h2 class="sec">Store Split <span class="badge b-locked">Now: manual</span> <span class="badge b-open">Later: AI</span></h2>
+  <p>Warehouse <strong>proposes</strong> the per-store allocation; Patna <strong>confirms + inwards</strong> per-store PT, so each store sees only its own allocation.</p>
+  <div class="card">
+    <h4>Now — manual, but capture training data <span class="qref">Q23</span></h4>
+    <p>Person splits manually. Capture <strong>per-line-item allocations</strong> (style/size → store → qty, tied to Shipment, brand, season) as structured rows from day one. This is the future training set.</p>
+  </div>
+  <div class="card">
+    <h4>Later — AI forecasting suggests the split</h4>
+    <p><strong>Stage 1 (cold start):</strong> fully manual, system records every split. <strong>Stage 2:</strong> AI forecasting models suggest the split from sales history; person adjusts. <strong>Stage 3:</strong> forecasting sharpens with more data. POS sales import is a later phase (clean &amp; standardize data first, then feed forecasting). KDPS has sales data per store and per brand, just not import-ready at launch.</p>
+  </div>
+</section>
+
+<section id="crosscut">
+  <h2 class="sec">Cross-Cutting Rules <span class="badge b-locked">Locked</span></h2>
+  <div class="card">
+    <h4>Invoice handling <span class="badge b-ai">AI</span> <span class="qref">Q11·Q21</span></h4>
+    <p>Invoice is a PDF/image. <strong>AI reads</strong> it into structured data. Verification is <strong>risk-based</strong>: non-branded (invoice becomes the product + pricing) must be confirmed; branded (invoice only cross-checks) trusts directly with light review. Original file is <strong>kept permanently</strong> in object storage, linked to its Shipment (GST audit needs ~6–8 years minimum).</p>
+  </div>
+  <div class="card">
+    <h4>Notifications <span class="qref">Q9</span></h4>
+    <p><strong>In-app is the system of record + work queue</strong> (auditable, a real queue people act on). <strong>WhatsApp is the nudge</strong> — deep-links into the app. WhatsApp is never the source of truth.</p>
+  </div>
+  <div class="card">
+    <h4>Access control <span class="qref">Q12</span></h4>
+    <p><strong>Fixed roles</strong> (Store, Warehouse, Patna/HO, Admin) + <strong>data scoping</strong>: a store sees only its own Shipments; warehouse and Patna are network-wide; admin sees all + config.</p>
+  </div>
+  <div class="card">
+    <h4>Reconciliation <span class="badge b-sw">SW</span><span class="badge b-ai">+ narrow AI</span> <span class="qref">Q17·Q18</span></h4>
+    <p>Scope here = <strong>Invoice ↔ GRN ↔ PT</strong>. Runs <strong>EOD batch only</strong> (client's demand). Mechanical quantity/value matching = strong algo; AI only to decide whether two differently-worded line items are the same product.</p>
+  </div>
+  <div class="card">
+    <h4>TIR export <span class="badge b-sw">SW</span> <span class="qref">Q20</span></h4>
+    <p>Fires <strong>after Patna inwards</strong> (data is official). <strong>Pure algorithm, no AI</strong> — accounting export must be exact and reproducible. If recon later finds an issue, it raises a correction, not a block.</p>
+  </div>
+  <div class="card">
+    <h4>Audit trail — automatic</h4>
+    <p>A <strong>byproduct of event-by-event design</strong>: every action writes an immutable record (who, what, when, value before → after). Nobody "writes" the audit trail. Build this way from day one and audit is complete and free.</p>
+  </div>
+</section>
+
+<section id="pos">
+  <h2 class="sec">POS Integration — push &amp; pull <span class="badge b-open">Confirm endpoints</span> <span class="qref">Q34</span></h2>
+  <p>POS is <strong><a href="https://tensoftware.in/">tensoftware.in</a></strong> (online-first, so a REST API is likely). We don't rebuild POS — we feed it and read from it. The shared <strong>join key is the barcode</strong>.</p>
+  <h3>KDPS → POS (push)</h3>
+  <table>
+    <thead><tr><th>What</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Item / SKU master + price (barcode, MRP, tax/HSN, brand, season)</td><td>POS can't scan-and-sell an item it doesn't know. Foundation for everything else.</td></tr>
+      <tr><td>Pending-inward / incoming-transfer qty (per-store allocation)</td><td>So the store sees "pending inward" before goods arrive and scans to receive (workflow §7).</td></tr>
+      <tr><td><span style="color:var(--muted)">Later:</span> active EOSS / offer rules per barcode/store/date</td><td>POS auto-applies the discount at billing instead of staff keying it by hand.</td></tr>
+    </tbody>
+  </table>
+  <h3>POS → KDPS (pull / export)</h3>
+  <table>
+    <thead><tr><th>What</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Line-item sales per bill (barcode, qty, price, discount, store, time, pay mode, bill no.)</td><td>Feeds reconciliation, profitability, forecasting, dead-stock, daily digest, Report Maker.</td></tr>
+      <tr><td>Stock-on-hand per store</td><td>Reconcile KDPS-expected vs POS-reality; catches the negative-SOH drift.</td></tr>
+      <tr><td>Daily collection per store (cash + UPI + card)</td><td>Feeds the Cash / Collection Audit (collection vs bank deposit).</td></tr>
+      <tr><td><span style="color:var(--muted)">Later:</span> returns / exchanges at counter</td><td>For the outbound half.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout co-dep"><strong>Negative SOH → D3 <span class="qref">Q40</span>.</strong> The daily SOH pull surfaces stores where POS shows minus stock (sold what the books say isn't there). Inbound only <em>detects</em> it; the policy — how it's reconciled and corrected — is an explicit agenda item on the D3 outbound discussion (also added to the architecture page's D3 row).</div>
+  <div class="callout co-dep"><strong>Two mechanics to confirm with Ten Software:</strong> <strong>how</strong> (REST / webhook / file export, and sync frequency), and that the <strong>barcode</strong> is an acceptable join key on both sides.</div>
+</section>
+
+<section id="ai">
+  <h2 class="sec">AI vs Software — the boundary</h2>
+  <p>Deliberately narrow AI footprint. AI is used only where judgment/reading is genuinely needed; everything mechanical is deterministic software (cheaper, exact, auditable).</p>
+  <table>
+    <thead><tr><th>Task</th><th>How</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Read invoice (PDF/image) → data</td><td><span class="badge b-ai">AI</span></td><td>Unstructured image; genuine reading task</td></tr>
+      <tr><td>Non-branded PT chat assistant</td><td><span class="badge b-ai">AI</span></td><td>Guides user, reports filled vs missing</td></tr>
+      <tr><td>Recon fuzzy item-name match</td><td><span class="badge b-ai">AI (narrow)</span></td><td>"Are these two descriptions the same item?"</td></tr>
+      <tr><td>Non-branded cross-style similarity (later)</td><td><span class="badge b-ai">AI (suggest)</span></td><td>Same product, different style-code — handler confirms</td></tr>
+      <tr><td>Store-split suggestion (later)</td><td><span class="badge b-ai">AI (forecast)</span></td><td>Pattern over sales history</td></tr>
+      <tr><td>Brand PT → KDPS PT conversion</td><td><span class="badge b-sw">Software</span></td><td>Fixed formats → mapping rules</td></tr>
+      <tr><td>Non-branded SKU dedup (vendor+style+size)</td><td><span class="badge b-sw">Software</span></td><td>Exact-key registry reuse, no guessing</td></tr>
+      <tr><td>Recon quantity/value matching</td><td><span class="badge b-sw">Software</span></td><td>Money must be exact, never guessed</td></tr>
+      <tr><td>MRP / tax / margin calculation</td><td><span class="badge b-sw">Software</span></td><td>Pure formula</td></tr>
+      <tr><td>TIR accounting export</td><td><span class="badge b-sw">Software</span></td><td>Strict, reproducible format</td></tr>
+      <tr><td>Audit trail</td><td><span class="badge b-sw">Software</span></td><td>Automatic event log</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="decisions">
+  <h2 class="sec">All Decisions — Reference Table</h2>
+  <table>
+    <thead><tr><th>#</th><th>Decision</th><th>Choice</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Q2</td><td>GRN granularity</td><td>Source-driven (branded: style+size; non-branded: style+size+qty)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q3</td><td>Discrepancy handling</td><td>Soft flag, never blocks, tracked</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q4</td><td>Non-branded missing-info</td><td>PT format = the required-field checklist</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q5</td><td>Brand mapping rules</td><td>Built by dev from client formats</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q6</td><td>Unknown brand format</td><td>Park in unmapped queue, alert dev</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q7</td><td>Non-branded margin</td><td>Per-category default 30–35%, overridable</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q8</td><td>Barcode generation</td><td>Barcode present → keep it; absent → <strong>the POS (Ten Software) generates it</strong> and the WH operator fills the barcode column in the editable PT. We integrate the POS generator; native later</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q9</td><td>Notifications</td><td>In-app = record; WhatsApp = nudge</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q10</td><td>Status tracking</td><td>Shipment + line-item</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q11</td><td>Invoice data trust</td><td>Risk-based (non-branded confirm, branded light)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q12</td><td>Access model</td><td>Fixed roles + data scoping</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q14</td><td>Scope endpoint</td><td>Ends at allocation push to POS</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q16</td><td>Non-branded SKU</td><td><strong>Changed →</strong> central registry + reuse (vendor+style+size); no silent duplicates</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q17</td><td>Reconciliation scope</td><td>Invoice ↔ GRN ↔ PT</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q18</td><td>Reconciliation timing</td><td>EOD batch only</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q19</td><td>Patna check</td><td>Auto-validate + exception, human inwards</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q20</td><td>TIR timing</td><td>After Patna inward; pure algo</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q21</td><td>File storage</td><td>Keep originals permanently</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q22</td><td>Central object</td><td>Shipment is the anchor (one vendor arrival)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q23</td><td>Split data capture</td><td>Per line-item, structured</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q24</td><td>Discrepancy ownership</td><td>Account manager, structured outcome</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q25</td><td>Warehouse approval</td><td>Auto-validate + exception</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q26/27</td><td>PT UX</td><td>Chat agent for non-branded → Excel output; branded silent</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q28</td><td>Non-branded colour</td><td>Use the invoice's colour if it states one; else P/M/E tier picked by operator in chat (no fixed bands). Real colour also from a brand PDF</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q29</td><td>Non-branded size</td><td>Use if given; else "Free Size" — size never dropped</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q30</td><td>Branded definition &amp; delivery</td><td>All items barcoded + invoice + retrievable PT; store-delivery: store operator receives in-app, WH person finalises GRN (see Q38); warehouse-delivery GRN at WH</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q31</td><td>SKU vs barcode</td><td><strong>Changed →</strong> SKU (type) = Brand+Style+Colour+Size, and the <strong>barcode is that identity</strong> (not a per-piece serial). One barcode → many pieces; stock = count per barcode. Barcode unique to the identity within a season; barcode+season is the cross-season key</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q32</td><td>GRN over-receipt &amp; damaged</td><td>Over-receipt adds line+remark; damaged = received-flagged → defective (quarantined)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q33</td><td>Anchor object name</td><td>Renamed Consignment → Shipment</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q34</td><td>POS push/pull contract</td><td>Push: item master + pending-inward. Pull: sales + SOH + collection. Confirm endpoints w/ Ten Software</td><td><span class="badge b-open">Open</span></td></tr>
+      <tr><td>Q35</td><td>v1 build scope</td><td><strong>Corrected 10 Jun:</strong> both inbound paths are v1. Parked = non-branded <em>vendor management</em> only (records, agents, bookings — D1 §13, pending the data-input discussion). v1 non-branded shipments may arrive booking-less: minimal vendor record on the fly, GRN stands alone</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q36</td><td>Canonical unit cost</td><td>Landed, ex-GST: vendor payable per piece after discounts (per-brand mapping pins the column, e.g. P RATE) − GST + value-weighted share of invoice-level charges/discounts; frozen on the stock-in posting</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q37</td><td>PT posting spec</td><td>All postings at Patna inward. Stock-in at unit cost for every model; vendor payable: <strong>Outright &amp; Correction</strong> = invoice total incl. GST at inward (both KDPS-owned; Correction nets the return allowance back on D3 return), <strong>SOR</strong> = accrues per piece on sale (D3), <strong>Consignment</strong> = never from the PT. <em>Updated 13 Jun: 4 models — Correction split out from SOR</em></td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q38</td><td>GRN provenance</td><td>Store delivery: store operator receives against the order in their own login (counted-by, auto-stamped) → Done → WH person finalises GRN + converts PT (entered/approved-by). Two actors on every GRN</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q39</td><td>Season (interim, until D8)</td><td>Never free text. System derives the next season code in the fixed format and presents it at PT-creation; WH person (PT maker — not Patna) selects. Season master ownership = D8 critical path</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q40</td><td>Negative SOH</td><td>Inbound detects (daily SOH pull); policy is an explicit D3 outbound agenda item — recorded here and on the architecture page's D3 row</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q41</td><td>Barcode cardinality</td><td><strong>New (client) →</strong> one barcode → many physical pieces (barcode = product identity, not a per-piece serial); stock is a count per barcode per location. Reverses earlier "one barcode per piece." Mostly non-branded (colour→P/M/E, size→Free Size collapse identities), also branded</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q42</td><td>Damage check timing</td><td>Arrival = count only (don't block to inspect); the damaged/quarantine check happens later at <strong>selling</strong> in-store. The arrival damage-flag option is kept but never blocks (Rule 5)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q43</td><td>Non-branded GRN</td><td>A simple receipt — counts what physically arrived, not checked against an order (non-branded may be booking-less, Q35). Created after invoice upload; needed before the PT step and for audit</td><td><span class="badge b-locked">Locked</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="open">
+  <h2 class="sec">Open / To Confirm</h2>
+  <div class="callout co-dep"><strong>POS API (tensoftware.in)</strong> — confirm the full push/pull list in <a href="#pos">POS Integration</a> is supported, plus sync mechanism &amp; barcode join key. <em>Confirm with Ten Software.</em></div>
+  <div class="callout co-dep"><strong>Order list interface</strong> — exact shape of the structured order list that pre-fills the GRN. <em>Owned by the Booking module.</em></div>
+  <div class="callout co-open"><strong>Per-brand cost mapping <span class="qref">Q36</span></strong> — for each brand's PT format: which column carries the per-piece payable rate, and is GST inside it? The cost <em>definition</em> is locked; these per-brand inputs are pending. <em>Client will provide the brand formats.</em></div>
+  <div class="callout co-open"><strong>SOR statutory timing (for D6)</strong> — Q37 books a TIR purchase at Patna inward while the SOR payable accrues only on sale. Confirm how brands actually bill SOR deliveries (tax invoice at delivery vs approval-basis challan) and how Tally should book them — D6 must reconcile the two timings. <em>Ask client / accountant.</em></div>
+  <div class="callout co-note"><strong>Resolved (17 Jun):</strong> the same style next season <strong>reuses the style identity</strong> (Brand+Style+Colour+Size) — for reorder &amp; carryover — while <strong>each season is a distinct stock cohort</strong> keyed by barcode + season (aging, dead-stock, returns run per cohort).</div>
+  <div class="callout co-open"><strong>Collapsed identity for non-branded <span class="qref">Q41</span></strong> — when colour isn't written (P/M/E tier) and size isn't on the invoice (Free Size), many different pieces collapse to <strong>one identity / one barcode</strong>. Proposed standard: <em>don't invent a colour or size we can't see — record the coarsest honest identity and let the barcode carry the count.</em> Confirm this is acceptable, or set a rule for when a real colour must be captured even though it isn't written. <em>Decide with Anand / client.</em></div>
+  <div class="callout co-dep"><strong>Season master ownership — D8 critical path</strong> — booking, PT and barcode identity all key on season, but its master (open/close ritual, corrections, cross-season barcode reuse) is owned by nobody until D8. Interim rule in Q39. <em>Must not slip out of D8.</em></div>
+  <div class="callout co-note"><strong>Resolved (17 Jun):</strong> if the invoice states a colour, <strong>use it</strong>; fall back to P/M/E only when no colour is given <span class="qref">Q28</span>.</div>
+  <div class="callout co-note"><strong>Resolved (updated 16 Jun):</strong> a barcode identifies a <em>product identity</em> shared by its pieces (one barcode → many pieces), unique <em>within a season</em>; some brands reuse a barcode in a later season → the key = <strong>barcode + season</strong> <span class="qref">Q41</span>.</div>
+  <div class="callout co-note"><strong>Resolved (17 Jun):</strong> the barcode is <strong>generated by the POS (Ten Software)</strong> today; we integrate that generator. Native generation can come later <span class="qref">Q8</span>.</div>
+  <div class="callout co-open"><strong>Sales-data import</strong> — format and cleanup needed before forecasting can use per-store / per-brand history.</div>
+  <div class="callout co-note"><strong>Resolved:</strong> P/M/E price bands = operator judgment, no fixed thresholds (Q28).</div>
+  <div class="editbox">➕ Add new open items here as the discussion grows.</div>
+</section>
+
+<section id="glossary">
+  <h2 class="sec">Glossary</h2>
+  <dl class="gloss">
+    <dt>PT file</dt><dd>The main KDPS document listing every item, its price, and tax details. Built per brand in a fixed format.</dd>
+    <dt>GRN (Goods Receipt Note)</dt><dd>Record of what was physically received, generated against the order list.</dd>
+    <dt>Shipment</dt><dd>The anchor record for one vendor arrival — invoice, GRN, PT, split, and TIR all link to it. (Renamed from "Consignment" to avoid clashing with the Consignment commercial model.)</dd>
+    <dt>SKU</dt><dd>The sellable identity (the "type"): Brand + Style-code + Colour + Size — carried by one barcode. Stock is counted per SKU / barcode per location.</dd>
+    <dt>Barcode</dt><dd>The ID of a product <em>identity</em>, shared by all its pieces — 5 identical kurtis share one barcode (quantity 5), not five barcodes (changed; was per-piece). Unique to the identity within a season; some brands reuse a barcode in a later season, so the unit key is barcode + season. Branded keeps the vendor barcode; non-branded gets one KDPS barcode per identity.</dd>
+    <dt>P / M / E</dt><dd>Premium / Medium / Economy — a price tier the operator puts in the COLOR column for non-branded items that have no real colour.</dd>
+    <dt>Free Size</dt><dd>The size value used for a non-branded line when the invoice gives no size.</dd>
+    <dt>TIR</dt><dd>The strict, accounting-ready dataset/format the accounting system ingests. Generated by software after Patna inward.</dd>
+    <dt>Branded vs Non-branded</dt><dd>Counts as branded when all three exist: every item barcoded, a detailed invoice, and a retrievable vendor PT file. Otherwise non-branded.</dd>
+    <dt>Patna (HO)</dt><dd>Head office; checks GST + margin and inwards the PT into the system.</dd>
+    <dt>Store split / allocation</dt><dd>Dividing a warehouse Shipment across stores by what each store needs; inwarded per-store so each store sees only its allocation.</dd>
+    <dt>Commercial models (4)</dt><dd><strong>Outright</strong> (Buy &amp; Sell — KDPS owns, no return) · <strong>Correction</strong> (KDPS owns, capped 25-18-10 return allowance on delivered qty) · <strong>SOR</strong> (brand owns, all unsold returns, no cap, fresh booking to reorder) · <strong>Consignment</strong> (brand owns, like SOR + rolling top-up). See D1 §3. The 25-18-10 belongs to Correction, not SOR (corrected 13 Jun Q&amp;A).</dd>
+  </dl>
+</section>
+
+<footer>
+  KDPS — Inbound Ingestion Design · Living document · Scope: vendor delivery → sellable at store ·
+  Statuses: <span class="badge b-locked">Locked</span> <span class="badge b-open">Open</span> <span class="badge b-dep">Dependency</span>.
+  Booking and POS internals are designed elsewhere.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

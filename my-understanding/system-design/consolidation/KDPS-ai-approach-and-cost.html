@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — AI Approach & Running Cost</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:var(--maxw);margin:0 auto;padding:40px 26px 120px}
+  header.doc{border-bottom:3px solid var(--rust);padding-bottom:20px;margin-bottom:12px}
+  .eyebrow{color:var(--rust);font-weight:700;letter-spacing:.15em;text-transform:uppercase;font-size:12px}
+  h1{font-size:29px;line-height:1.15;margin:8px 0 8px;color:var(--navy)}
+  .lead{font-size:17px;color:var(--navy2);max-width:74ch}
+  .sub{color:var(--muted);font-size:14.5px;max-width:76ch}
+  section{margin:34px 0}
+  h2{font-size:21px;color:var(--navy);border-left:4px solid var(--rust);padding-left:12px;margin:0 0 12px}
+  h2 .n{color:var(--rust-soft);font-weight:800;margin-right:8px}
+  h3{font-size:15.5px;color:var(--navy2);margin:18px 0 6px}
+  p{margin:9px 0}
+  .badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.03em;padding:2px 8px;border-radius:999px}
+  .b-code{background:var(--grey-bg);color:var(--navy2)}
+  .b-ml{background:var(--blue-bg);color:var(--blue)}
+  .b-llm{background:var(--purple-bg);color:var(--purple)}
+  .b-no{background:#fde8e8;color:#a32a2a}
+  .b-yes{background:var(--green-bg);color:var(--green)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:15px 18px;margin:10px 0;box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px;padding:14px 17px;margin:14px 0;border:1px solid}
+  .co-rule{background:var(--purple-bg);border-color:#dcd3f3}.co-rule b{color:var(--purple)}
+  .co-win{background:var(--green-bg);border-color:#bfe2cf}.co-win b{color:var(--green)}
+  .co-warn{background:var(--amber-bg);border-color:#ecd9a6}.co-warn b{color:var(--amber)}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  th{background:var(--navy);color:#fff;text-align:left;padding:9px 11px;font-size:12.5px}
+  td{padding:9px 11px;border-top:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .big{font-size:30px;font-weight:800;color:var(--navy)}
+  .right{text-align:right;white-space:nowrap}
+  .tot td{background:var(--navy)!important;color:#fff;font-weight:700}
+  ul{margin:8px 0;padding-left:20px}li{margin:4px 0}
+  .src{font-size:11.5px;color:var(--muted)}
+  footer{margin-top:50px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS Lifestyle Pvt Ltd · For the meeting</div>
+  <h1>AI Approach &amp; Running Cost</h1>
+  <p class="lead">How we picked the right kind of AI for each job — and what the whole system costs to run every month.</p>
+  <p class="sub">Companion to the system-design presentation. Prices are current (2026) and cited; treat as a solid estimate, confirm live before any firm quote. FX: ₹86 / USD.</p>
+</header>
+
+<section>
+  <h2><span class="n">1</span>The rule we used to choose</h2>
+  <div class="callout co-rule"><b>Use the simplest tool that works — and always the cheapest of the three that does the job.</b> In rising cost and risk: <strong>plain code → classical machine-learning → an AI model (LLM).</strong> Money numbers are <em>always</em> computed by plain code — an AI model is never trusted to do the maths.</div>
+  <p class="sub">This isn't caution for its own sake. On real quantitative tasks, an AI model alone scored ~36% accuracy; given a plain calculator tool to do the sums, the same setup hit ~95%. So: <strong>code computes, AI explains, a human decides.</strong> <span class="src">(npj Digital Medicine, 2025.)</span></p>
+</section>
+
+<section>
+  <h2><span class="n">2</span>The best tool for each job</h2>
+  <p class="sub">Every place AI touches the system, and what actually runs there. <span class="badge b-code">code</span> <span class="badge b-ml">machine-learning</span> <span class="badge b-llm">AI model</span></p>
+  <table>
+    <tr><th>The job</th><th>What runs</th><th>Best model / method</th><th>Agent?</th><th>Why</th></tr>
+    <tr>
+      <td><strong>Reading invoices &amp; documents</strong> (photo/PDF → data)</td>
+      <td><span class="badge b-llm">AI model</span></td>
+      <td>Google <strong>Gemini 2.5 Flash</strong> (Pro for hard scans)</td>
+      <td>No</td>
+      <td>Reads messy real-world paper far better than old OCR; cheap. We check its maths with code.</td>
+    </tr>
+    <tr>
+      <td><strong>Matching product / vendor names</strong> ("M N Garments" = "MN Garments")</td>
+      <td><span class="badge b-code">code</span> → <span class="badge b-ml">ML</span> → <span class="badge b-llm">AI</span></td>
+      <td>Rules first; embeddings next; AI only for the hard few</td>
+      <td>No</td>
+      <td>Most matches are simple and free to do in code; escalate only what's genuinely fuzzy.</td>
+    </tr>
+    <tr>
+      <td><strong>Demand forecasting &amp; size curves</strong></td>
+      <td><span class="badge b-ml">machine-learning</span></td>
+      <td>Classical ML (gradient-boosted trees / statistical) — <strong>not an AI model</strong></td>
+      <td>No</td>
+      <td>AI language models are the wrong tool for forecasting; classical methods win and cost far less. <span class="src">(NeurIPS 2024; M5 competition.)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Markdowns &amp; dead-stock</strong></td>
+      <td><span class="badge b-code">code (rules)</span> → <span class="badge b-ml">ML later</span></td>
+      <td>A signal scorecard (age, sell-through, cover, broken sizes, cost floor)</td>
+      <td>No</td>
+      <td>A clear rule engine is explainable and works on day-one data; add ML once 2–3 clean seasons exist.</td>
+    </tr>
+    <tr>
+      <td><strong>Anomaly / leakage / fraud</strong> (discount leaks, cash gaps, duplicate payments)</td>
+      <td><span class="badge b-code">rules</span> + <span class="badge b-ml">stats/ML</span></td>
+      <td>Rules now; statistical/ML later</td>
+      <td>No</td>
+      <td>Catches most leaks cheaply; flags for a human, never blocks. (ML is on-par with AI models here, at far lower cost.)</td>
+    </tr>
+    <tr>
+      <td><strong>The 9 PM WhatsApp digest</strong></td>
+      <td><span class="badge b-code">code computes</span> + <span class="badge b-llm">AI writes</span></td>
+      <td>Gemini 2.5 Flash (writes the words, in Hindi/English)</td>
+      <td>No</td>
+      <td>Code works out every number; the AI only turns them into a readable message.</td>
+    </tr>
+    <tr>
+      <td><strong>The "ask anything" assistant</strong></td>
+      <td><span class="badge b-llm">AI model</span> over the agreed numbers</td>
+      <td>Claude Sonnet or Gemini Pro (on Vertex), via the read-only tool layer</td>
+      <td><span class="badge b-yes">Yes</span></td>
+      <td>The one place a multi-step agent earns its keep. It uses defined numbers, never raw database queries — a semantic layer answers correctly ~100% vs ~63% for free-form. <span class="src">(dbt, 2026.)</span></td>
+    </tr>
+    <tr>
+      <td><strong>Payments copilot</strong> (read bank lines, flag duplicates/fraud, "safe to pay?")</td>
+      <td><span class="badge b-llm">AI</span> + <span class="badge b-code">rules</span></td>
+      <td>Gemini Flash / Claude Haiku + rule checks</td>
+      <td>Light</td>
+      <td>AI reads the mess and summarises; rules and a human do the deciding.</td>
+    </tr>
+  </table>
+  <div class="callout co-note" style="background:#eef1f7;border-color:#cdd6e6"><strong>Where agents help vs. overkill:</strong> 7 of these 8 jobs are a single AI call or a plain pipeline. <strong>Only the assistant is a true "agent."</strong> The industry is littered with failed agent projects — Gartner expects over 40% cancelled by 2027 — almost always from using an agent where a simple call would do. We don't.</div>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Which models, and why "best tool for each"</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Google Gemini (Flash / Pro)</strong> — reading invoices &amp; documents, writing the digest. Fast, cheap, strong at images. <em>(Your choice for image — confirmed as the right one.)</em></li>
+      <li><strong>Claude Sonnet or Gemini Pro</strong> — the conversational assistant, where reasoning and tool-use matter most. Swappable; both run on Vertex.</li>
+      <li><strong>Classical machine-learning</strong> — forecasting, size curves, anomaly scoring. No AI model involved; it's the right and cheaper engine.</li>
+      <li><strong>Plain code</strong> — every rupee, every posting, every tax number. Exact, every time.</li>
+    </ul>
+    <p class="sub">All AI runs through Vertex AI; the assistant reaches data only through a read-only, access-scoped layer — it can never write the books.</p>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">4</span>What it costs to run — every month</h2>
+  <p class="sub">For ~50 stores, 40+ brands. Assumes ~300 invoices/month read by AI, daily digests to ~10 owners/managers, store alerts, and ~300 assistant questions/month. Forecasting/markdown/anomaly run on the same server — no extra per-use AI cost.</p>
+  <table>
+    <tr><th>Line item</th><th class="right">Lean</th><th class="right">Expected</th><th class="right">High</th></tr>
+    <tr><td><strong>Database</strong> — Cloud SQL PostgreSQL (always-on)</td><td class="right">₹17,200<br><span class="src">1 vCPU, no HA</span></td><td class="right">₹20,200<br><span class="src">2 vCPU, no HA</span></td><td class="right">₹40,400<br><span class="src">+ high-availability</span></td></tr>
+    <tr><td><strong>WhatsApp</strong> — messaging plan (AiSensy)</td><td class="right">₹3,200</td><td class="right">₹3,200</td><td class="right">₹5,000</td></tr>
+    <tr><td><strong>WhatsApp</strong> — utility messages (digests/alerts)</td><td class="right">₹430</td><td class="right">₹730</td><td class="right">₹5,160<br><span class="src">if marketing-grade</span></td></tr>
+    <tr><td><strong>App server</strong> — Cloud Run (scales to zero)</td><td class="right">₹0</td><td class="right">₹260</td><td class="right">₹860</td></tr>
+    <tr><td><strong>File storage</strong> — invoices, PT files</td><td class="right">₹130</td><td class="right">₹215</td><td class="right">₹260</td></tr>
+    <tr><td><strong>AI — assistant</strong> (~300 questions)</td><td class="right">₹260</td><td class="right">₹520</td><td class="right">₹1,550<br><span class="src">on the top model</span></td></tr>
+    <tr><td><strong>AI — invoice reading</strong> (~300 docs)</td><td class="right">₹45</td><td class="right">₹125</td><td class="right">₹260</td></tr>
+    <tr><td><strong>AI — digest writing</strong> (~180 messages)</td><td class="right">₹50</td><td class="right">₹95</td><td class="right">₹260</td></tr>
+    <tr class="tot"><td>Total per month</td><td class="right">~₹21,300</td><td class="right">~₹25,300</td><td class="right">~₹53,800</td></tr>
+  </table>
+  <div class="callout co-win"><b>The headline:</b> the whole system runs at about <strong>₹25,000/month</strong>. <strong>All the AI combined is under ₹2,000 of that</strong> — the cost is the always-on database, not the intelligence. (In USD: ~$248 lean / ~$294 expected / ~$625 high.)</div>
+  <h3>The cheapest levers, in order</h3>
+  <ul>
+    <li><strong>Skip database high-availability at launch</strong> — biggest single saving (~₹20k); add it when zero-downtime truly matters.</li>
+    <li><strong>Right-size the database</strong> — start small, grow with load.</li>
+    <li><strong>Keep WhatsApp on "utility," not "marketing"</strong> — utility messages are ~7× cheaper; service replies are free.</li>
+    <li><strong>Model choice</strong> — Flash/Flash-Lite for digests &amp; reading; pick the top model only for the assistant. Even then it's a rounding error.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">5</span>Two honest flags (so they don't bite us later)</h2>
+  <div class="callout co-warn"><b>Data location:</b> all stored data — the database, files, every record — sits in India (Mumbai). But Google does not yet give a formal guarantee that the <em>AI model's processing</em> happens inside India for the generative models (its committed regions today are US/EU/Japan/Singapore/Korea). <strong>Our design already handles this:</strong> the AI only ever sees safe, edge data and computed numbers — never raw customer or payment details. We confirm the live position before go-live, and the system works regardless of which model we point at.</div>
+  <div class="callout co-warn"><b>Prices &amp; regions move fast.</b> The numbers above are current and sourced, but AI pricing and India-region availability change often — re-confirm live before any firm client quote.</div>
+  <p class="src">Detailed per-task technique note (with all sources): <a href="../07-analytics-ai/ai-technique-selection.html">ai-technique-selection.html</a>. Hosting decision detail: <a href="cloud-hosting-decision.html">cloud-hosting-decision.html</a>.</p>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt Ltd · AI Approach &amp; Running Cost · June 2026 · Companion to the system-design presentation. Prices cited current (2026), FX ₹86/USD — confirm live before quoting.
+</footer>
+
+</main>
+</body>
+</html>

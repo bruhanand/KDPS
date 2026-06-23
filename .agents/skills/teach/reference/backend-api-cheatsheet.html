@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backend / API Cheat Sheet — KDPS</title>
+<style>
+  :root{ --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --brain:#1d4ed8; --brain-bg:#eff6ff; --brain-line:#bfdbfe; --brain-deep:#1e3a8a;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --amber-bg:#fff7ed;
+    --lbl:#7dd3fc; --str:#86efac; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; font-size:14.5px;}
+  .wrap{max-width:860px; margin:0 auto; padding:38px 24px 64px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:28px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:64ch; margin:0 0 16px}
+  h2{font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--brain-deep); margin:24px 0 8px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:5px}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:8px 0}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line)}
+  th{background:var(--brain-bg); color:var(--brain-deep); font-size:11.5px; text-transform:uppercase}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:ui-monospace,Menlo,monospace; white-space:nowrap}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px 16px; break-inside:avoid}
+  .card h3{margin:0 0 8px; font-size:15px}
+  pre{background:#0f172a; color:#e2e8f0; border-radius:10px; padding:13px 15px; font-size:13px; line-height:1.65; margin:6px 0; overflow-x:auto; font-family:ui-monospace,Menlo,monospace}
+  .lbl{color:var(--lbl)} .str{color:var(--str)}
+  .badge{display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:6px}
+  .b2{background:var(--good-bg); color:#14532d} .b4{background:var(--amber-bg); color:#7c2d12} .b5{background:var(--bad-bg); color:#991b1b}
+  .reflex{background:#1d2433; color:#e7ebf3; border-radius:12px; padding:14px 18px; margin:18px 0}
+  .reflex b{color:#bfdbfe}
+  footer{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--brain); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} th,.reflex,.badge{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>Backend / API cheat sheet</h1>
+  <p class="lede">How the screen talks to the Brain: a <b>request</b> goes in, a <b>response</b> comes back. Everything here is for reading and reviewing endpoints — not writing them.</p>
+
+  <h2>The cycle (restaurant → KDPS)</h2>
+  <table>
+    <tr><th>Step</th><th>Restaurant</th><th>KDPS</th></tr>
+    <tr><td>Ask</td><td>order to the waiter</td><td>screen sends a <b>request</b></td></tr>
+    <tr><td>Travel</td><td>waiter → kitchen</td><td>request → the Brain</td></tr>
+    <tr><td>Decide</td><td>kitchen checks stock</td><td>Brain checks the rules</td></tr>
+    <tr><td>Store</td><td>cook takes ingredients</td><td>Brain reads/writes the database</td></tr>
+    <tr><td>Return</td><td>waiter brings food</td><td>Brain sends a <b>response</b></td></tr>
+  </table>
+
+  <div class="grid">
+    <div class="card">
+      <h3>The four verbs (= SQL)</h3>
+      <table>
+        <tr><th>Verb</th><th>Does</th><th>SQL</th></tr>
+        <tr><td class="mono">GET</td><td>read</td><td>SELECT</td></tr>
+        <tr><td class="mono">POST</td><td>create</td><td>INSERT</td></tr>
+        <tr><td class="mono">PUT/PATCH</td><td>change</td><td>UPDATE</td></tr>
+        <tr><td class="mono">DELETE</td><td>remove</td><td>DELETE</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Status codes</h3>
+      <table>
+        <tr><td><span class="badge b2">2xx</span></td><td>good — it worked</td></tr>
+        <tr><td><span class="badge b4">4xx</span></td><td><b>your</b> fault (bad request, not allowed, not found)</td></tr>
+        <tr><td><span class="badge b5">5xx</span></td><td>the <b>server's</b> fault (a bug)</td></tr>
+      </table>
+      <p style="margin:8px 0 0; color:var(--muted); font-size:13px">400 bad · 401/403 not allowed · 404 not found · 500 server bug</p>
+    </div>
+  </div>
+
+  <h2>Endpoint = one job + one address</h2>
+  <table>
+    <tr><th>Want</th><th>Endpoint</th><th>Verb</th></tr>
+    <tr><td>all SKUs</td><td class="mono">/skus</td><td class="mono">GET</td></tr>
+    <tr><td>one SKU</td><td class="mono">/skus/&lt;id&gt;</td><td class="mono">GET</td></tr>
+    <tr><td>make a sale</td><td class="mono">/sales</td><td class="mono">POST</td></tr>
+    <tr><td>update a price</td><td class="mono">/skus/&lt;id&gt;</td><td class="mono">PATCH</td></tr>
+  </table>
+  <p style="color:var(--muted)">The <b>API</b> is the full menu of endpoints the Brain offers the screen.</p>
+
+  <h2>JSON — the message format</h2>
+  <div class="grid">
+    <div class="card"><h3>→ Request</h3>
+      <pre>{ <span class="lbl">"sku_id"</span>: <span class="str">"NK-AM90-WHT-8"</span>,
+  <span class="lbl">"qty"</span>: <span class="str">1</span>,
+  <span class="lbl">"store"</span>: <span class="str">"Store-7"</span> }</pre></div>
+    <div class="card"><h3>← Response</h3>
+      <pre>{ <span class="lbl">"status"</span>: <span class="str">"ok"</span>,
+  <span class="lbl">"bill_no"</span>: <span class="str">"BILL#902"</span>,
+  <span class="lbl">"on_hand"</span>: <span class="str">4</span> }</pre></div>
+  </div>
+  <p style="color:var(--muted)">JSON is just <b>label: value</b> text both sides understand.</p>
+
+  <div class="reflex">
+    🧭 <b>Reviewer's lens for any write endpoint (POST/PUT/DELETE):</b>
+    &nbsp;(1) Does it check <b>who</b> is allowed? &nbsp;(2) Does it <b>validate</b> the input (reject rubbish → 4xx)? &nbsp;(3) Is the database write <b>scoped</b> (the WHERE)? &nbsp;(4) Does it return a clear <b>status code</b>?
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0006-request-response-and-apis.html">Lesson 6</a>; sits beside the <a href="database-handbook.html">Database Handbook</a> &amp; <a href="sql-reading-cheatsheet.html">SQL Reading</a> card. Source: <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview">MDN — HTTP overview</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · backend / API</p>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — ERP Requirements Register</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --must:#1f7a4d; --must-bg:#e7f4ee;
+    --should:#1e5fa8; --should-bg:#e6f0fb;
+    --later:#6b7280; --later-bg:#eef0f3;
+    --ai:#6d28d9; --ai-bg:#f1ebfd;
+    --fc:#0e7490; --fc-bg:#e3f5f9;
+    --cl:#9a6700; --cl-bg:#fdf3da;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15.5px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:900px; margin:0 auto; padding:36px 26px 90px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:18px; margin-bottom:14px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:27px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:14.5px; max-width:70ch}
+  h2{font-size:19px; color:var(--navy); border-left:4px solid var(--rust); padding-left:11px; margin:36px 0 10px}
+  h3{font-size:15.5px; color:var(--navy2); margin:18px 0 6px}
+  p{margin:8px 0}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:10px 0; break-inside:avoid}
+  ul.r{list-style:none; margin:6px 0; padding:0}
+  ul.r li{margin:8px 0; padding:8px 11px; border:1px solid var(--line); border-radius:8px; background:#fff}
+  ul.r li .id{color:#aab1bd; font-size:11.5px; margin-right:7px; font-variant-numeric:tabular-nums}
+  .b{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+     padding:2px 7px; border-radius:5px; margin-left:6px; white-space:nowrap; vertical-align:1px}
+  .b.must{background:var(--must-bg); color:var(--must)}
+  .b.should{background:var(--should-bg); color:var(--should)}
+  .b.later{background:var(--later-bg); color:var(--later)}
+  .b.ai{background:var(--ai-bg); color:var(--ai)}
+  .b.fc{background:var(--fc-bg); color:var(--fc)}
+  .b.cl{background:var(--cl-bg); color:var(--cl)}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .note{background:#f3f1fb; border:1px solid #dcd3f3; border-radius:10px; padding:11px 14px; margin:12px 0; font-size:14px}
+  .legend{display:flex; flex-wrap:wrap; gap:10px; margin:14px 0 0; font-size:13px; color:var(--muted); align-items:center}
+  footer{margin-top:40px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  @media print{ body{background:#fff; font-size:13px} .wrap{padding:10px 0 30px; max-width:100%} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · Internal Working Document</div>
+  <h1>ERP Requirements Register</h1>
+  <p class="sub">The master list of everything the system must do — gathered from the requirements-confirmation document, the current-workflow record, the client's demands, the real report &amp; bank files, and the requirements session of 11 June 2026. This is the WHAT, never the HOW.</p>
+  <div class="legend">
+    <span class="b must">Must</span><span class="b should">Should</span><span class="b later">Later</span> priority (proposed — review &amp; adjust) ·
+    <span class="b ai">AI</span> reads/writes with a language model ·
+    <span class="b fc">Forecast</span> prediction from numbers ·
+    <span class="b cl">Client</span> still unconfirmed by the client
+  </div>
+</header>
+
+<div class="note"><strong>Fixed scope rulings (do not reopen):</strong> the Ten Software POS owns everything customer-facing at the counter — billing, customer data, the selling moment. Our scope at a store is stock in, stock out, and reporting what happened. No customer module, no loyalty; sales channel is in-store only. Non-branded invoice → PT (the PT Mapper) is core scope. Tally stays the book of record. The POS stays as-is; we assume its API and documentation come from the client.</div>
+
+<h2>1 · The system at a glance</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">1.1</span>One central system covering stock from brand to store, PT-file making, stock aging, daily cash &amp; payment audit, and brand reports.<span class="b must">Must</span></li>
+  <li><span class="id">1.2</span>The POS stays untouched at the counter. Our system connects to it — sends it new items and prices, reads back sales, stock and collection.<span class="b must">Must</span></li>
+  <li><span class="id">1.3</span>Tally stays the statutory book of record. The system prepares import-ready vouchers for Tally; it never replaces it.<span class="b must">Must</span></li>
+  <li><span class="id">1.4</span>The PT Mapper, both kinds: convert any brand's PT file to KDPS format, and build a PT from a plain invoice — with barcodes.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">1.5</span>Owners get key numbers on WhatsApp daily — the figures plus a short written summary of anything unusual.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">1.6</span>A central sales dashboard — every store in one place, one login.<span class="b must">Must</span></li>
+  <li><span class="id">1.7</span>Everything runs in the browser — no app installs. Store staff use the store computer; phones serve the warehouse and people on the move.<span class="b must">Must</span></li>
+</ul>
+</div>
+
+<h2>2 · Buying terms — brands &amp; vendors</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">2.1</span>A brand book: every brand's buying model (SOR / Outright / Consignment), margin percentages, return window days, payment terms — set once, applied everywhere.<span class="b must">Must</span></li>
+  <li><span class="id">2.2</span>The buying model is recorded per order, not only per brand — one order can occasionally run on a different model.<span class="b must">Must</span></li>
+  <li><span class="id">2.3</span>Fixed brand vendors are always branded. A non-branded vendor's shipment counts as branded only when all three are present: vendor barcode &amp; tag, a proper detailed invoice, and a vendor PT file — checked per shipment.<span class="b must">Must</span></li>
+  <li><span class="id">2.4</span>Non-branded intake: read the vendor's invoice from a photo or PDF, ask the warehouse person for whatever is missing, produce the KDPS PT and barcode stickers.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">2.5</span>No size on the invoice → the item is recorded as Free Size.<span class="b must">Must</span></li>
+  <li><span class="id">2.6</span>Price-setting for untagged goods: cost + ~1.1% transport + GST + margin by category. Decided in the inbound design: default 30–35% per category (the old plan's 20–25% is superseded). The per-category margin list is still needed from the client.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">2.7</span>The calculated MRP can be overridden — decided in the inbound design: the operator may override within the category band.<span class="b must">Must</span></li>
+  <li><span class="id">2.8</span>Premium / Medium / Economy is used for non-branded stock when the invoice doesn't give a colour for every item — checking colour piece by piece is too painful. The warehouse operator picks the tier by judgment; no fixed price bands.<span class="b should">Should</span></li>
+  <li><span class="id">2.9</span>City sourcing agents are real records — who introduced the vendor, answerable until delivery.<span class="b must">Must</span></li>
+  <li><span class="id">2.10</span>Vendors without a GSTIN must still be representable. Ask the client: do all non-branded vendors have a GSTIN? (Buying and paying work differently without one.)<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">2.11</span>Brand incentives (target bonus, display money, advertisement support) tracked per brand.<span class="b should">Should</span><span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>3 · Booking orders</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">3.1</span>Brand orders: photograph/upload the brand's printed receiving paper → the order is drafted automatically → KDPS's person checks and confirms.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">3.2</span>Non-branded verbal orders: the account manager types the order, speaks it as a voice note, or uploads a WhatsApp screenshot / photo — or simply forwards the vendor chat to the system's WhatsApp number. The system drafts the order from any of these.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">3.3</span>Every capture makes a draft first; a person confirms before the order exists. Nothing auto-finalises.<span class="b must">Must</span></li>
+  <li><span class="id">3.4</span>The order lives in the system from booking day — branded 6–8 months ahead, non-branded 3–4 months ahead.<span class="b must">Must</span></li>
+  <li><span class="id">3.5</span>An order line is style + size + quantity. No colour, no prices at booking — prices come with the goods (PT).<span class="b must">Must</span></li>
+  <li><span class="id">3.6</span>One order = one brand, one season; goods may arrive in several lots against it.<span class="b must">Must</span></li>
+  <li><span class="id">3.7</span>Order statuses stay simple: booked → part-received / received → cancelled. If the vendor says an order can't be delivered, the person marks it cancelled.<span class="b must">Must</span></li>
+  <li><span class="id">3.8</span>Ordered vs received is always visible; pending balances stay open until goods come or a person cancels the line. The system never auto-closes anything.<span class="b must">Must</span></li>
+</ul>
+</div>
+
+<h2>4 · Goods arrival &amp; PT making</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">4.1</span>Branded goods land at the store; non-branded at the warehouse (almost always). At a store, staff open the order, mark what actually came, press Done; the warehouse completes the entry.<span class="b must">Must</span></li>
+  <li><span class="id">4.2</span>The warehouse does counting only — quantity against the invoice. Damage is checked at the store; a damaged piece is set aside there, not sellable, and goes back to the brand.<span class="b must">Must</span></li>
+  <li><span class="id">4.3</span>Vendors sometimes send more than ordered. Over-received items are received on the same screen — an added line, flagged with a required remark; the original order lines stay, flagged (per the inbound design). Asking the vendor to take extras back is an outcome recorded on the flag, not a reason to skip the entry.<span class="b must">Must</span></li>
+  <li><span class="id">4.4</span>Short supply: the order shows part-received; the pending quantity stays open and visible until the goods come or a person cancels it.<span class="b must">Must</span></li>
+  <li><span class="id">4.5</span>Patna head office works with data only — it checks the PT (GST, margin), inwards it, and confirms the store split. Receiving never waits for Patna; nothing physical is ever blocked.<span class="b must">Must</span></li>
+  <li><span class="id">4.6</span>The warehouse proposes which store gets how much; Patna confirms; each store sees only its own share. The proposal starts from each store's past-sales share.<span class="b must">Must</span><span class="b fc">Forecast</span></li>
+  <li><span class="id">4.7</span>PT making, all four ways: convert the vendor's PT · build the PT from the invoice (call the vendor for gaps) · keep the vendor's barcode and MRP tag · KDPS sets the MRP and prints barcodes when nothing is tagged.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">4.8</span>Incoming invoice rows are matched against the brand's master PT file automatically.<span class="b must">Must</span><span class="b ai">AI</span></li>
+</ul>
+</div>
+
+<h2>5 · Stock in the store</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">5.1</span>The receiving store sees a pending inward the moment the sender saves the voucher — quantity visible before the goods arrive. Pieces are scanned in; all scanned = sellable. (This flow runs inside the POS today and stays there; our system tracks it.)<span class="b must">Must</span></li>
+  <li><span class="id">5.2</span>For brands whose PT carries no barcodes (e.g. Jockey), entry is by style code.<span class="b must">Must</span></li>
+  <li><span class="id">5.3</span>Every item carries season, collection and age — tagged automatically from its code. Aging drives markdowns and dead-stock handling.<span class="b must">Must</span></li>
+  <li><span class="id">5.4</span>Each store sees only its own stock; every item always shows a clear status — in transit, in store, sold, returned, set aside as defective.<span class="b must">Must</span></li>
+  <li><span class="id">5.5</span>Selling before the inward is keyed in happens and is not policed. The system absorbs it; owners can simply see what's happening in each store when they look.<span class="b must">Must</span></li>
+</ul>
+</div>
+
+<h2>6 · Stock going out — sale &amp; exchange</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">6.1</span>The POS bills the sale; our system reads it and the stock comes off in our records. All bills, in every store, are made on the POS — confirmed. Every store runs its own Ten Software, used only as the billing counter.<span class="b must">Must</span></li>
+  <li><span class="id">6.2</span>Exchange, stock side: the returned piece comes back in — good condition → sellable stock; defective → the defective flow. Exchange is an MRP-to-MRP swap valued at the original final bill.<span class="b must">Must</span></li>
+  <li><span class="id">6.3</span>Exchange, money side: the customer pays the gap upward or adds items downward; the difference lands in that day's collection so the cash audit always adds up.<span class="b must">Must</span></li>
+  <li><span class="id">6.4</span>Whether the POS links an exchange to the original bill — and what happens on a no-bill exchange — are client questions. The bill-link half is already on the prepared Ten Software question list (returns/exchanges with reference to the original bill).<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>7 · Transfers between stores</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">7.1</span>Transfers are MBO stores only; EBO stock moves are handled between the brand and the EBO, outside our system.<span class="b must">Must</span></li>
+  <li><span class="id">7.2</span>The transfer voucher, pending inward and scanning all happen inside the POS today and stay there. Our system reads and tracks the movement.<span class="b must">Must</span></li>
+  <li><span class="id">7.3</span>Transport details recorded against the transfer — bus, driver, courier, who carried it. (Today this lives in a WhatsApp group and is lost.)<span class="b must">Must</span></li>
+  <li><span class="id">7.4</span>A reason on each transfer — customer waiting, slow mover, seasonal swap, freeing floor space.<span class="b should">Should</span></li>
+  <li><span class="id">7.5</span>Sent ≠ received: the receiving store closes its inward at what came; the gap sits visibly as "in transit — unresolved" against that voucher until head office settles it. Nothing disappears silently.<span class="b must">Must</span></li>
+  <li><span class="id">7.6</span>The e-way bill number is recorded on the transfer (made on the portal as today). Preparing e-way bill data inside the system comes later.<span class="b must">Must</span> <span style="font-size:12.5px;color:var(--muted)">(preparation: <span class="b later">Later</span>)</span></li>
+</ul>
+</div>
+
+<h2>8 · Returns to brands &amp; disposal</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">8.1</span>Defective returns run on two routes: Madura brands (Allen Solly, Louis Philippe, Van Heusen, Peter England) collect directly from the store; every other brand and non-branded — defectives gather at the warehouse and go back from there.<span class="b must">Must</span></li>
+  <li><span class="id">8.2</span>Seasonal SOR returns: unsold pieces within the agreed allowance go back at season end. The system tracks each brand's return window and alerts before it expires (30 / 15 / 7 days).<span class="b must">Must</span></li>
+  <li><span class="id">8.3</span>The system works out the return value KDPS is entitled to — designed already: one pool per vendor per season, growing with each priced stock-in at stock-in value (ex-GST), shrinking with each return; the 30/15/7-day alerts show pool remaining. Still for the brands/client: do brands compute their 10% on the same basis, and which date anchors the window.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">8.4</span>Credit notes: every return to a brand should end in a credit note; the system tracks which came and which are pending.<span class="b must">Must</span></li>
+  <li><span class="id">8.5</span>Consignment vendors pick up their unsold goods; what they took is recorded.<span class="b must">Must</span></li>
+  <li><span class="id">8.6</span>Return lists ready-grouped by the brand's warehouse.<span class="b should">Should</span></li>
+  <li><span class="id">8.7</span>Stock nobody takes back (dead outright stock, refused defectives, abandoned consignment) gets a proper exit — proposed: owner approves, piece leaves the books as a written-off loss with the matching Tally entry. What happens physically today is a client question.<span class="b should">Should</span><span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>9 · Counting stock</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">9.1</span>Count sessions, store by store, section by section — scan the racks, the system shows book vs counted.<span class="b must">Must</span></li>
+  <li><span class="id">9.2</span>Every difference becomes a listed item — found / missing — never a silent correction. Adjustments post only after approval; count history stays per store.<span class="b must">Must</span></li>
+  <li><span class="id">9.3</span>How counting runs today, who answers for differences, and the counting rhythm are client questions.<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>10 · Prices, offers &amp; EOSS</h2>
+<div class="card">
+<p class="sub" style="margin:4px 0 8px">MRPs don't move — discounts do all the moving. Branded (~70% of buying): the brand decides the discount. Outright / non-branded: KDPS decides.</p>
+<ul class="r">
+  <li><span class="id">10.1</span>An offer book holding every offer type seen in practice: GWP (buy above a value, get a gift item at a token price — gift's worth recorded), ATV slabs (spend or quantity thresholds, stacked in families), item-scope conditions (specific fits/categories, MRP floors), buy-2-get-1 cheapest free, percent-off.<span class="b must">Must</span></li>
+  <li><span class="id">10.2</span>Each offer carries the stores it applies to, start date, end date — and supports "end not disclosed yet": the offer stays running until the brand closes it.<span class="b must">Must</span></li>
+  <li><span class="id">10.3</span>A fallback offer can take over when one ends.<span class="b must">Must</span></li>
+  <li><span class="id">10.4</span>Read the offer from the brand's circular or image and draft it; a person confirms. Manual entry always works.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">10.5</span>Two truths per bill, kept side by side: what the counter actually billed (from the POS, never altered) and what the brand's offer says should have applied (from the offer book). The brand report is built 100% on the brand's terms.<span class="b must">Must</span></li>
+  <li><span class="id">10.6</span>Every bill where billed ≠ offer lands on a difference list — store, bill, gap. Owners see the total gap per store and brand. This also catches the pocketed-discount fraud.<span class="b must">Must</span></li>
+  <li><span class="id">10.7</span>EOSS records: who funds the discount (brand or KDPS), margin drop (25 → 18), by season/brand/category/store/dates.<span class="b must">Must</span></li>
+  <li><span class="id">10.8</span>A markdown ladder suggestion as stock ages (10 → 20 → 30%…).<span class="b should">Should</span><span class="b fc">Forecast</span></li>
+  <li><span class="id">10.9</span>Who creates/approves an offer, what wins when two offers fit one bill, and whether gift items sit in stock records are client questions.<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>11 · Money — cash audit, vendor payments, brand paperwork</h2>
+<div class="card">
+<h3>The daily cash audit</h3>
+<ul class="r">
+  <li><span class="id">11.1</span>Per store, per day: cash + UPI + card/swipe + dues from the POS matched against what actually reached the bank.<span class="b must">Must</span></li>
+  <li><span class="id">11.2</span>Bank statements come into the system (upload or feed, per account) — without them the audit has nothing to match against.<span class="b must">Must</span></li>
+  <li><span class="id">11.3</span>Deposits matched to stores even from messy bank narrations (NEFT/INFT codes).<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">11.4</span>UPI and card settlements matched with their delay and bank charge, per store terminal (MID).<span class="b must">Must</span></li>
+  <li><span class="id">11.5</span>Petty cash spent from the till (salary advances, tea, alteration, courier, rent, electricity, repairs…) recorded before deposit.<span class="b must">Must</span></li>
+  <li><span class="id">11.6</span>Credit (udhaar) sales and dues recovery tracked in the daily cash book — the store files prove they exist.<span class="b must">Must</span></li>
+  <li><span class="id">11.7</span>The store's daily workbook (DSR) — sales lines, cash book with opening/closing balance, inward, reconciliation, petty cash — is produced by the system, not typed by hand.<span class="b must">Must</span></li>
+</ul>
+<h3>Paying vendors &amp; brand paperwork</h3>
+<ul class="r">
+  <li><span class="id">11.8</span>Vendor payments need approval; above a limit, someone senior approves — routed by amount, approvable inside WhatsApp. Who and what limits are the client's call.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">11.9</span>SOR payments are for sold goods — the system prepares what's owed from actual sales. How the brand demands it today is a client question.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">11.10</span>No payment to any vendor unless their bank details and GSTIN are on file. (Proposed rule — client to accept.)<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">11.11</span>One lump payment split across many part-paid invoices automatically.<span class="b must">Must</span></li>
+  <li><span class="id">11.12</span>Cash discount calculated on the pre-tax amount only; the GST line stays whole.<span class="b must">Must</span></li>
+  <li><span class="id">11.13</span>Brand statements reconciled against our records — sales, returns, credit notes, incentive claims — so what the brand says matches what we have.<span class="b must">Must</span></li>
+</ul>
+</div>
+
+<h2>12 · Tax &amp; Tally</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">12.1</span>GSTIN on every entity and vendor; HSN code and tax breakup on every item line; every document filing-ready.<span class="b must">Must</span></li>
+  <li><span class="id">12.2</span>Vouchers prepared for Tally import — purchases, sales, returns, credit notes, write-offs. Nightly auto-sync can come later.<span class="b must">Must</span> <span style="font-size:12.5px;color:var(--muted)">(auto-sync: <span class="b later">Later</span>)</span></li>
+  <li><span class="id">12.3</span>E-way bill number recorded on inter-store transfers (Bihar↔Jharkhand crossings especially).<span class="b must">Must</span></li>
+  <li><span class="id">12.4</span>For the client / CA: how many entities and GSTINs · does e-invoicing apply · who makes e-way bills today · how GSTIN-less purchases are booked · Tally company &amp; ledger structure for import.<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>13 · Reports &amp; daily numbers</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">13.1</span>Monthly brand reports (Sale vouchers + SOH) generated by the system in the exact format sent today — discounts filled per the brand's offer book, returns cancelling the right lines.<span class="b must">Must</span></li>
+  <li><span class="id">13.2</span>The daily WhatsApp to owners: yesterday's sales, collection vs bank, and anything unusual — numbers plus a short written summary.<span class="b must">Must</span><span class="b ai">AI</span></li>
+  <li><span class="id">13.3</span>The central dashboard: every store's sales in one place, one login.<span class="b must">Must</span></li>
+  <li><span class="id">13.4</span>Stock aging on every item, so old stock is caught before it dies. The "old after how many days" thresholds are the client's to set.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">13.5</span>Trading profit per store and brand — cost from the PT at stock-in, revenue from the POS at sale. Never hand-entered.<span class="b must">Must</span></li>
+  <li><span class="id">13.6</span>The full store P&amp;L reads expense totals from Tally (rent, salaries) — nobody enters expenses twice. Petty cash is the one expense stream captured by us.<span class="b should">Should</span></li>
+  <li><span class="id">13.7</span>Staff performance, reporting only: actuals per salesperson from POS data — sales value, pieces, per store, per month, ranked. Whether owners set targets to compare against is a client question.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">13.8</span>The POS data is dirty and the system survives it: brand names written many ways, tier words in the colour field, mangled barcodes, manual + online bill numbers, returns as minus quantities. Name variants are mapped, nothing crashes on a weird row.<span class="b must">Must</span><span class="b ai">AI</span></li>
+</ul>
+</div>
+
+<h2>14 · People &amp; access</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">14.1</span>Three kinds of users to start — Store (own store only), Warehouse, Patna/Head Office (everything) — plus an admin.<span class="b must">Must</span></li>
+  <li><span class="id">14.2</span>Every action records who did it and when — automatic, for everyone equally, kept seven years.<span class="b must">Must</span></li>
+  <li><span class="id">14.3</span>Profit and margin visibility is a setting; who sees it is the client's call.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">14.4</span>Per-store vs per-person logins, Hindi/English screens, and who adds/removes users — client questions.<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>15 · Old data &amp; going live</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">15.1</span>Past sales history loaded, so reports, aging and forecasting have something to learn from. How many years exist in the POS and whether they can be exported is a client question.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">15.2</span>Opening stock per store = one physical count at go-live. Unavoidable.<span class="b must">Must</span></li>
+  <li><span class="id">15.3</span>Go-live store by store: 2–3 pilots, then waves; the system runs in parallel with today's routine until proven.<span class="b must">Must</span></li>
+  <li><span class="id">15.4</span>Training simple, in Hindi, mostly short videos and voice notes.<span class="b must">Must</span></li>
+  <li><span class="id">15.5</span>Pilot store choice and the festival/audit blackout calendar — client questions.<span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>16 · Success &amp; ownership</h2>
+<div class="card">
+<ul class="r">
+  <li><span class="id">16.1</span>One named super-user at KDPS who owns the system day-to-day.<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">16.2</span>A written six-month success definition from the owner — the numbers that make him say "this worked."<span class="b must">Must</span><span class="b cl">Client</span></li>
+  <li><span class="id">16.3</span>Running cost stays within the client's stated cap (₹25–40K/month) — cap to be re-confirmed.<span class="b must">Must</span><span class="b cl">Client</span></li>
+</ul>
+</div>
+
+<h2>17 · AI &amp; forecasting inventory</h2>
+<p class="sub" style="margin:6px 0 2px">Every smart feature above, in one place — what each needs to exist, and how it starts from zero. Rule of the house: AI reads documents and writes summaries at the edges; the operational rules stay plain, predictable code. Fraud detection is statistics, never a language model.</p>
+
+<h3>Reading &amp; writing (language models)</h3>
+<table>
+  <tr><th>Feature</th><th>Where used</th><th>Needs to exist</th><th>Cold-start plan</th></tr>
+  <tr><td>Invoice reading → PT draft</td><td>4.7, 2.4</td><td>Real invoices (~150 collected); warehouse person confirms</td><td>Every draft human-confirmed; uncertain fields flagged, never guessed silently</td></tr>
+  <tr><td>Receiving-paper reading → draft order</td><td>3.1</td><td>Sample order papers from brands (new data ask)</td><td>Typing stays available from day one</td></tr>
+  <tr><td>Voice / text / screenshot / WhatsApp-forward order capture</td><td>3.2</td><td>Hindi-mixed speech handling; account manager confirms</td><td>Always draft → confirm, never auto-final</td></tr>
+  <tr><td>Offer-circular reading → offer draft</td><td>10.4</td><td>Circulars as they come (already on the client checklist)</td><td>Manual offer entry works first; AI assists</td></tr>
+  <tr><td>Daily digest writing</td><td>1.5, 13.2</td><td>Clean daily numbers flowing first</td><td>Numbers-only digest first; the written summary after data settles</td></tr>
+  <tr><td>Anomaly explanations in plain words</td><td>13.2</td><td>The flags must exist first</td><td>Comes after baselines exist</td></tr>
+  <tr><td>Fuzzy matching — invoice rows ↔ master PT, brand-name variants, bank narrations ↔ stores</td><td>4.8, 11.3, 13.8</td><td>Confirmed matches remembered, so it learns KDPS's names</td><td>Human confirms every match early on; memory grows</td></tr>
+  <tr><td>Owner Q&amp;A bot on WhatsApp</td><td>—</td><td>All data in one place; read-only answers</td><td><span class="b later">Later</span> — only after the data is trustworthy</td></tr>
+</table>
+
+<h3>Numbers &amp; prediction (not language models)</h3>
+<table>
+  <tr><th>Feature</th><th>Where used</th><th>Needs to exist</th><th>Cold-start plan</th></tr>
+  <tr><td>Store-split suggestions (ML)</td><td>4.6</td><td>Per-store sales history by brand/category</td><td>Today's rule (past-sales share) from day one; learning model later</td></tr>
+  <tr><td>Reorder alerts (time series)</td><td>—</td><td>A season of sales + stock at size level</td><td>Simple rate-of-sale rules first</td></tr>
+  <tr><td>Dead-stock risk (classification)</td><td>10.8, 13.4</td><td>Aging + sales speed per item</td><td>Plain age thresholds (client picks 90/120/180) first</td></tr>
+  <tr><td>Festival-aware sales forecasts (time series + Indian holiday calendar)</td><td>—</td><td>2+ years of history (client to confirm POS history depth)</td><td>Last-year-same-period comparison until the model has data</td></tr>
+  <tr><td>Cash-flow projection</td><td>—</td><td>Payment terms per brand, dues, sales run rate</td><td>Known-obligations calendar first (what's due when)</td></tr>
+  <tr><td>Fraud signals (statistical baselines)</td><td>10.6, 11.1</td><td>A few months of clean data</td><td>Rule flags from day one (billed ≠ offer, deposit gaps); baselines after ~3 months</td></tr>
+</table>
+
+<h2>18 · Still unconfirmed by the client — one list</h2>
+<div class="card">
+<p>Everything marked <span class="b cl">Client</span> above, gathered. The items new from the 11 June session are also being added to the client confirmation document.</p>
+<ul class="r" style="font-size:14.5px">
+  <li>Non-branded per-category margin list (the default 30–35% is decided in design; the old 20–25% figure is superseded).</li>
+  <li>Colour edge case: invoice names a real colour but no brand PDF — colour or P/M/E tier? (Override rights and tier judgment: decided — the operator, within the category band.)</li>
+  <li>Track brand incentives (target bonus, display money, ad support)? Do all non-branded vendors have a GSTIN?</li>
+  <li>SOR returns: do brands compute the 10% on the same basis as our designed pool (stock-in value, ex-GST); which date anchors the return window; tax invoice vs challan on SOR delivery (also needed for Tally); same margins for all SOR brands.</li>
+  <li>Do brands part-cancel an order from their side, and how does KDPS come to know.</li>
+  <li>Who decides the store split today, and on what basis; transport on purchases — who pays. (Answered now: branded goods come to stores only; same style or a repeated barcode in a new season is kept separate, season-wise.)</li>
+  <li>Does the POS link an exchange to the original bill; is a no-bill exchange allowed and how is it recorded. <em>(new)</em></li>
+  <li>Stock nobody takes back — what happens today; owner-approved write-off acceptable? <em>(new)</em></li>
+  <li>Counting today: how often, who answers for differences, fixed rhythm acceptable?</li>
+  <li>Offers: who creates/approves; two offers on one bill — what wins; gift items in stock records or not.</li>
+  <li>Cash: deposit timing, accounts, settlement days, expenses from store cash. Payments: who approves, limits; how SOR brands demand payment.</li>
+  <li>Entities &amp; GSTINs; e-invoicing applicability; who makes e-way bills today; Tally company/ledger structure — one CA sitting. <em>(new)</em></li>
+  <li>Old stock thresholds (90/120/180 days, per brand/category?). Who sees profit. Logins per store or per person; Hindi/English; who manages users.</li>
+  <li>Salesperson targets — do they exist, or actuals only? <em>(new)</em></li>
+  <li>POS sales history: how many years exist, exportable? <em>(new)</em></li>
+  <li>Pilot stores; blackout calendar. Daily WhatsApp recipients; the owner's five morning numbers.</li>
+  <li>Super-user name; the owner's six-month success definition; running-cost cap confirmed. <em>(new)</em></li>
+</ul>
+</div>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. · ERP Requirements Register v1 · 11 June 2026 · Prepared by Anand ·
+  Priorities (Must / Should / Later) are proposals for review — adjust here, then the build order follows the architecture, not the wishlist.
+</footer>
+
+</div>
+</body>
+</html>

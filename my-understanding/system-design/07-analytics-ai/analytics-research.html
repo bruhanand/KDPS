@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Analytics &amp; Intelligence: Research Foundation</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --red:#a8331f; --red-bg:#fae9e6;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:268px; flex:0 0 268px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:13.5px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .lead{color:var(--navy2); font-size:15.5px; max-width:72ch; margin:8px 0}
+  section{margin:40px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 6px}
+  .framing{color:var(--muted); font-size:14.5px; margin:6px 0 12px; max-width:72ch}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-real{background:var(--green-bg); color:var(--green)}
+  .b-hype{background:var(--red-bg); color:var(--red)}
+  .b-build{background:var(--amber-bg); color:var(--amber)}
+  .b-defer{background:var(--grey-bg); color:var(--navy2)}
+  .b-india{background:var(--purple-bg); color:var(--purple)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:2px 0 8px; font-size:15.5px; color:var(--navy)}
+  .card ul{margin:4px 0}
+  .callout{border-radius:12px; padding:12px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:#f3f1fb; border-color:#dcd3f3}
+  .co-warn{background:var(--red-bg); border-color:#e6c2bb}
+  .co-go{background:var(--green-bg); border-color:#bfe0cd}
+  .co-note{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .callout strong{color:var(--navy)}
+  .callout .ct{font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:6px}
+  .co-key .ct{color:var(--purple)}
+  .co-warn .ct{color:var(--red)}
+  .co-go .ct{color:var(--green)}
+  .co-note .ct{color:var(--amber)}
+  .co-dep .ct{color:var(--blue)}
+  .callout ul{margin:4px 0}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:20px}
+  li{margin:5px 0}
+  .src{font-size:12px; color:var(--muted); margin:6px 0 0}
+  .src a{color:var(--blue)}
+  code,.k{background:#eef0f4; padding:1px 6px; border-radius:5px; font-size:13px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--navy2)}
+  ol.refs{font-size:12.5px}
+  ol.refs li{margin:6px 0; break-inside:avoid}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  /* brain bands */
+  .arch{margin:18px 0}
+  .band{border:1.5px solid; border-radius:12px; padding:12px 14px; margin:0}
+  .band .bname{font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:8px}
+  .band .boxes{display:flex; flex-wrap:wrap; gap:8px}
+  .bx{background:#fff; border:1.5px solid; border-radius:9px; padding:7px 11px; font-size:13px; font-weight:600; line-height:1.3}
+  .bx small{display:block; font-weight:500; font-size:11px; color:var(--muted)}
+  .band.src-b{border-color:#b8bfce; background:var(--grey-bg)}
+  .band.src-b .bname{color:#41506b}
+  .band.src-b .bx{border-color:#9aa7c2; color:var(--navy2)}
+  .band.found{border-color:var(--rust); background:#fdf1ea}
+  .band.found .bname{color:var(--rust)}
+  .band.found .bx{border-color:var(--rust); color:#8a3f22}
+  .band.compute{border-color:var(--navy2); background:#eef1f7}
+  .band.compute .bname{color:var(--navy)}
+  .band.compute .bx{border-color:var(--navy2); color:var(--navy)}
+  .band.edge-b{border-color:#9b7bd0; background:var(--purple-bg)}
+  .band.edge-b .bname{color:var(--purple)}
+  .band.edge-b .bx{border-color:#9b7bd0; color:var(--purple)}
+  .band.out-b{border-color:#7fa9d9; background:var(--blue-bg)}
+  .band.out-b .bname{color:var(--blue)}
+  .band.out-b .bx{border-color:#7fa9d9; color:var(--blue)}
+  .gap{display:flex; align-items:center; justify-content:center; gap:10px; color:var(--muted); font-size:12px; padding:6px 0}
+  .gap::before{content:"↓"; color:var(--rust); font-weight:800; font-size:15px}
+  .qbox{background:#fff;border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:10px;padding:10px 15px;margin:9px 0}
+  .qbox .qh{font-weight:700;color:var(--navy)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Brief</h2>
+  <a href="#what">What this is</a>
+  <a href="#thesis">The one design that emerged</a>
+  <a href="#brain">The brain on one page</a>
+  <a href="#verdict">Real vs hype</a>
+  <h2>The eight pieces</h2>
+  <a href="#foundation">1 · The foundation</a>
+  <a href="#kpi">2 · The KPI canon</a>
+  <a href="#digest">3 · The daily digest</a>
+  <a href="#profit">4 · Profitability</a>
+  <a href="#deadstock">5 · Dead-stock &amp; markdown</a>
+  <a href="#forecast">6 · Forecasting</a>
+  <a href="#watchdog">7 · The watchdog</a>
+  <a href="#chat">8 · Conversational AI</a>
+  <h2>Putting it together</h2>
+  <a href="#roadmap">Crawl · walk · run</a>
+  <a href="#rules">Fits the 11 rules</a>
+  <a href="#agenda">The grilling agenda</a>
+  <a href="#sources">Sources</a>
+</nav>
+
+<main>
+<header class="doc" id="what">
+  <div class="eyebrow">KDPS · D7 · Analytics &amp; Intelligence — Research Foundation</div>
+  <h1>The brain KDPS has never had — what the best retailers actually do</h1>
+  <ul class="lead">
+    <li>Today: 50+ stores, 40+ brands, <strong>zero analytics</strong> — every report rebuilt by hand in Excel.</li>
+    <li>This doc: the cited research that decides how to build a real intelligence layer.</li>
+    <li>It separates <strong>real from marketing</strong>, and <strong>buildable-now</strong> from <strong>needs-scale-later</strong>.</li>
+    <li>It is the foundation we grill against — <strong>not</strong> yet locked decisions.</li>
+  </ul>
+  <p class="src">Compiled 18 June 2026 from seven parallel deep-research passes + the earlier <a href="../05-offers/markdown-ai-research.html">markdown-AI research</a>. Flags: <span class="badge b-real">PROVEN</span> <span class="badge b-hype">HYPE</span> <span class="badge b-build">BUILD NOW</span> <span class="badge b-defer">DEFER</span> <span class="badge b-india">INDIA</span></p>
+</header>
+
+<section id="thesis">
+  <h2 class="sec">The one design that emerged</h2>
+  <p class="framing">Seven independent research passes pointed at the <em>same</em> shape: not a flashy "AI agent" — a disciplined, explainable, read-only brain with one trustworthy spine of numbers underneath.</p>
+  <table>
+    <tr><th style="width:34%">The principle</th><th>What it means, in plain words</th></tr>
+    <tr><td><strong>1 · One spine of numbers</strong></td><td>Define every metric <em>once</em>, computed by plain code. Makes the digest, the reports and any "ask-anything" agree — instead of quietly contradicting each other.</td></tr>
+    <tr><td><strong>2 · Clean the data on read, now</strong></td><td>Map LP / LY / LR → one brand, fix season labels, drop cost &gt; MRP rows — without waiting for the D8 master clean-up.</td></tr>
+    <tr><td><strong>3 · Code does the maths, AI only talks</strong></td><td>Deterministic code computes the number; the LLM only narrates, explains and translates it (to Hindi, on WhatsApp).</td></tr>
+    <tr><td><strong>4 · Copilot, never autopilot</strong></td><td>AI suggests, a human approves. This is how the mature market runs — it is best practice, not timidity.</td></tr>
+    <tr><td><strong>5 · Crawl → walk → run</strong></td><td>Simple rules now (they stay permanent); ML later <em>wraps</em> them. Promise the client honesty, not magic.</td></tr>
+    <tr><td><strong>6 · Meet owners on WhatsApp</strong></td><td>The digest is an <em>exception feed</em>, not a report. The craft is what you leave out.</td></tr>
+  </table>
+  <div class="callout co-key">
+    <span class="ct">The pitch to the client</span>
+    <ul>
+      <li>We're not automating KDPS's spreadsheets — we're giving the business a <strong>single source of truth + a brain on top</strong>.</li>
+      <li>It watches every store every day, explains itself in plain Hindi on WhatsApp, and <strong>never moves a rupee on its own</strong>.</li>
+      <li>That's how Aditya Birla, Levi's and PUMA run retail intelligence (via tools like Increff) — we build the right-sized version for KDPS.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="brain">
+  <h2 class="sec">The brain on one page</h2>
+  <p class="framing">Read top to bottom. It <strong>reads</strong> the spine, cleans &amp; defines the numbers once, computes with plain code, lets an LLM phrase the result — then out to WhatsApp / reports / screens. Nothing here writes a ledger.</p>
+  <div class="arch">
+    <div class="band src-b">
+      <div class="bname">Reads from the spine (never writes)</div>
+      <div class="boxes">
+        <div class="bx">Stock ledger<small>every move, barcode+season</small></div>
+        <div class="bx">Vendor ledger<small>payables, returns</small></div>
+        <div class="bx">Cash ledger<small>store collections</small></div>
+        <div class="bx">Masters<small>brand terms, SKU, offers</small></div>
+        <div class="bx">POS pull<small>line sales · SOH · cash</small></div>
+        <div class="bx">Frozen unit cost<small>from PT at stock-in</small></div>
+      </div>
+    </div>
+    <div class="gap">cleaned &amp; defined once</div>
+    <div class="band found">
+      <div class="bname">The foundation — one spine of numbers</div>
+      <div class="boxes">
+        <div class="bx">Canonicalization crosswalk<small>LP/LY/LR → one brand · season fix · drop bad rows</small></div>
+        <div class="bx">Semantic / metrics layer<small>each KPI defined once · deterministic SQL</small></div>
+        <div class="bx">Data-trust score<small>coverage shown, not hidden</small></div>
+      </div>
+    </div>
+    <div class="gap">computed by plain code — no LLM in the maths</div>
+    <div class="band compute">
+      <div class="bname">The seven products (read-only outputs)</div>
+      <div class="boxes">
+        <div class="bx">Daily owner digest</div>
+        <div class="bx">Report-maker<small>brand pack + discount audit</small></div>
+        <div class="bx">Profitability &amp; scorecard<small>per commercial model</small></div>
+        <div class="bx">Dead-stock &amp; markdown<small>aging → suggest → approve</small></div>
+        <div class="bx">Forecast &amp; replenishment<small>size curves · rebalancing</small></div>
+        <div class="bx">Anomaly &amp; leakage watchdog</div>
+      </div>
+    </div>
+    <div class="gap">phrased, not calculated</div>
+    <div class="band edge-b">
+      <div class="bname">AI at the edge — narrate · explain · translate <span class="badge b-ai">LLM</span></div>
+      <div class="boxes">
+        <div class="bx">Plain-Hindi narrative line</div>
+        <div class="bx">"Why did this move?"</div>
+        <div class="bx">Grounded Q&amp;A (later)</div>
+      </div>
+    </div>
+    <div class="gap">a human always decides</div>
+    <div class="band out-b">
+      <div class="bname">Where it lands</div>
+      <div class="boxes">
+        <div class="bx">WhatsApp digest &amp; alerts</div>
+        <div class="bx">Monthly brand reports (PDF/HTML)</div>
+        <div class="bx">Drill-down screens (head office)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="verdict">
+  <h2 class="sec">Real vs hype — at a glance</h2>
+  <table>
+    <tr><th>Capability</th><th>Status</th><th>Honest read for KDPS</th></tr>
+    <tr><td>Governed metrics/semantic layer as the trust spine</td><td><span class="badge b-real">PROVEN</span></td><td>Makes everything else trustworthy. dbt 2026: NL-query 84% → 100% through a semantic layer. Build first.</td></tr>
+    <tr><td>WhatsApp daily digests &amp; threshold alerts</td><td><span class="badge b-real">PROVEN</span> <span class="badge b-india">INDIA</span></td><td>Mature &amp; cheap via a WhatsApp API provider. Solved transport — don't reinvent.</td></tr>
+    <tr><td>Rules-based markdown / dead-stock / reorder</td><td><span class="badge b-real">PROVEN</span></td><td>Decades old; even ML vendors say start here. Captures the big win on KDPS's data.</td></tr>
+    <tr><td>Exception-based loss-prevention (flag &amp; rank)</td><td><span class="badge b-real">PROVEN</span></td><td>Whole field is read-only-flag-for-human. Discount-leakage list needs zero statistics.</td></tr>
+    <tr><td>LLM as narrator / explainer / Hindi translator</td><td><span class="badge b-real">PROVEN</span></td><td>Real &amp; shipping. The right, safe use of AI here.</td></tr>
+    <tr><td>ML forecasting / elasticity / size optimisation</td><td><span class="badge b-build">NEEDS SCALE</span></td><td>Genuine, but needs 2–3 clean seasons KDPS lacks. Thin/dirty data → ML loses to a rule. Defer.</td></tr>
+    <tr><td>Free-form "ask anything" NL query</td><td><span class="badge b-defer">DEFER</span></td><td>Collapses to 10–20% accuracy on dirty schemas with no semantic layer. Ship reply-to-drill now.</td></tr>
+    <tr><td>"AI agent runs your pricing autonomously"</td><td><span class="badge b-hype">MOSTLY HYPE</span></td><td>Gartner: ~130 of thousands of "agentic" vendors are real; &gt;40% of projects cancelled by 2027.</td></tr>
+    <tr><td>LLM computing the numbers</td><td><span class="badge b-hype">DON'T</span></td><td>LLMs "are not calculators" — they fragment numbers. Deterministic code only. Hard rule.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 1 FOUNDATION ============ -->
+<section id="foundation">
+  <h2 class="sec">1 · The foundation — one spine of numbers <span class="badge b-build">BUILD FIRST</span></h2>
+  <p class="framing">Everything else depends on this, so it comes first. Three read-only parts, all buildable by one developer.</p>
+  <table>
+    <tr><th style="width:24%">Part</th><th>What we build</th><th>Why it matters</th></tr>
+    <tr><td><strong>(a) Canonicalization crosswalk</strong></td>
+      <td>Map raw brand codes → one canonical brand; normalise season labels to one cohort key; quarantine impossible rows (cost &gt; MRP). Source data untouched — analytics reads a clean view over it.</td>
+      <td>Dirty data poisons margin &amp; forecasting ("garbage in, garbage out"). Not throwaway — it <em>becomes</em> D8's head start.</td></tr>
+    <tr><td><strong>(b) Semantic / metrics layer</strong></td>
+      <td>Define each KPI once (SQL views + a small metric dictionary in the app — no heavy tool needed). Derived-profit logic lives here, once.</td>
+      <td>Kills "your sell-through ≠ my sell-through". dbt 2026 test: NL-query accuracy <strong>84% → 100%</strong> when routed through a semantic layer; failures become honest error messages, not wrong numbers.</td></tr>
+    <tr><td><strong>(c) Data-trust score</strong></td>
+      <td>Show coverage on every figure — "92% of LP units mapped to a clean season cohort; 8% unclassified — tap to see".</td>
+      <td>A shown confidence beats a false-precise total. Turns dirty data into a <em>visible, improving KPI</em> ahead of D8.</td></tr>
+  </table>
+  <p class="src">Sources: <a href="https://docs.getdbt.com/blog/semantic-layer-vs-text-to-sql-2026">dbt — semantic vs text-to-SQL</a> · <a href="https://www.rudderstack.com/blog/what-is-entity-resolution/">RudderStack — entity resolution</a> · <a href="https://profisee.com/solutions/initiatives/matching-and-survivorship/">Profisee — survivorship</a> · <a href="https://lakefs.io/data-quality/data-quality-metrics/">lakeFS — coverage as a metric</a>.</p>
+  <div class="callout co-dep">
+    <span class="ct">Sequencing flag for the architecture</span>
+    <ul>
+      <li>Master-data consolidation is <strong>D8 — after this layer</strong>.</li>
+      <li>But analytics can't wait for clean masters — the crosswalk copes <em>now</em> and seeds D8.</li>
+      <li>So the foundation slice is likely one of the <strong>earliest things built</strong>, even though D7 is "last" in the discussion order.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 2 KPI CANON ============ -->
+<section id="kpi">
+  <h2 class="sec">2 · The KPI canon — the numbers to standardise</h2>
+  <p class="framing">Define these once in the spine. For a <strong>multi-brand</strong> retailer the centre of gravity is the <strong>brand × store matrix</strong>; the master inventory metric is <strong>GMROI</strong> — but sliced by commercial model (see §4).</p>
+  <table>
+    <tr><th>KPI</th><th>Formula</th><th>Healthy apparel range</th></tr>
+    <tr><td><strong>Sell-through %</strong></td><td>Units Sold ÷ Units Received</td><td>~70–80% before markdown</td></tr>
+    <tr><td><strong>Full-price sell-through %</strong></td><td>Full-price units ÷ total units sold</td><td>60–70%+ is best-in-class</td></tr>
+    <tr><td><strong>GMROI</strong></td><td>Gross Margin ₹ ÷ Avg Inventory at Cost</td><td>₹2.0–3.0; below 2.0 = work to do</td></tr>
+    <tr><td><strong>Weeks of cover</strong></td><td>On-hand ÷ avg weekly rate-of-sale</td><td>Rising cover + lagging sell-through = dead-stock alarm</td></tr>
+    <tr><td><strong>Inventory turnover</strong></td><td>COGS ÷ Avg Inventory at cost</td><td>4–6× / year for fashion</td></tr>
+    <tr><td><strong>Realisation %</strong></td><td>Net selling price ÷ MRP</td><td>Inverse of effective discount</td></tr>
+    <tr><td><strong>Markdown %</strong></td><td>Markdown value ÷ total sales</td><td>&lt;15% is healthy</td></tr>
+    <tr><td><strong>Dead-stock %</strong> &amp; ageing</td><td>Units &gt;90d unsold ÷ on-hand; buckets 0–30/31–60/61–90/91–180/180+</td><td>&lt;10%; 180d = "dead"</td></tr>
+    <tr><td><strong>Like-for-like growth</strong></td><td>(This − last) ÷ last, <em>only stores open in both</em></td><td>The honest growth number</td></tr>
+    <tr><td><strong>ASP · UPT · ATV</strong></td><td>sales÷units · units÷bills · sales÷bills</td><td>Trend &amp; compare across brand/store</td></tr>
+    <tr><td><strong>Customer</strong> (when phone captured)</td><td>Repeat-rate · top-20% concentration · RFM</td><td>Often top 10% drive 50%+ of sales</td></tr>
+  </table>
+  <div class="callout co-note">
+    <span class="ct">Two things to remember</span>
+    <ul>
+      <li><strong>Vanity to avoid:</strong> all-time totals, raw footfall, and the dangerous one — <strong>gross sales without margin</strong> (SOR looks huge but earns only commission). Test any metric: <em>can it lead to an action?</em></li>
+      <li><strong>Cold-start:</strong> sell-through, weeks-of-cover, ageing, dead-stock %, realisation, gross margin all compute <strong>day one</strong>. LFL / GMROI-trend / full-price sell-through need ~one clean season. Conversion needs footfall hardware — later.</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://stylematrix.io/retail-analytics-fashion-buying-kpis-10-essential-metrics-for-success/">StyleMatrix</a> · <a href="https://www.toolio.com/post/the-complete-guide-to-gmroi-for-retail-brands">Toolio — GMROI</a> · <a href="https://www.retaildogma.com/same-store-sales/">RetailDogma — LFL</a> · <a href="https://www.tableau.com/learn/articles/vanity-metrics">Tableau — vanity metrics</a> · <a href="https://clevertap.com/blog/rfm-analysis/">CleverTap — RFM</a>.</p>
+</section>
+
+<!-- ============ 3 DIGEST ============ -->
+<section id="digest">
+  <h2 class="sec">3 · The daily owner digest — an exception feed, not a report</h2>
+  <p class="framing">For owners who live on WhatsApp, the digest <em>is</em> the product. The key lesson comes from alerting practice: ~97% of alerts are noise, and noise trains people to ignore the 3% that matter. The craft is subtraction.</p>
+
+  <div class="card">
+    <h4>The discipline</h4>
+    <ul>
+      <li><strong>The actionability gate:</strong> if the owner can't take a specific action, the alert shouldn't exist. (Target 30–50% alert-to-action.)</li>
+      <li><strong>Thresholds vs comparison:</strong> static thresholds for hard states (₹0, terminal down); relative-to-same-weekday/last-year for sales — retail is too seasonal (EOSS, Diwali) for a flat "down 20%" rule.</li>
+      <li><strong>Volume floor:</strong> so tiny stores don't false-trigger on noise.</li>
+    </ul>
+  </div>
+
+  <table>
+    <tr><th style="width:22%">Severity tier</th><th>KDPS examples</th><th>Where it goes</th></tr>
+    <tr><td><strong>SEV1 — ping now</strong></td><td>Store at ₹0 by mid-afternoon · payment terminal down · cash/shrink spike</td><td>Real-time; escalates if unacknowledged</td></tr>
+    <tr><td><strong>SEV2 — digest</strong></td><td>Store well below target · fast-mover stockout · offer mis-applied · return-window deadline near</td><td>Bundled into the 9 PM digest, ranked, capped ~5</td></tr>
+    <tr><td><strong>SEV3 — weekly</strong></td><td>Dead-stock ageing · slow margin drift</td><td>Monday deep-dive (keeps the daily short)</td></tr>
+  </table>
+
+  <div class="card">
+    <h4>The 9 PM digest — what's in it (fits one phone screen)</h4>
+    <ul>
+      <li><strong>1 narrative line</strong> — today's revenue vs target/yesterday/last-year + the one driver (LLM phrases it, in Hindi/English).</li>
+      <li><strong>≤5 headline numbers</strong> — in Lakh format.</li>
+      <li><strong>Store leaderboard</strong> — top 3 / bottom 3.</li>
+      <li><strong>"One unusual thing today"</strong> — a single anomaly line.</li>
+      <li><strong>≤5 SEV2 exceptions</strong> — each reply-to-drill.</li>
+      <li><strong>Footer</strong> — "reply [store] for detail".</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Delivery &amp; roles</h4>
+    <ul>
+      <li><strong>Channel:</strong> WhatsApp Business API via a Meta-authorised India provider (AiSensy / Wati / Interakt); scheduled sends use approved templates (~₹0.85/conversation). <span class="badge b-india">INDIA</span></li>
+      <li><strong>Primary beat:</strong> the 9 PM close the client asked for. Later: a one-line 9 AM nudge + the Monday deep-dive.</li>
+      <li><strong>Role scope from day one:</strong> owner sees the network; a store manager sees only their store.</li>
+    </ul>
+  </div>
+  <div class="callout co-warn">
+    <span class="ct">The trap to design against</span>
+    <ul>
+      <li>The urge will be to stuff the 9 PM message with everything the system <em>can</em> compute.</li>
+      <li>Every source says the opposite — the value is in what you leave out. Hold the line: ≤5 numbers, ≤5 exceptions, 1 anomaly line.</li>
+      <li>Free-form "ask anything" is deferred until the semantic layer can ground it (an ungrounded bot returns confident wrong numbers).</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://incident.io/blog/sre-alerting-best-practices">incident.io — SRE alerting</a> · <a href="https://oneuptime.com/blog/post/2026-01-30-alert-severity-levels/view">OneUptime — severity tiers</a> · <a href="https://wa.expert/pages/whatsapp-sales-report-bot">WA.Expert — live India digest bot</a> · <a href="https://m.aisensy.com/blog/whatsapp-api-providers/">AiSensy — WhatsApp API providers</a>.</p>
+</section>
+
+<!-- ============ 4 PROFITABILITY ============ -->
+<section id="profit">
+  <h2 class="sec">4 · Profitability &amp; margin — the same number means different things per model</h2>
+  <p class="framing">KDPS manages 40 brands under four ownership models — that's the analytical heart. Profit is derived (frozen ex-GST cost × POS revenue). <strong>Stop at gross / contribution margin; net profit stays in Tally</strong> (net needs store opex that lives there).</p>
+
+  <div class="card">
+    <h4>The key insight: GMROI is meaningless for SOR / Consignment</h4>
+    <ul>
+      <li>GMROI's denominator is <em>your</em> inventory cost. For SOR/Consignment that's ~zero → GMROI undefined/infinite, which flatters non-owned goods.</li>
+      <li>So report margin <strong>per model, on its own terms</strong> (table below).</li>
+      <li><strong>Hard dashboard rule:</strong> never rank an SOR brand on GMROI beside an owned brand — segment by ownership first.</li>
+    </ul>
+  </div>
+  <table>
+    <tr><th>Model</th><th>Owns stock</th><th>Headline metric</th><th>Why</th></tr>
+    <tr><td><strong>Outright</strong></td><td>KDPS</td><td>GMROI + full margin ₹</td><td>KDPS cash at risk → return-on-inventory</td></tr>
+    <tr><td><strong>Correction (25-18-10)</strong></td><td>KDPS</td><td>GMROI + state-tagged realisation</td><td>Owned, but margin% depends on rate-state — tag normal vs EOSS vs return</td></tr>
+    <tr><td><strong>SOR</strong></td><td>Brand</td><td>Margin% · sell-through · margin-₹-per-shelf-slot <em>(not GMROI)</em></td><td>No capital at risk → "worth the space?"</td></tr>
+    <tr><td><strong>Consignment</strong></td><td>Brand</td><td>Same as SOR + settle-on-sale margin ₹</td><td>Commission vs space/staff occupied</td></tr>
+  </table>
+
+  <div class="card">
+    <h4>The margin-leakage waterfall — turn "low realisation" into an answer</h4>
+    <ul>
+      <li>Start at MRP value, subtract each step: <strong>MRP → −markdown → −free-gift (GWP) → −returns → net pocket</strong>.</li>
+      <li>So instead of "Brand X has low realisation", the owner sees: <strong>"lost 14 pts — 9 markdown, 3 gifts, 2 returns"</strong>.</li>
+      <li>Real waterfalls hit 30–40% erosion; making it <em>attributable</em> is how mature teams stop hidden leakage.</li>
+      <li>KDPS's GWP gifts (valued at MRP) and returns each get their own step — never buried in COGS.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>The scorecard — keep KDPS's two-axis instinct, upgrade it</h4>
+    <ul>
+      <li>The Vaishnavi analysis already scored on <strong>Realisation % × Sales÷Stock</strong> — that's the merch-native Margin × Velocity quadrant the literature endorses.</li>
+      <li><strong>Upgrade 1:</strong> velocity axis = GMROI for owned / velocity for SOR.</li>
+      <li><strong>Upgrade 2:</strong> render owned vs SOR as <em>separate boards</em> (the Y-axis means different things).</li>
+      <li><strong>Upgrade 3:</strong> add <strong>margin-₹-per-shelf-slot</strong> — the one metric fair across all models.</li>
+      <li><strong>Upgrade 4:</strong> score stores on <strong>peer-percentile</strong>, not absolutes (a small store isn't judged against a flagship).</li>
+      <li>Quadrants: Lean-in · Defend · Churn · Pull-back. One click to the leakage waterfall.</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://www.netsuite.com/portal/resource/articles/inventory-management/consignment-inventory.shtml">NetSuite — consignment economics</a> · <a href="https://consigncloud.com/blog/consignment-store-kpi-s-8-essential-metrics-and-how-to-get-them">ConsignCloud</a> · <a href="https://zilliant.com/blog/how-the-pricing-waterfall-stops-hidden-margin-leakage">Zilliant — margin leakage</a> · <a href="https://retalon.com/blog/retail-industry-performance-metrics-kpis">Retalon — peer-percentile scorecards</a>.</p>
+</section>
+
+<!-- ============ 5 DEADSTOCK ============ -->
+<section id="deadstock">
+  <h2 class="sec">5 · Dead-stock &amp; markdown — mostly already designed</h2>
+  <p class="framing">The most-decided piece — full sourced brief in <a href="../05-offers/markdown-ai-research.html">markdown-ai-research.html</a>, direction set in <a href="../05-offers/offers.html">Offers §7</a>. The short version, in one place:</p>
+
+  <div class="card">
+    <h4>The markdown recommender</h4>
+    <ul>
+      <li><strong>Signals in:</strong> age · sell-through-vs-target · weeks-of-cover-vs-remaining-window · broken size runs.</li>
+      <li><strong>Out (a package, not a number):</strong> a single % snapped to an allowed ladder · expected sell-through/margin · a 2–3 step step-down plan · a priority list of which lots first · a plain-Hindi reason.</li>
+      <li><strong>Hard cap:</strong> a margin floor from the PT cost a suggestion can never breach.</li>
+      <li><strong>Path:</strong> crawl (rules now) → walk (add forecasting) → run (ML elasticity, 2–3 seasons away). Rules never disappear — ML wraps them.</li>
+      <li><strong>Always:</strong> AI suggests → a human authors the offer → it goes live (the Oracle pattern).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>The dead-stock hunter — KDPS already has the worked template (Vaishnavi)</h4>
+    <ul>
+      <li><strong>Classify by season-cohort age:</strong> truly dead = 2024-&amp;-older never-sold · aging = last-season unsold · fresh = current (normal — don't condemn it).</li>
+      <li><strong>Match dead</strong> at exact size×colour barcode; value at frozen cost.</li>
+      <li><strong>Action per commercial model:</strong> SOR/Consignment → return before the window closes · owned &amp; selling elsewhere → inter-store transfer · not selling anywhere → markdown/clearance.</li>
+      <li><strong>Past the window the brand won't take back:</strong> the V-flip settles it as "sold under EOSS" and flips ownership to KDPS.</li>
+      <li><strong>Every output is a suggestion a human confirms</strong> — the client's "auto-list to return / Create Return" wording must stay propose-not-execute.</li>
+    </ul>
+  </div>
+  <p class="src">Full sources (Increff, Oracle, Umbrex, Eightx, Filene's Basement) in <a href="../05-offers/markdown-ai-research.html">markdown-ai-research.html</a>.</p>
+</section>
+
+<!-- ============ 6 FORECAST ============ -->
+<section id="forecast">
+  <h2 class="sec">6 · Forecasting &amp; replenishment — build the boring thing well</h2>
+  <p class="framing">At KDPS's data maturity the winning move is <strong>rate-of-sale + comparison + analogy + rule-based reorder/rebalancing — not ML</strong>. Benchmarks confirm simple methods beat deep learning on sparse, intermittent retail data.</p>
+
+  <div class="card">
+    <h4>Cold-start forecasting (mostly-new products)</h4>
+    <ul>
+      <li><strong>Forecast by analogy:</strong> borrow the demand pattern of similar past styles (cluster by brand × category × price-band × colour-family × season — rule-based, not ML).</li>
+      <li><strong>Blend in real sales:</strong> analogy at launch → shift to the item's own rate-of-sale by ~2–3 weeks → trust its own trajectory by ~8 weeks.</li>
+      <li><strong>Honest accuracy (put in writing for the client):</strong> new products ~40–55%; established basics climb to ~75–85% only after clean seasons. Measure in <strong>WAPE, not MAPE</strong>.</li>
+      <li><strong>Year 1 goal:</strong> "narrow the decision", not "predict the number".</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Size curves — the highest-ROI, most under-rated piece</h4>
+    <ul>
+      <li>Forecast total style demand, then split to size with a curve (each size's share), built from "clean weeks" and rebuilt every order cycle.</li>
+      <li>Build it <strong>per region</strong> (Bihar vs Jharkhand) — curves vary by geography.</li>
+      <li><strong>Broken size runs</strong> cost apparel retailers up to ~20% of profit: core sizes stock out, fringe sizes become markdown fodder.</li>
+      <li>Make it a first-class trigger: flag a lot once core sizes are gone, even if overall sell-through still looks fine.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Replenishment &amp; inter-store rebalancing — automate the gut call</h4>
+    <ul>
+      <li><strong>Reorder</strong> on weeks-of-cover-driven min/max, per-store, recomputed on live sell-through (static thresholds fail in fashion).</li>
+      <li><strong>Rebalance</strong> stock trapped in a slow store to where demand is live — prioritised by recent sell-through, assortment gap, excess cover. (A documented case: +28% bestseller availability, −15% surplus.)</li>
+      <li><strong>New-store / new-arrival allocation</strong> falls back to a comparable store's pattern — the right feed for Inbound's "AI store split".</li>
+    </ul>
+  </div>
+  <div class="callout co-note">
+    <span class="ct">Defer honestly</span>
+    <ul>
+      <li><strong>Weather feeds</strong> (+~2% topline, real but v2 — season/calendar already captures most).</li>
+      <li><strong>Promo-uplift modelling</strong> (needs control data you lack — start with a descriptive "sales during offer vs baseline", no causal claim).</li>
+      <li><strong>SKU-level intermittent-demand tuning &amp; true elasticity</strong> (wait for 2–3 clean seasons).</li>
+      <li>All forecasting accuracy is <strong>conditional on the canonicalization clean-up</strong> — without it, forecasts "do more harm than good".</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://www.onepint.ai/insights/how-do-you-forecast-demand-for-new-products">OnePint — new-product forecasting</a> · <a href="https://eightx.co/blog/apparel-size-curve-inventory">Eightx — size curves</a> · <a href="https://onebeat.co/blog/replenishment-planning-in-retail-why-static-min-max-rules-fail/">Onebeat — rebalancing</a> · <a href="https://arxiv.org/abs/2506.05941">arXiv — simple beats deep</a>.</p>
+</section>
+
+<!-- ============ 7 WATCHDOG ============ -->
+<section id="watchdog">
+  <h2 class="sec">7 · The anomaly, fraud &amp; leakage watchdog — flag &amp; rank, never block</h2>
+  <p class="framing">The field is "Exception-Based Reporting" — always flag-for-a-human, never block; rules first, statistics later, all maths in deterministic code. India tilt: UPI is self-logging, so leakage concentrates in <strong>hand-keyed discounts</strong> and the <strong>cash-to-bank-deposit gap</strong>.</p>
+
+  <div class="card">
+    <h4>Day-one rules (zero history needed)</h4>
+    <ul>
+      <li><strong>Discount leakage — the flagship:</strong> every bill where <strong>billed total ≠ offer-rulebook total</strong> → list the gap, rolled up per store / brand / cashier. No statistics — just expected price vs keyed price. Plugs the placard hole directly.</li>
+      <li><strong>Cash deposit:</strong> deposit &lt; system-expected cash beyond a small tolerance → <strong>count breaches per store/month</strong> → "Store X under-deposited 3×". (Signal = persistence, not a single miss.)</li>
+      <li><strong>Returns / voids / overrides:</strong> over-threshold refunds · returns with no bill reference · voids after partial completion · manual discounts beyond any active offer · repeated round-number cash bills · after-hours sales.</li>
+      <li><strong>Data errors (first-class):</strong> cost &gt; MRP · duplicate bills (POS-hang double-record) · brand/season drift · in-transit transfers open &gt; N days · negative stock <strong>still negative after the sync window</strong> (transient self-healing negatives are known noise).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h4>Month-3+ statistical layer, then human judgement</h4>
+    <ul>
+      <li>Once ~8–13 weeks of clean data exist: <strong>z-score / std-dev bands</strong> on per-cashier &amp; per-store rates.</li>
+      <li><strong>Peer-cluster ranking</strong> (3–6 comparable stores; cashier-vs-store, store-vs-region).</li>
+      <li><strong>Seasonal / day-of-week baselines</strong>, refreshed quarterly, so EOSS/festival spikes don't false-trigger.</li>
+      <li><strong>Isolation forest</strong> — optional later catch-all; supplements rules, never replaces them; every flag carries a reason code.</li>
+      <li><strong>LLM may narrate</strong> a flag ("billed ₹X, offer ₹Y, gap ₹Z") — never computes the score.</li>
+    </ul>
+  </div>
+  <div class="callout co-go">
+    <span class="ct">A flag is a suspicion, not evidence</span>
+    <ul>
+      <li>"12 voids on a shift is a red flag — but maybe 12 customers changed their minds."</li>
+      <li>KDPS has no CCTV → the <strong>human review step is the verification</strong>. The flag → review → confirm/dismiss loop is non-negotiable, and outcomes feed back to tune thresholds.</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://www.agilenceinc.com/exception-based-reporting">Agilence — EBR catalogue</a> · <a href="https://apgsolutions.com/cash-loss-prevention/">apg — cash/deposit recon</a> · <a href="https://www.spot.ai/blog/exception-based-reporting">Spot AI — suspicion not evidence</a> · <a href="https://arxiv.org/pdf/2603.06636">SmartBench — maths to deterministic tools</a>.</p>
+</section>
+
+<!-- ============ 8 CHAT ============ -->
+<section id="chat">
+  <h2 class="sec">8 · Conversational AI &amp; narration — the LLM talks, it never calculates</h2>
+  <p class="framing">Where the client's "wow" meets reality. Near-unanimous consensus: deterministic code computes; the LLM only translates the question in and explains the validated answer out. A peer study: hybrid 87% vs LLM-only 63%.</p>
+  <table>
+    <tr><th style="width:50%">Ship now (safe)</th><th>Defer</th></tr>
+    <tr>
+      <td>
+        <ul style="margin:0">
+          <li>LLM writes the digest's plain-Hindi/English line from computed numbers.</li>
+          <li>"Why did this move?" — narrates the rows the code pulled.</li>
+          <li>Translates reports to Hindi (frontier models keep Hindi+English ~67–79% correct — fine to <em>narrate</em>).</li>
+        </ul>
+      </td>
+      <td>
+        <ul style="margin:0">
+          <li>Free-form "ask anything" NL query — 10–20% accuracy on a dirty schema with no semantic layer; a wrong number kills trust on contact.</li>
+          <li>When added: route <em>semantic-layer-first</em>, text-to-SQL only as a labelled "unverified" fallback — never for owner numbers.</li>
+        </ul>
+      </td>
+    </tr>
+  </table>
+  <div class="card">
+    <h4>Governance (matches "AI never posts to a ledger")</h4>
+    <ul>
+      <li>Confidence thresholds → an honest "not enough data" instead of a guess.</li>
+      <li>Tamper-evident audit trail of every AI suggestion + the human's accept/reject.</li>
+      <li>LLM kept <strong>physically unable to compute or write</strong> (the Power BI "can't cross semantic boundaries" design).</li>
+    </ul>
+  </div>
+  <p class="src">Sources: <a href="https://towardsdatascience.com/hybrid-ai-combining-deterministic-analytics-with-llm-reasoning/">TDS — hybrid AI</a> · <a href="https://www.blazesql.com/blog/natural-language-to-sql">BlazeSQL — NL-to-SQL cliff</a> · <a href="https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-semantic-models">MS — Copilot boundaries</a> · <a href="https://arxiv.org/pdf/2504.20022">arXiv — Hindi/English accuracy</a>.</p>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <h2 class="sec">Crawl · walk · run — the whole layer, sequenced honestly</h2>
+  <p class="framing">The table to show the client — it proves ambition <em>and</em> honesty.</p>
+  <table>
+    <tr><th>Piece</th><th>Crawl — cold-start V1 (now)</th><th>Walk — after ~1 season</th><th>Run — 2–3 clean seasons</th></tr>
+    <tr><td><strong>Foundation</strong></td><td>Crosswalk · metrics layer · data-trust score</td><td>Wider attribute tags · richer survivorship</td><td>Promote crosswalk into D8 masters</td></tr>
+    <tr><td><strong>KPIs</strong></td><td>Sell-through, weeks-of-cover, ageing, dead-stock %, realisation, gross margin</td><td>GMROI, LFL, full-price sell-through, turnover</td><td>Trend/seasonality, peer-percentile benchmarks</td></tr>
+    <tr><td><strong>Digest</strong></td><td>9 PM WhatsApp · ≤5 KPIs · leaderboard · 3-tier alerts · 1 NLG line</td><td>Morning nudge · Monday deep-dive · finance view</td><td>Grounded WhatsApp Q&amp;A bot</td></tr>
+    <tr><td><strong>Profitability</strong></td><td>Per-model margin · realisation waterfall · 2-axis scorecard</td><td>GMROI board · peer-percentile stores · SOR-worth-it score</td><td>Contribution to net (opex from Tally)</td></tr>
+    <tr><td><strong>Dead-stock / markdown</strong></td><td>Rules ladder + margin floor · dead-stock hunter · V-flip trigger</td><td>Forecasting sizes the cut · broken-size triggers</td><td>ML elasticity (wraps the rules)</td></tr>
+    <tr><td><strong>Forecast / replenishment</strong></td><td>Rate-of-sale · analogy · regional size curves · min/max reorder · rebalancing</td><td>Blended history · confidence tiers · descriptive promo view</td><td>ML demand sensing · elasticity · weather feed</td></tr>
+    <tr><td><strong>Watchdog</strong></td><td>Discount-leakage list · cash-deposit ranking · data-error rules</td><td>Z-score · peer-cluster · seasonal baselines</td><td>Isolation forest (+ reason codes)</td></tr>
+    <tr><td><strong>Conversational AI</strong></td><td>LLM narrates / explains / Hindi (computed numbers only)</td><td>Grounded canned-query drill-downs</td><td>Free-form NL query over the semantic layer</td></tr>
+  </table>
+</section>
+
+<!-- ============ RULES ============ -->
+<section id="rules">
+  <h2 class="sec">How it obeys the 11 architecture rules</h2>
+  <table>
+    <tr><th style="width:30%">Rule</th><th>How this layer honours it</th></tr>
+    <tr><td><strong>8 · AI at the edges only</strong></td><td>Read-only throughout — code computes, the LLM only narrates, a human decides. The industry now treats this as best practice.</td></tr>
+    <tr><td><strong>6 · Derived, never typed</strong></td><td>Margin = frozen PT cost × POS revenue; ageing = today − season cohort; each derivation lives in the metrics layer, once.</td></tr>
+    <tr><td><strong>5 · Flag, never block</strong></td><td>The watchdog &amp; the markdown/dead-stock hunter propose &amp; rank; never stop a sale or auto-execute.</td></tr>
+    <tr><td><strong>4 · One owner per fact</strong></td><td>Tally stays the statutory book (net profit); this layer does management/margin analytics and never overrides it.</td></tr>
+    <tr><td><strong>11 · Deadlines are data</strong></td><td>SOR return windows &amp; EOSS dates drive the dead-stock actions and the digest's deadline alerts.</td></tr>
+    <tr><td><strong>7 · Contracts, reconciled</strong></td><td>The WhatsApp edge gets a real contract (provider, approved templates, retry); the POS pull is the barcode join feeding everything.</td></tr>
+  </table>
+</section>
+
+<!-- ============ AGENDA ============ -->
+<section id="agenda">
+  <h2 class="sec">The grilling agenda — the forks this research sets up</h2>
+  <p class="framing">Research narrows the options; it doesn't make the calls. The decisions to settle, in order — each a one-question grill with options + a recommendation, logged in <code>analytics-ai.html</code>.</p>
+  <div class="qbox"><div class="qh">0 · Foundation</div>Read-model in-app vs embedded BI (Metabase)? · auto-map vs human-approved crosswalk? · ship the data-trust score? <em>(Likely built earliest.)</em></div>
+  <div class="qbox"><div class="qh">1 · Daily digest</div>Cadence · the content blocks · alert tiers &amp; thresholds · role split · NLG line yes/no · which WhatsApp provider.</div>
+  <div class="qbox"><div class="qh">2 · Report-maker</div>Productize the monthly brand pack (Sale + SOH + discount audit) + the month-end target hold-back — what's automated vs reviewed.</div>
+  <div class="qbox"><div class="qh">3 · Profitability</div>Per-model treatment · scorecard axes · leakage waterfall · stop-at-gross-margin · is shelf-slot/floor-area data available?</div>
+  <div class="qbox"><div class="qh">4 · Dead-stock &amp; markdown</div>Hot/Warm/Cold/Dead thresholds · markdown-vs-return-vs-transfer · margin floor per brand · who approves (mostly set in Offers §7 — confirm).</div>
+  <div class="qbox"><div class="qh">5 · Leakage &amp; anomaly watchdog</div>The day-one rules &amp; thresholds · the discount-leakage flagship · cash-deposit ranking · when statistics turn on · the review loop.</div>
+  <div class="qbox"><div class="qh">6 · Forecasting</div>How much to build now vs defer · how it feeds store-split &amp; markdown · the written accuracy expectation for the client.</div>
+  <div class="qbox"><div class="qh">7 · Conversational AI</div>Confirm LLM-narrator-only in V1 · Hindi narration · free-form Q&amp;A deferred · the governance/audit shape.</div>
+</section>
+
+<section id="sources">
+  <h2 class="sec">Sources</h2>
+  <p class="framing">Grouped by section; accessed 18 June 2026. Vendor uplift figures are vendor-reported. Markdown/dead-stock pricing sources live in full in <a href="../05-offers/markdown-ai-research.html">markdown-ai-research.html</a>.</p>
+  <ol class="refs">
+    <li><strong>Foundation &amp; semantic layer:</strong> dbt semantic-vs-text-to-SQL · dbt Semantic Layer · Google Looker grounding · RudderStack / Senzing entity resolution · Profisee survivorship · TheDataOps harmonization.</li>
+    <li><strong>Data-trust / quality:</strong> lakeFS · OvalEdge · Atlan dashboards · Redpoint trust-but-verify · arXiv 2407.14042.</li>
+    <li><strong>KPI canon:</strong> StyleMatrix · Toolio (GMROI/sell-through/WOS) · Retalon · RetailDogma / Wall Street Prep (LFL) · Digital Fashion Academy · NetSuite KPIs · Tableau vanity · CleverTap / Putler (RFM) · Holistics / AnswerRocket.</li>
+    <li><strong>Digest &amp; alerting:</strong> incident.io · OneUptime / Nova AIOps · WA.Expert · AiSensy / respond.io · Solink / Shopify / Xenia · Yellowfin / Bismart · Gartner augmented analytics · KDnuggets.</li>
+    <li><strong>Profitability:</strong> Toolio / Retalon / ShipBob (GMROI) · NetSuite / Lightspeed / ConsignCloud (consignment) · Prospeo / Vendavo / Zilliant (waterfall) · GrowthForce · TrueProfit · Zenlytic / Brightpearl · Datawiz / CFI (BCG).</li>
+    <li><strong>Forecasting &amp; replenishment:</strong> OnePint · Impact Analytics / Anaplan / o9 (size curves) · Eightx · MCP Analytics (Croston) · Onebeat · Uphance / Dropoff · arXiv 2506.05941 · Vandeput (GIGO) · Weather Source · Tredence / Wikipedia (uplift).</li>
+    <li><strong>Watchdog:</strong> Agilence · Appriss · Envysion / Interface Systems · apg / Cassida / NRS · InVue / NRF · CPCON · MCP Analytics (z-score) · Elia Lanz · DataCamp (isolation forest) · Fluxforce / Oscilar / Mangopay · Spot AI · arXiv 2603.06636 · Acceldata / Monte Carlo.</li>
+    <li><strong>Conversational AI:</strong> dbt benchmark · BlazeSQL · Snowflake Cortex Analyst · Google Looker · MS Power BI Copilot / Data Goblins · TDS hybrid AI · arXiv 2404.15604 · Gartner agent-washing · IBM / Kiteworks / MindStudio · arXiv 2504.20022.</li>
+  </ol>
+</section>
+
+<footer>
+  KDPS Lifestyle — Analytics &amp; Intelligence (D7) research foundation. Compiled 18 June 2026 from seven deep-research passes + the markdown-AI brief. Research input, not locked design — decisions are made in the grill, logged in <code>analytics-ai.html</code>. The whole layer is read-only: it reads the spine and writes only messages, reports and suggestions; a human always decides.
+</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 5 — Reading a Query (SQL)</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --mem:#15803d; --mem-bg:#f0fdf4; --mem-line:#bbf7d0; --mem-deep:#14532d;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --kw:#c084fc; --col:#7dd3fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--mem)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--mem-deep)}
+  p{margin:14px 0}
+  .key{font-weight:600}
+
+  /* code blocks */
+  pre{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:16px 18px; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:14px; line-height:1.7; margin:18px 0}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .kw{color:var(--kw); font-weight:700} .col{color:var(--col)} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)}
+  .inline{background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px; font-size:14px; font-family:ui-monospace,Menlo,monospace}
+
+  /* annotated query */
+  .anno{background:#0f172a; border-radius:12px; padding:16px 18px; margin:18px 0; font-family:ui-monospace,Menlo,monospace; font-size:13.5px; line-height:1.4}
+  .anno .ln{display:flex; gap:14px; align-items:baseline; padding:5px 0}
+  .anno .code{color:#e2e8f0; flex:0 0 auto; min-width:230px; white-space:pre}
+  .anno .note{color:#93a4bd; font-family:-apple-system,sans-serif; font-size:13px}
+
+  /* result table */
+  .res{margin:14px 0; border:1px solid var(--mem-line); border-radius:10px; overflow:hidden; display:inline-block; min-width:240px}
+  .res .cap{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--mem-deep); background:var(--mem-bg); padding:6px 12px; border-bottom:1px solid var(--mem-line)}
+  .res table{border-collapse:collapse; width:100%; font-size:13px; font-family:ui-monospace,Menlo,monospace}
+  .res th,.res td{padding:6px 14px; text-align:left; border-bottom:1px solid var(--line)}
+  .res th{background:#f8fafc; color:var(--muted); font-size:11px; text-transform:uppercase}
+  .res tr:last-child td{border-bottom:0}
+  .srcs{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:14px 0; align-items:start}
+  @media(max-width:620px){.srcs{grid-template-columns:1fr}}
+  .srcs .res{display:block; width:100%; min-width:0; margin:0}
+  .arrow{text-align:center; margin:12px 0}
+  .arrow span{background:var(--mem-bg); border:1px solid var(--mem-line); color:var(--mem-deep); border-radius:999px; padding:5px 14px; font-size:13px; font-weight:700}
+  .cmp2{width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  .cmp2 th,.cmp2 td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line)}
+  .cmp2 th{background:#f8fafc; color:var(--muted); font-size:11.5px; text-transform:uppercase}
+  .cmp2 tr:last-child td{border-bottom:0}
+  .orders{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0}
+  @media(max-width:560px){.orders{grid-template-columns:1fr}}
+  .ord{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .ord h4{margin:0; padding:10px 14px; font-size:14px; color:#fff}
+  .ord.w h4{background:#64748b} .ord.r h4{background:var(--mem)}
+  .ord ol{margin:0; padding:12px 14px 14px 32px; font-size:13.5px; font-family:ui-monospace,Menlo,monospace}
+  .ord li{margin:5px 0}
+  .ord .x{color:#94a3b8}
+  .steps{counter-reset:st; list-style:none; margin:18px 0; padding:0}
+  .steps li{counter-increment:st; position:relative; padding:13px 16px 13px 56px; margin:9px 0; background:#fff; border:1px solid var(--line); border-radius:12px}
+  .steps li::before{content:counter(st); position:absolute; left:13px; top:13px; width:30px; height:30px; border-radius:8px; background:var(--mem); color:#fff; font-weight:800; font-size:14px; display:flex; align-items:center; justify-content:center}
+  .steps .cl{font-family:ui-monospace,Menlo,monospace; font-weight:700; color:var(--mem-deep); font-size:14.5px}
+  .steps .ask{display:block; color:var(--muted); font-size:14px; margin-top:3px}
+  .step0{background:#1d2433; color:#fff; border-radius:12px; padding:14px 18px; margin:16px 0}
+  .step0 b{color:#bbf7d0}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:24px 0}
+  .callout.mem{background:var(--mem-bg); border:1px solid var(--mem-line)}
+  .callout.ink{background:#1d2433; color:#fff}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+  .callout.danger{background:var(--bad-bg); border:1px solid var(--bad-line)}
+  .callout b{font-weight:700}
+  .callout.mem b{color:var(--mem-deep)} .callout.ink b{color:#bbf7d0} .callout.danger b{color:#991b1b}
+  .callout p{margin:0; font-size:15px}
+
+  .words{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0}
+  @media(max-width:560px){.words{grid-template-columns:1fr}}
+  .word{border:1px solid var(--line); border-radius:10px; padding:11px 14px; background:#fff; font-size:14px}
+  .word b{font-family:ui-monospace,Menlo,monospace; color:var(--mem-deep)}
+  .word span{color:var(--muted)}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .q pre{margin:0 0 14px; font-size:13px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#bbf7d0; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#f0fdf4,#eff6ff); border:1px solid var(--mem-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--mem-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--mem); text-decoration:none} footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 5 · ~18 min · database deep-dive · updated 20 Jun 2026</div>
+  <h1>Reading a query</h1>
+  <p class="lede">A query is how you <i>ask</i> the database a question. They look intimidating, but almost every one is the same short sentence with the words in the same order. Learn the sentence, and you can read what any query does — and catch the one that's dangerous.</p>
+  <div class="mission"><b>Why this lesson:</b> you said the database is the thing you most need to own. This is the floor: when you review code or a schema, you'll constantly see queries. Being able to read one — "what rows come back, and is this safe?" — is the core review skill.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — THE SENTENCE -->
+  <section>
+    <h2><span class="num">1</span> Every query is one sentence</h2>
+    <p class="kicker">SELECT … FROM … WHERE …</p>
+    <p>To <i>read</i> rows out of a table you use <span class="key">SELECT</span>. It has three core parts, always in this order. Read it right-to-left as plain English:</p>
+
+    <div class="anno">
+      <div class="ln"><span class="code"><span class="kw">SELECT</span> name, mrp</span><span class="note">① which <b>columns</b> you want back</span></div>
+      <div class="ln"><span class="code"><span class="kw">FROM</span>   sku</span><span class="note">② which <b>table</b> to look in</span></div>
+      <div class="ln"><span class="code"><span class="kw">WHERE</span>  brand_id = 12</span><span class="note">③ keep only <b>rows</b> that match</span></div>
+    </div>
+    <p style="margin-top:6px">In words: <i>"give me the name and MRP, from the sku table, for rows where the brand is 12 (Biba)."</i> You get a small result table back:</p>
+
+    <div class="res">
+      <div class="cap">result</div>
+      <table>
+        <tr><th>name</th><th>mrp</th></tr>
+        <tr><td>Anarkali Kurti</td><td>2,400</td></tr>
+        <tr><td>Cotton Suit</td><td>3,100</td></tr>
+      </table>
+    </div>
+
+    <div class="callout soft">
+      <p>🔑 <b>SELECT picks columns, WHERE picks rows.</b> That one distinction unlocks 80% of queries. <span class="inline">SELECT *</span> means "every column"; a missing <span class="inline">WHERE</span> means "every row".</p>
+    </div>
+  </section>
+
+  <!-- 2 — ADDING UP -->
+  <section>
+    <h2><span class="num">2</span> Adding things up</h2>
+    <p class="kicker">SUM + GROUP BY — your stock-on-hand query</p>
+    <p>Now the one you asked about. To get <b>stock on hand</b> you don't read a stored number — you <b>add up the movements</b>. <span class="inline">SUM()</span> is an <i>aggregate</i>: it squashes many rows into one total.</p>
+
+    <pre><span class="kw">SELECT</span> <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span>   stock_movement
+<span class="kw">WHERE</span>  sku_id = <span class="str">'NK-AM90-WHT-8'</span>;   <span class="cmt">-- +5 −1 −2 +1</span></pre>
+
+    <div class="res">
+      <div class="cap">result</div>
+      <table><tr><th>on_hand</th></tr><tr><td>3</td></tr></table>
+    </div>
+
+    <p>That's <b>one</b> SKU. To get it for <b>every</b> SKU at once, add <span class="inline">GROUP BY</span> — "do the SUM once per bucket":</p>
+
+    <div class="anno">
+      <div class="ln"><span class="code"><span class="kw">SELECT</span>   sku_id, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand</span><span class="note">total per…</span></div>
+      <div class="ln"><span class="code"><span class="kw">FROM</span>     stock_movement</span><span class="note"></span></div>
+      <div class="ln"><span class="code"><span class="kw">GROUP BY</span> sku_id;</span><span class="note">…each SKU bucket</span></div>
+    </div>
+    <div class="res">
+      <div class="cap">result</div>
+      <table>
+        <tr><th>sku_id</th><th>on_hand</th></tr>
+        <tr><td>NK-AM90-WHT-8</td><td>3</td></tr>
+        <tr><td>NK-AM90-BLK-9</td><td>7</td></tr>
+      </table>
+    </div>
+
+    <div class="callout mem">
+      <p>💡 <b>The rule of GROUP BY:</b> whatever you bucket by goes in <span class="inline">GROUP BY</span>, and the rest gets an aggregate (<span class="inline">SUM</span>, <span class="inline">COUNT</span>, <span class="inline">AVG</span>). Want on-hand <i>per store</i>? Just bucket by both: <span class="inline">GROUP BY sku_id, store</span>. This single pattern powers most of your dashboards — sales per brand, pieces per store, revenue per day.</p>
+    </div>
+
+    <div class="words">
+      <div class="word"><b>SUM(x)</b> <span>— total of a column</span></div>
+      <div class="word"><b>COUNT(*)</b> <span>— how many rows</span></div>
+      <div class="word"><b>AVG(x)</b> <span>— average</span></div>
+      <div class="word"><b>ORDER BY x DESC</b> <span>— sort, biggest first</span></div>
+    </div>
+
+    <h3 style="margin-top:30px; color:var(--mem-deep)">Filtering groups: WHERE vs HAVING</h3>
+    <p>One more filter — and it trips everyone up once. <span class="inline">WHERE</span> throws out <b>rows, before</b> grouping. <span class="key">HAVING</span> throws out whole <b>groups, after</b> — so it's the one you use to filter on a <i>total</i>.</p>
+    <pre><span class="kw">SELECT</span>   sku_id, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span>     stock_movement
+<span class="kw">WHERE</span>    season = <span class="str">'SS26'</span>        <span class="cmt">-- ① per-row: only this season's movements</span>
+<span class="kw">GROUP BY</span> sku_id
+<span class="kw">HAVING</span>   <span class="fn">SUM</span>(qty) &lt; <span class="num">3</span>;          <span class="cmt">-- ② per-group: only low-stock SKUs</span></pre>
+    <p>The clauses run in this order: <b>WHERE → GROUP BY → HAVING</b>. So when <span class="inline">WHERE</span> runs, the totals don't exist yet — which is exactly why <span class="inline">WHERE SUM(qty) &lt; 3</span> is an error, and you must use <span class="inline">HAVING</span> instead.</p>
+    <table class="cmp2">
+      <tr><th>Filter on…</th><th>Use</th></tr>
+      <tr><td>a plain column value (<span class="inline">season</span>, <span class="inline">store</span>, <span class="inline">colour</span>)</td><td><b>WHERE</b></td></tr>
+      <tr><td>a total or count (<span class="inline">SUM(qty) &lt; 3</span>, <span class="inline">COUNT(*) &gt; 10</span>)</td><td><b>HAVING</b></td></tr>
+    </table>
+    <div class="callout mem"><p>🍳 <b>One-liner:</b> WHERE filters the <i>ingredients</i>; HAVING filters the <i>finished dish</i>. The tell-tale sign: HAVING almost always contains an aggregate (<span class="inline">SUM</span>, <span class="inline">COUNT</span>…).</p></div>
+  </section>
+
+  <!-- 3 — JOINS -->
+  <section>
+    <h2><span class="num">3</span> Combining tables — JOIN</h2>
+    <p class="kicker">Walking from one table to another by id</p>
+
+    <p>First, a shorthand you'll see in almost every real query: right after a table name you can give it a short <b>nickname</b> (an <i>alias</i>). <span class="inline">FROM stock_movement m</span> just means "call it <span class="inline">m</span>", so you can write <span class="inline">m.qty</span> instead of the whole table name every time. This query nicknames three tables:</p>
+    <div class="words">
+      <div class="word"><b>stock_movement → m</b> <span>the sales</span></div>
+      <div class="word"><b>sku → s</b> <span>the products</span></div>
+      <div class="word"><b>brand → b</b> <span>the brands</span></div>
+    </div>
+
+    <p>Now the problem a JOIN solves. A sale row in <span class="inline">stock_movement</span> only stores a <span class="inline">sku_id</span> — a code like <span class="inline">NK-AM90-WHT-8</span>. It does <b>not</b> hold the brand name. To print "Biba" you have to <b>walk across tables, matching ids</b>. That walk is a <span class="key">JOIN</span>.</p>
+
+    <p>Here's "today's sales per brand" — the two JOIN lines read as plain sentences:</p>
+    <div class="anno">
+      <div class="ln"><span class="code"><span class="kw">SELECT</span>   b.name, -<span class="fn">SUM</span>(m.qty)</span><span class="note">brand name + pieces sold</span></div>
+      <div class="ln"><span class="code"><span class="kw">FROM</span>     stock_movement m</span><span class="note">start from the sales…</span></div>
+      <div class="ln"><span class="code"><span class="kw">JOIN</span>     sku   s <span class="kw">ON</span> s.id = m.sku_id</span><span class="note">…find each one's SKU</span></div>
+      <div class="ln"><span class="code"><span class="kw">JOIN</span>     brand b <span class="kw">ON</span> b.id = s.brand_id</span><span class="note">…then that SKU's brand</span></div>
+      <div class="ln"><span class="code"><span class="kw">WHERE</span>    m.type = <span class="str">'SALE'</span></span><span class="note">only sale rows…</span></div>
+      <div class="ln"><span class="code">  <span class="kw">AND</span>    m.created_at &gt;= <span class="fn">CURRENT_DATE</span></span><span class="note">…from today</span></div>
+      <div class="ln"><span class="code"><span class="kw">GROUP BY</span> b.name;</span><span class="note">one total per brand</span></div>
+    </div>
+    <p style="font-size:14.5px; color:var(--muted)">(<span class="inline">-SUM(m.qty)</span> because sales are stored as negatives — the minus flips the total back to a friendly positive count.)</p>
+
+    <h3>Watch the rows flow through</h3>
+    <p>This is the clearest way to <i>see</i> a JOIN. Start with today's sale rows, plus the two tables we'll walk to:</p>
+    <div class="srcs">
+      <div class="res"><div class="cap">stock_movement (m)</div><table>
+        <tr><th>sku_id</th><th>qty</th></tr>
+        <tr><td>NK-AM90-WHT-8</td><td class="out">−1</td></tr>
+        <tr><td>BIBA-KUR-RED-M</td><td class="out">−1</td></tr>
+        <tr><td>BIBA-KUR-RED-M</td><td class="out">−1</td></tr>
+      </table></div>
+      <div class="res"><div class="cap">sku (s)</div><table>
+        <tr><th>id</th><th>brand_id</th></tr>
+        <tr><td>NK-AM90-WHT-8</td><td>7</td></tr>
+        <tr><td>BIBA-KUR-RED-M</td><td>12</td></tr>
+      </table></div>
+      <div class="res"><div class="cap">brand (b)</div><table>
+        <tr><th>id</th><th>name</th></tr>
+        <tr><td>7</td><td>Nike</td></tr>
+        <tr><td>12</td><td>Biba</td></tr>
+      </table></div>
+    </div>
+    <div class="arrow"><span>① JOIN — match each sku_id → its sku → its brand</span></div>
+    <div class="res" style="display:block; width:100%"><div class="cap">after the joins — every sale now carries its brand</div><table>
+      <tr><th>sku_id</th><th>qty</th><th>brand</th></tr>
+      <tr><td>NK-AM90-WHT-8</td><td class="out">−1</td><td>Nike</td></tr>
+      <tr><td>BIBA-KUR-RED-M</td><td class="out">−1</td><td>Biba</td></tr>
+      <tr><td>BIBA-KUR-RED-M</td><td class="out">−1</td><td>Biba</td></tr>
+    </table></div>
+    <div class="arrow"><span>② GROUP BY brand, total the qty</span></div>
+    <div class="res" style="display:block; width:100%"><div class="cap">result</div><table>
+      <tr><th>brand</th><th>pieces_sold</th></tr>
+      <tr><td>Biba</td><td class="in">2</td></tr>
+      <tr><td>Nike</td><td class="in">1</td></tr>
+    </table></div>
+
+    <div class="callout ink"><p>🔗 <b>The reviewer's read of a JOIN:</b> the <span class="inline" style="background:#334155">ON</span> should always match a <b>foreign key to the primary key it points at</b> — here <span class="inline" style="background:#334155">m.sku_id = s.id</span>, then <span class="inline" style="background:#334155">s.brand_id = b.id</span>. If a JOIN matches unrelated columns, or has no <span class="inline" style="background:#334155">ON</span> at all, every row gets paired with every row — an explosion that's almost always a bug.</p></div>
+
+    <div class="callout soft"><p>💡 <b>Pieces vs money live in different tables.</b> Piece counts come from the movement ledger (above). Rupee <i>revenue</i> comes from the <span class="inline">bill</span>, where the selling price sits — same JOIN shape, but summing a price column. Keeping stock and money apart is deliberate: documents write ledgers.</p></div>
+  </section>
+
+  <!-- 4 — READS vs WRITES -->
+  <section>
+    <h2><span class="num">4</span> Reads vs writes — and the dangerous one</h2>
+    <p class="kicker">The safety check every reviewer makes</p>
+    <p>Everything so far was a <b>read</b> (<span class="inline">SELECT</span>) — it just looks, changes nothing. There are also <b>writes</b>, which change data:</p>
+    <div class="words">
+      <div class="word"><b>INSERT</b> <span>— add a new row</span></div>
+      <div class="word"><b>UPDATE</b> <span>— change existing rows</span></div>
+      <div class="word"><b>DELETE</b> <span>— remove rows</span></div>
+      <div class="word"><b>SELECT</b> <span>— read only (safe)</span></div>
+    </div>
+
+    <p>Here's the trap. On an <span class="inline">UPDATE</span> or <span class="inline">DELETE</span>, the <span class="inline">WHERE</span> decides <i>which rows</i> are hit. <b>Forget the WHERE, and it hits every row in the table:</b></p>
+
+    <pre><span class="cmt">-- 😱 NO WHERE — this zeroes out EVERY movement, for every SKU</span>
+<span class="kw">UPDATE</span> stock_movement <span class="kw">SET</span> qty = <span class="str">0</span>;
+
+<span class="cmt">-- ✅ scoped — only this one document's rows</span>
+<span class="kw">UPDATE</span> stock_movement <span class="kw">SET</span> qty = <span class="str">0</span> <span class="kw">WHERE</span> document = <span class="str">'BILL#902'</span>;</pre>
+
+    <div class="callout danger">
+      <p>🚩 <b>The #1 thing to catch when reviewing AI-written SQL:</b> an <span class="inline" style="background:#7f1d1d">UPDATE</span> or <span class="inline" style="background:#7f1d1d">DELETE</span> with <b>no WHERE clause</b>. It's the database equivalent of "delete everything." For a system holding money and stock, this is the review check that matters most. (Your ledger design softens the blow — it's append-only — but never let an un-scoped write through.)</p>
+    </div>
+
+    <div class="callout ink">
+      <p>🧭 <b>Reviewer's reflex:</b> for any query the AI shows you, ask three things — <b>(1)</b> Read or write? <b>(2)</b> Which table? <b>(3)</b> What's the WHERE — does it scope to exactly the rows I mean? Answer those and you know what the query will do, and where its effects will land.</p>
+    </div>
+  </section>
+
+  <!-- 5 — THE METHOD -->
+  <section>
+    <h2><span class="num">5</span> A method to read any query</h2>
+    <p class="kicker">How to think, in order — even with a scary one</p>
+    <p>Here's the single most useful habit. A query is <b>written</b> in one order, but it's far easier to <b>read</b> it in a different order — the order the database actually does the work. Beginners read top-down and get lost in <span class="inline">SELECT</span> before they even know what they're selecting <i>from</i>. Don't.</p>
+
+    <div class="orders">
+      <div class="ord w"><h4>How it's written (top→bottom)</h4><ol>
+        <li>SELECT</li><li>FROM / JOIN</li><li>WHERE</li><li>GROUP BY</li><li>HAVING</li><li>ORDER BY / LIMIT</li>
+      </ol></div>
+      <div class="ord r"><h4>How to read it ✅</h4><ol>
+        <li>FROM / JOIN</li><li>WHERE</li><li>GROUP BY</li><li>HAVING</li><li>SELECT</li><li>ORDER BY / LIMIT</li>
+      </ol></div>
+    </div>
+
+    <div class="step0"><p>🚦 <b>Step 0 — read or write?</b> Glance at the first word. <span class="inline" style="background:#334155">SELECT</span> = a safe read. <span class="inline" style="background:#334155">INSERT / UPDATE / DELETE</span> = a write that changes data — and your eyes go straight to its <span class="inline" style="background:#334155">WHERE</span>.</p></div>
+
+    <p>Then walk these six steps, picturing the rows shrinking at each one:</p>
+    <ol class="steps">
+      <li><span class="cl">FROM / JOIN</span> <span class="ask">"What am I starting from?" Find the table(s). If there are JOINs, picture each row with its matches attached — one combined set of rows.</span></li>
+      <li><span class="cl">WHERE</span> <span class="ask">"Which rows survive?" Apply the filter and throw the rest away.</span></li>
+      <li><span class="cl">GROUP BY</span> <span class="ask">"Am I bucketing rows into piles?" If yes, picture one pile per group. (No GROUP BY but an aggregate like SUM? The whole thing is one pile.)</span></li>
+      <li><span class="cl">HAVING</span> <span class="ask">"Which piles survive?" Filter the groups — usually on a total.</span></li>
+      <li><span class="cl">SELECT</span> <span class="ask">"What does each output row show?" The columns and aggregates you get back. You read this <i>late</i> because it describes the <b>output</b>, not the source.</span></li>
+      <li><span class="cl">ORDER BY / LIMIT</span> <span class="ask">"Sorted how, and how many rows?"</span></li>
+    </ol>
+
+    <h3>The method on our query</h3>
+    <p>Apply it to "today's sales per brand" and it reads itself:</p>
+    <div class="anno">
+      <div class="ln"><span class="code">① FROM stock_movement m + JOINs</span><span class="note">each sale, with its SKU &amp; brand attached</span></div>
+      <div class="ln"><span class="code">② WHERE type='SALE' AND today</span><span class="note">keep only today's sales</span></div>
+      <div class="ln"><span class="code">③ GROUP BY b.name</span><span class="note">one pile per brand</span></div>
+      <div class="ln"><span class="code">④ (no HAVING)</span><span class="note">keep all piles</span></div>
+      <div class="ln"><span class="code">⑤ SELECT b.name, -SUM(m.qty)</span><span class="note">each row = a brand + its pieces sold</span></div>
+      <div class="ln"><span class="code">⑥ ORDER BY pieces_sold DESC</span><span class="note">best-selling brand on top</span></div>
+    </div>
+
+    <div class="callout mem"><p>🧠 <b>The one-sentence habit:</b> <b>read FROM first, SELECT almost last.</b> Start with "what rows am I working on," shrink them step by step, and only at the end ask "what do I show." Do that and even a 30-line query becomes a short story you can follow.</p></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 9 queries to read</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">Read each one and pick what it does. This is exactly the muscle you'll use reviewing code.</p>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 1 · SELECT &amp; WHERE</div>
+      <div class="qt">What does this return?</div>
+      <pre><span class="kw">SELECT</span> name <span class="kw">FROM</span> sku <span class="kw">WHERE</span> colour = <span class="str">'White'</span>;</pre>
+      <button class="opt">Every column of every SKU</button>
+      <button class="opt">Just the <code>name</code> column, only for White SKUs</button>
+      <button class="opt">The number of White SKUs</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 2 · Stock on hand</div>
+      <div class="qt">You want on-hand for one SKU. Which is right?</div>
+      <button class="opt"><code>SELECT stock_qty FROM sku WHERE id = '…'</code></button>
+      <button class="opt"><code>SELECT * FROM stock_movement</code></button>
+      <button class="opt"><code>SELECT SUM(qty) FROM stock_movement WHERE sku_id = '…'</code></button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 3 · GROUP BY</div>
+      <div class="qt">What does <code>GROUP BY sku_id, store</code> give you with <code>SUM(qty)</code>?</div>
+      <button class="opt">On-hand for each SKU <b>in each store</b> separately</button>
+      <button class="opt">One grand total across everything</button>
+      <button class="opt">The list of stores only</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · WHERE vs SELECT</div>
+      <div class="qt">In a query, what's the job of the <code>WHERE</code> clause?</div>
+      <button class="opt">It chooses which <b>columns</b> come back</button>
+      <button class="opt">It chooses which <b>rows</b> are included</button>
+      <button class="opt">It sorts the results</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 5 · Read or write</div>
+      <div class="qt">Which of these only <b>reads</b> — changes nothing?</div>
+      <button class="opt"><code>DELETE FROM sku WHERE id = '…'</code></button>
+      <button class="opt"><code>UPDATE sku SET mrp = 999</code></button>
+      <button class="opt"><code>SELECT name, mrp FROM sku</code></button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 6 · The danger check</div>
+      <div class="qt">The AI proposes this. Your call?</div>
+      <pre><span class="kw">UPDATE</span> stock_movement <span class="kw">SET</span> qty = <span class="str">0</span>;</pre>
+      <button class="opt">🚩 Reject — no <code>WHERE</code>, so it hits <b>every row in the table</b></button>
+      <button class="opt">Accept — it's just setting a value</button>
+      <button class="opt">Accept — <code>UPDATE</code> is always safe</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 7 · WHERE vs HAVING</div>
+      <div class="qt">You want SKUs whose <b>total</b> stock is under 3, counting only SS26 movements. Where does <code>SUM(qty) &lt; 3</code> go?</div>
+      <button class="opt">In the <code>WHERE</code></button>
+      <button class="opt">In the <code>HAVING</code> — it filters on a total, which only exists after grouping</button>
+      <button class="opt">In the <code>ORDER BY</code></button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 8 · Reading a JOIN</div>
+      <div class="qt">What is <code>JOIN brand b ON b.id = s.brand_id</code> doing?</div>
+      <button class="opt">Matching each SKU to its brand row, by id — so each row gains its brand</button>
+      <button class="opt">Pairing every brand with every SKU</button>
+      <button class="opt">Deleting the brand table</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 9 · The method</div>
+      <div class="qt">To read a query the easy way, which clause should you usually read <b>first</b>?</div>
+      <button class="opt"><code>SELECT</code> — it's written at the top</button>
+      <button class="opt"><code>FROM</code> / <code>JOIN</code> — figure out what rows you're starting from, then shrink</button>
+      <button class="opt"><code>ORDER BY</code> — the sort tells you everything</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 9</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Ask me anything — “what's the difference between WHERE and HAVING?”, “show me a query for today's sales per brand”, or “run the deep-dive — Lesson 6, JOINs.” We can also try these on a real database whenever you want to get hands-on.
+  </div>
+
+  <footer>
+    <p>Pairs with the <a href="../reference/sql-reading-cheatsheet.html">SQL Reading Cheat Sheet</a> · builds on <a href="0004-the-database-your-ledger-made-real.html">Lesson 4 (the tables)</a>.</p>
+    <p>Source: <a href="https://www.postgresql.org/docs/current/tutorial-select.html">PostgreSQL — Querying a Table</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0005 · 🗄️ database deep-dive 1 of 4</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "SELECT picks columns (just name), WHERE picks rows (only White). So you get one column, filtered to White SKUs.",
+    "On-hand is never stored — it's SUM(qty) of that SKU's movements. The first option assumes a stored count (the red flag); the middle one dumps raw rows.",
+    "GROUP BY sku_id, store makes one bucket per SKU-and-store combination, so SUM(qty) gives on-hand for each SKU in each store.",
+    "WHERE filters rows. (Choosing columns is SELECT's job; sorting is ORDER BY.)",
+    "SELECT only reads — it never changes data. DELETE and UPDATE are writes.",
+    "No WHERE on an UPDATE means every row is changed — here, every movement zeroed. Always reject an un-scoped write.",
+    "SUM(qty) < 3 filters a total, and totals only exist after GROUP BY — so it belongs in HAVING. WHERE filters plain rows before grouping (like season = 'SS26').",
+    "The ON matches each SKU's brand_id to the brand's id, attaching the right brand to each row — that's walking from SKU to brand.",
+    "Read FROM/JOIN first to know what rows you're working with, then WHERE, GROUP BY, HAVING, and SELECT almost last. SELECT describes the output, not the source."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){
+          o.disabled = true;
+          if (j === correct) o.classList.add('correct');
+        });
+        if (i === correct){
+          score++;
+          document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok';
+          fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no';
+          fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

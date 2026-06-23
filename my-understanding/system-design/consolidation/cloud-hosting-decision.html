@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Hosting Decision — KDPS OS</title>
+<style>
+  :root{
+    --ink:#1a1c23; --ink-soft:#4a4e5a; --muted:#7b8194;
+    --line:#e6e8ee; --bg:#f6f7f9; --card:#ffffff;
+    --accent:#4f46e5;
+    --gcp:#1a73e8; --aws:#ff9900; --azure:#0078d4;
+    --good:#15803d; --good-bg:#eaf6ee;
+    --warn:#b45309; --warn-bg:#fbf1e3;
+    --stop:#b91c1c; --stop-bg:#fbeceb;
+    --info:#1d4ed8; --info-bg:#eaf0fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:920px;margin:0 auto;padding:0 22px 80px}
+  header{background:linear-gradient(135deg,#1a1c23,#2b2f44);color:#fff;
+    margin-bottom:30px;padding:42px 22px 36px}
+  header .wrap{padding-bottom:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;
+    color:#aab0c8;font-weight:600;margin:0 0 10px}
+  h1{font-size:30px;line-height:1.15;margin:0 0 12px;font-weight:700}
+  header p{color:#c9cde0;font-size:15px;margin:0;max-width:680px}
+  .meta{margin-top:18px;font-size:12.5px;color:#9aa0bd}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);
+    font-weight:700;margin:48px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  h3{font-size:17px;margin:0 0 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    padding:20px 22px;margin:14px 0;box-shadow:0 1px 2px rgba(20,22,35,.04)}
+  .lead{font-size:16px;border-left:4px solid var(--accent);background:#fff;
+    border-radius:0 14px 14px 0}
+  .lead strong{color:var(--ink)}
+  .pick{border-left:4px solid var(--good);background:var(--good-bg)}
+  ul,ol{margin:8px 0 4px;padding-left:20px}
+  li{margin:6px 0}
+  p{margin:8px 0}
+  .small{font-size:13px;color:var(--ink-soft)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;
+    padding:3px 11px;letter-spacing:.02em;white-space:nowrap}
+  .b-good{background:var(--good-bg);color:var(--good)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-stop{background:var(--stop-bg);color:var(--stop)}
+  .b-info{background:var(--info-bg);color:var(--info)}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;background:#fff;
+    border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#fafbfc;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  tr:last-child td{border-bottom:none}
+  td.win{background:var(--good-bg);font-weight:600}
+  .tag{display:inline-block;font-weight:700;padding:2px 9px;border-radius:6px;font-size:12px}
+  .t-gcp{background:#e8f0fe;color:var(--gcp)}
+  .t-aws{background:#fff3e0;color:#d97706}
+  .t-azure{background:#e6f2fb;color:var(--azure)}
+  .callout{border-radius:12px;padding:14px 16px;margin:14px 0;font-size:14px}
+  .c-stop{background:var(--stop-bg);border:1px solid #f3c9c6}
+  .c-warn{background:var(--warn-bg);border:1px solid #eeddbf}
+  .c-info{background:var(--info-bg);border:1px solid #cdd9f7}
+  .c-good{background:var(--good-bg);border:1px solid #cfe7d6}
+  .src{font-size:12px;color:var(--muted);word-break:break-word}
+  .src a{color:var(--info);text-decoration:none}
+  .src a:hover{text-decoration:underline}
+  .num{font-variant-numeric:tabular-nums}
+  code{background:#f0f1f5;padding:1px 6px;border-radius:5px;font-size:12.5px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <p class="eyebrow">KDPS OS · Build Decision · Research-backed</p>
+    <h1>Where do we host the KDPS system?</h1>
+    <p>Comparing Google Cloud, AWS and Azure for the exact build: a TypeScript app + managed PostgreSQL + file storage, all data in India, talking to Google's AI in Mumbai, run by one developer, serving ~50 stores.</p>
+    <div class="meta">21 June 2026 · Sources cited inline (provider docs, the DPDP Act, RBI) · Verify final prices in each provider's calculator before committing</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card pick">
+    <h3 style="margin-top:0">The recommendation, in one line</h3>
+    <p style="font-size:16px;margin-bottom:6px"><strong>Host everything on Google Cloud, Mumbai region (asia-south1): Cloud Run for the app + Cloud SQL for PostgreSQL + Cloud Storage for files + Secret Manager.</strong></p>
+    <p class="small" style="margin-bottom:0">Because the system already calls Google's AI (Vertex AI) in Mumbai, putting the rest of the system in the <em>same</em> Google region removes a whole class of problems: no second cloud to run, no cross-internet hop to the AI, one login/permission system, and the AI data never leaves Google's India region. For one developer running a money-critical system, that simplicity is the deciding factor — not price (all three are cheap at this size).</p>
+  </div>
+
+  <h2>The decision at a glance</h2>
+  <p class="sub">All three can legally host this in India. The tie-breaker is operational simplicity for a solo dev co-located with the AI.</p>
+  <table>
+    <tr>
+      <th>What matters</th>
+      <th><span class="tag t-gcp">Google Cloud</span></th>
+      <th><span class="tag t-aws">AWS</span></th>
+      <th><span class="tag t-azure">Azure</span></th>
+    </tr>
+    <tr>
+      <td>India region for app + Postgres + storage</td>
+      <td class="win">Mumbai (asia-south1) — all present</td>
+      <td>Mumbai (ap-south-1) — all present</td>
+      <td>Central India / Pune — all present</td>
+    </tr>
+    <tr>
+      <td>Same cloud as the AI (Vertex)</td>
+      <td class="win">Yes — same Mumbai region</td>
+      <td>No — cross-internet to Google</td>
+      <td>No — cross-internet to Google</td>
+    </tr>
+    <tr>
+      <td>One login / permission system for app + AI</td>
+      <td class="win">Yes (one service account)</td>
+      <td>No (two clouds, bridge auth)</td>
+      <td>No (two clouds, bridge auth)</td>
+    </tr>
+    <tr>
+      <td>Easiest deploy for one dev</td>
+      <td class="win">Cloud Run: <code>deploy --source .</code>, no Dockerfile needed</td>
+      <td>App Runner now closed to new accounts</td>
+      <td>App Service (simple) or Container Apps</td>
+    </tr>
+    <tr>
+      <td>Rough monthly cost (small, warm)</td>
+      <td>~$150–200</td>
+      <td>~$60–95</td>
+      <td class="win">~$30–55</td>
+    </tr>
+    <tr>
+      <td>Legally OK for data-in-India?</td>
+      <td class="win">Yes</td>
+      <td class="win">Yes</td>
+      <td class="win">Yes</td>
+    </tr>
+  </table>
+  <p class="small">Azure is the cheapest on paper and AWS is in the middle, but both lose the AI co-location advantage. At this scale the price gap (a few thousand rupees a month) is dwarfed by the cost of one developer maintaining two clouds. <strong>Google wins on the thing that's hard to fix later, not the thing that's easy to absorb.</strong></p>
+
+  <!-- ============ 1. RESIDENCY / LAW ============ -->
+  <h2>1 · Data residency &amp; the law (DPDP Act 2023)</h2>
+  <p class="sub">The most important myth to kill: you do NOT legally need a "sovereign" Indian cloud for a private retailer.</p>
+
+  <div class="callout c-good">
+    <strong>Bottom line:</strong> Hosting in any of the three hyperscalers' India regions <strong>legally satisfies "data stays in India"</strong> for a private fashion retailer. India's DPDP Act does <em>not</em> impose strict localisation on this kind of data — it uses a "blocklist" model, and as of June 2026 no country is even blocked. A MeitY-empanelled sovereign cloud is a <em>government-procurement</em> rule, not a private-company rule.
+  </div>
+
+  <ul>
+    <li><strong>DPDP is permissive, not GDPR-strict.</strong> Section 16 lets the government <em>restrict</em> transfers only to specific countries it notifies — until then, transfer is free. No restricted-country list has been notified. This is the opposite of the common assumption that India bans data export.</li>
+    <li><strong>Sovereign / MeitY-empanelled cloud is for government, PSUs and nationalised banks</strong> — it does not govern private-sector cloud procurement. (All three hyperscalers are empanelled anyway, so even a future banking relationship is covered.)</li>
+    <li><strong>The one genuinely strict rule — RBI payment-data localisation (6 April 2018)</strong> — binds <em>payment system operators</em> (card networks, gateways, banks), <strong>not a merchant</strong> using a third-party gateway. As long as the ERP stores only a gateway reference/token and tender type (never raw card numbers/CVV), this is the gateway's obligation, not ours.</li>
+    <li><strong>DPDP Rules 2025</strong> (notified 14 Nov 2025) add a conditional localisation hook only for "Significant Data Fiduciaries" and only for data categories the government later names. A 50-store apparel chain is very unlikely to be an SDF, and no category has been named. Not a concern today.</li>
+  </ul>
+
+  <div class="callout c-info">
+    <strong>What this means for design:</strong> Pinning everything to an India region is the zero-risk, costs-nothing default — it pre-empts any future country-block, any SDF designation, and any client/bank demand, without re-architecting. So we choose an India region by <em>choice</em>, not because the law forces it. Keep data region-locked so any future tightening is absorbed automatically.
+  </div>
+
+  <p class="src">
+    Sources:
+    DPDP Act 2023 §16 — <a href="https://www.dpdpa.com/dpdpa2023/chapter-4/section16.html">dpdpa.com/dpdpa2023/chapter-4/section16.html</a> ·
+    India Code (official Act 22/2023) — <a href="https://www.indiacode.nic.in/handle/123456789/20063">indiacode.nic.in/handle/123456789/20063</a> ·
+    MeitY data-protection framework — <a href="https://www.meity.gov.in/data-protection-framework">meity.gov.in/data-protection-framework</a> ·
+    MeitY empanelment scope — <a href="https://spiceroutelegal.com/publications/cloud-governance-101-public-procurement-of-cloud-service/">spiceroutelegal.com</a> ·
+    RBI Storage of Payment System Data (6 Apr 2018) — <a href="https://www.rbi.org.in/Scripts/NotificationUser.aspx?Id=11244">rbi.org.in (Id=11244)</a> ·
+    RBI FAQ (applicability) — <a href="https://www.rbi.org.in/commonman/english/scripts/FAQs.aspx?Id=2995">rbi.org.in (FAQ Id=2995)</a> ·
+    DPDP Rules 2025 (PIB) — <a href="https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/nov/doc20251117695301.pdf">pib.gov.in PDF</a> ·
+    Rule 13 (SDF) — <a href="https://www.dpdpa.com/dpdparules/rule13.html">dpdpa.com/dpdparules/rule13.html</a>
+  </p>
+
+  <!-- ============ 2. CO-LOCATION ============ -->
+  <h2>2 · The deciding factor — sitting in the same cloud as the AI</h2>
+  <p class="sub">This is what makes Google Cloud the right call rather than a coin-flip.</p>
+
+  <div class="grid2">
+    <div class="card" style="border-top:3px solid var(--gcp)">
+      <h3>Google Cloud (app + AI together in Mumbai)</h3>
+      <ul class="small">
+        <li><span class="badge b-good">FREE</span> App→AI traffic stays inside Google's Mumbai region — <strong>same-region traffic is free</strong> (no egress).</li>
+        <li><span class="badge b-good">SIMPLE</span> One permission system: Cloud Run runs as a Google <em>service account</em>; grant it the Vertex AI role and it calls the AI with <strong>no API keys, no secrets to store or rotate</strong>.</li>
+        <li><span class="badge b-good">FAST</span> No public-internet hop — lowest latency to the AI.</li>
+        <li><span class="badge b-good">IN INDIA</span> AI request data is region-pinned in Mumbai (data-at-rest in India).</li>
+      </ul>
+    </div>
+    <div class="card" style="border-top:3px solid var(--aws)">
+      <h3>AWS or Azure (app calls Google AI across the internet)</h3>
+      <ul class="small">
+        <li><span class="badge b-warn">EGRESS</span> Every AI call leaves the cloud to the public internet and bills as data-transfer-out (AWS Mumbai ~$0.109/GB; Azure ~$0.12/GB after 100 GB free). <em>Dollar cost is tiny for text-sized AI calls</em> — but it's real plumbing.</li>
+        <li><span class="badge b-stop">TWO IAMs</span> You manage AWS/Azure permissions <em>and</em> Google permissions. No SSO between them.</li>
+        <li><span class="badge b-stop">BRIDGE AUTH</span> To call Vertex you must either ship a Google service-account key into the other cloud (a long-lived secret to guard &amp; rotate — leak risk) or wire up Workload Identity Federation (more secure, more setup).</li>
+        <li><span class="badge b-warn">PUBLIC PATH</span> Traffic to the AI rides the open internet (TLS only) unless you pay for private interconnect.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout c-info">
+    <strong>The honest counter-move:</strong> the two-cloud tax disappears entirely if you stay single-cloud on the <em>AI</em> too — i.e. use <strong>Amazon Bedrock</strong> (on AWS) or <strong>Azure OpenAI</strong> (on Azure) instead of Vertex. But the design has already chosen Vertex/Gemini in Mumbai (D7). Given that choice, <strong>Google Cloud is the only option that keeps the whole system single-cloud.</strong> Switching the AI provider to avoid Google hosting would be the tail wagging the dog.
+  </div>
+
+  <div class="callout c-warn">
+    <strong>One caveat to track on Vertex (not a blocker):</strong> Google guarantees your AI data is stored <em>at-rest</em> in India when you use the Mumbai <em>regional</em> endpoint — but its stronger "ML-processing happens in-region" guarantee is currently documented only for US/EU, not Asia. Practically: always use the <code>asia-south1</code> regional endpoint (never the global one), and never send raw PII/payment data to the AI. Re-confirm coverage with Google over time. (See sources below.)
+  </div>
+
+  <p class="src">
+    Sources:
+    Vertex AI locations/endpoints — <a href="https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/locations">docs.cloud.google.com/vertex-ai/.../locations</a> ·
+    Vertex AI data residency — <a href="https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency">.../data-residency</a> ·
+    At-rest residency (blog) — <a href="https://cloud.google.com/blog/products/ai-machine-learning/google-cloud-generative-ai-data-residency-guarantees-for-data-stored-at-rest">cloud.google.com/blog/...data-residency-at-rest</a> ·
+    GCP VPC/egress pricing (same-region free) — <a href="https://cloud.google.com/vpc/network-pricing">cloud.google.com/vpc/network-pricing</a> ·
+    AWS data-transfer (egress) — <a href="https://aws.amazon.com/ec2/pricing/on-demand/">aws.amazon.com/ec2/pricing/on-demand</a> ·
+    Azure bandwidth pricing — <a href="https://azure.microsoft.com/en-in/pricing/details/bandwidth/">azure.microsoft.com/.../bandwidth</a> ·
+    Cross-cloud auth (WIF) — <a href="https://cloud.google.com/iam/docs/workload-identity-federation">cloud.google.com/iam/docs/workload-identity-federation</a>
+  </p>
+
+  <!-- ============ 3. SOLO-DEV BURDEN ============ -->
+  <h2>3 · Running it with one developer</h2>
+  <p class="sub">Managed everything, minimal moving parts, deploys that are one command.</p>
+
+  <table>
+    <tr><th>Concern</th><th>Google Cloud</th><th>AWS</th><th>Azure</th></tr>
+    <tr>
+      <td>Simplest managed compute</td>
+      <td class="win">Cloud Run — <code>gcloud run deploy --source .</code>, builds from source, no Dockerfile, logs/metrics built in</td>
+      <td>App Runner was the equal — but it is now <strong>closed to new customers</strong>; new builds fall back to heavier ECS</td>
+      <td>App Service (push code, no container) or Container Apps (needs a container image)</td>
+    </tr>
+    <tr>
+      <td>Scale-to-zero</td>
+      <td>Yes (set min=0) — but for a money app we keep <strong>1 warm</strong> instance</td>
+      <td>App Runner kept ≥1 warm; ECS no native scale-to-zero</td>
+      <td>Container Apps: yes. App Service: no</td>
+    </tr>
+    <tr>
+      <td>Managed Postgres backups</td>
+      <td class="win">Cloud SQL — daily backup + point-in-time recovery, retention up to <strong>365 days</strong></td>
+      <td>RDS — backup + PITR, retention up to 35 days</td>
+      <td>Flexible Server — backup + PITR 7–35 days, plus 10-yr archival; clearest written SLA</td>
+    </tr>
+    <tr>
+      <td>Migrations</td>
+      <td colspan="3">Same everywhere — it's standard Postgres; run Prisma/Drizzle/Knex against the connection string. The managed service doesn't get in the way.</td>
+    </tr>
+    <tr>
+      <td>Step up to high-availability</td>
+      <td colspan="3">All three: a single toggle, roughly 2× the DB cost (adds a standby). Not an architecture project. Add it when uptime demands, not on day one.</td>
+    </tr>
+  </table>
+
+  <div class="callout c-stop">
+    <strong>Money-critical rule, applies to all three:</strong> do <strong>not</strong> let the database scale to zero, and keep <strong>one warm app instance</strong> (min-instances = 1). The next request after an idle period is usually a sale or a ledger posting — a multi-second cold-start mid-transaction invites double-submits. One warm instance costs only ~$10–15/month and removes the risk entirely.
+  </div>
+
+  <div class="callout c-warn">
+    <strong>Supabase — worth knowing, not the pick.</strong> Supabase (managed Postgres + auth + storage + APIs) runs on <strong>AWS Mumbai (ap-south-1)</strong>, so it satisfies data-in-India and would cut solo-dev burden fast. But for a <em>money-critical multi-tenant</em> ERP its tenant isolation rides entirely on Postgres Row-Level Security — which is off by default, silently returns empty on a blocked read, and is bypassed by the service key. That's a real cross-tenant-leak footgun for ledgers, and point-in-time recovery is a paid add-on (~$100+/mo). Fine to revisit, but raw Cloud Run + Cloud SQL gives a simpler, more auditable mental model for money.
+  </div>
+
+  <p class="src">
+    Sources:
+    Cloud Run deploy from source — <a href="https://docs.cloud.google.com/run/docs/deploying-source-code">docs.cloud.google.com/run/docs/deploying-source-code</a> ·
+    Cloud SQL backups/PITR — <a href="https://docs.cloud.google.com/sql/docs/postgres/backup-recovery/backups">.../backup-recovery/backups</a> ·
+    AWS App Runner closed to new customers — <a href="https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html">docs.aws.amazon.com/apprunner/.../availability-change</a> ·
+    RDS backups/PITR — <a href="https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_WorkingWithAutomatedBackups.html">docs.aws.amazon.com/AmazonRDS/.../AutomatedBackups</a> ·
+    Azure Container Apps scale/billing — <a href="https://learn.microsoft.com/en-us/azure/container-apps/billing">learn.microsoft.com/.../container-apps/billing</a> ·
+    Azure PostgreSQL backup/restore — <a href="https://learn.microsoft.com/en-us/azure/postgresql/backup-restore/concepts-backup-restore">learn.microsoft.com/.../postgresql/backup-restore</a> ·
+    Supabase regions (Mumbai) — <a href="https://supabase.com/docs/guides/platform/regions">supabase.com/docs/guides/platform/regions</a> ·
+    Supabase RLS — <a href="https://supabase.com/docs/guides/database/postgres/row-level-security">supabase.com/docs/.../row-level-security</a>
+  </p>
+
+  <!-- ============ 4. COST ============ -->
+  <h2>4 · Rough monthly cost (~50 stores, modest traffic)</h2>
+  <p class="sub">Order-of-magnitude only. All in USD before India GST and before per-call AI usage. Confirm in each provider's calculator.</p>
+
+  <table>
+    <tr><th>Provider</th><th>App (1 warm)</th><th>Managed Postgres (small)</th><th>File storage (tens of GB)</th><th>Approx total</th></tr>
+    <tr>
+      <td><span class="tag t-gcp">Google</span></td>
+      <td class="num">~$65–70 (Cloud Run, 1 warm)</td>
+      <td class="num">~$90–120 (Cloud SQL 2 vCPU/8GB, no HA, 50GB)</td>
+      <td class="num">~$2–3</td>
+      <td class="num"><strong>~$150–200</strong></td>
+    </tr>
+    <tr>
+      <td><span class="tag t-aws">AWS</span></td>
+      <td class="num">~$25–60 (App Runner, where available)</td>
+      <td class="num">~$32 (RDS t4g.small + 50GB)</td>
+      <td class="num">~$1.5</td>
+      <td class="num"><strong>~$60–95</strong></td>
+    </tr>
+    <tr>
+      <td><span class="tag t-azure">Azure</span></td>
+      <td class="num">~$13 (App Service B1)</td>
+      <td class="num">~$17–35 (Flexible Server B1ms/B2s + storage)</td>
+      <td class="num">~$1</td>
+      <td class="num"><strong>~$30–55</strong></td>
+    </tr>
+  </table>
+
+  <div class="callout c-info">
+    <strong>Read this honestly:</strong> Google is the most expensive of the three here — roughly <strong>$100–150/month more</strong> than Azure. That's about ₹8,000–12,000/month. The database dominates the bill on Google; you can shrink it (smaller Cloud SQL tier, or scale-to-zero compute in dev) to land nearer $100. <strong>For a money-critical system run by one person, that gap buys single-cloud simplicity, unified IAM, and zero AI-egress — which is a good trade.</strong> If budget were the hard constraint over simplicity, Azure + Azure OpenAI (single-cloud the other way) would be the cheapest coherent alternative.
+  </div>
+
+  <p class="src">
+    Sources:
+    Cloud Run pricing — <a href="https://cloud.google.com/run/pricing">cloud.google.com/run/pricing</a> ·
+    Cloud SQL pricing — <a href="https://cloud.google.com/sql/pricing">cloud.google.com/sql/pricing</a> ·
+    Cloud Storage pricing — <a href="https://cloud.google.com/storage/pricing">cloud.google.com/storage/pricing</a> ·
+    RDS PostgreSQL pricing — <a href="https://aws.amazon.com/rds/postgresql/pricing/">aws.amazon.com/rds/postgresql/pricing</a> ·
+    S3 pricing — <a href="https://aws.amazon.com/s3/pricing/">aws.amazon.com/s3/pricing</a> ·
+    Azure App Service pricing — <a href="https://azure.microsoft.com/en-us/pricing/details/app-service/linux/">azure.microsoft.com/.../app-service/linux</a> ·
+    Azure PostgreSQL pricing — <a href="https://azure.microsoft.com/en-us/pricing/details/postgresql/flexible-server/">azure.microsoft.com/.../postgresql/flexible-server</a> ·
+    Azure Blob pricing — <a href="https://azure.microsoft.com/en-us/pricing/details/storage/blobs/">azure.microsoft.com/.../storage/blobs</a>
+    <br><em>Provider pricing pages render prices in JavaScript and could not all be machine-read; figures combine official rate cards, documented Asia-Pacific brackets, and a Mumbai/Asia uplift. Treat as order-of-magnitude and verify in each provider's pricing calculator before quoting.</em>
+  </p>
+
+  <!-- ============ FINAL ============ -->
+  <h2>5 · Recommendation &amp; the exact shape to build</h2>
+
+  <div class="card pick">
+    <h3 style="margin-top:0">Build on Google Cloud, asia-south1 (Mumbai)</h3>
+    <table style="margin-top:6px">
+      <tr><th>Layer</th><th>Service</th></tr>
+      <tr><td>App (Next.js / Node)</td><td>Cloud Run, min-instances = 1 (one warm)</td></tr>
+      <tr><td>Database (ledgers, GST)</td><td>Cloud SQL for PostgreSQL — start single-zone, add HA toggle later</td></tr>
+      <tr><td>Files (invoices, PT files)</td><td>Cloud Storage</td></tr>
+      <tr><td>Secrets</td><td>Secret Manager</td></tr>
+      <tr><td>AI / agents</td><td>Vertex AI (Gemini) — <strong>regional</strong> asia-south1 endpoint, called via the Cloud Run service account</td></tr>
+    </table>
+    <p class="small" style="margin-bottom:0">Use Cloud SQL, not AlloyDB, to start (AlloyDB is always-on, 2-vCPU minimum, pricier — overkill for 50 stores). Move up only if analytics load demands it.</p>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Why Google over the others</h3>
+      <ul class="small">
+        <li>Single cloud end-to-end because the AI is Google's — one IAM, no cross-cloud key, no AI egress, lowest AI latency.</li>
+        <li>Lowest-ops compute for a solo dev (deploy from source, no Dockerfile, built-in logs).</li>
+        <li>Longest backup retention (up to 365 days) — good for financial records.</li>
+        <li>Legally clean for data-in-India (same as the others).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>The tradeoffs you're accepting</h3>
+      <ul class="small">
+        <li>Costs ~₹8–12k/month more than Azure at this size (worth it for simplicity; shrinkable).</li>
+        <li>Vertex's in-region <em>processing</em> guarantee isn't documented for Asia yet — mitigate by using the regional endpoint and never sending raw PII/payment data to the AI.</li>
+        <li>If budget ever trumps simplicity, the clean fallback is Azure + Azure OpenAI (single-cloud the other way), not a Google-app-calling-AWS-AI mix.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout c-good">
+    <strong>Locks cleanly to existing architecture rules:</strong> "AI at the edges only" and "documents write ledgers" mean the browser/PWA is a fast client but the <strong>server on Cloud Run is the single writer of any ledger or GST posting</strong>. The PWA caches the app shell + master data (SKUs, price lists, offer rules, GST slabs) for weak networks, but <strong>never does optimistic offline money writes</strong> — every rupee commits server-side, and any queued write must carry an idempotency key so retries can't double-post.
+  </div>
+
+</div>
+</body>
+</html>

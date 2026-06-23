@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Markdown / Clearance AI: What's Real (Research Brief)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --red:#a8331f; --red-bg:#fae9e6;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:264px; flex:0 0 264px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:68ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-real{background:var(--green-bg); color:var(--green)}
+  .b-hype{background:var(--red-bg); color:var(--red)}
+  .b-build{background:var(--amber-bg); color:var(--amber)}
+  .b-india{background:var(--purple-bg); color:var(--purple)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:#f3f1fb; border-color:#dcd3f3}
+  .co-warn{background:var(--red-bg); border-color:#e6c2bb}
+  .co-go{background:var(--green-bg); border-color:#bfe0cd}
+  .co-note{background:var(--amber-bg); border-color:#ecd9a6}
+  .callout strong{color:var(--navy)}
+  .callout .ct{font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:5px}
+  .co-key .ct{color:var(--purple)}
+  .co-warn .ct{color:var(--red)}
+  .co-go .ct{color:var(--green)}
+  .co-note .ct{color:var(--amber)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:22px}
+  li{margin:5px 0}
+  .src{font-size:12.5px; color:var(--muted)}
+  .src a{color:var(--blue)}
+  code,.k{background:#eef0f4; padding:1px 6px; border-radius:5px; font-size:13px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--navy2)}
+  .verdict{font-size:13px; margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); color:#33415c}
+  .pill-row{display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 2px}
+  .pill{font-size:12px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:3px 10px; color:var(--navy2)}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .leadbox{background:#fff; border:1px solid var(--line); border-left:4px solid var(--rust); border-radius:10px; padding:16px 18px; margin:16px 0}
+  .leadbox p{margin:6px 0}
+  .small{font-size:13px; color:var(--muted)}
+  ol.refs{font-size:13px; columns:1}
+  ol.refs li{margin:6px 0; break-inside:avoid}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <h2>Brief</h2>
+  <a href="#tldr">The short version</a>
+  <a href="#verdict">Real vs hype at a glance</a>
+  <h2>The picture</h2>
+  <a href="#products">1 · Who sells this</a>
+  <a href="#signals">2 · Inputs / signals</a>
+  <a href="#outputs">3 · What the output looks like</a>
+  <a href="#forecast">4 · Forecasting apparel</a>
+  <a href="#agentic">5 · "AI agents" — hype check</a>
+  <a href="#hitl">6 · Human-in-the-loop</a>
+  <h2>For KDPS</h2>
+  <a href="#smallretailer">7 · What a tiny team builds</a>
+  <a href="#v1">Suggested V1</a>
+  <a href="#sources">Sources</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Research input · feeds D7 (Analytics &amp; AI)</div>
+  <h1>Markdown &amp; clearance AI for fashion — what's real, what's hype, what you'd build</h1>
+  <p class="sub">An honest, cited picture of how retailers use AI/analytics to decide discounts on stock they <em>own</em> (clearance of aging / slow-moving inventory), and what is realistically buildable by one developer for a ~50-store multi-brand Indian apparel retailer. This is research, not a design — it informs the markdown-recommendation feature, where AI only <em>suggests</em> and a human authors the price.</p>
+  <p class="small">Compiled 18 June 2026 · every claim carries a source (name + link) · flags mark <span class="badge b-real">PROVEN</span> <span class="badge b-hype">MOSTLY HYPE</span> <span class="badge b-build">YOU'D BUILD IT</span> <span class="badge b-india">INDIA-RELEVANT</span></p>
+</header>
+
+<section id="tldr">
+  <h2 class="sec">The short version</h2>
+  <div class="leadbox">
+    <p><strong>1. The mature technology is classic ML / operations-research price optimization with a dashboard and a human approval step — not an autonomous "AI agent".</strong> Every serious tool does the same thing: forecast demand, estimate how much a price cut lifts sales (elasticity), then pick the discount that clears the stock by a deadline at the best margin, inside hard business rules. The "agentic AI" branding flooding the market in 2025–26 is, for pricing, mostly a chat layer on top of that same engine. Gartner found only ~130 of thousands of "agentic" vendors are genuinely agentic and predicts &gt;40% of agentic projects get cancelled by 2027.</p>
+    <p><strong>2. For clearance specifically, the signals that matter are few and simple:</strong> sell-through vs target, weeks-of-cover vs the time left in the season, and age — plus, for apparel, broken size runs. Depth is then sized by elasticity against a margin floor.</p>
+    <p><strong>3. The output is a recommended discount (a single % chosen from an allowed ladder, not a free number), with expected sell-through and margin impact, a step-down plan over the clearance window, and a priority order of which items to act on first — handed to a human to accept / reject / tweak.</strong></p>
+    <p><strong>4. For a 50-store retailer just leaving per-store POS + Excel, real ML is out of reach for now</strong> — it needs 2–3 years of clean, size-level history you don't have, and feeding thin/dirty data to ML loses to a sensible rule. <strong>A simple, explainable, sell-through-triggered discount ladder with a margin floor is not a compromise — it's what even the ML vendors say to start with.</strong> The rule engine you build now stays permanent; ML later <em>wraps</em> it, it doesn't replace it.</p>
+  </div>
+  <div class="callout co-key">
+    <span class="ct">The one sentence to carry into D7</span>
+    Build a rules engine that turns a few signals (age, sell-through-vs-target, weeks-of-cover, broken sizes) into a <em>recommended discount band + a plain-English reason</em>, hard-capped by a margin floor from PT/invoice cost; a human approves the actual price. Use an LLM, if at all, only to <em>explain</em> the recommendation in plain Hindi/English — never to compute the number.
+  </div>
+</section>
+
+<section id="verdict">
+  <h2 class="sec">Real vs hype — at a glance</h2>
+  <table>
+    <tr><th>Capability</th><th>Status</th><th>Honest read</th></tr>
+    <tr><td>ML markdown/clearance optimization (forecast → elasticity → optimal discount under rules)</td><td><span class="badge b-real">PROVEN</span></td><td>Decades-old, deployed at scale by big retailers. Genuine. But needs scale + clean history.</td></tr>
+    <tr><td>Age-bucket / sell-through-triggered discount ladders (rules-based)</td><td><span class="badge b-real">PROVEN</span></td><td>Decades of precedent (Filene's Basement, 1982). Even ML vendors say the core discipline "runs fine on a spreadsheet."</td></tr>
+    <tr><td>"AI agent that autonomously sets your markdowns"</td><td><span class="badge b-hype">MOSTLY HYPE</span></td><td>At alpha/pilot stage at best (Revionics GA only 2026), and even then runs on human-set parameters. Not a thing you buy and trust to run unattended.</td></tr>
+    <tr><td>LLM for explanations / chat-with-your-data / what-if summaries</td><td><span class="badge b-real">PROVEN</span></td><td>Real and shipping (e.g. Revionics Conversational Analytics). Useful as a language layer — <em>not</em> for the maths.</td></tr>
+    <tr><td>LLM doing the numeric optimization itself</td><td><span class="badge b-hype">DON'T</span></td><td>LLMs are not calculators; they fragment numbers and fail as constraints are added. Use deterministic code for the number.</td></tr>
+    <tr><td>A markdown recommender tuned for a small Indian multi-brand retailer</td><td><span class="badge b-build">YOU'D BUILD IT</span></td><td>No off-the-shelf product fits the SOR/Outright/EOSS + per-brand-offer + 50-store-Excel reality. The simple version is small to build.</td></tr>
+  </table>
+</section>
+
+<!-- ============ 1 PRODUCTS ============ -->
+<section id="products">
+  <h2 class="sec">1 · Who sells markdown / clearance pricing — and the trap to avoid</h2>
+  <div class="callout co-warn">
+    <span class="ct">The distinction that matters most</span>
+    Two very different things get sold under "AI pricing." <strong>Markdown OPTIMIZATION</strong> looks at <em>your own</em> aging stock (age, sell-through, cover, size health) and recommends how deep to cut and when. <strong>Competitive-price INTELLIGENCE</strong> scrapes <em>competitors'</em> prices and tells you where you stand — it does <em>not</em> decide clearance depth on your dead stock. For KDPS clearance, you want the first kind. <strong>EDITED and Intelligence Node are the second kind</strong> (the latter is ironically an Indian-founded company). <strong>Daydream is neither</strong> — it's a consumer shopping app, not a retailer tool.
+  </div>
+
+  <h3>Genuine markdown optimizers (own-inventory clearance)</h3>
+
+  <div class="card">
+    <h4>Increff <span class="badge b-india">INDIA-RELEVANT</span> <span class="badge b-real">most transparent method</span></h4>
+    <p>Bengaluru-built retail SaaS (700+ brands). Its Markdown Optimization recommends "more accurate discount percentages" at <strong>store and SKU level</strong>. Decides depth from <strong>True ROS</strong> (rate of sale with promo/liquidation noise removed) + product age + sell-through% + <strong>size-set health</strong> + elasticity caps "to prevent wasted markdowns"; timing from ageing + automated triggers when ROS/sell-through cutoffs are breached. Runs on <em>own data only</em> — no competitor scraping. Named Indian-fashion customers incl. Aditya Birla Fashion &amp; Retail; also Levi's, PUMA, Tommy Hilfiger, Pepe Jeans.</p>
+    <div class="verdict"><strong>Why it matters to KDPS:</strong> the only Indian-built true markdown optimizer in the field, works at Style×Size×Color with size-set health (matches your SKU rule), and publishes its logic most clearly of anyone — a good reference model even if you don't buy it. <span class="src">Source: <a href="https://www.increff.com/merchandising-software/markdown-optimization/">Increff Markdown Optimization</a>; <a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff guide</a>. Quoted % results are vendor-reported.</span></div>
+  </div>
+
+  <div class="card">
+    <h4>Oracle Retail Offer Optimization / Markdown Optimization <span class="badge b-real">most documented workflow</span></h4>
+    <p>Enterprise cloud service. Scores items by "risk of being unsold at the end of the selling period," searches many price combinations against a margin/sell-through objective under configurable rules, then surfaces item-level recommendations for an analyst to accept/reject/override before execution. Has a named approval workflow (see §6). Apparel-capable; sold in India but no India-specific clearance claim.</p>
+    <div class="verdict"><span class="src">Source: <a href="https://www.oracle.com/uk/industries/retail/products/merchandise-planning/markdown-optimization/index.html">Oracle Markdown Optimization</a>; <a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/25.2.301.0/pooug/promotion-markdown-optimization-workflow.htm">Oracle workflow docs</a>.</span></div>
+  </div>
+
+  <div class="card">
+    <h4>SAS Revenue Optimization Suite — Markdown Optimization <span class="badge b-real">science-led</span></h4>
+    <p>Generates store/SKU-level clearance prices to hit target sell-through and margin for end-of-life/seasonal product; manages "optimal price and markdown cadence in a clearance cycle" under corporate pricing policy. Clearance is the headline use case. Has a dedicated India product page.</p>
+    <div class="verdict"><span class="src">Source: <a href="https://www.sas.com/en_us/software/revenue-optimization-suite.html">SAS Revenue Optimization Suite</a>; <a href="https://www.sas.com/content/dam/SAS/documents/product-collateral/product-brief/en/sas-markdown-optimization-111145.pdf">SAS Markdown brief (PDF)</a>.</span></div>
+  </div>
+
+  <div class="card">
+    <h4>Revionics (now Aptos) &nbsp;·&nbsp; Impact Analytics PriceSmart / MarkSmart <span class="badge b-india">India engineering roots</span></h4>
+    <p><strong>Revionics:</strong> science-based base-price + markdown optimization, blends consumer/competitor/market data; used across apparel/footwear (e.g. Academy Sports). Recognized in Gartner's unified price/promo/markdown market. <strong>Impact Analytics (MarkSmart):</strong> AI-native markdown engine that "automates markdown timing, depth and execution" via scenario simulation + rules; positioned as a "short-life-cycle specialist" for fashion. US-headquartered with deep Bengaluru engineering. Claimed +5–15% margin / +10% sell-through (vendor-reported).</p>
+    <div class="verdict"><span class="src">Source: <a href="https://www.aptos.com/news/aptos-to-acquire-revionics">Aptos/Revionics</a>; <a href="https://revionics.com/news/academy-sports-outdoors-strikes-the-right-balance-in-retail-price-optimization">Academy Sports case</a>; <a href="https://www.impactanalytics.ai/solutions/markdown-optimization">Impact Analytics MarkSmart</a>.</span></div>
+  </div>
+
+  <div class="card">
+    <h4>Blue Yonder (formerly JDA) — Lifecycle Pricing / Markdown <span class="badge b-build">methodology thin in public</span></h4>
+    <p>AI-enabled lifecycle pricing incl. end-of-season markdowns; strong dedicated Apparel &amp; Footwear practice and long history with major apparel retailers. The most concrete fashion claim is on the <em>allocation</em> side (distribute stock to "maximize full-price sell-through and minimize end-of-season markdowns"). The markdown-depth maths is more marketing-level on public pages than Oracle's or SAS's.</p>
+    <div class="verdict"><span class="src">Source: <a href="https://now.blueyonder.com/AI-pricing-tailored">Blue Yonder AI pricing</a>; <a href="https://blueyonder.com/industries/apparel-and-footwear">Apparel &amp; Footwear</a>.</span></div>
+  </div>
+
+  <h3>Not markdown optimization — flagged so you don't mistake them</h3>
+  <table>
+    <tr><th>Tool</th><th>What it actually is</th><th>Source</th></tr>
+    <tr><td>EDITED</td><td><strong>Competitive/market intelligence</strong> for fashion. Its pricing module benchmarks you vs competitors and automates rule-based changes; it does <em>not</em> compute clearance depth from your own age/sell-through/elasticity.</td><td class="src"><a href="https://edited.com/products/retail-intelligence-platform/">edited.com</a></td></tr>
+    <tr><td>Intelligence Node <span class="badge b-india">Indian-founded</span></td><td><strong>Competitor price monitoring</strong> + digital-shelf analytics ("where your brand stands"), explicitly "rather than internal inventory management." Mumbai-founded, but the product is intelligence, not markdowns.</td><td class="src"><a href="https://www.intelligencenode.com/solutions/price-intelligence/">intelligencenode.com</a></td></tr>
+    <tr><td>Daydream</td><td><strong>Consumer AI shopping app</strong> (founder ex-Stitch Fix). No retailer pricing engine at all. Out of scope.</td><td class="src"><a href="https://www.prnewswire.com/news-releases/daydream-secures-50-million-in-seed-funding-to-launch-new-ai-powered-search-and-discovery-shopping-platform-302177481.html">PR Newswire</a></td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="ct">Common method across the credible ones</span>
+    Forecast demand / sell-through → estimate <em>risk of not clearing by season-end</em> → search price points constrained by margin floor, elasticity and rule guardrails (caps/increments) → trigger deeper cuts as items age past benchmarks → <strong>human approval before execution.</strong> Honesty flag: Blue Yonder's and Impact Analytics' depth maths is largely undisclosed; Oracle, SAS and Increff are the most concrete. All quoted % uplifts are vendor-reported, not independently verified.
+  </div>
+</section>
+
+<!-- ============ 2 SIGNALS ============ -->
+<section id="signals">
+  <h2 class="sec">2 · Inputs / signals — and which ones actually matter for clearance</h2>
+  <p>The same signal set recurs across vendors and consultancies. They split cleanly into <strong>"should I mark down, and when?"</strong> signals and <strong>"how deep?"</strong> signals.</p>
+
+  <table>
+    <tr><th>Signal</th><th>Role</th><th>Source</th></tr>
+    <tr><td><strong>Sell-through vs target</strong> (for the weeks elapsed)</td><td>Trigger — the primary one for apparel; the apparel guidance is explicit that the trigger is sell-through, <em>not</em> a calendar date.</td><td class="src"><a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a>; <a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a></td></tr>
+    <tr><td><strong>Weeks-of-cover / weeks-of-supply</strong> vs remaining selling window</td><td>Trigger — the second markdown fires "as weeks-of-supply exceeds remaining selling weeks." Answers "will this clear in time?"</td><td class="src"><a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a>; <a href="https://stylematrix.io/weeks-of-cover-retail-how-much-stock-should-you-hold/">StyleMatrix</a></td></tr>
+    <tr><td><strong>Age / weeks-in-stock</strong> (+ lifecycle stage)</td><td>Trigger / prioritization — "units sitting past X weeks"; fast-fashion must clear in ~60 days vs slower categories.</td><td class="src"><a href="https://www.pricefx.com/learning-center/markdown-depth-for-retailers-the-key-determining-factors">Pricefx</a>; <a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a></td></tr>
+    <tr><td><strong>Size-curve breakage / broken size runs</strong></td><td>Trigger — apparel-specific; "a leading cause of <em>forced</em> markdowns." An otherwise-fine style gets cut once only odd sizes remain.</td><td class="src"><a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a>; <a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a></td></tr>
+    <tr><td><strong>Price elasticity</strong> of demand</td><td>Depth — sizes the cut needed to hit the sell-through target. The key "how deep" signal.</td><td class="src"><a href="https://peak.ai/hub/blog/what-is-price-elasticity-and-why-does-it-matter-for-markdowns/">Peak</a>; <a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a></td></tr>
+    <tr><td><strong>Margin / cost floor</strong> (+ salvage / RTV value)</td><td>Constraint — the recommendation must never breach the floor. Oracle calls it a "Minimum Price Threshold Rule."</td><td class="src"><a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/25.2.401.0/pooug/lpo-rules-strategies.htm">Oracle rules</a>; <a href="https://o9solutions.com/articles/effective-markdown-optimization">o9</a></td></tr>
+    <tr><td><strong>Stock-on-hand vs forecast demand</strong></td><td>Trigger — "inventory exceeds demand forecasts" flags a clearance candidate.</td><td class="src"><a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a></td></tr>
+    <tr><td><strong>Seasonality / EOSS deadline</strong></td><td>Sets the clearance deadline the optimizer works back from.</td><td class="src"><a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a></td></tr>
+    <tr><td><strong>Store / location cluster</strong></td><td>Localizes — winter goods sell differently in cold vs warm stores; markdowns can differ by store cluster.</td><td class="src"><a href="https://www.pricefx.com/learning-center/markdown-depth-for-retailers-the-key-determining-factors">Pricefx</a></td></tr>
+    <tr><td><strong>Competitor price</strong></td><td>Used "as a constraint, not a guess" — a guardrail, not the driver, for clearance.</td><td class="src"><a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a></td></tr>
+  </table>
+
+  <div class="callout co-go">
+    <span class="ct">Most important for clearance of aging stock — confirmed</span>
+    Umbrex states it directly: markdown optimization "identifies SKUs with <strong>low sell-through and high weeks-of-supply</strong>, then schedules earlier markdowns to exit inventory before it becomes end-of-season liability." Increff's "most critical signals for aging inventory" are <strong>weeks-of-cover, sell-through-vs-plan, age flags, and broken size curves.</strong> So the trigger trio is <strong>sell-through-vs-target + weeks-of-cover-vs-remaining-window + age</strong>, with <strong>broken size runs</strong> as a first-class fourth for apparel. Depth is then elasticity against the margin floor. <span class="src"><a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a>, <a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a>, <a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a></span>
+  </div>
+
+  <div class="callout co-note">
+    <span class="ct">Two honesty flags on the signals</span>
+    <strong>(a) Elasticity at clearance is contested.</strong> One camp says late-season demand turns <em>inelastic</em> ("even at 50% off, sell-through is low" — <a href="https://peak.ai/hub/blog/what-is-price-elasticity-and-why-does-it-matter-for-markdowns/">Peak</a>); another says it <em>rises</em> so you must cut deeper (<a href="https://www.42signals.com/blog/price-elasticity-analysis-for-optimal-discount-depth/">42signals</a>). The robust, agreed conclusion is "<strong>act early and shallow</strong>," because discount response decays over time and cuts are non-linear. Treat the direction as a tunable assumption, not a fact. <strong>(b)</strong> Specific numbers (25% opener, 3 steps, 30/50/70 at 60/75/90 days) are rules of thumb, not constants — configurable defaults.
+  </div>
+  <p class="small">Definitions for the build: <strong>Sell-through % = Units Sold ÷ Units Received × 100</strong>; apparel healthy range ~65–85% (<a href="https://www.toolio.com/post/sell-through-rate-how-to-calculate-and-5-strategies-to-optimize">Toolio</a>). <strong>Weeks-of-cover = On-hand ÷ average weekly units sold</strong> (forward version adds on-order ÷ forecast weekly demand) (<a href="https://stylematrix.io/weeks-of-cover-retail-how-much-stock-should-you-hold/">StyleMatrix</a>).</p>
+</section>
+
+<!-- ============ 3 OUTPUTS ============ -->
+<section id="outputs">
+  <h2 class="sec">3 · What the recommendation actually looks like</h2>
+  <p>Across vendors, a markdown recommendation is not just "a number" — it's a small package. All six elements below are documented across multiple independent sources.</p>
+
+  <div class="card">
+    <h4>A single % — but chosen from an allowed band/ladder, not a free value</h4>
+    <p>The system emits a <strong>specific recommended price/discount with effective dates</strong>, but it must land on a configured ladder (5%, 10%, 20%…) and respect psychological endings (₹999-style). The "band" is a guardrail input (e.g. opening markdown allowed 25–50%, step change 20–40%); the single % is the output snapped to it.</p>
+    <div class="verdict"><span class="src"><a href="https://o9solutions.com/articles/effective-markdown-optimization">o9</a>; <a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/25.2.401.0/pooug/lpo-rules-strategies.htm">Oracle rules</a>; <a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a></span></div>
+  </div>
+
+  <div class="card">
+    <h4>Expected sell-through lift + revenue/margin impact (the core trade-off)</h4>
+    <p>Each recommendation projects <strong>expected units, gross-margin and sell-through</strong>; Solvoyo shows "revenue, unit sales, and gross margin for all scenarios." The clear-faster-vs-protect-margin trade-off is an explicit, chosen objective — usually framed as <strong>"maximize gross-margin dollars subject to hitting a target sell-through by the exit date."</strong></p>
+    <div class="verdict"><span class="src"><a href="https://www.solvoyo.com/whitepapers/markdown-optimization/">Solvoyo</a>; <a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a>; <a href="https://peak.ai/hub/blog/what-is-price-elasticity-and-why-does-it-matter-for-markdowns/">Peak</a></span></div>
+  </div>
+
+  <div class="card">
+    <h4>A step-down plan over the clearance window — not a one-shot price</h4>
+    <p>The output is a ladder over time: e.g. "10% now, 20% in three weeks, 40% if sell-through lags." Apparel cadence is typically <strong>2–3 steps</strong>: first 10–25% (mid-season), second 30–40%, final 50–60%+. The rule "you can always discount deeper, you can never put the price back up" → cap the opening cut. Cadence is also operationally constrained (e.g. no more than biweekly price changes in-store).</p>
+    <div class="verdict"><span class="src"><a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a>; <a href="https://www.impactanalytics.ai/blog/markdown-optimization-part-3-how-to-succeed-if-youre-not-using-pricing-software">Impact Analytics</a>; <a href="https://retalon.com/blog/retail-markdown-strategy">Retalon</a></span></div>
+  </div>
+
+  <div class="card">
+    <h4>A priority order — which SKUs/styles/lots to act on first</h4>
+    <p>A core output is a <strong>prioritized list of markdown actions</strong> with expected impact + rationale. Logic: act first on low-sell-through + high-weeks-of-cover items to exit before season-end; concentrate discounts where price is the constraint, and <strong>"discount by style, never sitewide"</strong> — don't mark down the winners.</p>
+    <div class="verdict"><span class="src"><a href="https://umbrex.com/resources/frameworks/pricing-frameworks/markdown-optimization/">Umbrex</a>; <a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a></span></div>
+  </div>
+  <p class="small">Also documented: a <strong>markdown budget</strong> (a shared cap the optimizer allocates across SKUs) and the <strong>number of markdowns</strong> as a bounded decision (cadences specify "at least three price movements" before final liquidation). <span class="src"><a href="https://link.springer.com/article/10.1057/rpm.2015.4">J. Revenue &amp; Pricing Mgmt</a>; <a href="https://o9solutions.com/articles/effective-markdown-optimization">o9</a></span></p>
+</section>
+
+<!-- ============ 4 FORECASTING ============ -->
+<section id="forecast">
+  <h2 class="sec">4 · Demand forecasting for apparel — the layer under markdowns</h2>
+  <p>You can't say "this is underperforming, mark it down" without a view of what it <em>should</em> have sold. That view is a demand forecast — and fashion makes it genuinely hard.</p>
+
+  <h3>Cold start — new styles with no history ("like styles")</h3>
+  <p>Most fashion product is new every season, so there's no time-series to extrapolate. The standard method is <strong>forecast by analogy</strong>: borrow the demand curve of <em>past styles that resemble the new one</em>, matched on attributes (category, price band, colour, fabric, silhouette, season). Vendors implement this as <strong>attribute clustering</strong>: group existing SKUs by attributes, find the new SKU's cluster, borrow comparable items' demand <em>shape</em> (ramp/peak/decline) weighted by similarity, while the <em>volume</em> comes from buy quantity, price and store reach — then blend in real sales as they arrive, reducing the comparables' weight over time.</p>
+  <p>Lokad puts the problem bluntly: "fashion is about products that haven't been sold <em>at all</em>," and warns that <strong>manual old→new style mapping fails</strong> because each collection "redefines the codes" — the matching must be algorithmic.</p>
+  <div class="verdict"><span class="src">Source: <a href="https://en.wikipedia.org/wiki/Forecast_by_analogy">Forecast by analogy</a>; <a href="https://www.onepint.ai/insights/how-do-you-forecast-demand-for-new-products">onepint.ai</a>; <a href="https://www.lokad.com/blog/2017/2/8/fashion-demand-forecasting/">Lokad</a>; academic: <a href="https://arxiv.org/abs/1907.01960">Singh et al., arXiv 1907.01960</a></span></div>
+
+  <h3>Repeat / carry-over styles</h3>
+  <p>The minority (basics, replenishment) but the tractable case: classical time-series with seasonality and ML on the item's own demand history. The architectural split that matters: <strong>history-rich SKUs → time-series/ML; history-poor (new) SKUs → attribute-borrowed forecast.</strong> Most fashion ranges are dominated by the second.</p>
+
+  <h3>Size / colour-level forecasting (your SKU = Style×Size×Color rule)</h3>
+  <p>A style-level forecast is useless for buying or markdowns — you split it to SKU with <strong>size curves</strong>: a distribution of demand across sizes that sums to 100%; forecast total style demand, then apply the curve. Curves are built from history and <em>vary by store/region</em>. Two hard truths: <strong>(a) broken size runs</strong> (popular sizes sell out, odd sizes become markdown fodder, and the lost full-price sales are invisible in standard reports) — IHL/Style Arcade size the global cost at ~$1 trillion/year; <strong>(b) at individual size×colour level, demand is intermittent</strong> (ones and twos), where ordinary forecasting breaks and error commonly runs up to ~40%.</p>
+  <div class="verdict"><span class="src">Source: <a href="https://www.impactanalytics.ai/blog/how-to-improve-retail-assortment-planning-with-size-curves-based-demand-forecasting">Impact Analytics size curves</a>; <a href="https://o9solutions.com/articles/advanced-size-curve-analysis">o9</a>; <a href="https://www.stylearcade.com/blog/retailers-are-losing-a-trillion-a-year-due-to-messed-up-sizing">Style Arcade</a></span></div>
+
+  <div class="callout co-warn">
+    <span class="ct">Honest data requirement — read before promising ML</span>
+    Statistical forecasting wants <strong>≥18–24 months</strong> of history; ML's "20–40% better accuracy" carries the qualifier "<em>for retailers with sufficient data volume.</em>" The literature is blunt that <strong>fed thin or dirty data, heavy ML loses to simple methods</strong> — data quality contributes ~half the performance variation, and "garbage in, garbage out" propagates unchecked through legacy retail data. <strong>78% of companies still forecast in Excel.</strong> For ML forecasting to beat a rule, KDPS would need ~2–3 years of clean, validated, <em>size-level</em> sales with stockout/lost-sales correction and consistent attribute tags — exactly what a per-store-POS + Tally + Excel shop doesn't have. Realistic near-term win: <strong>attribute tagging + size curves + simple methods</strong>, with accuracy expectations set honestly (fashion ~50–65%; new product ~40–55%) and measured in <strong>WAPE, not MAPE</strong> (MAPE blows up on near-zero actuals). <span class="src"><a href="https://sranalytics.io/blog/retail-demand-forecasting/">SR Analytics</a>; <a href="https://www.toolsgroup.com/blog/forecast-accuracy-benchmarks/">ToolsGroup</a>; <a href="https://www.onepint.ai/insights/how-do-companies-measure-forecast-accuracy">onepint.ai</a>; <a href="https://traxretail.com/blog/why-data-quality-still-matters-garbage-in-garbage-out-in-the-age-of-ir/">Trax</a></span>
+  </div>
+</section>
+
+<!-- ============ 5 AGENTIC ============ -->
+<section id="agentic">
+  <h2 class="sec">5 · "An AI agent that recommends offers" — hype check</h2>
+  <div class="callout co-warn">
+    <span class="ct">Verdict</span>
+    <strong>The mature, deployed technology is classic ML / operations-research optimization with a dashboard and a human approval step. "An AI agent that autonomously sets your markdowns" is, as of mid-2026, overwhelmingly marketing wrapped around that same engine — not a separate capability you can buy and trust to run unattended.</strong>
+  </div>
+
+  <h3>What's actually shipping vs branded</h3>
+  <ul>
+    <li><strong>The numeric optimization is decades-old ML/OR</strong> — estimate elasticity, solve a constrained problem ("max margin s.t. sell-through target") inside business rules. Elasticity as a concept dates to 1890; ML demand forecasting has been productized ~15–20 years. Not generative AI. <span class="src"><a href="https://en.wikipedia.org/wiki/Price_optimization">Price optimization</a></span></li>
+    <li><strong>"Agentic" pricing is at alpha/pilot.</strong> Revionics' multi-agent pricing system — among the most-touted — was an <em>alpha</em> (Apr 2025), pilots in 2025, <strong>GA only planned 2026</strong>; and it's human-directed (a manager types "change these prices by 10% while holding 2% margin" and the agents execute that request). That's workflow automation under explicit human parameters, not autonomous strategy. <span class="src"><a href="https://revionics.com/news/revionics-unveils-alpha-release-for-multi-agent-pricing-system">Revionics</a></span></li>
+    <li><strong>Gartner calls it "agent-washing":</strong> only ~130 of thousands of "agentic" vendors are genuinely agentic; <strong>&gt;40% of agentic AI projects predicted cancelled by 2027</strong>; most current projects are "early-stage experiments… driven by hype and often misapplied." <span class="src"><a href="https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027">Gartner</a></span></li>
+    <li><strong>The clearest tell — Peak:</strong> markets "Agentic Commercial Pricing" loudly, but its actual markdown product is ML + guardrails where merchants pick from ranked scenarios — in their own words "<strong>AI-recommended, human-approved — not autonomous agents setting prices independently.</strong>" <span class="src"><a href="https://peak.ai/hub/blog/retail-markdown-strategy-is-broken-heres-how-to-fix-it/">Peak</a></span></li>
+  </ul>
+
+  <h3>What LLMs are genuinely good for here</h3>
+  <p>LLMs are a <strong>language layer, not a pricing engine</strong>. Three real jobs:</p>
+  <ol>
+    <li><strong>Conversational analytics</strong> — "chat with your data" to find trends (e.g. Revionics' shipping Gemini-based feature). The vendor is careful: the LLM helps you <em>understand</em> data; the optimization science still <em>decides</em>. <span class="src"><a href="https://revionics.com/news/revionics-augments-its-leading-retail-pricing-ai-with-conversational-analytics">Revionics</a></span></li>
+    <li><strong>Plain-language explanations</strong> of <em>why</em> a markdown is recommended — high value because "explainable recommendations beat marginally-more-optimal ones when a human has to approve the price." <span class="src"><a href="https://umbrex.com/resources/retail-industry-playbooks/markdown-optimization-playbook/implementation-roadmap-tools-and-change-management/">Umbrex playbook</a></span></li>
+    <li><strong>What-if / scenario summaries</strong> and drafting the rationale.</li>
+  </ol>
+  <div class="callout co-warn">
+    <span class="ct">What LLMs must NOT do</span>
+    Compute the number. LLMs "are not calculators" — they fragment numbers when tokenizing and "degrade sharply as constraints are introduced," exactly the regime of markdown optimization. The engineering consensus is a <strong>hybrid: LLM orchestrates and explains, deterministic code computes.</strong> <span class="src"><a href="https://venturebeat.com/business/researchers-find-that-large-language-models-struggle-with-math">VentureBeat</a>; <a href="https://moveo.ai/blog/why-llm-struggle">Moveo.ai</a></span>
+  </div>
+  <p class="small">Vendor announcements assessed: Revionics (most credible GenAI story, but bounded), Blue Yonder ("five agents" are mostly fulfillment/service, not markdown; markdown stays ML), Oracle (agents are horizontal Fusion; retail markdown = LPO optimizer + approval), Impact Analytics ("Agentic AI" branded as a <em>separate</em> offering — telling you the pricing product isn't itself the agent), Peak (loudest gap). Skeptical commentary: <a href="https://pros.com/learn/blog/agent-washing-spot-hype-separate-buzzwords-from-real-agentic-ai/">PROS on agent-washing</a>.</p>
+</section>
+
+<!-- ============ 6 HITL ============ -->
+<section id="hitl">
+  <h2 class="sec">6 · Human-in-the-loop — recommend, don't auto-apply</h2>
+  <p>This matches your hard rule (AI only suggests; a human authors and approves the price). It's also the industry norm — even tools that <em>can</em> auto-execute are sold as recommenders with explicit approval gates.</p>
+
+  <div class="card">
+    <h4>The reference workflow — Oracle LPO's named statuses</h4>
+    <p>Optimization runs → recommendations land in <span class="k">Ready for Review</span> → a pricing analyst reviews <em>at item level</em> and may <strong>accept, reject, or override</strong> any one → status becomes <span class="k">Reviewed</span> → a buyer <strong>submits/approves</strong> → it goes live. Granular accept/reject/override, plus a separate sign-off.</p>
+    <div class="verdict"><span class="src"><a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/25.2.301.0/pooug/promotion-markdown-optimization-workflow.htm">Oracle workflow docs</a></span></div>
+  </div>
+
+  <p>Recurring patterns to copy:</p>
+  <ul>
+    <li><strong>Accept/reject to auto-create the campaign</strong>; manually add/remove specific items (tweak). <span class="src"><a href="https://www.relexsolutions.com/resources/markdown-optimization/">RELEX</a></span></li>
+    <li><strong>Exception-based management</strong> — the dashboard shows "exceptions, triggers, recommended actions, expected impact, owners, deadlines"; humans act on flags, not every line. <span class="src"><a href="https://umbrex.com/resources/retail-industry-playbooks/markdown-optimization-playbook/implementation-roadmap-tools-and-change-management/">Umbrex</a></span></li>
+    <li><strong>Scenario simulation, human picks</strong> — options ranked "most profitable → most aggressive." <span class="src"><a href="https://peak.ai/hub/blog/retail-markdown-strategy-is-broken-heres-how-to-fix-it/">Peak</a></span></li>
+    <li><strong>Real reasons humans override</strong> — confidence in a product, a regional team wanting deeper cuts. Design for it, and log it. <span class="src"><a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/25.2.301.0/pooug/promotion-markdown-optimization-workflow.htm">Oracle</a></span></li>
+  </ul>
+
+  <div class="callout co-go">
+    <span class="ct">Governance guardrails the optimizer works inside (not above)</span>
+    Decision rights + approval thresholds + escalation paths + weekly reviews; and hard rule guardrails: <strong>minimum-margin / price floors, psychological price-ending rules, allowed discount ladders, full-price windows &amp; markdown timing, sell-through targets / markdown budget, and per-brand brand-guidelines.</strong> All of these map onto KDPS's per-brand SOR/Outright/EOSS and offer rules. <span class="src"><a href="https://umbrex.com/resources/retail-industry-playbooks/markdown-optimization-playbook/implementation-roadmap-tools-and-change-management/">Umbrex</a>; <a href="https://peak.ai/hub/blog/retail-markdown-strategy-is-broken-heres-how-to-fix-it/">Peak</a>; <a href="https://docs.oracle.com/en/industries/retail/retail-lifecycle-pricing-optimization-cloud/26.1.101.0/pooug/offer-optimization.htm">Oracle LPO</a></span>
+  </div>
+</section>
+
+<!-- ============ 7 SMALL RETAILER ============ -->
+<section id="smallretailer">
+  <h2 class="sec">7 · Cold-start / small-retailer reality — what one developer actually builds</h2>
+  <div class="callout co-key">
+    <span class="ct">The unanimous finding</span>
+    A simple, explainable, rules-based markdown system — <strong>age buckets + a sell-through trigger + a margin floor</strong> — is <em>not</em> a compromise. It's the <em>recommended</em> starting point even by the vendors who sell ML. ML markdown earns its keep only at scale (thousands of SKUs × hundreds of stores) on years of clean history KDPS doesn't have. Heuristics get a small retailer most of the way. Build the rule engine; capture data so ML is a later upgrade, not a rewrite.
+  </div>
+
+  <h3>Rules-based vs ML — and when rules are "good enough"</h3>
+  <p>Two timing philosophies: <strong>calendar/rules-based</strong> (predetermined cuts on dates or triggers) vs <strong>optimization-based</strong> (continuous adjustment against a forecast + elasticity). ML's payoff is a function of <em>scale</em>, not sophistication: a tiny per-item gain only matters "across thousands of SKUs and hundreds of locations." Crucially, a pricing-software vendor (Cognira) says the quiet part out loud: <strong>"The core discipline — pre-defined triggers, tiered discounts, a margin floor, post-season analysis — runs fine on a spreadsheet with a weekly review."</strong></p>
+  <p>Honest limits of rules to design around: a fixed schedule "applies discounts regardless of actual performance" (over-cuts winners, under-cuts duds) and can't differentiate by elasticity. And <strong>both rules and ML die on bad data</strong> — "if store inventory accuracy is off, markdown decisions get noisy fast." Fix per-store, per-SKU stock accuracy first. Academic backing: heuristic pricing rules are appropriate exactly "if a decision maker wants to set the price of a new product or one whose past price variation is low, and budget limitations prevent experiments" — the cold-start case — and stay "easily understandable and therefore implementable."</p>
+  <div class="verdict"><span class="src"><a href="https://priceva.com/blog/markdown-pricing">Priceva</a>; <a href="https://cognira.com/blog/markdown-strategy-how-to-clear-inventory-without-destroying-your-margins-in-2026/">Cognira</a>; <a href="https://www.increff.com/blog/a-guide-to-markdown-optimization-for-retailers">Increff</a>; <a href="https://link.springer.com/article/10.1007/s11846-022-00581-1">Review of Managerial Science</a></span></div>
+
+  <h3>Heuristic A — age-bucket → discount ladder (the classic automatic markdown)</h3>
+  <p>Decades of precedent: <strong>Filene's Basement (1982)</strong> tagged each item with its first-sale date and auto-cut on a clock — day 12: −25%, day 18: −50%, day 24: −75%, day 30: donate. Notably <strong>90% sold in the first 12-day full-price window</strong>; the ladder only cleared the tail. Shopify's modern bucket→action version maps nicely onto KDPS's Season/Collection/Age tags: <strong>0–30 days</strong> no markdown (try placement/bundling/rebalancing first), <strong>31–90 days</strong> planned markdowns, <strong>90+ days</strong> liquidate; 180 days = dead stock.</p>
+  <div class="verdict"><span class="src"><a href="https://en.wikipedia.org/wiki/Filene%27s_Basement">Filene's Basement</a>; <a href="https://www.shopify.com/retail/inventory-aging-report">Shopify inventory aging</a>; <a href="https://priceva.com/blog/markdown-pricing">Priceva</a></span></div>
+
+  <h3>Heuristic B — sell-through-triggered markdown (the smarter, still-simple upgrade)</h3>
+  <p>Pure age ladders ignore <em>how much sold</em>. The recommended improvement — same build complexity, far better — is to trigger on <strong>sell-through vs target for the weeks elapsed</strong>: "Set a sell-through target for each style at each checkpoint. At the midpoint of the selling window, pull actual sell-through. Any style materially below its curve gets a small, automatic markdown that week." Concrete thresholds seen: "below 40% sell-through at week 8 → first markdown" (Cognira); "end-of-season below 60% → markdown trigger" (Eightx/Toolio).</p>
+  <p>Step sizes and cadence (consistent across sources): <strong>first cut shallow 10–25%, only 2–3 steps total</strong> (≈15–25% → 30–40% → 50–60%+), re-check 2–3 weeks after each. The margin math to put in the "reason" string — on a ₹100 item costing ₹45: a 15% cut keeps ₹40 gross profit; 30% drops it to ₹25; waiting for 55%-off yields <strong>zero</strong>. "Small and on time beats deep and late," and it protects brand positioning; predictable deep promos "train customers to wait."</p>
+  <div class="verdict"><span class="src"><a href="https://eightx.co/blog/apparel-markdown-strategy">Eightx</a>; <a href="https://cognira.com/blog/markdown-strategy-how-to-clear-inventory-without-destroying-your-margins-in-2026/">Cognira</a>; <a href="https://www.toolio.com/post/sell-through-rate-how-to-calculate-and-5-strategies-to-optimize">Toolio</a></span></div>
+
+  <h3>The crawl-walk-run upgrade path</h3>
+  <p>This is an explicit framework from an optimization vendor (Revionics) that <em>endorses starting on rules</em>: <strong>Crawl</strong> = manage manually / by category in Excel, define price rules. <strong>Walk</strong> = rules-based management + forecasting, model strategies side-by-side, enforce constraints (margin floors, increments). <strong>Run</strong> = AI/elasticity optimization, learning per-SKU price sensitivity. The key reassurance: <strong>rules don't disappear when ML arrives — they wrap it.</strong> Even mature optimization "combines model outputs with business rules" (margin thresholds, increments, blackout periods). So the rule engine you build now is permanent infrastructure.</p>
+  <div class="verdict"><span class="src"><a href="https://revionics.com/blog/a-crawl-walk-run-approach-to-optimized-pricing">Revionics crawl-walk-run</a>; <a href="https://www.mckinsey.com/industries/retail/our-insights/pricing-in-retail-setting-strategy">McKinsey</a></span></div>
+
+  <h3>Why ML is out of reach now (and heuristics still capture the big win)</h3>
+  <p>ML elasticity models "utilize massive volumes of data" — a McKinsey engine drew on <strong>~10 terabytes of transaction records</strong> with per-product features (own price, substitute price, promos, inventory, seasonality, competitor volumes). Elasticity specifically needs observed <em>price variation</em> per item; with little markdown history you can't estimate it — precisely when the literature says use heuristics. The honest framing: <strong>ML chases the last increment of margin once you have scale + clean history; the heuristic captures the first, larger increment by simply not marking down too late or too deep.</strong></p>
+  <div class="verdict"><span class="src"><a href="https://en.wikipedia.org/wiki/Price_optimization">Price optimization</a>; <a href="https://www.mckinsey.com/industries/retail/our-insights/pricing-in-retail-setting-strategy">McKinsey</a>; <a href="https://link.springer.com/article/10.1007/s11846-022-00581-1">Review of Managerial Science</a></span></div>
+</section>
+
+<!-- ============ V1 ============ -->
+<section id="v1">
+  <h2 class="sec">Suggested V1 for KDPS (a realistic first version)</h2>
+  <div class="leadbox">
+    <ol>
+      <li><strong>V1 = sell-through-triggered ladder, not a pure age ladder.</strong> Age alone over/under-cuts; sell-through-vs-target is the same build cost and far better. Use age only as a <em>fallback</em> trigger when a SKU has too little sales data yet.</li>
+      <li><strong>Per-brand parameters, not global constants.</strong> KDPS is multi-brand with brand-specific velocity, return windows, SOR/Outright/EOSS and offer rules — make targets, bucket widths and step sizes per-brand inputs.</li>
+      <li><strong>Defaults to ship with:</strong> a per-brand sell-through target curve (anchor ~65–85% end-of-season); first markdown 15–20% when below curve at mid-season; 2–3 steps (≈15–20% → 30–40% → 50–60%+); re-check every 2–3 weeks; <strong>a hard margin floor from PT/invoice cost</strong> that a recommendation can never breach.</li>
+      <li><strong>Treat broken size runs as a first-class trigger</strong> (you already store Style×Size×Color) — flag a lot for markdown once the sellable sizes are gone even if overall sell-through looks fine.</li>
+      <li><strong>Always emit a plain-language reason</strong> (sell-through %, week N vs target, resulting band, margin headroom). Explainability is the feature, not decoration — owners on WhatsApp will trust "22% sold by week 6, target 40% → suggest 20% off, still ₹X above cost" over a black-box number. This is the one place an LLM can help — phrase the reason — never compute the number.</li>
+      <li><strong>Human authors and approves</strong> — copy the Oracle pattern: recommend → human accept/reject/override per lot → approve → the price change becomes an authored document. Log overrides.</li>
+      <li><strong>Capture now the data ML will later need:</strong> per-SKU stock-in date, every price change with date, units sold per week per store. With 1–2 clean seasons logged, the "run" (elasticity) stage becomes possible without re-instrumenting.</li>
+      <li><strong>Don't build optimization yet.</strong> At 50 stores you're below the scale where item×store×week optimization pays back, and you lack the price-variation history to estimate elasticity. The rule engine is permanent — ML, when it comes, wraps it.</li>
+    </ol>
+  </div>
+  <div class="callout co-note">
+    <span class="ct">Fits the architecture rules</span>
+    This matches the master rules cleanly: AI at the edges only (suggest, not decide), flag-don't-block, documents-write-ledgers (the approved markdown is a human-authored price-change document), profitability derived (margin floor from PT cost, not hand-entered). The recommender reads ledgers/snapshots and proposes; it never writes a price.
+  </div>
+</section>
+
+<section id="sources">
+  <h2 class="sec">Sources</h2>
+  <p class="small">Grouped by section. All accessed 18 June 2026. Vendor-quoted uplift figures are vendor-reported, not independently verified.</p>
+  <ol class="refs">
+    <li><strong>Products:</strong> Increff Markdown Optimization — increff.com/merchandising-software/markdown-optimization · Oracle Markdown Optimization — oracle.com/.../markdown-optimization · SAS Revenue Optimization Suite — sas.com/.../revenue-optimization-suite.html · Aptos/Revionics — aptos.com/news/aptos-to-acquire-revionics · Impact Analytics MarkSmart — impactanalytics.ai/solutions/markdown-optimization · Blue Yonder AI pricing — now.blueyonder.com/AI-pricing-tailored · EDITED — edited.com/products/retail-intelligence-platform · Intelligence Node — intelligencenode.com/solutions/price-intelligence · Daydream — prnewswire.com (Daydream $50M seed)</li>
+    <li><strong>Signals &amp; outputs:</strong> Umbrex markdown framework — umbrex.com/.../markdown-optimization · Increff guide — increff.com/blog/a-guide-to-markdown-optimization-for-retailers · Eightx apparel markdown — eightx.co/blog/apparel-markdown-strategy · Pricefx — pricefx.com/.../markdown-depth-for-retailers · Peak elasticity — peak.ai/.../price-elasticity-and-why-does-it-matter-for-markdowns · o9 — o9solutions.com/articles/effective-markdown-optimization · Solvoyo — solvoyo.com/whitepapers/markdown-optimization · Oracle LPO rules — docs.oracle.com/.../lpo-rules-strategies.htm · Retalon — retalon.com/blog/retail-markdown-strategy · Toolio sell-through — toolio.com/post/sell-through-rate · StyleMatrix weeks-of-cover — stylematrix.io/weeks-of-cover-retail · 42signals — 42signals.com/blog/price-elasticity-analysis · J. Revenue &amp; Pricing Mgmt — link.springer.com/article/10.1057/rpm.2015.4</li>
+    <li><strong>Forecasting:</strong> Forecast by analogy — en.wikipedia.org/wiki/Forecast_by_analogy · onepint.ai new-product forecast — onepint.ai/insights/how-do-you-forecast-demand-for-new-products · Lokad fashion — lokad.com/blog/2017/2/8/fashion-demand-forecasting · Singh et al. — arxiv.org/abs/1907.01960 · Impact Analytics size curves — impactanalytics.ai/blog/how-to-improve-retail-assortment-planning-with-size-curves-based-demand-forecasting · o9 size curve — o9solutions.com/articles/advanced-size-curve-analysis · Style Arcade — stylearcade.com/blog/retailers-are-losing-a-trillion-a-year · SR Analytics — sranalytics.io/blog/retail-demand-forecasting · ToolsGroup accuracy — toolsgroup.com/blog/forecast-accuracy-benchmarks · onepint.ai accuracy — onepint.ai/insights/how-do-companies-measure-forecast-accuracy · Trax data quality — traxretail.com/blog/why-data-quality-still-matters</li>
+    <li><strong>Agentic / LLM:</strong> Revionics multi-agent alpha — revionics.com/news/revionics-unveils-alpha-release-for-multi-agent-pricing-system · Revionics Conversational Analytics — revionics.com/news/revionics-augments-its-leading-retail-pricing-ai-with-conversational-analytics · Gartner 40%-cancelled — gartner.com/.../2025-06-25 · PROS agent-washing — pros.com/learn/blog/agent-washing-spot-hype · Peak markdown reality — peak.ai/hub/blog/retail-markdown-strategy-is-broken · Wikipedia price optimization — en.wikipedia.org/wiki/Price_optimization · VentureBeat LLM math — venturebeat.com/business/researchers-find-that-large-language-models-struggle-with-math · Moveo.ai — moveo.ai/blog/why-llm-struggle</li>
+    <li><strong>Human-in-the-loop:</strong> Oracle promotion/markdown workflow — docs.oracle.com/.../promotion-markdown-optimization-workflow.htm · Umbrex implementation playbook — umbrex.com/.../implementation-roadmap-tools-and-change-management · RELEX markdown — relexsolutions.com/resources/markdown-optimization · Oracle LPO offer optimization — docs.oracle.com/.../offer-optimization.htm</li>
+    <li><strong>Small-retailer / rules vs ML:</strong> Priceva — priceva.com/blog/markdown-pricing · Cognira — cognira.com/blog/markdown-strategy-...-2026 · Filene's Basement — en.wikipedia.org/wiki/Filene%27s_Basement · Shopify inventory aging — shopify.com/retail/inventory-aging-report · Revionics crawl-walk-run — revionics.com/blog/a-crawl-walk-run-approach-to-optimized-pricing · Review of Managerial Science (heuristic pricing) — link.springer.com/article/10.1007/s11846-022-00581-1 · McKinsey pricing in retail — mckinsey.com/industries/retail/our-insights/pricing-in-retail-setting-strategy · ClearDemand — cleardemand.com/fundamentals-of-retail-science-episode-v-markdown-in-retail</li>
+  </ol>
+</section>
+
+<footer>
+  KDPS Lifestyle — research input for D7 (Analytics &amp; AI). Not a design decision. Compiled 18 June 2026. Markdown / clearance-pricing AI for owned aging apparel stock.
+</footer>
+</main>
+</div>
+</body>
+</html>

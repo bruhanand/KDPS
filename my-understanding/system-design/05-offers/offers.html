@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Offers Design (The Discount Rulebook)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4; --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:34px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:6px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  .tabbar{position:sticky; top:0; z-index:20; display:flex; gap:6px; background:var(--bg); padding:14px 0 10px; margin:6px 0 6px; border-bottom:1px solid var(--line)}
+  .tabbtn{border:1px solid var(--line); background:#fff; color:var(--navy2); font-weight:700; font-size:14.5px; padding:9px 16px; border-radius:10px 10px 0 0; cursor:pointer}
+  .tabbtn.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .tabbtn small{display:block; font-weight:500; font-size:11.5px; opacity:.8}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  section{margin:30px 0; scroll-margin-top:70px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:20px 0 8px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-park{background:var(--purple-bg); color:var(--purple)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-park{background:var(--purple-bg); border-color:#dcd3f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--grey-bg);color:#41506b;margin:1px 2px}
+  .chip.kdps{background:var(--green-bg);color:var(--green)}
+  .chip.maybe{background:var(--amber-bg);color:#7a5200}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--rust);color:#fff;font-size:12.5px;font-weight:700;margin-right:6px;flex:0 0 auto}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  .gq{border-left:4px solid var(--rust); background:#fff; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:11px 15px; margin:11px 0}
+  .gq .qh{font-weight:700; color:var(--navy)}
+  .editbox{background:#fffdf6; border:1px dashed #d8c98f; border-radius:10px; padding:12px 14px; color:#6b5a1f; font-size:13.5px; margin-top:10px}
+  .src{font-size:12.5px;color:var(--muted)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · D5 · Offers · The Discount Rulebook</div>
+  <h1>Offers — System Design</h1>
+  <p class="sub">One tidy place where every brand's offer is written the same way — so the shop can apply the right discount on its own, managers can control big discounts, and at month-end we know exactly how much margin each brand's discounting cost. A discount just lowers the selling price (KDPS earns less margin); nothing is reclaimed from the brand. Feeds the counter sale in <a href="../03-outbound/outbound.html">Outbound</a>.</p>
+</header>
+
+<div class="tabbar">
+  <button class="tabbtn active" onclick="showTab(0)">① System Design<small>how offers should work</small></button>
+  <button class="tabbtn" onclick="showTab(1)">② Decisions &amp; Grilling Log<small>research + reasoning trail</small></button>
+</div>
+
+<!-- ============================ TAB 1 ============================ -->
+<div class="tabpanel show" id="tab-design">
+
+<section id="stage">
+  <div class="callout co-note"><strong>Stage: offer grill complete — 13 questions locked (18 Jun 2026).</strong> The model (Q1–Q13) is settled: one common offer form (trigger + reward + dials), item-level in a multi-brand bill, brand + KDPS offers, AI-suggested clearance for owned stock, auto-apply via a swappable POS adapter, two approval gates, daily reconcile + month-end brand pack. <strong>A discount only lowers the selling price → KDPS earns less margin; nothing is claimed back from the brand</strong> (corrected 18 Jun). Client confirmation doc: <code>04-client-docs/Offers-Module-Client.html</code>.</div>
+</section>
+
+<section id="idea">
+  <h2 class="sec">1 · The one idea</h2>
+  <p>Every offer — no matter the brand or how messily it's written — is the same simple shape:</p>
+  <div class="card" style="text-align:center;font-size:17px">
+    <strong>What the customer must do</strong> &nbsp;→&nbsp; <strong>what they get</strong>
+  </div>
+  <p class="why">"Spend ₹6,999" → "get ₹600 off". "Buy 3 shirts" → "cheapest one free". "Spend ₹23,000" → "free trolley bag". Once every offer is written in this one shape and kept in one place, the shop till can apply it automatically, and we can check and report it later. The patterns below are just the different ways the two halves get filled in.</p>
+  <div class="callout co-note" style="margin-top:12px"><strong>Locked (Q1, 18 Jun): one common form for every offer.</strong> An offer is stored as a <strong>trigger</strong> (what must happen) + a <strong>reward</strong> (what they get) + its <strong>dials</strong> (§3). The eight patterns are just trigger+reward combinations, so a new pattern is a new choice — never a rebuild. In plain terms:</div>
+  <table>
+    <thead><tr><th>Trigger — "when…"</th><th>Reward — "…give"</th></tr></thead>
+    <tbody>
+      <tr><td>nothing (just applies) · spend ≥ ₹X · buy N items · buy from a chosen group / category · <span class="chip maybe">later</span> a coupon, a card, a member</td><td>% off · ₹ off · an item free (cheapest) · a fixed price · a gift · <span class="chip maybe">later</span> points, cashback</td></tr>
+    </tbody>
+  </table>
+  <div class="callout co-note"><strong>Offers attach to items, not the bill (multi-brand store).</strong> KDPS is a Shoppers-Stop-style multi-brand store, so one bill can carry many offers at once — each item gets its own offer (a Mufti item → Mufti's offer; a Blackberry item → Blackberry's) and a <strong>store-wide</strong> KDPS discount can sit across everything. Discounts apply <strong>per item as it's scanned</strong> at the till and total up on the bill. A "spend ≥ ₹X" offer measures the spend over <em>its own scope's items</em> (that brand's lines), then splits its reward back across them. <span class="badge b-locked">Locked (Q6, 18 Jun — Anand)</span></div>
+</section>
+
+<section id="patterns">
+  <h2 class="sec">2 · The eight patterns we build first <span class="badge b-locked">Phase 1</span></h2>
+  <p class="lead">These eight cover every offer in KDPS's brand sheets today — so we build them first. The rulebook itself is built <strong>open</strong>, so the extra patterns in §5 can be switched on later without a rebuild (Anand's call, 18 Jun).</p>
+  <table>
+    <thead><tr><th style="width:30px"></th><th>Pattern</th><th>In plain words</th><th>Real KDPS example</th></tr></thead>
+    <tbody>
+      <tr><td><span class="num">1</span></td><td><strong>Spend → money off</strong></td><td>Spend at least ₹X, get a fixed ₹ off. Usually several rising steps.</td><td>Blackberry: spend ₹6,999 → ₹600 off; ₹10,999 → ₹1,000; ₹14,999 → ₹1,500</td></tr>
+      <tr><td><span class="num">2</span></td><td><strong>Spend → percent off</strong></td><td>Spend at least ₹X, get Z% off the bill.</td><td>Mufti: flat 10% on bills above ₹7,999</td></tr>
+      <tr><td><span class="num">3</span></td><td><strong>Straight percent off</strong></td><td>Z% off — on everything, or one category, or chosen styles.</td><td>Mufti: flat 50%. Parx: suits &amp; blazers 20%</td></tr>
+      <tr><td><span class="num">4</span></td><td><strong>Buy more, bigger percent</strong></td><td>The more pieces, the higher the %.</td><td>Blackberry/Killer: buy 1 → 20%, buy 2 → 30%, buy 3 → 40%</td></tr>
+      <tr><td><span class="num">5</span></td><td><strong>Buy X, get Y free</strong></td><td>Buy a number of items, the cheapest one(s) become free.</td><td>Mufti: buy 2 get 1 free. US Polo / VH: buy-1-get-1</td></tr>
+      <tr><td><span class="num">6</span></td><td><strong>Free gift above a spend</strong></td><td>Cross a spend → get a gift (bag/trolley), sometimes at a token price. If the gift is out of stock, give a set discount instead.</td><td>Blackberry: spend ₹23,000 → free trolley; Gaya gave a duffel when trolleys ran out</td></tr>
+      <tr><td><span class="num">7</span></td><td><strong>Fixed price by MRP band</strong></td><td>Everything in an MRP range sells at one fixed price.</td><td>Sweet Dreams: MRP ₹3,249–3,649 → flat ₹2,599</td></tr>
+      <tr><td><span class="num">8</span></td><td><strong>Flat money off</strong></td><td>A fixed ₹ off (no spend condition). The rarest; usually a one-item deal.</td><td>"₹500 off on this style"</td></tr>
+    </tbody>
+  </table>
+  <div class="callout co-note"><strong>Confirmed by research.</strong> These same eight are exactly the built-in offer families in the Indian retail systems (Ginesys, Logic ERP, GoFrugal, Wondersoft, Vinculum) and the global ones (Shopify, Oracle, SAP). So KDPS isn't unusual — there's a known, finite menu. <em>"Buy X get Y, cheapest free"</em> is the worldwide default (Logic ERP &amp; GoFrugal both call it "lowest rate free").</p></div>
+</section>
+
+<section id="dials">
+  <h2 class="sec">3 · The dials every offer carries</h2>
+  <p>These aren't extra patterns — they're the settings that sit on <em>any</em> of the eight above. The rulebook must hold all of them.</p>
+  <table>
+    <thead><tr><th>Dial</th><th>What it decides</th><th>Seen in KDPS data?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Brand</strong></td><td>Which brand's offer this is.</td><td>Yes — every sheet is per brand</td></tr>
+      <tr><td><strong>Stores</strong></td><td>All shops, specific shops, or store-groups; a new shop is never auto-added to a running offer (Q4).</td><td>Yes — Mufti offers tagged Ratu / Lee / Jainsons; Gaya</td></tr>
+      <tr><td><strong>Dates</strong></td><td>Start + optional end; no end = rolls until stopped. Offers queue on a dated timeline; a default offer fills any gap; expiry reminders (Q5).</td><td>Yes — "still running", rolling fallbacks</td></tr>
+      <tr><td><strong>Which items count</strong></td><td>Any level — <strong>store-wide</strong>, whole brand, category, chosen styles, or a specific size/colour — and by <strong>season / age</strong> (Q2). Plus the per-style <strong>no-discount flag</strong> (imported from the AMM sheet) and per-offer exclusions (Q3).</td><td>Yes — "suits &amp; blazers", "selected styles", "NOT ON NOD", the AMM style list</td></tr>
+      <tr><td><strong>Who decides</strong></td><td>Brand-controlled stock → the brand sets the discount; KDPS-controlled stock → KDPS sets it. Either way KDPS just earns less margin — nothing is reclaimed. Tagged only for margin attribution in reports.</td><td>Yes — current workflow §14; Correction brands allow ~18% discount</td></tr>
+      <tr><td><strong>On MRP or net</strong></td><td>Figured on printed MRP; when an add-on stacks on a brand offer, the add-on is figured on the already-reduced price (Q13).</td><td>Yes — India standard; the report works on MRP</td></tr>
+      <tr><td><strong>Can offers combine?</strong></td><td>Per <em>item</em>, not per bill. An item gets its best brand offer; typed add-ons (store-wide, bank-card, coupon) may stack on top — every discount tagged with its rule + funder. Two brand offers don't stack on one item (the old "duffel ≠ slab", in its right place). See Q6 / Q6b.</td><td>Multi-brand bills carry many offers (Anand, Q6)</td></tr>
+      <tr><td><strong>Approval limit</strong></td><td>Counter staff can give up to a set limit; anything bigger needs a manager.</td><td>Yes — current workflow §14</td></tr>
+      <tr><td><strong>Gift handover</strong></td><td>A free gift only counts if it was actually handed to the customer.</td><td>Yes — meeting note on trolleys/duffels</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="eoss">
+  <h2 class="sec">4 · EOSS is a mode, not a new pattern</h2>
+  <p>End-of-season sale (cleared around August and February) uses the <em>same</em> patterns above — usually a straight percent off or buy-more-bigger-percent — but with three things switched on: it's <strong>deep</strong>, it's tied to a <strong>season</strong>, and it's often <strong>KDPS-decided</strong> (clearing our own old stock) rather than the brand's. So we treat "EOSS" as a label/mode on an offer, not a ninth pattern. The brand sheets confirm this — Libas literally tags rows "Promo" vs "EOSS".</p>
+</section>
+
+<section id="more">
+  <h2 class="sec">5 · More patterns — in scope, added as we grow <span class="badge b-dep">Later</span></h2>
+  <p>KDPS doesn't run these today, but they may in future — so they're <strong>all in scope</strong> (Anand's call, 18 Jun). We don't build them now; we build the rulebook open so each can be switched on later without a redesign. The full known universe, grouped:</p>
+
+  <h3>More ways to do "buy more"</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>Buy X, get Y at a discount</strong></td><td>Like buy-X-get-Y-free, but the extra item is cheaper, not free. "Buy 2, get the 3rd at half price."</td></tr>
+      <tr><td><strong>Several for one price</strong></td><td>A set number of one item for a combined price. "3 vests for ₹499."</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Set / combo deals</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>Combo / bundle</strong></td><td>A fixed set of items for one price. "Shirt + trouser + belt for ₹1,999."</td></tr>
+      <tr><td><strong>Mix-and-match</strong></td><td>Pick any few from a chosen group at a group price. "Any 2 from this rack for ₹2,500."</td></tr>
+      <tr><td><strong>Buy this, discount on that</strong></td><td>Buying from one category unlocks a discount on another. "Buy a blazer, get 50% off a tie."</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Repricing</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>One flat price for a group</strong></td><td>Any item in a chosen group sells at one price. "Any T-shirt for ₹999." (Cousin of Phase-1 pattern 7.)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Pay-based</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>Bank-card / UPI discount</strong></td><td>Extra off for paying with a certain card or method. "10% off on HDFC cards."</td></tr>
+      <tr><td><strong>No-cost EMI</strong></td><td>Interest waived, shown as an upfront discount.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Customer-based</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>Coupon codes</strong></td><td>A code the customer gives to unlock a discount.</td></tr>
+      <tr><td><strong>Loyalty points</strong></td><td>Earn points per ₹ spent, redeem later (and "earn faster when you buy more").</td></tr>
+      <tr><td><strong>Membership price / early access</strong></td><td>Members get a special price, or first entry to a sale.</td></tr>
+      <tr><td><strong>Birthday / anniversary</strong></td><td>A personal-occasion discount for a known customer.</td></tr>
+      <tr><td><strong>First-visit / new-customer</strong></td><td>Extra off the first purchase.</td></tr>
+      <tr><td><strong>Cashback to wallet</strong></td><td>Money back as store credit for next time.</td></tr>
+      <tr><td><strong>Gift voucher / store credit</strong></td><td>Prepaid value spent like cash — often given as a reward.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Online-only — parked until KDPS sells online</h3>
+  <table>
+    <tbody>
+      <tr><td><strong>Extra discount on the app / website</strong></td><td>A discount only on the online channel.</td></tr>
+      <tr><td><strong>Free or cheap shipping</strong></td><td>Only matters once there's delivery.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout co-note"><strong>The design rule this sets.</strong> Because the pattern list will grow, the rulebook can't be a fixed menu of eight hard-coded types. It's built as an <em>open</em> model — a new pattern is added as a new rule type (config), not a code rewrite. Start live with the eight; the rest are pre-cleared to join.</div>
+</section>
+
+<section id="sources">
+  <h2 class="sec">6 · Two sources of offers: brand vs KDPS</h2>
+  <p>The eight patterns are the same for everyone. What differs is only <strong>who decides the discount</strong> — the money effect is the same either way: KDPS earns less margin, nothing is reclaimed.</p>
+  <table>
+    <thead><tr><th></th><th>Brand offer</th><th>KDPS offer</th></tr></thead>
+    <tbody>
+      <tr><td><strong>On what stock</strong></td><td>Brand-controlled goods (SOR / Consignment, and brand-run schemes on Correction / Outright).</td><td>KDPS-owned goods — Outright &amp; Correction stock, and dead stock flipped to KDPS.</td></tr>
+      <tr><td><strong>Who decides</strong></td><td>The brand — they send the offer (photo / sheet / PDF).</td><td>KDPS decides, freely and whenever it wants.</td></tr>
+      <tr><td><strong>Money effect</strong></td><td>KDPS earns <strong>less margin</strong> on the sale. Nothing is reclaimed from the brand.</td><td>KDPS earns <strong>less margin</strong> on the sale (its own choice).</td></tr>
+      <tr><td><strong>How it's created</strong></td><td>Read the brand's offer into the rulebook (seamless ingest), then apply.</td><td>KDPS authors it directly — often from an AI suggestion (§7).</td></tr>
+      <tr><td><strong>At month-end</strong></td><td>No claim. The discount-by-brand total feeds the brand performance report (margin attribution).</td><td>Same — tracked as KDPS's own margin hit in the report.</td></tr>
+    </tbody>
+  </table>
+  <p class="why">The same goods can see both over time: a brand runs its in-season offer; later, once the stock is old (or flipped to KDPS), KDPS runs its own clearance offer. So the split isn't about the item — it's about <em>who decides this particular discount</em> (the "who decides" dial in §3). The money effect is the same either way: less margin, no reclaim.</p>
+  <div class="callout co-dep"><strong>Where offers ends and payments begins (Q7 — corrected 18 Jun).</strong> A discount is <strong>not a claim against the brand</strong>. It simply lowers the selling price, so <strong>KDPS earns less margin — that's the whole money effect</strong> (profit is derived: cost from the PT/settlement, revenue from the discounted sale). Nothing is reclaimed. The split is only about <strong>who decides the discount</strong>: brand-controlled stock → the brand sets its discount scheme (KDPS applies it, earns less margin); KDPS-controlled stock → KDPS decides its own. Each line still records a <strong>funder tag</strong>, but only to attribute the margin in the monthly brand report — never to bill the brand. Payment to the vendor is separate and on the vendor's terms (the four commercial models). The real brand-money flows live in <a href="../04-payments/payments.html">Payments (D4)</a> and are unchanged: SOR/Consignment payable on sale, RTV defective credit, EOSS/V-flip settlement, goods-return DN.</div>
+</section>
+
+<section id="ai">
+  <h2 class="sec">7 · The AI helper for KDPS-owned stock <span class="badge b-park">read-only · suggests, never sets</span></h2>
+  <p>On the brand side, offers arrive ready-made. On the <strong>KDPS side</strong>, nobody should have to spot old stock by hand. An AI helper watches every lot of KDPS-owned stock and <strong>proposes</strong> a discount — with reasons — for a person to approve. It only ever suggests; a human reviews, adjusts, and creates the actual offer. Nothing changes price on its own (architecture Rule 8).</p>
+  <div class="card">
+    <h4>What it watches</h4>
+    <p>How old the lot is · how fast it's selling (sell-through) · how many weeks of stock are left vs how much season is left · broken size runs (only odd sizes left) · the cost floor (never suggest a price below an agreed margin floor).</p>
+  </div>
+  <div class="card">
+    <h4>What it proposes — a package, not just a number</h4>
+    <p>Which lots to act on first · a suggested discount as a <strong>min–max band</strong> snapped to sensible steps (not a random %) · the best pattern to use · the expected result (roughly how much will clear, and the margin hit) · a step-down plan ("20% now; 30% in two weeks if it's still slow").</p>
+    <p class="why" style="margin-top:6px">Example: "FM jackets, SS-25, 120 days old, selling slow — suggest <strong>30–40% off</strong>, expect to clear ~60% in 3 weeks, floor ₹X (cost). [Create offer]".</p>
+  </div>
+  <h3>Built crawl → walk → run (the honest path)</h3>
+  <table>
+    <thead><tr><th>Stage</th><th>What it is</th><th>Needs</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Crawl — V1, buildable now</strong></td><td>An explainable rule ladder: age + sell-through → a suggested discount band, with a per-brand margin floor and a plain-English reason. Already feels proactive.</td><td>Just the stock + sales data we already pull.</td></tr>
+      <tr><td><strong>Walk</strong></td><td>Add demand forecasting (size-level; new styles guessed from similar past styles) to size the markdown better.</td><td>A few seasons of clean history, building up.</td></tr>
+      <tr><td><strong>Run</strong></td><td>Full ML markdown optimisation — the kind Increff / Oracle sell.</td><td>2–3 seasons of clean data.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout co-note"><strong>Honest on the "AI agent" word.</strong> The dependable core is classic maths (optimisation) plus a human approving — that's what the mature tools (Increff is the most India-relevant) actually do. The "agent / LLM" part is the <em>language layer</em>: plain-English explanations, "what if we did 25%?" questions, and summaries — useful and worth having, but it never sets prices by itself. An AI that prices fully on its own is mostly hype today. Full research + sources: <a href="markdown-ai-research.html">markdown-ai-research.html</a>.</div>
+  <div class="callout co-dep"><strong>Where it lives.</strong> The suggestion engine sits in the intelligence layer (the D7 analytics discussion) and <em>feeds</em> this rulebook: AI suggests → a human authors the offer here → it goes live like any other → the result feeds back so the suggestions sharpen.</div>
+</section>
+
+<section id="till">
+  <h2 class="sec">8 · Getting offers to the till, and approval</h2>
+  <p><strong>Auto-apply (Q8):</strong> the offer engine is the single brain. It sits behind one swappable POS adapter with two modes:</p>
+  <ul>
+    <li><strong>Now (Ten Software):</strong> push the simple per-item discounts it can take; for basket offers (spend ≥ ₹X, buy-2-get-1) read the sale back from its report and reconcile at end of day.</li>
+    <li><strong>Target (KDPS-built POS):</strong> push the full rules; the till applies them live as each item is scanned, and enforces approval at the counter.</li>
+  </ul>
+  <p><strong>Approval (Q9) — two gates:</strong></p>
+  <ul>
+    <li><strong>Creating an offer:</strong> beyond a set depth, an offer needs a named approver before it goes live — so every offer, including the AI's suggestions, has a human sign-off (Rules 8 &amp; 10).</li>
+    <li><strong>At the counter:</strong> a manual discount or override beyond a cashier's limit needs a manager's OK before the bill closes.</li>
+  </ul>
+  <p class="why">The exact limits and the who-approves-what role grid are set in the roles / payments work (D4); the offer module just places the two gates.</p>
+</section>
+
+</div>
+
+<!-- ============================ TAB 2 ============================ -->
+<div class="tabpanel" id="tab-log">
+
+<section>
+  <h2 class="sec">Decisions &amp; Grilling Log</h2>
+  <p class="lead">The reasoning + research trail behind Tab 1. Statuses: <span class="badge b-locked">Locked</span> <span class="badge b-open">Open</span> <span class="badge b-dep">Dependency</span> <span class="badge b-park">Parked</span>.</p>
+  <div class="editbox">
+    <strong>Changelog</strong>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      <li><strong>18 Jun 2026 — created.</strong> Read the offer-relevant KDPS data (sale &amp; SOH formats, supplier↔brand list, BRAND OFFERS.xlsx, May Blackberry/Mufti OFFER tabs, KDPS-DIRECTION worked example) + the June-1 offers meeting + the <code>kdps-offer</code>/<code>discount-audit-v2</code> skills.</li>
+      <li><strong>18 Jun — pattern catalog.</strong> Web research across Indian retail engines (Ginesys, Logic ERP, GoFrugal, Wondersoft, Vinculum) and global ones (Shopify, Oracle Retail, SAP, Salesforce, NetSuite, Square, Lightspeed, Magento). Distilled to <strong>8 patterns + 9 dials</strong>.</li>
+      <li><strong>18 Jun — scope widened (Anand).</strong> Keep <em>all</em> extra patterns in scope for the future; build the eight first, then add more as the business grows. Rulebook to be an <strong>open model</strong>, not a fixed menu. §5 expanded to the full known universe (buy-more variants, combo/mix-match, pay-based, customer-based, online-only). <span class="badge b-locked">Locked</span></li>
+      <li><strong>18 Jun — direction added (Anand).</strong> Offers split into <strong>brand-decided</strong> (seamless ingest → apply; brand controls the discount) and <strong>KDPS-decided</strong> (KDPS authors freely). <em>[Money framing corrected 18 Jun: a discount only lowers margin — no claim.]</em> For the KDPS side, an <strong>AI helper</strong> recommends discounts (range, pattern, timing) on aging owned stock — read-only, human-approved (Rule 8). Researched markdown / forecasting tech → <code>markdown-ai-research.html</code>. §6–§7 added. <span class="badge b-locked">Direction set</span></li>
+      <li><strong>18 Jun — offer grill complete.</strong> Q1–Q13 locked (shape · scope · no-discount list · stores · dates+fallback · item-level combine + per-item stacking · funding boundary→payments · auto-apply adapter · approval gates · audit+month-end pack · gifts+V-flip · ingest · MRP base). Client confirmation doc drafted at <code>04-client-docs/Offers-Module-Client.html</code>. <span class="badge b-locked">Grill complete</span></li>
+      <li><strong>18 Jun — Offers↔Payments connection corrected (Anand).</strong> An earlier draft of this connection invented a <strong>"promotional claim / billback"</strong> — modelling a brand discount as money KDPS reclaims from the brand. <strong>Wrong, removed.</strong> The real model is simple: <strong>a discount only lowers the selling price, so KDPS earns less margin — nothing is reclaimed.</strong> Brand-controlled stock → the brand decides the discount; KDPS-controlled → KDPS decides; the money effect is the same. Confirmed against <a href="../03-outbound/outbound.html">Outbound</a> (sale posts revenue only for Outright/Correction; SOR/Consignment accrue on a fixed settlement rate, not the discounted price) + the four commercial models in <a href="../01-vendor-management/Vendor-Management-Module.html">Booking</a>. All claim language stripped from this doc and Payments. Real brand-money flows (SOR/Consignment payable, RTV credit, EOSS/V-flip settlement, goods-return DN) are separate and unchanged. <span class="badge b-locked">Corrected</span></li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">What the research confirmed</h2>
+  <ul>
+    <li><strong>The pattern menu is finite and known.</strong> Every KDPS offer maps to one of 8 standard families; nothing in their sheets falls outside it.</li>
+    <li><strong>"Buy X get Y, cheapest free" is the universal default.</strong> Logic ERP and GoFrugal both ship it as "lowest rate free"; SAP/Oracle/Square offer "cheapest free". "Most-expensive free" is offered by essentially no one.</li>
+    <li><strong>Two kinds of "slab" are first-class everywhere:</strong> by bill <em>value</em> (spend tiers) and by <em>quantity</em> (buy-more tiers). KDPS uses both.</li>
+    <li><strong>A bill-level discount must be split back across the items on the bill</strong> — so per-item cost, profit and GST stay correct. This is the most important engine rule for us (matches the "documents write ledgers / profit is derived" rules).</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="sec">Open questions this raises (for later grilling)</h2>
+  <div class="gq"><div class="qh">O1 · Discount base <span class="badge b-locked">Resolved → Q13</span></div>Figured on MRP; a stacked add-on is figured on the already-reduced price. (Locked in Q13.)</div>
+  <div class="gq"><div class="qh">O2 · Stacking <span class="badge b-locked">Resolved → Q6 / Q6b</span></div>Not "one bill, one offer" — offers are item-level; per item the best brand offer + stackable typed add-ons (store-wide / bank / coupon). (Locked in Q6 / Q6b.)</div>
+  <div class="gq"><div class="qh">O3 · Which offer wins <span class="badge b-open">Open — the only one left</span></div>When two offers could apply to the <em>same item</em>, pick the one <strong>best for the customer</strong> (global default — Shopify / NetSuite / Oracle), or follow a <strong>set priority order</strong> (Magento / Salesforce / SAP)? <strong>Rec: best for the customer</strong> — simplest and fairest, and with no claim/margin-split there's no reason to prefer one offer over another. One line from Anand to lock.</div>
+  <div class="gq"><div class="qh">O4 · Store scope grain <span class="badge b-locked">Resolved → Q4</span></div>All / specific stores / store-groups; a new store is never auto-enrolled. (Locked in Q4.)</div>
+  <div class="gq"><div class="qh">O5 · Scope of patterns <span class="badge b-locked">Decided 18 Jun</span></div>All known patterns are in scope. Build the eight first; the rest (§5) are pre-cleared to add later. The rulebook is an <strong>open model</strong>, so new pattern types join as configuration, not a code rewrite.</div>
+  <div class="gq"><div class="qh">O6 · Brand vs KDPS offers <span class="badge b-locked">Decided 18 Jun · corrected 18 Jun</span></div>Two sources, one rulebook, split only by <strong>who decides the discount</strong>: <strong>brand-decided</strong> (brand-controlled stock) and <strong>KDPS-decided</strong> (KDPS-controlled stock). Same eight patterns. <strong>The money effect is identical — KDPS earns less margin; nothing is reclaimed from the brand.</strong> (Earlier "brand-funded → claim back" framing was wrong, removed.) KDPS-controlled = dead stock flipped to KDPS and any stock KDPS, not the brand, decides discounts on.</div>
+  <div class="gq"><div class="qh">O7 · AI markdown helper <span class="badge b-locked">Direction set 18 Jun</span></div>Read-only suggestion engine for KDPS-owned aging stock (discount range, pattern, timing, margin floor); a human approves it into a real offer. Built crawl→walk→run (rules now, forecasting next, ML later). Lives in D7 analytics, feeds D5. <strong>To drill:</strong> the exact age→discount ladder, per-brand margin floors, the suggestion→offer screen, and how results feed back.</div>
+  <div class="callout co-dep"><strong>Likely things we must build (no off-the-shelf system confirmed them):</strong> automatic "cheapest free", the gift-out-of-stock fallback, rolling offers with auto-fallback when one ends, and per-cashier discount caps with manager override. These connect to Outbound (the counter). <em>Note: a discount is not a brand claim — it only lowers margin (corrected 18 Jun), so there is no "auto-generate a claim" step.</em></div>
+</section>
+
+<section>
+  <h2 class="sec">Grilling log</h2>
+  <div class="gq"><div class="qh">Q1 · The shape of one offer <span class="badge b-locked">Locked — B (18 Jun)</span></div>
+  <strong>Decision: B</strong> — one common form per offer (trigger + reward + dials); patterns are combinations, new ones slot in without a rebuild. Options weighed:<strong>(A)</strong> eight separate forms, one per pattern — rigid, fights the open model. <strong>(B) one form = "when X → give Y" + the dials</strong> (trigger + reward + scope / who-decides / stores / dates / stacking / approval); the patterns are just trigger+reward combinations; a new pattern is a new choice, not a rebuild — <em>recommended</em>. <strong>(C)</strong> a scope × benefit grid (GoFrugal-style, ~46 families) — enumerable but sprawls, and some patterns don't fit a cell. <strong>(D)</strong> free-form rule script — most powerful but unauditable, risky to auto-apply, not for non-tech staff. <strong>Rec: B</strong> — holds all 8 now + §5 later, shared dials written once, matches Oracle / SAP / NetSuite (offer = condition + reward) and GoFrugal (scope × benefit).</div>
+  <div class="gq"><div class="qh">Q2 · How finely an offer points at items <span class="badge b-locked">Locked — B+ (18 Jun)</span></div>
+  <strong>Decision: B + season/age targeting</strong> (a starter slice of C; fuller tags later) — so the KDPS-side AI can aim at an aging lot. Options weighed: (A) brand + category only — too coarse for KDPS's real sheets. (B) any level: brand → category → chosen styles → specific size/colour item. (C) B + tags (season, fresh-vs-old, age) to target e.g. "all old SS-25" in one go. <strong>Rec: B + the season/age targeting we already have (a starter slice of C); fuller tags later</strong> — needed so the KDPS-side AI can point at "this aging lot". Grounded in: scope reaches SKU = style×size×colour (identity rule); attribute/condition targeting standard in Salesforce/Magento/Vinculum.</div>
+  <div class="gq"><div class="qh">Q3 · The "do-not-discount" list (AMM / NOD) <span class="badge b-locked">Locked — A+C (18 Jun)</span></div>
+  <strong>Decision: A + C</strong> — a per-style discountable flag per brand (the AMM sheet imports into it; no list = all eligible) that every offer auto-obeys, plus per-offer one-off exclusions. How to hold &amp; apply the brand's "never discount these styles" list. (A) a discountable yes/no flag on each style, per brand, on the item master — every offer auto-skips no-discount styles; no list = all eligible; the AMM sheet imports into the flags. (B) keep the brand's sheet as a separate file, matched by style code each time (today's way). (C) per-offer exclusions only ("EXCL: SUITS"). <strong>Rec: A as the always-on brand block-list + C on top for one-off per-offer exclusions (A+C).</strong> Grounded in: explicit no-discount fields in Wondersoft / Vinculum, fresh-stock toggle in Logic ERP, global-exclude in Salesforce; matches KDPS's AMM gate.</div>
+  <div class="gq"><div class="qh">Q4 · Which stores an offer runs at <span class="badge b-locked">Locked — C (18 Jun)</span></div>
+  <strong>Decision: C</strong> — all / specific / store-groups; a new store is never auto-enrolled into a running offer; start with all/specific + a few groups. Options weighed: (A) all stores OR a hand-picked list. (B) add store-groups (city / region / format) on top. (C) all / specific / groups, and a <strong>new store is never auto-added</strong> to a running offer. <strong>Rec: C</strong> — 50+ stores make groups worth it; never auto-enrol a new store (matches Vinculum's safeguard; Ginesys store-groups; GoFrugal outlet-wise). Start with all/specific + a few groups.</div>
+  <div class="gq"><div class="qh">Q5 · An offer's life — dates &amp; fallback <span class="badge b-locked">Locked — C (18 Jun)</span></div>
+  <strong>Decision: C</strong> — dated timeline per brand + a rolling default offer that fills any gap + expiry reminders (Rule 11). Start (required) + optional end; no end = rolls until stopped. (A) plain start/end, nothing auto-replaces a lapsed offer. (B) a dated timeline per brand — whoever's window covers today is live; no end = runs till the next starts. (C) B + a named <strong>default/fallback offer</strong> that runs whenever nothing else is scheduled, with expiry reminders (Rule 11). <strong>Rec: C</strong> — matches the brands' dated sequences + rolling defaults (June-1 meeting: slab till 27 May → B2G1 from 28 May, "continues as default unless brand updates"). Auto-fallback is a known build item (no off-the-shelf system confirmed it).</div>
+  <div class="gq"><div class="qh">Q6 · How offers combine <span class="badge b-locked">Reframed by Anand — 18 Jun</span></div>
+  <strong>"One offer per bill" REJECTED.</strong> KDPS is a multi-brand store (Shoppers-Stop-style): offers attach to <strong>items</strong>, so one bill carries many offers at once (one per brand's items), plus a <strong>store-wide</strong> discount scope. Discounts apply per item at the till and total on the bill; a spend-threshold offer measures over its own scope's items, then splits its reward back across them.</div>
+  <div class="gq"><div class="qh">Q6b · Two offers on the same item <span class="badge b-locked">Locked — B (18 Jun)</span></div>
+  <strong>Decision: B</strong> — per item: best brand offer + stackable typed add-ons (store-wide / bank / coupon) on top, each tagged with rule + funder; per-offer "can stack?" switch; two brand offers never stack on one item. When two offers hit the <em>same</em> item: (A) best one only — no stacking on an item. (B) best brand offer + stackable typed add-ons (store-wide / bank / coupon) on top, each tagged with rule + funder; a per-offer "can stack?" switch. (C) unlimited priority-ordered stacking. <strong>Rec: B</strong> — flexible (a brand offer <em>and</em> a store-wide discount can both land on one item) yet clean for reporting because every discount records its funder tag (for margin attribution, not a claim); can behave like C wherever marked stackable; two brand offers never stack on one item (duffel ≠ slab). Grounded: stacking must be explicit; India bank-offers stack on top; line-level discounts must split/attribute per line for cost/GST.</div>
+  <div class="gq"><div class="qh">Q7 · Funding &amp; the offer↔payment boundary <span class="badge b-locked">Locked — 18 Jun</span></div>
+  The earlier funding-mechanics question (split / smart-default / claim rollup) was <strong>too much for the offer module</strong>. <strong>Corrected 18 Jun (Anand): there is no claim at all.</strong> A discount only lowers the selling price → KDPS earns less margin. Offers just tags each line with who decided the discount (brand-controlled vs KDPS-controlled) for <strong>margin attribution in reports</strong> — it never bills the brand. The real brand-money flows (SOR/Consignment payable, RTV credit, EOSS/V-flip settlement, goods-return DN) live in payments (D4) and are separate from offers.</div>
+  <div class="gq"><div class="qh">Q8 · Getting offers onto the till (auto-apply) <span class="badge b-locked">Locked — C (18 Jun)</span></div>
+  <strong>Decision: C</strong> — one adapter, two modes; our engine is always the brain; Ten Software interim (push simple per-item + reconcile basket offers from its report) → KDPS-POS target (push full rules, live apply, enforced approval). Options weighed: (A) the till is the brain — push rules into the POS, it computes &amp; applies live; best UX but needs a capable POS (Ten Software isn't ready). (B) our system is the brain, the till only displays — works via the adapter but needs a live link mid-sale. (C) one adapter, two modes (matches the locked POS plan): our engine is always the brain; for now push the simple per-item discounts Ten Software can take + reconcile basket offers from its sale report (B-interim); with the KDPS-built POS push full rules + evaluate live + enforce approval (A-target). <strong>Rec: C</strong> — only honest path with Ten Software's API not ready; one brain (rules + audit in one place), swap the POS underneath. Matches outbound Q12.</div>
+  <div class="gq"><div class="qh">Q9 · Approval — which discounts need a manager's OK <span class="badge b-locked">Locked — B (18 Jun)</span></div>
+  <strong>Decision: B</strong> — two gates: offer-authoring sign-off above a depth (every offer incl. AI suggestions has a named approver) + counter manual-discount/override cap; exact limits + role grid → D4. Two possible gates: creating an offer (esp. big KDPS % and AI suggestions) and a manual counter discount / override. (A) counter-only — cashier cap, manager OK at till above it; authored offers just apply. (B) two gates: (1) creating/changing an offer beyond a set depth needs a named approver before go-live (every offer incl. AI suggestions gets a human sign-off, Rules 8 &amp; 10); (2) counter manual discount/override beyond a cap needs manager OK; exact limits + role grid set in roles/payments (D4). (C) B + limits that vary by who decided the discount (tighter for KDPS-decided). <strong>Rec: B</strong> — covers the current counter rule + the new authoring/AI sign-off; limits/roles deferred to D4. Grounded: §14 approval control; Logic ERP user/branch discount-limit auth (password/OTP); GoFrugal discount limits + approval alerts.</div>
+  <div class="gq"><div class="qh">Q10 · Audit &amp; the month-end view <span class="badge b-locked">Locked — C (18 Jun)</span></div>
+  <strong>Decision: C</strong> — record §14 per-line + reconcile applied-vs-rulebook daily (flag mismatches, Rule 5) + month-end per-brand pack (discount-by-brand → the brand performance report &amp; margin attribution; <em>no claim</em>), replacing the manual rebuild. §14 sets the per-line record (MRP, disc%, final, offer rule, cashier, approver, funder tag, time). (A) record only — totals for the brand report, no check. (B) record + reconcile against the rulebook daily — re-compute what each bill's discount should have been, flag wrong / missing / over / unapproved into an exception queue (Rule 5); the safety net for interim mode. (C) B + month-end per-brand pack — rolls into discount-by-brand → the brand performance report &amp; margin attribution (no claim), replacing the manual monthly rebuild (clubbing). <strong>Rec: C</strong> — the till applies in real time, so no by-hand rebuild; the system records, checks, and produces the pack. Confirmed by Anand (18 Jun) — the "hold back sales to a leaner month" practice is <strong>system-managed</strong>, in the report-maker (D7): each brand (and KDPS overall) has a monthly target; at report time, when the current month has <em>met</em> its target, surplus sales can be deferred into the <em>next</em> month if it's running low — only two adjacent months involved — so both meet target. Captured here; designed in D7.</div>
+  <div class="gq"><div class="qh">Q11 · Gifts (GWP) &amp; the V-flip tie-in <span class="badge b-locked">Locked — B (18 Jun)</span></div>
+  <strong>Decision: B</strong> — stock-aware gift: SKU + token price; out → a pre-decided discount set per offer (confirmed by Anand 18 Jun — in stock → give the gift; out → the pre-set discount); counts only when handed over; leaves inventory. V-flip reuses an EOSS offer then flips to KDPS-owned (no new mechanic). A gift reward differs from a money discount — it's a real stock item, can run out, counts only if handed over. (A) simple: name gift + token price, cashier handles stock / fallback / substitution by hand. (B) stock-aware: offer names gift (a SKU) + token price; if out → fallback discount (the <code>else=</code> we already encode) or substitute gift (trolley→duffel); counts only when scanned/handed over; gift leaves inventory + shows on bill. (C) B + forecast gift demand to stock up (later). <strong>Rec: B</strong> — exactly today's behaviour. V-flip tie-in (not a new mechanic): the flip "sells" dead stock under an EOSS offer to settle with the brand, then the stock becomes KDPS-owned → KDPS offers + AI clearance apply. Grounded: kdps-offer <code>else=</code> fallback; GWP stock-fallback is a known build item; gift = stock item; handover check from the June-1 meeting.</div>
+  <div class="gq"><div class="qh">Q12 · How offers get created (ingest / authoring) <span class="badge b-locked">Locked — B (18 Jun)</span></div>
+  <strong>Decision: B</strong> — AI-assisted ingest + human confirm (paste brand photo/PDF → AI drafts → person approves → live; reuses kdps-offer); manual entry stays for KDPS offers &amp; one-offs. Brands send offers as messy photos / PDFs / rough sheets (every brand different). (A) manual entry only — reliable but slow, ignores the AI we have. (B) AI-assisted ingest + human confirm — paste the brand's photo / PDF → AI drafts the offer rule(s) (as the <code>kdps-offer</code> skill does) → a person reviews, fixes, approves → live; manual entry stays for one-offs &amp; KDPS offers. (C) B + auto-pull from a structured feed if a brand ever sends one (later). <strong>Rec: B</strong> — AI reads the messy input, human decides (Rule 8); reuses the kdps-offer skill; manual stays. Grounded: kdps-offer parses promo images→Offer List; Rule 8 AI-at-edges; the authoring sign-off (Q9).</div>
+  <div class="gq"><div class="qh">Q13 · Discount base (MRP) <span class="badge b-locked">Locked — Yes (18 Jun)</span></div>
+  Discounts figured on printed <strong>MRP</strong>, not an already-reduced price (India norm; reports work on MRP). Stacking base: an add-on (store-wide / bank / coupon) on top of a brand offer is computed on the <strong>already-discounted price</strong> ("extra 10%" = 10% of what's left), protecting margin. <strong>Rec: MRP base + add-ons on reduced price.</strong> Resolves O1.</div>
+</section>
+
+<section>
+  <h2 class="sec">Sources (representative)</h2>
+  <p class="src">
+    Indian apparel engines — Logic ERP BOGO "lowest rate free" (logicerp.com/blog/.../bogo...) · GoFrugal offer families &amp; "Allow Offer Span" (community.gofrugal.com/.../offer-management) · Ginesys value/quantity slab benefits (ginesys.atlassian.net/wiki) · Wondersoft &amp; Vinculum (explicit no-discount/exclusion fields).<br>
+    Global engines — Shopify discount types · Oracle Retail RPM/OMS promotions (spend-X-get-Y, prorate-to-lines, best-deal) · SAP Commerce (cheapest vs default reward, rule groups/priority) · NetSuite SuitePromotions · Magento cart/catalog price rules · Square/Lightspeed (BOGO cheapest, per-store).<br>
+    KDPS ground truth — current-workflow §14 (EOSS/Discount), the June-1 offers meeting, <code>kdps-offer</code> + <code>discount-audit-v2</code> skills, and the brand offer sheets in <code>data-from-kdps</code>.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">Glossary (plain words)</h2>
+  <dl class="gloss">
+    <dt>Offer / rule</dt><dd>One discount written as "what the customer must do → what they get", plus its dials (brand, stores, dates, who pays…).</dd>
+    <dt>Slab</dt><dd>Steps in an offer — e.g. spend ₹7k→₹1k off, spend ₹13k→₹2k off. Can step by bill value or by number of items.</dd>
+    <dt>Cheapest free</dt><dd>In "buy X get Y free", the lowest-priced qualifying item is the one made free.</dd>
+    <dt>Brand-decided vs KDPS-decided</dt><dd>Who sets the discount — the brand (on brand-controlled stock) or KDPS (on KDPS-controlled stock). Either way KDPS just earns less margin; <strong>nothing is reclaimed from the brand</strong>. The tag is kept only for margin attribution in the monthly brand report.</dd>
+    <dt>Funder tag</dt><dd>A label on each discounted line (brand or KDPS) — used purely to attribute the margin hit in reporting, <strong>not</strong> to bill the brand. A discount is never a claim.</dd>
+    <dt>No-discount list (NOD / AMM)</dt><dd>Styles the brand forbids discounting (usually new stock); every offer must skip them.</dd>
+    <dt>EOSS</dt><dd>End-of-season sale (~Aug and ~Feb): a deep, season-tied clearance — a mode on the normal patterns, not a new one.</dd>
+    <dt>Split back to lines</dt><dd>When a discount is on the whole bill, share it across the items so each item's cost/profit/tax stays right.</dd>
+  </dl>
+</section>
+
+</div>
+
+<footer>
+  KDPS — Offers Design · Living document · Tab 1 = system design · Tab 2 = research &amp; reasoning · Companion to the Vendor, Inbound and Outbound docs. · Created 18 Jun 2026.
+</footer>
+
+</main>
+<script>
+function showTab(n){
+  var panels=[document.getElementById('tab-design'),document.getElementById('tab-log')];
+  var btns=document.querySelectorAll('.tabbtn');
+  panels.forEach(function(p,i){p.classList.toggle('show', i===n);});
+  btns.forEach(function(b,i){b.classList.toggle('active', i===n);});
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>

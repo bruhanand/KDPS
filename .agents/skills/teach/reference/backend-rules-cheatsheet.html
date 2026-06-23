@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Backend Rules Cheat Sheet — KDPS</title>
+<style>
+  :root{ --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --brain:#1d4ed8; --brain-bg:#eff6ff; --brain-line:#bfdbfe; --brain-deep:#1e3a8a;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --amber:#b45309; --amber-bg:#fff7ed; --amber-deep:#7c2d12; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; font-size:14.5px;}
+  .wrap{max-width:860px; margin:0 auto; padding:38px 24px 64px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:28px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:64ch; margin:0 0 16px}
+  h2{font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--brain-deep); margin:22px 0 8px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:5px}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:8px 0}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--brain-bg); color:var(--brain-deep); font-size:11.5px; text-transform:uppercase}
+  tr:last-child td{border-bottom:0}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px 16px; break-inside:avoid}
+  .card h3{margin:0 0 8px; font-size:15px}
+  .card ul{margin:0; padding-left:18px} .card li{margin:5px 0}
+  .pill{display:inline-block; font-size:11px; font-weight:800; padding:2px 9px; border-radius:7px}
+  .block{background:var(--bad-bg); color:#991b1b} .flag{background:var(--amber-bg); color:var(--amber-deep)}
+  .reflex{background:#1d2433; color:#e7ebf3; border-radius:12px; padding:14px 18px; margin:18px 0}
+  .reflex b{color:#bfdbfe}
+  footer{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--brain); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} th,.reflex,.pill{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>Backend rules cheat sheet</h1>
+  <p class="lede">What lives inside the Brain's "decide" stage — and how to review it. The rules are where your money and stock are won or lost.</p>
+
+  <h2>Two kinds of rules</h2>
+  <div class="grid">
+    <div class="card"><h3>🔎 Validation</h3><ul>
+      <li>"Is the request sensible?"</li>
+      <li>About the <b>shape</b> of data</li>
+      <li>Generic to any app</li>
+      <li>e.g. <code>sku_id</code> present, <code>qty &gt; 0</code></li>
+    </ul></div>
+    <div class="card"><h3>⚖️ Business logic</h3><ul>
+      <li>"Is it allowed by KDPS?"</li>
+      <li>About the <b>business</b> meaning</li>
+      <li>Special to KDPS — your design</li>
+      <li>e.g. SOR window, GST, the four models</li>
+    </ul></div>
+  </div>
+  <p style="color:var(--muted)"><b>Test:</b> true for any shop → validation. Only makes sense for KDPS → business logic.</p>
+
+  <h2>The non-negotiables</h2>
+  <table>
+    <tr><th>Rule</th><th>Why</th></tr>
+    <tr><td>Rules live in the <b>Brain</b>, not only the screen</td><td>the screen can be skipped or faked — a screen-only rule is fake</td></tr>
+    <tr><td><b>Never trust the screen's input</b></td><td>validate everything in the Brain; assume it could be wrong/harmful</td></tr>
+    <tr><td><b>Compute, don't trust</b> money &amp; stock</td><td>GST, profit, on-hand, totals are calculated — never believed from the request</td></tr>
+  </table>
+
+  <h2>Flag, don't block</h2>
+  <table>
+    <tr><th>Situation</th><th>Do</th></tr>
+    <tr><td><code>sku_id</code> missing (broken request)</td><td><span class="pill block">🛑 Block</span> 400</td></tr>
+    <tr><td>cashier not allowed to discount</td><td><span class="pill block">🛑 Block</span> 403</td></tr>
+    <tr><td>selling below cost</td><td><span class="pill flag">🚩 Flag</span> allow + warn</td></tr>
+    <tr><td>return past the Correction budget</td><td><span class="pill flag">🚩 Flag</span> allow + warn</td></tr>
+    <tr><td>stock −1 (sold before inward)</td><td><span class="pill flag">🚩 Flag</span> allow — ledger self-heals</td></tr>
+  </table>
+  <p style="color:var(--muted)"><b>Block</b> = broken or forbidden. <b>Flag</b> = unusual but real. A shop must keep selling.</p>
+
+  <h2>Two more habits</h2>
+  <table>
+    <tr><th>Habit</th><th>What &amp; why</th></tr>
+    <tr><td>Rates &amp; slabs as <b>data</b></td><td>GST is slab + date based — keep it in dated rows, not <code>price * 0.05</code> in code. Rate change = edit a row, no re-deploy.</td></tr>
+    <tr><td>Rules in a <b>service layer</b></td><td>Write a shared rule (GST, the four models) <b>once</b> in a service; endpoints stay thin and just call it. Don't copy-paste a rule across endpoints — they drift.</td></tr>
+  </table>
+
+  <div class="reflex">
+    🧭 <b>Reviewer's lens for any rule:</b> &nbsp;(1) Enforced in the <b>Brain</b>, not just the screen? &nbsp;(2) Broken/forbidden input <b>blocked</b> (400/403)? &nbsp;(3) Unusual-but-real cases <b>flagged</b>, not blocking the store? &nbsp;(4) Money &amp; stock <b>computed</b>, never trusted from the request?
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0007-where-the-rules-live.html">Lesson 7</a>; sits beside the <a href="backend-api-cheatsheet.html">Backend / API</a> and <a href="database-handbook.html">Database Handbook</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · backend rules</p>
+  </footer>
+</div>
+</body>
+</html>

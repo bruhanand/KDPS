@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 8 — Who Is Allowed (Auth &amp; Roles)</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --brain:#1d4ed8; --brain-bg:#eff6ff; --brain-line:#bfdbfe; --brain-deep:#1e3a8a;
+    --lock:#7c3aed; --lock-bg:#f5f3ff; --lock-line:#ddd6fe; --lock-deep:#5b21b6;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --amber:#b45309; --amber-bg:#fff7ed; --amber-line:#fed7aa; --amber-deep:#7c2d12;
+    --kw:#c084fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b; --cnum:#fda4af;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--lock)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--lock-deep)}
+  h3{font-size:18px; margin:26px 0 4px; color:var(--lock-deep)}
+  p{margin:13px 0}
+  .key{font-weight:600}
+
+  code,.inline{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .inline{background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px; font-size:14px}
+  pre{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:15px 17px; overflow-x:auto; font-size:13.5px; line-height:1.7; margin:14px 0; font-family:ui-monospace,Menlo,monospace}
+  .kw{color:var(--kw); font-weight:700} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)} .cnum{color:var(--cnum)}
+
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:14px 0; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--lock-bg); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--lock-deep); font-weight:700}
+  tr:last-child td{border-bottom:0}
+  td.c{text-align:center}
+  .tbl-wrap{overflow-x:auto}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0}
+  @media(max-width:560px){.two{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .card .h{padding:11px 15px; color:#fff; font-weight:700; font-size:15px}
+  .card .b{padding:13px 15px; font-size:14px}
+  .card .b ul{margin:0; padding-left:18px} .card .b li{margin:6px 0}
+  .card.who .h{background:var(--lock)} .card.what .h{background:var(--brain)}
+  .card.bad .h{background:var(--bad)} .card.good .h{background:var(--good)}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:22px 0}
+  .callout p{margin:0; font-size:15px} .callout p+p{margin-top:8px}
+  .callout.lock{background:var(--lock-bg); border:1px solid var(--lock-line)} .callout.lock b{color:var(--lock-deep)}
+  .callout.ink{background:#1d2433; color:#fff} .callout.ink b{color:#ddd6fe}
+  .callout.warn{background:var(--amber-bg); border:1px solid var(--amber-line)} .callout.warn b{color:var(--amber-deep)}
+  .callout.danger{background:var(--bad-bg); border:1px solid var(--bad-line)} .callout.danger b{color:#991b1b}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+
+  .flow{counter-reset:f; list-style:none; margin:16px 0; padding:0}
+  .flow li{counter-increment:f; position:relative; padding:12px 16px 12px 52px; margin:8px 0; background:#fff; border:1px solid var(--line); border-radius:12px; font-size:14.5px}
+  .flow li::before{counter-increment:f; content:counter(f); position:absolute; left:12px; top:12px; width:27px; height:27px; border-radius:50%; background:var(--lock); color:#fff; font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#ddd6fe; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#f5f3ff,#eff6ff); border:1px solid var(--lock-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--lock-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--lock); text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 8 · ~16 min · backend deep-dive 3 of 4</div>
+  <h1>Who is allowed?</h1>
+  <p class="lede">The Brain knows the rules. But before it runs them, it must answer two questions: <b>who are you?</b> and <b>what are you allowed to do?</b> This is the lock on the door — and the place where most real-world breaches happen.</p>
+  <div class="mission"><b>Why this lesson:</b> KDPS holds money, stock and customer data, across 50+ stores and two states. Get "who is allowed" wrong and a cashier sees the owner's profit, or one store edits another's data. This is your design's safety lock — you must be able to review it.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — TWO WORDS -->
+  <section>
+    <h2><span class="num">1</span> Two words people mix up</h2>
+    <p class="kicker">Authentication vs Authorization</p>
+    <p>They sound the same and are always said together, but they are two different jobs. Keep them apart.</p>
+    <div class="two">
+      <div class="card who"><div class="h">🪪 Authentication — "who are you?"</div><div class="b"><ul>
+        <li>Proving your <b>identity</b></li>
+        <li>Done by <b>logging in</b> (password, OTP)</li>
+        <li>Short word: <b>authN</b></li>
+        <li>KDPS: "are you really cashier Ravi?"</li>
+      </ul></div></div>
+      <div class="card what"><div class="h">🔑 Authorization — "what may you do?"</div><div class="b"><ul>
+        <li>Your <b>permissions</b></li>
+        <li>Decided by your <b>role</b></li>
+        <li>Short word: <b>authZ</b></li>
+        <li>KDPS: "may Ravi give a discount?"</li>
+      </ul></div></div>
+    </div>
+    <div class="callout lock"><p>🏨 <b>Hotel picture:</b> <b>authentication</b> is showing your ID at the front desk (you are who you say). <b>authorization</b> is your room key — it opens <i>your</i> room, not every room. You can be let in the building (authN) and still not be allowed in a room (authZ).</p></div>
+  </section>
+
+  <!-- 2 — HOW LOGIN WORKS -->
+  <section>
+    <h2><span class="num">2</span> How login actually works</h2>
+    <p class="kicker">The flow, step by step</p>
+    <p>Follow what happens when Ravi logs in, then makes a sale:</p>
+    <ol class="flow">
+      <li>Ravi types his <b>username + password</b> on the screen.</li>
+      <li>The Brain checks the password against a <b>scrambled (hashed)</b> copy in the database — never a plain one.</li>
+      <li>If it matches, the Brain sends back a <b>token</b> — a small signed pass that says <i>"user Ravi, role cashier, store 7, expires 6pm."</i></li>
+      <li>The screen keeps the token and <b>sends it with every later request.</b></li>
+      <li>On each request, the Brain checks the token first (the gatekeeper from L6). No token or expired → <span class="inline">401</span>, stop.</li>
+    </ol>
+    <div class="callout ink"><p>🧠 <b>Connect it to L6:</b> the Brain is <b>stateless</b> — after each reply it forgets you. That's why the token must ride along on <i>every</i> request: it re-proves who you are, each time. The server doesn't "remember" you're logged in.</p></div>
+  </section>
+
+  <!-- 3 — TOKEN -->
+  <section>
+    <h2><span class="num">3</span> What's inside a token</h2>
+    <p class="kicker">A signed pass — not a secret to trust blindly</p>
+    <p>A token is a small bit of text the Brain hands you at login. Think of it as a <b>wristband at an event</b>:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>The token says…</th><th>Why it matters</th></tr>
+      <tr><td>who you are (user Ravi)</td><td>so the Brain knows the person</td></tr>
+      <tr><td>your role (cashier)</td><td>so it can check permissions</td></tr>
+      <tr><td>your store (Store 7)</td><td>so it can scope your data</td></tr>
+      <tr><td>an expiry (6pm today)</td><td>so an old/stolen token stops working</td></tr>
+      <tr><td>a signature</td><td>so it <b>can't be faked or edited</b></td></tr>
+    </table></div>
+    <div class="callout warn"><p>🔏 <b>Signed = tamper-proof.</b> If someone edits the token to say "role: owner", the signature breaks and the Brain rejects it. That's why the Brain can trust the token — but, as you'll see in §5, <b>only the token</b>, never a role typed into the request.</p></div>
+  </section>
+
+  <!-- 4 — ROLES & PERMISSIONS -->
+  <section>
+    <h2><span class="num">4</span> Roles &amp; permissions</h2>
+    <p class="kicker">The KDPS permission table (this is authZ)</p>
+    <p>Instead of setting permissions per person, you group people into <b>roles</b>, and give each role a set of allowed actions. (The proper name is <b>RBAC</b> — role-based access control.) Example for KDPS roles:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Action</th><th class="c">Cashier</th><th class="c">Store Manager</th><th class="c">Owner</th></tr>
+      <tr><td>Make a sale</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
+      <tr><td>Give a big discount</td><td class="c">❌</td><td class="c">✅</td><td class="c">✅</td></tr>
+      <tr><td>Approve a return past the allowance</td><td class="c">❌</td><td class="c">✅</td><td class="c">✅</td></tr>
+      <tr><td>See profit / margins</td><td class="c">❌</td><td class="c">❌</td><td class="c">✅</td></tr>
+      <tr><td>Edit master data (brands, prices)</td><td class="c">❌</td><td class="c">❌</td><td class="c">✅</td></tr>
+      <tr><td>See other stores' data</td><td class="c">❌</td><td class="c">own store</td><td class="c">all stores</td></tr>
+    </table></div>
+    <div class="callout soft"><p>💡 <b>Why roles, not per-person:</b> with 50+ stores you can't set rights for each of hundreds of staff. You set them <b>once per role</b>, and every cashier inherits "cashier" rights. New cashier joins → give them the role, done. (Same idea as setting the commercial model once on the brand.)</p></div>
+  </section>
+
+  <!-- 5 — WHERE THE CHECK HAPPENS -->
+  <section>
+    <h2><span class="num">5</span> Where the checks happen — in code</h2>
+    <p class="kicker">Gatekeepers, before the work</p>
+    <p>Both checks run as <b>gatekeepers</b> (Lesson 6, stage 2) — before the real work, on every request:</p>
+    <pre><span class="cmt">// must be logged in (authN)</span>
+app.<span class="fn">post</span>(<span class="str">'/sales'</span>, requireLogin, makeSale);
+
+<span class="cmt">// must be logged in AND a manager (authN + authZ)</span>
+app.<span class="fn">post</span>(<span class="str">'/discounts'</span>, requireLogin, <span class="fn">requireRole</span>(<span class="str">'manager'</span>), giveDiscount);</pre>
+    <p>And here is the most important habit — <b>where the role comes from</b>:</p>
+    <pre><span class="cmt">// ❌ WRONG — trusting what the screen sent</span>
+<span class="kw">const</span> role = req.body.role;     <span class="cmt">// a user could just type  role: "owner"</span>
+
+<span class="cmt">// ✅ RIGHT — read it from the verified token</span>
+<span class="kw">const</span> role = req.user.role;     <span class="cmt">// put there by requireLogin, can't be faked</span></pre>
+    <div class="callout danger"><p>🚩 <b>Never trust a role in the request body.</b> Anyone can send <span class="inline" style="background:#7f1d1d">{ "role": "owner" }</span>. The role must come from the <b>verified token</b> (which is signed and can't be edited). This one mistake hands the keys to anyone who asks.</p></div>
+  </section>
+
+  <!-- 6 — SCREEN ONLY -->
+  <section>
+    <h2><span class="num">6</span> The screen lock is not a lock</h2>
+    <p class="kicker">Same trap as Lesson 7 — worth repeating</p>
+    <p>The screen greys out "Discount" for cashiers. Looks safe. It is not, on its own.</p>
+    <div class="two">
+      <div class="card bad"><div class="h">❌ Screen only</div><div class="b"><ul>
+        <li>Button greyed out for cashiers</li>
+        <li>But the <span class="inline">/discounts</span> endpoint has no role check</li>
+        <li>Anyone can call it directly → discount given</li>
+        <li>The lock is <b>fake</b></li>
+      </ul></div></div>
+      <div class="card good"><div class="h">✅ Brain too</div><div class="b"><ul>
+        <li>Screen greys it out (nice for staff)</li>
+        <li><b>And</b> the endpoint checks the role</li>
+        <li>A direct call without the role → <span class="inline">403</span></li>
+        <li>The lock is <b>real</b></li>
+      </ul></div></div>
+    </div>
+    <div class="callout lock"><p>🔑 <b>The rule:</b> the screen check is for <i>comfort</i> (fast, friendly). The <b>Brain check is the real lock</b>. Always do both, but never rely on the screen alone.</p></div>
+  </section>
+
+  <!-- 7 — BROKEN ACCESS CONTROL -->
+  <section>
+    <h2><span class="num">7</span> The #1 real-world mistake</h2>
+    <p class="kicker">"Logged in" is not "allowed to see this"</p>
+    <p>The most common serious bug in real apps is this: a user is logged in, so the app lets them see <i>anything</i> — including other people's data. Watch:</p>
+    <pre><span class="cmt">// Ravi is a cashier at Store 7. His screen asks for:</span>
+GET /stores/<span class="cnum">7</span>/sales      <span class="cmt">// ✅ his own store — fine</span>
+
+<span class="cmt">// He edits the URL by hand, 7 → 3:</span>
+GET /stores/<span class="cnum">3</span>/sales      <span class="cmt">// 🚩 another store! must be BLOCKED</span></pre>
+    <p>Being logged in is not enough. The Brain must also check: <b>does this user's store match the store they're asking for?</b></p>
+    <pre><span class="cmt">// the missing check</span>
+<span class="kw">if</span> (req.user.store !== requestedStore)
+  <span class="kw">return</span> res.<span class="fn">status</span>(<span class="cnum">403</span>).<span class="fn">json</span>({ error: <span class="str">'not your store'</span> });</pre>
+    <div class="callout danger"><p>🏬 <b>Why this matters for KDPS:</b> two states, 50+ stores. Without this check, any logged-in cashier could read every store's sales, the owner's profit, or another state's data — just by changing a number in the address. This is called <b>broken access control</b>, and it is the most common real breach. Always check the user is allowed <i>this specific thing</i>, not just logged in.</p></div>
+  </section>
+
+  <!-- 8 — REVIEWER -->
+  <section>
+    <h2><span class="num">8</span> Your reviewer's lens</h2>
+    <p class="kicker">What to check on anything with a login or a role</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Check</th><th>The question to ask</th></tr>
+      <tr><td>Role from the token?</td><td>Is the role read from the verified token — never from the request body?</td></tr>
+      <tr><td>Check in the Brain?</td><td>Does the endpoint check the role — not just the greyed-out screen?</td></tr>
+      <tr><td>This thing, not just logged-in?</td><td>Does it confirm the user may see <i>this</i> store / record (broken access control)?</td></tr>
+      <tr><td>Passwords hashed?</td><td>Are passwords scrambled one-way, never stored in plain text?</td></tr>
+      <tr><td>Tokens expire?</td><td>Do tokens have an expiry, so a stolen one stops working?</td></tr>
+    </table></div>
+    <div class="callout ink"><p>🧭 <b>Tie it together:</b> a request arrives → <b>authN</b> (valid token? who are you?) → <b>authZ</b> (your role + is this <i>your</i> data?) → then the rules (L7) → the ledger → a response. You now know the full gate. Last in the backend track: <b>L9 — when things go wrong + background jobs.</b></p></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 10 quick ones</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">Some options are deliberately tempting. Read carefully — instant feedback.</p>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 1 · authN vs authZ</div>
+      <div class="qt">Checking a username and password is…</div>
+      <button class="opt">Authentication — proving who you are</button>
+      <button class="opt">Authorization — what you can do</button>
+      <button class="opt">A status code</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 2 · authN vs authZ</div>
+      <div class="qt">Checking whether a cashier may give a big discount is…</div>
+      <button class="opt">Authentication</button>
+      <button class="opt">Authorization — what you're allowed to do</button>
+      <button class="opt">Validation</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 3 · Tokens</div>
+      <div class="qt">Why does every request carry a token?</div>
+      <button class="opt">To make the request faster</button>
+      <button class="opt">The Brain is stateless — it forgets you, so the token re-proves who you are each time</button>
+      <button class="opt">To store the password on the server</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · Never trust the request</div>
+      <div class="qt">The request body says <code>{ "role": "owner" }</code>. Should the Brain believe it?</div>
+      <button class="opt">Yes — the request said so</button>
+      <button class="opt">No — the role must come from the verified token, not the request body</button>
+      <button class="opt">Only if the rest of the request looks normal</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 5 · Broken access control</div>
+      <div class="qt">A Store-7 cashier changes the URL from <code>/stores/7/sales</code> to <code>/stores/3/sales</code>. What must happen?</div>
+      <button class="opt">Allow it — they are logged in</button>
+      <button class="opt">Block it (403) — check the user's store matches the store requested</button>
+      <button class="opt">Log them out of the system</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 6 · Passwords</div>
+      <div class="qt">How should passwords be stored?</div>
+      <button class="opt">Plain text, so staff can recover a forgotten one</button>
+      <button class="opt">Hashed — scrambled one-way, unreadable even if the database leaks</button>
+      <button class="opt">On the screen, near the login box</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 7 · Where the check runs</div>
+      <div class="qt">Where must the role check actually run?</div>
+      <button class="opt">On the screen only — grey out the button</button>
+      <button class="opt">In the Brain's gatekeeper, before the work</button>
+      <button class="opt">In the database table of users</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 8 · Screen-only trap</div>
+      <div class="qt">The AI greys out a button for cashiers, but the endpoint has <b>no</b> role check. Your call?</div>
+      <button class="opt">Fine — the button is greyed out</button>
+      <button class="opt">Flag it — a screen-only check is fake; the endpoint must check the role</button>
+      <button class="opt">Fine — cashiers won't try the URL directly</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 9 · Token expiry</div>
+      <div class="qt">Why give a token an expiry time?</div>
+      <button class="opt">So a stolen or forgotten token stops working — limiting the damage</button>
+      <button class="opt">To annoy users into logging in again</button>
+      <button class="opt">No reason — tokens should never expire</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 10 · Data scoping</div>
+      <div class="qt">A <b>store manager</b> logs in. Whose sales should they see by default?</div>
+      <button class="opt">Every store's sales</button>
+      <button class="opt">Only their own store's (the owner sees all)</button>
+      <button class="opt">No sales at all</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 10</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Ask me — “what is hashing, simply?”, “show me how a token gets checked in code,” or “next — Lesson 9, when things go wrong.” I'll keep it simple.
+  </div>
+
+  <footer>
+    <p>Builds on <a href="0006-request-response-and-apis.html">Lesson 6 (gatekeepers, stateless)</a> &amp; <a href="0007-where-the-rules-live.html">Lesson 7 (rules in the Brain)</a>. Ties to your D4 payments &amp; roles design. Pairs with the <a href="../reference/auth-roles-cheatsheet.html">Auth &amp; Roles Cheat Sheet</a>.</p>
+    <p>Source: <a href="https://owasp.org/Top10/A01_2021-Broken_Access_Control/">OWASP — Broken Access Control (the #1 risk)</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0008 · 🔑 backend deep-dive 3 of 4 — who is allowed</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "Checking username + password proves who you are — that's authentication (authN).",
+    "Deciding what a logged-in person may do is authorization (authZ) — here, may a cashier give a discount?",
+    "The Brain is stateless (L6) — after each reply it forgets you, so every request carries a token that re-proves who you are.",
+    "Never trust a role sent in the request — a user could type role: owner. It must come from the signed, verified token.",
+    "Logged in is not the same as allowed everywhere. Check the user's own store matches the store requested, or block with 403.",
+    "Passwords are hashed — scrambled one-way so they can't be read back, even if the database leaks. Never plain text.",
+    "The real role check runs in the Brain's gatekeeper, before any work. The screen check is only for comfort.",
+    "A greyed-out button is comfort only. If the endpoint doesn't check the role, anyone can call it directly — the lock is fake.",
+    "An expiry means a stolen or forgotten token stops working after a while, limiting how much damage it can do.",
+    "By default a store user sees only their own store's data; the owner sees all. That's data scoping — part of authorization."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){ o.disabled = true; if (j === correct) o.classList.add('correct'); });
+        if (i === correct){
+          score++; document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok'; fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no'; fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

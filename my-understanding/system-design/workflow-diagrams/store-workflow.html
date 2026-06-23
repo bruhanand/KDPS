@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Store Workflow</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 48px 32px;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 6px;
+  }
+
+  header p {
+    font-size: 14px;
+    color: #6b7280;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tab {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .tab:hover { color: #1a1a2e; }
+
+  .tab.active {
+    color: #7c3aed;
+    border-bottom-color: #7c3aed;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+    margin-bottom: 28px;
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: #4b5563;
+    font-weight: 500;
+  }
+
+  .legend-item .sw {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1.5px solid;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .panel-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #6b7280;
+    margin-bottom: 24px;
+  }
+
+  .diagram-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .diagram-card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .mermaid {
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    body { padding: 24px 16px; }
+    .tab { padding: 10px 8px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>KDPS — Store Workflow</h1>
+    <p>The store side — from inward at the door, through the till, to anything that leaves the store. Each tab is a standalone sub-flow; the first tab maps them together.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" role="tab" aria-selected="true" data-panel="overall">Overall</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="inward">Inward</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="sale">Counter Sale</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="returns">Exchange</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="movement">Stock Movement Out</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="eoss">EOSS / Markdown</button>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="sw" style="background:#ede9fe;border-color:#7c3aed;"></span>Entry point</span>
+    <span class="legend-item"><span class="sw" style="background:#f3f4f6;border-color:#6b7280;"></span>Step</span>
+    <span class="legend-item"><span class="sw" style="background:#fef3c7;border-color:#d97706;"></span>Decision</span>
+    <span class="legend-item"><span class="sw" style="background:#fee2e2;border-color:#dc2626;"></span>Friction / leak</span>
+    <span class="legend-item"><span class="sw" style="background:#d1fae5;border-color:#059669;"></span>Outcome</span>
+  </div>
+
+  <!-- ============ OVERALL ============ -->
+  <section class="panel active" id="overall" role="tabpanel">
+    <p class="panel-desc">
+      Picks up exactly where the stock workflow ends — the moment a PT file is generated for the
+      store and stock starts arriving. The store-side inward is shown as a single block here —
+      open the Inward tab for its detail. The Counter Sale, Exchange and Stock Movement Out
+      sub-flows are then combined into one end-to-end map; the EOSS markdown path is also a
+      single block — open the EOSS / Markdown tab for detail.
+    </p>
+
+    <div class="diagram-card">
+      <h2>End-to-End Flow: How a Sellable Unit Leaves the Store</h2>
+      <pre class="mermaid">
+flowchart TD
+  live["<b>Stock live &amp; sellable</b><br/>every barcode scanned · stock on the POS panel"]:::phase
+  floor["<b>Item merchandised on the sales floor</b><br/>season-tagged so staff can read its age"]:::field
+  exit{"How does the<br/>unit leave the store?"}:::decision
+
+  offers["<b>Counter staff checks active offers</b><br/>read off physical placards — the POS does not enforce them"]:::field
+  hasbc{"Does the item<br/>have a barcode?"}:::decision
+  scan["<b>Barcode scanned on the POS</b>"]:::field
+  ok{"Barcode reads cleanly<br/>&amp; POS is up?"}:::decision
+  manual["<b>Manual billing</b><br/>customer served at the counter now"]:::pain
+  fix["<b>Head office corrects the entry</b><br/>reconciled into the system next day"]:::pain
+  disc{"Discount<br/>to apply?"}:::decision
+  full["<b>Full price</b><br/>no discount"]:::field
+  applied["<b>Discount applied</b><br/>amount is not in the POS — keyed in by hand from a placard"]:::field
+  ring["<b>POS rings up the sale · customer pays — cash / UPI</b>"]:::field
+  bill["<b>Bill printed · stock auto-deducted</b>"]:::field
+
+  back{"Customer returns<br/>the item later?"}:::decision
+  final["<b>Sale final · unit has left the store</b>"]:::done
+  exch["<b>Exchange only — no money, no credit</b><br/>policy is an MRP-to-MRP swap"]:::field
+  mrp{"New item's MRP<br/>vs the original?"}:::decision
+  lower["<b>New item MRP lower</b><br/>customer takes additional item(s) to cover the gap — down to socks / handkerchief"]:::field
+  equal["<b>Equal MRP</b><br/>direct swap"]:::field
+  higher["<b>New item MRP higher</b><br/>customer pays the balance"]:::field
+  leak["<b>No discount-history check on exchange</b><br/>equal-MRP swaps leave no audit trail"]:::pain
+  swap["<b>Units swapped at the counter</b>"]:::field
+  qstate{"Returned unit<br/>condition?"}:::decision
+  resell["<b>Back to sellable stock on the floor</b>"]:::done
+  quar["<b>Quarantined — defective</b>"]:::field
+
+  why{"Reason for moving<br/>the stock?<br/>(MBO-only · EBOs skip this)"}:::decision
+  create_pt["<b>Stock Transfer voucher created in the panel</b><br/>destination SBU selected · each piece scanned (or style code for brands like Jockey) · voucher saved · PT generated"]:::field
+  pendingdest["<b>Pending inward visible on destination's POS login</b><br/>'today's credit' — qty visible before goods physically arrive"]:::field
+  busload["<b>Dispatcher loads the goods on a bus</b>"]:::field
+  wagroup["<b>Bus number + driver number posted in the WhatsApp group</b><br/>transfer is effectively instant (~2 hrs) — bus details are not captured as system fields"]:::field
+  wareceipt["<b>Receiver posts receipt confirmation in the same WhatsApp group</b>"]:::field
+  inward["<b>Receiver inwards the items — sellable at the new SBU</b><br/>see the Inward tab"]:::done
+
+  mfbrand{"Defective / GR —<br/>which brand?"}:::decision
+  madura["<b>Madura Fashion brand</b><br/>Allen Solly, Louis Philippe, Van Heusen, Peter England, …"]:::field
+  others["<b>Other brand / non-branded</b>"]:::field
+  storepick["<b>Brand picks up GR / defective stock directly from the KDPS store</b>"]:::done
+  toWH["<b>Defective stock consolidated at the warehouse</b><br/>collected from all stores into one place"]:::field
+  fromWH["<b>GR / defective returns processed from the warehouse</b>"]:::done
+  sorret["<b>SOR seasonal return to the brand</b><br/>within the unsold allowance"]:::done
+
+  eoss["<b>End of season → marked-down sale</b><br/>see the EOSS / Markdown tab"]:::field
+
+  live --> floor
+  floor --> exit
+  exit -- "customer buys it" --> offers
+  exit -- "moved out · not a sale" --> why
+  exit -- "season ends" --> eoss
+  eoss --> offers
+
+  offers --> hasbc
+  hasbc -- "no barcode" --> manual
+  hasbc -- "yes" --> scan
+  scan --> ok
+  ok -- "no · barcode clash or POS down" --> manual
+  ok -- "yes" --> disc
+  manual --> fix
+  disc -- "none" --> full
+  disc -- "discount" --> applied
+  full --> ring
+  applied --> ring
+  ring --> bill
+
+  bill --> back
+  back -- "no" --> final
+  back -- "yes" --> exch
+  exch --> mrp
+  mrp -- "lower" --> lower
+  mrp -- "equal" --> equal
+  mrp -- "higher" --> higher
+  lower --> swap
+  equal --> swap
+  higher --> swap
+  equal -.-> leak
+  swap --> qstate
+  qstate -- "good" --> resell
+  qstate -- "damaged" --> quar
+  quar --> mfbrand
+
+  why -- "rebalancing" --> create_pt
+  why -- "free up floor space" --> create_pt
+  why -- "defective" --> mfbrand
+  why -- "season-end · SOR brand" --> sorret
+  create_pt --> pendingdest
+  pendingdest --> busload
+  busload --> wagroup
+  wagroup --> wareceipt
+  wareceipt --> inward
+  mfbrand -- "Madura Fashion" --> madura
+  mfbrand -- "other / non-branded" --> others
+  madura --> storepick
+  others --> toWH
+  toWH --> fromWH
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ INWARD ============ -->
+  <section class="panel" id="inward" role="tabpanel">
+    <p class="panel-desc">
+      How stock becomes sellable at this store. The source SBU (Ranchi warehouse or a sister
+      store) generates a PT file when it saves its outbound voucher — the pending inward is
+      visible on this store's POS login immediately, before the goods physically arrive. Goods
+      come daily. Staff opens the matching voucher and scans every piece by its individual
+      barcode; Received qty climbs while Pending qty drops. The system permits selling a unit
+      before the inward is keyed in (the goods are already in hand) — in that case SOH shows
+      negative for the SKU and auto-corrects once the inward is completed.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Goods at the Door → Sellable Stock</h2>
+      <pre class="mermaid">
+flowchart TD
+  pending["<b>1 · Pending inward visible on the store's POS login</b><br/>created the moment the source SBU saves its outbound voucher · qty visible before goods arrive"]:::phase
+  arrive["<b>2 · Goods physically arrive at the store</b><br/>from the Ranchi warehouse or a sister store · daily inward is the norm"]:::field
+  open["<b>3 · Staff opens the matching inward voucher</b>"]:::field
+  scan["<b>4 · Each piece scanned by barcode</b><br/>every unit carries its own barcode"]:::field
+  counters["<b>5 · Received qty ↑ · Pending qty ↓</b><br/>on every scan"]:::field
+  earlysell{"6 · Item billed before<br/>'in' was completed?"}:::decision
+  neg["<b>SOH shows negative for that SKU</b><br/>system permits the sale · stays negative until the inward is keyed in"]:::pain
+  cont["<b>Continue scanning the remaining pieces</b>"]:::field
+  done2["<b>7 · Inward complete · SOH auto-adjusts</b><br/>any negatives plus-minus on next sync · stock now sellable at the counter"]:::done
+
+  pending --> arrive
+  arrive --> open
+  open --> scan
+  scan --> counters
+  counters --> earlysell
+  earlysell -- "yes · goods already in hand" --> neg
+  earlysell -- "no" --> cont
+  neg --> cont
+  cont --> done2
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ COUNTER SALE ============ -->
+  <section class="panel" id="sale" role="tabpanel">
+    <p class="panel-desc">
+      The golden path at the till. Offers are read off physical placards and applied by hand —
+      the POS does not enforce them, which is also where the discount-skimming leak sits: a
+      unit eligible for a larger brand-funded discount can be billed at a smaller one. The POS
+      is fully cloud-dependent — any network outage drops the sale to manual billing, reconciled
+      next day. Print is single-shot: if the printer was off when the bill rang up, the bill
+      saves but the slip does not print, and recovery is a Search → reopen → edit → re-trigger
+      print loop.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Customer at the Counter → Billed Sale</h2>
+      <pre class="mermaid">
+flowchart TD
+  customer["<b>1 · Customer brings an item to the counter</b>"]:::phase
+  offers["<b>2 · Counter staff checks active offers</b><br/>read from physical placards — the POS does not enforce them"]:::field
+  hasbc{"3 · Does the item<br/>have a barcode?"}:::decision
+  scan["<b>4 · Barcode scanned on the POS</b>"]:::field
+  ok{"5 · Barcode reads cleanly<br/>&amp; POS is up?"}:::decision
+  manual["<b>Manual billing</b><br/>customer served at the counter now"]:::pain
+  fix["<b>Head office corrects the entry</b><br/>transaction reconciled into the system next day"]:::pain
+  disc{"6 · Discount<br/>to apply?"}:::decision
+  full["<b>Full price</b><br/>no discount"]:::field
+  applied["<b>Discount applied</b><br/>the amount is not in the POS — staff reads it off a placard and keys it in by hand"]:::field
+  ring["<b>7 · POS rings up the sale</b>"]:::field
+  pay["<b>8 · Customer pays — cash / UPI</b>"]:::field
+  bill["<b>9 · Bill printed · stock auto-deducted</b>"]:::done
+  printfail["<b>If printer was off · bill saved, slip didn't print</b><br/>screen has already jumped to a new bill"]:::pain
+  redo["<b>Recovery: Search → reopen bill → edit → re-trigger print</b><br/>no reprint button"]:::pain
+
+  customer --> offers
+  offers --> hasbc
+  hasbc -- "no barcode" --> manual
+  hasbc -- "yes" --> scan
+  scan --> ok
+  ok -- "no · barcode clash or POS down" --> manual
+  ok -- "yes" --> disc
+  manual --> fix
+  disc -- "none" --> full
+  disc -- "discount" --> applied
+  full --> ring
+  applied --> ring
+  ring --> pay
+  pay --> bill
+  bill -.-> printfail
+  printfail --> redo
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ EXCHANGE ============ -->
+  <section class="panel" id="returns" role="tabpanel">
+    <p class="panel-desc">
+      The firm rule: <b>exchange only — no money back, no store credit</b>. Swaps are
+      MRP-to-MRP. If the new item is cheaper, the customer takes additional item(s) — down to
+      socks or a handkerchief — to cover the gap; if it is dearer, the customer pays the
+      balance. Because an exchange does not re-check discount history, equal-MRP swaps leave
+      no audit trail and can be used to mask an under-applied discount.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Customer Exchange at the Store</h2>
+      <pre class="mermaid">
+flowchart TD
+  back["<b>Customer returns to the store with a purchased item</b>"]:::phase
+  policy["<b>Exchange only — no money, no credit</b><br/>swap is MRP-to-MRP"]:::field
+  mrp{"New item's MRP<br/>vs the original?"}:::decision
+  lower["<b>New item MRP lower than the original</b><br/>customer takes additional item(s) to cover the gap — down to socks / handkerchief"]:::field
+  equal["<b>Equal MRP</b><br/>direct swap"]:::field
+  higher["<b>New item MRP higher than the original</b><br/>customer pays the balance"]:::field
+  swap["<b>Units swapped at the counter</b>"]:::field
+  qstate{"Returned unit<br/>condition?"}:::decision
+  resell["<b>Back to sellable stock on the floor</b>"]:::done
+  quar["<b>Quarantined — defective</b><br/>routes to Stock Movement Out"]:::field
+  leak["<b>No discount-history check on exchange</b><br/>equal-MRP swaps leave no audit trail"]:::pain
+
+  back --> policy
+  policy --> mrp
+  mrp -- "lower" --> lower
+  mrp -- "equal" --> equal
+  mrp -- "higher" --> higher
+  lower --> swap
+  equal --> swap
+  higher --> swap
+  swap --> qstate
+  qstate -- "good" --> resell
+  qstate -- "damaged" --> quar
+  equal -.-> leak
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ STOCK MOVEMENT OUT ============ -->
+  <section class="panel" id="movement" role="tabpanel">
+    <p class="panel-desc">
+      Every way a unit leaves a store that is not a customer sale. <b>Internal stock transfer is
+      MBO-only</b> — EBOs do not move stock internally (that traffic is between the brand and the
+      EBO directly). A transfer is created in the Stock Transfer panel: the destination SBU is
+      selected, each piece is scanned (or entered by style code for brands like Jockey, where
+      the PT file is keyed that way), and the voucher is saved — a PT file is generated and the
+      destination immediately sees the items as <i>today&apos;s credit</i> / pending inward on
+      its POS login, before the goods physically move. Physically, the goods then move by bus,
+      confirmed over a WhatsApp group with bus + driver number — system-level transfer tracking
+      is deferred to a later ERP phase. Defective / GR returns split by brand: Madura Fashion
+      brands (Allen Solly, LP, Van Heusen, Peter England) pick up directly from the store;
+      every other brand and non-branded stock is consolidated at the warehouse and processed
+      from there. SOR season-end stock returns to the brand within the unsold allowance.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Stock Leaving the Store (not a Sale)</h2>
+      <pre class="mermaid">
+flowchart TD
+  trigger["<b>Stock needs to leave the store — not a customer sale</b><br/>internal stock transfer is MBO-only · EBOs don't move stock internally (brand ↔ EBO directly)"]:::phase
+  why{"Reason?"}:::decision
+  rebal["<b>Rebalancing</b><br/>sister store needs the stock (customer waiting) · or SKU sat 3–4 months and sells well elsewhere"]:::field
+  space["<b>Free up floor space</b><br/>prior-season stock to warehouse · seasonal swap (winter ↔ summer)"]:::field
+  damaged["<b>Unit found defective after inward</b>"]:::field
+  seasonend["<b>Season ended · unit unsold · brand is SOR</b>"]:::field
+
+  create_pt["<b>Stock Transfer voucher created in the panel</b><br/>destination SBU selected · each piece scanned (or style code for brands like Jockey) · voucher saved · PT file generated"]:::field
+  pendingdest["<b>Pending inward appears on destination's POS login</b><br/>'today's credit' — qty visible before goods physically arrive"]:::field
+
+  busload["<b>Dispatcher loads the goods on a bus</b>"]:::field
+  wagroup["<b>Bus number + driver number posted in the WhatsApp group</b><br/>transfer is effectively instant (~2 hrs) — bus details are not captured as system fields"]:::field
+  wareceipt["<b>Receiver posts receipt confirmation in the same WhatsApp group</b>"]:::field
+  inward["<b>Receiver inwards the items — sellable at the new SBU</b><br/>see the Inward tab for detail"]:::done
+  laternote["<b>System-level transfer tracking deferred to a later ERP phase</b>"]:::field
+
+  mfbrand{"Defective / GR —<br/>which brand?"}:::decision
+  madura["<b>Madura Fashion brand</b><br/>Allen Solly, Louis Philippe, Van Heusen, Peter England, …"]:::field
+  others["<b>Other brand / non-branded</b>"]:::field
+  storepick["<b>Brand picks up GR / defective stock directly from the KDPS store</b>"]:::done
+  toWH["<b>Defective stock consolidated at the warehouse</b><br/>collected from all stores into one place"]:::field
+  fromWH["<b>GR / defective returns processed from the warehouse</b>"]:::done
+
+  sorret["<b>SOR seasonal return to the brand</b><br/>within the unsold allowance"]:::done
+
+  trigger --> why
+  why -- "rebalance" --> rebal
+  why -- "make space" --> space
+  why -- "defective" --> damaged
+  why -- "season end" --> seasonend
+  rebal --> create_pt
+  space --> create_pt
+  create_pt --> pendingdest
+  pendingdest --> busload
+  damaged --> mfbrand
+  seasonend --> sorret
+  busload --> wagroup
+  wagroup --> wareceipt
+  wareceipt --> inward
+  inward -.-> laternote
+  mfbrand -- "Madura Fashion" --> madura
+  mfbrand -- "other / non-branded" --> others
+  madura --> storepick
+  others --> toWH
+  toWH --> fromWH
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ EOSS / MARKDOWN ============ -->
+  <section class="panel" id="eoss" role="tabpanel">
+    <p class="panel-desc">
+      The end-of-season markdown path. Who funds the discount — the brand or KDPS — depends on
+      whether it is a brand offer or an ageing-stock clearance. Most stores lack the floor
+      space to separate offer stock from fresh arrivals, so the whole store goes on sale. The
+      improved POS flow should apply the active discount from the scanned barcode, capture
+      approvals for overrides, and retain discount and margin history for reporting.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: End of Season → Marked-Down Sale</h2>
+      <pre class="mermaid">
+flowchart TD
+  seasonend["<b>Season nears its end</b><br/>summer clears ~Aug · winter EOSS ~Feb"]:::phase
+  itemtype{"Item<br/>type?"}:::decision
+  core["<b>Core item</b><br/>basics rarely discounted in year 1 — offer runs the next year"]:::field
+  seasonal["<b>Seasonal item</b><br/>discounted at the end of the same season"]:::field
+  fund{"Who funds<br/>the markdown?"}:::decision
+  brandfund["<b>Brand-funded offer</b><br/>e.g. flat % off a category"]:::field
+  kdpsfund["<b>KDPS-funded</b><br/>ageing / dead-stock clearance"]:::field
+  placard["<b>Offer communicated to stores via placards</b>"]:::field
+  space{"Store has<br/>floor space?"}:::decision
+  separate["<b>Offer section separated from fresh arrivals</b>"]:::field
+  whole["<b>Whole store goes on sale</b>"]:::field
+  approve{"Discount within<br/>floor discretion?"}:::decision
+  mgrok["<b>Higher-management approval</b>"]:::field
+  atbill["<b>POS applies the EOSS discount at billing</b><br/>margin compresses ~25% → ~18% · approval captured for overrides"]:::field
+  audit["<b>Discount audit trail retained</b><br/>MRP · discount % · final price · cashier · approver · funding source"]:::field
+  sold["<b>Sold at EOSS price · stock deducted immediately</b>"]:::done
+
+  seasonend --> itemtype
+  itemtype -- "core" --> core
+  itemtype -- "seasonal" --> seasonal
+  core --> fund
+  seasonal --> fund
+  fund -- "brand" --> brandfund
+  fund -- "KDPS" --> kdpsfund
+  brandfund --> placard
+  kdpsfund --> placard
+  placard --> space
+  space -- "yes · rare" --> separate
+  space -- "no" --> whole
+  separate --> approve
+  whole --> approve
+  approve -- "yes" --> atbill
+  approve -- "no" --> mgrok
+  mgrok --> atbill
+  atbill --> audit
+  audit --> sold
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef pain fill:#fee2e2,stroke:#dc2626,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, sans-serif',
+      fontSize: '13px',
+      primaryColor: '#f3f4f6',
+      primaryTextColor: '#1a1a2e',
+      primaryBorderColor: '#374151',
+      lineColor: '#6b7280',
+      background: '#ffffff',
+      mainBkg: '#ffffff',
+      nodeBorder: '#374151'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 16,
+      nodeSpacing: 30,
+      rankSpacing: 40
+    }
+  });
+
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.panel');
+  var renderedPanels = {};
+
+  // Mermaid cannot lay out a diagram inside a display:none container, so each
+  // panel's diagram is rendered the first time its tab becomes visible.
+  function renderPanel(panelId) {
+    if (renderedPanels[panelId]) return;
+    var el = document.querySelector('#' + panelId + ' .mermaid');
+    if (!el) return;
+    renderedPanels[panelId] = true;
+    mermaid.run({ nodes: [el] });
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      panels.forEach(function (p) { p.classList.remove('active'); });
+
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+      renderPanel(tab.dataset.panel);
+    });
+  });
+
+  // Render the panel that is visible on first load. Wait for the webfont so
+  // Mermaid measures label widths with Inter rather than a fallback font.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { renderPanel('overall'); });
+  } else {
+    renderPanel('overall');
+  }
+</script>
+</body>
+</html>

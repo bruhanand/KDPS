@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Questions for Ten Software (POS Integration)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --rust:#c4623f; --ink:#222; --muted:#6b7280;
+    --line:#e3e6ec; --bg:#f7f8fa; --card:#fff; --blue:#1e5fa8; --blue-bg:#e6f0fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:760px; margin:0 auto; padding:40px 24px 80px}
+  header{border-bottom:3px solid var(--rust); padding-bottom:18px; margin-bottom:22px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:26px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px}
+  h2{font-size:18px; color:var(--navy); border-left:4px solid var(--rust); padding-left:10px; margin:28px 0 10px}
+  ol{margin:8px 0; padding-left:26px}
+  li{margin:8px 0}
+  li b{color:var(--navy)}
+  .note{background:var(--blue-bg); border:1px solid #bcd6f3; border-radius:10px; padding:12px 14px; font-size:14px; margin:18px 0}
+  footer{margin-top:40px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">KDPS · POS Integration · Q34</div>
+  <h1>Questions for Ten Software</h1>
+  <p class="sub">KDPS Lifestyle is building a central inventory and accounting system. The Ten Software POS stays exactly as it is in every store — we only need to exchange data with it. These questions decide how. (Forward-ready; answers close inbound decision Q34.)</p>
+</header>
+
+<h2>A · Access &amp; mechanics</h2>
+<ol>
+  <li><b>Is there an API?</b> REST, webhook, or scheduled file export — what does the POS support today for both reading and writing data?</li>
+  <li><b>Where is the data?</b> One central database for all stores, or one install per store? If per store, how do we reach each one?</li>
+  <li><b>Authentication</b> — how is API/export access secured (keys, accounts), and can access be scoped per store?</li>
+  <li><b>Documentation</b> — is there API/export documentation you can share?</li>
+  <li><b>Frequency &amp; limits</b> — how often can we sync (real-time, every few minutes, daily)? Any rate limits or batch-size limits?</li>
+  <li><b>Test environment</b> — is there a sandbox or a test store we can integrate against before touching live stores?</li>
+  <li><b>Commercials</b> — is API/integration access included in the current licence, or priced separately?</li>
+</ol>
+
+<h2>B · Data we want to push INTO the POS</h2>
+<ol start="8">
+  <li><b>Item master</b> — can we create/update items by barcode with MRP, tax/HSN, brand, season, category? Bulk and incremental?</li>
+  <li><b>Pending inward</b> — can the POS accept a "pending inward / incoming transfer" quantity per store, so the store scans against it to receive?</li>
+  <li><b>Price &amp; offer updates</b> — can we update prices, and can discount/EOSS rules be set per barcode, per store, with start/end dates? Or is price the only lever?</li>
+</ol>
+
+<h2>C · Data we want to pull OUT of the POS</h2>
+<ol start="11">
+  <li><b>Line-item sales per bill</b> — barcode, qty, price, discount, store, date/time, payment mode, bill number. Available? At what frequency?</li>
+  <li><b>Returns &amp; exchanges at the counter</b> — do they come through as line items with a reference to the original bill?</li>
+  <li><b>Stock on hand per store</b> — can we read current SOH per barcode per store (including negative values, if any)?</li>
+  <li><b>Daily collection per store</b> — cash / UPI / card totals per day per store?</li>
+</ol>
+
+<h2>D · The join key</h2>
+<ol start="15">
+  <li><b>Barcode as the shared key</b> — both sides must identify items by barcode. Any constraints (length, format, uniqueness)?</li>
+  <li><b>Season reuse</b> — some brands reuse the same barcode value in a later season. How does the POS handle a barcode it has seen before with a different item/MRP? Can items be season-scoped?</li>
+</ol>
+
+<div class="note"><b>The two load-bearing answers</b> (everything else can flex): can the POS accept a <b>pending-inward quantity per store</b> (B-9), and can it export <b>line-item sales</b> (C-11)? If either is impossible, please tell us what the closest supported alternative is.</div>
+
+<footer>
+  KDPS · prepared 10 June 2026 · answers fold into <code>inbound-ingestion-design.html</code> (Q34) and unblock the D3 outbound design.
+</footer>
+
+</div>
+</body>
+</html>

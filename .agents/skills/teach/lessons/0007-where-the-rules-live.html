@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 7 — Where the Rules Live</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --brain:#1d4ed8; --brain-bg:#eff6ff; --brain-line:#bfdbfe; --brain-deep:#1e3a8a;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --amber:#b45309; --amber-bg:#fff7ed; --amber-line:#fed7aa; --amber-deep:#7c2d12;
+    --kw:#c084fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b; --cnum:#fda4af;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--brain)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--brain-deep)}
+  h3{font-size:18px; margin:26px 0 4px; color:var(--brain-deep)}
+  p{margin:13px 0}
+  .key{font-weight:600}
+
+  code,.inline{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .inline{background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px; font-size:14px}
+  pre{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:15px 17px; overflow-x:auto; font-size:13.5px; line-height:1.7; margin:14px 0; font-family:ui-monospace,Menlo,monospace}
+  .kw{color:var(--kw); font-weight:700} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)} .cnum{color:var(--cnum)}
+
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:14px 0; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--brain-bg); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--brain-deep); font-weight:700}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:ui-monospace,Menlo,monospace}
+  .tbl-wrap{overflow-x:auto}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px 0}
+  @media(max-width:560px){.two{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .card .h{padding:11px 15px; color:#fff; font-weight:700; font-size:15px}
+  .card .b{padding:13px 15px; font-size:14px}
+  .card .b ul{margin:0; padding-left:18px} .card .b li{margin:6px 0}
+  .card.v .h{background:var(--brain)} .card.l .h{background:#334155}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:22px 0}
+  .callout p{margin:0; font-size:15px} .callout p+p{margin-top:8px}
+  .callout.brain{background:var(--brain-bg); border:1px solid var(--brain-line)} .callout.brain b{color:var(--brain-deep)}
+  .callout.ink{background:#1d2433; color:#fff} .callout.ink b{color:#bfdbfe}
+  .callout.warn{background:var(--amber-bg); border:1px solid var(--amber-line)} .callout.warn b{color:var(--amber-deep)}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+
+  .pill{display:inline-block; font-size:12px; font-weight:800; padding:2px 9px; border-radius:7px; white-space:nowrap}
+  .block{background:var(--bad-bg); color:#991b1b} .flag{background:var(--amber-bg); color:var(--amber-deep)}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#bfdbfe; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#eff6ff,#f0fdf4); border:1px solid var(--brain-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--brain-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--brain); text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 7 · ~18 min · backend deep-dive 2 of 4 · updated 20 Jun 2026</div>
+  <h1>Where the rules live</h1>
+  <p class="lede">Lesson 6 showed the request reaching the Brain. This lesson opens <b>stage 4</b> — the rules. This is the real KDPS: the four models, GST, return windows, "flag don't block." It's where your whole design becomes code.</p>
+  <div class="mission"><b>Why this lesson:</b> this is the box you'll review the most. Bad rules = wrong money, wrong stock, angry stores. If you can tell a <i>good</i> rule from a <i>bad</i> one, you can keep the AI honest where it matters most.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — TWO KINDS OF RULES -->
+  <section>
+    <h2><span class="num">1</span> Two kinds of "rules"</h2>
+    <p class="kicker">Validation vs business logic</p>
+    <p>People say "the rules", but there are really <b>two</b> kinds, and they do different jobs. Keep them apart in your head.</p>
+    <div class="two">
+      <div class="card v">
+        <div class="h">🔎 Validation</div>
+        <div class="b">
+          <p style="margin:0 0 6px"><b>"Is this request even sensible?"</b></p>
+          <ul>
+            <li>About the <b>shape</b> of the data</li>
+            <li>Generic — same for any app</li>
+            <li>Runs first (stage 3)</li>
+            <li>e.g. <span class="inline">sku_id</span> present? <span class="inline">qty</span> a positive number?</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card l">
+        <div class="h">⚖️ Business logic</div>
+        <div class="b">
+          <p style="margin:0 0 6px"><b>"Is this allowed by KDPS's rules?"</b></p>
+          <ul>
+            <li>About the <b>business</b> meaning</li>
+            <li>Special to KDPS — your design</li>
+            <li>Runs after (stage 4)</li>
+            <li>e.g. SOR return window, GST slab, commercial model</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="callout soft"><p>🧠 <b>Simple test:</b> if the rule would be true for <i>any</i> shop's software, it's <b>validation</b>. If it only makes sense because of how <b>KDPS</b> works, it's <b>business logic</b>.</p></div>
+  </section>
+
+  <!-- 2 — RULES LIVE IN THE BRAIN -->
+  <section>
+    <h2><span class="num">2</span> Rules must live in the Brain</h2>
+    <p class="kicker">Never only on the screen</p>
+    <p>This is the single most important idea in the lesson. A rule on the <b>screen</b> alone is not a rule — it's a suggestion.</p>
+    <ul>
+      <li>The screen can be skipped, edited, or have a bug.</li>
+      <li>A clever person can send a request straight to the Brain, with no screen at all.</li>
+      <li>So if the Brain doesn't check the rule, the rule does not really exist.</li>
+    </ul>
+    <div class="callout warn"><p>⚠️ <b>The greyed-out button trap.</b> The screen greys out "Discount" for a cashier — looks safe. But if the <b>Brain</b> accepts any discount request without checking the role, the rule is fake. The screen is for <i>comfort</i>; the Brain is for <i>truth</i>. (Screen checks are still nice — they give fast feedback — but the Brain must check too.)</p></div>
+  </section>
+
+  <!-- 3 — VALIDATION -->
+  <section>
+    <h2><span class="num">3</span> Validation — the bouncer at the door</h2>
+    <p class="kicker">Reject broken requests early</p>
+    <p>Validation throws out a request that doesn't even make sense — before any real work. A bad request gets a <span class="inline">400</span> and stops.</p>
+    <pre><span class="cmt">// stage 3 — validate, before touching anything</span>
+<span class="kw">if</span> (!sku_id)        <span class="kw">return</span> res.<span class="fn">status</span>(<span class="cnum">400</span>).<span class="fn">json</span>({ error: <span class="str">'sku_id is required'</span> });
+<span class="kw">if</span> (qty &lt;= <span class="cnum">0</span>)      <span class="kw">return</span> res.<span class="fn">status</span>(<span class="cnum">400</span>).<span class="fn">json</span>({ error: <span class="str">'qty must be positive'</span> });</pre>
+    <div class="callout brain"><p>🛡️ <b>The golden rule of input:</b> <b>never trust the screen.</b> Always assume the data coming in could be wrong or harmful, and check it in the Brain. Good validation is the wall that keeps rubbish out of your ledger.</p></div>
+  </section>
+
+  <!-- 4 — BUSINESS LOGIC -->
+  <section>
+    <h2><span class="num">4</span> Business logic — the KDPS rulebook</h2>
+    <p class="kicker">Your design, turned into code</p>
+    <p>This is where your spine comes alive. The clearest example: <b>what happens on a sale depends on the brand's commercial model</b> (Lesson 1's four models, stored on the brand row from Lesson 4).</p>
+    <pre><span class="cmt">// when a sale happens — the rule branches on the model</span>
+<span class="kw">const</span> brand = <span class="kw">await</span> db.brand.<span class="fn">find</span>(sku.brand_id);
+
+<span class="kw">if</span> (brand.commercial_model === <span class="str">'SOR'</span> ||
+    brand.commercial_model === <span class="str">'CONSIGNMENT'</span>) {
+  <span class="cmt">// brand owns it → we owe the vendor a commission as it sells</span>
+  <span class="fn">accrueVendorPayable</span>(sku, qty, brand);
+}
+<span class="cmt">// BNS / CORRECTION → KDPS already owns it (vendor paid at inward) → nothing here</span></pre>
+    <p>Read it as plain words:</p>
+    <ul>
+      <li>Find the brand for this SKU.</li>
+      <li>If it's <b>brand-owned</b> (SOR / Consignment) → record that we now owe the vendor.</li>
+      <li>If it's <b>KDPS-owned</b> (Buy &amp; Sell / Correction) → nothing; the vendor was already paid at inward.</li>
+    </ul>
+    <p>Other KDPS business rules that live right here:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Rule</th><th>What the Brain checks / does</th></tr>
+      <tr><td>Return window</td><td>Is today within the SOR/Correction window? Alert at 30 / 15 / 7 days.</td></tr>
+      <tr><td>GST</td><td>Pick the right slab by HSN + date, add the tax breakup.</td></tr>
+      <tr><td>Correction allowance</td><td>Is this return within the brand's capped budget?</td></tr>
+      <tr><td>Offers / EOSS</td><td>Apply the brand's discount rules for this store and date.</td></tr>
+    </table></div>
+  </section>
+
+  <!-- 5 — GST AS A RULE -->
+  <section>
+    <h2><span class="num">5</span> A real rule in code: GST</h2>
+    <p class="kicker">Slab-based, date-based — so keep it as data</p>
+    <p>Let's make one rule fully real. Indian apparel GST is tricky in two ways:</p>
+    <ul>
+      <li>It is <b>slab-based</b> — the rate depends on the item's price.</li>
+      <li>It is <b>date-effective</b> — the government can change rates over time.</li>
+    </ul>
+    <p>So the golden rule: <span class="key">keep the rates as data (rows you can change), not as numbers hidden in code.</span></p>
+    <pre><span class="cmt">// the slabs live as DATA — easy to change, no code edit (example rates)</span>
+<span class="kw">const</span> gstSlabs = [
+  { hsn: <span class="str">'6109'</span>, upto: <span class="cnum">1000</span>,     rate: <span class="cnum">5</span>  },  <span class="cmt">// garment under ₹1000</span>
+  { hsn: <span class="str">'6109'</span>, upto: <span class="kw">Infinity</span>, rate: <span class="cnum">12</span> },  <span class="cmt">// ₹1000 and above</span>
+];
+
+<span class="cmt">// the rule: pick the right slab, then compute the tax</span>
+<span class="kw">function</span> <span class="fn">gstFor</span>(item) {
+  <span class="kw">const</span> slab = gstSlabs.<span class="fn">find</span>(s =>
+    s.hsn === item.hsn && item.price &lt;= s.upto);
+  <span class="kw">const</span> tax = item.price * slab.rate / <span class="cnum">100</span>;
+  <span class="kw">return</span> { rate: slab.rate, tax };
+}</pre>
+    <p>In plain words:</p>
+    <ul>
+      <li>Look at the item's <b>HSN code</b> and <b>price</b>.</li>
+      <li>Find the matching <b>slab</b> (under ₹1000 → 5%, else 12%).</li>
+      <li><b>Compute</b> the tax — the Brain works it out; it is never typed in.</li>
+    </ul>
+    <div class="callout brain"><p>💡 <b>Why data, not code:</b> when the government changes a rate, you edit <i>one row</i> in the slab data — no developer, no re-deploy. Real slabs also carry <b>from / to dates</b>, so the Brain picks the rate that was correct <i>on the sale date</i>. Never hard-code a single GST number.</p></div>
+    <div class="two">
+      <div class="card l"><div class="h" style="background:var(--bad)">❌ Hard-coded</div><div class="b"><ul><li><span class="inline">tax = price * 0.05</span> sprinkled in code</li><li>Wrong for ₹1000+ items</li><li>Breaks the day rates change</li></ul></div></div>
+      <div class="card v"><div class="h">✅ Slabs as dated data</div><div class="b"><ul><li>One rule reads the slab table</li><li>Right slab by HSN + price + date</li><li>Rate change = edit a row</li></ul></div></div>
+    </div>
+  </section>
+
+  <!-- 6 — FLAG DON'T BLOCK -->
+  <section>
+    <h2><span class="num">6</span> Flag, don't block</h2>
+    <p class="kicker">KDPS's special rule — know the difference</p>
+    <p>Here's a rule unique to your design, and it's easy to get wrong. There are two ways the Brain can respond to a problem:</p>
+    <div class="two">
+      <div class="card l"><div class="h" style="background:var(--bad)">🛑 Block</div><div class="b"><ul>
+        <li>Stop. Reject the request.</li>
+        <li>For things that are <b>broken</b> or <b>forbidden</b>.</li>
+        <li>Returns an error (400 / 403).</li>
+      </ul></div></div>
+      <div class="card l"><div class="h" style="background:var(--amber)">🚩 Flag</div><div class="b"><ul>
+        <li>Allow it — but raise a warning.</li>
+        <li>For things that are <b>unusual but real</b>.</li>
+        <li>Saves the work, marks it for review.</li>
+      </ul></div></div>
+    </div>
+    <p>The KDPS rule: <span class="key">block only what's invalid or not allowed; for unusual-but-real business cases, flag — never stop the store.</span></p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Situation</th><th>Block or Flag?</th><th>What the system does</th></tr>
+      <tr><td><span class="inline">sku_id</span> missing</td><td><span class="pill block">🛑 Block</span></td><td>reject 400 — the request is broken</td></tr>
+      <tr><td>cashier not allowed to discount</td><td><span class="pill block">🛑 Block</span></td><td>reject 403 — forbidden</td></tr>
+      <tr><td>selling below cost price</td><td><span class="pill flag">🚩 Flag</span></td><td>allow the sale, raise a flag for review</td></tr>
+      <tr><td>return past the Correction budget</td><td><span class="pill flag">🚩 Flag</span></td><td>allow, but warn — D4 sorts the money</td></tr>
+      <tr><td>stock goes −1 (sold before inward)</td><td><span class="pill flag">🚩 Flag</span></td><td>allow — the ledger self-heals (L1); just note it</td></tr>
+    </table></div>
+    <div class="callout warn"><p>🏪 <b>Why this matters:</b> a real shop must keep selling. If the system <i>blocked</i> every odd case, the counter would freeze and staff would hate it. So KDPS lets business flow and lets the owner review flags later — block only the truly broken or forbidden.</p></div>
+  </section>
+
+  <!-- 6 — COMPUTE DON'T TRUST -->
+  <section>
+    <h2><span class="num">7</span> Compute, don't trust</h2>
+    <p class="kicker">The Brain works out the numbers itself</p>
+    <p>Money and stock numbers must be <b>calculated by the Brain</b> — never just believed from the request. This connects straight to Lesson 4 (derived profit) and Lesson 5 (on-hand = SUM).</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Value</th><th>❌ Wrong — trust the screen</th><th>✅ Right — Brain computes</th></tr>
+      <tr><td>GST</td><td>take the tax amount from the request</td><td>work it out from HSN slab + price</td></tr>
+      <tr><td>Profit</td><td>a typed-in field</td><td>revenue − cost</td></tr>
+      <tr><td>On hand</td><td>a number sent by the screen</td><td><span class="inline">SUM</span> of the movements</td></tr>
+      <tr><td>Bill total</td><td>trust the screen's total</td><td>re-add the lines in the Brain</td></tr>
+    </table></div>
+    <div class="callout brain"><p>💡 <b>Why:</b> if you trust a number from the screen, anyone can send a fake one — a ₹1 bill total, a 0% GST. Compute it in the Brain and the truth can't be faked. <b>Trust nothing the screen sends about money.</b></p></div>
+  </section>
+
+  <!-- 8 — SERVICE LAYER -->
+  <section>
+    <h2><span class="num">8</span> The service layer — one home for the rules</h2>
+    <p class="kicker">So rules aren't copy-pasted everywhere</p>
+    <p>Many endpoints need the <i>same</i> rules. A sale, a return, and an exchange all need GST and the four-model logic. Where should those rules live?</p>
+    <div class="two">
+      <div class="card l"><div class="h" style="background:var(--bad)">❌ Copy-pasted</div><div class="b"><ul><li>The GST rule pasted into every endpoint</li><li>Fix a bug in one, forget the others</li><li>They slowly drift apart</li></ul></div></div>
+      <div class="card v"><div class="h">✅ One service layer</div><div class="b"><ul><li>The rule written <b>once</b> in a "service"</li><li>Every endpoint <b>calls</b> it</li><li>Fix it once, fixed everywhere</li></ul></div></div>
+    </div>
+    <p>A <span class="key">service layer</span> is the part of the Brain that holds the business rules. It splits the Brain into three thin layers:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Layer</th><th>Its job</th><th>KDPS example</th></tr>
+      <tr><td>Endpoint <span style="color:var(--muted)">(controller)</span></td><td>receive request, call services, reply — stays <b>thin</b></td><td><span class="inline">POST /sales</span></td></tr>
+      <tr><td>Service</td><td>the <b>business rules</b> — the real work</td><td><span class="inline">salesService.makeSale()</span> — GST, models, flag-don't-block</td></tr>
+      <tr><td>Data</td><td>read / write the database</td><td><span class="inline">INSERT</span> the movement</td></tr>
+    </table></div>
+    <pre><span class="cmt">// the endpoint stays thin — it just calls the service</span>
+app.<span class="fn">post</span>(<span class="str">'/sales'</span>, requireLogin, <span class="kw">async</span> (req, res) => {
+  <span class="kw">const</span> result = <span class="kw">await</span> salesService.<span class="fn">makeSale</span>(req.body);  <span class="cmt">// all the rules live in here</span>
+  res.<span class="fn">status</span>(<span class="cnum">201</span>).<span class="fn">json</span>(result);
+});</pre>
+    <div class="callout brain"><p>🔎 <b>Reviewer's tip:</b> if you see the same rule copied across two or three endpoints, that's a smell — it belongs in <b>one service</b>. <b>Thin endpoints + rules gathered in services</b> means you always know where to look, and a fix lands in one place. This is just "rules live in the Brain" (§2) made tidy.</p></div>
+  </section>
+
+  <!-- 9 — REVIEWER -->
+  <section>
+    <h2><span class="num">9</span> Your reviewer's lens</h2>
+    <p class="kicker">Four questions for any rule the AI writes</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Check</th><th>The question to ask</th></tr>
+      <tr><td>In the Brain?</td><td>Is the rule enforced in the backend — not only greyed-out on the screen?</td></tr>
+      <tr><td>Bad input blocked?</td><td>Does it reject broken or forbidden requests (400 / 403)?</td></tr>
+      <tr><td>Flag, not block?</td><td>For unusual-but-real cases, does it allow + warn instead of stopping the store?</td></tr>
+      <tr><td>Computed?</td><td>Are money &amp; stock values calculated, never trusted from the request?</td></tr>
+    </table></div>
+    <div class="callout ink"><p>🧭 <b>Tie it together:</b> a request comes in → validated → the <b>rules</b> run (the four models, GST, flag-don't-block) → the ledger is written → a response goes back. You now know what happens inside the most important box. Next: <b>who is allowed</b> to do all this — auth &amp; roles (L8).</p></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 11 quick ones</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">Pick an answer for instant feedback.</p>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 1 · Two kinds of rules</div>
+      <div class="qt">"<code>qty</code> must be a positive number" is which kind of rule?</div>
+      <button class="opt">Validation — it's about the shape of the data</button>
+      <button class="opt">Business logic — it's special to KDPS</button>
+      <button class="opt">A status code</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 2 · Two kinds of rules</div>
+      <div class="qt">"If the brand is SOR, owe the vendor a commission as it sells" is which kind?</div>
+      <button class="opt">Validation</button>
+      <button class="opt">Business logic — it only makes sense because of how KDPS works</button>
+      <button class="opt">Just formatting</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 3 · Where rules live</div>
+      <div class="qt">A rule must be enforced in…</div>
+      <button class="opt">The screen only — grey out the button</button>
+      <button class="opt">The Brain (the screen can be skipped or faked)</button>
+      <button class="opt">The database only</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 4 · Block or flag</div>
+      <div class="qt">A request arrives with <b>no <code>sku_id</code></b>. What should happen?</div>
+      <button class="opt">🛑 Block — reject with 400, the request is broken</button>
+      <button class="opt">🚩 Flag — save it and warn</button>
+      <button class="opt">Ignore it quietly</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 5 · Block or flag</div>
+      <div class="qt">A genuine sale is happening <b>below cost price</b>. What's the KDPS way?</div>
+      <button class="opt">🛑 Block the sale — never allow it</button>
+      <button class="opt">🚩 Flag — allow the sale, raise a warning for review</button>
+      <button class="opt">Delete the SKU</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 6 · Compute don't trust</div>
+      <div class="qt">How should the Brain get the GST on a bill?</div>
+      <button class="opt">Trust the tax amount the screen sends</button>
+      <button class="opt">Compute it itself from the HSN slab + price</button>
+      <button class="opt">Ask the cashier to type it</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 7 · Reviewer's lens</div>
+      <div class="qt">The AI greys out "Discount" on the screen for cashiers, but the <code>POST</code> endpoint accepts <b>any</b> discount with no role check. Your call?</div>
+      <button class="opt">Fine — the screen handles it</button>
+      <button class="opt">Flag it — the rule must be enforced in the Brain too, or it's fake</button>
+      <button class="opt">Fine — discounts aren't important</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 8 · Why flag don't block</div>
+      <div class="qt">Why does KDPS prefer "flag, don't block" for unusual-but-real cases?</div>
+      <button class="opt">Flags look nicer on screen</button>
+      <button class="opt">A real shop must keep selling — allow business to flow, warn for later review</button>
+      <button class="opt">Blocking is impossible to code</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 9 · GST rule</div>
+      <div class="qt">Apparel GST is slab-based and changes by date. Where should the rate come from?</div>
+      <button class="opt">Hard-coded as <code>5%</code> in the code — it's the simplest</button>
+      <button class="opt">Looked up from a dated slab table by HSN + price, then computed in the Brain</button>
+      <button class="opt">Taken from the tax amount the screen sends</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 10 · Service layer</div>
+      <div class="qt">What is a "service layer"?</div>
+      <button class="opt">The screen customers use to request services</button>
+      <button class="opt">A database table that lists services</button>
+      <button class="opt">One place in the Brain where the business rules live, that endpoints call</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 11 · Service layer</div>
+      <div class="qt">A sale, a return, and an exchange all need the <b>same</b> GST rule. Best place to put it?</div>
+      <button class="opt">Copy the GST code into all three endpoints — quickest to write</button>
+      <button class="opt">Write it once in a service and call it from all three</button>
+      <button class="opt">Put it on the screen so each one can reuse it</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 11</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Ask me — “show GST as a small rule in code,” “what's a ‘service layer’?”, or “next — Lesson 8, who is allowed.” I'll keep it simple.
+  </div>
+
+  <footer>
+    <p>Builds on <a href="0001-the-two-spines.html">Lesson 1 (four models)</a>, <a href="0004-the-database-your-ledger-made-real.html">Lesson 4 (brand row)</a> &amp; <a href="0006-request-response-and-apis.html">Lesson 6 (the 6 stages)</a>. Pairs with the <a href="../reference/backend-rules-cheatsheet.html">Backend Rules Cheat Sheet</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0007 · 🧠 backend deep-dive 2 of 4 — the rules</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "It's about the shape of the data (a positive number) — that's validation, and it would be true for any app.",
+    "It only makes sense because of KDPS's SOR model — that's business logic, your design as code.",
+    "The screen can be skipped or faked, so a rule only truly holds if the Brain enforces it. Screen checks are a nice extra, not the real guard.",
+    "A missing sku_id is a broken request — block it with a 400. Blocking is for invalid or forbidden things.",
+    "A below-cost sale is unusual but real — the shop must keep selling. Allow it and flag it for the owner to review.",
+    "GST must be computed in the Brain from the slab and price. Trusting a number from the screen lets anyone fake the tax.",
+    "A greyed-out button is comfort only. If the Brain doesn't check the role, anyone can send the request — the rule is fake until the Brain enforces it.",
+    "A shop can't freeze on every odd case. Flag-don't-block keeps business flowing and lets the owner review flags later; block only the broken or forbidden.",
+    "GST is slab-based and date-effective, so the rate must come from dated data and be computed in the Brain. Hard-coding 5% breaks for ₹1000+ items and the day rates change; trusting the screen lets the tax be faked.",
+    "A service layer is the part of the Brain that holds the business rules in one place, so endpoints just call it instead of repeating the rules.",
+    "Write a shared rule once in a service and call it everywhere. Copy-pasting into each endpoint makes them drift apart and hides bugs; the screen can never be the home of a rule."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){ o.disabled = true; if (j === correct) o.classList.add('correct'); });
+        if (i === correct){
+          score++; document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok'; fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no'; fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>
