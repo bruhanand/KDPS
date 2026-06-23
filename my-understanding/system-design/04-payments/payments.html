@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Payments Design (How KDPS Pays Brands &amp; Audits Store Money)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4; --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:34px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:6px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  /* tabs */
+  .tabbar{position:sticky; top:0; z-index:20; display:flex; gap:6px; background:var(--bg); padding:14px 0 10px; margin:6px 0 6px; border-bottom:1px solid var(--line)}
+  .tabbtn{border:1px solid var(--line); background:#fff; color:var(--navy2); font-weight:700; font-size:14.5px; padding:9px 16px; border-radius:10px 10px 0 0; cursor:pointer}
+  .tabbtn.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .tabbtn small{display:block; font-weight:500; font-size:11.5px; opacity:.8}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  /* sections */
+  section{margin:30px 0; scroll-margin-top:70px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:20px 0 8px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-park{background:var(--purple-bg); color:var(--purple)}
+  .b-inherit{background:#fdeee8; color:#b4452f; border:1px solid #f0cdbe}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .qref{font-size:12px; color:var(--rust); font-weight:700}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-park{background:var(--purple-bg); border-color:#dcd3f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--grey-bg);color:#41506b;margin:1px 2px}
+  .chip.out{background:#fdeee8;color:#b4452f}
+  .chip.in{background:var(--green-bg);color:var(--green)}
+  .states{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;align-items:center}
+  .state{border:1.5px solid var(--navy2);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;color:var(--navy);background:#fff;min-width:96px}
+  .state small{display:block;font-weight:500;color:var(--muted);font-size:11.5px}
+  .state.start{border-color:#8a93a8;background:#eef1f7}
+  .state.done{border-color:var(--green);background:var(--green-bg);color:var(--green)}
+  .sarr{color:var(--rust);font-weight:800}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  .gq{border-left:4px solid var(--rust); background:#fff; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:11px 15px; margin:11px 0}
+  .gq .qh{font-weight:700; color:var(--navy)}
+  .pill-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .editbox{background:#fffdf6; border:1px dashed #d8c98f; border-radius:10px; padding:12px 14px; color:#6b5a1f; font-size:13.5px; margin-top:10px}
+  .opt{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:8px 0;background:#fff}
+  .opt b{color:var(--navy)}
+  .opt.rec{border-color:#bfe2cd;background:var(--green-bg)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · D4 · Payments · Money Out to Brands · Money In from Stores</div>
+  <h1>Payments — System Design</h1>
+  <p class="sub">How KDPS <strong>pays its vendors (brands)</strong> — turning debts the spine already booked into money that actually left the bank, under control and fully traceable — and how the daily <strong>store-collection audit</strong> proves the money a store reported actually reached the bank. Picks up the payables created at <a href="../02-inbound/inbound-ingestion-design.html">Inbound</a> (PT, Q37) and <a href="../03-outbound/outbound.html">Outbound</a> (sale payables, brand credits, settlements).</p>
+</header>
+
+<div class="tabbar">
+  <button class="tabbtn active" onclick="showTab(0)">① System Design<small>how payments should work</small></button>
+  <button class="tabbtn" onclick="showTab(1)">② Decisions &amp; Grilling Log<small>the reasoning trail</small></button>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 1 — THE SYSTEM DESIGN                                      -->
+<!-- ============================================================ -->
+<div class="tabpanel show" id="tab-design">
+
+<section id="d-idea">
+  <h2 class="sec">1 · The one idea</h2>
+  <p>Payments does <strong>not decide what KDPS owes</strong> — the spine already booked every debt (a PT at inbound, a sale for SOR/Consignment, a return, a brand credit). Payments is the <strong>controlled lifecycle</strong> that turns a booked debt into <strong>money that left the bank</strong>, plus the daily <strong>audit</strong> that proves store money arrived. Two halves of one module:</p>
+  <div class="card">
+    <p style="margin:0 0 4px"><span class="chip out">MONEY OUT</span> <strong>Vendor payments</strong> — settle what we owe each brand: eligibility gate → approval → bank execution → reconciliation against the bank.</p>
+    <p style="margin:8px 0 0"><span class="chip in">MONEY IN</span> <strong>Store-collection audit</strong> — every day, compare what each store collected (cash / card / UPI) against what actually landed in the bank account.</p>
+  </div>
+  <div class="card">
+    <h4>Three rules the whole module obeys (from the architecture)</h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Documents write the ledger.</strong> A payment is a document that posts a vendor-ledger <em>debit</em>; nobody types a balance (Rule 2).</li>
+      <li><strong>Flag, don't block</strong> — but money has a real <strong>hard gate</strong> (Rule 5 + D1 pay-gate): no pay without bank details + GSTIN, and no pay before reconciliation is clean.</li>
+      <li><strong>Every payment has a name on it</strong> — requestor, approver(s), executor — as steps inside the document's state machine, not emails on the side (Rule 10).</li>
+    </ul>
+  </div>
+</section>
+
+<section id="d-inherit">
+  <h2 class="sec">2 · What Payments inherits from the spine <span class="badge b-inherit">consume, don't re-decide</span></h2>
+  <p class="lead">These are locked upstream facts. D4 settles them; it does not re-open them.</p>
+  <table>
+    <thead><tr><th>Inherited fact</th><th>Where locked</th><th>What D4 does with it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Outright &amp; Correction payable</strong> = invoice total <strong>incl. GST</strong>, booked at Patna inward</td><td>Inbound Q37</td><td>Becomes an open payable to settle, due per brand terms</td></tr>
+      <tr><td><strong>SOR payable</strong> accrues <strong>per piece on sale</strong> (settlement rate, ex-GST cost basis)</td><td>Inbound Q37 · Outbound</td><td>Many small accruals per brand → settled in a periodic payment</td></tr>
+      <tr><td><strong>Consignment payable</strong> — nothing from the PT; money exists only at sale</td><td>Inbound Q37 · Outbound</td><td>Same as SOR for settlement</td></tr>
+      <tr><td><strong>Correction return allowance (GR budget)</strong> tracked in ₹ or pieces on the booking</td><td>D1 §8 / §11</td><td>D4 settles the rupees: returns net the payable; over-limit cost is D4's call</td></tr>
+      <tr><td><strong>RTV brand credits</strong> (defective, owned models) &amp; <strong>EOSS / V-flip settlements</strong></td><td>Outbound Q10–Q12</td><td>Credits/claims <em>in</em> — net against payables or recovered</td></tr>
+      <tr><td><strong>Vendor record carries GSTIN + bank details</strong>; pay-gate deferred to D4</td><td>D1 §2 / §11</td><td>D4 enforces: no payment without them</td></tr>
+      <tr><td><strong>Vendor ledger</strong> = the one owner of "what we owe each brand", append-only</td><td>Architecture L2</td><td>D4 writes payment debits here; balance is derived</td></tr>
+      <tr><td><strong>Cash ledger</strong> (store × day × mode) + daily bank/POS recon are L3 controls</td><td>Architecture L3</td><td>D4 designs the store-collection audit on top of it</td></tr>
+      <tr><td><strong>Bank API (read-only statements)</strong>, daily — the bank is a <strong>variable</strong> (3 banks; ICICI access now)</td><td>Bank-API brief, 13 Jun</td><td>Feeds both reconciliations; UTR + narration are the match keys</td></tr>
+      <tr><td><strong>Tally stays the statutory book</strong>; payment vouchers feed it</td><td>Architecture / Rule 4</td><td>D4 emits payment events; the voucher catalog itself is D6</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="d-model">
+  <h2 class="sec">3 · The payment model <span class="badge b-locked">Q-A locked</span></h2>
+  <p>When KDPS pays a brand, the system tracks <strong>two layers</strong> — the debt and the disbursement — linked by <strong>bill-wise allocation</strong> (the NetSuite / SAP / Tally standard). The only model that survives SOR's per-sale accruals and Correction's net-of-returns.</p>
+  <div class="card">
+    <h4>Layer 1 — the Payable (the debt)</h4>
+    <p>One debt KDPS owes a brand, <strong>born from a spine document</strong> (a PT invoice, a per-sale SOR/Consignment accrual, a return debit, a brand credit). Lives on the vendor ledger; status is <strong>derived from allocations</strong>, never typed:</p>
+    <div class="states">
+      <div class="state start">Open</div><span class="sarr">→</span>
+      <div class="state">Partly paid</div><span class="sarr">→</span>
+      <div class="state done">Paid</div>
+      <span style="margin-left:10px;color:var(--muted);font-size:12.5px">side paths: On-hold (disputed) · Cancelled (credit-noted)</span>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Layer 2 — the Payment (the disbursement)</h4>
+    <p>A separate document that settles <strong>one or many</strong> open payables (full or partial), carrying the approval + execution lifecycle. The link is the <strong>allocation</strong> — exactly Tally's <em>Agst Ref</em>. So one bank transfer can clear a month of SOR accruals; one Outright invoice can be paid on its own.</p>
+  </div>
+
+  <div class="card">
+    <h4>The two state machines <span class="badge b-locked">Q-B locked</span></h4>
+    <p style="margin:0 0 4px"><strong>Payable</strong> — derived from allocations, never typed:</p>
+    <div class="states">
+      <div class="state start">Open</div><span class="sarr">→</span>
+      <div class="state">Partly paid</div><span class="sarr">→</span>
+      <div class="state done">Paid</div>
+      <span style="margin-left:8px;color:var(--muted);font-size:12.5px">side: On-hold (disputed) · Cancelled (credit-noted)</span>
+    </div>
+    <p style="margin:12px 0 4px"><strong>Payment</strong> — the approval + execution lifecycle (PASCS's six, hardened):</p>
+    <div class="states">
+      <div class="state start">Draft</div><span class="sarr">→</span>
+      <div class="state">Pending approval</div><span class="sarr">→</span>
+      <div class="state">Approved</div><span class="sarr">→</span>
+      <div class="state">Executed</div><span class="sarr">→</span>
+      <div class="state">Confirmed<small>bank ref captured = matched</small></div><span class="sarr">→</span>
+      <div class="state done">Reconciled<small>statement cleared</small></div>
+    </div>
+    <p class="why">Branches off the happy path: <strong>Rejected</strong> (approver declines) · <strong>On-hold</strong> · <strong>Failed / Returned</strong> (bank bounce → back for retry) · <strong>Cancelled / Void</strong>. "Eligible to pay" is a property of the <em>payable</em> (the entry gate, <span class="qref">Q-C</span>), not a payment state.</p>
+  </div>
+
+  <div class="card">
+    <h4>Which entity, which grain — the ledger reads both ways <span class="badge b-locked">added by Anand 17 Jun</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Payables accrue per brand</strong> — commercial model, returns, the GR allowance and the SOR sale-accrual are all brand-level (D1: bookings are brand-wise).</li>
+      <li><strong>Payments anchor to the vendor</strong> — the bank account + GSTIN live on the vendor / legal entity (D1 §2), so one payment can allocate across payables from <strong>several brands under one vendor</strong>, or a single brand. The model allows either; whether KDPS sweeps a vendor or pays brand-by-brand stays an operational choice.</li>
+      <li><strong>Every allocation is a posting</strong>, partials included — the vendor ledger records each part-payment and reads at <strong>both brand and vendor grain</strong> ("what we owe / have paid — this brand · this vendor"). Balances derived, never typed (Rule 2).</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Bank execution — manual now, the bank is a variable <span class="badge b-locked">Q-E locked</span></h4>
+    <p>Once a payment is approved (the Q-D four-eyes), the money leaves like this in v1:</p>
+    <ol style="margin:6px 0 0;padding-left:20px">
+      <li>System <strong>prepares</strong> the payment — beneficiary, amount, the payables it settles.</li>
+      <li>A person <strong>pays manually</strong> in the bank's portal (no software-initiated transfer in v1).</li>
+      <li>The <strong>UTR is captured</strong> — typed at pay-time and/or auto-matched from the daily <strong>read-only statement pull</strong> (the §6 narration parser) — which <strong>auto-closes the payable</strong> (the payment roundtrip).</li>
+    </ol>
+    <p style="margin-top:10px"><strong>Everything bank-touching sits behind one <em>bank adapter</em></strong> — swappable on two axes:</p>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Which bank</strong> — there are <strong>three banks</strong>; <strong>ICICI</strong> is the one we have access to now, but no bank name is hardcoded. Treat the bank as <strong>Bank X</strong>; the adapter is the seam.</li>
+      <li><strong>Which mode</strong> — read-only + manual pay now; an <strong>H2H file</strong> or a <strong>payment-initiation API</strong> drops in later (v2) with no redesign.</li>
+    </ul>
+    <p class="why">The actual bank API spec is <strong>sent to the bank later</strong> — design the requirement first, then request the matching API. Read-only statement access is enough to close the loop today.</p>
+  </div>
+  <div class="card">
+    <h4>Settlement &amp; netting — what we actually pay <span class="badge b-locked">Q-G locked</span></h4>
+    <p>Brand money flows both ways; the payment is the <strong>net</strong>. Two-state netting, in KDPS's own vocabulary:</p>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Goods-return DN nets now</strong> — a Debit Note for returned stock reduces the payable immediately (backed by a physical return); the brand's <strong>Credit Note (CN)</strong> is tracked as acknowledgment, and the §6 ⑥ reconciler chases the DN-without-CN gap.</li>
+      <li><strong>Commercial claims pend</strong> — EOSS/V-flip settlements &amp; Correction over-allowance recovery have no return behind them, so they sit as <strong>pending claims</strong> and net only when the brand agrees, at the <em>agreed</em> amount. <em>(A normal offer discount is <strong>not</strong> a claim — it just lowers the selling price; KDPS earns less margin, nothing is reclaimed.)</em></li>
+      <li><strong>Per model:</strong> Outright/Correction payable books at inward (Correction return within allowance nets, over-allowance → pending / V-flip); SOR/Consignment accrues on sale (the Account Sales Report), unsold returns net nothing.</li>
+    </ul>
+    <p class="why">The vendor ledger <em>is</em> KDPS's <strong>party ledger</strong>, derived: <strong>Opening + Invoices − CD (cash discount) − GR (goods return) − Payments + Interest = Due</strong>, at brand + vendor grain. Confirmed by the real CN&amp;DN and party-ledger files.</p>
+  </div>
+</section>
+
+<section id="d-gate">
+  <h2 class="sec">4 · The eligibility gate <span class="badge b-locked">Q-C locked</span></h2>
+  <p>The one place the system deliberately holds money back. A payable becomes payable only when it clears a <strong>tiered gate</strong> — a short hard-block list, everything else flags.</p>
+  <div class="card">
+    <h4>Hard blocks — never overridable (fix the cause)</h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li>No <strong>validated bank details</strong> or no <strong>GSTIN</strong> on the vendor (the D1 pay-gate; India-mandatory anyway).</li>
+      <li>Payable <strong>not tied to an inwarded PT / TIR</strong> — the debt isn't official yet (Outright/Correction book at Patna inward; SOR/Consignment only on sale).</li>
+      <li>An <strong>SOR/Consignment piece that hasn't actually sold</strong>.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>Soft holds — flag + a named senior releases with a reason</h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li>An open <strong>invoice ↔ GRN ↔ PT discrepancy</strong> (the inbound EOD recon).</li>
+      <li>A <strong>Correction return over its allowance</strong>.</li>
+      <li>An amount <strong>over a per-brand variance tolerance</strong>. Trivial ₹/% gaps auto-pass — rounding never freezes a payment.</li>
+    </ul>
+    <p class="why">Checked on the payable, re-checked at execution (the world can change between approve and pay).</p>
+  </div>
+</section>
+
+<section id="d-roles">
+  <h2 class="sec">5 · Roles &amp; access — the people <span class="badge b-open">grid here; thresholds at Q-D</span></h2>
+  <p>Built on the finance-world rule of <strong>segregation of duties</strong>: the three highest-risk actions — <strong>changing a vendor's bank details</strong>, <strong>approving a payment</strong>, and <strong>releasing the money</strong> — must never sit with one person. Everyone else gets <strong>least-privilege</strong>, data-scoped access (a store sees only its own money).</p>
+  <table>
+    <thead><tr><th>Role</th><th>Can do</th><th>Sees</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Requestor</strong> (account manager)</td><td>Raise a payment proposal; allocate it across payables</td><td>Their brands' payables</td></tr>
+      <tr><td><strong>Approver(s)</strong></td><td>Approve / reject with a comment — tiered by amount (Q-D)</td><td>Full context: invoice · GRN · PT · ledger</td></tr>
+      <tr><td><strong>Executor</strong></td><td>Release the payment; capture the bank ref (or trigger the API)</td><td>Approved queue only</td></tr>
+      <tr><td><strong>Finance controller / auditor</strong></td><td>Oversight; release soft holds; read the full trail</td><td>Everything, read-deep</td></tr>
+      <tr><td><strong>Owner / proprietor</strong></td><td>Nothing to click — receives WhatsApp digests</td><td>Read-only dashboards; the money picture</td></tr>
+      <tr><td><strong>Store user</strong></td><td>Confirm their daily collection &amp; deposit</td><td><strong>Only their own store's</strong> audit</td></tr>
+      <tr><td><strong>Admin</strong></td><td>Config &amp; roles; vendor master (bank-change is itself logged + 2nd-eye)</td><td>All + settings</td></tr>
+    </tbody>
+  </table>
+  <p class="why">A vendor's <strong>bank-detail change</strong> is its own control point: logged, second-eye verified, and AI-flagged on the next payment (§6). Maker ≠ checker ≠ payer, always. AI is <em>not</em> a role — it's a layer every role sees, tuned to their job.</p>
+  <div class="card">
+    <h4>The approval matrix <span class="badge b-locked">Q-D locked</span></h4>
+    <p>Approval authority is a <strong>configurable amount-tiered matrix</strong> — ₹ bands decide how many and how senior the approvers — not a single signer.</p>
+    <table>
+      <thead><tr><th>Amount band (KDPS sets the ₹)</th><th>Approvers</th></tr></thead>
+      <tbody>
+        <tr><td>Below a small floor</td><td>Straight-through / one approver — no friction on routine small payments</td></tr>
+        <tr><td>Mid</td><td>+ Finance controller (a second level)</td></tr>
+        <tr><td>Large</td><td>+ Owner / director (top level)</td></tr>
+      </tbody>
+    </table>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Maker ≠ checker ≠ payer</strong> — the raiser can't approve; the approver isn't the executor.</li>
+      <li><strong>Role-based, not name-based</strong> — authority moves with the role when staff change.</li>
+      <li><strong>Never stalls</strong> — auto-escalate when an approval sits past its SLA; delegate to a backup when an approver is away.</li>
+      <li><strong>Configurable</strong> — bands, levels and approvers are settings; per-brand overrides (Q-D Option 3) layer on later.</li>
+    </ul>
+    <p class="why">The actual ₹ thresholds and who sits at each level are a <strong>client input</strong> (the owners decide) — question drafted, see Tab 2 open items.</p>
+  </div>
+</section>
+
+<section id="d-ai">
+  <h2 class="sec">6 · The AI &amp; Intelligence layer — the "wow" <span class="badge" style="background:var(--purple-bg);color:var(--purple)">read-only · Rule 8</span></h2>
+  <p>The market splits AI two ways: <strong>autonomous agents that act</strong> and <strong>copilots that advise</strong>. For money, KDPS is deliberately <strong>copilot, not autopilot</strong> — AI reads everything, summarizes, predicts, drafts and flags, but a <strong>human always approves and a document always posts</strong> (Rule 8). That one line is what lets us pile on AI safely: the worst an AI can do here is show a wrong <em>suggestion</em>, never move a wrong rupee.</p>
+  <p class="lead" style="margin-top:0">Tags: <span class="chip">Now</span> shippable day one · <span class="chip">Soon</span> once data accrues · <span class="chip" style="background:var(--purple-bg);color:var(--purple)">Wow</span> the showpiece.</p>
+
+  <div class="card">
+    <h4>① Reads the mess <span class="chip">Now</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Bank-narration parser</strong> — turns <code>INF/NEFT/IN4260…</code> gibberish into "this credit = Allen Solly refund / this store's UPI settlement", using the UTR + narration. The match key for both reconciliations.</li>
+      <li><strong>Invoice &amp; credit-note reader</strong> — already in inbound; feeds payables and brand credits here.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>② Catches what humans miss <span class="chip">Now</span> <span class="chip">Soon</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Duplicate-payment guard</strong> — catches near-duplicates (same vendor+amount, slightly different invoice no / OCR noise), not just exact matches. Industry cuts duplicate losses 80–95%.</li>
+      <li><strong>Vendor bank-change alert</strong> — "⚠️ Madura's account number changed since the last payment — verify before releasing." The single most common AP fraud.</li>
+      <li><strong>Anomaly watch</strong> <span class="chip">Soon</span> — "this payment is unlike your history" (amount / timing / frequency); split-invoice and approval-policy-violation patterns.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>③ Summarizes &amp; explains <span class="chip">Now</span> <span class="chip" style="background:var(--purple-bg);color:var(--purple)">Wow</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>One-line approver brief on every payment</strong> — "Pay ₹4.2L to Madura · 12 invoices · all 3-way matched · within terms · nothing unusual." The approver decides in seconds, not minutes.</li>
+      <li><strong>Ask-anything box</strong> <span class="chip" style="background:var(--purple-bg);color:var(--purple)">Wow</span> — plain Hindi/English questions over the payables: "Madura ko is season kitna dena hai?", "what's overdue this week?" — instant answer with the breakdown. (Natural-language query over the ledger is a flagship 2026 finance feature.)</li>
+      <li><strong>Owner WhatsApp digest</strong> — one morning message: money in vs bank, exceptions, what's due to brands.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>④ Looks ahead — only the due-date radar stays here <span class="chip">Now</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Payables aging + due-date radar</strong> — a live work-queue of what's due / overdue per brand (deadlines are data, Rule 11). Operational to <em>running</em> payments, so it stays.</li>
+    </ul>
+    <p class="why"><strong>Forecasting &amp; optimisation are D7 Analytics, not here</strong> (Anand, 17 Jun): the cash forecast, the early-payment-discount (dynamic-discounting) optimiser, SOR/Consignment settlement projection, brand payment-behaviour insight. Payments <em>feeds</em> them; it doesn't run them.</p>
+  </div>
+  <div class="card">
+    <h4>⑤ The money-in audit brain <span class="chip">Now</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Three-rail auto-match</strong> — cash deposit, card settlement (net of MDR), UPI → matched to bank credits by narration/UTR with fuzzy + many-to-many logic; clears the easy 90%, surfaces only exceptions. AI recon cuts matching time ~80%.</li>
+      <li><strong>Today's exception flags</strong> — this deposit is short / missing / settled slow / MDR off — raised on the day, for the day's owner to chase.</li>
+    </ul>
+    <p class="why">The <strong>cross-time view</strong> — ranking stores by leakage, "Store X under-deposited thrice this month", trend lines — is <strong>D7 Analytics</strong>. The audit here catches each day; analytics finds the pattern.</p>
+  </div>
+  <div class="card">
+    <h4>⑥ Brand-statement reconciler — money-out assurance <span class="chip">Soon</span> <span class="badge" style="background:var(--purple-bg);color:var(--purple)">AI</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li>Match a <strong>brand's own statement / ledger</strong> (what <em>they</em> say KDPS owes) against <strong>our vendor ledger</strong> (what <em>we</em> say) — line by line, fuzzy + many-to-many — and surface the gaps: a missed credit note, a return they didn't book, an SOR settlement double-counted.</li>
+      <li>Catches a dispute <strong>before it festers</strong> into a payment fight, and hands the account manager a ready reconciliation to send back.</li>
+    </ul>
+    <p class="why">Added 17 Jun (Anand). An <strong>inline assurance control</strong>, not analytics — it reconciles two ledgers at a point in time; the money-out mirror of the ⑤ money-in audit.</p>
+  </div>
+
+  <div class="callout co-dep">
+    <strong>The boundary with D7 Analytics (Anand, 17 Jun):</strong> Payments keeps the <strong>inline copilot</strong> — AI that acts <em>at the moment of a payment or a day's audit</em> (read the mess · catch the fraud · summarise the payment · match the bank · flag today's gap). <strong>All forecasting, optimisation, ranking and profitability analysis is D7 Analytics</strong>, reading what Payments records. Clean line: <em>controls live here, intelligence-over-time lives there.</em>
+  </div>
+  <div class="callout co-note">
+    <strong>How much accounting lives here?</strong> This module does <strong>operational + management accounting and control</strong> — the payables sub-ledger, aging, cash position, brand settlement, reconciliation, working-capital insight. <strong>Tally stays the statutory book</strong> (Rule 4): GST returns, final accounts, filings. We <em>feed</em> Tally vouchers (D6). AI drafts and explains; it never files a return or posts a statutory entry.
+  </div>
+  <div class="callout co-note">
+    <strong>Wow demo moments</strong> (client-facing): the ask-anything box answering "kitna dena hai?" out loud · a red bank-change banner stopping a fraud before release · the morning WhatsApp that reads the whole 50-store money-day in five lines · the audit that auto-clears 90% of bank lines and shows the owner only the 3 stores that came up short.
+  </div>
+
+  <h3 style="margin-top:22px">How we apply it safely — the best-practice playbook</h3>
+  <p class="lead" style="margin-top:0">Industry consensus, 2026: even frontier "agentic payments" keep a human on money above a threshold, and the real barrier to AI in finance is <strong>trust, not technology</strong>. So <em>how</em> we ship matters as much as <em>what</em> we ship.</p>
+  <table>
+    <thead><tr><th>Principle</th><th>What it means in Payments</th></tr></thead>
+    <tbody>
+      <tr><td><strong>1 · A confidence line</strong></td><td>AI auto-fills only <strong>above a confidence score</strong>; below it routes to a human. The line is set by <strong>failure cost, not average accuracy</strong> — a payment release gets a far stricter line than coding a stationery bill.</td></tr>
+      <tr><td><strong>2 · Always show the "why"</strong></td><td>No black box on money. "Flagged: Madura's account changed since 14 invoices ago." / "Matched on UTR + amount." The human sees the reason, not just the verdict.</td></tr>
+      <tr><td><strong>3 · AI is in the audit trail</strong></td><td>Every suggestion + what the human did with it (accepted / overridden / by whom) is logged. The machine's advice is itself auditable — Rule 10, extended to AI.</td></tr>
+      <tr><td><strong>4 · Learns from every correction</strong></td><td>Override once → it doesn't repeat the miss (same vendor mapping, same false flag). A feedback loop is mandatory, or it never improves.</td></tr>
+      <tr><td><strong>5 · Tune the flags (no alert fatigue)</strong></td><td>Keep false positives low, recalibrate from feedback, sample suppressed items. A flag nobody trusts is worse than no flag — most raw alerts are noise.</td></tr>
+      <tr><td><strong>6 · Earn trust in stages</strong></td><td><strong>Shadow → suggest → assist</strong>, never big-bang. AI runs silently in parallel first (weeks), we show match rates, then it suggests, then assists. Mirrors the store-split rollout and the build-doc risk tiers.</td></tr>
+      <tr><td><strong>7 · India-compliant by design</strong></td><td>Bank/payment data <strong>stays in India</strong> (RBI localisation); document what the AI reads (DPDP consent/provenance). Sectoral RBI rules prevail — build for Indian finance reality from day one.</td></tr>
+      <tr><td><strong>8 · Degraded mode</strong></td><td>AI is never the system of record. If it's down, the human queue still runs — the in-app record is the truth; AI only advises.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="d-audit">
+  <h2 class="sec">7 · The store-collection audit <span class="badge b-locked">Q-F locked</span></h2>
+  <div class="card">
+    <h4>What the real data already tells us</h4>
+    <p>From the live store DSR + bank export: this is <strong>not a flat "deposits vs cash" match</strong> — there are <strong>three rails</strong>, each behaving differently:</p>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Cash</strong> — collected, some spent as petty cash, the rest <strong>physically deposited in lumps</strong> (not daily) → match against the cash-deposit credit.</li>
+      <li><strong>Card / swipe</strong> — settles <strong>T+n, net of MDR (bank charge %)</strong>, keyed by <strong>MID / terminal</strong>.</li>
+      <li><strong>UPI</strong> — settles, keyed to the store.</li>
+    </ul>
+    <p class="why">KDPS's current version of this is a manual Excel sheet (per-MID, "Swip Satt Amt" vs "Swip Amt", "Bank Charge %") that is full of broken formulas — the exact pain the audit replaces.</p>
+  </div>
+  <div class="card">
+    <h4>The match, per rail — 3-way <span class="badge b-locked">Q-F locked</span></h4>
+    <table>
+      <thead><tr><th>Rail</th><th>The 3-way</th><th>Behaviour</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Card</strong></td><td>POS gross ↔ acquirer settlement report (gross − MDR = net, UTR + MID) ↔ bank credit</td><td>T+2, net of MDR, bulk credit disaggregated by the settlement report</td></tr>
+        <tr><td><strong>UPI</strong></td><td>POS gross ↔ UPI settlement report ↔ bank credit</td><td>T+1</td></tr>
+        <tr><td><strong>Cash</strong></td><td>POS cash ↔ deposit slip ↔ bank cash-credit</td><td>Lumpy (T+1–2), minus petty cash; matched over a window</td></tr>
+      </tbody>
+    </table>
+    <p>The lag is carried as <strong>"expected / in-transit"</strong> until the money lands — so the audit flags only a settlement that's genuinely <strong>late, short, or missing</strong>, and can always say <em>why</em> a number differs (MDR vs real shortfall). Delivered <strong>phased by rail</strong> as each settlement feed comes online.</p>
+  </div>
+  <div class="card">
+    <h4>Where the data comes from — and the POS reality <span class="badge b-dep">dependencies</span></h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>POS collection feed</strong> (what each store collected, per rail) — through the <strong>swappable POS adapter</strong> (same pattern as outbound). The <strong>current POS (Ten Software) is limiting and old</strong>; whatever it can export we take — the audit doesn't depend on POS internals.</li>
+      <li><strong>Acquirer / aggregator settlement reports</strong> (Pine Labs / Razorpay / Paytm…) — the feed that makes the card/UPI legs reconcile; <strong>client to confirm which acquirers + getting daily reports</strong>.</li>
+      <li><strong>Bank statement</strong> — the read-only pull (Bank X; ICICI now).</li>
+    </ul>
+    <div class="callout co-dep" style="margin-top:10px"><strong>KDPS will build its own POS</strong> (the current one is old, limiting tech) — a <strong>separate module discussion</strong>, not D4. Two plans on the table: (1) keep the current POS and request the APIs we need; (2) build a KDPS POS that does <em>only</em> point-of-sale while the KDPS system owns the backend. Either way the audit reads the collection feed through the adapter, so D4 doesn't change when the POS does.</div>
+  </div>
+</section>
+
+<section id="d-tally">
+  <h2 class="sec">8 · The Tally boundary <span class="badge b-locked">Q-H locked</span></h2>
+  <p>Tally stays the <strong>statutory book of record</strong> (Rule 4); KDPS Payments is the <strong>operational AP sub-ledger</strong>. The boundary is the classic sub-ledger → general-ledger seam: the sub-ledger holds full detail and posts into the GL's control accounts, carried <em>detailed</em> for what's audited and <em>summary</em> for what's just volume, with a tie-out so the two never drift.</p>
+  <div class="card">
+    <h4>Two truths, one direction</h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>KDPS = the live truth</strong> — "what we owe Madura right now", every part-payment, aging, the party ledger. The operational answer comes from here.</li>
+      <li><strong>Tally = the filed truth</strong> — GST returns, final accounts, statutory filings.</li>
+      <li><strong>One-way push, no re-keying</strong> — KDPS generates the voucher, Tally receives it; the accountant <strong>stops hand-entering</strong> payments/bills (Anand, 18 Jun). Nobody types the same payment twice.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h4>What crosses, at what grain</h4>
+    <table>
+      <thead><tr><th>Crosses as detail (bill-wise voucher)</th><th>Crosses as summary (periodic voucher)</th></tr></thead>
+      <tbody>
+        <tr><td>Purchase bill, payment, <strong>DN / CN</strong>, store receipts — anything GST or the party ledger needs (keeps GSTIN · HSN · party · Agst Ref, so a GST notice traces inside Tally)</td><td><strong>Per-piece SOR / Consignment accruals</strong> — thousands a month; rolled into <strong>one settlement journal per brand per period</strong> off the Account Sales Report (GST on these crystallises only at settlement)</td></tr>
+      </tbody>
+    </table>
+    <p class="why">A <strong>daily AP-to-Tally tie-out</strong> reconciles the KDPS payables balance against Tally's control account — the safety net against silent drift. The exact voucher catalog (debit/credit legs, ledger names, GST classes) is <strong>D6</strong>; Q-H fixes only <em>which events cross and at what grain</em>.</p>
+  </div>
+  <div class="callout co-dep">
+    <strong>Stack reality (18 Jun):</strong> the Patna finance team runs <strong>Vyapar TaxOne (ex-Suvit)</strong> — an accounting-automation bridge that auto-posts documents into <strong>Tally</strong>. So Tally stays the book and there's already a "stop hand-entering" precedent in their stack. This opens a <strong>D6 fork</strong>: KDPS pushes to Tally <em>directly</em> (own connector / XML), or KDPS hands the structured export to <em>TaxOne</em> and lets the tool they already trust post it. <strong>To confirm with client:</strong> Tally is still the book (TaxOne feeding it) — not that accounts have moved into Vyapar itself.
+  </div>
+</section>
+
+<section id="d-connect">
+  <h2 class="sec">9 · How it connects</h2>
+  <ul>
+    <li><strong>Offers (D5) → D4:</strong> a discount is <strong>not a brand claim</strong> — it simply lowers the sale's net price, so KDPS earns less margin (profit is derived). The brand decides the discount on brand-controlled stock, KDPS on KDPS-controlled stock; either way nothing is reclaimed. Brand money from outbound stays the existing, real flows only: SOR/Consignment payable on sale, RTV defective brand credit, the EOSS/V-flip settlement of dead stock, and goods-return DN netting.</li>
+    <li><strong>Inbound → D4:</strong> the PT posting (Q37) creates the Outright/Correction payables D4 settles; the frozen ex-GST unit cost is the SOR/Consignment settlement basis.</li>
+    <li><strong>Outbound → D4:</strong> per-sale SOR/Consignment payables, RTV brand credits, EOSS/V-flip settlements all flow in here.</li>
+    <li><strong>Booking → D4:</strong> the Correction return allowance + payment terms set on the booking drive due dates and net-of-returns settlement.</li>
+    <li><strong>D4 → D6 (Tally):</strong> every payment + every reconciliation emits a statutory event; the voucher catalog is designed in D6.</li>
+  </ul>
+</section>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 2 — DECISIONS & GRILLING LOG                               -->
+<!-- ============================================================ -->
+<div class="tabpanel" id="tab-log">
+
+<section id="l-intro">
+  <h2 class="sec">Decisions &amp; Grilling Log</h2>
+  <p class="lead">The reasoning trail behind Tab 1 — every question, the options weighed, the research, and the locked choice. Statuses: <span class="badge b-locked">Locked</span> <span class="badge b-open">Open</span> <span class="badge b-dep">Dependency</span> <span class="badge b-park">Parked</span>.</p>
+  <div class="editbox">
+    <strong>Changelog</strong>
+    <ul style="margin:8px 0 0;padding-left:18px">
+      <li><strong>17 Jun 2026 — created.</strong> Orientation folded in (inherited-contracts table, the two halves, the 3-rail audit insight from real DSR/bank data). Grill opened at <strong>Q-A — the payment object grain</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-A locked</strong> (Option 2): two layers — <strong>Payable</strong> (the debt) + <strong>Payment</strong> (allocated bill-wise across one/many payables). Model written into Tab 1 §3. Opened <strong>Q-B — the payment lifecycle / state machine</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-B locked</strong> (Option 2): two coordinated state machines + real failure branches; Confirmed (bank ref captured) ≠ Reconciled (statement cleared). <strong>Anand's refinement:</strong> the vendor ledger reads at <strong>brand + vendor grain</strong> — payables accrue per brand, the payment anchors to the vendor and may span its brands, partials post. Opened <strong>Q-C — the payment eligibility gate</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-C locked</strong> (Option 2): tiered gate — short non-overridable hard-block list (no bank/GSTIN, no inwarded PT/TIR, SOR piece not sold) + soft holds (discrepancy, over-allowance, over-tolerance) that a named senior releases with a reason; trivial ₹/% auto-pass. Then <strong>Anand opened the AI &amp; Intelligence research pass</strong> (the "wow" layer) — sections, roles/access, summaries, insights, accounting depth.</li>
+      <li><strong>17 Jun 2026 — AI layer (§6) added + scoped.</strong> Copilot-not-autopilot map across 5 zones; roles/SoD grid (§5); accounting boundary (management here, Tally statutory). <strong>Anand's scope call:</strong> the <em>inline</em> copilot stays in Payments; all <em>analysis</em> (forecasting, dynamic-discounting optimiser, leakage ranking, profitability) moves to <strong>D7 Analytics</strong>. Opened a broader best-practice pass — <em>how to apply AI safely</em> (governance, human-in-the-loop, explainability, rollout).</li>
+      <li><strong>17 Jun 2026 — Q-AI locked.</strong> Anand locked the §6 AI vision + the 8-point apply-it-safely playbook, and added a 6th inline feature — the <strong>brand-statement reconciler</strong> (money-out assurance). "This much AI is enough." Next: <strong>Q-D — the approval hierarchy</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-D &amp; Q-E locked.</strong> Q-D: configurable amount-tiered approval matrix (maker ≠ checker ≠ payer, role-based, auto-escalate/delegate; ₹ bands = client input, WhatsApp question drafted) → §5. Q-E: v1 = <strong>manual pay + auto-confirm (read-only)</strong>; software-initiated pay (H2H / API) is v2, behind a swappable <strong>bank adapter</strong>. <strong>Bank is a variable — 3 banks, ICICI now (not HDFC); API requirement sent to the bank later.</strong> Doc de-HDFC'd; bank execution written into §3. Next: <strong>Q-F — the store-collection audit</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-F locked.</strong> Store-collection audit = <strong>3-way per rail (POS ↔ acquirer settlement report ↔ bank), phased</strong>; lag carried as expected/in-transit; written into §7. <strong>POS context (Anand):</strong> current POS is old/limiting → KDPS will build its own POS (separate module discussion, not D4); the audit reads the collection feed via a swappable POS adapter. New client/data items: acquirer settlement feeds + POS API list. Next: <strong>Q-G — settlement maths &amp; credits/netting per commercial model</strong>.</li>
+      <li><strong>17 Jun 2026 — Q-G locked</strong> (informed by the real KDPS CN&amp;DN + Invoice/Offer files). Two-state netting in KDPS vocabulary: goods-return <strong>DN</strong> nets now, brand <strong>CN</strong> = acknowledgment, commercial claims pend until agreed. Vendor ledger = derived <strong>party ledger</strong> (Opening + Invoices − CD − GR − Payments + Interest = Due). Glossary + §3 updated; payment terms partially found (Credit Days + CD%). <strong>Chat compacted here</strong> — see the continuation box in Open/Parked. Next: <strong>Q-H — Tally boundary</strong>.</li>
+      <li><strong>18 Jun 2026 — D4↔D5 connection corrected (Anand).</strong> An earlier draft modelled a brand discount as a recoverable <strong>"promotional claim / billback"</strong> against the brand — <strong>wrong, removed.</strong> The real model is simple: <strong>a discount just lowers the selling price, so KDPS earns less margin (profit is derived); nothing is reclaimed from the brand.</strong> Brand-controlled stock → the brand decides the discount; KDPS-controlled stock → KDPS decides — the money effect is identical (less margin) and the only difference is who authors it. Confirmed against <a href="../03-outbound/outbound.html">Outbound</a> (a sale posts revenue only for Outright/Correction; SOR/Consignment accrue on a fixed settlement rate, not the discounted price) + the four commercial models. The §9 claim machine, the D4↔D5 claim glossary and the offers-doc claim framing were all stripped. Real brand-money flows are unchanged: SOR/Consignment payable on sale · RTV defective credit · EOSS/V-flip settlement · goods-return DN.</li>
+      <li><strong>18 Jun 2026 — Q-H locked</strong> (Option 3). The statutory boundary: <strong>KDPS = operational AP sub-ledger (live truth), Tally = statutory book (filed truth)</strong>; <strong>one-way push, accountant stops hand-entering</strong> (Anand confirmed). Detail crosses where GST/party needs it (purchase bill, payment, DN/CN, store receipts — bill-wise), high-volume per-piece SOR/Consignment crosses as a <strong>periodic summarized settlement voucher</strong>; a <strong>daily AP-to-Tally tie-out</strong> is the control. Written into §8. <strong>New client-stack fact:</strong> Patna finance runs <strong>Vyapar TaxOne (ex-Suvit)</strong> — an accounting-automation bridge that auto-posts documents into <strong>Tally</strong> (Tally stays the book). Opens a D6 fork — KDPS→Tally direct vs KDPS→TaxOne→Tally. Confirm: is Tally still the book (TaxOne feeding it) or have they moved accounts into Vyapar itself. <strong>D4 design questions Q-A–Q-H now all locked.</strong></li>
+    </ul>
+  </div>
+</section>
+
+<section id="l-decisions">
+  <h2 class="sec">All decisions</h2>
+  <table>
+    <thead><tr><th>#</th><th>Decision</th><th>Choice</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Q-A</td><td>Payment object grain</td><td><strong>Two layers</strong> — Payable (one debt per source doc, status open→partly-paid→paid) + Payment (a disbursement allocated bill-wise across one/many open payables, full or partial). The ERP standard; the only model that survives SOR accruals &amp; Correction net-of-returns</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-B</td><td>Payment lifecycle / state machine</td><td><strong>Two coordinated machines.</strong> Payable: Open→Partly-paid→Paid (+On-hold, Cancelled). Payment: Draft→Pending-approval→Approved→Executed→Confirmed→Reconciled (+Rejected / On-hold / Failed-returned / Cancelled). Confirmed (bank ref captured) ≠ Reconciled (statement cleared). Ledger reads at <strong>brand + vendor grain</strong>; partials post (Anand)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-C</td><td>Payment eligibility gate</td><td><strong>Tiered gate.</strong> Hard blocks (never overridable): no validated bank / no GSTIN, payable not tied to inwarded PT/TIR, SOR/Consignment piece not sold. Soft holds (flag + senior override w/ reason): open invoice↔GRN↔PT discrepancy, Correction over-allowance, over per-brand tolerance. Trivial ₹/% auto-pass; checked on payable, re-checked at execution</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-AI</td><td>AI &amp; Intelligence layer (the "wow")</td><td><strong>Copilot, not autopilot</strong> (read-only, Rule 8). Inline copilot in Payments — ① read the mess · ② catch fraud · ③ summarise &amp; ask-anything · ④ due-date radar · ⑤ 3-rail audit match + day's flags · ⑥ <strong>brand-statement reconciler</strong>; <strong>forecasting / optimisation / ranking / profitability → D7 Analytics</strong>. Roles/SoD §5; map §6; the <strong>8-point apply-it-safely playbook</strong> locked in §6</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-D</td><td>Approval hierarchy</td><td><strong>Configurable amount-tiered matrix</strong> + escalation. ₹ bands → number/seniority of approvers; maker ≠ checker ≠ payer; role-based not name-based; auto-escalate on SLA breach + delegate when away. Actual ₹ bands = client input. Per-brand overrides (Option 3) later</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-E</td><td>Bank execution</td><td><strong>v1 = manual pay + auto-confirm (read-only)</strong>; payment-initiation API is v2. Behind a swappable <strong>bank adapter</strong> — <strong>bank is a variable</strong> (3 banks, ICICI now), mode swappable (manual → H2H / API). UTR roundtrip auto-closes the payable. API requirement sent to bank later</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-F</td><td>Store-collection audit (matching model)</td><td><strong>3-way per rail, phased.</strong> Card: POS gross ↔ acquirer settlement report (net of MDR, UTR/MID) ↔ bank. UPI: T+1 via settlement report. Cash: POS ↔ deposit slip ↔ bank, windowed, minus petty cash. Lag carried as expected/in-transit; flag only late/short/missing. POS feed via swappable adapter (KDPS POS = separate discussion)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-G</td><td>Settlement maths &amp; credits/netting</td><td><strong>Two-state netting</strong> (KDPS vocab). Goods-return <strong>DN nets the payable now</strong>; brand <strong>CN</strong> tracked as acknowledgment (§6 ⑥ chases the gap). Commercial claims (EOSS/V-flip, over-allowance) <strong>pend until agreed</strong>, confirm at agreed amount. (A normal offer discount is not a claim — it just lowers margin.) Per model: Outright/Correction book at inward; SOR/Consignment accrue on sale. Vendor ledger = party ledger: Opening + Invoices − CD − GR − Payments + Interest = Due</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>D4↔D5</td><td>Offers connection</td><td><strong>A discount is not a brand claim</strong> — it lowers the sale's net price → KDPS earns less margin (profit is derived). Brand decides the discount on brand-controlled stock, KDPS on KDPS-controlled; nothing reclaimed either way. The funder tag is kept only to attribute margin in reports (D7). Real brand-money flows are unchanged and separate: SOR/Consignment payable on sale · RTV defective credit · EOSS/V-flip settlement · goods-return DN. <em>(Corrected 18 Jun — the earlier "promotional claim / billback" model was wrong and removed.)</em></td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q-H</td><td>Tally boundary</td><td><strong>Option 3 — detail where statutory/party needs it, summary where it's just volume.</strong> KDPS = operational AP sub-ledger (live truth); Tally = statutory book (filed truth); <strong>one-way push, no re-keying</strong> (accountant stops hand-entering). Bill / payment / DN / CN / store receipt cross as <strong>bill-wise detailed vouchers</strong> (keep GSTIN · HSN · party · Agst Ref); per-piece SOR/Consignment accruals cross as a <strong>periodic summarized settlement voucher</strong>; <strong>daily AP-to-Tally tie-out</strong> is the control. Which business events become which vouchers = D6. <strong>Stack note:</strong> Patna runs <strong>Vyapar TaxOne</strong> (auto-posts to Tally) → D6 fork: push to Tally direct vs via TaxOne</td><td><span class="badge b-locked">Locked</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="l-open">
+  <h2 class="sec">Open / Parked / To confirm</h2>
+  <div class="callout co-note" style="border-width:2px">
+    <strong>▶ Where we are &amp; how to continue (17 Jun 2026 — chat compacted here).</strong>
+    <p style="margin:6px 0 4px"><strong>This doc is the source of truth for D4 Payments.</strong> Locked: <strong>Q-A</strong> two-layer payable + payment (bill-wise allocation) · <strong>Q-B</strong> two state machines + failure branches, Confirmed ≠ Reconciled, ledger at brand + vendor grain · <strong>Q-C</strong> tiered eligibility gate (hard blocks + soft holds + tolerance) · <strong>Q-AI</strong> copilot-not-autopilot AI (§6 — 6 inline features + the 8-point playbook; all analysis → D7) · <strong>Q-D</strong> configurable amount-tiered approval matrix (maker ≠ checker ≠ payer, escalate/delegate) · <strong>Q-E</strong> manual pay + auto-confirm (read-only) for v1, payment API later, behind a swappable <strong>bank adapter</strong> — <strong>bank is a variable; ICICI now, not HDFC</strong> · <strong>Q-F</strong> 3-way-per-rail store-collection audit, phased (POS feed via swappable adapter; KDPS will build its own POS — separate discussion) · <strong>Q-G</strong> two-state settlement/netting in KDPS vocab (DN nets now / CN = ack / claims pend; party ledger = Opening + Invoices − CD − GR − Payments + Interest = Due).</p>
+    <p style="margin:4px 0"><strong>Q-H locked (18 Jun) — Tally boundary done. All D4 design questions Q-A–Q-H are now locked.</strong> Boundary = Option 3 (KDPS sub-ledger / Tally statutory; one-way push, accountant stops hand-entering; detail for bill/payment/DN/CN/receipt, summary for per-piece SOR; daily tie-out). New stack fact: Patna runs <strong>Vyapar TaxOne</strong> (auto-posts to Tally) → D6 fork on the push route. <strong>Remaining for D4:</strong> optionally a fuller Tab-1 settlement write-up + the client confirmation doc at <code>04-client-docs/Payments-Module-Client.html</code>. Then per the architecture queue → <strong>D5 (offers)</strong>.</p>
+    <p style="margin:4px 0"><strong>Client data owed:</strong> approval ₹ thresholds (WhatsApp question drafted, see Q-D) · payment terms per brand (partially found = Credit Days + CD%) · which card/UPI acquirers + their daily settlement reports · the bank API requirement (ICICI) to be sent later · <strong>confirm Tally is still the statutory book with Vyapar TaxOne feeding it (not accounts moved into Vyapar), and how TaxOne is licensed/accessed (for the D6 push-route fork)</strong>.</p>
+    <p style="margin:4px 0"><strong>Method:</strong> grill one fork at a time, research industry best practice first (cite sources), 3–4 options + a recommendation in plain chat, update this living doc after every question (two tabs, house style). Plain language; never widen scope by inference; design forward, not to current manual limits.</p>
+  </div>
+  <div class="callout co-note"><strong>The execution fork — resolved at Q-E (17 Jun):</strong> v1 is <strong>manual pay + auto-confirm (read-only)</strong>; software-initiated payment (H2H file / payment-initiation API) is v2, behind a swappable <strong>bank adapter</strong>. The bank is a <strong>variable</strong> — 3 banks, ICICI now, nothing hardcoded; the API requirement is sent to the bank later.</div>
+  <div class="callout co-dep"><strong>Client data still owed:</strong> payment terms per brand (D1 §11 — <em>partially found</em>: Credit Days + CD% per supplier in the Invoice/Supplier files) · per-brand cost-mapping column (Inbound Q36) · whether card/UPI settlements land in the same bank account and carry store/terminal identity (bank-API brief Q6 — the single most important audit question) · <strong>approval ₹ thresholds &amp; who sits at each level (Q-D — owners decide; question drafted 17 Jun)</strong> · <strong>which card/UPI acquirers/aggregators KDPS uses + getting their daily settlement reports (Q-F)</strong>.</div>
+  <div class="callout co-park"><strong>POS — separate module discussion (not D4):</strong> the current POS (Ten Software) is old &amp; limiting and will be replaced by a <strong>KDPS-built POS</strong>. Two plans: keep current + request the APIs we need, or build a POS that does <em>only</em> point-of-sale with the KDPS system as backend. D4 reads the store-collection feed through a <strong>swappable POS adapter</strong>, so it's insulated from the choice.</div>
+  <div class="callout co-park"><strong>To D6 (Tally):</strong> the payment / receipt / reconciliation voucher catalog (debit/credit legs, ledger names, GST classes) — D4 emits the events at the Q-H grain; D6 designs the vouchers. Plus the <strong>push-route fork</strong>: KDPS → Tally directly (own connector / XML) vs KDPS → <strong>Vyapar TaxOne</strong> → Tally (reuse the bridge Patna finance already runs).</div>
+  <div class="callout co-note"><strong>Roles grid:</strong> D1/D2 deferred the full user-roles design to D4. It rides on the approval hierarchy (Q-D) and is consolidated at Q-H.</div>
+</section>
+
+<section id="l-log">
+  <h2 class="sec">Grilling log</h2>
+  <div class="gq">
+    <div class="qh">Q-A · The payment object grain <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> when KDPS pays a brand, what does the system create and track?</p>
+    <p style="margin:6px 0"><strong>Research:</strong> NetSuite, SAP and Tally all separate <em>bill/payable</em> (one per invoice, status open→partly-paid→paid, on the AP ledger) from <em>payment</em> (a disbursement allocated across one or many payables — Tally's bill-wise "Agst Ref"; NetSuite's one Bill Payment clearing many Vendor Bills). Lifecycle: approved→scheduled→executed→reconciled.</p>
+    <div class="opt"><b>Option 1 — Payment = one per invoice (1:1).</b> Simplest, but breaks for SOR/Consignment (payable accrues per sale, hundreds of tiny accruals) and doesn't match how KDPS actually pays a brand (one transfer for many invoices).</div>
+    <div class="opt rec"><b>Option 2 — Two layers: Payable + Payment (allocation). ★ recommended.</b> The payable is the long-lived debt (one per source doc — PT invoice, per-sale SOR accrual, return debit, credit note), carrying open→partly-paid→paid. The Payment is a separate document allocated across one or many open payables for a brand (full or partial), carrying the execution lifecycle. The universal ERP pattern; the only model that handles SOR accruals, Correction net-of-returns, and brand-level reconciliation cleanly. Subsumes Options 1 and 3.</div>
+    <div class="opt"><b>Option 3 — Periodic brand "settlement run" only.</b> Everything is a scheduled per-brand sweep of eligible payables. Great for SOR/Consignment, heavy for one-off Outright invoices — and it's just a special case of Option 2.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2. The payable layer already exists in our vendor ledger; we're naming the payment document that debits it and how it allocates.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision:</strong> Option 2 locked — two layers (Payable + Payment), bill-wise allocation.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-B · The payment lifecycle / state machine <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> what states does a Payment move through, and do we adopt PASCS's six verbatim?</p>
+    <p style="margin:6px 0"><strong>Research:</strong> real AP systems add unhappy-path states PASCS omits — <em>Failed / Returned</em> (bank bounce), <em>Cancelled / Void</em>, <em>On-hold</em>, plus an in-flight <em>Processing</em> (BILL, Acumatica). And reconciliation is genuinely <strong>two steps — matching then clearing</strong> (Oracle Cash Management), which is exactly PASCS's <em>Confirmed</em> (we captured the bank ref) vs <em>Reconciled</em> (the statement independently shows it cleared).</p>
+    <div class="opt"><b>Option 1 — PASCS verbatim.</b> Eligible→Requested→Approved→Executed→Confirmed→Reconciled on one object. Honours the client doc, but conflates the payable's "eligible" with the payment, and has no Rejected / Failed / On-hold / Cancelled — which "flag, don't block" and real bank bounces demand.</div>
+    <div class="opt rec"><b>Option 2 — Two coordinated machines + real branches. ★ recommended.</b> <u>Payable:</u> Open→Partly-paid→Paid (+On-hold, Cancelled), derived from allocations. <u>Payment:</u> Draft→Pending-approval→Approved→Executed→Confirmed→Reconciled, with Rejected / On-hold / Failed-returned / Cancelled branches. "Eligible" sits on the payable (it's the entry gate, Q-C), not the payment. Keeps Confirmed (txn ref captured = matched) distinct from Reconciled (bank statement cleared). Maps PASCS's six onto the payment spine and loses nothing.</div>
+    <div class="opt"><b>Option 3 — Lean 4-state.</b> Approved→Paid→Reconciled (+Failed). Minimal; drops the pre-approval work queue, the partial-payment story and the confirm/reconcile split. Too thin for a 50-store control system.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2 — keep the client's spine, split it across the two layers, add the failure paths, preserve Confirmed≠Reconciled.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision:</strong> Option 2 locked. <strong>Anand's refinement:</strong> the vendor ledger is kept at <strong>brand + vendor grain</strong> — payables accrue per brand, the payment anchors to the vendor (bank account) and may span the brands under it, and every partial payment posts to the ledger.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-C · The payment eligibility gate <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> what must be true before a payable can be paid, and does a failed check <em>block</em> or <em>flag</em>?</p>
+    <p style="margin:6px 0"><strong>Research:</strong> 3-way match (booking ↔ GRN ↔ invoice) is the core AP safeguard; on failure a <strong>hold</strong> stops payment until released. Mature systems split holds into <strong>fix-the-cause (hard)</strong> vs <strong>override-with-approval (soft)</strong>, and use <strong>tolerances</strong> so trivial variances don't freeze payments (Oracle AP, Tipalti, Ramp). India adds a hard prerequisite: <strong>PAN + GSTIN + penny-drop-validated bank account</strong> before paying.</p>
+    <div class="opt"><b>Option 1 — One hard gate, all-or-nothing.</b> Every check must pass, no override (PASCS literal). Maximum control, but a ₹50 variance or one open line freezes a ₹5-lakh payment — staff route around the system (the Rule 5 failure).</div>
+    <div class="opt rec"><b>Option 2 — Tiered gate: hard blocks + soft holds with override. ★ recommended.</b> <u>Hard (never overridable, fix-the-cause):</u> no validated bank / no GSTIN (D1 pay-gate, India-mandatory); payable not tied to an inwarded PT / TIR (debt not official yet); SOR/Consignment piece not actually sold. <u>Soft (flag + senior override w/ reason):</u> open invoice↔GRN↔PT discrepancy; Correction over-allowance; amount over a per-brand variance tolerance. <u>Tolerance:</u> trivial ₹/% gaps auto-pass. Checked on the payable, re-checked at execution.</div>
+    <div class="opt"><b>Option 3 — Soft everywhere (flag-only).</b> Always allow, just warn. Too loose — defeats the module's whole purpose.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2 — the only design that's both a real money gate and Rule-5-honest. The hard list is short and non-negotiable; everything else flags and needs a named senior to release.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision:</strong> Option 2 locked (Anand: "recommendation sounds good"). Hard/soft split as above; tolerances per brand.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-AI · The AI &amp; Intelligence layer (the "wow") <span class="pill-status b-locked">Locked — Anand 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>Anand's ask:</strong> a deep research pass on where AI fits the payment module — sections, roles/access, summaries, insights, suggestions, accounting depth, and a client "wow" on par with the offers module.</p>
+    <p style="margin:6px 0"><strong>Guardrail (decides everything):</strong> the market splits AI into autonomous <em>agents that act</em> vs <em>copilots that advise</em>. For money KDPS is <strong>copilot, not autopilot</strong> — AI reads / summarizes / predicts / flags; humans approve, documents post (Rule 8). Worst case = a wrong suggestion, never a wrong rupee.</p>
+    <p style="margin:6px 0"><strong>Proposed map (full version in Tab 1 §6):</strong> ① reads the mess (bank-narration parser, invoice/credit-note reader) · ② catches what humans miss (duplicate-payment guard, vendor bank-change fraud alert, anomaly watch) · ③ summarizes &amp; explains (one-line approver brief, ask-anything box in Hindi/English, owner WhatsApp digest) · ④ looks ahead (aging/due-date radar, SOR settlement projection, cash forecast + early-payment-discount optimizer) · ⑤ the money-in audit brain (3-rail auto-match, leakage flags). Plus the roles/SoD grid (§5) and the accounting boundary (management accounting here, Tally statutory).</p>
+    <p style="margin:6px 0"><strong>Evidence:</strong> AP AI cuts duplicate-payment losses 80–95% and invoice cost ~$18→$3 (Beancount, Quadient); 44% of finance teams deploy agentic AI in 2026 and NL-query over ledgers is flagship (Safebooks, ChatFin/MS Copilot); AI recon uses NLP narration parsing + fuzzy / many-to-many matching, ~80% faster (HighRadius, Solvexia, Atlar); vendor bank-change + near-duplicate fraud detection (open.money, everworker); dynamic discounting recovers 2–3% working capital, 2/10 ≈ 37% annualised (ProcIndex, ChatFin); SoD: vendor-master / approve / release are the 3 non-negotiable separations (HighRadius, Ramp, Pathlock).</p>
+    <p style="margin:6px 0"><strong>Best-practice "how to apply" (broader pass, §6 playbook):</strong> confidence-threshold routing tuned to <em>failure cost</em> not average accuracy (Zip, LlamaIndex); explainability proportional to risk + decision logs (Lowenstein, BCLP, Grant Thornton); AI suggestions in the audit trail + learn-from-corrections (Naviant, Zip); alert-fatigue control — most raw alerts are noise, recalibrate from feedback (FraudNet, Dropzone); <strong>shadow → suggest → assist</strong> rollout, 8–12 weeks shadow in regulated finance, trust is the barrier (insightsoftware, Cobbai, ChatFin); frontier agentic-payments still keep humans above a threshold (IMF, Fenwick, Mastercard Agent Pay); <strong>India: RBI data-localisation + DPDP consent/provenance, sectoral RBI prevails</strong> (PwC, SARC, RingSafe).</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision (Anand, 17 Jun):</strong> §6 AI vision + the 8-point apply-it-safely playbook <strong>locked</strong>; analysis lives in D7 Analytics; inline copilot stays here. Added the <strong>brand-statement reconciler</strong> (⑥) as the one extra inline control. "This much AI is enough." → on to Q-D (approval hierarchy).</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-D · The approval hierarchy <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> how is approval authority structured for a vendor payment?</p>
+    <p style="margin:6px 0"><strong>Research:</strong> the AP standard is an <strong>approval matrix</strong> — criteria (amount / vendor / type) × thresholds × roles — higher amounts needing more senior, multi-level sign-off (Manager→Director→Owner). Best practice: <strong>role-based not name-based</strong> (survives staff change), always a <strong>backup / escalation path</strong>, SLA auto-escalate on delay, delegate when an approver is away (HighRadius, BILL, Tipalti, MS Dynamics).</p>
+    <div class="opt"><b>Option 1 — Single approver.</b> One senior signs everything (today's informal habit). Simple, but no segregation at high value, a single fraud point, and a bottleneck when they're away.</div>
+    <div class="opt rec"><b>Option 2 — Configurable amount-tiered matrix + escalation. ★ recommended.</b> ₹ bands → how many / how senior the approvers (tiny → straight-through or one approver; mid → + controller; large → + owner). <strong>Maker ≠ checker ≠ payer</strong> (from §5). Role-based, survives staff change. <strong>Auto-escalate</strong> on SLA breach, <strong>delegate</strong> when away — never stalls. KDPS sets the actual numbers (client input).</div>
+    <div class="opt"><b>Option 3 — Hybrid matrix (amount + brand + funding).</b> Adds rules like "this brand always needs owner sign-off" or "SOR settlements differ from Outright." More powerful, more config to maintain — best added as a refinement on Option 2.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2 — design the matrix now (structure, segregation, escalation); the <strong>actual ₹ bands + who sits where are a client input</strong> (owners decide). Option 3's per-brand overrides slot in later if needed.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision:</strong> Option 2 locked. Configurable amount-tiered matrix; maker ≠ checker ≠ payer; role-based; auto-escalate + delegate. ₹ bands = client input (WhatsApp question drafted for the owners).</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-E · Bank execution — how the money actually leaves <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> once a payment is approved, how does it actually get paid — and does our software push money?</p>
+    <p style="margin:6px 0"><strong>The tension:</strong> PASCS wants execution "via bank", but the bank-API brief deliberately scoped the API to <strong>read-only statements</strong> ("not asking to send money") — faster approval, lower risk. Research: India banks gate <em>payment-initiation</em> (write) APIs behind heavy auth, four/six-eyes and bulk-payout limits; read-only statement access is clean and consent-based. The reconciliation gold standard either way is the <strong>UTR flowing back and auto-closing the payable</strong> (the "payment roundtrip").</p>
+    <div class="opt rec"><b>Option 1 — Manual pay + auto-confirm (read-only now). ★ recommended.</b> System prepares the approved payment (beneficiary, amount, allocation); a human pays manually in the bank's net-banking; the UTR is captured (typed at pay-time + auto-matched from the daily read-only statement pull via the §6 narration parser). Loop still closes. Matches the bank-API brief exactly; lowest risk, fastest.</div>
+    <div class="opt"><b>Option 2 — Bank file / H2H (SFTP) upload.</b> System generates a payment file dropped to the bank via SFTP; bank executes the batch, returns status/UTR. Good for many SOR settlements at once; the brief's "reliable fallback." More setup; four-eyes on the file.</div>
+    <div class="opt"><b>Option 3 — Payment-initiation API (full STP write).</b> Approved payment → API pushes the instruction → bank executes → returns UTR. Fully closed loop, no human bank step. But: write access, heavy security/onboarding, bulk-payout limits, and the brief parked it.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 1 <em>now</em>, behind a <strong>swappable execution adapter</strong> (same pattern as the outbound POS adapter) so H2H (2) or the payment API (3) drops in later with no redesign. Confirmation + reconciliation are automated from day one via the read-only statement API, so the loop closes regardless of who presses "pay". Whichever mode, the Q-D four-eyes governs release and UTR capture is the linchpin.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision (Anand, 17 Jun):</strong> Option 1 locked — manual pay + auto-confirm (read-only) for v1; payment-initiation API wanted <em>later</em> (v2). Behind a swappable <strong>bank adapter</strong>: the <strong>bank is a variable</strong> (3 banks; ICICI access now, not HDFC; nothing hardcoded) and the mode is swappable (manual → H2H / API). API requirement to be sent to the bank later — design first.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-F · The store-collection audit — matching model <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> how do we prove each store's daily collection (cash / card / UPI) reached the bank, when the three rails behave completely differently?</p>
+    <p style="margin:6px 0"><strong>Research (India retail):</strong> <strong>cash</strong> deposits lumpy (T+1–2, minus petty cash); <strong>card</strong> settles <strong>T+2, net of MDR</strong>, as a <em>bulk</em> credit you must disaggregate with the <strong>acquirer settlement report</strong> (Pine Labs / Razorpay / Paytm…); <strong>UPI</strong> settles T+1. The bank credit alone can't tell an MDR fee from a real shortfall — you need the settlement report (gross − MDR = net, with UTR + MID). Discrepancy types: over-settlement, under-settlement, fee mismatch.</p>
+    <div class="opt"><b>Option 1 — 2-way: POS collection ↔ bank credit.</b> Compare what the POS says each store collected to what hit the bank. One extra feed (bank). But card/UPI arrive net of MDR, lagged and bulked — so the match is permanently "off," and you can't tell a fee from a fraud. Noisy and weak.</div>
+    <div class="opt rec"><b>Option 2 — 3-way per rail: POS → acquirer settlement report → bank. ★ recommended.</b> <u>Card/UPI:</u> POS gross ↔ settlement report (gross − MDR = net, UTR) ↔ bank credit (matched by UTR). <u>Cash:</u> POS cash ↔ deposit slip ↔ bank cash-credit (windowed, minus petty cash). The lag is handled by carrying amounts as <em>expected / in-transit</em> until they land; flag only a genuinely late or short one. The only model that <strong>explains</strong> the gap (it's MDR, not theft) and still catches a real missing deposit. Mirrors KDPS's own per-MID sheet, done right.</div>
+    <div class="opt"><b>Option 3 — Option 2, phased by rail.</b> Start with the rails we have data for (bank + POS + UPI), add each card-acquirer settlement feed as it's wired in. Pragmatic if we don't have every settlement report on day one.</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2 as the target, delivered Option-3-style (phase by rail as settlement feeds come online). New data dependency: <strong>which card/UPI acquirers/aggregators KDPS uses + getting their daily settlement reports</strong> — a client item (mirrors the bank-API brief Q6).</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision (Anand, 17 Jun):</strong> Option 2 locked — 3-way per rail, phased. <strong>POS context:</strong> current POS is limiting/old and will be replaced by a KDPS-built POS (a separate module discussion); the audit reads the collection feed via a <strong>swappable POS adapter</strong>, insulated from the POS choice. Acquirer settlement feeds + the POS API list = client/data items.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-G · Settlement maths &amp; credits/netting per commercial model <span class="pill-status b-locked">Locked — Anand approved 17 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> brand money flows both ways — we owe payables, brands owe us credits (returns, RTV, EOSS/V-flip settlements, Correction over-allowance). How do these net into what we actually pay? <em>(Note: a normal offer discount is NOT one of these — it just lowers margin, no credit owed.)</em></p>
+    <p style="margin:6px 0"><strong>Research:</strong> best practice — <strong>match each credit note to its original invoice and net</strong>; never pay before applicable credits are applied; never leave credits floating (they create "phantom liabilities"). For SOR/Consignment, the retailer sends the brand an <strong>Account Sales Report</strong> (what sold) and pays the settlement on sold units (FreeAgent, QuickBooks; CFI/PwC consignment).</p>
+    <div class="opt"><b>Option 1 — Net everything immediately.</b> Any recorded credit reduces the payable at once. One balance, simple. But an <em>unagreed</em> claim (an EOSS settlement we've only <em>asked</em> for) would wrongly cut what we pay → we short-pay the brand → dispute.</div>
+    <div class="opt rec"><b>Option 2 — Two-state netting: confirmed nets now, claims pend until agreed. ★ recommended.</b> A <strong>confirmed credit</strong> (return accepted, credit note in hand, RTV credit acknowledged, Correction return within allowance) is <strong>allocated against specific open payables</strong> and reduces the payment now. A <strong>raised-but-unagreed claim</strong> (EOSS/V-flip settlement, Correction over-allowance recovery) sits as a <strong>pending claim</strong> — visible per brand — and nets only when the brand agrees (then it becomes a confirmed credit). Clean <em>net payable</em> + a visible <em>pending-claims</em> list; nothing floats.</div>
+    <div class="opt"><b>Option 3 — Separate claims sub-ledger.</b> Claims tracked entirely apart, settled manually, never auto-net. Cleanest separation, but heavy and manual — overkill for KDPS.</div>
+    <p style="margin:8px 0 0"><strong>Per model (all from the spine, just applied consistently):</strong> Outright/Correction payable books at inward; a Correction return within allowance nets, <strong>over-allowance → pending recovery / V-flip</strong>; SOR/Consignment payable accrues on sale (the Account Sales Report) and unsold returns net nothing (never accrued); RTV credits &amp; EOSS/V-flip settlements are <strong>claims</strong> until agreed. <em>(A normal offer discount is not a claim — it only lowers margin.)</em></p>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 2 — it protects the brand relationship (no surprise short-pay), keeps a clean net payable + a visible claims list, and matches both credit-note and consignment best practice. It feeds the §6 ⑥ brand-statement reconciler directly.</p>
+    <p style="margin:8px 0 0"><strong>Real-data evidence (17 Jun — KDPS CN&amp;DN + Invoice/Offer files):</strong> KDPS already runs exactly this by hand — it raises a <strong>Debit Note (DN)</strong> on a goods return and the brand issues a <strong>Credit Note (CN)</strong> back; the two are matched (sometimes at a slightly different amount). The sheet shows a large <strong>DN-without-CN gap</strong> (~₹1.74 Cr DN vs ~₹0.45 Cr CN) — pending claims in real rupees. <strong>Refinement the data reveals:</strong> two kinds of credit — (a) a <strong>goods-return DN</strong> is backed by a physical return, so it <em>nets the payable now</em>; the CN is tracked as the brand's <em>acknowledgment</em> (feeds §6 ⑥), not a block; (b) a <strong>commercial claim</strong> (EOSS/V-flip settlement, Correction over-allowance) has no return, so it <em>pends until the brand agrees</em> — and confirms at the <em>agreed</em> amount. Adopt KDPS vocab — <strong>DN / CN / GR / CD</strong> — and their party-ledger identity: <strong>Opening + Invoices − CD − GR − Payments + Interest = Due</strong>, which D4 produces derived. Payment terms appear here as <strong>Credit Days + CD%</strong> per supplier (the D1 §11 data, partially captured already); invoice ageing runs 300–600 days on the worst lines — the exact pain this module fixes.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision (Anand, 17 Jun):</strong> Option 2 locked, refined by the real CN&amp;DN + party-ledger data. Two-state netting in KDPS vocab — goods-return <strong>DN nets now</strong> (CN tracked as the brand's ack), commercial claims <strong>pend until agreed</strong> at the agreed amount. Vendor ledger = the derived <strong>party ledger</strong> (Opening + Invoices − CD − GR − Payments + Interest = Due), brand + vendor grain.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q-H · The Tally boundary <span class="pill-status b-locked">Locked — Anand approved 18 Jun</span></div>
+    <p style="margin:6px 0"><strong>The fork:</strong> Tally stays the statutory book (Rule 4) — so what exactly crosses from the KDPS Payments sub-ledger into Tally, at what level of detail, and which side is the truth when they disagree?</p>
+    <p style="margin:6px 0"><strong>Research:</strong> the standard sub-ledger → general-ledger pattern — the sub-ledger keeps every transaction in full detail and posts a journal into the GL's <em>control account</em>; the interface can carry <strong>summary</strong> (one total per account per batch) or <strong>detail</strong> (a voucher per document), and the safety net is a <strong>sub-ledger-to-GL tie-out</strong> so the two never silently drift (DualEntry; MS Dynamics 365 ledger/sub-ledger docs; ClearTax AP-to-GL recon). Tally's own AP guidance: standardised, automated, single-entry — no double capture (Tally Solutions).</p>
+    <p style="margin:6px 0"><strong>Settled by our own rules (flagged, not debated):</strong> <strong>one-way push, never re-keying</strong> (KDPS generates, Tally receives); <strong>KDPS = operational truth, Tally = statutory truth</strong>, reconciled by a daily tie-out.</p>
+    <div class="opt"><b>Option 1 — Thin Tally (summary only).</b> KDPS pushes daily journal totals per control account; Tally is a lean statutory roll-up. Lightest sync, but Tally loses the per-bill / per-party detail GST returns lean on — a notice can't be traced inside Tally.</div>
+    <div class="opt"><b>Option 2 — Full mirror (detail everything).</b> Every KDPS document — including each per-piece SOR accrual — becomes its own Tally voucher. Maximum traceability, but the per-piece accruals are thousands of tiny vouchers a month → bloat and drift, exactly what the tie-out exists to prevent.</div>
+    <div class="opt rec"><b>Option 3 — Detail where statutory/party needs it, summary where it's just volume. ★ recommended.</b> Purchase bill · payment · DN/CN · store receipts cross as <strong>detailed bill-wise vouchers</strong> (keep GSTIN · HSN · party · Agst Ref); per-piece SOR/Consignment accruals cross as a <strong>periodic summarized settlement voucher</strong> (one per brand per period, off the Account Sales Report — GST crystallises only at settlement). Plus the <strong>daily AP-to-Tally tie-out</strong>. Textbook "detail for what's audited, summary for what's just count."</div>
+    <p style="margin:8px 0 0"><strong>Recommendation:</strong> Option 3 — keeps Tally clean enough to stay the filing book, detailed enough to survive a GST audit, without drowning it in SOR micro-accruals. The voucher-by-voucher catalog is D6; Q-H fixes only which events cross and at what grain.</p>
+    <p style="margin:8px 0 0;color:var(--green)"><strong>✓ Decision (Anand, 18 Jun):</strong> Option 3 locked; accountant <strong>stops hand-entering</strong> (one-way push confirmed). <strong>New stack fact:</strong> Patna finance runs <strong>Vyapar TaxOne (ex-Suvit)</strong>, an automation bridge that auto-posts into Tally — so Tally stays the book; opens a D6 fork (KDPS→Tally direct vs KDPS→TaxOne→Tally). Confirm with client that Tally is still the book, not that accounts moved into Vyapar. <strong>D4 Q-A–Q-H all locked.</strong></p>
+  </div>
+</section>
+
+<section id="l-gloss">
+  <h2 class="sec">Glossary</h2>
+  <dl class="gloss">
+    <dt>Payable</dt><dd>One debt KDPS owes a brand, born from a spine document (PT invoice, per-sale SOR accrual, return debit, brand credit). Lives on the vendor ledger; status open → partly-paid → paid. <em>(Locked at Q-A.)</em></dd>
+    <dt>Payment</dt><dd>A disbursement document that settles one or many open payables for a brand, full or partial, and carries the execution lifecycle. <em>(Locked at Q-A.)</em></dd>
+    <dt>Allocation (bill-wise)</dt><dd>The link that applies a payment against specific open payables — the ERP-standard way one payment clears many bills.</dd>
+    <dt>Store-collection audit</dt><dd>The daily money-in check: what each store collected (cash / card / UPI) vs what landed in the bank account, across three settlement rails.</dd>
+    <dt>Bank adapter</dt><dd>The single seam behind which all bank-touching lives — swappable on two axes: <em>which bank</em> (3 banks; ICICI now; the bank is a variable, "Bank X") and <em>which mode</em> (read-only + manual pay now; H2H file or payment-initiation API later).</dd>
+    <dt>Debit Note (DN)</dt><dd>The note KDPS raises on a brand/party when it returns goods, reducing what KDPS owes. Backed by a physical return, so it nets the payable now.</dd>
+    <dt>Credit Note (CN)</dt><dd>The brand's acknowledgment of a DN (sometimes at a different amount). A DN without a matching CN is the reconciling gap with the brand — surfaced by the §6 ⑥ reconciler. KDPS's real sheet carries a large unmatched DN balance.</dd>
+    <dt>GR (Goods Return)</dt><dd>Stock sent back to a brand (defective/RTV or seasonal/Correction); its value reduces the payable — the "GR Value" in KDPS's party ledger.</dd>
+    <dt>CD (Cash Discount)</dt><dd>An early-payment discount a supplier gives for paying within the credit days; tracked as Credit Days + CD%. Capturing it is the payment-timing win (the optimiser itself lives in D7).</dd>
+    <dt>Party ledger</dt><dd>KDPS's per-party running account: Opening + Invoices − CD − GR − Payments + Interest = Due. D4 produces this as the derived vendor ledger (brand + vendor grain).</dd>
+    <dt>MDR / bank charge</dt><dd>The fee an acquirer deducts from card/UPI settlements, so the bank credit is less than the amount swiped — the audit must expect the gap.</dd>
+    <dt>UTR</dt><dd>The bank reference on a transaction — the key that matches a payment or a settlement back to its record.</dd>
+    <dt>Copilot, not autopilot</dt><dd>KDPS's stance on AI in money work: AI advises (reads, summarizes, predicts, flags) but never acts on the ledger or inside an approval — a human approves, a document posts (Rule 8). The opposite of an autonomous agent that moves money on its own.</dd>
+    <dt>Segregation of duties (SoD)</dt><dd>The control that the three highest-risk actions — change a vendor's bank details, approve a payment, release the money — never sit with one person. Enforced by role-based access; AI is a layer, not one of the duty-holders.</dd>
+    <dt>Dynamic discounting</dt><dd>Paying a brand early in exchange for a discount, timed by an AI cash forecast so KDPS captures the discount without straining cash. A 2/10 term ≈ 37% annualised return.</dd>
+    <dt>Bank-narration parser</dt><dd>The AI that reads cryptic statement text (e.g. <code>INF/NEFT/IN…</code>) + UTR and maps each credit to the right store, brand or payment — the join that powers both reconciliations.</dd>
+    <dt>Confidence-threshold routing</dt><dd>The core human-in-the-loop pattern: AI auto-acts only above a confidence score, routes the rest to a human. The threshold is set by the cost of being wrong, so money work gets a stricter line than low-stakes work.</dd>
+    <dt>Shadow mode</dt><dd>Running AI silently in parallel with humans first — capturing its suggestions and comparing match rates — before letting it suggest, then assist. How trust is earned in regulated finance (weeks, not a big-bang switch).</dd>
+    <dt>Data localisation (RBI/DPDP)</dt><dd>India's rule that payment data is stored within the country; AI use must document consent and training-data provenance. Sector rules (RBI) prevail over the general DPDP Act in conflict.</dd>
+  </dl>
+</section>
+
+</div>
+
+<footer>
+  KDPS — Payments Design · Living document · Tab 1 = system design · Tab 2 = decisions &amp; grilling log · Companion to the Booking, Inbound and Outbound docs.
+</footer>
+
+</main>
+<script>
+function showTab(n){
+  var panels=[document.getElementById('tab-design'),document.getElementById('tab-log')];
+  var btns=document.querySelectorAll('.tabbtn');
+  panels.forEach(function(p,i){p.classList.toggle('show', i===n);});
+  btns.forEach(function(b,i){b.classList.toggle('active', i===n);});
+  window.scrollTo(0,0);
+}
+</script>
+</body>
+</html>

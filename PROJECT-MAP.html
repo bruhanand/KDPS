@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Project Map (Start Here)</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --card:#1c2029; --line:#2a2f3a;
+    --ink:#e8eaed; --muted:#9aa3b2; --soft:#7b8494;
+    --green:#22c55e; --blue:#3b82f6; --amber:#f59e0b; --red:#ef4444; --violet:#a78bfa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1080px; margin:0 auto; padding:34px 24px 80px}
+  header{display:flex; align-items:center; gap:18px; margin-bottom:6px}
+  header img{height:54px; background:#fff0; border-radius:8px}
+  h1{margin:0; font-size:28px; letter-spacing:-.4px}
+  .sub{color:var(--muted); margin:6px 0 0; max-width:760px}
+  .updated{color:var(--soft); font-size:12.5px; margin-top:10px}
+
+  h2{font-size:19px; margin:38px 0 12px; padding-bottom:8px; border-bottom:1px solid var(--line)}
+  h2 .num{color:var(--green); font-weight:700; margin-right:8px; font-size:14px}
+
+  .status-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; margin-top:14px}
+  .status{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:13px 15px}
+  .status b{display:block; font-size:14px; margin-bottom:4px}
+  .status span{font-size:13px; color:var(--muted)}
+  .pill{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.4px; text-transform:uppercase;
+    padding:3px 8px; border-radius:5px; margin-bottom:8px}
+  .done{background:rgba(34,197,94,.16); color:#86efac}
+  .next{background:rgba(245,158,11,.16); color:#fcd34d}
+  .paused{background:rgba(59,130,246,.16); color:#93c5fd}
+  .ongoing{background:rgba(167,139,250,.16); color:#c4b5fd}
+  .dead{background:rgba(239,68,68,.16); color:#fca5a5}
+
+  .folder{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin-top:14px}
+  .folder-head{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .folder-head code{background:var(--card); border:1px solid var(--line); border-radius:6px; padding:2px 9px;
+    font-size:14px; font-weight:700; color:#93c5fd}
+  .folder-head .purpose{color:var(--muted); font-size:13.5px}
+  ul.files{list-style:none; margin:10px 0 0; padding:0}
+  ul.files li{padding:5px 0 5px 14px; border-left:2px solid var(--line); margin:4px 0; font-size:13.5px}
+  ul.files li b{color:var(--ink); font-weight:600}
+  ul.files li span{color:var(--muted)}
+  ul.files li.star{border-left-color:var(--green)}
+  ul.files li.warn{border-left-color:var(--red)}
+  .rule{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--green);
+    border-radius:10px; padding:12px 16px; margin-top:10px; font-size:14px}
+  .rule b{color:#86efac}
+  .note-red{background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.35); border-radius:10px;
+    padding:12px 16px; margin-top:14px; font-size:13.5px; color:#fca5a5}
+  .note-blue{background:rgba(59,130,246,.08); border:1px solid rgba(59,130,246,.30); border-radius:10px;
+    padding:12px 16px; margin-top:14px; font-size:13.5px; color:#bfdbfe}
+  footer{color:var(--soft); font-size:12.5px; margin-top:50px; border-top:1px solid var(--line); padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <img src="data-from-kdps/05-reference-data/KDPS-LIFE-STYLE-Copy.png" alt="KDPS Lifestyle logo">
+  <div>
+    <h1>KDPS — Project Map</h1>
+    <p class="sub">Open this file first. It tells you what every folder is, what every file is for, where the project stands, and where new things go.</p>
+    <p class="updated">Last organized: 23 June 2026</p>
+  </div>
+</header>
+
+<div class="note-blue">
+  <b>How the project is organized now.</b> Two big buckets:
+  <b>my-understanding/</b> = the work Anand produces (system design, requirement write-ups, the as-is workflow) and
+  <b>data-from-kdps/</b> = raw material received from the client (reference files, Q&amp;A answers, bank statements, monthly-report data, store analysis).
+  Everything else: <b>client-requirements-docs/</b> (what the client asked for), <b>04-client-docs/</b> (what we hand back for approval),
+  <b>meetings/</b>, <b>code/</b>, <b>__archive/</b>.
+</div>
+
+<h2><span class="num">⊙</span>Where the project stands right now</h2>
+<p class="sub" style="margin-bottom:4px">All module designs (D1–D8) are done. Decision (23 Jun): <b>start the build now</b> — lock the stack → build the foundation (repo, database, login, user-roles) → then one verified vertical slice at a time. <b>Deferred to later</b> (before go-live): D9 migration, the deep roles/access model, and Attendance &amp; Payroll.</p>
+<div class="status-grid">
+  <div class="status"><span class="pill done">Designed</span><b>D1 · Vendor management &amp; booking</b><span>Brands/vendors, commercial terms (Outright / Correction / SOR / Consignment), bookings.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D2 · Inbound</b><span>Arrival → GRN → PT → priced stock-in → store split → POS push.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D3 · Outbound (+ stocktake)</b><span>Sale, exchange, inter-store transfer, returns out, EOSS, counting.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D4 · Payments &amp; roles</b><span>Vendor payment lifecycle, cash/bank audit, login roles. Locked 18 Jun 2026.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D5 · Offer rulebook</b><span>Slabs, B2G1 lowest-free, gifts, per-store windows + fallback.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D7 · Analytics &amp; AI</b><span>Digest, forecast, dead-stock, profitability, anomaly watchdog — the intelligence layer.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D6 · Tally sync</b><span>Voucher catalog + push/recon loop. Locked 20 Jun 2026.</span></div>
+  <div class="status"><span class="pill done">Designed</span><b>D8 · Master-data &amp; users consolidation</b><span>Every registry in one owned place: edit-rights grid, season calendar, GST slab, configurable roles. Locked 21 Jun 2026.</span></div>
+  <div class="status"><span class="pill paused">Deferred</span><b>D9 · Migration &amp; rollout</b><span>Masters import, opening stock, store-by-store go-live, parallel Tally run. Designed later, before go-live (decided 23 Jun).</span></div>
+  <div class="status"><span class="pill next">Building now</span><b>Foundation → slices</b><span>Lock the stack → foundation (repo, DB, login, roles) → then one verified vertical slice at a time; data model + posting entries grow per slice.</span></div>
+  <div class="status"><span class="pill paused">Paused</span><b>Invoice → PT code</b><span>code/pdf-to-pt. Resumes once D3–D4 lock the documents it feeds.</span></div>
+  <div class="status"><span class="pill ongoing">Every month</span><b>Month-start brand reports</b><span>Sale/SOH reports in the 1st week of each month (data-from-kdps/monthly-reports…).</span></div>
+  <div class="status"><span class="pill dead">Cancelled</span><b>Phase-1 plan</b><span>The pressured 3-month plan. Dropped — now in __archive.</span></div>
+</div>
+
+<h2><span class="num">★</span>my-understanding — the work Anand produces</h2>
+
+<div class="folder">
+  <div class="folder-head"><code>my-understanding/system-design/</code><span class="purpose">The spine — the architecture, designed piece by piece in process order. This is the real deliverable.</span></div>
+  <ul class="files">
+    <li class="star"><b>00-system-architecture.html</b> — <span>THE master plan: the whole system on one page (5 layers), the 11 rules every module obeys, the discussion plan D3–D9, and "How we build". Read this before any design discussion.</span></li>
+    <li class="star"><b>01-vendor-management/Vendor-Management-Module.html</b> — <span>vendors/brands, commercial models, bookings.</span></li>
+    <li class="star"><b>02-inbound/inbound-ingestion-design.html</b> — <span>vendor delivery → data injection → sellable stock.</span> <b>· ten-software-questions.html</b> — <span>POS questions whose answers unblock outbound.</span></li>
+    <li class="star"><b>03-outbound/outbound.html</b> — <span>sale, exchange, transfer, returns out, EOSS, stocktake.</span></li>
+    <li class="star"><b>04-payments/payments.html</b> — <span>vendor payment lifecycle, cash/bank audit, roles.</span></li>
+    <li class="star"><b>05-offers/offers.html</b> — <span>the offer rulebook as a data model.</span> <b>· markdown-ai-research.html</b> — <span>research behind markdown/EOSS logic.</span></li>
+    <li class="star"><b>07-analytics-ai/analytics-ai.html</b> — <span>the intelligence layer design.</span> <b>· analytics-research.html</b> — <span>best-practice research behind it.</span></li>
+    <li><b>workflow-diagrams/</b> — <span>current-workflow, stock-workflows, store-workflow, system-explainer — reference flowcharts (not the design itself).</span></li>
+    <li class="star"><b>06-tally-sync/tally-sync.html</b> — <span>voucher catalog + push/recon to Tally.</span> <b>· 08-master-data/master-data.html</b> — <span>master-data &amp; users consolidation: inventory, edit-rights grid, per-master designs.</span></li>
+    <li><b>09-migration/</b> — <span>not created yet — the last design discussion lands here.</span></li>
+  </ul>
+  <div class="rule"><b>New design discussion?</b> Make its own numbered folder here (e.g. <code>06-tally-sync/</code>) and end the doc with a locked-decisions table + open-items list.</div>
+</div>
+
+<div class="folder">
+  <div class="folder-head"><code>my-understanding/req-understanding-docs/</code><span class="purpose">Anand's requirement write-ups and early explainers.</span></div>
+  <ul class="files">
+    <li><b>KDPS-booking-inbound-client.html / -summary.html</b> — <span>the plain-language booking &amp; inbound walkthrough.</span></li>
+    <li><b>KDPS-requirements-confirmation-client.html</b> — <span>the tick-and-answer requirements checklist + data-handover list.</span></li>
+  </ul>
+</div>
+
+<div class="folder">
+  <div class="folder-head"><code>my-understanding/workflow/</code><span class="purpose">Ground truth — how KDPS actually works today. The whole design is derived from this. Reference only; never edit to match the design.</span></div>
+  <ul class="files">
+    <li class="star"><b>KDPS-current-workflow.pdf</b> — <span>THE as-is workflow: booking → warehouse → store → sale/exchange/transfer/return.</span></li>
+    <li><b>conversations.md</b> — <span>raw Hindi staff interviews + English summaries behind the PDF.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">in</span>client-requirements-docs — what the client asked for</h2>
+<div class="folder">
+  <div class="folder-head"><code>client-requirements-docs/</code><span class="purpose">The client's own plans and demands. Requirements input only — their system design is NOT the design we follow.</span></div>
+  <ul class="files">
+    <li class="star"><b>ERP-requirements-register.html</b> — <span>master requirements list by business flow, with Must/Should/Later + AI tags.</span></li>
+    <li class="star"><b>client-demands.html</b> — <span>every demand from all docs/meetings, with what/why and priority.</span></li>
+    <li><b>PRD ( KDPS).pdf</b> + <b>PRD-explainer.html</b> — <span>the client's requirements doc for ingestion + payment-control, plus a plain walkthrough.</span></li>
+    <li><b>KDPS Definitive Plan.pdf</b> — <span>the client's original 8-month plan (10 AI agents, costs). Imagined, not adopted.</span></li>
+    <li class="star"><b>change-request/CHANGES IN SOFTWARE_17.6.26.pdf</b> — <span>the client's latest change request (17 Jun 2026).</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">out</span>04-client-docs — documents made for the client</h2>
+<div class="folder">
+  <div class="folder-head"><code>04-client-docs/</code><span class="purpose">Polished per-module documents shared with the client for approval. Living — they change while the architecture isn't final.</span></div>
+  <ul class="files">
+    <li><b>Vendor-Management-Module-Client</b> · <b>Goods-Inward-Module-Client</b> · <b>Outbound-Module-Client</b> · <b>Payments-Module-Client</b> · <b>Offers-Module-Client</b> — <span>the client-facing version of each designed module (.html + .pdf).</span></li>
+    <li><b>POS-Ingestion-Requirements</b> · <b>POS-Integration-Requirements</b> — <span>what the POS (Ten Software) must push/pull for us.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">data</span>data-from-kdps — raw material received from the client</h2>
+<div class="folder">
+  <div class="folder-head"><code>data-from-kdps/</code><span class="purpose">Just data the client sent. Read it; don't treat it as design.</span></div>
+  <ul class="files">
+    <li class="star"><b>05-reference-data/</b> — <span>pt-file-format.xlsx (the PT template + allowed values) and vendor-files/ (real invoice↔PT↔ledger samples + logo).</span></li>
+    <li><b>Q&amp;A-req-recieved/</b> — <span>answers to our questions: LIST OF ALL STORES, SUPPLIER BRAND DETAILS, BRAND OFFERS, ~25 brand PT files (PT FILE/), SALE &amp; SOH report formats, MOM_S.</span></li>
+    <li><b>bank-statement/</b> — <span>Bank statement.xlsx + Vaishnavi DSR — source for the cash/bank-audit track.</span></li>
+    <li class="star"><b>monthly-reports-april-may-2026/</b> — <span>the month-start report duty: 2026-04 &amp; 2026-05 data, KDPS-DIRECTION.xlsx (the worked example to copy), FORMAT_SALES_VOUCHERS.xlsx (blank template).</span></li>
+    <li><b>store-analysis/</b> — <span>Vaishnavi Deoghar deep-dive: analysis + data-quality reports, dead-stock worklist, SOH error list — the stock-aging / data-quality track.</span></li>
+    <li><b>KDPS DEBIT &amp; CREDIT NOTE DETAILS.xlsx · KDPS INVOICE &amp; OFFER DETAILS.xlsx</b> — <span>client-provided transaction detail.</span></li>
+  </ul>
+  <div class="note-red" style="margin-top:12px"><b>Watch:</b> the finished Flying Machine April-2026 report (<i>List of Sales Vouchers FM (Apr-26).xlsx</i>) was lost on 10 June and may still be missing from <code>monthly-reports-april-may-2026/2026-04/</code>. It was already sent out — restore it from WhatsApp/sent files if needed.</div>
+</div>
+
+<h2><span class="num">mtg</span>meetings — every meeting, dated</h2>
+<div class="folder">
+  <div class="folder-head"><code>meetings/</code><span class="purpose">One folder per meeting, YYYY-MM-DD-topic. Audio + transcript + minutes together.</span></div>
+  <ul class="files">
+    <li><b>2026-05-18-warehouse</b> · <b>2026-05-21-workflow-explanation</b> · <b>2026-05-26-store-visit</b> — <span>how stock/invoices are handled by hand; workflow corrections; live store walkthrough.</span></li>
+    <li><b>2026-06-01-offers-and-reporting</b> — <span>how brand offers work (slabs, B2G1, gifts) and how monthly reports are really made.</span></li>
+    <li class="star"><b>2026-06-05-deal-3-months</b> — <span>the deal: the agreed tracks (cash audit, stock aging, PT mapper, report maker, dashboard). See meeting-output.md.</span></li>
+    <li><b>2026-06-13-Q&amp;A</b> — <span>requirements Q&amp;A round (see Q&amp;A-analysis.html).</span> <b>· 2026-06-13-hdfc-bank-api</b> — <span>bank-API brief for the cash/bank-audit track.</span></li>
+    <li><b>audio-archive/</b> — <span>extra raw recordings.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">code</span>code — the tools being built</h2>
+<div class="folder">
+  <div class="folder-head"><code>code/</code><span class="purpose">Code. Paused until the design is complete, then work resumes here.</span></div>
+  <ul class="files">
+    <li class="star"><b>pdf-to-pt/</b> — <span>the Invoice → PT file maker. BLUEPRINT.md explains the AI-reader → checker → Excel-writer pipeline. ~150 real invoices in document/ for testing.</span></li>
+    <li><b>scripts/generate-pdf.mjs</b> — <span>turns a workflow/design HTML page into a polished A4 PDF.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">old</span>__archive — kept but out of the way</h2>
+<div class="folder">
+  <div class="folder-head"><code>__archive/</code><span class="purpose">Nothing here is current. Don't design or build from these.</span></div>
+  <ul class="files">
+    <li><b>phase-1-cancelled/</b> — <span>the pressured 3-month plan. Cancelled.</span></li>
+    <li><b>KDPS-development-timeline-client.html / .pdf</b> — <span>the old month-by-month timeline (superseded by "no fixed timeline").</span></li>
+    <li><b>workflow-doc-old-versions/ · old-workflow-diagrams/ · meeting-prep-deck-may17/ · KDPS-DIRECTION-old.md</b> — <span>earlier drafts and superseded material.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">·</span>Root files</h2>
+<div class="folder">
+  <ul class="files" style="margin-top:0">
+    <li class="star"><b>MOU-KDPS-Anand.pdf</b> — <span>the signed engagement / scope agreement.</span></li>
+    <li><b>CLAUDE.md</b> — <span>instructions for Claude Code in this repo (kept in sync with this map).</span></li>
+    <li><b>PROJECT-MAP.html</b> — <span>this file.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">→</span>House rules — where new things go</h2>
+<div class="rule"><b>New design discussion?</b> New numbered folder under <code>my-understanding/system-design/</code> (e.g. <code>06-tally-sync/</code>).</div>
+<div class="rule"><b>New meeting?</b> <code>meetings/YYYY-MM-DD-topic/</code> with audio + transcript + minutes.</div>
+<div class="rule"><b>New month's report work?</b> Its month folder under <code>data-from-kdps/monthly-reports-april-may-2026/</code> (or the current monthly-reports folder), with a data/ subfolder for raw store files.</div>
+<div class="rule"><b>New client deliverable?</b> <code>04-client-docs/</code>. When superseded, move the old one to <code>__archive/</code>.</div>
+<div class="rule"><b>Something stale?</b> Never delete — move it into <code>__archive/</code> so the active folders stay clean.</div>
+
+<footer>KDPS project · updated 23 June 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
+</div>
+</body>
+</html>

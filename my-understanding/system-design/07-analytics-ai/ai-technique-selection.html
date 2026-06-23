@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Right Tool for Each AI Job (sourced)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --red:#a8331f; --red-bg:#fae9e6;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:36px 30px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:18px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:28px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .status{font-size:13.5px;color:var(--muted)}
+  .status b{color:var(--green)}
+  section{margin:34px 0; scroll-margin-top:18px}
+  h2.sec{font-size:19px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 6px}
+  .framing{color:var(--muted); font-size:14px; margin:6px 0 12px; max-width:80ch}
+  h3{font-size:15.5px; color:var(--navy2); margin:22px 0 6px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-code{background:var(--grey-bg); color:var(--navy2)}
+  .b-ml{background:var(--blue-bg); color:var(--blue)}
+  .b-llm{background:var(--purple-bg); color:var(--purple)}
+  .b-hybrid{background:var(--amber-bg); color:var(--amber)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:16px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:2px 0 10px; font-size:16px; color:var(--navy)}
+  .card h4 .num{color:var(--rust); margin-right:6px}
+  .callout{border-radius:12px; padding:12px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:#f3f1fb; border-color:#dcd3f3}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-note{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-verdict{background:var(--green-bg); border-color:#bfe3cf}
+  .callout .ct{font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:6px}
+  .co-key .ct{color:var(--purple)} .co-dep .ct{color:var(--blue)} .co-note .ct{color:var(--amber)} .co-verdict .ct{color:var(--green)}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .grid2{display:grid;grid-template-columns:140px 1fr;gap:0;font-size:13.5px}
+  .grid2 .gl{font-weight:700;color:var(--navy2);padding:7px 10px;border-top:1px solid var(--line)}
+  .grid2 .gv{padding:7px 10px;border-top:1px solid var(--line)}
+  .grid2 .gl:first-of-type,.grid2 .gv:first-of-type{border-top:none}
+  ul,ol{margin:8px 0; padding-left:20px} li{margin:5px 0}
+  code,.k{background:#eef0f4; padding:1px 6px; border-radius:5px; font-size:13px; font-family:ui-monospace,Menlo,monospace; color:var(--navy2)}
+  .src{font-size:12px; color:var(--muted); margin:8px 0 0}
+  .src b{color:var(--navy2)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;margin:0 4px 4px 0}
+  .pill-code{background:var(--grey-bg);color:var(--navy2)}
+  .pill-ml{background:var(--blue-bg);color:var(--blue)}
+  .pill-llm{background:var(--purple-bg);color:var(--purple)}
+  .pill-agent{background:#fde9df;color:var(--rust)}
+  .pill-single{background:var(--green-bg);color:var(--green)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:10px 0}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS · D7 · Intelligence layer — meeting note</div>
+  <h1>The right tool for each AI job</h1>
+  <p class="status">Sourced analysis · 21 Jun 2026 · principle: <b>AI at the edges, never on the books</b> · stack: Google Cloud Mumbai + Vertex AI · "best tool for each job," not one model for everything.</p>
+</header>
+
+<section>
+  <h2 class="sec">The one rule that decides everything</h2>
+  <p class="framing">Three techniques, in rising order of cost, latency, and unpredictability. Always pick the lowest one that does the job; only climb when it genuinely fails.</p>
+  <ol>
+    <li><strong>Plain code (deterministic)</strong> — rules, math, string matching, lookups. Exact, instant, free, auditable, never hallucinates. <em>Every money number lives here.</em></li>
+    <li><strong>Classical / statistical ML</strong> — gradient-boosted trees, time-series models, isolation forest. Learns patterns from numbers; needs data + a small MLOps loop (train, validate, monitor, retrain).</li>
+    <li><strong>LLM (Gemini / Claude)</strong> — for language and vision: reading documents, writing prose, understanding a typed question, mapping messy text. Brilliant at the edges, wrong for math.</li>
+  </ol>
+  <div class="callout co-verdict">
+    <span class="ct">Why money math is always code — "LLMs are not calculators"</span>
+    A peer-reviewed study (npj Digital Medicine, 2025) measured base GPT-4o at <strong>~36%</strong> accuracy on hard calculations and LLaMa-3.1 at <strong>~11%</strong>; bolting on a deterministic calculation tool lifted GPT-4o to <strong>95.2%</strong> — a 13× error cut. The conclusion: "without specialized tools, LLMs remain fundamentally unreliable for calculations, regardless of model size." LLMs tokenise numbers as text, not quantities, so they pattern-match instead of computing. Every rupee figure in KDPS — totals, margins, discounts, balances — is computed in code; the LLM only ever <em>narrates</em> numbers code already produced.
+    <div class="src"><b>npj Digital Medicine (2025)</b> — https://pmc.ncbi.nlm.nih.gov/articles/PMC11914283/ · <b>moveo.ai, "Why LLMs struggle: math, structured data"</b> — https://moveo.ai/blog/why-llm-struggle · <b>arXiv 2410.13857, numerical precision &amp; arithmetic in LLMs</b> — https://arxiv.org/pdf/2410.13857</div>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:#aeb6c6"></span> Plain code</span>
+    <span><span class="dot" style="background:#1e5fa8"></span> Classical ML</span>
+    <span><span class="dot" style="background:#6b3fb0"></span> LLM</span>
+    <span><span class="dot" style="background:#c4623f"></span> Agent (multi-step)</span>
+    <span><span class="dot" style="background:#1f7a4d"></span> Single call / plain pipeline</span>
+  </div>
+</section>
+
+<!-- ===================== PER-TASK TABLE ===================== -->
+<section>
+  <h2 class="sec">Per-task verdict — the summary table</h2>
+  <table>
+    <tr>
+      <th>Task</th><th>Right approach</th><th>Model / method</th><th>Agent?</th><th>Start with</th>
+    </tr>
+    <tr>
+      <td><strong>1 · Invoice / document reading</strong></td>
+      <td><span class="pill pill-llm">LLM vision</span> + code validation</td>
+      <td>Gemini 2.5 Flash (default), Pro for hard scans</td>
+      <td><span class="pill pill-single">Single call</span></td>
+      <td>Flash + arithmetic checks + human review on low confidence</td>
+    </tr>
+    <tr>
+      <td><strong>2 · Fuzzy item / name matching</strong></td>
+      <td><span class="pill pill-code">Rules</span> → <span class="pill pill-ml">embeddings</span> → LLM</td>
+      <td>Levenshtein/Jaro-Winkler → Vertex embeddings → LLM on residue</td>
+      <td><span class="pill pill-single">Single call</span></td>
+      <td>Normalize + string distance (solves most)</td>
+    </tr>
+    <tr>
+      <td><strong>3 · Demand forecasting &amp; size curves</strong></td>
+      <td><span class="pill pill-ml">Classical ML / stats</span> — <strong>never LLM</strong></td>
+      <td>LightGBM + ETS/ARIMA + Croston/SBA/TSB; ARIMA_PLUS baseline</td>
+      <td><span class="pill pill-single">Pipeline</span></td>
+      <td>ARIMA_PLUS / ETS baseline, then LightGBM</td>
+    </tr>
+    <tr>
+      <td><strong>4 · Markdown / dead-stock</strong></td>
+      <td><span class="pill pill-code">Rules / signal engine</span> → ML later</td>
+      <td>Age/sell-through/cover triggers; later elasticity price-opt</td>
+      <td><span class="pill pill-single">Pipeline</span></td>
+      <td>Deterministic signal rules</td>
+    </tr>
+    <tr>
+      <td><strong>5 · Anomaly / leakage / fraud</strong></td>
+      <td><span class="pill pill-code">Rules</span> → <span class="pill pill-ml">classical ML</span></td>
+      <td>Threshold rules → Isolation Forest / GBDT; LLM only explains</td>
+      <td><span class="pill pill-single">Pipeline</span></td>
+      <td>Deterministic rules for known patterns</td>
+    </tr>
+    <tr>
+      <td><strong>6 · Daily digest narration</strong></td>
+      <td><span class="pill pill-llm">LLM</span> over code-computed numbers</td>
+      <td>Gemini 2.5 Flash (Hindi/English)</td>
+      <td><span class="pill pill-single">Single call</span></td>
+      <td>Numbers in code, LLM writes the sentence</td>
+    </tr>
+    <tr>
+      <td><strong>7 · Conversational assistant</strong></td>
+      <td><span class="pill pill-llm">LLM</span> over a semantic/tool layer</td>
+      <td>Claude Sonnet or Gemini 2.5 Pro; semantic layer, not free SQL</td>
+      <td><span class="pill pill-agent">Light agent</span></td>
+      <td>Single-call tool selection over fixed metrics</td>
+    </tr>
+    <tr>
+      <td><strong>8 · Payments copilot</strong></td>
+      <td><span class="pill pill-code">Rules/ML</span> detect + <span class="pill pill-llm">LLM</span> parse/brief</td>
+      <td>Deterministic dup-match + Gemini Flash for narration</td>
+      <td><span class="pill pill-single">Single call</span></td>
+      <td>Deterministic duplicate &amp; threshold rules</td>
+    </tr>
+  </table>
+  <p class="src">Detailed reasoning and sources for each row below.</p>
+</section>
+
+<!-- ===================== TASK 1 ===================== -->
+<section>
+  <h2 class="sec">Detailed reasoning, task by task</h2>
+
+  <div class="card">
+    <h4><span class="num">1</span>Invoice / document reading <span class="badge b-llm">LLM vision + code validation</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">LLM vision, <strong>not</strong> traditional OCR/IDP, with deterministic validation wrapped around it.</div>
+      <div class="gl">Model</div><div class="gv"><strong>Gemini 2.5 Flash</strong> (or Flash-Lite) as the default; escalate degraded scans / complex tables to <strong>Gemini 2.5 Pro</strong>.</div>
+      <div class="gl">Agent?</div><div class="gv">No. One vision call per document → JSON. A plain pipeline, not an agent.</div>
+    </div>
+    <p><strong>Why it beats OCR/IDP here:</strong> KDPS has 40+ brands with no shared invoice/PT template. Classic OCR/IDP (Google Document AI, Textract, ABBYY) is strongest on fixed, repeating layouts and weak on the line-item breakdown KDPS needs — in one head-to-head Document AI merged description/qty/price/amount into a single unstructured string ("unsuitable for automated workflows"), and scored ~40% on complex tables. LLM vision wins exactly where layouts vary, on degraded photos, and on line-item structure (Gemini "near-perfect" on tables). Where OCR still wins — raw speed, determinism, cost at massive scale — does not apply to KDPS's volume.</p>
+    <p><strong>Flash vs Pro:</strong> both carry a 1M-token context (any invoice fits). Flash input/output is ~$0.30/$2.50 per 1M tokens vs Pro's $1.25/$10 — roughly 4× cheaper. Gemini 2.0 Flash was benchmarked at ~6,000 pages per $1 at near-frontier accuracy. Default to Flash; route only low-confidence/ugly documents to Pro.</p>
+    <p><strong>The risk to design around:</strong> LLMs <em>fabricate</em> values not present (they fill blanks with plausible guesses). Google itself concedes pure-LLM parsing hallucinates and grounds its own "Gemini layout parser" in OCR to reduce it. Mitigation fits the system's "flag-don't-block" rule: arithmetic checks (line items must sum to total), schema/type validation, confidence scores, and human review on anything below threshold. The LLM extracts; code verifies the math.</p>
+    <div class="callout co-note">
+      <span class="ct">When to add ML later</span>
+      No classical-ML stage needed. The natural evolution is a confidence-routing layer: cheap path for clean docs, Pro/human for the hard tail. Keep a labelled set of corrected extractions as a quality benchmark.
+    </div>
+    <p class="src"><b>Businessware invoice benchmark (7 models)</b> — https://www.businesswaretech.com/blog/research-ai-models-invoice-processing-benchmark · <b>Parsli, LLM-OCR vs traditional OCR 2026</b> — https://parsli.co/blog/llm-ocr-vs-traditional-ocr · <b>Google Cloud, Gemini layout parser</b> ("fewer hallucinations" via OCR grounding) — https://docs.cloud.google.com/document-ai/docs/layout-parse-chunk · <b>Klippa, LLMs vs OCR</b> — https://www.klippa.com/en/blog/information/llms-vs-ocr-software/ · <b>arXiv 2506.20168, OCR hallucinations in multimodal LLMs</b> — https://arxiv.org/html/2506.20168v2 · <b>Gemini API pricing</b> — https://ai.google.dev/gemini-api/docs/pricing</p>
+  </div>
+
+  <!-- TASK 2 -->
+  <div class="card">
+    <h4><span class="num">2</span>Fuzzy item-name / product matching <span class="badge b-hybrid">rules → embeddings → LLM</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">A three-tier waterfall, climbing only when the cheap tier fails — the standard entity-resolution pipeline (AWS, Splink, dedupe all do this).</div>
+      <div class="gl">Method</div><div class="gv"><strong>Tier 1:</strong> normalize + Levenshtein / Jaro-Winkler (deterministic). <strong>Tier 2:</strong> Vertex embeddings + vector nearest-neighbour. <strong>Tier 3:</strong> LLM only on the ambiguous residue.</div>
+      <div class="gl">Agent?</div><div class="gv">No. Each tier is one operation; the residue is a single LLM judgement call.</div>
+    </div>
+    <p><strong>Why this order:</strong> "MN garments" vs "M N Garments" is pure <em>surface</em> variation — casing, spacing, punctuation — solved by normalization + string distance. No embeddings or LLM needed. Jaro-Winkler is the classic, fast record-linkage metric. String distance can't capture <em>meaning</em> (reordered descriptors, abbreviations, brand synonyms) — that's where embeddings earn their place (Vertex <code>text-embedding-005</code> for English/codes, <code>text-multilingual-embedding-002</code> for Hindi/mixed script, ~sub-second, very cheap). The LLM is reserved for the genuinely ambiguous pairs — like dedupe's active-learning frontier of ~50%-confidence cases.</p>
+    <p><strong>Why LLM is not the default:</strong> entity-matching papers show LLMs are 100–1000× the cost and latency of an edit-distance or vector comparison (self-hosted Llama2 at 22.6s/inference vs sub-second alternatives), are non-deterministic, and even GPT-4 "finds the term 'match' ambiguous." At KDPS's volume that is the wrong default. Use it as the precision backstop, never the firehose.</p>
+    <div class="callout co-key">
+      <span class="ct">Fits the existing D7 crosswalk</span>
+      This is exactly the brand/season "canonicalization crosswalk" already designed — a human-curated map plus fuzzy auto-suggest for the long tail. The three-tier waterfall is the engine under that auto-suggest.
+    </div>
+    <p class="src"><b>AWS Entity Resolution</b> (rule-based: Levenshtein/Cosine/Soundex; ML tier for noisy data) — https://aws.amazon.com/entity-resolution/ · <b>Splink, probabilistic vs deterministic linkage</b> — https://moj-analytical-services.github.io/splink/topic_guides/theory/probabilistic_vs_deterministic.html · <b>dedupe.io, how it works</b> (active learning on uncertain pairs) — https://dedupe.io/documentation/how-it-works.html · <b>Data Ladder, Fuzzy Matching 101</b> — https://dataladder.com/fuzzy-matching-101/ · <b>Vertex AI text embeddings</b> — https://docs.cloud.google.com/vertex-ai/generative-ai/docs/embeddings/get-text-embeddings · <b>arXiv 2310.11244, entity matching with LLMs</b> (cost/latency) — https://arxiv.org/html/2310.11244v4</p>
+  </div>
+
+  <!-- TASK 3 -->
+  <div class="card">
+    <h4><span class="num">3</span>Demand forecasting &amp; size curves <span class="badge b-ml">classical ML — LLM is the wrong tool</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">Purpose-built forecasting models with a real MLOps loop. <strong>LLMs explicitly excluded</strong> from the forecasting engine.</div>
+      <div class="gl">Method</div><div class="gv"><strong>Baseline:</strong> BigQuery ML <code>ARIMA_PLUS</code> / AutoETS. <strong>Workhorse:</strong> LightGBM (gradient-boosted trees, via Nixtla MLForecast). <strong>Slow movers:</strong> Croston / SBA / TSB. <strong>Size curves:</strong> forecast style demand, then disaggregate onto an empirical size profile.</div>
+      <div class="gl">Agent?</div><div class="gv">No — a scheduled training/inference pipeline.</div>
+    </div>
+    <p><strong>The evidence that LLMs are wrong for forecasting (this is settled):</strong></p>
+    <ul>
+      <li><strong>NeurIPS 2024 spotlight</strong> — "Are Language Models Actually Useful for Time Series Forecasting?" Across three LLM-based forecasters, <em>deleting the LLM</em> matched or <em>improved</em> accuracy in up to 26/26 cases, while cutting compute ~1000× (6,642M params / 3,003 min → 0.245M params / ~2 min). LLMs added cost, not accuracy — and didn't help even in few-shot, low-data settings.</li>
+      <li><strong>M5 (Walmart product×store retail, ~6,400 teams)</strong> — 1st, 2nd, 3rd place all used <strong>LightGBM</strong>. And ~92.5% of expert teams failed to beat a trivial exponential-smoothing benchmark — sophistication ≠ accuracy.</li>
+      <li><strong>M4 (100k series)</strong> — pure ML/neural methods lost to plain ARIMA/exponential smoothing; the winner was a stats+NN hybrid, not pure ML and certainly not an LLM.</li>
+    </ul>
+    <p><strong>The right methods, mapped to KDPS:</strong> LightGBM for SKUs with history + covariates (price, promo, calendar) — it cross-learns across thousands of correlated series. ETS/ARIMA/Theta as fast, mandatory baselines. Croston/SBA/TSB for the long tail of slow-moving SKUs with many zero-sales weeks (most of a 20,000-SKU catalog). Size curves are a <em>disaggregation</em> problem: total style demand split by an empirical S/M/L/XL profile — not language.</p>
+    <p><strong>Data needed (and two traps):</strong> sales history (ideally ~1 year for yearly seasonality), price, promotion flags, calendar/holidays. <strong>Trap 1 — stock-out censoring:</strong> when an item was out of stock, recorded sales understate true demand and bias forecasts downward in a "spiral-down"; demand must be uncensored before fitting. <strong>Trap 2 — cold start:</strong> new SKUs have no history, so you forecast from <em>attributes</em> (category, colour, price band, brand, season) borrowing from similar past SKUs — which only works if the product-attribute master (D8) is clean. This makes master data a hard prerequisite for forecasting.</p>
+    <div class="callout co-dep">
+      <span class="ct">On the Google Cloud stack</span>
+      Start in-warehouse with BigQuery ML <code>ARIMA_PLUS</code> (and <code>ARIMA_PLUS_XREG</code> for regressors) as the cheap baseline; run Nixtla/LightGBM as Vertex AI custom training for the workhorse tier. Both are native to GCP — no extra infra.
+    </div>
+    <p class="src"><b>arXiv 2406.16964 (NeurIPS 2024), "Are Language Models Actually Useful for Time Series Forecasting?"</b> — https://arxiv.org/abs/2406.16964 · <b>M5 special issue (IJF / PMC)</b> — https://pmc.ncbi.nlm.nih.gov/articles/PMC9232271/ · <b>M4 / ES-RNN hybrid (Uber Engineering)</b> — https://www.uber.com/en-BE/blog/m4-forecasting-competition/ · <b>Nixtla StatsForecast</b> (AutoARIMA/ETS/Theta/Croston/SBA/TSB) — https://github.com/Nixtla/statsforecast · <b>FreshRetailNet, stock-out censored demand</b> — https://arxiv.org/html/2505.16319v3 · <b>BigQuery ML ARIMA_PLUS</b> — https://cloud.google.com/bigquery/docs/reference/standard-sql/bigqueryml-syntax-create-time-series · <b>Impact Analytics, size-curve forecasting</b> — https://www.impactanalytics.ai/blog/how-to-improve-retail-assortment-planning-with-size-curves-based-demand-forecasting</p>
+  </div>
+
+  <!-- TASK 4 -->
+  <div class="card">
+    <h4><span class="num">4</span>Markdown / dead-stock / clearance <span class="badge b-code">rules first, ML later</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">Deterministic <strong>signal/rules engine</strong> now; ML price-optimization later, only when data supports it. LLM not used.</div>
+      <div class="gl">Method</div><div class="gv"><strong>Build first:</strong> age / sell-through / weeks-of-cover triggers that flag candidates and suggest a markdown step. <strong>Later:</strong> elasticity-based price optimization (regression / ML).</div>
+      <div class="gl">Agent?</div><div class="gv">No — a rules pipeline that proposes; a human approves (copilot, not autopilot).</div>
+    </div>
+    <p><strong>Why rules first:</strong> ML price-optimization is fundamentally an <em>elasticity estimation + constrained optimization</em> problem, and elasticity is data-hungry — practitioners cite needing ~12–24 months of transaction history <em>with genuine price variation</em>, plus substitutes, promos, inventory, seasonality (McKinsey's module used ~10 TB of records). KDPS won't have that clean signal on day one. So the literature's own framing applies: when elasticity information is only partial, retailers fall back to rules — and that's the correct starting point, not a compromise. Deterministic triggers (this SKU is 90 days old with <40% sell-through → propose markdown) are explainable, auditable, and immediately useful.</p>
+    <p><strong>Why ML pays off later:</strong> once enough price-varied history exists, ML price-optimization is where the money is — McKinsey reports dynamic pricing lifting margin 5–10%; one controlled fashion-markdown study showed ~86% profitability improvement vs manual. That is the upgrade target, not the v1.</p>
+    <p><strong>Why never an LLM:</strong> setting an optimal clearance price is math (elasticity, margin, sell-through constraints), not language. LLMs are probabilistic text models that don't compute exact quantities — wrong instrument entirely.</p>
+    <p class="src"><b>arXiv 2207.01137, Promotheus markdown ML</b> — https://arxiv.org/pdf/2207.01137 · <b>McKinsey, profitable growth through dynamic pricing</b> — https://www.mckinsey.com/industries/retail/our-insights/how-retailers-can-drive-profitable-growth-through-dynamic-pricing · <b>getmonetizely, data thresholds for price-opt ML</b> — https://www.getmonetizely.com/articles/how-can-machine-learning-transform-your-price-optimization-strategy · <b>Oracle Retail price optimization</b> (elasticity models + pricing rules coexist) — https://www.oracle.com/ai-data-platform/price-optimization/</p>
+  </div>
+
+  <!-- TASK 5 -->
+  <div class="card">
+    <h4><span class="num">5</span>Anomaly / leakage / fraud detection <span class="badge b-ml">rules → classical ML</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">Deterministic rules for <em>known</em> leakage patterns first; statistical/ML anomaly detection for the <em>unknown</em> patterns later. LLM only to explain a flagged case.</div>
+      <div class="gl">Method</div><div class="gv"><strong>Rules:</strong> duplicate invoice numbers, discount over threshold, cash variance, payment to inactive vendor. <strong>ML:</strong> Isolation Forest / LOF for unsupervised outliers; gradient-boosted trees if labelled fraud exists.</div>
+      <div class="gl">Agent?</div><div class="gv">No — a detection pipeline that flags; humans investigate.</div>
+    </div>
+    <p><strong>Why classical, not LLM:</strong> this is numeric tabular data, and the honest evidence is that LLMs are at <em>best on par</em> with classical methods at far higher cost — never a clear win. In the tabular-anomaly study, classical ECOD often <em>surpassed</em> unaligned LLMs, and the paper notes "once data is preprocessed to numbers, LLMs cannot reliably detect errors" because anomaly detection needs density estimation and thresholding — computation, not language. Separately, gradient-boosted trees dominate supervised tabular learning (incl. fraud) over deep nets, because tabular features have no spatial/sequential structure that deep models exploit.</p>
+    <p><strong>Build order:</strong> deterministic rules catch the known, high-value leakage cheaply and auditably (duplicate invoice numbers, over-threshold discounts, cash gaps) — AP-fraud tools ship exactly these out of the box. Then layer Isolation Forest for the patterns nobody thought to write a rule for. Rules give precision and explainability; ML extends reach.</p>
+    <div class="callout co-note">
+      <span class="ct">Where the LLM does help — explanation, not detection</span>
+      Classical ML/rules decide <em>what</em> is anomalous; an LLM can turn a flagged row into a readable investigation note ("this ₹X payment matches invoice 4471 already paid on 3 Jun"). Augment, never replace — and never let it make the money decision.
+    </div>
+    <p class="src"><b>arXiv 2406.16308, anomaly detection of tabular data using LLMs</b> (LLMs only on-par; classical often better) — https://arxiv.org/html/2406.16308v1 · <b>scikit-learn, novelty &amp; outlier detection</b> (Isolation Forest, LOF) — https://scikit-learn.org/stable/modules/outlier_detection.html · <b>arXiv 2405.13692, why tree models beat deep learning on tabular data</b> — https://arxiv.org/abs/2405.13692 · <b>Diligent, invoice fraud detection rules</b> — https://www.diligent.com/resources/blog/invoice-fraud-detection · <b>Taktile, LLMs as investigative partners in fraud</b> (explain, don't decide) — https://taktile.com/articles/llms-investigative-partners-fraud-detection</p>
+  </div>
+
+  <!-- TASK 6 -->
+  <div class="card">
+    <h4><span class="num">6</span>Daily digest narration <span class="badge b-llm">LLM over code-computed numbers</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">Code computes every number; the LLM writes the human sentence around them, in Hindi or English.</div>
+      <div class="gl">Model</div><div class="gv"><strong>Gemini 2.5 Flash</strong> — fast, cheap, strong multilingual, ample for short prose.</div>
+      <div class="gl">Agent?</div><div class="gv">No. One call: a computed-numbers payload in, a paragraph out.</div>
+    </div>
+    <p><strong>Why this is the textbook LLM use:</strong> generating fluent, tone-appropriate prose over a fixed set of facts is exactly what LLMs are best at. The trick — and the safety property — is that the LLM receives numbers already computed by code and is told to phrase, not calculate. This sidesteps the arithmetic weakness entirely: there is no math for it to get wrong. It also handles Hindi/English naturally, which matters for owners living on WhatsApp.</p>
+    <p><strong>Guardrail:</strong> the prompt passes structured numbers and forbids deriving new ones; a quick code check can confirm the figures in the output string match the payload. This is the system's "code computes, AI narrates" rule made literal.</p>
+    <p class="src"><b>npj Digital Medicine (2025)</b> (why numbers must be pre-computed) — https://pmc.ncbi.nlm.nih.gov/articles/PMC11914283/ · <b>Gemini API pricing</b> (Flash positioning/cost) — https://ai.google.dev/gemini-api/docs/pricing</p>
+  </div>
+
+  <!-- TASK 7 -->
+  <div class="card">
+    <h4><span class="num">7</span>Conversational assistant <span class="badge b-llm">LLM over a semantic/tool layer</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">LLM that selects from a <strong>governed semantic/metrics layer</strong> — not free text-to-SQL. Numbers come back from the layer (code), never from the model.</div>
+      <div class="gl">Model</div><div class="gv"><strong>Claude Sonnet</strong> or <strong>Gemini 2.5 Pro</strong> (both on Vertex). Sonnet leads on tool-use/instruction-following; Gemini Pro is strong multilingual. Either works; pick on cost and your own Hindi test.</div>
+      <div class="gl">Agent?</div><div class="gv"><strong>Light agent.</strong> A tool-calling loop is justified only for multi-step or clarifying questions; a simple "question → one metric query → answer" stays a single call.</div>
+    </div>
+    <p><strong>Why a semantic layer beats free text-to-SQL:</strong> raw text-to-SQL fails quietly — even frontier models hit only ~17–21% on enterprise-scale schemas (Spider 2.0), and a wrong query returns a <em>plausible but false</em> number. A constrained semantic layer flips the failure mode: dbt's 2026 benchmark measured the semantic layer at 100% accuracy in scope vs 62–64% for text-to-SQL, because "if it picks the right metric and dimensions, the query is guaranteed to be correct" and failure looks like an error message, not a wrong answer. For a system whose whole principle is trustworthy money numbers, that property is decisive — the LLM chooses <em>which</em> pre-defined metric to fetch; it never authors arithmetic.</p>
+    <p><strong>Agent vs single call:</strong> follow Anthropic's rule — use the simplest thing that works. A fixed question→metric→answer path is a workflow (single call). Reserve the full tool-calling loop for genuinely open-ended, multi-turn exploration where you can't predict the steps. Agents "trade latency and cost for better task performance" — only pay that when the task demands it.</p>
+    <div class="callout co-dep">
+      <span class="ct">Model availability — stays inside GCP</span>
+      Claude (Sonnet, Haiku) runs on Vertex AI Model Garden, so a Gemini-vs-Claude choice doesn't mean leaving Google Cloud. Note: Claude multi-region endpoints are US/EU only today — confirm the India-region position in Model Garden if strict residency is required.
+    </div>
+    <p class="src"><b>dbt, Semantic Layer vs Text-to-SQL 2026 benchmark</b> — https://docs.getdbt.com/blog/semantic-layer-vs-text-to-sql-2026 · <b>Spider benchmark (Yale)</b> — https://yale-lily.github.io/spider · <b>Anthropic, Building Effective Agents</b> — https://www.anthropic.com/research/building-effective-agents · <b>Claude on Vertex AI (Anthropic docs)</b> — https://platform.claude.com/docs/en/build-with-claude/claude-on-vertex-ai · <b>Google Cloud Model Garden — Claude</b> — https://cloud.google.com/products/model-garden/claude</p>
+  </div>
+
+  <!-- TASK 8 -->
+  <div class="card">
+    <h4><span class="num">8</span>Payments copilot <span class="badge b-hybrid">rules/ML detect + LLM parse &amp; brief</span></h4>
+    <div class="grid2">
+      <div class="gl">Approach</div><div class="gv">Split the job. <strong>Deterministic code</strong> owns duplicate detection and all amounts; <strong>LLM</strong> owns the messy free-text narration and writing the "safe to pay" brief.</div>
+      <div class="gl">Method</div><div class="gv"><strong>Code:</strong> duplicate-payment match on vendor + invoice-no + amount(±tolerance) + date-window; threshold/variance rules. <strong>LLM (Gemini Flash):</strong> parse bank narration → vendor/store/purpose. Optional fuzzy/ML layer for near-duplicate invoice numbers.</div>
+      <div class="gl">Agent?</div><div class="gv">No. Parse = one call; detection = deterministic; brief = one call.</div>
+    </div>
+    <p><strong>Why this split:</strong> bank narration is unstructured, multilingual, and bank-specific — per-bank regex parsers break constantly. This is where an LLM genuinely earns its keep: one vendor (Inscribe) measured coverage jumping from 18%→94% on non-English account-number extraction by adding an LLM. But the <em>amount, value date, debit/credit</em> are already structured — keep those deterministic; never ask the LLM to restate or compute money.</p>
+    <p><strong>Duplicate / fraud detection stays deterministic:</strong> the right approach is multi-field matching (same vendor + invoice number + amount within tolerance + date inside a rolling window, e.g. 90 days), plus rules for same-amount-to-two-vendors and changed bank details. This is exact, auditable, and the AP-fraud industry standard — duplicates/errors run 1–2.5% of payments processed. A fuzzy/ML layer is the later upgrade to catch near-duplicates ("INV-001" vs "INV1"). On a flag: hold and escalate to a human — "flag-don't-block."</p>
+    <p><strong>The brief:</strong> once code has matched, validated, and flagged, an LLM writes the one-paragraph "safe to pay / hold because…" summary over those computed facts — the same narrate-don't-calculate pattern as the daily digest.</p>
+    <p class="src"><b>Inscribe, LLMs boosted bank-statement parsing up to 5×</b> — https://www.inscribe.ai/blog/how-llms-boosted-our-bank-statement-parsing-coverage-by-up-to-5x · <b>Zone &amp; Co, preventing duplicate payments</b> (multi-field match, APQC 1–2.5% stat) — https://www.zoneandco.com/articles/preventing-duplicate-payments · <b>Stripe, prevent duplicate payments</b> (idempotency, deterministic over probabilistic) — https://stripe.com/resources/more/how-to-prevent-duplicate-payments · <b>Diligent, invoice fraud rules</b> — https://www.diligent.com/resources/blog/invoice-fraud-detection</p>
+  </div>
+</section>
+
+<!-- ===================== CROSS-CUTTING ===================== -->
+<section>
+  <h2 class="sec">Cross-cutting verdict</h2>
+
+  <h3>Where agents add value — and where they're overkill</h3>
+  <p class="framing">An "agent" = a model that runs a multi-step, tool-calling loop and decides its own next move. Powerful, but expensive, slower, and harder to control — and most projects don't need it.</p>
+  <div class="callout co-note">
+    <span class="ct">Gartner — the cautionary data</span>
+    Gartner predicts (25 June 2025) that <strong>over 40% of agentic AI projects will be cancelled by end of 2027</strong>, citing escalating costs, unclear business value, and inadequate risk controls — plus "agent washing" (rebranding chatbots/RPA as agents), with only ~130 vendors worldwide judged to offer genuine agentic AI. The lesson for KDPS: don't reach for an agent because it's fashionable.
+    <div class="src"><b>Gartner press release</b> — https://www.gartner.com/en/newsroom/press-releases/2025-06-25-gartner-predicts-over-40-percent-of-agentic-ai-projects-will-be-canceled-by-end-of-2027 · <b>CDO Magazine coverage</b> (agent washing, 130 vendors) — https://www.cdomagazine.tech/aiml/over-40-of-agentic-ai-projects-likely-to-be-abandoned-by-2027-gartner-forecast</div>
+  </div>
+  <p><strong>The decision rule (Anthropic, "Building Effective Agents"):</strong> "find the simplest solution possible, and only increase complexity when needed… for many applications, optimizing single LLM calls with retrieval and in-context examples is usually enough." Use an <em>agent</em> only for "open-ended problems where it's difficult to predict the required number of steps and you can't hardcode a fixed path" — and where you can trust its decisions. Agents "trade latency and cost for better task performance."</p>
+  <table>
+    <tr><th>KDPS task</th><th>Agent or not</th><th>Why</th></tr>
+    <tr><td>Invoice reading, narration, payment-brief, narration of digests</td><td><span class="pill pill-single">Single call</span></td><td>Fixed input → fixed output. No decisions to make.</td></tr>
+    <tr><td>Forecasting, markdown, anomaly detection</td><td><span class="pill pill-single">Plain pipeline</span></td><td>Deterministic/ML compute on a schedule. No LLM in the loop.</td></tr>
+    <tr><td>Fuzzy matching</td><td><span class="pill pill-single">Tiered pipeline</span></td><td>A waterfall of cheap → expensive checks, not autonomous reasoning.</td></tr>
+    <tr><td>Conversational assistant (only this one)</td><td><span class="pill pill-agent">Light agent — when needed</span></td><td>Multi-turn, clarifying, exploratory questions can need a tool-calling loop. Simple lookups stay single-call.</td></tr>
+  </table>
+  <p>So of eight tasks, <strong>seven are single-call or plain pipelines</strong>; only the conversational assistant ever justifies an agent, and even then only for the open-ended questions. This is the cheap, controllable, debuggable design — and it's why KDPS sits on the right side of the Gartner statistic.</p>
+
+  <h3>Why deterministic code must compute every money number</h3>
+  <p>Restating the spine rule with its evidence: LLMs are not calculators. Base models score ~11–36% on hard arithmetic; the fix is to give them deterministic tools, after which accuracy jumps to ~95% — i.e. <em>the code does the math, not the model.</em> In KDPS terms: totals, margins, discounts, taxes, balances, sell-through, duplicate-amount matches — all computed in plain code against the ledgers. The LLM's only relationship to a number is to read one code produced and wrap a sentence around it. This is "AI at the edges, never on the books," made concrete.</p>
+
+  <div class="callout co-verdict">
+    <span class="ct">Bottom line for the meeting</span>
+    The "best tool for each job" instinct is exactly right and is backed by the evidence: <strong>vision LLM</strong> for reading documents, <strong>classical ML/stats</strong> for forecasting and anomalies (LLMs are measurably the wrong tool there), <strong>deterministic rules</strong> for markdown signals and duplicate detection, and <strong>language LLMs (Gemini Flash / Claude Sonnet)</strong> only at the language edges — narrating, parsing text, answering questions over a governed metrics layer. Money math is always code. Start simple everywhere; add ML where data earns it. Use an agent for one task at most.
+  </div>
+</section>
+
+<footer>
+  KDPS Lifestyle · D7 intelligence layer · technique-selection note · 21 Jun 2026.
+  Sources are vendor docs, peer-reviewed papers, analyst notes, and engineering writeups, cited inline per claim.
+  Pricing and model/region availability move fast — re-confirm Gemini/Claude pricing and India-region availability on the live Google Cloud and Anthropic pages before quoting figures to the client.
+</footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The KDPS Database Handbook</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe; --soft:#f1f5f9;
+    --mem:#15803d; --mem-bg:#f0fdf4; --mem-line:#bbf7d0; --mem-deep:#14532d;
+    --blue:#1d4ed8; --blue-bg:#eff6ff; --blue-line:#bfdbfe; --blue-deep:#1e3a8a;
+    --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --amber:#b45309; --amber-bg:#fff7ed; --amber-line:#fed7aa; --amber-deep:#7c2d12;
+    --kw:#c084fc; --col:#7dd3fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b; --num:#fda4af;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.62; font-size:16px;}
+  a{color:var(--mem)}
+
+  /* layout */
+  .top{background:#0f172a; color:#fff; padding:40px 0 34px}
+  .top .inner{max-width:1080px; margin:0 auto; padding:0 26px}
+  .eyebrow{font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:#7dd3fc; font-weight:700}
+  .top h1{font-size:38px; margin:10px 0 8px; letter-spacing:-.02em}
+  .top p{color:#c4cbd8; max-width:64ch; margin:0; font-size:16.5px}
+  .layout{max-width:1080px; margin:0 auto; padding:0 26px; display:grid; grid-template-columns:228px 1fr; gap:40px; align-items:start}
+  @media(max-width:820px){.layout{grid-template-columns:1fr; gap:0}}
+
+  nav.toc{position:sticky; top:18px; align-self:start; font-size:13.5px; padding:22px 0}
+  @media(max-width:820px){nav.toc{position:static; border-bottom:1px solid var(--line); margin-bottom:10px}}
+  nav.toc .lbl{font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); font-weight:700; margin:0 0 8px}
+  nav.toc ol{list-style:none; margin:0; padding:0; counter-reset:s}
+  nav.toc li{counter-increment:s; margin:2px 0}
+  nav.toc a{display:block; color:var(--muted); text-decoration:none; padding:4px 8px; border-radius:7px; border-left:2px solid transparent}
+  nav.toc a:hover{background:var(--mem-bg); color:var(--mem-deep); border-left-color:var(--mem)}
+  nav.toc a::before{content:counter(s) ". "; color:#a8b3c4; font-variant-numeric:tabular-nums}
+
+  main{padding:26px 0 90px; min-width:0}
+  section{margin:0 0 18px; scroll-margin-top:14px}
+  section.sec{padding-top:30px; border-top:1px solid var(--line); margin-top:30px}
+  section.sec:first-of-type{border-top:0; margin-top:0; padding-top:8px}
+  h2{font-size:26px; letter-spacing:-.01em; margin:6px 0 4px; display:flex; gap:11px; align-items:baseline}
+  h2 .n{font-size:14px; font-weight:800; color:#fff; background:var(--mem); width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto}
+  h3{font-size:18px; margin:26px 0 4px; color:var(--mem-deep)}
+  .kick{color:var(--muted); font-size:14px; margin:0 0 8px 41px; text-transform:uppercase; letter-spacing:.04em; font-weight:700}
+  p{margin:13px 0}
+  .key{font-weight:600}
+  ul,ol.list{margin:12px 0; padding-left:22px} li{margin:6px 0}
+
+  /* code */
+  pre{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:15px 17px; overflow-x:auto; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13.5px; line-height:1.7; margin:14px 0}
+  .inline{background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px; font-size:13.5px; font-family:ui-monospace,Menlo,monospace; white-space:nowrap}
+  .kw{color:var(--kw); font-weight:700} .col{color:var(--col)} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)} .num{color:var(--num)}
+
+  /* tables */
+  .tbl{margin:14px 0; border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .tbl .cap{font-family:ui-monospace,Menlo,monospace; font-size:12.5px; font-weight:700; color:var(--mem-deep); background:var(--mem-bg); padding:8px 13px; border-bottom:1px solid var(--mem-line)}
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:#f8fafc; font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:ui-monospace,Menlo,monospace}
+  .pk{color:#7c3aed; font-weight:700} .fk{color:#1d4ed8; font-weight:700}
+  .in{color:var(--mem); font-weight:700} .out{color:var(--bad); font-weight:700}
+
+  /* callouts */
+  .box{padding:15px 19px; border-radius:12px; margin:18px 0}
+  .box p{margin:0; font-size:15px} .box p+p{margin-top:9px}
+  .box.tip{background:var(--mem-bg); border:1px solid var(--mem-line)} .box.tip b{color:var(--mem-deep)}
+  .box.info{background:var(--blue-bg); border:1px solid var(--blue-line)} .box.info b{color:var(--blue-deep)}
+  .box.warn{background:var(--amber-bg); border:1px solid var(--amber-line)} .box.warn b{color:var(--amber-deep)}
+  .box.danger{background:var(--bad-bg); border:1px solid var(--bad-line)} .box.danger b{color:#991b1b}
+  .box.ink{background:#1d2433; color:#fff} .box.ink b{color:#bbf7d0}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0}
+  @media(max-width:620px){.two{grid-template-columns:1fr}}
+  .mini{border:1px solid var(--line); border-radius:11px; padding:13px 15px; background:#fff; font-size:14px}
+  .mini h4{margin:0 0 6px; font-size:14.5px}
+  .mini.bad{background:var(--bad-bg); border-color:var(--bad-line)} .mini.bad h4{color:#991b1b}
+  .mini.good{background:var(--mem-bg); border-color:var(--mem-line)} .mini.good h4{color:var(--mem-deep)}
+  .mini p{margin:0; color:var(--muted); font-size:13.5px}
+
+  dl.gloss{margin:0} dl.gloss dt{font-weight:700; margin-top:14px; color:var(--ink)}
+  dl.gloss dd{margin:2px 0 0; color:var(--muted); font-size:14.5px}
+
+  .crumbs{font-size:13px; color:var(--muted); margin:8px 0 0 41px}
+  footer{max-width:1080px; margin:0 auto; padding:24px 26px 60px; color:var(--muted); font-size:13px; border-top:1px solid var(--line)}
+  .toplink{font-size:12px; color:var(--muted); text-decoration:none; float:right; margin-top:14px}
+  @media print{
+    .top{background:#fff; color:#000; -webkit-print-color-adjust:exact; print-color-adjust:exact}
+    .top h1{color:#000} .top p,.eyebrow{color:#333}
+    nav.toc{display:none} .layout{display:block} pre{font-size:11px}
+    .box,.tbl .cap,th{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  }
+</style>
+</head>
+<body>
+
+<div class="top"><div class="inner">
+  <div class="eyebrow">KDPS Teaching · Reference Handbook</div>
+  <h1>The KDPS Database Handbook</h1>
+  <p>One sit-down read to take you from "I can mostly follow a database" to "I can read a schema, a query, or a migration and know exactly what's built, how it behaves, and where the data goes." Every idea is grounded in the KDPS tables you already designed.</p>
+</div></div>
+
+<div class="layout">
+  <nav class="toc">
+    <p class="lbl">Contents</p>
+    <ol>
+      <li><a href="#big">The big picture</a></li>
+      <li><a href="#types">Columns have types</a></li>
+      <li><a href="#keys">Keys &amp; relationships</a></li>
+      <li><a href="#schema">Reading a schema</a></li>
+      <li><a href="#constraints">Constraints — refusing bad data</a></li>
+      <li><a href="#select">Asking questions (SELECT)</a></li>
+      <li><a href="#aggregate">Aggregating &amp; grouping</a></li>
+      <li><a href="#joins">Combining tables (JOIN)</a></li>
+      <li><a href="#writes">Changing data &amp; the danger</a></li>
+      <li><a href="#indexes">Indexes — speed</a></li>
+      <li><a href="#tx">Transactions &amp; ACID</a></li>
+      <li><a href="#migrations">Migrations</a></li>
+      <li><a href="#normal">Why so many tables</a></li>
+      <li><a href="#ledger">The ledger pattern</a></li>
+      <li><a href="#map">The KDPS schema map</a></li>
+      <li><a href="#review">The reviewer's checklist</a></li>
+      <li><a href="#gloss">Glossary</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+  <!-- 1 -->
+  <section class="sec" id="big">
+    <h2><span class="n">1</span> The big picture</h2>
+    <p class="kick">A database is a stack of smart spreadsheets</p>
+    <p>A <span class="key">database</span> is a collection of <span class="key">tables</span>. A table is like one sheet in Excel: <b>columns</b> are the fields (what you store), <b>rows</b> are the records (one thing each). The KDPS stock ledger is a table — each movement is a row.</p>
+    <p>Three things make a database far more than a spreadsheet, and all three matter for KDPS:</p>
+    <ol class="list">
+      <li><b>It enforces rules.</b> A column can refuse blanks, refuse duplicates, refuse a sale pointing at a SKU that doesn't exist. A spreadsheet lets anyone type anything.</li>
+      <li><b>Tables link to each other</b> by id, so a fact (a brand's commission %) lives in exactly one place.</li>
+      <li><b>It answers questions instantly</b> with queries, over millions of rows, and guarantees a sale either saves <i>completely</i> or not at all.</li>
+    </ol>
+    <p>The kind KDPS will use is a <span class="key">relational database</span> (e.g. PostgreSQL) — "relational" just means tables that relate to one another by id. You talk to it in a language called <span class="key">SQL</span> ("sequel").</p>
+    <div class="box tip"><p>🧭 <b>Hold this whole handbook together with one sentence:</b> a database stores <i>facts in tables</i>, <i>links them by id</i>, <i>refuses bad data</i>, and <i>answers questions</i> — all while guaranteeing nothing is ever left half-saved.</p></div>
+  </section>
+
+  <!-- 2 -->
+  <section class="sec" id="types">
+    <h2><span class="n">2</span> Columns have types</h2>
+    <p class="kick">Every column holds one kind of value</p>
+    <p>When you create a column you say what it holds. The type decides what's allowed in and how it sorts and adds up. These are the handful you'll see across KDPS:</p>
+    <div class="tbl"><div class="tbl-wrap"><table>
+      <tr><th>Type</th><th>Holds</th><th>KDPS example</th></tr>
+      <tr><td class="mono">TEXT / VARCHAR</td><td>words, codes</td><td>brand name, SKU code, colour</td></tr>
+      <tr><td class="mono">INTEGER</td><td>whole numbers</td><td>quantity, a row's id</td></tr>
+      <tr><td class="mono">NUMERIC(12,2)</td><td>exact decimals</td><td><b>money</b> — MRP, cost, commission</td></tr>
+      <tr><td class="mono">BOOLEAN</td><td>true / false</td><td>is_active, is_returnable</td></tr>
+      <tr><td class="mono">DATE / TIMESTAMP</td><td>a day / a moment</td><td>sale date, return-window close, created_at</td></tr>
+      <tr><td class="mono">ENUM / CHECK</td><td>one of a fixed list</td><td>commercial_model, movement type</td></tr>
+    </table></div></div>
+
+    <div class="box danger"><p>💰 <b>The money rule — this one bites real ERPs.</b> Always store money as <span class="inline">NUMERIC</span>/<span class="inline">DECIMAL</span>, <b>never</b> as a <span class="inline">FLOAT</span>/<span class="inline">REAL</span>. Floats are approximate — <span class="inline">0.1 + 0.2</span> famously isn't exactly <span class="inline">0.3</span> — and over thousands of bills those rounding crumbs become real rupees that don't reconcile with Tally. If you see a money column typed <span class="inline">FLOAT</span> in a schema review, flag it.</p></div>
+
+    <h3>NULL — "we don't know / not set"</h3>
+    <p>A cell can be empty — that's <span class="key">NULL</span>. It is <i>not</i> zero and <i>not</i> blank text; it means "no value". It matters because NULL behaves oddly: <span class="inline">NULL = NULL</span> is <i>not</i> true, and a NULL in a sum is skipped. A column can be told to forbid NULL (next section). Rule of thumb: <b>money and quantities should rarely be NULL; optional notes can be.</b></p>
+  </section>
+
+  <!-- 3 -->
+  <section class="sec" id="keys">
+    <h2><span class="n">3</span> Keys &amp; relationships</h2>
+    <p class="kick">How rows point at each other</p>
+    <p>Every table should give each row a unique id — its <span class="key">primary key</span>. Other tables refer to that row by storing its id — a <span class="key">foreign key</span>. That's the entire idea of "relational".</p>
+    <div class="tbl"><div class="cap">sku</div><div class="tbl-wrap"><table>
+      <tr><th class="mono">id (PK)</th><th>style</th><th>colour</th><th>size</th><th class="mono">brand_id (FK)</th></tr>
+      <tr><td class="mono pk">NK-AM90-WHT-8</td><td>Air Max 90</td><td>White</td><td>8</td><td class="mono fk">12</td></tr>
+    </table></div></div>
+    <p>The <span class="fk">brand_id</span> = 12 points at the <span class="inline">brand</span> row whose <span class="pk">id</span> = 12 (Biba). Store the brand's details <b>once</b>, in the brand table; everywhere else just hold the id.</p>
+
+    <h3>The three relationship shapes</h3>
+    <div class="two">
+      <div class="mini"><h4>One-to-many (the common one)</h4><p>One brand has many SKUs. One SKU has many movements. The "many" side holds the foreign key (<span class="inline">sku.brand_id</span>, <span class="inline">stock_movement.sku_id</span>).</p></div>
+      <div class="mini"><h4>One-to-one (rare)</h4><p>One sale has one bill PDF. Sometimes split off for tidiness; often just more columns on the same row.</p></div>
+    </div>
+    <div class="box info"><p>🔗 <b>Many-to-many needs a third table.</b> A store stocks many brands, and a brand sells in many stores. You can't put that in one column, so you add a <i>junction</i> table — <span class="inline">store_brand(store_id, brand_id)</span> — one row per pairing. Whenever you hear "X can have many Y <i>and</i> Y can have many X," expect a junction table in the schema.</p></div>
+    <div class="box tip"><p>📌 <b>Why this is the heart of KDPS:</b> follow the foreign keys — <span class="inline">movement → sku → brand</span> — and from a single sold piece you can reach its brand and therefore its commercial model. Set SOR <i>once</i> on the brand row and every sale of its SKUs inherits it. The relationships <i>are</i> the spine.</p></div>
+  </section>
+
+  <!-- 4 -->
+  <section class="sec" id="schema">
+    <h2><span class="n">4</span> Reading a schema</h2>
+    <p class="kick">CREATE TABLE — the blueprint you'll review</p>
+    <p>A <span class="key">schema</span> is the set of <span class="inline">CREATE TABLE</span> statements that define every table, its columns, types and links. You won't write these — you'll <b>read</b> them. Here's the brand table, fully annotated:</p>
+    <pre><span class="kw">CREATE TABLE</span> brand (
+  id                 <span class="col">SERIAL</span>       <span class="kw">PRIMARY KEY</span>,   <span class="cmt">-- auto-numbered unique id</span>
+  name               <span class="col">TEXT</span>         <span class="kw">NOT NULL</span>,      <span class="cmt">-- must be filled</span>
+  commercial_model   <span class="col">TEXT</span>         <span class="kw">NOT NULL</span>
+        <span class="kw">CHECK</span> (commercial_model <span class="kw">IN</span> (<span class="str">'BNS'</span>,<span class="str">'CORRECTION'</span>,<span class="str">'SOR'</span>,<span class="str">'CONSIGNMENT'</span>)),
+  commission_pct     <span class="col">NUMERIC</span>(5,2),                <span class="cmt">-- e.g. 35.00 ; NULL for owned models</span>
+  return_window_days <span class="col">INTEGER</span>,
+  is_active          <span class="col">BOOLEAN</span>      <span class="kw">NOT NULL DEFAULT</span> <span class="kw">true</span>
+);</pre>
+    <p>Read it top to bottom: a brand has an auto id, a required name, a model that <b>must</b> be one of your four, an optional commission %, a return window, and an active flag that defaults to true. That single <span class="inline">CHECK</span> means the database itself will <i>reject</i> a typo'd model — the rule lives in the data, not in hope.</p>
+    <pre><span class="kw">CREATE TABLE</span> stock_movement (
+  id          <span class="col">BIGSERIAL</span>   <span class="kw">PRIMARY KEY</span>,
+  sku_id      <span class="col">TEXT</span>        <span class="kw">NOT NULL REFERENCES</span> sku(id),   <span class="cmt">-- foreign key</span>
+  type        <span class="col">TEXT</span>        <span class="kw">NOT NULL</span>,                  <span class="cmt">-- GRN / SALE / TRANSFER / RETURN</span>
+  qty         <span class="col">INTEGER</span>     <span class="kw">NOT NULL</span>,                  <span class="cmt">-- +ve in, −ve out</span>
+  document    <span class="col">TEXT</span>        <span class="kw">NOT NULL</span>,                  <span class="cmt">-- which document caused it</span>
+  store       <span class="col">TEXT</span>        <span class="kw">NOT NULL REFERENCES</span> store(id),
+  created_at  <span class="col">TIMESTAMP</span>   <span class="kw">NOT NULL DEFAULT</span> now()
+);</pre>
+    <div class="box tip"><p>👀 <b>What to notice in any schema:</b> there is <i>no</i> <span class="inline">on_hand</span> column here. Stock is the <span class="inline">SUM</span> of <span class="inline">qty</span> — derived, never stored. Rows are only ever inserted, never edited. That's the ledger, correctly built. (If you instead saw <span class="inline">stock_qty</span> on the <span class="inline">sku</span> table, you'd be looking at a count — the thing to reject.)</p></div>
+  </section>
+
+  <!-- 5 -->
+  <section class="sec" id="constraints">
+    <h2><span class="n">5</span> Constraints — how the database refuses bad data</h2>
+    <p class="kick">The rules that make bad rows impossible, not just unlikely</p>
+    <p>A <span class="key">constraint</span> is a rule the database enforces on every write. They're your safety net: even buggy code can't slip past them. Six you'll meet:</p>
+    <div class="tbl"><div class="tbl-wrap"><table>
+      <tr><th>Constraint</th><th>Promises</th><th>KDPS use</th></tr>
+      <tr><td class="mono">PRIMARY KEY</td><td>unique, never NULL — the row's identity</td><td>every table's <span class="inline">id</span></td></tr>
+      <tr><td class="mono">NOT NULL</td><td>must have a value</td><td>qty, model, name</td></tr>
+      <tr><td class="mono">UNIQUE</td><td>no duplicates in this column</td><td>a barcode, a GSTIN</td></tr>
+      <tr><td class="mono">FOREIGN KEY</td><td>must point at a real row elsewhere</td><td>a movement's <span class="inline">sku_id</span> must exist</td></tr>
+      <tr><td class="mono">CHECK</td><td>value must pass a test</td><td>model ∈ your four; <span class="inline">qty &lt;&gt; 0</span></td></tr>
+      <tr><td class="mono">DEFAULT</td><td>auto-fill when not given</td><td><span class="inline">created_at = now()</span>; <span class="inline">is_active = true</span></td></tr>
+    </table></div></div>
+    <div class="box info"><p>🛡️ <b>Why this matters for review:</b> constraints are how the schema makes your <i>domain rules</i> physically true. "A sale can't reference a SKU that doesn't exist" should be a <span class="inline">FOREIGN KEY</span>, not a comment. "Commercial model is one of four" should be a <span class="inline">CHECK</span>. When you review a schema, half the job is asking: <i>are the business rules I care about actually enforced here, or just hoped for in the code?</i></p></div>
+  </section>
+
+  <!-- 6 -->
+  <section class="sec" id="select">
+    <h2><span class="n">6</span> Asking questions — SELECT</h2>
+    <p class="kick">Read it right-to-left as a sentence</p>
+    <p>A <span class="inline">SELECT</span> reads rows out and changes nothing. The clauses always come in this order:</p>
+    <pre><span class="kw">SELECT</span>   name, mrp          <span class="cmt">-- which COLUMNS</span>
+<span class="kw">FROM</span>     sku                <span class="cmt">-- which TABLE</span>
+<span class="kw">WHERE</span>    brand_id = <span class="num">12</span>      <span class="cmt">-- which ROWS to keep</span>
+<span class="kw">ORDER BY</span> mrp <span class="kw">DESC</span>           <span class="cmt">-- sort, biggest first</span>
+<span class="kw">LIMIT</span>    <span class="num">10</span>;                <span class="cmt">-- only the first 10</span></pre>
+    <p class="key">SELECT picks columns. WHERE picks rows. That one split unlocks most queries.</p>
+    <h3>Filtering: the WHERE toolkit</h3>
+    <div class="tbl"><div class="tbl-wrap"><table>
+      <tr><th>Write</th><th>Means</th></tr>
+      <tr><td class="mono">WHERE colour = 'White'</td><td>exact match</td></tr>
+      <tr><td class="mono">WHERE mrp &gt;= 2000</td><td>comparisons (&gt; &lt; &gt;= &lt;= &lt;&gt;)</td></tr>
+      <tr><td class="mono">WHERE brand_id = 12 AND size = '8'</td><td>both must hold</td></tr>
+      <tr><td class="mono">WHERE colour = 'Red' OR colour = 'Blue'</td><td>either</td></tr>
+      <tr><td class="mono">WHERE size IN ('8','9','10')</td><td>any of a list</td></tr>
+      <tr><td class="mono">WHERE name LIKE 'Kurti%'</td><td>text starts with "Kurti"</td></tr>
+      <tr><td class="mono">WHERE created_at BETWEEN '2026-06-01' AND '2026-06-30'</td><td>a range</td></tr>
+      <tr><td class="mono">WHERE return_window_days IS NULL</td><td>the empty/unknown ones</td></tr>
+    </table></div></div>
+    <div class="box warn"><p>⚠️ <b>NULL gotcha:</b> to find empty cells you must write <span class="inline">IS NULL</span>, never <span class="inline">= NULL</span> (that's never true). It's the most common "why did my query return nothing?" trap.</p></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="sec" id="aggregate">
+    <h2><span class="n">7</span> Aggregating &amp; grouping</h2>
+    <p class="kick">Squash many rows into one number — per bucket</p>
+    <p>An <span class="key">aggregate</span> collapses many rows into a single value: <span class="inline">SUM</span>, <span class="inline">COUNT</span>, <span class="inline">AVG</span>, <span class="inline">MIN</span>, <span class="inline">MAX</span>. Your stock-on-hand query is just a SUM over the ledger:</p>
+    <pre><span class="kw">SELECT</span> <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand <span class="kw">FROM</span> stock_movement <span class="kw">WHERE</span> sku_id = <span class="str">'NK-AM90-WHT-8'</span>;
+<span class="cmt">-- → 3   (the +5 −1 −2 +1 added up)</span></pre>
+    <p><span class="key">GROUP BY</span> runs that aggregate once per bucket. The rule: every column you select is <i>either</i> in the <span class="inline">GROUP BY</span> <i>or</i> wrapped in an aggregate.</p>
+    <pre><span class="kw">SELECT</span>   sku_id, store, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span>     stock_movement
+<span class="kw">GROUP BY</span> sku_id, store;          <span class="cmt">-- on-hand per SKU per store</span></pre>
+    <p>To filter <i>after</i> grouping (e.g. "only SKUs with under 3 left"), you use <span class="key">HAVING</span> — it's a WHERE for groups:</p>
+    <pre><span class="kw">SELECT</span> sku_id, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span> stock_movement <span class="kw">GROUP BY</span> sku_id
+<span class="kw">HAVING</span> <span class="fn">SUM</span>(qty) &lt; <span class="num">3</span>;             <span class="cmt">-- low-stock list</span></pre>
+    <div class="box tip"><p>💡 <b>WHERE vs HAVING:</b> WHERE filters <i>rows before</i> grouping; HAVING filters <i>groups after</i>. "Only this season's movements" → WHERE. "Only SKUs whose total is low" → HAVING. This single GROUP BY pattern powers most dashboards: sales per brand, pieces per store, revenue per day.</p></div>
+  </section>
+
+  <!-- 8 -->
+  <section class="sec" id="joins">
+    <h2><span class="n">8</span> Combining tables — JOIN</h2>
+    <p class="kick">Stitch related rows together by their keys</p>
+    <p>Your movement rows store a <span class="inline">sku_id</span>, not the brand name. To show the brand name beside each sale, you <span class="key">JOIN</span> the tables along the foreign keys:</p>
+    <pre><span class="kw">SELECT</span> b.name, <span class="fn">SUM</span>(m.qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span>      stock_movement m
+<span class="kw">JOIN</span>      sku   s <span class="kw">ON</span> s.id = m.sku_id      <span class="cmt">-- movement → its SKU</span>
+<span class="kw">JOIN</span>      brand b <span class="kw">ON</span> b.id = s.brand_id    <span class="cmt">-- SKU → its brand</span>
+<span class="kw">GROUP BY</span>  b.name;                          <span class="cmt">-- stock on hand per brand</span></pre>
+    <p>Read it as: "walk from each movement to its SKU, then to its brand, and total the quantities per brand." The <span class="inline">m</span>, <span class="inline">s</span>, <span class="inline">b</span> are short nicknames (aliases) for the tables.</p>
+    <div class="two">
+      <div class="mini good"><h4>INNER JOIN (default)</h4><p>Keeps only rows that match on both sides. A movement with no matching SKU drops out — usually what you want.</p></div>
+      <div class="mini"><h4>LEFT JOIN</h4><p>Keeps <i>every</i> row from the left table even if the right has no match (you get NULLs). Use for "all brands, including those with zero sales."</p></div>
+    </div>
+    <div class="box info"><p>🔎 <b>In review:</b> a JOIN should always connect a foreign key to the primary key it points at (<span class="inline">m.sku_id = s.id</span>). If a JOIN's <span class="inline">ON</span> joins unrelated columns, or is missing, you can get a "cross join" — every row paired with every row — which explodes the result and is almost always a bug.</p></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="sec" id="writes">
+    <h2><span class="n">9</span> Changing data — and the dangerous one</h2>
+    <p class="kick">INSERT, UPDATE, DELETE</p>
+    <p>Writes change what's stored. In a ledger system the everyday write is <span class="inline">INSERT</span> — you add a movement, you don't edit one:</p>
+    <pre><span class="kw">INSERT INTO</span> stock_movement (sku_id, type, qty, document, store)
+<span class="kw">VALUES</span> (<span class="str">'NK-AM90-WHT-8'</span>, <span class="str">'SALE'</span>, <span class="num">-1</span>, <span class="str">'BILL#902'</span>, <span class="str">'Store-7'</span>);</pre>
+    <p><span class="inline">UPDATE</span> changes existing rows; <span class="inline">DELETE</span> removes them. On both, the <span class="inline">WHERE</span> decides <i>which</i> rows are affected.</p>
+    <div class="box danger"><p>🚩 <b>The single most important review check in this whole handbook.</b> An <span class="inline" style="background:#7f1d1d">UPDATE</span> or <span class="inline" style="background:#7f1d1d">DELETE</span> with <b>no WHERE</b> hits <b>every row in the table</b>.</p>
+    <pre style="margin-top:9px"><span class="cmt">-- 😱 zeroes every movement, every SKU</span>     <span class="cmt">-- ✅ scoped to one document</span>
+<span class="kw">UPDATE</span> stock_movement <span class="kw">SET</span> qty = <span class="num">0</span>;          <span class="kw">UPDATE</span> stock_movement <span class="kw">SET</span> qty = <span class="num">0</span> <span class="kw">WHERE</span> document = <span class="str">'BILL#902'</span>;</pre>
+    <p>For a system holding money and stock, never let an un-scoped write through. Your append-only ledger softens the blow (you'd add a correcting entry rather than edit), but the reflex stands.</p></div>
+  </section>
+
+  <!-- 10 -->
+  <section class="sec" id="indexes">
+    <h2><span class="n">10</span> Indexes — why queries are fast or slow</h2>
+    <p class="kick">The book's index, for your data</p>
+    <p>Without help, finding rows means scanning the whole table top to bottom — fine for 100 rows, painful for 5 million movements. An <span class="key">index</span> is a pre-sorted lookup (like the index at the back of a book) on a column, so the database jumps straight to the rows.</p>
+    <pre><span class="kw">CREATE INDEX</span> <span class="kw">ON</span> stock_movement (sku_id);   <span class="cmt">-- on-hand lookups get fast</span></pre>
+    <div class="two">
+      <div class="mini good"><h4>Index the columns you filter/join on</h4><p>The ones in <span class="inline">WHERE</span> and <span class="inline">JOIN ... ON</span> — here, <span class="inline">sku_id</span>, <span class="inline">store</span>, <span class="inline">created_at</span>. Primary keys are indexed automatically.</p></div>
+      <div class="mini bad"><h4>But don't index everything</h4><p>Each index makes writes a little slower and uses space. It's a trade-off: faster reads, slightly slower inserts.</p></div>
+    </div>
+    <div class="box tip"><p>🐢 <b>The practical signal:</b> if a KDPS screen gets slow as data grows, "a missing index" is the usual suspect — the database is scanning the whole table. You don't need to tune indexes yourself, but knowing the word lets you ask the AI the right question: <i>"is this query using an index, or scanning the whole table?"</i></p></div>
+  </section>
+
+  <!-- 11 -->
+  <section class="sec" id="tx">
+    <h2><span class="n">11</span> Transactions &amp; ACID — all or nothing</h2>
+    <p class="kick">The guarantee that money is never half-saved</p>
+    <p>A single business action often needs <i>several</i> writes together. A counter sale must: add a <span class="inline">−1</span> stock movement <b>and</b> create the bill row <b>and</b> (for SOR) accrue the vendor payable. If the power dies after step 1, you must not be left with stock reduced but no bill.</p>
+    <p>A <span class="key">transaction</span> wraps those writes so they happen as one indivisible unit — <b>all of them, or none</b>:</p>
+    <pre><span class="kw">BEGIN</span>;
+  <span class="kw">INSERT INTO</span> stock_movement (...) <span class="kw">VALUES</span> (...);   <span class="cmt">-- −1 stock</span>
+  <span class="kw">INSERT INTO</span> bill (...)            <span class="kw">VALUES</span> (...);   <span class="cmt">-- the bill</span>
+  <span class="kw">INSERT INTO</span> vendor_ledger (...)   <span class="kw">VALUES</span> (...);   <span class="cmt">-- payable accrues</span>
+<span class="kw">COMMIT</span>;   <span class="cmt">-- all three become real together; any failure → ROLLBACK, none happen</span></pre>
+    <p>This is the famous <span class="key">ACID</span> promise, four words worth knowing:</p>
+    <div class="tbl"><div class="tbl-wrap"><table>
+      <tr><th>Letter</th><th>Means</th><th>For KDPS</th></tr>
+      <tr><td><b>A</b>tomic</td><td>all-or-nothing</td><td>sale's writes never split</td></tr>
+      <tr><td><b>C</b>onsistent</td><td>constraints always hold</td><td>no sale pointing at a missing SKU</td></tr>
+      <tr><td><b>I</b>solated</td><td>two tills at once don't corrupt each other</td><td>50 stores billing simultaneously is safe</td></tr>
+      <tr><td><b>D</b>urable</td><td>once committed, it survives a crash</td><td>a saved bill stays saved</td></tr>
+    </table></div></div>
+    <div class="box info"><p>🧾 <b>In review:</b> any time you see several related writes (stock + money + document), ask <i>"are these wrapped in one transaction?"</i> If not, a crash mid-way can leave your books inconsistent — exactly what an ERP must never do.</p></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="sec" id="migrations">
+    <h2><span class="n">12</span> Migrations — changing the database safely</h2>
+    <p class="kick">Git commits, but for the shape of the database</p>
+    <p>The schema changes over time — you add a <span class="inline">season</span> column, a new table. A <span class="key">migration</span> is one such change, saved as a numbered file and applied in order. You never hand-edit the live database; the migration runs the <b>same way</b> on your laptop, the test database, and every store's live database, and each database records which migrations it has run.</p>
+    <pre><span class="cmt">-- 014_add_season_to_sku.sql</span>
+<span class="kw">ALTER TABLE</span> sku <span class="kw">ADD COLUMN</span> season <span class="col">TEXT</span>;</pre>
+    <p>When the AI changes your data model, it should produce a migration — and that file is exactly what you review. Your eye goes straight to whether anything is <b>dropped or renamed</b>:</p>
+    <div class="tbl"><div class="tbl-wrap"><table>
+      <tr><th>The migration…</th><th>Risk</th><th>Why</th></tr>
+      <tr><td>adds a table or column</td><td><span class="in">🟢 safe</span></td><td>nothing existing is touched</td></tr>
+      <tr><td>adds an index</td><td><span class="in">🟢 safe</span></td><td>(can be slow to build on a huge table)</td></tr>
+      <tr><td>renames / drops a column</td><td><span class="out">🔴 risky</span></td><td>can lose data; old code may break</td></tr>
+      <tr><td>changes a column's type</td><td>🟠 careful</td><td>can fail or corrupt if values don't fit</td></tr>
+      <tr><td>back-fills / updates rows</td><td>🟠 careful</td><td>check the WHERE; runs over real data</td></tr>
+    </table></div></div>
+    <div class="box tip"><p>↩️ <b>Reversible by design:</b> good migrations come in pairs — an "up" (apply) and a "down" (undo) — so a bad change can be rolled back, just like <span class="inline">git revert</span>. When reviewing, a safe migration tells you <i>exactly</i> what structural change is about to happen, everywhere, in one readable file.</p></div>
+  </section>
+
+  <!-- 13 -->
+  <section class="sec" id="normal">
+    <h2><span class="n">13</span> Why so many tables</h2>
+    <p class="kick">Normalisation — each fact in exactly one place</p>
+    <p>Beginners expect one giant table. Databases instead <span class="key">normalise</span>: split data so each fact lives once. Why not store the brand name on every movement row? Because then renaming a brand means editing thousands of rows, and one missed row means contradictory data.</p>
+    <div class="two">
+      <div class="mini bad"><h4>❌ One fat table</h4><p>Brand name, commission %, SKU details all repeated on every single movement. Update anomalies guaranteed; storage wasted.</p></div>
+      <div class="mini good"><h4>✅ Split &amp; linked</h4><p><span class="inline">brand</span>, <span class="inline">sku</span>, <span class="inline">stock_movement</span> — each fact once, joined by id. Rename a brand in one place.</p></div>
+    </div>
+    <p>The intuition (you don't need the formal "normal forms"): <b>if you're copying the same value into many rows, it probably wants its own table</b>, referenced by a foreign key.</p>
+    <div class="box warn"><p>⚖️ <b>The deliberate exception — snapshots.</b> Sometimes you copy a value <i>on purpose</i>. When a sale happens you record the price and the commercial terms <i>as they were that day</i>, even though the brand's master may change later. That's a <b>snapshot</b>, and it's correct: history must not move when a master is edited. So "don't repeat data" has one principled exception — capturing a point-in-time fact. In review, ask: <i>is this duplication a mistake, or a deliberate snapshot?</i></p></div>
+  </section>
+
+  <!-- 14 -->
+  <section class="sec" id="ledger">
+    <h2><span class="n">14</span> The ledger pattern, in depth</h2>
+    <p class="kick">The one pattern the whole KDPS spine rests on</p>
+    <p>You designed this; here's its database shape and why it's bulletproof. Stock (and money) are stored as an <span class="key">append-only</span> list of movements. Rows are only ever <b>inserted</b>; none is updated or deleted. The current balance is <b>derived</b> by summing.</p>
+    <div class="tbl"><div class="cap">stock_movement · one SKU</div><div class="tbl-wrap"><table>
+      <tr><th>type</th><th>qty</th><th>document</th><th>running total</th></tr>
+      <tr><td>GRN</td><td class="in">+5</td><td>GRN#41</td><td>5</td></tr>
+      <tr><td>SALE</td><td class="out">−1</td><td>BILL#902</td><td>4</td></tr>
+      <tr><td>TRANSFER</td><td class="out">−2</td><td>TR#88</td><td>2</td></tr>
+      <tr><td>RETURN</td><td class="in">+1</td><td>EXCH#5</td><td>3</td></tr>
+    </table></div></div>
+    <p>This buys you four things a stored count can never give:</p>
+    <ul>
+      <li><b>Audit trail.</b> Every unit traces to a document. You can answer "why is on-hand 3?" exactly.</li>
+      <li><b>Self-healing.</b> A momentary wrong order (sell-before-inward → −1) is corrected by the next entry; the sum is always eventually right.</li>
+      <li><b>Time travel.</b> On-hand "as of last Tuesday" = sum of movements up to that date. Stock history for free.</li>
+      <li><b>Scale &amp; safety.</b> Tiny rows that never change are easy to index and impossible to corrupt by editing.</li>
+    </ul>
+    <div class="box ink"><p>📒 <b>The same pattern repeats across KDPS:</b> the vendor ledger (payables accrue per SOR sale), the return-allowance budget (drawn down per Correction return). Whenever the answer is "a balance," the right shape is almost always "a ledger you sum," not "a number you overwrite." Spot a stored running total being edited in place, and you've found the bug.</p></div>
+  </section>
+
+  <!-- 15 -->
+  <section class="sec" id="map">
+    <h2><span class="n">15</span> The KDPS schema at a glance</h2>
+    <p class="kick">How the core tables link</p>
+    <p>A rough map of the spine's main tables and their relationships (arrows point from the foreign key to the table it references):</p>
+    <pre><span class="cmt">MASTERS                         DOCUMENTS                  LEDGERS</span>
+brand   ─┐                       booking ──┐
+         ├─&lt; sku ─&lt; <span class="kw">(barcode)</span>      grn / shipment ─┤
+vendor ──┘         │             bill / sale ───┼──&gt; stock_movement   <span class="cmt">(stock balances)</span>
+store ────────────┘             transfer ──────┤
+                                 return ────────┴──&gt; vendor_ledger     <span class="cmt">(payables)</span>
+                                                └──&gt; return_allowance   <span class="cmt">(GR budget)</span>
+
+<span class="cmt">─&lt; means "one-to-many":  one brand has many SKUs;  one SKU has many movements.</span>
+<span class="cmt">Every document WRITES ledger rows. Nothing edits a balance directly.</span></pre>
+    <div class="box info"><p>🧭 <b>Reading any KDPS feature:</b> find which <i>master</i> it reads, which <i>document</i> it creates, and which <i>ledger</i> that document writes. That three-part trace — master → document → ledger — is the architecture's backbone, and it maps one-to-one onto tables here.</p></div>
+  </section>
+
+  <!-- 16 -->
+  <section class="sec" id="review">
+    <h2><span class="n">16</span> The reviewer's checklist</h2>
+    <p class="kick">What to actually look for — schema, query, migration</p>
+    <h3>Reviewing a schema</h3>
+    <ul>
+      <li>Stock/money is a <b>movement ledger</b> (append-only), not a <span class="inline">stock_qty</span> you overwrite.</li>
+      <li><b>Size &amp; colour</b> are their own columns — SKU = Style × Size × Colour survives.</li>
+      <li>The <b>commercial model lives on the brand</b> (one column), not copied per product.</li>
+      <li>Money columns are <span class="inline">NUMERIC</span>, never <span class="inline">FLOAT</span>; profit is <b>derived</b>, not a typed column.</li>
+      <li>Business rules are real constraints (<span class="inline">FOREIGN KEY</span>, <span class="inline">CHECK</span>, <span class="inline">NOT NULL</span>), not just hopes.</li>
+      <li>State/GST modelled as data (store → state GSTIN; dated tax rates), not hard-coded.</li>
+    </ul>
+    <h3>Reviewing a query</h3>
+    <ul>
+      <li>Three questions: <b>read or write? which table? what's the WHERE?</b></li>
+      <li>An <span class="inline">UPDATE</span>/<span class="inline">DELETE</span> with <b>no WHERE</b> → reject.</li>
+      <li>JOINs connect a foreign key to the primary key it points at.</li>
+      <li>Several related writes (stock + money + doc) → wrapped in one <b>transaction</b>?</li>
+    </ul>
+    <h3>Reviewing a migration</h3>
+    <ul>
+      <li>Adding tables/columns → safe. <b>Renaming/dropping</b> or type-changes → look hard, ask about data loss.</li>
+      <li>Any row back-fill → check its WHERE and that it's reversible.</li>
+    </ul>
+    <div class="box tip"><p>🗣️ <b>Your universal fallback question to the AI:</b> "Walk me through this table/query/migration — what's one row, what gets <i>added</i> versus <i>changed</i>, and where does the data end up?" If the honest answer involves overwriting a balance or an un-scoped write, push back.</p></div>
+  </section>
+
+  <!-- 17 -->
+  <section class="sec" id="gloss">
+    <h2><span class="n">17</span> Glossary</h2>
+    <dl class="gloss">
+      <dt>Table</dt><dd>A grid of rows (records) and columns (fields). One kind of thing per table.</dd>
+      <dt>Row / Column</dt><dd>A row is one record; a column is one field across all rows.</dd>
+      <dt>Schema</dt><dd>The blueprint — all the tables, columns, types, and links.</dd>
+      <dt>Primary key (PK)</dt><dd>A row's unique id within its table.</dd>
+      <dt>Foreign key (FK)</dt><dd>A column holding another table's id — the link between tables.</dd>
+      <dt>Constraint</dt><dd>A rule the database enforces on every write (NOT NULL, UNIQUE, CHECK, FK, DEFAULT).</dd>
+      <dt>Query</dt><dd>A request to the database, written in SQL.</dd>
+      <dt>SELECT / INSERT / UPDATE / DELETE</dt><dd>Read rows / add a row / change rows / remove rows.</dd>
+      <dt>WHERE</dt><dd>Filters which rows a statement affects or returns.</dd>
+      <dt>Aggregate</dt><dd>SUM, COUNT, AVG, MIN, MAX — many rows collapsed to one value.</dd>
+      <dt>GROUP BY / HAVING</dt><dd>Bucket rows for an aggregate / filter those buckets.</dd>
+      <dt>JOIN</dt><dd>Combine rows from two tables along their keys.</dd>
+      <dt>Index</dt><dd>A pre-sorted lookup that makes filtering/joining a column fast.</dd>
+      <dt>Transaction</dt><dd>A group of writes that all succeed or all fail together.</dd>
+      <dt>ACID</dt><dd>Atomic, Consistent, Isolated, Durable — the safety guarantees of a transaction.</dd>
+      <dt>Migration</dt><dd>A versioned, ordered change to the schema, applied identically everywhere.</dd>
+      <dt>Normalisation</dt><dd>Splitting data so each fact lives in exactly one place.</dd>
+      <dt>Snapshot</dt><dd>A deliberate copy of a value as it was at a moment (e.g. price at sale time).</dd>
+      <dt>Ledger (append-only)</dt><dd>A table you only ever add to; balances are summed, never stored.</dd>
+      <dt>NULL</dt><dd>"No value / unknown." Not zero, not blank. Test it with IS NULL.</dd>
+      <dt>NUMERIC vs FLOAT</dt><dd>Exact vs approximate decimals. Money must be NUMERIC.</dd>
+    </dl>
+    <a class="toplink" href="#big">↑ back to top</a>
+  </section>
+
+  </main>
+</div>
+
+<footer>
+  <p>Pairs with Lessons <a href="../lessons/0004-the-database-your-ledger-made-real.html">4</a> &amp; <a href="../lessons/0005-reading-a-query.html">5</a>, the <a href="schema-sanity-check.html">Schema Sanity-Check</a> and <a href="sql-reading-cheatsheet.html">SQL Reading</a> cards.
+  Sources: <a href="https://www.postgresql.org/docs/current/index.html">PostgreSQL documentation</a> · <a href="https://docs.frappe.io/">Frappe / ERPNext</a> · <a href="https://martinfowler.com/eaaDev/EventSourcing.html">Event Sourcing — Martin Fowler</a>.</p>
+  <p>KDPS Teaching Workspace · Reference Handbook · the database, end to end</p>
+</footer>
+
+</body>
+</html>

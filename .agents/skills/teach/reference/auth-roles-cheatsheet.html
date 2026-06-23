@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auth &amp; Roles Cheat Sheet — KDPS</title>
+<style>
+  :root{ --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --lock:#7c3aed; --lock-bg:#f5f3ff; --lock-line:#ddd6fe; --lock-deep:#5b21b6;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --amber-bg:#fff7ed; --amber-deep:#7c2d12; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; font-size:14.5px;}
+  .wrap{max-width:860px; margin:0 auto; padding:38px 24px 64px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:28px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:64ch; margin:0 0 16px}
+  h2{font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--lock-deep); margin:22px 0 8px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:5px}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:8px 0}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--lock-bg); color:var(--lock-deep); font-size:11.5px; text-transform:uppercase}
+  tr:last-child td{border-bottom:0}
+  td.c{text-align:center}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px 16px; break-inside:avoid}
+  .card h3{margin:0 0 8px; font-size:15px}
+  .card ul{margin:0; padding-left:18px} .card li{margin:5px 0}
+  .reflex{background:#1d2433; color:#e7ebf3; border-radius:12px; padding:14px 18px; margin:18px 0}
+  .reflex b{color:#ddd6fe}
+  .danger{background:var(--bad-bg); border:1px solid #fecaca; border-radius:12px; padding:12px 16px; margin:14px 0}
+  .danger b{color:#991b1b}
+  footer{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--lock); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} th,.reflex,.danger{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>Auth &amp; roles cheat sheet</h1>
+  <p class="lede">The lock on the Brain's door: who you are, and what you may do. Most real breaches happen here — this is the page to keep open during review.</p>
+
+  <h2>The two words</h2>
+  <div class="grid">
+    <div class="card"><h3>🪪 Authentication (authN)</h3><ul>
+      <li>"Who are you?" — proving identity</li>
+      <li>Done by logging in</li>
+      <li>Hotel: showing ID at the desk</li>
+    </ul></div>
+    <div class="card"><h3>🔑 Authorization (authZ)</h3><ul>
+      <li>"What may you do?" — permissions</li>
+      <li>Decided by your role</li>
+      <li>Hotel: your room key opens your room</li>
+    </ul></div>
+  </div>
+
+  <h2>Login flow</h2>
+  <table>
+    <tr><th>#</th><th>Step</th></tr>
+    <tr><td>1</td><td>User sends username + password</td></tr>
+    <tr><td>2</td><td>Brain checks it against a <b>hashed</b> copy (never plain text)</td></tr>
+    <tr><td>3</td><td>Brain returns a <b>token</b>: signed, says user + role + store + expiry</td></tr>
+    <tr><td>4</td><td>Screen sends the token with <b>every</b> later request (Brain is stateless)</td></tr>
+    <tr><td>5</td><td>Brain checks the token first; none/expired → <code>401</code></td></tr>
+  </table>
+
+  <h2>Roles (RBAC) — example</h2>
+  <table>
+    <tr><th>Action</th><th class="c">Cashier</th><th class="c">Manager</th><th class="c">Owner</th></tr>
+    <tr><td>Make a sale</td><td class="c">✅</td><td class="c">✅</td><td class="c">✅</td></tr>
+    <tr><td>Big discount</td><td class="c">❌</td><td class="c">✅</td><td class="c">✅</td></tr>
+    <tr><td>See profit</td><td class="c">❌</td><td class="c">❌</td><td class="c">✅</td></tr>
+    <tr><td>Edit master data</td><td class="c">❌</td><td class="c">❌</td><td class="c">✅</td></tr>
+    <tr><td>See other stores</td><td class="c">❌</td><td class="c">own</td><td class="c">all</td></tr>
+  </table>
+
+  <div class="danger">
+    🚩 <b>Three classic mistakes to catch:</b>
+    <table style="margin-top:8px">
+      <tr><td><b>Trusting the request's role</b></td><td><code>req.body.role</code> can lie → read <code>req.user.role</code> from the token</td></tr>
+      <tr><td><b>Screen-only lock</b></td><td>greyed-out button but no endpoint check → fake; check in the Brain</td></tr>
+      <tr><td><b>Broken access control</b></td><td>logged-in ≠ allowed this record → check the user may see <i>this</i> store/row (change <code>/stores/7</code>→<code>/stores/3</code> must 403)</td></tr>
+    </table>
+  </div>
+
+  <div class="reflex">
+    🧭 <b>Reviewer's lens:</b> &nbsp;(1) role from the <b>token</b>, not the request? &nbsp;(2) checked in the <b>Brain</b>, not just the screen? &nbsp;(3) allowed <b>this</b> record, not just logged in? &nbsp;(4) passwords <b>hashed</b>? &nbsp;(5) tokens <b>expire</b>?
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0008-who-is-allowed.html">Lesson 8</a>; sits beside <a href="backend-api-cheatsheet.html">Backend / API</a> &amp; <a href="backend-rules-cheatsheet.html">Backend Rules</a>. Source: <a href="https://owasp.org/Top10/A01_2021-Broken_Access_Control/">OWASP — Broken Access Control</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · auth &amp; roles</p>
+  </footer>
+</div>
+</body>
+</html>

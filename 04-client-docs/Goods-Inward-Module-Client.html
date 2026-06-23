@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — Goods Inward Module</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:22px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:22px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  h3{font-size:11.5pt; margin:14px 0 4px; color:var(--navy); page-break-after:avoid;}
+  p{margin:7px 0;}
+  ul{margin:7px 0; padding-left:20px;}
+  li{margin:3px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .flow{font-size:10.5pt; margin:10px 0; padding:10px 12px; background:var(--soft); border:1px solid var(--line); border-radius:6px;}
+  .flow b{color:var(--navy);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 10px; margin:10px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;}
+  .ask li{margin:7px 0;}
+  .ask .note{color:var(--muted); font-size:10pt;}
+  footer{margin-top:26px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · System Design</div>
+  <h1>Goods Inward Module</h1>
+  <p class="sub">How stock moves from vendor delivery to ready-to-sell at the store — receipt, verification, pricing, barcoding and allocation to stores.</p>
+</header>
+
+<div class="scope">
+  <strong>Scope — Version 1:</strong> Both branded and non-branded goods inward are built in Version 1. Non-branded vendor records, agents and bookings come in Version 2; a non-branded delivery can still be received and made sellable in Version 1 without a booking.
+</div>
+
+<section>
+<h2><span class="num">1.</span>Two types of inward</h2>
+<ul>
+  <li><strong>Branded</strong> — the delivery has all three: an invoice, a barcode on every item, and a retrievable PT/PDF file from the brand. Goods may arrive in several lots.</li>
+  <li><strong>Non-branded</strong> — invoice only. No item barcodes and no brand PT file. The style-code is the only reliable detail.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">2.</span>Branded — flow</h2>
+<p>Two paths, by where the goods land:</p>
+<div class="flow"><b>Store delivery</b> (most common) — Goods + invoice at store → store operator logs in and receives against the order, marking the quantity that arrived line by line and noting anything short or damaged → presses Done → warehouse person reviews, finalises the GRN and converts the PT → Patna inwards → store scans the items → sellable.</div>
+<div class="flow"><b>Warehouse delivery</b> — Goods + invoice at warehouse → counted, checked and GRN'd at the warehouse → PT converted → Patna inwards → split and allocated to stores → store scans → sellable.</div>
+<ul>
+  <li>The vendor barcode is kept. No new barcode is made for branded goods.</li>
+  <li>PT conversion turns the brand's own file into the KDPS PT format using fixed per-brand rules, built from each brand's PT format. The brand's price and tax details carry across.</li>
+  <li>A store-delivered shipment can be redistributed from one store to another.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">3.</span>Non-branded — flow</h2>
+<ul>
+  <li>Upload the invoice (PDF or photo); the system reads it into item lines — style-code, quantity and price.</li>
+  <li>A simple GRN is made for what was received (there is no order to check against).</li>
+  <li>The system shows, in a chat, what it filled and what is missing. Missing details are filled through pick-or-type boxes — size/unit, colour tier, category, season, GST% — drawn from the master lists. Anything not known is asked of the vendor by phone.</li>
+  <li>The system checks the item registry and reuses the item if the same vendor + style-code + size was seen before, instead of creating a duplicate.</li>
+  <li>Output: an editable PT file (Excel) that can be reviewed and corrected before inward.</li>
+  <li>Barcode: if the goods already carry a barcode, it is kept; if not, the barcode is generated by the POS software and the warehouse operator fills the barcode column.</li>
+  <li>Warehouse check → Patna inwards → allocated to stores → sellable.</li>
+  <li>MRP for untagged goods = base price + 1.1% transport + GST + a per-category margin (30–35%, adjustable). The transport, tax and margin are calculated automatically.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">4.</span>Goods receipt (GRN)</h2>
+<ul>
+  <li><strong>Branded:</strong> the order list pre-fills the GRN; the receiver records what physically arrived and notes anything short or damaged, then generates the GRN.</li>
+  <li><strong>Non-branded:</strong> a simple receipt of what arrived, with no order to compare against.</li>
+  <li>One delivery can have many GRNs — stock can arrive over several lots.</li>
+  <li>A short or extra quantity is recorded as a difference against the order and tracked to a close-out; it does not stop the goods from moving forward to sale.</li>
+  <li>Over-receipt — items or sizes not on the order — can be received on the same screen, with a remark.</li>
+  <li>Every GRN carries two names, taken from logins: who counted and who finalised.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">5.</span>Damage</h2>
+<ul>
+  <li>At arrival, goods are counted in. Each piece is not inspected for damage at this stage.</li>
+  <li>Damage is checked at the point of selling, in the store.</li>
+  <li>Damage can still be flagged at arrival if seen; a flagged piece is held as not-sellable. It never stops the count.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">6.</span>Item identity and barcode</h2>
+<ul>
+  <li>An item is identified by <strong>brand + style-code + colour + size</strong>. Stock is counted at this level, not at style level alone.</li>
+  <li><strong>One barcode = one item identity.</strong> The same barcode covers all pieces of that item; stock is the count under that barcode. Five identical pieces = one barcode, quantity five.</li>
+  <li><strong>Season</strong> is recorded on every item. The same style-code in a new season is tracked separately, told apart by the season name.</li>
+  <li><strong>Colour, non-branded:</strong> when the invoice gives no colour, a price tier — Premium / Medium / Economy — is put in the colour in place of a real colour.</li>
+  <li><strong>Size, non-branded:</strong> when the invoice gives no size, the item is "Free Size."</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">7.</span>Cost and checks</h2>
+<ul>
+  <li>Cost of a piece = landed price, excluding GST — the purchase rate after discounts, plus its share of freight and charges, minus GST. It is fixed at inward and not changed afterwards.</li>
+  <li>Profit is derived — sale price from POS minus this cost — not entered by hand.</li>
+  <li><strong>Warehouse check:</strong> the converted PT is auto-checked for blank required fields, tax and HSN; only problems are flagged for the person to fix.</li>
+  <li><strong>Patna inward:</strong> GST and margin are auto-checked; clean items are bulk-approved and only flags are reviewed. Inward is done by a person at Patna, and is the point the stock becomes official in the system.</li>
+</ul>
+</section>
+
+<section>
+<h2><span class="num">8.</span>Store allocation</h2>
+<ul>
+  <li>The warehouse proposes how to split a delivery across stores; Patna confirms and inwards per store. Each store sees only its own stock.</li>
+  <li>Splitting is manual in Version 1.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">9.</span>Link with POS (Ten Software)</h2>
+<p>Selling, scanning goods in at the store, and stock-on-hand stay in the POS. The KDPS system feeds it and reads back from it.</p>
+<table>
+  <tr><th>Direction</th><th>What moves</th></tr>
+  <tr><td>KDPS system → POS</td><td>Item master + price (barcode, MRP, tax/HSN, brand, season); pending-inward quantity per store; later, offer/EOSS rules.</td></tr>
+  <tr><td>POS → KDPS system</td><td>Line-item sales per bill; stock-on-hand per store; daily collection (cash, UPI, card).</td></tr>
+</table>
+<p>The sales and stock read back are used for reconciliation and reporting. The shared key between both systems is the <strong>barcode</strong>.</p>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — Goods Inward Module (Version 1). 16 June 2026.
+</footer>
+
+</div>
+</body>
+</html>

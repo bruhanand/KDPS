@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Analytics &amp; Intelligence: Living Design</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --red:#a8331f; --red-bg:#fae9e6;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:36px 30px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:18px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:28px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .status{font-size:13.5px;color:var(--muted)}
+  .status b{color:var(--green)}
+  .tabs{display:flex; gap:8px; margin:20px 0 0; border-bottom:2px solid var(--line)}
+  .tab{appearance:none;border:none;background:none;cursor:pointer;font:inherit;font-weight:700;
+    font-size:14.5px;color:var(--muted);padding:10px 16px;border-bottom:3px solid transparent;margin-bottom:-2px}
+  .tab.active{color:var(--navy);border-bottom-color:var(--rust)}
+  .tabpane{display:none;margin-top:8px} .tabpane.active{display:block}
+  section{margin:30px 0; scroll-margin-top:18px}
+  h2.sec{font-size:19px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 6px}
+  .framing{color:var(--muted); font-size:14px; margin:6px 0 12px; max-width:74ch}
+  h3{font-size:15.5px; color:var(--navy2); margin:20px 0 6px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-lock{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:2px 0 8px; font-size:15px; color:var(--navy)}
+  .callout{border-radius:12px; padding:12px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:#f3f1fb; border-color:#dcd3f3}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-note{background:var(--amber-bg); border-color:#ecd9a6}
+  .callout .ct{font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; display:block; margin-bottom:6px}
+  .co-key .ct{color:var(--purple)} .co-dep .ct{color:var(--blue)} .co-note .ct{color:var(--amber)}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:20px} li{margin:5px 0}
+  code,.k{background:#eef0f4; padding:1px 6px; border-radius:5px; font-size:13px; font-family:ui-monospace,Menlo,monospace; color:var(--navy2)}
+  .src{font-size:12px; color:var(--muted); margin:6px 0 0}
+  .gq{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:14px 0}
+  .gq .qh{font-weight:700;color:var(--navy);font-size:15px;margin-bottom:4px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+  .opt{margin:4px 0}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS · D7 · Analytics &amp; Intelligence — Living Design</div>
+  <h1>Analytics &amp; Intelligence — design in progress</h1>
+  <p class="status">Status: <b>grilling in progress</b> · updated 19 Jun 2026 · All 9 grills locked · design complete · client doc next ·Research basis: <a href="analytics-research.html">analytics-research.html</a> · <a href="../05-offers/markdown-ai-research.html">markdown-ai-research.html</a></p>
+  <div class="tabs">
+    <button class="tab active" onclick="showTab(event,'design')">① System Design</button>
+    <button class="tab" onclick="showTab(event,'log')">② Decisions &amp; Grilling Log</button>
+  </div>
+</header>
+
+<!-- ============================ TAB 1 ============================ -->
+<div id="design" class="tabpane active">
+
+  <section>
+    <h2 class="sec">The shape</h2>
+    <ul>
+      <li><strong>Read-only "brain"</strong> — reads ledgers + masters + POS pull; writes only messages, reports, suggestions. A human always decides. (Rule 8)</li>
+      <li><strong>One spine of numbers</strong> — every metric defined once (semantic/metrics layer), computed by deterministic code.</li>
+      <li><strong>Code computes, AI narrates</strong> — the LLM only phrases / explains / translates to Hindi; it never calculates.</li>
+      <li><strong>Copilot, not autopilot</strong> — AI suggests → a human approves.</li>
+      <li><strong>Delivered</strong> — WhatsApp for owners; drill-down screens for head office.</li>
+      <li><strong>Built crawl → walk → run</strong> — rules now, ML later wraps them.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Foundation — the data spine <span class="badge b-lock">direction set · Grill 0 = A</span></h2>
+    <p class="framing">Analytics builds its own read-side <strong>canonicalization crosswalk</strong> now (doesn't wait for D8); the crosswalk later seeds the D8 masters.</p>
+
+    <div class="callout co-key">
+      <span class="ct">Key insight — 19 Jun (from the KDPS brand-code sheet)</span>
+      The brand codes are <strong>a structured scheme, not random dirt.</strong> Each code = Brand + Division (Mens / Womens / Kids), with several codes per brand. So there is a real key to map on — the crosswalk is easier <em>and</em> can preserve a hierarchy instead of flattening.
+    </div>
+
+    <h3>Canonical brand model — a hierarchy (merge <em>and</em> preserve)</h3>
+    <p class="framing">Confirmed 19 Jun: the extra codes are <strong>sub-brands</strong>. Rolled up to brand, it's the brand only.</p>
+    <table>
+      <tr><th>Level</th><th>Example</th><th>Use</th></tr>
+      <tr><td><strong>Supplier</strong> (= the vendor)</td><td>Aditya Birla Lifestyle Brands Ltd (Madura)</td><td>Who we buy from &amp; pay; ties to the D1 vendor master</td></tr>
+      <tr><td><strong>Brand</strong> (rollup)</td><td>Louis Philippe · Van Heusen · Allen Solly</td><td>Brand-level analytics &amp; the monthly brand pack</td></tr>
+      <tr><td><strong>Sub-brand</strong></td><td>V Dot · LP Sport · Allen Solly Womens/Junior</td><td>Drill-down; preserved (Rule 9), collapsed for brand reports</td></tr>
+      <tr><td><strong>Raw code</strong> (source key, kept)</td><td><code>LP</code>, <code>VD</code>, <code>AS</code></td><td>Join key from POS/PT; never lost; resolves to a sub-brand</td></tr>
+    </table>
+    <ul>
+      <li><strong>Merge</strong> codes for brand rollups; <strong>preserve</strong> the sub-brand — don't throw away a real distinction (Rule 9).</li>
+      <li>Division (Mens / Womens / Kids) rides on the sub-brand (e.g. "Allen Solly Womens").</li>
+      <li>Crosswalk = a human-curated map + fuzzy auto-suggest for the long tail.</li>
+      <li>Also normalise <strong>season labels</strong> to one cohort key; <strong>quarantine</strong> impossible rows (cost &gt; MRP).</li>
+      <li><strong>Data-trust score</strong> — show coverage ("x% of units mapped to a clean brand + season") rising as the map fills.</li>
+    </ul>
+
+    <div class="callout co-dep">
+      <span class="ct">This is shared master data, not analytics-only</span>
+      Supplier → Brand → Sub-brand is a Layer-0 master the whole system needs (vendor mgmt, PT, offers, reports). Analytics is just first to need it clean — so the crosswalk it builds now (Grill 0 = A) is what <strong>D8 later promotes into the official master</strong>, and <strong>Supplier = the vendor record from D1</strong>.
+    </div>
+
+    <h3>Reference data provided by KDPS (19 Jun)</h3>
+    <ul>
+      <li><strong>Brand-code sheet</strong> (image) → code → brand + division — the seed for the code crosswalk.</li>
+      <li><strong>SUPPLIER BRAND DETAILS.xlsx</strong> → the supplier↔brand master: <strong>1,163 brand names, 281 suppliers</strong>. Multi-brand distributors are huge (SSS = 176 brands, Variety Textile = 175); branded houses smaller (Aditya Birla/Madura = Van Heusen, Louis Philippe, Allen Solly…).</li>
+      <li><strong>Supplier names are dirty too:</strong> "Madura Pvt Ltd" and "Aditya Birla Lifestyle Brands Ltd" = the same house under two names → canonicalize at supplier level as well.</li>
+    </ul>
+
+    <h3>Seed crosswalk — the branded houses (19 Jun)</h3>
+    <table>
+      <tr><th>Code(s)</th><th>Sub-brand / division</th><th>Brand</th><th>Supplier</th></tr>
+      <tr><td>AH</td><td>Allen Solly Womens</td><td>Allen Solly</td><td>Aditya Birla (Madura)</td></tr>
+      <tr><td>AK</td><td>Allen Solly Kids/Junior</td><td>Allen Solly</td><td>Aditya Birla (Madura)</td></tr>
+      <tr><td>AS · AT · AL</td><td>Allen Solly Mens sub-brands</td><td>Allen Solly</td><td>Aditya Birla (Madura)</td></tr>
+      <tr><td>VW</td><td>Van Heusen Womens</td><td>Van Heusen</td><td>Aditya Birla (Madura)</td></tr>
+      <tr><td>VD · VF · VH · VS · VX</td><td>Van Heusen Mens sub-brands (VD = V Dot, …)</td><td>Van Heusen</td><td>Aditya Birla (Madura)</td></tr>
+      <tr><td>LA · LP · LR · LY</td><td>Louis Philippe Mens sub-brands</td><td>Louis Philippe</td><td>Aditya Birla (Madura)</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="sec">The seven products</h2>
+    <table>
+      <tr><th>Product</th><th>One line</th></tr>
+      <tr><td><strong>Daily owner digest</strong></td><td>9 PM WhatsApp exception feed — ≤5 numbers, leaderboard, 1 anomaly line, ≤5 alerts</td></tr>
+      <tr><td><strong>Report-maker</strong></td><td>The monthly brand pack (Sale + SOH + discount audit) + the month-end target hold-back, productized</td></tr>
+      <tr><td><strong>Profitability &amp; scorecard</strong></td><td>Per-model margin · leakage waterfall · Margin × Velocity scorecard (own vs SOR split)</td></tr>
+      <tr><td><strong>Dead-stock &amp; markdown</strong></td><td>Aging hunter + markdown ladder (margin floor) + the V-flip trigger — suggest → approve</td></tr>
+      <tr><td><strong>Forecast &amp; replenishment</strong></td><td>Rate-of-sale · analogy · regional size curves · reorder &amp; inter-store rebalancing suggestions</td></tr>
+      <tr><td><strong>Anomaly &amp; leakage watchdog</strong></td><td>Discount-leakage (billed≠offer) · cash-deposit ranking · data-error flags — flag &amp; rank, never block</td></tr>
+      <tr><td><strong>Conversational AI</strong> (narrator)</td><td>LLM writes the Hindi narrative &amp; "why did this move?"; free-form Q&amp;A deferred</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 1 · The daily owner digest <span class="badge b-lock">shape locked · Grill 2</span></h2>
+    <ul>
+      <li><strong>Shape: hybrid (C)</strong> — a small text summary on top, then what needs attention, then the numbers lower.</li>
+      <li><strong>Top = percentages / direction only</strong> (vs target, vs last week, margin %) — <strong>no absolute ₹ up top</strong> (Anand, 19 Jun): keeps the notification preview light.</li>
+      <li><strong>Money sits lower</strong> — sales ₹, margin ₹, bills/avg, and the store leaderboard.</li>
+      <li><strong>Cadence:</strong> 9 PM close (client ask). Morning nudge / Monday deep-dive — later.</li>
+      <li><strong>Discipline:</strong> small % summary · one "unusual today" line · ≤5 ranked exceptions · numbers lower. Leave the rest out.</li>
+    </ul>
+    <h3>The 9 PM message — agreed layout</h3>
+    <pre style="background:#f3f4f7;border:1px solid var(--line);border-radius:10px;padding:14px 16px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;overflow:auto;margin:8px 0">KDPS · Mon 19 Jun · 9:00 PM
+
+✅ Good day — +12% vs target, +9% vs last Monday.
+   Margin healthy ~33%. Patna &amp; Boring Rd led;
+   Ranchi-2 slow on a stockout.
+
+⚠️ Unusual: Van Heusen did 2× a normal Monday (EOSS).
+
+🔔 Needs a look (3):
+ 1. Ranchi-2 is 32% below target — reply 1
+ 2. LP slim-fit 32 out of stock in 4 stores — reply 2
+ 3. Allen Solly over-discounted, gap ~₹3,200 — reply 3
+
+— — the numbers — —
+ • Sales  ₹18.4L  (target ₹16.4L)
+ • Margin ₹6.0L   (33%)
+ • Bills   412 · avg ₹4,466
+ 🏆 Patna-Main ₹3.1L · Boring Rd ₹2.4L · Bhagalpur ₹2.0L
+ 🐌 Ranchi-2 ₹0.4L · Gaya ₹0.6L
+
+Reply a number for detail.</pre>
+
+    <h3>Roles &amp; alert routing <span class="badge b-lock">model 2 · roles proposed 19 Jun</span></h3>
+    <p class="framing">Standard-practice hierarchy (actual employees named after the system design is signed off). Functional mailboxes + escalation — respective people get respective interrupts.</p>
+    <table>
+      <tr><th>Role</th><th>Owns</th><th>Gets from analytics</th></tr>
+      <tr><td><strong>Owner / Director</strong></td><td>The whole business</td><td>Curated 9 PM digest + escalations + weekly deep-dive</td></tr>
+      <tr><td><strong>Head of Business Development</strong></td><td>Growth, new stores, brand tie-ups</td><td>Brand &amp; store/region performance, profitability trends (strategic, not ops pings)</td></tr>
+      <tr><td><strong>Head of Operations</strong></td><td>All stores' day-to-day; store managers report up</td><td>Network ops alerts: store not opened, terminal down, stockouts, stuck transfers; escalation point for store managers</td></tr>
+      <tr><td><strong>Account Manager</strong></td><td>Suppliers &amp; buying — data is fed to him, he makes the calls</td><td>Dead stock, broken sizes, reorder/replenishment, SOR return-window deadlines, supplier/brand performance</td></tr>
+      <tr><td><strong>Finance</strong></td><td>Money</td><td>Cash short, deposit gaps, discount leakage, payment due dates, profitability/margin</td></tr>
+      <tr><td><strong>Store Manager</strong> (×~50)</td><td>Their one store</td><td>Their store's sales vs target, opening, terminal, stockouts, local dead stock</td></tr>
+    </table>
+    <ul>
+      <li><strong>Escalation chain</strong> (standard): Store Manager → Head of Operations → Owner · Account Manager → Owner · Finance → Owner. Exact timing / who-pings-whom → client call.</li>
+      <li>Feeds <strong>D4 (roles &amp; permissions)</strong>; actual employee names/positions confirmed after the deal.</li>
+    </ul>
+
+    <h3>Working definitions <span class="badge b-open">thresholds → dead-stock grill</span></h3>
+    <table>
+      <tr><th>Term</th><th>Working definition</th></tr>
+      <tr><td><strong>Dead stock</strong></td><td>An item (barcode = brand×style×colour×size, in its season cohort) with <strong>zero sales for N days</strong> and an <strong>old cohort</strong>; valued at frozen cost. <strong>N is a per-brand dial</strong> (fast ~60–90d, slow ~120–180d). Fresh-season stock is never condemned.</td></tr>
+      <tr><td><strong>Broken size</strong></td><td>A style still holds stock, but its <strong>core/sellable sizes are sold out</strong> — only fringe sizes (e.g. 38, 44) remain. Costs: invisible lost full-price sales + leftover odd sizes become markdown fodder. Uses the PT size data as its input — it's a <strong>pattern across sizes within a style</strong>, per store.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 2 · The report-maker <span class="badge b-open">Grill 4</span></h2>
+    <h3>What it is</h3>
+    <ul>
+      <li>The monthly <strong>brand-facing settlement / reporting pack</strong>: two sheets — <strong>Sale</strong> (List of Sales Vouchers) + <strong>SOH</strong> (List of Stock Details), in the exact KDPS format ("Voucher Series : {BRAND}").</li>
+      <li>Generated <strong>per brand × per store × month</strong> (e.g. LP April 2026 = 6 store files: AS-DEO · Bokaro · Dumka · HZB · Sanskar · Vas-Deo).</li>
+      <li>Sale cols: Date · Vch/Bill No · Particulars · Item Details · Brand · Size · Style Code · Barcode · Unit · Qty · Price · Dis% · Dis · Total. SOH cols: Date · Item Details · Barcode · Size · Style Code · Brand · Qty · Unit · MRP · Total MRP.</li>
+    </ul>
+    <h3>Today vs the new system</h3>
+    <table>
+      <tr><th>Today (manual / skills)</th><th>New system (clean export)</th></tr>
+      <tr><td>Gather varied raw files from each store; map columns by meaning</td><td>Read clean sales straight from the system (one source)</td></tr>
+      <tr><td>Fabricate missing bill numbers / dates (fragile)</td><td>Real bill numbers &amp; dates already captured</td></tr>
+      <tr><td>Hand-apply discounts via AMM List + offer-list clubbing</td><td>Per-line discount = what the offer rulebook applied at sale — just read it</td></tr>
+      <tr><td>Build SOH from a separate stock file</td><td>Closing SOH from the stock ledger</td></tr>
+    </table>
+    <p class="framing">So the report-maker becomes a <strong>clean one-click export in the exact format</strong> — the manual rebuild pain disappears. The one genuinely new D7 feature is the target hold-back.</p>
+    <h3>The target hold-back <span class="badge b-lock">direction locked · 19 Jun</span></h3>
+    <ul>
+      <li>The brand-facing report is a <strong>flexible presentation layer</strong> — to hit targets and maximise what KDPS earns from the brand, bills can be re-dated, re-numbered and shifted between two adjacent months.</li>
+      <li><strong>Now:</strong> system suggests → human approves. <strong>Goal:</strong> automatic (its own discussion later).</li>
+      <li><strong>Guardrail:</strong> the bending lives only in the brand-report layer; the real ledgers + Tally/GST/cash stay truthful (Rule 4). How the two reconcile = part of the deferred hold-back discussion.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 3 · Profitability &amp; margin <span class="badge b-lock">depth locked · Grill 5</span></h2>
+    <ul>
+      <li><strong>Headline = trading + contribution margin (B)</strong> — derived from frozen PT cost × POS revenue; honest, day-one. Full net store P&amp;L (C, Tally opex) added later as a flagged estimate. Scope kept open.</li>
+      <li><strong>Per commercial model:</strong> owned (Outright/Correction) → margin ₹ + GMROI; SOR/Consignment → margin% + margin-₹-per-shelf-slot (no GMROI — no owned cash at risk).</li>
+      <li><strong>Margin-leakage waterfall:</strong> MRP → −markdown → −free gifts → −returns → net, so "low margin" is attributable.</li>
+      <li><strong>Scorecard:</strong> Realisation × Velocity quadrant (Lean-in · Defend · Churn · Pull-back), owned vs SOR on separate boards; stores scored on peer-percentile.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 4 · Dead-stock &amp; markdown <span class="badge b-lock">Grill 6</span></h2>
+    <ul>
+      <li><strong>Classification = combined age × velocity matrix</strong> — start age/season (day-one from the cohort), layer velocity (Hot/Warm/Cold/Dead) as sales history builds. Thresholds per brand (Account Manager tunes).</li>
+      <li><strong>Markdown helper</strong> (from Offers §7): age + sell-through + margin floor → suggested band + plain-Hindi reason → a human authors the offer. Crawl→walk→run; feeds D5.</li>
+      <li><strong>Action per model:</strong> SOR/Consignment → return in window · owned selling elsewhere → transfer · selling nowhere → markdown · past window → V-flip.</li>
+      <li><strong>Routes to</strong> Account Manager + store manager. Every output is a suggestion a human confirms.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 5 · Anomaly &amp; leakage watchdog <span class="badge b-lock">Grill 7</span></h2>
+    <ul>
+      <li><strong>Flag &amp; rank for a human, never block.</strong> No CCTV → human review is the verification; a flag is a suspicion, not proof.</li>
+      <li><strong>Day-one rules:</strong> discount-leakage (billed ≠ offer) per store/brand · cash-deposit shortfall ranking · data errors (cost&gt;MRP, duplicate bills, stuck transfers, persistent negative stock).</li>
+      <li><strong>Leakage depth (C):</strong> per-cashier leakage score + a flag→review→confirm/dismiss→learn loop — the tool against hand-keyed-placard pocketing.</li>
+      <li><strong>Rules day-one → statistics month-3+</strong> (z-score, peer-cluster, seasonal baselines). LLM narrates a flag, never computes it. Routes per the role table.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 6 · Forecasting &amp; replenishment <span class="badge b-lock">Grill 8</span></h2>
+    <ul>
+      <li><strong>Full cold-start engine now</strong> (suggest-only): rate-of-sale · analogy forecast for new styles · regional size curves · weeks-of-cover reorder · inter-store rebalancing suggestions · broken-size alerts.</li>
+      <li><strong>Honest accuracy:</strong> new-product ~40–55% (WAPE) — "narrow the decision", not "predict the number". Conditional on the Grill-0 cleanup. Set in writing with the client.</li>
+      <li><strong>ML "Fashion Demand AI"</strong> (demand-sensing, elasticity, weather, promo-uplift) — <strong>future roadmap</strong>, once 2–3 clean seasons exist.</li>
+      <li><strong>Feeds</strong> the inbound store-split, the markdown helper, and the digest.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Product 7 · Conversational AI <span class="badge b-lock">Grill 9</span></h2>
+    <ul>
+      <li><strong>V1 = narrator only.</strong> The LLM writes the Hindi/English digest line, explains "why did this move?", and translates — always from numbers the code computed. It never calculates.</li>
+      <li><strong>Foundation is built agent-ready:</strong> the semantic/metrics layer is exposed as <strong>read-only, role-scoped data tools (function-calling)</strong> — so any agent plugs on top later by <em>calling the tools</em>, never raw SQL on the messy DB.</li>
+      <li><strong>Deferred conversational agent = a low-cost bolt-on; off-the-shelf open-source is fine</strong> (e.g. an OpenClaw-style runner + a Hermes-class function-calling model). It fetches &amp; answers within each person's scope.</li>
+      <li><strong>Two rails:</strong> read-only — it fetches &amp; tells, never acts on the books (Rule 8); grounded via our tools — not "self-learning" on live data (we control what it sees).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2 class="sec">Open threads</h2>
+    <ul>
+      <li><span class="badge b-lock">Grill complete</span> All 9 locked. Next: the client confirmation doc (<code>04-client-docs/Analytics-AI-Module-Client.html</code>).</li>
+      <li>Hold-back <strong>auto mechanic</strong> + how the bent brand report reconciles with the statutory books — its own discussion, deferred.</li>
+      <li>Escalation hierarchy (who-pings-whom) · actual employee names/positions — both via the client, after sign-off.</li>
+      <li>Digest follow-ups — morning nudge / Monday deep-dive · WhatsApp provider.</li>
+      <li>The read-model &amp; dashboard surface — build in-app vs embed a BI tool (Metabase). <em>(Parked: stack choice is later.)</em></li>
+      <li><strong>Parked for their own discussions:</strong> hold-back auto-mechanic &amp; reconciliation · full net P&amp;L (C) · build-vs-buy surface (stack) · escalation hierarchy &amp; employee names (client).</li>
+    </ul>
+  </section>
+</div>
+
+<!-- ============================ TAB 2 ============================ -->
+<div id="log" class="tabpane">
+
+  <section>
+    <h2 class="sec">Decisions &amp; grilling log</h2>
+    <p class="framing">One entry per fork. Options weighed → decision → why → evidence. Newest open item last.</p>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 0 · The data foundation — handling dirty data, given master clean-up is D8 (later)</span> <span class="badge b-lock">Locked · A · 19 Jun</span></div>
+      <p><strong>Fork:</strong> does analytics clean brand/season data itself, or wait for D8?</p>
+      <div class="opt"><strong>A ★ chosen</strong> — analytics builds its own read-side canonicalization crosswalk now; seeds D8.</div>
+      <div class="opt">B — keep analytics "dumb", show as-is, wait for D8. <em>(Rejected: every brand/season number wrong until D8.)</em></div>
+      <div class="opt">C — pull D8 earlier, clean masters first. <em>(Rejected: delays the whole layer behind a big project.)</em></div>
+      <div class="opt">D — minimal alias table only, no season fix. <em>(Rejected: aging stays unreliable.)</em></div>
+      <p><strong>Why A:</strong> the only way to be correct now without blocking on D8, and it is not throwaway — the crosswalk is exactly what D8 later promotes into the masters. Also powers the data-trust score.</p>
+      <p><strong>Scope note:</strong> A means D7 owns a slice of master-data cleanup that nominally belongs to D8 — Anand gave an explicit nod (19 Jun).</p>
+      <p><strong>New input:</strong> Anand provided the KDPS brand-code mapping sheet (transcribed as the seed crosswalk in Tab 1) and confirmed he is driving brand/data normalization. The codes are a structured scheme (Brand + Division), not random errors → canonical model becomes a hierarchy.</p>
+      <p class="src">Evidence: RudderStack / Senzing (entity resolution is a read-side discipline) · Profisee / TheDataOps (crosswalk seeds MDM) · Vandeput (garbage-in-garbage-out on dirty brand/season).</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 1 · What do the multiple per-brand codes represent?</span> <span class="badge b-lock">Locked · sub-brand · 19 Jun</span></div>
+      <p><strong>Answer (Anand):</strong> the extra codes are <strong>sub-brands</strong>. Structure = <strong>Supplier → Brand → Sub-brand</strong>; rolled up to brand, it is the brand only.</p>
+      <p><strong>Model:</strong> raw code → sub-brand → brand (rollup) → supplier (= the D1 vendor). Merge for brand reports; preserve the sub-brand as a drill-down (Rule 9).</p>
+      <p><strong>Evidence provided:</strong> SUPPLIER BRAND DETAILS.xlsx — 1,163 brands, 281 suppliers; Aditya Birla/Madura = Van Heusen, Louis Philippe, Allen Solly (+ Womens/Junior). Supplier names are themselves dirty (Madura Pvt Ltd vs Aditya Birla Lifestyle Brands Ltd) → canonicalize suppliers too.</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 2 · The daily owner digest — shape, content &amp; cadence</span> <span class="badge b-lock">Locked · hybrid · 19 Jun</span></div>
+      <p><strong>Decision:</strong> hybrid (C). Small text summary on top in <strong>percentages / direction only</strong> (vs target, vs last week, margin %); <strong>absolute money moved lower</strong> (Anand). Then one "unusual" line + ≤5 ranked exceptions; leaderboard with the numbers lower. 9 PM close.</p>
+      <p><strong>Why:</strong> keeps the reassurance + the subtraction discipline; the top stays light (good for the notification preview), detail sits below.</p>
+      <p class="src">Evidence: incident.io (exception discipline, ≤3% of alerts actionable) · WA.Expert (leaderboard drives engagement) · OneUptime (3 tiers).</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 3 · Alert routing — who gets interrupted by what</span> <span class="badge b-lock">Locked · model 2 · 19 Jun</span></div>
+      <p><strong>Decision:</strong> functional mailboxes + escalation (model 2). Real-time interrupts before 9 PM = yes; ping-everything = no. Routing by responsibility (Anand):</p>
+      <ul>
+        <li>A store's own sales / opening / terminal → <strong>that store manager</strong></li>
+        <li>Operations + cash/finance (deposits, leakage, transfers) → <strong>operations/finance person</strong> (head office)</li>
+        <li>Dead stock + broken sizes → <strong>store manager + operations</strong></li>
+        <li>Critical &amp; unacknowledged → <strong>escalates up → owner</strong></li>
+        <li>Owner → curated few + the 9 PM digest</li>
+      </ul>
+      <p><strong>Parked / open:</strong> escalation hierarchy (who-pings-whom) → set with the client, Anand's call · <strong>"buyer" role dropped</strong> (buying is owner/central — confirming who) · "operational finance" = one combined head-office role or two?</p>
+      <p class="src">Evidence: DTIQ / Agilence (route exceptions by responsibility) · Datadog / PagerDuty / incident.io (escalation, ack stops the climb).</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Roles &amp; hierarchy — standard-practice structure</span> <span class="badge b-lock">Proposed · 19 Jun</span></div>
+      <p><strong>From Anand's client call:</strong> Owner/Director · Head of Business Development · Head of Operations · Account Manager · Finance · Store Managers. The <strong>Account Manager</strong> manages all suppliers — the data is fed to him and he makes the buying / reorder / dead-stock calls (answers the earlier "who is the buyer?").</p>
+      <p><strong>Approach:</strong> design now with standard practice; actual employees named after the system design is signed off. Per-role routing in Tab 1. Feeds D4.</p>
+      <p class="src">Standard retail divisions — store operations · buying/merchandising · finance · executive/BD (Lumen Retail Management · RetailDogma · OpsDog).</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 4 · The report-maker &amp; target hold-back</span> <span class="badge b-lock">Locked · 19 Jun</span></div>
+      <p><strong>Report-maker:</strong> a clean one-click export of the brand-facing Sale + SOH pack (per brand × store) — the manual rebuild disappears once the system owns clean sales, real bill numbers, rulebook-applied discounts and ledger SOH.</p>
+      <p><strong>Hold-back (Anand):</strong> the brand report can be bent freely — dates, bill numbers, bills shifted between two adjacent months — to hit targets and maximise what KDPS earns from the brand. It <strong>does</strong> smooth the actual brand report (option B).</p>
+      <p><strong>Mechanic:</strong> suggest → approve now; <strong>automatic is the goal</strong> — its own discussion later, not now.</p>
+      <p><strong>Guardrail (architect):</strong> the bending stays in the brand-report layer; the real ledgers + Tally/GST/cash stay truthful (Rule 4). Reconciling the two = part of the deferred hold-back discussion.</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 5 · Profitability — how deep does it go?</span> <span class="badge b-lock">Locked · B · 19 Jun</span></div>
+      <p><strong>Decision:</strong> headline = trading + contribution margin (B), derived from PT cost × POS revenue. Full net store P&amp;L (C, Tally opex) added later as a flagged estimate — scope kept open.</p>
+      <p><strong>Method:</strong> owned → margin ₹ + GMROI; SOR/Consignment → margin% + margin-per-shelf-slot. Leakage waterfall + Realisation × Velocity scorecard (owned vs SOR separate).</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 6 · Dead-stock &amp; markdown — the classification</span> <span class="badge b-lock">Locked · combined · 19 Jun</span></div>
+      <p><strong>Decision:</strong> combined age × velocity matrix (3). Start age/season (day-one from the cohort), layer velocity (Hot/Warm/Cold/Dead) as history builds. Thresholds per brand (Account Manager tunes). Markdown helper, action-per-model and routing as in Product 4.</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 7 · The anomaly &amp; leakage watchdog</span> <span class="badge b-lock">Locked · C · 19 Jun</span></div>
+      <p><strong>Decision:</strong> C — per-cashier discount-leakage score + a flag→review→confirm/dismiss→learn loop. Flag &amp; rank for a human, never block; rules day-one → statistics month-3+; LLM narrates, never computes. Day-one rules &amp; routing as in Product 5.</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 8 · Forecasting &amp; replenishment — how much now?</span> <span class="badge b-lock">Locked · B · 19 Jun</span></div>
+      <p><strong>Decision:</strong> B — full cold-start engine now (rate-of-sale, analogy, regional size curves, weeks-of-cover reorder, inter-store rebalancing, broken-size alerts), suggest-only. ML "Fashion Demand AI" = future roadmap once clean seasons exist. Honest accuracy set in writing with the client.</p>
+    </div>
+
+    <div class="gq">
+      <div class="qh"><span>Grill 9 · Conversational AI — the narrator</span> <span class="badge b-lock">Locked · 19 Jun</span></div>
+      <p><strong>Decision:</strong> V1 = LLM narrates / explains / translates (incl. Hindi) computed numbers; never computes. Free-form Q&amp;A agent deferred.</p>
+      <p><strong>Anand's idea (adopted):</strong> build the foundation <strong>agent-ready</strong> — expose the metrics layer as read-only, role-scoped function-calling tools — so the deferred conversational agent can be an <strong>off-the-shelf open-source agent</strong> (OpenClaw-style runner + Hermes-class function-calling model) bolted on later, not hand-built. Lower build, not zero — the tools are the work, and we build those anyway.</p>
+      <p><strong>Two rails:</strong> read-only (fetch &amp; tell, never act on the books — Rule 8); grounded via our tools (Hermes is open <em>weights</em>, not "self-learning" — we control what it sees).</p>
+      <p class="src">OpenClaw — MIT, local-first action agent (KDnuggets · DigitalOcean) · Hermes 3 — Nous Research open-weight, function-calling / structured output (nousresearch.com · HuggingFace).</p>
+    </div>
+  </section>
+</div>
+
+<footer>
+  KDPS Lifestyle — D7 Analytics &amp; Intelligence living design. Updated after every grill question. Read-only layer: reads the spine, writes only messages, reports and suggestions; a human always decides. Research basis: <a href="analytics-research.html">analytics-research.html</a>.
+</footer>
+
+<script>
+function showTab(e,id){
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  e.currentTarget.classList.add('active');
+}
+</script>
+</main>
+</body>
+</html>

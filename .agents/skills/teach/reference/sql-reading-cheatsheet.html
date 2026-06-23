@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL Reading Cheat Sheet — KDPS</title>
+<style>
+  :root{ --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --mem:#15803d; --mem-bg:#f0fdf4; --mem-line:#bbf7d0; --mem-deep:#14532d;
+    --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --kw:#c084fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b; }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; line-height:1.5; font-size:14.5px;}
+  .wrap{max-width:860px; margin:0 auto; padding:38px 24px 64px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:28px; margin:8px 0 6px; letter-spacing:-.02em}
+  .lede{color:var(--muted); max-width:62ch; margin:0 0 18px}
+  h2{font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--mem-deep); margin:24px 0 8px}
+  code,.kw,.str,.fn,.cmt{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .kw{color:var(--kw); font-weight:700} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  @media(max-width:640px){.grid{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line); border-radius:12px; background:#fff; padding:14px 16px; break-inside:avoid}
+  .card h3{margin:0 0 8px; font-size:15px}
+  .kv{display:flex; gap:10px; padding:6px 0; border-bottom:1px dashed var(--line); font-size:13.5px}
+  .kv:last-child{border-bottom:0}
+  .kv code{flex:0 0 130px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:5px; height:fit-content}
+  .kv span{color:var(--muted)}
+
+  pre{background:#0f172a; color:#e2e8f0; border-radius:10px; padding:13px 15px; overflow-x:auto; font-size:13px; line-height:1.65; margin:0}
+  .ex{border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:10px 0; break-inside:avoid}
+  .ex .t{font-size:13px; font-weight:600; color:var(--mem-deep); background:var(--mem-bg); padding:7px 13px; border-bottom:1px solid var(--mem-line)}
+  .ex pre{border-radius:0}
+
+  .danger{background:var(--bad-bg); border:1px solid var(--bad-line); border-radius:12px; padding:14px 18px; margin:18px 0}
+  .danger b{color:#991b1b}
+  .reflex{background:#1d2433; color:#e7ebf3; border-radius:12px; padding:14px 18px; margin:14px 0}
+  .reflex b{color:#bbf7d0}
+  footer{margin-top:26px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  footer a{color:var(--mem); text-decoration:none}
+  @media print{ body{background:#fff} .wrap{padding:0} .danger,.reflex,.ex .t{-webkit-print-color-adjust:exact; print-color-adjust:exact} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">KDPS Teaching · Reference</div>
+  <h1>SQL reading cheat sheet</h1>
+  <p class="lede">Enough SQL to <i>read</i> any query in a code review and know what comes back — and to catch the one that's dangerous. You're reading, not writing.</p>
+
+  <h2>The sentence</h2>
+  <div class="ex"><div class="t">Read it right-to-left as English</div>
+  <pre><span class="kw">SELECT</span>   sku_id, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand   <span class="cmt">-- ① which columns</span>
+<span class="kw">FROM</span>     stock_movement                <span class="cmt">-- ② which table</span>
+<span class="kw">WHERE</span>    store = <span class="str">'Store-7'</span>            <span class="cmt">-- ③ which rows</span>
+<span class="kw">GROUP BY</span> sku_id                         <span class="cmt">-- ④ buckets for the SUM</span>
+<span class="kw">ORDER BY</span> on_hand <span class="kw">DESC</span>;                <span class="cmt">-- ⑤ sort, biggest first</span></pre></div>
+
+  <div class="grid">
+    <div class="card">
+      <h3>The words</h3>
+      <div class="kv"><code>SELECT</code><span>which <b>columns</b> to return (<code>*</code> = all)</span></div>
+      <div class="kv"><code>FROM</code><span>which table</span></div>
+      <div class="kv"><code>WHERE</code><span>which <b>rows</b> to keep</span></div>
+      <div class="kv"><code>GROUP BY</code><span>bucket rows for a total</span></div>
+      <div class="kv"><code>ORDER BY</code><span>sort (<code>DESC</code> = biggest first)</span></div>
+      <div class="kv"><code>LIMIT 10</code><span>only the first 10 rows</span></div>
+      <div class="kv"><code>JOIN</code><span>combine two tables (Lesson 6)</span></div>
+    </div>
+    <div class="card">
+      <h3>Aggregates (squash rows → one number)</h3>
+      <div class="kv"><code>SUM(x)</code><span>total — e.g. stock on hand</span></div>
+      <div class="kv"><code>COUNT(*)</code><span>how many rows</span></div>
+      <div class="kv"><code>AVG(x)</code><span>average</span></div>
+      <div class="kv"><code>MIN / MAX</code><span>smallest / largest</span></div>
+      <div class="kv"><code>AS name</code><span>rename the output column</span></div>
+    </div>
+  </div>
+
+  <h2>How to read any query (the method)</h2>
+  <p class="lede" style="margin-bottom:10px">A query is <b>written</b> top-down but easiest to <b>read</b> in the order the database runs it. Read <code>FROM</code> first, <code>SELECT</code> almost last.</p>
+  <div class="grid">
+    <div class="card">
+      <h3>Step 0 — read or write?</h3>
+      <div class="kv"><code>SELECT</code><span>safe — just looks</span></div>
+      <div class="kv"><code>INSERT/UPDATE/DELETE</code><span>changes data — check its <code>WHERE</code></span></div>
+    </div>
+    <div class="card">
+      <h3>Then walk it in this order</h3>
+      <div class="kv"><code>1 FROM/JOIN</code><span>what rows am I starting from?</span></div>
+      <div class="kv"><code>2 WHERE</code><span>which rows survive?</span></div>
+      <div class="kv"><code>3 GROUP BY</code><span>bucket into piles?</span></div>
+      <div class="kv"><code>4 HAVING</code><span>which piles survive?</span></div>
+      <div class="kv"><code>5 SELECT</code><span>what does each output row show?</span></div>
+      <div class="kv"><code>6 ORDER BY/LIMIT</code><span>sorted how, how many?</span></div>
+    </div>
+  </div>
+
+  <h2>Read vs write</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Reads (safe — look only)</h3>
+      <div class="kv"><code>SELECT</code><span>fetch rows; changes nothing</span></div>
+    </div>
+    <div class="card">
+      <h3>Writes (change data)</h3>
+      <div class="kv"><code>INSERT</code><span>add a new row</span></div>
+      <div class="kv"><code>UPDATE</code><span>change existing rows</span></div>
+      <div class="kv"><code>DELETE</code><span>remove rows</span></div>
+    </div>
+  </div>
+
+  <h2>KDPS queries you'll recognise</h2>
+  <div class="ex"><div class="t">Stock on hand, one SKU</div>
+  <pre><span class="kw">SELECT</span> <span class="fn">SUM</span>(qty) <span class="kw">FROM</span> stock_movement <span class="kw">WHERE</span> sku_id = <span class="str">'NK-AM90-WHT-8'</span>;</pre></div>
+  <div class="ex"><div class="t">On hand for every SKU in every store</div>
+  <pre><span class="kw">SELECT</span> sku_id, store, <span class="fn">SUM</span>(qty) <span class="kw">AS</span> on_hand
+<span class="kw">FROM</span> stock_movement <span class="kw">GROUP BY</span> sku_id, store;</pre></div>
+  <div class="ex"><div class="t">How many pieces sold today</div>
+  <pre><span class="kw">SELECT</span> <span class="fn">COUNT</span>(*) <span class="kw">FROM</span> stock_movement
+<span class="kw">WHERE</span> type = <span class="str">'SALE'</span> <span class="kw">AND</span> created_at >= <span class="str">'2026-06-20'</span>;</pre></div>
+
+  <div class="danger">
+    🚩 <b>The one dangerous pattern.</b> An <code>UPDATE</code> or <code>DELETE</code> with <b>no <code>WHERE</code></b> hits <b>every row in the table</b>.
+    <pre style="margin-top:8px"><span class="cmt">-- 😱 wipes everything        -- ✅ scoped to one document</span>
+<span class="kw">DELETE FROM</span> stock_movement;     <span class="kw">DELETE FROM</span> stock_movement <span class="kw">WHERE</span> document = <span class="str">'BILL#902'</span>;</pre>
+  </div>
+
+  <div class="reflex">
+    🧭 <b>Reviewer's reflex — three questions for any query:</b> &nbsp;(1) Read or write? &nbsp;(2) Which table? &nbsp;(3) What's the <code>WHERE</code> — does it scope to exactly the rows meant? &nbsp;Answer those and you know what it does and where its effects land.
+  </div>
+
+  <footer>
+    <p>Pairs with <a href="../lessons/0005-reading-a-query.html">Lesson 5 — Reading a query</a>. Source: <a href="https://www.postgresql.org/docs/current/tutorial-select.html">PostgreSQL tutorial</a>.</p>
+    <p>KDPS Teaching Workspace · Reference · SQL reading</p>
+  </footer>
+</div>
+</body>
+</html>

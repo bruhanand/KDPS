@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS PRD — Explained</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#171b2e; --panel2:#1d2238; --ink:#e7ebf5; --muted:#9aa3bd;
+    --line:#2a3150; --brand:#6c8cff; --brand2:#8f6cff;
+    --m1:#4cc9f0; --m2:#52d196; --m3:#ffb454; --m4:#ff7a9c;
+    --good:#52d196; --bad:#ff7a9c; --warn:#ffb454;
+    --radius:14px; --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0c0f1b,#0f1220 30%);color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--brand);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* Layout */
+  .wrap{display:grid;grid-template-columns:260px 1fr;max-width:1280px;margin:0 auto;gap:0}
+  nav{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:28px 18px;
+    border-right:1px solid var(--line);background:rgba(13,16,28,.6);backdrop-filter:blur(6px)}
+  nav h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:22px 0 8px}
+  nav a{display:block;color:var(--muted);padding:6px 10px;border-radius:8px;font-size:14px}
+  nav a:hover{background:var(--panel);color:var(--ink);text-decoration:none}
+  nav .brandlink{color:var(--ink);font-weight:700;font-size:18px;letter-spacing:.02em}
+  main{padding:40px 48px 120px;min-width:0}
+
+  /* Hero */
+  .hero{background:radial-gradient(120% 140% at 0% 0%,rgba(108,140,255,.25),transparent 55%),
+    radial-gradient(120% 140% at 100% 0%,rgba(143,108,255,.22),transparent 55%),var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);padding:34px 32px;box-shadow:var(--shadow)}
+  .hero .eyebrow{color:var(--brand);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+  .hero h1{margin:.3em 0 .2em;font-size:34px;line-height:1.15}
+  .hero p{color:var(--muted);max-width:70ch;margin:.4em 0}
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .pill{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--ink)}
+
+  section{margin-top:54px;scroll-margin-top:20px}
+  h2.sec{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:var(--brand);margin:0 0 6px}
+  h3.title{font-size:26px;margin:.1em 0 .5em}
+  .lead{color:var(--muted);max-width:78ch}
+
+  /* Cards grid */
+  .grid{display:grid;gap:18px}
+  .grid.cols-2{grid-template-columns:repeat(2,1fr)}
+  .grid.cols-4{grid-template-columns:repeat(4,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+  .card .tag{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.06em;padding:4px 10px;border-radius:999px;margin-bottom:10px}
+  .card h4{margin:.1em 0 .3em;font-size:18px}
+  .card p{color:var(--muted);margin:.2em 0;font-size:14.5px}
+  .card .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+
+  .m1{color:var(--m1)} .m2{color:var(--m2)} .m3{color:var(--m3)} .m4{color:var(--m4)}
+  .bg-m1{background:rgba(76,201,240,.14);color:var(--m1);border:1px solid rgba(76,201,240,.3)}
+  .bg-m2{background:rgba(82,209,150,.14);color:var(--m2);border:1px solid rgba(82,209,150,.3)}
+  .bg-m3{background:rgba(255,180,84,.14);color:var(--m3);border:1px solid rgba(255,180,84,.3)}
+  .bg-m4{background:rgba(255,122,156,.14);color:var(--m4);border:1px solid rgba(255,122,156,.3)}
+  .edge-m1{border-top:3px solid var(--m1)}
+  .edge-m2{border-top:3px solid var(--m2)}
+  .edge-m3{border-top:3px solid var(--m3)}
+  .edge-m4{border-top:3px solid var(--m4)}
+
+  /* Module detail block */
+  .module{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:0;overflow:hidden;box-shadow:var(--shadow);margin-top:26px}
+  .module .head{padding:24px 26px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:flex-start}
+  .module .num{font-size:30px;font-weight:800;min-width:54px;height:54px;display:grid;place-items:center;border-radius:14px}
+  .module .head h3{margin:0;font-size:22px}
+  .module .head .sub{color:var(--muted);font-size:13px;font-family:ui-monospace,monospace;letter-spacing:.04em}
+  .module .body{padding:24px 26px}
+  .module .body h5{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+  .module .body h5:first-child{margin-top:0}
+
+  ul.clean{list-style:none;padding:0;margin:0}
+  ul.clean li{padding:7px 0 7px 26px;position:relative;color:var(--ink);font-size:15px;border-bottom:1px dashed var(--line)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:"";position:absolute;left:4px;top:14px;width:7px;height:7px;border-radius:50%;background:var(--brand)}
+  ul.clean li b{color:var(--ink)}
+  ul.clean li small{color:var(--muted)}
+
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media(max-width:900px){.twocol{grid-template-columns:1fr}}
+
+  .panelbox{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .panelbox h6{margin:0 0 8px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+
+  .callout{border-left:4px solid var(--brand);background:var(--panel2);border-radius:8px;padding:14px 18px;margin:18px 0;color:var(--ink)}
+  .callout.bad{border-color:var(--bad)}
+  .callout.good{border-color:var(--good)}
+  .callout.warn{border-color:var(--warn)}
+  .callout b{color:#fff}
+
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
+  tbody tr:hover{background:var(--panel2)}
+  td .yes{color:var(--good);font-weight:700}
+  td .no{color:var(--bad);font-weight:700}
+
+  /* Flowchart */
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 0;padding:18px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:auto}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:13.5px;font-weight:600;white-space:nowrap;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .node small{font-weight:400;color:var(--muted);font-size:11.5px}
+  .node.start{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand) inset}
+  .node.gate{border-color:var(--warn);background:rgba(255,180,84,.08)}
+  .node.end{border-color:var(--good);background:rgba(82,209,150,.08)}
+  .node.bad{border-color:var(--bad);background:rgba(255,122,156,.08)}
+  .arrow{color:var(--muted);font-size:18px;flex:0 0 auto}
+  .arrow.down{width:100%;text-align:center}
+  .flow.vert{flex-direction:column;align-items:stretch}
+  .flow.vert .node{width:100%;flex-direction:row;justify-content:space-between;align-items:center}
+  .flow.vert .arrow{text-align:center}
+  .branch{display:flex;gap:10px;flex-wrap:wrap;width:100%}
+  .branch .node{flex:1;min-width:160px}
+
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+
+  .statebar{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+  .state{font-size:12.5px;padding:6px 11px;border-radius:8px;background:var(--panel2);border:1px solid var(--line)}
+
+  footer{color:var(--muted);font-size:13px;border-top:1px solid var(--line);margin-top:60px;padding-top:22px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:18px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .kpi .big{font-size:26px;font-weight:800}
+  .kpi .lbl{color:var(--muted);font-size:12.5px;margin-top:2px}
+
+  @media(max-width:1000px){
+    .wrap{grid-template-columns:1fr}
+    nav{display:none}
+    main{padding:24px}
+    .grid.cols-4{grid-template-columns:1fr 1fr}
+    .grid.cols-2{grid-template-columns:1fr}
+    .kpis{grid-template-columns:1fr 1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- SIDEBAR -->
+  <nav>
+    <a href="#top" class="brandlink">KDPS&nbsp;<span style="color:var(--muted);font-weight:400;font-size:13px">PRD</span></a>
+    <p style="color:var(--muted);font-size:12px;margin:6px 0 0">Product Requirements, explained</p>
+
+    <h2>1 · Overview</h2>
+    <a href="#overview">What KDPS is solving</a>
+    <a href="#bigpicture">The big picture flow</a>
+
+    <h2>2 · Modules</h2>
+    <a href="#modules">Module-wise list</a>
+
+    <h2>3 · Deep dives</h2>
+    <a href="#mod1">① Inventory Ingestion (IINE)</a>
+    <a href="#mod2">② Payment Control (PASCS)</a>
+    <a href="#mod3">③ Store Inventory (SIMAS)</a>
+    <a href="#mod4">④ Attendance &amp; Payroll (WAPCS)</a>
+
+    <h2>4 · Reference</h2>
+    <a href="#glossary">Glossary</a>
+  </nav>
+
+  <!-- MAIN -->
+  <main id="top">
+
+    <!-- HERO -->
+    <div class="hero">
+      <div class="eyebrow">Product Requirements Document · Explained</div>
+      <h1>KDPS — an operating system for a multi&#8209;brand fashion retailer</h1>
+      <p>This PRD describes <b>four connected control systems</b> that replace today's manual, Excel-and-WhatsApp way of running stores. Each one turns a fuzzy, human-dependent process into a <b>structured, auditable digital workflow</b> — from the moment goods arrive, through paying the brand, selling in-store, and paying the staff.</p>
+      <p class="lead">This page restates the PRD in plain language so you can clearly see <b>what the client wants</b>, module by module, with diagrams of every key flow.</p>
+      <div class="pills">
+        <span class="pill">🏬 Multi-brand outlet (MBO)</span>
+        <span class="pill">📦 SOR &amp; Outright stock</span>
+        <span class="pill">🧾 Tally / TIR accounting</span>
+        <span class="pill">📱 PWA + store Android device</span>
+        <span class="pill">🇮🇳 GST, INR, low-end phones</span>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="big m1">①</div><div class="lbl">Inventory ingestion &amp; normalization</div></div>
+        <div class="kpi"><div class="big m2">②</div><div class="lbl">Payment authorization &amp; settlement</div></div>
+        <div class="kpi"><div class="big m3">③</div><div class="lbl">Store inventory movement &amp; sell-through</div></div>
+        <div class="kpi"><div class="big m4">④</div><div class="lbl">Workforce attendance &amp; payroll</div></div>
+      </div>
+    </div>
+
+    <!-- 1. OVERVIEW -->
+    <section id="overview">
+      <h2 class="sec">1 — Overview</h2>
+      <h3 class="title">What problem is KDPS actually solving?</h3>
+      <p class="lead">Today the business runs on parallel, loosely-connected manual processes. Goods are matched to invoices by eye, PT files are interpreted by hand, payments are approved by memory, store stock is tracked in heads and handwritten memos, and attendance is a WhatsApp photo. Every one of these is slow, easy to game, and impossible to audit later.</p>
+
+      <div class="twocol" style="margin-top:18px">
+        <div class="panelbox">
+          <h6 style="color:var(--bad)">❌ The "as-is" reality</h6>
+          <ul class="clean">
+            <li>Inventory matched to invoices <b>manually</b>, by experience</li>
+            <li>PT files in <b>every format</b> — cleaned &amp; mapped by hand</li>
+            <li>Data <b>reshaped in Excel</b> before it reaches accounting</li>
+            <li>Payments approved <b>informally</b>, no record of who/why</li>
+            <li>Store stock moves on <b>handwritten memos</b></li>
+            <li>Attendance is a <b>photo in front of the store</b></li>
+          </ul>
+        </div>
+        <div class="panelbox">
+          <h6 style="color:var(--good)">✅ The "to-be" target</h6>
+          <ul class="clean">
+            <li>Every input <b>normalized</b> into one KDPS schema</li>
+            <li>Accounting-ready (TIR) data with <b>zero manual rework</b></li>
+            <li>No rupee paid without <b>reconciliation + approval + audit trail</b></li>
+            <li>Store stock as a <b>state-driven ledger</b>, not one number</li>
+            <li>EOSS "billed-but-retained" stock tracked <b>separately</b></li>
+            <li>Verified attendance via <b>face check-in</b>, feeding payroll</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        <b>One sentence:</b> KDPS converts real-world, inconsistent, delayed inputs (invoices, PT files, physical goods, staff presence) into <b>clean, structured, auditable truth</b> that operations, accounting, and banking can all trust — without anyone reshaping data in Excel.
+      </div>
+    </section>
+
+    <!-- BIG PICTURE FLOW -->
+    <section id="bigpicture">
+      <h2 class="sec">1.1 — How the four modules connect</h2>
+      <h3 class="title">The big-picture flow</h3>
+      <p class="lead">The modules are sequential layers of truth. Each one only runs once the previous truth is established — money is never released, and stock is never sold, until the upstream data is aligned.</p>
+
+      <div class="flow">
+        <div class="node start">📥 Goods + Invoice + PT arrive<small>raw, messy vendor inputs</small></div>
+        <span class="arrow">→</span>
+        <div class="node" style="border-color:var(--m1)"><span class="m1">① IINE</span><small>validate, normalize → TIR</small></div>
+        <span class="arrow">→</span>
+        <div class="node" style="border-color:var(--m2)"><span class="m2">② PASCS</span><small>approve &amp; pay the brand</small></div>
+        <span class="arrow">→</span>
+        <div class="node" style="border-color:var(--m3)"><span class="m3">③ SIMAS</span><small>run stock in the store</small></div>
+        <span class="arrow">→</span>
+        <div class="node" style="border-color:var(--m4)"><span class="m4">④ WAPCS</span><small>verify staff, feed payroll</small></div>
+        <span class="arrow">→</span>
+        <div class="node end">📊 Auditable books</div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--m1)"></span> Inbound truth</span>
+        <span><span class="dot" style="background:var(--m2)"></span> Financial control</span>
+        <span><span class="dot" style="background:var(--m3)"></span> In-store operations</span>
+        <span><span class="dot" style="background:var(--m4)"></span> Workforce</span>
+      </div>
+      <div class="callout warn">
+        <b>Key dependency:</b> Module ② (Payment) cannot mark a payment "eligible" until Module ① has produced a validated invoice, a confirmed GRN, a normalized PT, and a generated TIR record. Clean data upstream is what makes everything downstream possible.
+      </div>
+    </section>
+
+    <!-- 2. MODULE LIST -->
+    <section id="modules">
+      <h2 class="sec">2 — Module-wise list</h2>
+      <h3 class="title">The four modules at a glance</h3>
+      <p class="lead">Each module is a self-contained control system with its own goal, its own "where today breaks", and its own proposed design. Click any card to jump to the deep dive.</p>
+
+      <div class="grid cols-2" style="margin-top:20px">
+        <a href="#mod1" class="card edge-m1" style="display:block;color:inherit">
+          <span class="tag bg-m1">MODULE 1 · INBOUND</span>
+          <h4>Inventory Ingestion &amp; Normalization Engine</h4>
+          <p class="code">IINE</p>
+          <p>The single entry point for all inventory + financial truth. Turns any vendor invoice / PT file / physical receipt into one clean, accounting-ready (TIR) dataset — no Excel.</p>
+          <p class="m1" style="font-weight:600">Invoice → GRN → PT normalize → Reconcile → TIR</p>
+        </a>
+        <a href="#mod2" class="card edge-m2" style="display:block;color:inherit">
+          <span class="tag bg-m2">MODULE 2 · MONEY OUT</span>
+          <h4>Payment Authorization &amp; Settlement Control System</h4>
+          <p class="code">PASCS</p>
+          <p>Governs how &amp; when KDPS pays its brands. A financial control system — no payment without reconciliation, approval hierarchy, and a full audit trail tied to invoice/GRN/PT/TIR.</p>
+          <p class="m2" style="font-weight:600">Eligible → Requested → Approved → Executed → Confirmed → Reconciled</p>
+        </a>
+        <a href="#mod3" class="card edge-m3" style="display:block;color:inherit">
+          <span class="tag bg-m3">MODULE 3 · IN-STORE</span>
+          <h4>Store Inventory Movement, Adjustment &amp; Sell-Through Control</h4>
+          <p class="code">SIMAS</p>
+          <p>Runs stock <i>after</i> it's accepted into a store. A state-driven ledger that separates what is sold, transferred, returned, defective, and "billed-but-retained" (EOSS) — tightly tied to POS.</p>
+          <p class="m3" style="font-weight:600">A state machine per SKU, not a single number</p>
+        </a>
+        <a href="#mod4" class="card edge-m4" style="display:block;color:inherit">
+          <span class="tag bg-m4">MODULE 4 · WORKFORCE</span>
+          <h4>Workforce Attendance, Presence &amp; Payroll Control System</h4>
+          <p class="code">WAPCS</p>
+          <p>Replaces WhatsApp-photo attendance with verified face check-in/out on a store-owned Android device. Builds a trusted attendance ledger that feeds payroll &amp; incentives.</p>
+          <p class="m4" style="font-weight:600">Onboard → Check-in → Check-out → Rules → Payroll input</p>
+        </a>
+      </div>
+
+      <h5 style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:28px 0 8px">Shared pattern across all four</h5>
+      <table>
+        <thead><tr><th>Module</th><th>What it makes "true"</th><th>The core object</th><th>Biggest risk it removes</th></tr></thead>
+        <tbody>
+          <tr><td class="m1"><b>① IINE</b></td><td>What was ordered / received / payable</td><td>GRN (goods receipt note)</td><td>Excel rework &amp; inconsistent SKUs</td></tr>
+          <tr><td class="m2"><b>② PASCS</b></td><td>What we paid, why, and who approved it</td><td>Unified Payment object</td><td>Paying before discrepancies are resolved</td></tr>
+          <tr><td class="m3"><b>③ SIMAS</b></td><td>What stock is physically vs commercially in-store</td><td>SKU state (per store)</td><td>Mixing sales, returns &amp; EOSS billing</td></tr>
+          <tr><td class="m4"><b>④ WAPCS</b></td><td>Who actually worked, when</td><td>Attendance event</td><td>Fake/proxy attendance, payroll disputes</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ===================== MODULE 1 ===================== -->
+    <section id="mod1">
+      <h2 class="sec">3 — Deep dive</h2>
+      <div class="module">
+        <div class="head">
+          <div class="num bg-m1">①</div>
+          <div>
+            <h3>Inventory Ingestion &amp; Normalization Engine</h3>
+            <div class="sub">IINE · "the entry point for all inventory and financial truth"</div>
+          </div>
+        </div>
+        <div class="body">
+
+          <h5>What the client wants</h5>
+          <p class="lead">A system that takes <b>any</b> vendor input — a photographed invoice, a PT file in any brand's format, physical goods on the dock — and converts it into <b>one clean, standardized, accounting-ready dataset</b>. The output must always be 100% compatible with the <b>TIR format</b> (the structure Tally / the accounting software needs) <b>without any manual reshaping</b>.</p>
+
+          <div class="twocol">
+            <div class="panelbox">
+              <h6>Every received item must be…</h6>
+              <ul class="clean">
+                <li><b>Physically validated</b> <small>— it actually arrived</small></li>
+                <li><b>Financially traceable</b> <small>— cost is known</small></li>
+                <li><b>Semantically standardized</b> <small>— mapped to KDPS taxonomy</small></li>
+              </ul>
+            </div>
+            <div class="panelbox">
+              <h6>Success looks like</h6>
+              <ul class="clean">
+                <li>Zero Excel-based transformations</li>
+                <li>Minimal manual classification work</li>
+                <li>Real-time view: ordered vs received vs payable</li>
+                <li>Consistent taxonomy across branded &amp; non-branded</li>
+              </ul>
+            </div>
+          </div>
+
+          <h5>Why today is painful (As-Is)</h5>
+          <p class="lead">Three parallel processes, all human-heavy:</p>
+          <table>
+            <thead><tr><th>Flow</th><th>What happens now</th><th>Pain</th></tr></thead>
+            <tbody>
+              <tr><td><b>A. Physical receipt</b></td><td>Items matched against invoice by hand; shortages/damages noted on paper, told to brand via account manager</td><td>Informal "received as expected / discrepancy" — nothing structured</td></tr>
+              <tr><td><b>B. PT file (branded)</b></td><td>PT opened manually; columns differ per brand; mapped by experience to category/subcategory/type/fit</td><td>No standard format, no automated mapping, heavy reliance on one person</td></tr>
+              <tr><td><b>C. Non-branded</b></td><td>No PT file; human interprets product from invoice + inspection, creates attributes, pricing, tax, margin, barcode</td><td>Subjective classification, duplicate SKUs, high cognitive load</td></tr>
+              <tr><td><b>D. Transform to accounting</b></td><td>Data manually reshaped into TIR format, uploaded to accounting</td><td>Slow, error-prone, blocks payment</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout bad">
+            <b>The structural gaps:</b> no unified data model · no decoupling (physical receipt, PT, and accounting are tightly coupled and block each other) · no rule engine (mappings are implicit &amp; unversioned) · no SKU identity control (same product → many SKUs) · GRN isn't a real system object · no audit trail of "who mapped what, and why".
+          </div>
+
+          <h5>Proposed design — the to-be flow</h5>
+          <p class="lead">IINE becomes a <b>central layer between physical inventory and the accounting system</b>, decoupling the three flows so they run independently and asynchronously.</p>
+
+          <div class="flow vert">
+            <div class="node start">Step 1 · Invoice Upload <small>mandatory — no downstream processing without it</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Step 2 · GRN Creation <small>confirm received items, mark shortages/damages — independent of PT</small></div>
+            <span class="arrow down">↓</span>
+            <div class="branch">
+              <div class="node" style="border-color:var(--m1)">Step 3a · Branded <small>upload PT → auto-map → normalize</small></div>
+              <div class="node" style="border-color:var(--m1)">Step 3b · Non-branded <small>create product entries → generate PT internally</small></div>
+            </div>
+            <span class="arrow down">↓</span>
+            <div class="node gate">Step 4 · Reconciliation <small>system flags mismatches &amp; missing data: Invoice ↔ GRN ↔ PT</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Step 5 · Accounting Export <small>TIR-ready file generated — no manual reshaping</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node end">Step 6 · Approval &amp; Payment <small>(handed to Module ②) enabled by clean data</small></div>
+          </div>
+
+          <h5>Engines inside the module</h5>
+          <div class="grid cols-4">
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Ingestion</h4><p>Handles invoice + PT upload; detects headers &amp; structure</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">GRN</h4><p>Creates receipt record; tracks shortages &amp; damages</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Normalization</h4><p>PT → standardized schema; manual input → structured data</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Rule Engine</h4><p>Brand-specific, version-controlled, editable without code</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">SKU &amp; Barcode</h4><p>Unique SKU creation, barcode generation, duplicate detection</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Reconciliation</h4><p>Tracks Invoice↔GRN, Invoice↔PT, final approval status</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">TIR Transform</h4><p>Converts data into strict accounting format</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Users / UIs</h4><p>Store app (upload, GRN, scan) + Head-office dashboard</p></div>
+          </div>
+
+          <div class="callout good">
+            <b>Final positioning:</b> IINE is the central operating layer between physical inventory and accounting — making sure everything ordered, received, and payable is captured once, cleanly, and traceably.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MODULE 2 ===================== -->
+    <section id="mod2">
+      <div class="module">
+        <div class="head">
+          <div class="num bg-m2">②</div>
+          <div>
+            <h3>Payment Authorization &amp; Settlement Control System</h3>
+            <div class="sub">PASCS · "money is released only when all upstream truths are aligned and approved"</div>
+          </div>
+        </div>
+        <div class="body">
+
+          <h5>What the client wants</h5>
+          <p class="lead">This module sits <b>after</b> IINE and governs <b>how and when KDPS pays its vendors (brands)</b>. It is not a payment tracker — it's a <b>financial control system</b> ensuring every payment is <b>justified, approved, and traceable</b>. No payment without reconciliation, without authority, without an audit trail.</p>
+
+          <div class="twocol">
+            <div class="panelbox">
+              <h6>Every payment is linked to…</h6>
+              <ul class="clean">
+                <li>Invoice</li><li>GRN</li><li>PT</li><li>TIR</li>
+                <li><b>…and can be audited at any time</b></li>
+              </ul>
+            </div>
+            <div class="panelbox">
+              <h6>Success looks like</h6>
+              <ul class="clean">
+                <li>No informal / ad-hoc payments</li>
+                <li>No payment without full reconciliation</li>
+                <li>Clear approval hierarchy enforced</li>
+                <li>Live view: pending / approved / completed</li>
+                <li>Seamless link: operations ↔ accounting ↔ bank</li>
+              </ul>
+            </div>
+          </div>
+
+          <h5>Why today breaks</h5>
+          <table>
+            <thead><tr><th>Gap</th><th>Problem</th></tr></thead>
+            <tbody>
+              <tr><td><b>Weak pre-payment control</b></td><td>No enforced Invoice↔GRN / Invoice↔PT check → risk of paying wrong quantities or paying before discrepancies are resolved</td></tr>
+              <tr><td><b>No formal approval hierarchy</b></td><td>Approval depends on informal processes &amp; human memory; no authority level or escalation logic</td></tr>
+              <tr><td><b>No payment traceability</b></td><td>Payment not linked to transaction data; no transaction-ID capture, no structured audit trail</td></tr>
+              <tr><td><b>Disconnected from bank reality</b></td><td>Marked "done" internally; bank confirmation happens later → reconciliation gaps</td></tr>
+              <tr><td><b>No closed loop</b></td><td>Approval → Payment → separate bank reconciliation, with no single lifecycle tracking</td></tr>
+            </tbody>
+          </table>
+
+          <h5>Proposed design — the payment lifecycle</h5>
+          <p class="lead">Each payment becomes a single object that moves through one controlled lifecycle:</p>
+          <div class="flow">
+            <div class="node start">Eligible</div><span class="arrow">→</span>
+            <div class="node">Requested</div><span class="arrow">→</span>
+            <div class="node gate">Approved</div><span class="arrow">→</span>
+            <div class="node">Executed</div><span class="arrow">→</span>
+            <div class="node">Confirmed</div><span class="arrow">→</span>
+            <div class="node end">Reconciled</div>
+          </div>
+
+          <h5>Roles &amp; the workflow</h5>
+          <div class="twocol">
+            <div class="panelbox">
+              <h6>User roles &amp; hierarchy</h6>
+              <ul class="clean">
+                <li><b>Requestor</b> <small>— initiates payment request</small></li>
+                <li><b>Approver(s)</b> <small>— one or multiple levels, based on amount / vendor / risk</small></li>
+                <li><b>Executor</b> <small>— performs the payment</small></li>
+                <li><b>Finance Controller</b> <small>— optional final oversight</small></li>
+              </ul>
+            </div>
+            <div class="panelbox">
+              <h6>Step 1 — Eligibility gate</h6>
+              <p style="color:var(--muted);font-size:14px;margin:0 0 8px">Payment only becomes "eligible" when the system confirms <b>all four</b>:</p>
+              <div class="statebar">
+                <span class="state">✓ Invoice validated</span>
+                <span class="state">✓ GRN completed</span>
+                <span class="state">✓ PT processed</span>
+                <span class="state">✓ TIR generated</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow vert" style="margin-top:14px">
+            <div class="node start">Step 1 · Eligibility <small>system verifies invoice + GRN + PT + TIR</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Step 2 · Payment request created <small>vendor, amount, invoice references</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node gate">Step 3 · Approval workflow <small>routed by hierarchy; records who approved, when, decision &amp; comments</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Step 4 · Execution <small>executor pays via bank; captures transaction ID, mode, account used</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Step 5 · Confirmation <small>status → "Executed"</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node end">Step 6 · Bank reconciliation <small>upload bank statement, match txn ID + amount → "Reconciled"</small></div>
+          </div>
+
+          <h5>Engines &amp; interfaces</h5>
+          <div class="grid cols-4">
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Payment Engine</h4><p>Manages the lifecycle</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Approval Engine</h4><p>Hierarchy, routing, thresholds</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Validation Engine</h4><p>Ensures eligibility gate</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Transaction Capture</h4><p>Stores payment details</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Reconciliation Engine</h4><p>Matches bank records</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Payment Dashboard</h4><p>Pending / approved / executed / reconciled</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Approval Interface</h4><p>See invoice+GRN+PT context, approve/reject</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Execution + Recon UI</h4><p>Enter txn ID; upload &amp; match statement</p></div>
+          </div>
+
+          <div class="callout good">
+            <b>Final positioning:</b> a financial control layer that ensures every rupee KDPS pays is justified, approved, executed, and traceable — connecting operations, accounting, and banking into one auditable payment lifecycle.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MODULE 3 ===================== -->
+    <section id="mod3">
+      <div class="module">
+        <div class="head">
+          <div class="num bg-m3">③</div>
+          <div>
+            <h3>Store Inventory Movement, Adjustment &amp; Sell-Through Control</h3>
+            <div class="sub">SIMAS · "a state-driven inventory control system, not a stock counter"</div>
+          </div>
+        </div>
+        <div class="body">
+
+          <h5>What the client wants</h5>
+          <p class="lead">This module governs everything that happens <b>after inventory becomes valid store stock</b>. The key insight: in an MBO, store stock is <b>not a single number</b> — the naïve formula <span class="state">opening + inward − sales = closing</span> is too simplistic. Stock also changes through transfers, defects, brand returns, and end-of-season commercial billing where stock is <b>billed but physically stays in the store</b>.</p>
+
+          <div class="callout warn">
+            <b>The core formula it must respect:</b><br>
+            Store Available Stock = Opening Accepted Stock + New Accepted Inward − All Valid Reductions − All Pending Outbound Not Yet Accepted.<br>
+            …but reductions must be <b>classified by type</b>, because each has different commercial meaning.
+          </div>
+
+          <h5>The five reduction / movement types</h5>
+          <table>
+            <thead><tr><th>#</th><th>Type</th><th>What it means</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td><b>Customer sale (POS)</b></td><td>Normal sale — stock physically leaves the store</td></tr>
+              <tr><td>2</td><td><b>Internal transfer</b></td><td>Stock moves to another store (must be authorized &amp; acknowledged)</td></tr>
+              <tr><td>3</td><td><b>Defective stock</b></td><td>Found defective after inward</td></tr>
+              <tr><td>4</td><td><b>Brand-approved / seasonal return</b></td><td>Returned to the brand under contract</td></tr>
+              <tr><td>5</td><td><b>EOSS billed-but-retained</b></td><td>Commercially billed (sold for settlement) but <b>physically stays in store</b></td></tr>
+            </tbody>
+          </table>
+
+          <h5>Why this is hard — three different "stocks"</h5>
+          <div class="grid cols-2">
+            <div class="panelbox"><h6>The dual/triple reality</h6>
+              <p style="color:var(--muted);font-size:14px">The business must always distinguish:</p>
+              <ul class="clean">
+                <li><b>Physical stock</b> <small>— what's bodily in the store</small></li>
+                <li><b>System stock</b> <small>— what records say is available for sale</small></li>
+                <li><b>Commercially billed stock</b> <small>— billed to brand but still on the shelf</small></li>
+              </ul>
+            </div>
+            <div class="panelbox"><h6>Questions it must answer instantly</h6>
+              <ul class="clean">
+                <li>What's available in Store A right now?</li>
+                <li>What's in the store but not available for sale?</li>
+                <li>What's on the way from Store A → B?</li>
+                <li>How much was billed under EOSS but still lying in store?</li>
+                <li>How much of that has since been physically sold?</li>
+              </ul>
+            </div>
+          </div>
+
+          <h5>Key improvement — model each SKU as a state machine</h5>
+          <p class="lead">Instead of flat stock-in/stock-out, every SKU at a store exists in <b>one of several states</b>:</p>
+          <div class="statebar">
+            <span class="state">Available for Sale</span>
+            <span class="state">Pending Acceptance</span>
+            <span class="state">Pending Transfer Out</span>
+            <span class="state">In Transit</span>
+            <span class="state">Accepted at Destination</span>
+            <span class="state">Defective / Quarantined</span>
+            <span class="state">Return Approved</span>
+            <span class="state">Returned to Brand</span>
+            <span class="state">Sold to Customer</span>
+            <span class="state">EOSS Billed &amp; Retained</span>
+            <span class="state">Liquidated / Disposed</span>
+          </div>
+
+          <h5>Flow A — normal POS sale</h5>
+          <div class="flow">
+            <div class="node start">Item scanned at POS</div><span class="arrow">→</span>
+            <div class="node">Auto-deduct from "Available for Sale"</div><span class="arrow">→</span>
+            <div class="node">Store inventory updated in real time</div><span class="arrow">→</span>
+            <div class="node end">State → Sold to Customer</div>
+          </div>
+          <p style="color:var(--muted);font-size:13.5px;margin-top:4px">POS is the <b>single source of truth</b> for customer-driven reduction — no manual stock deduction allowed for sales.</p>
+
+          <h5>Flow B — EOSS "billed but retained" (the tricky one)</h5>
+          <div class="flow vert">
+            <div class="node start">EOSS / Internal billing mode used <small>e.g. "Billed to Brand", "Self-Billed Inventory"</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node gate">Remove from "Available for Sale" → move to <b>"Billed but Retained"</b> bucket <small>capture a billing identifier (e.g. EOSS Settlement Account)</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Stock physically remains in store; brand liability is settled</div>
+            <span class="arrow down">↓</span>
+            <div class="node end">Later sold to customer → reduce from "Billed but Retained" <small>do NOT double-count revenue / margin, no fresh brand liability</small></div>
+          </div>
+          <div class="callout">
+            <b>Why POS integration is foundational (not optional):</b> without it, sales don't reflect in real time, EOSS billing gets mixed with actual sales, inventory becomes unreliable, and brand settlement is wrong.
+          </div>
+
+          <h5>Flow C — internal store-to-store transfer</h5>
+          <div class="flow">
+            <div class="node start">Store A initiates transfer<small>stock reserved</small></div><span class="arrow">→</span>
+            <div class="node">State → Pending Transfer Out / In Transit</div><span class="arrow">→</span>
+            <div class="node gate">Store B confirms receipt &amp; acceptance</div><span class="arrow">→</span>
+            <div class="node end">State → Accepted at Destination</div>
+          </div>
+          <p style="color:var(--muted);font-size:13.5px;margin-top:4px">Replaces today's handwritten transfer memos, which give no visibility before dispatch and no accountability for items lost in transit.</p>
+
+          <div class="callout good">
+            <b>Final positioning:</b> a state-driven inventory control system that connects physical stock, commercial events, and POS-driven reality into a single, accurate ledger — so what is sold, transferred, returned, and billed-but-retained are all captured distinctly, accurately, and in real time.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== MODULE 4 ===================== -->
+    <section id="mod4">
+      <div class="module">
+        <div class="head">
+          <div class="num bg-m4">④</div>
+          <div>
+            <h3>Workforce Attendance, Presence &amp; Payroll Control System</h3>
+            <div class="sub">WAPCS · "verified staff presence without legacy punch machines"</div>
+          </div>
+        </div>
+        <div class="body">
+
+          <h5>What the client wants</h5>
+          <p class="lead">Answer one question reliably: <b>who came to work, when did they arrive, when did they leave</b> — and on that basis calculate salary and incentives. Today's "send a photo in front of the store" proves nothing about start time, end time, or continuous presence, and is easy to fake. The goal is a <b>trusted presence layer</b> that feeds payroll, plus an employee profile/document store (PAN, Aadhaar).</p>
+
+          <div class="callout warn">
+            <b>The central tension:</b> attendance must be <b>easy enough to use daily</b>, but <b>strong enough that people can't casually game it</b>. The design must balance ease of use, fraud resistance, low hardware dependency, and simple rollout.
+          </div>
+
+          <h5>Two options considered → the recommendation</h5>
+          <div class="twocol">
+            <div class="panelbox" style="border-color:var(--good)">
+              <h6 style="color:var(--good)">✅ Option 1 — Store-owned Android device + face check-in <span style="color:var(--good)">(RECOMMENDED)</span></h6>
+              <p style="color:var(--muted);font-size:14px">One dedicated phone/tablet stays in the store; employee opens the app, face is verified against their stored profile to clock in/out.</p>
+              <ul class="clean">
+                <li>Standardized hardware, easy to control &amp; supervise</li>
+                <li>Simple to train: come in → check in → leave → check out</li>
+                <li>No dependence on Wi-Fi strength or personal phones</li>
+                <li>Implementation complexity: <b>Moderate</b> — the practical, stable choice</li>
+              </ul>
+            </div>
+            <div class="panelbox">
+              <h6>Option 2 — Employee phone + Wi-Fi / IP presence</h6>
+              <p style="color:var(--muted);font-size:14px">App on personal phones infers presence from store Wi-Fi / network.</p>
+              <ul class="clean">
+                <li>No store hardware needed; potentially richer data</li>
+                <li>But: Wi-Fi off, battery issues, fluctuating signal, false exits</li>
+                <li>Android background-process restrictions, privacy complexity</li>
+                <li>Implementation complexity: <b>High</b> — harder to build, trust &amp; support</li>
+              </ul>
+            </div>
+          </div>
+
+          <h5>Proposed design — system layers</h5>
+          <div class="grid cols-4">
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Store Attendance App</h4><p>Dedicated Android device: check-in/out, face verify, offline queue</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Employee Self-Service</h4><p>View history, upload documents, raise corrections</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">HR / Admin Dashboard</h4><p>Create profiles, approve docs, late/absent reports, payroll export</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Face Verification Engine</h4><p>Stores templates at onboarding; liveness detection vs spoofing</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Attendance Event Engine</h4><p>Check-in, check-out, missed event, manual correction, override</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Device &amp; Store Binding</h4><p>Each device mapped to a store; events auto-tagged to that store</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Employee Master</h4><p>Details, documents, salary structure, incentive plan, assigned store</p></div>
+            <div class="card" style="padding:14px"><h4 style="font-size:15px">Rules + Payroll Layer</h4><p>Shift timing, grace, half-day → days present, absences, payable days</p></div>
+          </div>
+
+          <h5>Core workflow (end-to-end)</h5>
+          <div class="flow vert">
+            <div class="node start">Onboarding <small>HR creates profile · PAN + Aadhaar uploaded · face enrolled · store assigned · salary &amp; incentive rules linked</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Check-In <small>employee opens store-device app → face scanned → identity verified → check-in time recorded</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Check-Out <small>repeats face verification → check-out time recorded → work duration calculated</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node">Daily attendance finalized → attendance rules applied <small>shift, grace period, half-day, late logic</small></div>
+            <span class="arrow down">↓</span>
+            <div class="node end">Payroll input generated <small>days present, absences, late marks, payable days, incentive metrics</small></div>
+          </div>
+
+          <h5>Edge cases the product must handle</h5>
+          <table>
+            <thead><tr><th>Case</th><th>System behavior</th></tr></thead>
+            <tbody>
+              <tr><td><b>Missed checkout</b></td><td>Flag record incomplete → send to manager/HR → apply policy-based resolution</td></tr>
+              <tr><td><b>Face mismatch</b></td><td>Deny automatic check-in → allow retry → escalate if repeated</td></tr>
+              <tr><td><b>Device offline</b></td><td>Local timestamp queue → sync when online (attendance must not vanish if internet fails)</td></tr>
+              <tr><td><b>Moved to another store</b></td><td>Authorization follows current store-assignment rules</td></tr>
+              <tr><td><b>Unusual shift / late opening</b></td><td>Override capability without destroying the audit trail</td></tr>
+              <tr><td><b>Proxy attempts</b></td><td>Liveness checks + audit logs</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout good">
+            <b>Final positioning:</b> a verified workforce-presence &amp; payroll-control layer giving KDPS reliable attendance truth without legacy punch machines — the operational foundation for staffing visibility, discipline, payroll confidence, and incentive governance.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GLOSSARY -->
+    <section id="glossary">
+      <h2 class="sec">4 — Reference</h2>
+      <h3 class="title">Glossary of terms in this PRD</h3>
+      <table>
+        <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><b>PT file</b></td><td>"Packing/Product Transfer" file the brand sends listing what's shipped. Format differs per brand — the thing IINE must normalize.</td></tr>
+          <tr><td><b>GRN</b></td><td>Goods Receipt Note — the structured record of what was physically received (incl. shortages/damages). IINE makes it a first-class system object.</td></tr>
+          <tr><td><b>TIR</b></td><td>The structured, accounting-ready transaction format the accounting software (Tally) needs. <i>Not</i> a vendor file or industry standard — KDPS's internal "books-ready" dataset.</td></tr>
+          <tr><td><b>SOR vs Outright</b></td><td>Sale-or-Return (brand owns stock until sold, with a return window) vs Outright (KDPS owns from day one). Drives margin, returns &amp; EOSS rules.</td></tr>
+          <tr><td><b>EOSS</b></td><td>End Of Season Sale. Can involve "billed but retained" stock — commercially billed for brand settlement while physically staying in the store.</td></tr>
+          <tr><td><b>MBO</b></td><td>Multi-Brand Outlet — a store carrying many brands, which is why stock states &amp; commercial models get complex.</td></tr>
+          <tr><td><b>Billed but Retained</b></td><td>A distinct inventory bucket: stock that's been billed (e.g. under EOSS) but is still physically on the shelf, sold later without re-counting revenue.</td></tr>
+          <tr><td><b>SKU</b></td><td>A specific sellable item. In fashion = Style × Size × Color, so stock must always be tracked at that granularity.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>
+      <p><b>Source:</b> <code>01-plan-and-prd/PRD ( KDPS).pdf</code> (45 pages). This page is a plain-language restatement of that PRD — four modules: IINE, PASCS, SIMAS, WAPCS. Where the PRD is ambiguous, the PDF remains the source of truth.</p>
+      <p>Generated as a client-understanding aid for KDPS.</p>
+    </footer>
+
+  </main>
+</div>
+</body>
+</html>

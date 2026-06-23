@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KDPS Operational Atlas — v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,800;1,9..144,400&family=Crimson+Pro:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #F5EFE4;
+    --bg-alt: #EDE5D5;
+    --ink: #1A1611;
+    --ink-soft: #3D362C;
+    --rule: #C9BFA8;
+    --rule-soft: #DCD3BD;
+    --warning: #B8482A;
+    --warning-soft: #E8C9BE;
+    --insight: #3B5475;
+    --insight-soft: #BFCCDB;
+    --auto: #3F5F47;
+    --auto-soft: #C7D4C7;
+    --muted: #857A6A;
+    --paper: #FAF6EE;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-weight: 400;
+    font-size: 17px;
+    line-height: 1.65;
+    padding: 0;
+    background-image:
+      radial-gradient(circle at 15% 10%, rgba(184, 72, 42, 0.04) 0%, transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(59, 84, 117, 0.04) 0%, transparent 40%);
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 80px 64px 120px;
+  }
+
+  /* HEADER */
+  header.cover {
+    border-top: 6px double var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 48px 0 56px;
+    margin-bottom: 64px;
+    position: relative;
+  }
+
+  .cover-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+  }
+
+  h1.cover-title {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 800;
+    font-size: clamp(48px, 7vw, 88px);
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+
+  h1.cover-title em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--warning);
+  }
+
+  .cover-subtitle {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 24px;
+    color: var(--ink-soft);
+    margin-top: 16px;
+    max-width: 700px;
+  }
+
+  .cover-meta {
+    margin-top: 40px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .cover-meta dt {
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .cover-meta dd {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* TOC */
+  nav.toc {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 36px 40px;
+    margin-bottom: 80px;
+    position: relative;
+  }
+
+  nav.toc::before {
+    content: 'CONTENTS';
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    position: absolute;
+    top: -8px;
+    left: 32px;
+    background: var(--bg);
+    padding: 0 12px;
+  }
+
+  nav.toc ol {
+    list-style: none;
+    counter-reset: section;
+  }
+
+  nav.toc li {
+    counter-increment: section;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--rule-soft);
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  nav.toc li:last-child { border-bottom: none; }
+
+  nav.toc li::before {
+    content: counter(section, decimal-leading-zero);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    min-width: 32px;
+  }
+
+  nav.toc a {
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 18px;
+    flex: 1;
+    transition: color 0.15s;
+  }
+
+  nav.toc a:hover {
+    color: var(--warning);
+    font-style: italic;
+  }
+
+  nav.toc .toc-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* SECTIONS */
+  section.workflow {
+    margin-bottom: 96px;
+    scroll-margin-top: 24px;
+  }
+
+  .section-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    margin-bottom: 12px;
+  }
+
+  h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 42px;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+    margin-bottom: 16px;
+    color: var(--ink);
+  }
+
+  h2 em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--ink-soft);
+  }
+
+  .section-lede {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 400;
+    font-style: italic;
+    font-size: 22px;
+    line-height: 1.4;
+    color: var(--ink-soft);
+    max-width: 700px;
+    margin-bottom: 36px;
+    border-left: 3px solid var(--warning);
+    padding-left: 24px;
+  }
+
+  h3 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-size: 24px;
+    margin-top: 40px;
+    margin-bottom: 12px;
+    letter-spacing: -0.005em;
+  }
+
+  p { margin-bottom: 16px; }
+
+  p + p { margin-top: -4px; }
+
+  /* DIAGRAM BLOCK */
+  .diagram {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 32px;
+    margin: 32px 0;
+    overflow-x: auto;
+    box-shadow: 4px 4px 0 var(--rule-soft);
+  }
+
+  .diagram-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px dashed var(--rule);
+  }
+
+  .mermaid {
+    text-align: center;
+  }
+
+  /* ANNOTATIONS */
+  .annotation {
+    border-left: 3px solid;
+    padding: 16px 20px;
+    margin: 20px 0;
+    background: var(--paper);
+    font-size: 16px;
+  }
+
+  .annotation.pain {
+    border-color: var(--warning);
+    background: var(--warning-soft);
+  }
+
+  .annotation.insight {
+    border-color: var(--insight);
+    background: var(--insight-soft);
+  }
+
+  .annotation.constraint {
+    border-color: var(--muted);
+    background: var(--bg-alt);
+  }
+
+  .annotation-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    opacity: 0.8;
+  }
+
+  .annotation.pain .annotation-label { color: var(--warning); }
+  .annotation.insight .annotation-label { color: var(--insight); }
+  .annotation.constraint .annotation-label { color: var(--ink-soft); }
+
+  .quote {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 24px;
+    line-height: 1.4;
+    color: var(--ink);
+    margin: 32px 0;
+    padding: 24px 32px;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    position: relative;
+  }
+
+  .quote::before {
+    content: '\201C';
+    font-size: 80px;
+    line-height: 1;
+    position: absolute;
+    top: -8px;
+    left: -16px;
+    color: var(--warning);
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: normal;
+  }
+
+  .quote-attr {
+    font-family: 'JetBrains Mono', monospace;
+    font-style: normal;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-top: 12px;
+    display: block;
+  }
+
+  /* PEOPLE TABLE */
+  table.people {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 16px;
+  }
+
+  table.people thead th {
+    text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 12px 16px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  table.people tbody td {
+    padding: 16px 16px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+
+  table.people tbody td:first-child {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--ink);
+    min-width: 140px;
+  }
+
+  table.people tbody td:nth-child(2) {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 120px;
+  }
+
+  /* INLINE EMPHASIS */
+  .term {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9em;
+    background: var(--bg-alt);
+    padding: 1px 8px;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+
+  strong {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  em.brand-name {
+    font-style: italic;
+    color: var(--warning);
+    font-weight: 500;
+  }
+
+  /* DIVIDER */
+  .divider {
+    text-align: center;
+    margin: 80px 0;
+    color: var(--rule);
+    letter-spacing: 1em;
+    font-size: 14px;
+  }
+
+  /* CONSTRAINTS LIST */
+  ul.constraints {
+    list-style: none;
+    margin: 24px 0;
+  }
+
+  ul.constraints li {
+    padding: 14px 0 14px 32px;
+    border-bottom: 1px solid var(--rule-soft);
+    position: relative;
+  }
+
+  ul.constraints li::before {
+    content: '§';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    color: var(--warning);
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 20px;
+  }
+
+  /* FOOTER */
+  footer {
+    margin-top: 120px;
+    padding-top: 32px;
+    border-top: 6px double var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  /* TWO COL */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    margin: 32px 0;
+  }
+
+  @media (max-width: 768px) {
+    .container { padding: 40px 24px 80px; }
+    .two-col { grid-template-columns: 1fr; gap: 24px; }
+    nav.toc { padding: 24px; }
+  }
+
+  /* MARGIN NOTES */
+  .margin-note {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--muted);
+    padding: 12px 16px;
+    background: var(--bg-alt);
+    margin: 12px 0;
+    border-radius: 2px;
+  }
+
+  .margin-note::before {
+    content: '※ ';
+    color: var(--warning);
+    font-style: normal;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- COVER -->
+<header class="cover">
+  <div class="cover-eyebrow">Operational Atlas · Volume I</div>
+  <h1 class="cover-title">KDPS<br/><em>Workflow Anatomy</em></h1>
+  <p class="cover-subtitle">A descriptive map of how invoices, goods, money, and people move through the existing operation — as observed in a single two-hour session at the Ranchi office.</p>
+  <dl class="cover-meta">
+    <div>
+      <dt>Source</dt>
+      <dd>Operations meeting, head office</dd>
+    </div>
+    <div>
+      <dt>Subjects</dt>
+      <dd>Operations lead + observer</dd>
+    </div>
+    <div>
+      <dt>Status</dt>
+      <dd>v1 · Pre-store-visit</dd>
+    </div>
+    <div>
+      <dt>Scope</dt>
+      <dd>Current state · Not architectural</dd>
+    </div>
+  </dl>
+</header>
+
+<!-- TOC -->
+<nav class="toc">
+  <ol>
+    <li><a href="#two-realities">The Two Realities of Inbound Stock</a><span class="toc-tag">overview</span></li>
+    <li><a href="#branded">The Branded PT Generation Workflow</a><span class="toc-tag">priority #1</span></li>
+    <li><a href="#nonbranded">The Non-Branded PT Generation Workflow</a><span class="toc-tag">priority #1</span></li>
+    <li><a href="#image">The Image Quality Sub-Workflow</a><span class="toc-tag">friction</span></li>
+    <li><a href="#booking">The Upstream Booking System</a><span class="toc-tag">context</span></li>
+    <li><a href="#reporting">The Monthly Reporting Cycle</a><span class="toc-tag">priority #2</span></li>
+    <li><a href="#pos">The POS &amp; Sales Reality</a><span class="toc-tag">downstream</span></li>
+    <li><a href="#discount">The Discount Application Workflow</a><span class="toc-tag">leakage</span></li>
+    <li><a href="#people">The People &amp; Their Roles</a><span class="toc-tag">reference</span></li>
+    <li><a href="#constraints">Structural Constraints</a><span class="toc-tag">reference</span></li>
+    <li><a href="#voice">The Client's Own Words</a><span class="toc-tag">reference</span></li>
+    <li><a href="#unknown">What This Visit Did Not Cover</a><span class="toc-tag">gaps</span></li>
+  </ol>
+</nav>
+
+<!-- 1. TWO REALITIES -->
+<section class="workflow" id="two-realities">
+  <div class="section-num">§ 01</div>
+  <h2>The Two Realities <em>of Inbound Stock</em></h2>
+  <p class="section-lede">Before any workflow can be understood, one fact must be held in mind: KDPS operates two entirely different inbound supply chains at the same time, with different documents, different vendors, different routes, and different headaches.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 01 · The Bifurcation of Inbound</div>
+    <pre class="mermaid">
+flowchart TB
+  start([Stock arrives at KDPS network]):::start
+  start --> q{Branded<br/>or non-branded?}
+  q -- Branded ~70% --> a[Madura group + others<br/>Van Heusen, Allen Solly,<br/>Peter England, Louis Philippe]
+  q -- Non-branded ~30% --> b[Sarees, kurtis, kids wear,<br/>petticoats, accessories]
+  a --> a1[Invoice format mostly standard]
+  a --> a2[Master PT file from brand<br/>every 15 days]
+  a --> a3[Routes direct to stores<br/>OR via warehouse]
+  b --> b1[Tally invoice only<br/>qty + rate + HSN + GST]
+  b --> b2[No master PT file<br/>No barcode, no MRP]
+  b --> b3[99.9% routed to warehouse]
+  classDef start fill:#F5EFE4,stroke:#1A1611,stroke-width:2px,color:#1A1611
+  classDef branded fill:#BFCCDB,stroke:#3B5475,color:#1A1611
+  classDef nonbranded fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  class a,a1,a2,a3 branded
+  class b,b1,b2,b3 nonbranded
+    </pre>
+  </div>
+
+  <div class="annotation insight">
+    <div class="annotation-label">Why this matters</div>
+    Every other workflow on this page branches off this distinction. The same operations team, the same office, the same WhatsApp groups handle both paths — but the work required is fundamentally different. Branded is pattern-matching against a known master. Non-branded is interpretation from incomplete data.
+  </div>
+</section>
+
+<!-- 2. BRANDED -->
+<section class="workflow" id="branded">
+  <div class="section-num">§ 02 · Priority #1 (stated by client)</div>
+  <h2>The Branded PT <em>Generation Workflow</em></h2>
+  <p class="section-lede">The bottleneck of the entire operation. A single invoice consumes four humans on its way to becoming a billable PT file. One absence breaks the chain.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 02 · The Four-Person Funnel</div>
+    <pre class="mermaid">
+flowchart TB
+  brand[Brand dispatches stock + invoice]:::brand
+  brand --> goods{Destination?}
+  goods -- Direct --> store[Store receives goods]
+  goods -- Routed --> wh[Warehouse receives goods]
+  brand -. every 15 days .-> masterpt[Master PT File<br/>East Zone allocations<br/>across all KDPS stores]:::brand
+  store --> wa[Store sends invoice photo<br/>via WhatsApp to head office]:::pain
+  wh --> wa
+  wa --> priyo[Operations lead opens master PT file<br/>searches invoice ref #<br/>extracts data into KDPS format]:::person
+  masterpt --> priyo
+  priyo --> ptfile[KDPS-format PT Excel<br/>generated]:::output
+  ptfile --> wagroup[Posted to WhatsApp group]:::pain
+  wagroup --> tanmay[Verifier: check parameters<br/>GST correct? Margins applied?<br/>MRP set?]:::person
+  tanmay --> rahul[Inwarder: marks as inwarded<br/>in system]:::person
+  rahul --> mahendra[Approver: final OK<br/>triggers billing to stores]:::person
+  mahendra --> bill[Stores billed]:::output
+  bill --> storeenter[Store enters PT file<br/>into their POS system]
+  classDef brand fill:#BFCCDB,stroke:#3B5475,color:#1A1611
+  classDef person fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef output fill:#C7D4C7,stroke:#3F5F47,color:#1A1611
+    </pre>
+  </div>
+
+  <h3>What the human actually does</h3>
+  <p>The operations lead opens the master PT file. They search for the invoice reference number — for example, <span class="term">3219</span> — which appears on the invoice. That same reference appears as a row identifier in the master. They copy the relevant data into the KDPS internal format. This is pattern matching, not creative work. It could be done by software that has been shown the two files.</p>
+
+  <p>The other three people in the chain perform verification, status-update, and approval steps. None of them re-interpret the invoice. They check that the previous person did their job correctly.</p>
+
+  <div class="annotation pain">
+    <div class="annotation-label">Pain · stated by operations lead</div>
+    "PT file ek funnel ki tarah ho gaya hai." The PT file process has become a funnel. Four people working heavily. If any one of them is missing, the entire work stops. Stores are sending requests on a daily basis throughout the day.
+  </div>
+
+  <div class="annotation pain">
+    <div class="annotation-label">Pain · WhatsApp as primary tool</div>
+    The operations team works on PCs but the tool is WhatsApp. WhatsApp Web frequently shows "could not find message" for older files. To match a barcode against an older invoice, someone has to scroll backwards through weeks of conversation. The folder structure on disk maintains separate folders per season per store, just so pending files can be located.
+  </div>
+
+  <div class="margin-note">
+    The invoice reference number → master PT row lookup is one of the cleanest cases of automation-ready work observed during the visit. The brand has already done the structuring; KDPS is doing the lookup by hand.
+  </div>
+</section>
+
+<!-- 3. NON-BRANDED -->
+<section class="workflow" id="nonbranded">
+  <div class="section-num">§ 03 · Priority #1 (stated by client)</div>
+  <h2>The Non-Branded PT <em>Generation Workflow</em></h2>
+  <p class="section-lede">A different shape of pain. The invoice itself is incomplete, so KDPS performs the work that the brand would normally perform — naming items, assigning prices, generating barcodes.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 03 · The Manual Interpretation Loop</div>
+    <pre class="mermaid">
+flowchart TB
+  vendor["Vendor invoice<br/>via Tally"]:::vendor
+  vendor --> v1["Has: quantity, rate, HSN, GST"]
+  vendor --> v2["Missing: barcode, MRP,<br/>item description, size"]
+  v1 --> arrive["99.9% goods arrive at warehouse"]
+  v2 --> arrive
+  arrive --> call_vendor["Phone call to vendor<br/>What is style code X?<br/>Kurti? Plazo? Patiala?"]:::pain
+  call_vendor --> identify["Item identified<br/>category established"]
+  identify --> mrpwork["MRP set manually<br/>cost + 1.1% transport<br/>+ 30-35% margin"]:::manual
+  identify --> bcwork["Barcode generated manually<br/>1 per item type<br/>varied by size only"]:::manual
+  identify --> catwork["Categorization applied<br/>shirt → topwear → casual<br/>fixed taxonomy"]:::manual
+  mrpwork --> assemble["PT file assembled in KDPS format"]
+  bcwork --> assemble
+  catwork --> assemble
+  assemble --> chain["Same 4-person approval chain<br/>see Figure 02"]
+  chain --> stickerprint["Barcode stickers printed<br/>applied during billing to stores"]
+  classDef vendor fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef manual fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+    </pre>
+  </div>
+
+  <h3>The specific friction of this path</h3>
+  <p>The invoice arrives and tells KDPS almost nothing. For Radha Krishna Silk, a saree vendor, the invoice contained only HSN, GST, quantity, and rate. Everything else — what the item actually is, what colour, what size, what it should be sold for — comes from elsewhere.</p>
+
+  <p>Speaker 1 described the workflow plainly: he calls the vendor. He asks what the style codes represent. He takes notes. Then he constructs the PT file from those notes plus the invoice.</p>
+
+  <p>Sarees in particular resist differentiation. Free size. Many colours, no practical way to encode every variation in the SKU. The compromise: one barcode per item type, sized variants where applicable, colour treated as a non-modeled attribute.</p>
+
+  <div class="annotation pain">
+    <div class="annotation-label">Pain · same barcode, different MRPs</div>
+    A subtle constraint that the system must honour: a barcode generated for a previous lot of a non-branded item may be reused for a new lot at a different MRP. Software that assumes <span class="term">barcode → price</span> is a one-to-one mapping will break here.
+  </div>
+
+  <div class="annotation insight">
+    <div class="annotation-label">Insight · margins are not gut-based</div>
+    KDPS applies a flat 1.1% transport cost to base rate. On top of that, branded items earn approximately 25% margin and non-branded items earn 30-35%. These are documented internal rates. Variations on these rates are driven by demand history on repeat purchases — when a style sold well last cycle, it earns slightly less margin headroom because it must be procured competitively.
+  </div>
+</section>
+
+<!-- 4. IMAGE -->
+<section class="workflow" id="image">
+  <div class="section-num">§ 04 · Friction</div>
+  <h2>The Image Quality <em>Sub-Workflow</em></h2>
+  <p class="section-lede">A small workflow with disproportionate cost. Before any PT generation can begin, a usable image of the invoice must exist. Today, that often requires Photoshop.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 04 · From Paper Invoice to Readable PDF</div>
+    <pre class="mermaid">
+flowchart LR
+  paper[Paper invoice<br/>at store]:::input
+  paper --> photo[Store staff<br/>takes photo<br/>often crooked / blurry / tilted]:::pain
+  photo --> waupload[Sent to head office via WhatsApp]
+  waupload --> download[Operations downloads photo]
+  download --> photoshop[Photoshop<br/>straighten + clean + sharpen]:::pain
+  photoshop --> readable[Photo now readable]
+  readable --> continues[Continues into PT workflow<br/>see Figures 02 or 03]
+  classDef input fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+    </pre>
+  </div>
+
+  <div class="annotation insight">
+    <div class="annotation-label">The fix the client articulated</div>
+    Quality enforcement should happen at capture time, not at processing time. The handheld device used at the store should refuse to upload an unreadable photo. The phrase the client used: <em>"Data is not clear, redo it."</em> The capture device should also auto-convert to PDF, auto-rename the file using a consistent scheme (Invoice + Brand), and end the practice of maintaining one folder per store per season just to find pending files.
+  </div>
+</section>
+
+<!-- 5. BOOKING -->
+<section class="workflow" id="booking">
+  <div class="section-num">§ 05 · Context</div>
+  <h2>The Upstream <em>Booking System</em></h2>
+  <p class="section-lede">Everything that arrives downstream was committed to long before any invoice was generated. The booking system is verbal, mediated by regional agents, and entirely off-system today.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 05 · How Stock Gets Committed Before Anyone Sees an Invoice</div>
+    <pre class="mermaid">
+flowchart TB
+  kdps[KDPS team visits factory or vendor<br/>across India]:::kdps
+  kdps --> verbal[Verbal booking<br/>style code + quantity<br/>no paper, no system entry]:::pain
+  verbal --> agent[Regional agent witnesses<br/>and guarantees the deal]:::agent
+  agent --> known[KDPS is a known group<br/>no upfront financial commitment required]
+  known --> dispatch[Vendor dispatches per agreed schedule]
+  dispatch --> invoice[Invoice generated only at dispatch]
+  invoice --> arrival[Goods + invoice arrive<br/>see Figures 02 / 03]
+  agent --> commission[Agent earns 1-2% commission<br/>on dispatched value]
+  agent --> paycycle[Agent enforces<br/>60-day payment cycle]
+  branded[Branded items]:::brand -. 6-8 months in advance .-> kdps
+  nonbranded[Non-branded items]:::nonbranded -. 3-4 months in advance .-> kdps
+  classDef kdps fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef agent fill:#BFCCDB,stroke:#3B5475,color:#1A1611
+  classDef brand fill:#BFCCDB,stroke:#3B5475,color:#1A1611
+  classDef nonbranded fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+    </pre>
+  </div>
+
+  <h3>The agent as institution</h3>
+  <p>Each major sourcing region — Mumbai, Kolkata, Indore, Raipur, Bangalore — has one dedicated agent. The agent is not a KDPS employee. He is a guarantor on both sides. He guarantees to the vendor that KDPS will pay within the 60-day cycle. He guarantees to KDPS that the vendor will dispatch on schedule. His compensation is a 1-2% commission negotiated with the vendor side.</p>
+
+  <p>The agent persists across vendor changes. If KDPS stops buying from one factory in Mumbai and starts buying from another, the same Mumbai agent typically handles the new relationship. This is institutional memory that lives entirely in the agent's head.</p>
+
+  <div class="annotation constraint">
+    <div class="annotation-label">Constraint · upstream is unstructured</div>
+    Any future system that tries to reconcile vendor performance, predict supply, or audit payment cycles is reaching into territory that today has no digital footprint. The agent's commitments, the verbal bookings, the schedule expectations — none of it is captured in any tool. The arrival of an invoice is the first structured event in this entire chain.
+  </div>
+</section>
+
+<!-- 6. REPORTING -->
+<section class="workflow" id="reporting">
+  <div class="section-num">§ 06 · Priority #2 (stated by client)</div>
+  <h2>The Monthly <em>Reporting Cycle</em></h2>
+  <p class="section-lede">Half of the working month consumed by a single recurring obligation. Brand commission depends on it. Employee payroll depends on brand commission. There is no alternative path.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 06 · The 1st-to-7th Crunch and Its Aftermath</div>
+    <pre class="mermaid">
+flowchart TB
+  day1[Day 1 of month<br/>cycle begins]:::day1
+  day1 --> threepeople[Reporting team · 3 people<br/>work from home<br/>18-19 hour days<br/>multiple screens]:::pain
+  threepeople --> activity{Activities running in parallel}
+  activity --> daily[Daily WhatsApp digests<br/>per brand per store<br/>submitted by 11 PM nightly]
+  activity --> commission[Per-brand commission report<br/>cross-check every sale<br/>vs brand promotional offers]
+  activity --> retro[Apply offers retroactively<br/>where salesman missed them<br/>still claim from brand]:::insight
+  activity --> employee[Per-employee attendance<br/>+ per-employee incentive<br/>multi-brand calculations]
+  daily --> submit[Email all to brands<br/>by 4th-5th of month]:::deadline
+  commission --> submit
+  retro --> submit
+  employee --> submit
+  submit --> brand[Brand processes by 7th]
+  brand --> commipay[Commission paid to KDPS]:::output
+  commipay --> salary[KDPS pays employee salaries]:::output
+  day8[Day 8 onward<br/>backlog clearing]:::day2
+  threepeople --> dayhold[PT-file work goes on hold<br/>during this week]:::pain
+  dayhold --> day8
+  day8 --> day15[Day 8-15<br/>backlog cleared<br/>~5-8 days of recovery]
+  day15 --> rest[Day 15-30<br/>audits, store closures,<br/>internal problems, ad hoc]
+  classDef day1 fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef day2 fill:#C7D4C7,stroke:#3F5F47,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef deadline fill:#BFCCDB,stroke:#3B5475,color:#1A1611
+  classDef insight fill:#FAF6EE,stroke:#3B5475,color:#1A1611
+  classDef output fill:#C7D4C7,stroke:#3F5F47,color:#1A1611
+    </pre>
+  </div>
+
+  <div class="quote">
+    From morning we wake up, brush, drink tea — we work from home, the whole reporting team. We don't have time to breathe. The whole month, the first half goes here, the next 5-8 days clearing the backlog. Half the month gone.
+    <span class="quote-attr">operations lead · on the 1st-7th cycle</span>
+  </div>
+
+  <h3>The retroactive offer application</h3>
+  <p>One detail buried in the workflow deserves attention. When a salesman at a store fails to apply an eligible brand discount during a sale, KDPS still claims the brand-funded portion of that discount in the commission report. They apply the offer retroactively on paper and report it as if it had been applied at billing time. This is a known practice on the KDPS side. Whether the brand audits this is a separate question.</p>
+
+  <div class="annotation constraint">
+    <div class="annotation-label">Constraint · the deadline is non-negotiable</div>
+    The submission deadline of 4th-5th is determined by the brand, not by KDPS preference. If KDPS misses it, the brand delays the commission disbursement to the 7th or beyond. If commission is delayed, KDPS payroll is delayed. The reporting cycle is therefore the most rigid and least flexible workflow in the entire operation.
+  </div>
+</section>
+
+<!-- 7. POS -->
+<section class="workflow" id="pos">
+  <div class="section-num">§ 07 · Downstream</div>
+  <h2>The POS &amp; <em>Sales Reality</em></h2>
+  <p class="section-lede">The shop floor is the last place an inventory item touches before becoming a number in a report. The technology there is old, fragmented, and frequently in disagreement with itself.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 07 · Point of Sale, As It Exists</div>
+    <pre class="mermaid">
+flowchart TB
+  customer[Customer at counter]:::input
+  customer --> placard[Salesman checks physical placards<br/>for current brand offers]:::manual
+  placard --> calc[Manually calculates discount]:::manual
+  calc --> pos[Enters into POS system<br/>5-7 years old<br/>painfully slow]:::pain
+  pos --> mrpcheck{Same barcode<br/>multiple MRPs<br/>across lots?}
+  mrpcheck -- Yes --> err[Error: Stock not available]:::pain
+  mrpcheck -- No --> ring[Sale rings up]:::output
+  err --> manualbill[Manual billing workaround<br/>customer served<br/>backend reconciles later]:::pain
+  ring --> day[Day continues]
+  manualbill --> day
+  day --> closing[Store closes<br/>POS export retrieved]
+  closing --> reportlogin[Head office logs in<br/>to 5+ store POS accounts<br/>one at a time<br/>compiles report manually]:::pain
+  classDef input fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef manual fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef output fill:#C7D4C7,stroke:#3F5F47,color:#1A1611
+    </pre>
+  </div>
+
+  <div class="annotation pain">
+    <div class="annotation-label">Pain · no consolidated view</div>
+    To compile a network-wide report, the operations lead logs into multiple separate POS store accounts one by one, retrieves the export from each, and stitches the results together by hand. There is no global dashboard. Adding a store means adding another login to the rotation.
+  </div>
+
+  <div class="annotation pain">
+    <div class="annotation-label">Pain · the barcode price collision</div>
+    A consequence of reusing barcodes for new lots of non-branded items at different MRPs. The POS frequently encounters a scanned barcode for which it cannot determine which MRP applies. The displayed error is "Stock not available." Staff perform a manual billing workaround to serve the waiting customer, and the back office reconciles the entry afterwards.
+  </div>
+
+  <h3>EBO vs MBO clarification</h3>
+  <p>Exclusive Brand Outlets (EBOs) — single-brand stores — were explicitly placed outside the scope of any KDPS system intervention. The brand provides its own software for those locations. KDPS's pain, and therefore the system's responsibility, lies entirely with Multi-Brand Outlets (MBOs) and direct stores. The Deoghar store, branded as KDPS Lifestyle, falls inside scope.</p>
+</section>
+
+<!-- 8. DISCOUNT -->
+<section class="workflow" id="discount">
+  <div class="section-num">§ 08 · Leakage</div>
+  <h2>The Discount Application <em>Workflow</em></h2>
+  <p class="section-lede">A structural revenue leak. The current enforcement mechanism for brand discounts is paper signs in stores and salesman discretion at the counter. The gap between these two is unguarded.</p>
+
+  <div class="diagram">
+    <div class="diagram-label">Figure 08 · How Discounts Are Applied (and Misapplied)</div>
+    <pre class="mermaid">
+flowchart TB
+  offer[Brand publishes offer<br/>e.g., 40% off Van Heusen jackets]:::input
+  offer --> placard[Placard placed in store<br/>physical signage]:::manual
+  placard --> sale[Customer purchases<br/>eligible item]
+  sale --> salesman{Salesman applies discount}
+  salesman -- Honestly --> apply40[40% applied at POS<br/>full discount to customer]:::output
+  salesman -- Dishonestly --> apply20[20% applied at POS<br/>customer thinks this is the deal<br/>salesman pockets 20% difference]:::pain
+  apply20 --> cover[MRP-to-MRP exchanges<br/>used to mask the gap<br/>in records]:::pain
+  apply40 --> brand[Brand reimburses<br/>via commission report]
+  apply20 --> brand
+  cover --> brand
+  classDef input fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef manual fill:#FAF6EE,stroke:#1A1611,color:#1A1611
+  classDef pain fill:#E8C9BE,stroke:#B8482A,color:#1A1611
+  classDef output fill:#C7D4C7,stroke:#3F5F47,color:#1A1611
+    </pre>
+  </div>
+
+  <div class="annotation insight">
+    <div class="annotation-label">The fix as articulated by the client</div>
+    Hardcode the discount rules at the barcode × brand × period level. The POS should refuse to ring up a Van Heusen jacket at any discount other than the brand-funded one currently in force. The salesman should lose the ability to enter a custom percentage. The quote from the client: <em>"There are many such small loopholes in the system where there is a source of earning. We have to choke all of that, close it."</em>
+  </div>
+</section>
+
+<div class="divider">· · · ·</div>
+
+<!-- 9. PEOPLE -->
+<section class="workflow" id="people">
+  <div class="section-num">§ 09 · Reference</div>
+  <h2>The Roles <em>in the Operation</em></h2>
+  <p class="section-lede">A flat list of the roles involved in the workflows above, what they do today, and where they appear. Names omitted intentionally — the document describes structure, not individuals.</p>
+
+  <table class="people">
+    <thead>
+      <tr>
+        <th>Role</th>
+        <th>Context</th>
+        <th>What they actually do</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Operations Lead</td>
+        <td>Head office · Ranchi</td>
+        <td>Generates PT files from master + invoice. Owns the master PT file. First point of contact for incoming store requests on WhatsApp. Compiles network-wide reports during the 1st-7th cycle.</td>
+      </tr>
+      <tr>
+        <td>Verifier</td>
+        <td>Head office · WFH during crunch</td>
+        <td>Reviews PT files generated by the operations lead for parameter correctness. Checks GST, margin application, MRP. Approves before inwarding.</td>
+      </tr>
+      <tr>
+        <td>Inwarder</td>
+        <td>Head office</td>
+        <td>Marks approved PT files as inwarded in the system. Status-update role within the chain.</td>
+      </tr>
+      <tr>
+        <td>Approver</td>
+        <td>Head office · billing trigger</td>
+        <td>Final OK on PT files. Triggers the billing event to stores. Also handles manual data entry of multi-item Tally invoices that arrive without standardised data.</td>
+      </tr>
+      <tr>
+        <td>Reporting Team Member</td>
+        <td>Head office · WFH during crunch</td>
+        <td>Part of the 18-19 hour reporting cycle from the 1st through 7th. Specific role within reporting not fully detailed in this meeting.</td>
+      </tr>
+      <tr>
+        <td>Regional Agents</td>
+        <td>External · per major sourcing city</td>
+        <td>Guarantor between KDPS and vendors. Holds verbal bookings together. Enforces 60-day payment cycle in both directions. Earns 1-2% commission. Located in Mumbai, Kolkata, Indore, Raipur, Bangalore, others.</td>
+      </tr>
+      <tr>
+        <td>Salesmen</td>
+        <td>At store · per location</td>
+        <td>Operate POS during sales. Read physical placards for current brand offers. Apply discounts manually. Hold the discount loophole in their hands today.</td>
+      </tr>
+      <tr>
+        <td>Store Managers</td>
+        <td>Per location</td>
+        <td>Scan barcodes to officially receive goods. Post daily WhatsApp reports per store. Forget to take reports approximately 2-3 times per month, requiring ad-hoc generation by head office.</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 10. CONSTRAINTS -->
+<section class="workflow" id="constraints">
+  <div class="section-num">§ 10 · Reference</div>
+  <h2>Structural <em>Constraints</em></h2>
+  <p class="section-lede">Facts about the operation that any future intervention must accommodate. Not opinions, not pain points — constraints that exist independent of which solution is built.</p>
+
+  <ul class="constraints">
+    <li>The same barcode can carry different MRPs across lots, especially for non-branded items. A system cannot assume barcode is the unique price key.</li>
+    <li>Bookings are verbal upstream. There is no paper trail before the invoice arrives. The invoice is the first structured event in the supply chain as far as KDPS digital systems are concerned.</li>
+    <li>Regional agents are external parties holding institutional memory that does not exist in any system. They are the only enforcement layer on payment cycles.</li>
+    <li>Branded item invoices follow the Madura group format more or less consistently. About 70% of stock arrives this way.</li>
+    <li>Non-branded vendors provide minimal data on their invoices. About 30% of stock arrives this way, almost all of it routed through the warehouse rather than direct to stores.</li>
+    <li>The brand-side master PT file arrives every 15 days. Special-case single-shipment PT files can be requested but consolidating to the 15-day rhythm is the operational preference.</li>
+    <li>Exclusive Brand Outlets are outside KDPS system scope. The brand provides software there.</li>
+    <li>The POS system in use is 5-7 years old. It exposes per-store login portals only, with no consolidated view across the network.</li>
+    <li>Brand commission disbursement is gated on report submission by the 4th-5th of each month. Employee payroll is gated on commission disbursement. The cycle is non-negotiable from KDPS's side.</li>
+    <li>EBO format and MBO format differ. Sanskar (Ratu Road) is an example MBO with floor-level segregation by gender. Deoghar operates under the KDPS Lifestyle identity.</li>
+    <li>Style codes embed sub-brand identity (e.g., AL/AS = Allen Solly male, AW = female, AK = kids). Human operators currently parse these.</li>
+  </ul>
+</section>
+
+<!-- 11. VOICE -->
+<section class="workflow" id="voice">
+  <div class="section-num">§ 11 · Reference</div>
+  <h2>The Client's <em>Own Words</em></h2>
+  <p class="section-lede">Direct phrases from the operations lead that should be preserved in any downstream document — they encode priorities, constraints, and emotional state that paraphrase cannot capture.</p>
+
+  <div class="quote">
+    The biggest pain point right now is the PT file. And secondly, the reports from the 1st to the 8th. These two are the most troublesome things. They are at the very top of the priority list. The manual work is just too much.
+    <span class="quote-attr">on what to fix first</span>
+  </div>
+
+  <div class="quote">
+    We are already doing this manually now. Another 4 months of manual is fine. We just need a system to grow into.
+    <span class="quote-attr">on tolerance for a long build cycle</span>
+  </div>
+
+  <div class="quote">
+    Scope of improvement is very large. At this point, with how the tech is evolving, this is unacceptable. You have done a lot of good work normalising the data, but we can make this much better.
+    <span class="quote-attr">on the current state vs. what is possible</span>
+  </div>
+
+  <div class="quote">
+    There are many such small loopholes in the system where there is a source of earning. We have to choke all of that, close it.
+    <span class="quote-attr">on the discount application leak</span>
+  </div>
+
+  <div class="quote">
+    The system will also take time to understand what's going on. But once enough data comes in, prediction will be just a click away. It will learn on its own.
+    <span class="quote-attr">on the expected feedback loop</span>
+  </div>
+
+  <div class="quote">
+    Whatever input the system needs, we are ready to give.
+    <span class="quote-attr">on willingness to participate during training phase</span>
+  </div>
+</section>
+
+<!-- 12. UNKNOWN -->
+<section class="workflow" id="unknown">
+  <div class="section-num">§ 12 · Gaps</div>
+  <h2>What This Visit <em>Did Not Cover</em></h2>
+  <p class="section-lede">An honest enumeration of operational territory still unmapped. These items should drive the agenda for the upcoming store visit and any subsequent head-office conversations.</p>
+
+  <ul class="constraints">
+    <li>The point of sale itself — customer interactions, salesman billing behaviour, queue dynamics at the counter, return processing at stores.</li>
+    <li>The store-side handling of incoming PT files. What happens after the approver bills the store? How does the store inward goods? Who scans what?</li>
+    <li>Tally configuration. The version in use, how vouchers are currently exported or entered, what fields are populated.</li>
+    <li>The brand-specific report templates. Each brand expects a particular format for the monthly commission submission. None of these were collected.</li>
+    <li>Agent-side workflow. Whether agents currently interact with any KDPS digital system, or operate entirely off-system through phone and WhatsApp.</li>
+    <li>The full vendor list. The 70%-branded / 30%-non-branded split was stated; the underlying vendor population was not enumerated.</li>
+    <li>Brand-specific discount rule complexity. The number of currently active rules per brand × category × season is unknown.</li>
+    <li>Attendance recording today. How attendance feeds into the incentive sheets generated during the 1st-7th crunch is unmapped.</li>
+    <li>Defect handling. Speaker 2 mentioned the case of 100 ordered / 96 usable arriving, with returns handled by the regional agent — the workflow itself was not walked through.</li>
+    <li>Store closure and opening events. The Definitive Plan mentions restructuring; the visit did not cover how store transitions are handled today.</li>
+    <li>The relationship between WhatsApp groups and structured data. Daily reports flow as WhatsApp messages, but the storage and retrieval of those messages for monthly aggregation was not detailed.</li>
+    <li>The 0.1% case — when non-branded items mistakenly route directly to stores instead of the warehouse. The recovery workflow when this happens.</li>
+  </ul>
+</section>
+
+<footer>
+  KDPS Operational Atlas · v1 · Compiled from one head-office meeting · Awaiting store visit for v2
+</footer>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'JetBrains Mono, monospace',
+      fontSize: '13px',
+      primaryColor: '#FAF6EE',
+      primaryTextColor: '#1A1611',
+      primaryBorderColor: '#1A1611',
+      lineColor: '#3D362C',
+      secondaryColor: '#BFCCDB',
+      tertiaryColor: '#E8C9BE',
+      background: '#FAF6EE',
+      mainBkg: '#FAF6EE',
+      nodeBorder: '#1A1611',
+      clusterBkg: '#F5EFE4',
+      clusterBorder: '#C9BFA8',
+      titleColor: '#1A1611',
+      edgeLabelBackground: '#F5EFE4'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 16,
+      nodeSpacing: 30,
+      rankSpacing: 50
+    }
+  });
+</script>
+</body>
+</html>

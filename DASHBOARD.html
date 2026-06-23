@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS ERP — Project Command Center</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --navy3:#3a4f7a;
+    --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#1c2230; --ink2:#3a4252; --muted:#6b7280; --faint:#9aa0ad;
+    --line:#e4e7ee; --bg:#eef1f6; --card:#ffffff; --panel:#f7f8fb;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --green-line:#bfe3cd;
+    --amber:#9a6700; --amber-bg:#fdf3da; --amber-line:#ecd9a6;
+    --red:#b3261e; --red-bg:#fce8e6; --red-line:#f3c9c4;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --blue-line:#cfe0f5;
+    --grey-bg:#eceff4;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 22px 90px}
+
+  /* ---- sticky top bar ---- */
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(31,45,77,.97);backdrop-filter:blur(6px);
+    color:#fff;border-bottom:3px solid var(--rust)}
+  .topbar .inner{max-width:1180px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .topbar .brand{font-weight:800;letter-spacing:.02em;font-size:15px;white-space:nowrap}
+  .topbar .brand small{display:block;font-weight:500;color:var(--rust-soft);letter-spacing:.14em;font-size:9.5px;text-transform:uppercase}
+  .topbar nav{display:flex;gap:3px;flex-wrap:wrap;flex:1}
+  .topbar nav a{color:#c9d2e2;font-size:12.5px;padding:5px 9px;border-radius:7px}
+  .topbar nav a:hover{background:var(--navy3);color:#fff;text-decoration:none}
+  .topbar .live{font-size:11.5px;color:#aeb8cd;white-space:nowrap}
+  .topbar .live b{color:#fff}
+
+  /* ---- hero ---- */
+  header.hero{background:linear-gradient(135deg,#1b2742,#33456e 70%,#3f5183);color:#fff;
+    padding:34px 0 30px;border-bottom:1px solid #25304d}
+  .hero .eyebrow{color:var(--rust-soft);font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:11px;margin:0 0 8px}
+  .hero h1{font-size:30px;line-height:1.12;margin:0 0 8px;font-weight:800}
+  .hero .lede{color:#d6ddec;font-size:16px;max-width:74ch;margin:0}
+  .hero .stamp{color:#9fa9c2;font-size:12px;margin-top:14px}
+
+  /* ---- metric strip ---- */
+  .metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:-26px 0 8px;position:relative;z-index:5}
+  @media(max-width:900px){.metrics{grid-template-columns:repeat(2,1fr)}}
+  .metric{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:0 4px 14px rgba(20,30,60,.07)}
+  .metric .big{font-size:27px;font-weight:800;color:var(--navy);line-height:1}
+  .metric .big span{font-size:15px;color:var(--faint);font-weight:700}
+  .metric .lbl{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.35}
+  .metric.alert .big{color:var(--rust)}
+
+  /* ---- sections ---- */
+  section{margin:40px 0;scroll-margin-top:64px}
+  .sechead{display:flex;align-items:baseline;gap:12px;margin:0 0 4px}
+  h2.sec{font-size:19px;color:var(--navy);margin:0;font-weight:800}
+  .sec-n{font-size:12px;font-weight:800;color:#fff;background:var(--rust);border-radius:6px;padding:2px 8px;letter-spacing:.04em}
+  .secsub{color:var(--muted);font-size:13.5px;margin:0 0 14px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:17px 19px;margin:12px 0;box-shadow:0 1px 2px rgba(20,30,60,.04)}
+
+  /* ---- START HERE hero card ---- */
+  .start{display:grid;grid-template-columns:1.4fr 1fr;gap:0;border-radius:18px;overflow:hidden;border:1px solid var(--line);box-shadow:0 6px 22px rgba(20,30,60,.08);margin:18px 0}
+  @media(max-width:820px){.start{grid-template-columns:1fr}}
+  .start .now{background:linear-gradient(150deg,#c4623f,#a94e30);color:#fff;padding:24px 26px}
+  .start .now .tag{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.85}
+  .start .now h3{font-size:23px;margin:8px 0 6px;line-height:1.15}
+  .start .now p{margin:6px 0;font-size:14px;color:#ffe9df}
+  .start .now .why{font-size:13px;color:#ffd9c9;border-top:1px solid rgba(255,255,255,.25);padding-top:11px;margin-top:13px}
+  .start .now a.go{display:inline-block;margin-top:14px;background:#fff;color:#a94e30;font-weight:800;
+    font-size:13.5px;padding:9px 16px;border-radius:9px;text-decoration:none}
+  .start .now a.go:hover{background:#fff4ef;text-decoration:none}
+  .start .queue{background:#fff;padding:22px 24px}
+  .start .queue h4{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
+  .qstep{display:grid;grid-template-columns:24px 1fr;gap:11px;padding:10px 0;border-top:1px solid var(--line)}
+  .qstep:first-of-type{border-top:none}
+  .qn{width:24px;height:24px;border-radius:50%;background:var(--grey-bg);color:var(--navy2);font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .qstep .t{font-size:13.8px;font-weight:700;color:var(--navy)}
+  .qstep .s{font-size:12.5px;color:var(--muted)}
+  .reassure{background:#f3f6fc;border:1px solid #d8e3f2;border-radius:12px;padding:13px 16px;margin:14px 0;font-size:14px}
+  .reassure b{color:var(--navy)}
+
+  /* ---- lifecycle stages ---- */
+  .stages{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;margin:6px 0}
+  @media(max-width:900px){.stages{grid-template-columns:repeat(4,1fr)}}
+  @media(max-width:520px){.stages{grid-template-columns:repeat(2,1fr)}}
+  .stg{border-radius:11px;padding:11px 11px 12px;border:1px solid var(--line);background:#fff;position:relative}
+  .stg .sn{font-size:10px;font-weight:800;color:var(--faint);letter-spacing:.05em}
+  .stg .st{font-size:12.6px;font-weight:700;color:var(--ink2);margin-top:3px;line-height:1.25}
+  .stg .sp{font-size:10px;font-weight:800;margin-top:7px;display:inline-block;padding:2px 7px;border-radius:20px}
+  .stg.done{background:var(--green-bg);border-color:var(--green-line)} .stg.done .sp{background:#fff;color:var(--green)}
+  .stg.done .sn{color:var(--green)}
+  .stg.now{background:var(--navy);border-color:var(--navy)} .stg.now .sn{color:var(--rust-soft)} .stg.now .st{color:#fff} .stg.now .sp{background:var(--rust);color:#fff}
+  .stg.todo .sp{background:var(--grey-bg);color:var(--muted)}
+
+  /* ---- module grid ---- */
+  table{width:100%;border-collapse:collapse;margin:8px 0;font-size:13.4px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th{background:var(--navy);color:#fff;text-align:left;padding:9px 12px;font-size:12px;letter-spacing:.02em;font-weight:600}
+  td{padding:9px 12px;border-top:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfd}
+  td.mod{font-weight:700;color:var(--navy);white-space:nowrap}
+  .chip{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.02em;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  .c-done{background:var(--green-bg);color:var(--green)}
+  .c-prog{background:var(--blue-bg);color:var(--blue)}
+  .c-todo{background:var(--grey-bg);color:var(--muted)}
+  .c-warn{background:var(--amber-bg);color:var(--amber)}
+  .c-stop{background:var(--red-bg);color:var(--red)}
+  .meter{display:inline-flex;gap:3px;vertical-align:middle}
+  .meter i{width:9px;height:9px;border-radius:2px;background:#d7dbe2;display:inline-block}
+  .meter i.on{background:var(--rust)}
+  .grade{font-weight:800;color:var(--navy);font-size:13px}
+
+  /* ---- tracker (checkable) ---- */
+  .trk-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 8px}
+  .progbar{flex:1;min-width:160px;height:9px;background:#e2e6ee;border-radius:20px;overflow:hidden}
+  .progbar i{display:block;height:100%;background:linear-gradient(90deg,#2c8a5b,#1f7a4d);width:0;transition:width .3s}
+  .progtxt{font-size:12.5px;color:var(--muted);font-weight:700;white-space:nowrap}
+  .grp{margin:14px 0 4px}
+  .grp h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--navy2);margin:0 0 2px}
+  .grp .gsub{font-size:12px;color:var(--muted);margin:0 0 6px}
+  .item{display:grid;grid-template-columns:22px 1fr auto;gap:11px;align-items:start;padding:10px 0;border-top:1px solid var(--line)}
+  .item:first-of-type{border-top:none}
+  .item label{cursor:pointer;font-size:13.4px}
+  .item input{width:17px;height:17px;margin-top:2px;cursor:pointer;accent-color:var(--green)}
+  .item .where{font-size:11.5px;color:var(--faint);margin-top:2px}
+  .item.checked label .ttl{text-decoration:line-through;color:var(--faint)}
+  .sev{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;white-space:nowrap;align-self:start;margin-top:1px}
+  .s-high{background:var(--red-bg);color:var(--red)}
+  .s-med{background:var(--amber-bg);color:var(--amber)}
+  .s-low{background:var(--grey-bg);color:var(--muted)}
+  .ttl{font-weight:600;color:var(--ink)}
+  .resetbtn{font-size:11.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer}
+  .resetbtn:hover{background:var(--panel)}
+
+  /* ---- gates ---- */
+  .gates{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(max-width:760px){.gates{grid-template-columns:1fr}}
+  .gate{border:1px solid var(--line);border-radius:13px;padding:14px 16px;background:#fff;border-left:4px solid var(--amber)}
+  .gate.risk{border-left-color:var(--red)}
+  .gate h4{margin:0 0 3px;font-size:14.5px;color:var(--navy)}
+  .gate .q{font-size:12.8px;color:var(--ink2);margin:5px 0}
+  .gate .meta{font-size:11.5px;color:var(--muted);margin-top:7px}
+
+  /* ---- slices ---- */
+  .slice{display:grid;grid-template-columns:32px 1fr;gap:12px;border-top:1px solid var(--line);padding:11px 0}
+  .slice:first-of-type{border-top:none}
+  .snum{width:32px;height:32px;border-radius:9px;background:var(--navy);color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:13px}
+  .slice.gated .snum{background:var(--amber)}
+  .slice h4{margin:0 0 2px;font-size:14px;color:var(--navy)}
+  .slice .d{font-size:13px;color:var(--ink2)}
+
+  /* ---- doc launcher ---- */
+  .libgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(max-width:820px){.libgrid{grid-template-columns:1fr}}
+  .libcol h4{font-size:12.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--rust);margin:14px 0 4px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .libcol h4:first-child{margin-top:0}
+  .lib{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13.2px}
+  .lib .ic{font-size:11px;width:34px;text-align:center;color:var(--muted);background:var(--grey-bg);border-radius:5px;padding:1px 0;font-weight:700;flex:0 0 34px}
+  .lib a{flex:1}
+  .lib .st{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px}
+
+  .callout{border-radius:12px;padding:13px 16px;margin:13px 0;border:1px solid;font-size:13.8px}
+  .co-good{background:var(--green-bg);border-color:var(--green-line)}
+  .co-note{background:#f3f1fb;border-color:#dcd3f3}
+  .callout b{color:var(--navy)}
+  footer{margin-top:50px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+
+<!-- ============ STICKY TOP BAR ============ -->
+<div class="topbar">
+  <div class="inner">
+    <div class="brand">KDPS ERP<small>Command Center</small></div>
+    <nav>
+      <a href="#start">Start here</a>
+      <a href="#lifecycle">Stages</a>
+      <a href="#modules">Modules</a>
+      <a href="#sync">Sync &amp; loose ends</a>
+      <a href="#gates">External gates</a>
+      <a href="#build">Build plan</a>
+      <a href="#library">All documents</a>
+    </nav>
+    <div class="live">Sync items resolved: <b id="liveCount">0 / 0</b></div>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">One screen · the whole project</p>
+    <h1>Design done. Next: build the foundation.</h1>
+    <p class="lede">Not lost — just spread across 8 folders with nothing showing the whole board. Here it is: where you stand, what's out of sync, the external unknowns, the build road, and a link to every document. Tick things off as you close them.</p>
+    <p class="stamp">Live command center · 23 June 2026 · synthesises the build playbook + the build-readiness audit + the folder map. Edit it as facts change.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- METRIC STRIP -->
+  <div class="metrics">
+    <div class="metric"><div class="big">8 <span>/ 9</span></div><div class="lbl">module designs done. <b>D9 deferred</b> — building now.</div></div>
+    <div class="metric"><div class="big">5 <span>/ 8</span></div><div class="lbl">lifecycle — <b>project setup</b> (the foundation).</div></div>
+    <div class="metric alert"><div class="big" id="m-sync">7</div><div class="lbl">sync issues &amp; loose ends still open.</div></div>
+    <div class="metric alert"><div class="big">3</div><div class="lbl">external unknowns gate the first code.</div></div>
+    <div class="metric"><div class="big">0 <span>/ 9</span></div><div class="lbl">build slices started. The road is mapped.</div></div>
+  </div>
+
+  <!-- ============ 1 · START HERE ============ -->
+  <section id="start">
+    <div class="sechead"><span class="sec-n">START</span><h2 class="sec">Where you are, and the one next move</h2></div>
+    <p class="secsub">When it feels like too much, do only the top-left box. Everything else can wait its turn.</p>
+
+    <div class="start">
+      <div class="now">
+        <div class="tag">▶ Do this next</div>
+        <h3>Build the foundation</h3>
+        <p>Lock the tools, then stand up the empty shell: repo, database, login, user-roles, deployment. No business features yet — just the building everyone walks into.</p>
+        <p class="why"><b>Decision (23 Jun):</b> design is done. Migration (D9), the deep roles model and Attendance/Payroll are deferred to later. The one thing needed to start: <b>confirm the stack</b>.</p>
+        <a class="go" href="#build">See the full road →</a>
+      </div>
+      <div class="queue">
+        <h4>Then, in order</h4>
+        <div class="qstep"><div class="qn">2</div><div><div class="t">Build slice #1 — one real shipment → ledger</div><div class="s">One real invoice → stock-in → accurate cross-store stock on screen. First proof, before POS is ever touched.</div></div></div>
+        <div class="qstep"><div class="qn">3</div><div><div class="t">Spike the 3 externals + CA sitting</div><div class="s">POS API · Tally import · barcode. Run <b>in parallel</b> from now — they have lead time.</div></div></div>
+        <div class="qstep"><div class="qn">4</div><div><div class="t">Then one feature at a time</div><div class="s">Booking → inbound → payments → selling. Each built, tested and usable before the next. Specs written just-in-time.</div></div></div>
+        <div class="qstep"><div class="qn">5</div><div><div class="t">Migration &amp; go-live (D9, designed later)</div><div class="s">Import masters + opening stock, parallel Tally run, store-by-store. Last.</div></div></div>
+      </div>
+    </div>
+
+    <div class="reassure">
+      <b>Read this when it feels too big.</b> You built 8 module designs + the architecture in about six days. The thinking held up — an outside audit graded the spine <b>A−</b> and found no source recommending a different structure. What's left between now and code is mostly <b>paperwork and confirming three outside systems</b>, not more invention. Nothing has to be perfect before you start — each feature is locked just before it's built.
+    </div>
+  </section>
+
+  <!-- ============ 2 · LIFECYCLE ============ -->
+  <section id="lifecycle">
+    <div class="sechead"><span class="sec-n">2</span><h2 class="sec">The journey — 8 stages, start to finish</h2></div>
+    <p class="secsub">Standard software lifecycle. Three stages done, you're entering the fourth.</p>
+    <div class="stages">
+      <div class="stg done"><div class="sn">STAGE 1</div><div class="st">Requirements</div><span class="sp">Done</span></div>
+      <div class="stg done"><div class="sn">STAGE 2</div><div class="st">Process analysis</div><span class="sp">Done</span></div>
+      <div class="stg done"><div class="sn">STAGE 3</div><div class="st">System design (D1–D8)</div><span class="sp">Done</span></div>
+      <div class="stg now"><div class="sn">STAGE 4</div><div class="st">Detailed design + data model</div><span class="sp">You are here</span></div>
+      <div class="stg todo"><div class="sn">STAGE 5</div><div class="st">Project setup</div><span class="sp">Next</span></div>
+      <div class="stg todo"><div class="sn">STAGE 6</div><div class="st">Build — vertical slices</div><span class="sp">Then</span></div>
+      <div class="stg todo"><div class="sn">STAGE 7</div><div class="st">Integration (POS·Tally·…)</div><span class="sp">During build</span></div>
+      <div class="stg todo"><div class="sn">STAGE 8</div><div class="st">Migration &amp; go-live</div><span class="sp">Later</span></div>
+    </div>
+    <div class="callout co-note"><b>The trap to avoid:</b> a "locked" design is not yet a buildable spec. The green badges below describe the <em>shape</em>. The things code actually reads — one data model, the posting catalog, golden files, the feature checklist — are the work of stage 4 and don't exist yet. That's why the next move is detailed design, not code.</div>
+  </section>
+
+  <!-- ============ 3 · MODULES ============ -->
+  <section id="modules">
+    <div class="sechead"><span class="sec-n">3</span><h2 class="sec">Module board — every design, graded</h2></div>
+    <p class="secsub">Grade = design quality (from the audit). Readiness = distance to code (1 concept → 5 ready). Click any to open it.</p>
+    <table>
+      <tr><th style="width:30%">Module</th><th>Grade</th><th>Design</th><th>Ready</th><th>Watch / blocker</th></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/00-system-architecture.html">00 · Architecture</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>The spine — 5 layers, 11 rules. Your strongest asset.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/01-vendor-management/Vendor-Management-Module.html">D1 · Vendor &amp; booking</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Booking-price conflict still open (see Sync §4).</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/02-inbound/inbound-ingestion-design.html">D2 · Inbound</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Cost-vs-payable posting = standout. Gated on POS answers.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/03-outbound/outbound.html">D3 · Outbound</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td><span class="chip c-stop">bug</span> Cross-state transfer GST (see Sync §4).</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/04-payments/payments.html">D4 · Payments &amp; roles</a></td><td><span class="grade">A</span> <span class="chip c-warn">roles B</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td><td>Roles thin; store-audit needs acquirer feeds.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/05-offers/offers.html">D5 · Offers</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Lock "which offer wins" + basket-offer gap.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/06-tally-sync/tally-sync.html">D6 · Tally sync</a></td><td><span class="grade">B</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></td><td>Voucher catalog half-done; TaxOne import unverified.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/07-analytics-ai/analytics-ai.html">D7 · Analytics &amp; AI</a></td><td><span class="grade">A</span> <span class="chip c-stop">1 to challenge</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Challenge the bill "target hold-back" before building it.</td></tr>
+      <tr><td class="mod"><a href="my-understanding/system-design/08-master-data/master-data.html">D8 · Master data</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Validated on real client files. Edit-rights grid = right.</td></tr>
+      <tr><td class="mod">D9 · Migration &amp; rollout</td><td><span class="grade">—</span></td><td><span class="chip c-prog">Next to design</span></td><td><span class="meter"><i class="on"></i><i></i><i></i><i></i><i></i></span></td><td>The only remaining spine discussion. <b>Your next move.</b></td></tr>
+      <tr><td class="mod">Attendance &amp; Payroll</td><td><span class="grade">C</span></td><td><span class="chip c-warn">Decide in/out</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></td><td>Client must-have, no folder yet. Decide explicitly.</td></tr>
+    </table>
+    <div class="callout co-good"><b>How to read this:</b> the modules aren't the problem — they're nearly all A and locked. The gap is the row marked "Next to design" (D9) and the cross-doc drift in the next section. Close those two and you're genuinely build-ready.</div>
+  </section>
+
+  <!-- ============ 4 · SYNC TRACKER ============ -->
+  <section id="sync">
+    <div class="sechead"><span class="sec-n">4</span><h2 class="sec">Sync &amp; loose ends — the tick-off list</h2></div>
+    <p class="secsub">This is the "documents are out of sync" feeling, made finite. Every item is a small, closeable task. Tick them off — your browser remembers.</p>
+
+    <div class="card">
+      <div class="trk-head">
+        <div class="progbar"><i id="bar"></i></div>
+        <span class="progtxt" id="ptxt">0 of 0 done</span>
+        <button class="resetbtn" id="reset">Reset ticks</button>
+      </div>
+
+      <div class="grp">
+        <h4>A · Contradictions between docs</h4>
+        <p class="gsub">Two docs disagree. Pick the winner and propagate it.</p>
+
+        <div class="item"><input type="checkbox" data-trk="x1"><label><span class="ttl">Cross-state transfer GST — parked (23 Jun)</span> — Anand's point stands: price is fixed at PT-file time, not by destination. Separate point that still holds: in GST law a Bihar↔Jharkhand move between two GSTINs is a taxable IGST supply (+ e-way bill &gt; ₹50k) — confirm the voucher treatment with the CA when transfers are built. Not blocking the foundation. <span class="where">CA · at the transfer slice</span></label><span class="sev s-low">PARKED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="x2"><label><span class="ttl">Fold the 7 "sharpenings" back into module docs</span> — they live only in the consolidation doc. Most critical: the SOR 6-month GST deeming "second clock" (§31(7) CGST). If not propagated, it's silently lost. <span class="where">consolidation → D1 / D4 / D6</span></label><span class="sev s-high">HIGH</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="x3"><label><span class="ttl">Booking-price — resolved (23 Jun)</span> — booking is brand-only, and the brand gives the price at booking time, so price <b>is</b> captured. Closed. <span class="where">D1 · settled</span></label><span class="sev s-low">DONE</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="x4"><label><span class="ttl">Two roles models → one RBAC matrix</span> — D4 (payments roles) and D8 (edit-rights grid) each define access independently. Merge in the foundation slice. <span class="where">D4 vs D8</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="x5"><label><span class="ttl">Dual master drift</span> — D7 builds its own brand/supplier crosswalk meant to "seed" D8, but the owner/handoff is undefined (the two-owners trap, Rule 4). <span class="where">D7 vs D8</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="x6"><label><span class="ttl">Stack: locked or deferred?</span> — consolidation + AI docs say it's locked (TS + Postgres + GCP); architecture + CLAUDE.md say deferred until after spikes. Reconcile the wording. <span class="where">consolidation vs architecture</span></label><span class="sev s-low">LOW</span></div>
+      </div>
+
+      <div class="grp">
+        <h4>B · Tidy the desk</h4>
+        <p class="gsub">Cheap moves that keep the AI (and you) from acting on stale facts.</p>
+
+        <div class="item"><input type="checkbox" data-trk="t1"><label><span class="ttl">Refresh <code>PROJECT-MAP.html</code></span> — stamp says 19 Jun, missing the newest docs (build-playbook, consolidation, audit), still carries the lost-FM-April warning. <span class="where">root</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="t2"><label><span class="ttl">Keep PROJECT-MAP + CLAUDE.md as the <em>only</em> status sources</span> — update both in the same commit when status changes; no other doc carries status independently. <span class="where">working norm</span></label><span class="sev s-low">LOW</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="t3"><label><span class="ttl">Create the <code>09-migration/</code> folder</span> + an "external contracts" index (POS · Tally/TaxOne · barcode · CA facts, each with status). <span class="where">system-design/</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="t4"><label><span class="ttl">Pick one canonical module count for the client</span> (7 vs 8 differs across the presentation artifacts) + fix the <code>#3a4straat</code> CSS typo. <span class="where">consolidation presentation</span></label><span class="sev s-low">LOW</span></div>
+      </div>
+
+      <div class="grp">
+        <h4>C · Open gaps to design or decide</h4>
+        <p class="gsub">Bigger than a tick — but naming them stops them ambushing you mid-build.</p>
+
+        <div class="item"><input type="checkbox" data-trk="g1"><label><span class="ttl">Design D9 — migration &amp; rollout</span> — deferred (23 Jun): designed later, before go-live. The next move is the foundation, not D9. <span class="where">later</span></label><span class="sev s-low">LATER</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="g2"><label><span class="ttl">Attendance &amp; Payroll — decide in or out</span> — named PRD must-have, no folder, hardware contradiction (Android+face vs browser+GPS). If in, it needs its own discussion. <span class="where">vs client PRD</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="g3"><label><span class="ttl">POS fallback go/no-go</span> — if Ten Software has no usable API, "build our own minimal POS" is a big scope jump. Make it a conscious decision with an August deadline. <span class="where">gated on Spike #1</span></label><span class="sev s-high">HIGH</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="g4"><label><span class="ttl">GST mechanics — dedicated CA-assisted pass</span> — discount split-back across mixed HSN, GST on exchanges + the V-flip, SOR tax-invoice timing, e-invoicing (IRN) + e-way bills owner. <span class="where">cross-module</span></label><span class="sev s-med">MED</span></div>
+
+        <div class="item"><input type="checkbox" data-trk="g5"><label><span class="ttl">Challenge the "target hold-back" (D7)</span> — re-dating/month-shifting bills to hit brand targets shades into GST period-shifting. Decide if it should exist <em>at all</em> before tooling it. <span class="where">D7</span></label><span class="sev s-med">MED</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5 · GATES ============ -->
+  <section id="gates">
+    <div class="sechead"><span class="sec-n">5</span><h2 class="sec">External gates — confirm before they bite</h2></div>
+    <p class="secsub">Three outside systems + one CA conversation are <em>assumed</em>, not verified. They have lead time — start chasing them now, in parallel with D9.</p>
+    <div class="gates">
+      <div class="gate risk">
+        <h4>Spike #1 · Ten Software POS API <span class="chip c-stop">biggest risk</span></h4>
+        <div class="q">Two make-or-break answers: can it accept pending-inward qty per store, and export line-item sales?</div>
+        <div class="meta">Needed before you build <b>Selling</b>. Pre-decide the "no API" fallback + build-own-POS go/no-go · <b>August deadline</b>.</div>
+      </div>
+      <div class="gate">
+        <h4>Spike #2 · Tally via TaxOne</h4>
+        <div class="q">Actually post a sales + a transfer voucher to TallyPrime. Confirm deterministic import (no AI re-interpretation) + idempotency. Generate one IRN + one e-way bill in sandbox.</div>
+        <div class="meta">Needed when you build the <b>Tally-sync</b> module (near the end).</div>
+      </div>
+      <div class="gate">
+        <h4>Spike #3 · Barcode tool</h4>
+        <div class="q">Sample sticker · Code 128 generation · HID-mode scanning (not keyboard-wedge).</div>
+        <div class="meta">Needed when you build <b>Selling / stock movement</b>.</div>
+      </div>
+      <div class="gate">
+        <h4>The CA sitting</h4>
+        <div class="q">How many GSTINs/entities · one Tally company or two · e-invoicing applicability · SOR invoice-vs-challan · ledger structure.</div>
+        <div class="meta">One conversation unblocks D6 vouchers, D4 P&amp;L and SOR booking <b>at once</b>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 6 · BUILD PLAN ============ -->
+  <section id="build">
+    <div class="sechead"><span class="sec-n">6</span><h2 class="sec">The build road — thin slices, in architecture order</h2></div>
+    <p class="secsub">Each slice runs top-to-bottom (one real document → ledger → screen). Start with the simplest real path; end the first proof at the ledger, before POS.</p>
+    <div class="card">
+      <div class="slice"><div class="snum">0</div><div><h4>Foundation scaffold <span class="chip c-todo">the one flat step</span></h4><div class="d">Repo · database · migrations · login + RBAC (reconciling D4+D8) · CI gate · component library (₹ Lakh/Crore) · seed masters · CLAUDE.md. No business logic.</div></div></div>
+      <div class="slice"><div class="snum">1</div><div><h4>Walking skeleton — one branded shipment → ledger</h4><div class="d">One real invoice: booking → GRN → PT → stock + vendor postings → a screen showing accurate cross-store stock. Validated by a golden file. <b>First client win: accurate stock before POS is touched.</b></div></div></div>
+      <div class="slice"><div class="snum">2</div><div><h4>Booking + order-vs-received tracking</h4><div class="d">Build first (Aug = peak booking). Branded capture → AI draft → human confirm. Resolve the booking-price conflict in the spec first.</div></div></div>
+      <div class="slice"><div class="snum">3</div><div><h4>Non-branded inbound — the AI PT maker</h4><div class="d">~99% of warehouse volume, AI on the critical path. Invoice read → chat fill → editable PT → stock-in. Needs the per-category margin list.</div></div></div>
+      <div class="slice"><div class="snum">4</div><div><h4>Payments spine</h4><div class="d">Payable → eligibility gate → maker≠checker≠payer → manual pay (UTR) → bank-statement auto-close. Vendor GSTIN/bank cleanup precedes this.</div></div></div>
+      <div class="slice gated"><div class="snum">5</div><div><h4>Outbound + the POS edge <span class="chip c-warn">gated on Spike #1</span></h4><div class="d">"One machine, eight settings" behind a swappable POS adapter. Fix the cross-state IGST bug here. No API → triggers the build-own-POS fork.</div></div></div>
+      <div class="slice"><div class="snum">6</div><div><h4>Offers engine</h4><div class="d">Paste circular → AI draft → confirm · item-level stacking · bill-discount split back to lines · applied-vs-rulebook reconcile. Lock "which offer wins" first.</div></div></div>
+      <div class="slice gated"><div class="snum">7</div><div><h4>Tally sync <span class="chip c-warn">gated on Spike #2 + CA</span></h4><div class="d">Deterministic export → TaxOne · daily B2C voucher per store per rate · idempotent voucher numbers · daily tie-out queue.</div></div></div>
+      <div class="slice"><div class="snum">8</div><div><h4>Analytics foundation + WhatsApp digest</h4><div class="d">The metrics layer → 9pm exception digest → discount-leakage watchdog (zero ML, highest ROI). Defer forecasting until clean seasons exist.</div></div></div>
+    </div>
+    <p class="secsub" style="margin-top:8px">Full reasoning, the toolchain map and the research basis live in the two build docs → <a href="my-understanding/system-design/build-playbook.html">How we build</a> · <a href="my-understanding/system-design/audit-and-build-readiness.html">Build-readiness audit</a>.</p>
+  </section>
+
+  <!-- ============ 7 · LIBRARY ============ -->
+  <section id="library">
+    <div class="sechead"><span class="sec-n">7</span><h2 class="sec">All documents — the launcher</h2></div>
+    <p class="secsub">Every file in the project, grouped. This is your index — open anything from here.</p>
+    <div class="card">
+      <div class="libgrid">
+        <div class="libcol">
+          <h4>The spine · system design</h4>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/00-system-architecture.html">00 · System architecture (read first)</a><span class="st c-done">core</span></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/01-vendor-management/Vendor-Management-Module.html">D1 · Vendor management &amp; booking</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/02-inbound/inbound-ingestion-design.html">D2 · Inbound ingestion</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/03-outbound/outbound.html">D3 · Outbound + stocktake</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/04-payments/payments.html">D4 · Payments &amp; roles</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/05-offers/offers.html">D5 · Offer rulebook</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/06-tally-sync/tally-sync.html">D6 · Tally sync</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/07-analytics-ai/analytics-ai.html">D7 · Analytics &amp; AI</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/08-master-data/master-data.html">D8 · Master data &amp; users</a></div>
+          <div class="lib"><span class="ic">—</span><span style="flex:1;color:var(--faint)">D9 · Migration &amp; rollout (not created)</span><span class="st c-prog">next</span></div>
+
+          <h4>How to build</h4>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/build-playbook.html">Build playbook — how we build</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/audit-and-build-readiness.html">Build-readiness audit (read this)</a><span class="st c-warn">audit</span></div>
+
+          <h4>Consolidation layer</h4>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/consolidation/consolidation-source-of-truth.html">Source of truth</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/consolidation/cloud-hosting-decision.html">Cloud hosting decision</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/consolidation/KDPS-ai-approach-and-cost.html">AI approach &amp; cost</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/consolidation/KDPS-system-design-presentation.html">System-design presentation</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/consolidation/KDPS-walkthrough-interactive.html">Interactive walkthrough</a></div>
+        </div>
+
+        <div class="libcol">
+          <h4>Ground truth · workflow</h4>
+          <div class="lib"><span class="ic">PDF</span><a href="my-understanding/workflow/KDPS-current-workflow.pdf">Current workflow (how KDPS works today)</a><span class="st c-done">truth</span></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/workflow-diagrams/current-workflow.html">Diagram · current workflow</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/workflow-diagrams/stock-workflows.html">Diagram · stock workflows</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/workflow-diagrams/store-workflow.html">Diagram · store workflow</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="my-understanding/system-design/workflow-diagrams/system-explainer.html">Diagram · system explainer</a></div>
+
+          <h4>Client-facing deliverables</h4>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Vendor-Management-Module-Client.html">Vendor management (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Goods-Inward-Module-Client.html">Goods inward (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Outbound-Module-Client.html">Outbound (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Payments-Module-Client.html">Payments (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Offers-Module-Client.html">Offers (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/Analytics-AI-Module-Client.html">Analytics &amp; AI (client)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/POS-Integration-Requirements.html">POS integration requirements</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="04-client-docs/POS-Ingestion-Requirements.html">POS ingestion requirements</a></div>
+
+          <h4>Client requirements (input only)</h4>
+          <div class="lib"><span class="ic">PDF</span><a href="client-requirements-docs/PRD ( KDPS).pdf">Client PRD</a></div>
+          <div class="lib"><span class="ic">PDF</span><a href="client-requirements-docs/KDPS Definitive Plan.pdf">Definitive plan (10 AI agents)</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="client-requirements-docs/PRD-explainer.html">PRD explainer</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="client-requirements-docs/client-demands.html">Client demands</a></div>
+          <div class="lib"><span class="ic">HTML</span><a href="client-requirements-docs/ERP-requirements-register.html">ERP requirements register</a></div>
+
+          <h4>Index &amp; rules</h4>
+          <div class="lib"><span class="ic">HTML</span><a href="PROJECT-MAP.html">PROJECT-MAP (folder index)</a><span class="st c-warn">refresh</span></div>
+          <div class="lib"><span class="ic">MD</span><a href="CLAUDE.md">CLAUDE.md (project + AI rules)</a></div>
+          <div class="lib"><span class="ic">PDF</span><a href="MOU-KDPS-Anand.pdf">MOU — engagement &amp; scope</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    KDPS ERP · Project Command Center · 23 June 2026. Living document — update the metric strip, the module board and the sync tracker as facts change. Status truth still lives in <a href="CLAUDE.md">CLAUDE.md</a> + <a href="PROJECT-MAP.html">PROJECT-MAP.html</a>; this page points to them. Ticked sync items are saved in your browser only.
+  </footer>
+
+</div>
+
+<script>
+  // --- sync tracker: persist checkboxes + live progress ---
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('input[data-trk]'));
+  var KEY = 'kdps-dash-';
+  function paint(){
+    var done = 0;
+    boxes.forEach(function(b){
+      var on = localStorage.getItem(KEY+b.dataset.trk) === '1';
+      b.checked = on;
+      b.closest('.item').classList.toggle('checked', on);
+      if(on) done++;
+    });
+    var total = boxes.length, open = total - done;
+    var pct = total ? Math.round(done/total*100) : 0;
+    document.getElementById('bar').style.width = pct + '%';
+    document.getElementById('ptxt').textContent = done + ' of ' + total + ' done';
+    document.getElementById('liveCount').textContent = done + ' / ' + total;
+    document.getElementById('m-sync').textContent = open;
+  }
+  boxes.forEach(function(b){
+    b.addEventListener('change', function(){
+      localStorage.setItem(KEY+b.dataset.trk, b.checked ? '1' : '0');
+      paint();
+    });
+  });
+  document.getElementById('reset').addEventListener('click', function(){
+    boxes.forEach(function(b){ localStorage.removeItem(KEY+b.dataset.trk); });
+    paint();
+  });
+  paint();
+</script>
+</body>
+</html>

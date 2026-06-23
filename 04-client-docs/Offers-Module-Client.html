@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — Offers & Discounts Module</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:20px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:20px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  p{margin:7px 0;}
+  ul{margin:7px 0; padding-left:20px;}
+  li{margin:4px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 12px; margin:12px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;}
+  .ask li{margin:8px 0;}
+  footer{margin-top:24px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · System Design</div>
+  <h1>Offers &amp; Discounts Module</h1>
+  <p class="sub">How every brand and store discount is set up, applied at the counter, controlled, and checked — for a multi-brand store.</p>
+</header>
+
+<div class="scope">
+  <strong>Please confirm.</strong> Below is exactly how the system will handle offers and discounts. Read each point and tell us anything that does not match how you actually work, so we can correct it before building.
+</div>
+
+<section class="avoid">
+<h2><span class="num">1.</span>The big idea</h2>
+<ul>
+  <li>Every offer is written one simple way: <strong>what the customer must do → what they get</strong> (e.g. "spend ₹6,999 → ₹600 off", "buy 3 → cheapest free").</li>
+  <li>Discounts attach to <strong>items, not the whole bill</strong>. In one bill, each item gets its own offer — a Mufti item gets Mufti's offer, a Blackberry item gets Blackberry's — all automatically. The bill shows the <strong>total discount</strong> at the end.</li>
+  <li>This is a true <strong>multi-brand store</strong>: many offers can sit on one bill at once.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">2.</span>Two kinds of offer</h2>
+<ul>
+  <li><strong>Brand offers</strong> — the brand decides the discount on its own stock; we apply it. The only effect is that <strong>KDPS earns less margin on that sale</strong> — nothing is claimed back from the brand.</li>
+  <li><strong>KDPS offers</strong> — on stock KDPS controls (old stock you've taken over, and any stock you choose to discount yourself); <strong>you decide them</strong>. Same effect — less margin.</li>
+  <li>A <strong>store-wide discount</strong> across all brands is also possible.</li>
+  <li>So the only difference between the two is <strong>who decides the discount</strong>; either way it just lowers the selling price.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">3.</span>The kinds of discount we'll handle</h2>
+<table>
+  <tr><th>Discount</th><th>Means</th></tr>
+  <tr><td>Spend → money off</td><td>Spend ₹X, get a fixed ₹ off (usually rising steps).</td></tr>
+  <tr><td>Spend → percent off</td><td>Spend ₹X, get a % off.</td></tr>
+  <tr><td>Straight percent off</td><td>% off all, a category, or chosen styles.</td></tr>
+  <tr><td>Buy more, bigger percent</td><td>Buy 1 → 20%, buy 2 → 30%, buy 3 → 40%.</td></tr>
+  <tr><td>Buy X, get Y free</td><td>The cheapest item(s) become free.</td></tr>
+  <tr><td>Free gift above a spend</td><td>A bag / trolley at a token price if it's in stock; if not, a pre-set discount instead.</td></tr>
+  <tr><td>Fixed price by MRP band</td><td>Everything in an MRP range sells at one price.</td></tr>
+  <tr><td>Flat money off</td><td>A fixed ₹ off (usually a single-item deal).</td></tr>
+</table>
+<p>We build these <strong>eight first</strong>. More kinds (combo/bundle price, bank-card discount, loyalty points, coupons, and others) can be <strong>switched on later as you grow</strong> — the system is built open for that.</p>
+</section>
+
+<section class="avoid">
+<h2><span class="num">4.</span>Which items an offer applies to</h2>
+<ul>
+  <li>A whole brand, a category, chosen styles, or a single size/colour — and also by <strong>season or age</strong>.</li>
+  <li>Each brand's <strong>"do-not-discount" list</strong> (the styles the brand won't allow discounting — your AMM list) is always respected by every offer.</li>
+  <li>One store, several stores, or a <strong>store-group</strong>. A new store is <strong>never added to a running offer automatically</strong> — someone has to add it.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">5.</span>When offers run</h2>
+<ul>
+  <li>Each offer has a <strong>start</strong> and an optional <strong>end</strong>. No end = it runs until you stop it.</li>
+  <li>Offers line up on a timeline; a <strong>default offer</strong> fills any gap so the counter is never left without the right discount.</li>
+  <li>The system <strong>reminds you before an offer ends</strong>.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">6.</span>How offers combine</h2>
+<ul>
+  <li>Each item gets its <strong>best brand offer</strong>; a <strong>store-wide / bank / coupon</strong> discount can sit <strong>on top</strong>.</li>
+  <li><strong>Two brand offers never stack</strong> on one item.</li>
+  <li>Discounts are figured on the printed <strong>MRP</strong>. A discount added on top is figured on the <strong>already-reduced price</strong> (so "extra 10%" means 10% of what's left).</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">7.</span>Smart help for your own stock</h2>
+<ul>
+  <li>For stock <strong>you own</strong>, the system watches each lot's <strong>age and how fast it's selling</strong>, and <strong>suggests a discount</strong> — a sensible range, the best way to clear it, and what to expect.</li>
+  <li>It only <strong>suggests</strong>. <strong>You decide and approve</strong> — it never changes a price on its own.</li>
+  <li>It starts simple and gets smarter as it sees more of your sales.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">8.</span>At the counter</h2>
+<ul>
+  <li>Offers <strong>apply automatically</strong> as items are scanned; the bill totals the discount.</li>
+  <li>A discount <strong>bigger than a cashier's limit needs a manager's OK</strong> before the bill is completed.</li>
+  <li>While the current POS can't do all of this yet, the system applies what it can and fills the rest from the sale report — full automatic billing comes with the KDPS-built POS.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">9.</span>The money side</h2>
+<ul>
+  <li>A discount simply <strong>lowers the selling price, so KDPS earns less margin</strong> on that sale. <strong>Nothing is claimed back from the brand.</strong></li>
+  <li>Every discount is marked <strong>brand-decided</strong> or <strong>KDPS-decided</strong> — only so the month-end report can show how much margin each brand's discounting cost.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">10.</span>Records &amp; month-end</h2>
+<ul>
+  <li>Every bill records the <strong>original price, discount, final price, which offer, cashier, approver, who decided it, and time</strong>.</li>
+  <li>Each day the system <strong>checks what was actually given against the offer rules</strong>, and flags anything wrong to fix.</li>
+  <li>At month-end it produces a <strong>per-brand pack</strong> (discounts given, and the margin each brand's discounting cost) — replacing the by-hand rebuild you do today.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">11.</span>How offers get entered</h2>
+<ul>
+  <li>You paste the brand's offer <strong>photo or PDF</strong>; the system <strong>reads it and drafts the offer</strong>; you check and approve.</li>
+  <li>You can also <strong>type offers in by hand</strong> — for your own offers or odd cases.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">12.</span>A few questions for you</h2>
+<div class="ask">
+<ol>
+  <li>Does <strong>every section above</strong> match how you actually work? Please mark anything that is wrong.</li>
+  <li>When an offer runs at <strong>only some shops</strong>, how do you decide which ones — do you <strong>group shops</strong> (by city, by region, a fixed cluster), or <strong>pick them one by one</strong> each time? Tell us how you do it today.</li>
+  <li>For stock <strong>KDPS owns</strong>, how do you decide the discount today — <strong>what do you actually look at</strong>? (For example: how old the stock is, how slowly it's selling, what it cost, the season.) The more we know, the closer the system's suggestions will be to your own thinking.</li>
+</ol>
+</div>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — Offers &amp; Discounts Module · For confirmation · Companion to the Vendor Management, Goods Inward and Outbound modules.
+</footer>
+
+</div>
+</body>
+</html>

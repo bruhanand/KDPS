@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Tally Sync Design (How KDPS Feeds the Statutory Book)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4; --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:34px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:6px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  .tabbar{position:sticky; top:0; z-index:20; display:flex; gap:6px; background:var(--bg); padding:14px 0 10px; margin:6px 0 6px; border-bottom:1px solid var(--line)}
+  .tabbtn{border:1px solid var(--line); background:#fff; color:var(--navy2); font-weight:700; font-size:14.5px; padding:9px 16px; border-radius:10px 10px 0 0; cursor:pointer}
+  .tabbtn.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .tabbtn small{display:block; font-weight:500; font-size:11.5px; opacity:.8}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  section{margin:30px 0; scroll-margin-top:70px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:20px 0 8px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-park{background:var(--purple-bg); color:var(--purple)}
+  .b-inherit{background:#fdeee8; color:#b4452f; border:1px solid #f0cdbe}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .qref{font-size:12px; color:var(--rust); font-weight:700}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-park{background:var(--purple-bg); border-color:#dcd3f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--grey-bg);color:#41506b;margin:1px 2px}
+  .chip.out{background:#fdeee8;color:#b4452f}
+  .chip.in{background:var(--green-bg);color:var(--green)}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  .gq{border-left:4px solid var(--rust); background:#fff; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:11px 15px; margin:11px 0}
+  .gq .qh{font-weight:700; color:var(--navy)}
+  .pill-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .opt{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:8px 0;background:#fff}
+  .opt b{color:var(--navy)}
+  .opt.rec{border-color:#bfe2cd;background:var(--green-bg)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · D6 · Tally Sync · Feeding the Statutory Book</div>
+  <h1>Tally Sync — System Design</h1>
+  <p class="sub">The last <strong>edge contract</strong>. Every other module already <em>emits</em> business events; D6 turns those events into <strong>GST-ready vouchers</strong> and gets them into <strong>Tally — the statutory book of record</strong> — safely, once, and reconciled. KDPS stays the live operational truth; Tally stays the filed truth. Picks up the grain decided in <a href="../04-payments/payments.html">Payments Q-H</a> and the TIR purchase export designed in <a href="../02-inbound/inbound-ingestion-design.html">Inbound Q20</a>.</p>
+</header>
+
+<div class="tabbar">
+  <button class="tabbtn active" onclick="showTab(0)">① System Design<small>how the sync should work</small></button>
+  <button class="tabbtn" onclick="showTab(1)">② Decisions &amp; Grilling Log<small>the reasoning trail</small></button>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 1 — THE SYSTEM DESIGN                                      -->
+<!-- ============================================================ -->
+<div class="tabpanel show" id="tab-design">
+
+<div class="callout co-dep" style="margin-top:4px">
+  <strong>Where D6 stands (20 Jun 2026).</strong> The <strong>voucher design is done</strong>: push route, sales grain, money-in legs, numbering/exactly-once, GST handling, the "sale or return" purchase timing, and the daily safety-net are all locked (see grilling log). <strong>Implementation is not a priority for ~2 months</strong> — the actual go-live / cutover is deliberately left to the rollout discussions (D8/D9). Five small facts are <strong>parked for the client</strong> (C1–C5). Nothing here blocks the build queue.
+</div>
+
+<section id="idea">
+  <h2 class="sec">1 · The one idea</h2>
+  <p>D6 does <strong>not invent any accounting</strong>. The spine and payments already booked every event — a purchase at inbound, a sale and its cash at outbound, a payment and a credit note in payments. D6 is the <strong>controlled bridge</strong> that copies those events into Tally as proper vouchers, <strong>exactly once</strong>, with a daily tie-out so the two books never silently drift.</p>
+  <div class="card">
+    <h4>Four rules this module obeys (from the architecture)</h4>
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>One owner per fact</strong> — Tally owns statutory truth; KDPS owns operational truth. We feed Tally, never replace it (Rule 4).</li>
+      <li><strong>Integrations are contracts, reconciled daily</strong> — defined push, defined join key (voucher number), retry-safe, daily reconciliation, failure queue (Rule 7).</li>
+      <li><strong>One-way push, no re-keying</strong> — KDPS generates the voucher, Tally receives it; the accountant stops hand-entering (locked in D4 Q-H).</li>
+      <li><strong>Flag, never block</strong> — a rejected voucher goes to a failure queue, not a phone call; the floor never waits on Tally (Rule 5).</li>
+    </ul>
+  </div>
+</section>
+
+<section id="inherit">
+  <h2 class="sec">2 · What D6 inherits — does not re-decide <span class="badge b-inherit">consume, don't re-open</span></h2>
+  <p class="lead">Locked upstream. D6 turns these into vouchers; it does not re-litigate them.</p>
+  <table>
+    <thead><tr><th>Inherited fact</th><th>Where locked</th><th>What D6 does with it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>The grain</strong>: detail for what GST/party needs (purchase bill, payment, DN/CN, store receipt — keep GSTIN·HSN·party·Agst Ref); summary for high-volume per-piece SOR/Consignment accruals (one settlement voucher per brand per period)</td><td>Payments Q-H</td><td>This <em>is</em> the voucher catalog's shape — D6 fills in the legs</td></tr>
+      <tr><td><strong>TIR purchase export</strong> already designed — fires at Patna inward, strict reproducible format, pure algorithm</td><td>Inbound Q20</td><td>Becomes the first voucher type in the catalog (purchase); D6 makes the rest match its discipline</td></tr>
+      <tr><td><strong>Two GSTINs</strong> — Bihar &amp; Jharkhand are distinct persons; every store maps to a state GSTIN; cross-state transfers are taxable supplies</td><td>Domain fact</td><td>Voucher routing keys off the store's state GSTIN; transfers may need tax vouchers</td></tr>
+      <tr><td><strong>SOR statutory-timing question</strong> — TIR books a purchase at Patna inward while the SOR payable accrues only on sale; confirm how brands bill SOR (tax invoice at delivery vs approval-basis challan)</td><td>Inbound open item (flagged for D6)</td><td>D6 must reconcile the two timings in the voucher design</td></tr>
+      <tr><td><strong>Daily AP-to-Tally tie-out</strong> is the agreed control</td><td>Payments Q-H</td><td>D6 designs the actual reconciliation loop + failure queue</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="taxone">
+  <h2 class="sec">3 · The stack reality — Vyapar TaxOne <span class="badge b-open">shapes the push route</span></h2>
+  <p>KDPS's Patna finance team already runs <strong>Vyapar TaxOne (formerly Suvit)</strong> — an AI accounting-automation bridge. What its own documentation says it does:</p>
+  <div class="card">
+    <ul style="margin:0;padding-left:18px">
+      <li><strong>It writes vouchers straight into Tally.</strong> A <strong>desktop Tally Connector</strong> (Windows app on the same machine as Tally) points at the company folder with write permission and posts vouchers — <em>"one-click sync to Tally, no exports, no manual typing."</em> Tally stays the book.</li>
+      <li><strong>Its native input is structured Excel / PDF</strong> — sale/purchase invoices and bank statements; it converts them to structured entries, the accountant reviews, then pushes to Tally in one click.</li>
+      <li>Also does GST auto-validations and WhatsApp document collection — not relevant to us, but explains why finance trusts it.</li>
+    </ul>
+    <p class="why">Source: taxone.vyapar.com — Data Automation feature, desktop Tally-connector help, third-party-integration explainer (researched 20 Jun 2026).</p>
+  </div>
+  <div class="callout co-note"><strong>Why this matters:</strong> TaxOne's front door is exactly the clean structured export our system already produces. So instead of building and babysitting our own Tally connector, we can hand TaxOne a clean file and let the tool finance already trusts post it. The wrinkle: TaxOne is built to <em>re-read messy PDFs</em> — we want it doing a <strong>deterministic import of already-clean data</strong>, not re-interpreting our numbers.</div>
+  <div class="callout co-open"><strong>To confirm with client (D4-owed):</strong> (1) Is Tally still the book with TaxOne feeding it — <em>or</em> have accounts moved into Vyapar itself? (2) How is TaxOne licensed / accessed (so we know if the via-TaxOne route is available to us)? (3) Does TaxOne accept a fixed import template deterministically, or only its AI re-read path?</div>
+</section>
+
+<section id="route">
+  <h2 class="sec">4 · The push route — the central D6 fork <span class="badge b-open">Q1 · open</span></h2>
+  <p>How do KDPS's vouchers actually reach Tally? See the grilling log (Q1) for the live decision. Three shapes on the table:</p>
+  <table>
+    <thead><tr><th>Route</th><th>How</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A · Direct</strong></td><td>KDPS → Tally via our own connector (Tally XML / TDL, desktop sync)</td><td>Full format control, no third party — but we build &amp; maintain a Windows Tally bridge ourselves</td></tr>
+      <tr><td><strong>B · Via TaxOne</strong></td><td>KDPS → clean structured export → TaxOne → Tally</td><td>Reuses a trusted, already-installed bridge with GST validation — but our format must match their importer; depends on a third-party tool</td></tr>
+      <tr><td><strong>C · Hybrid</strong></td><td>Structured export as the contract; TaxOne is the default importer, direct-XML kept as a fallback if TaxOne can't take our file deterministically</td><td>De-risks the dependency; one export feeds either path</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="catalog">
+  <h2 class="sec">5 · The voucher catalog <span class="badge b-open">to design</span></h2>
+  <p class="lead">Every event that must reach Tally, its voucher type, and its debit/credit legs. Filled as we grill.</p>
+  <table>
+    <thead><tr><th>Event (source)</th><th>Tally voucher</th><th>Grain</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Purchase / stock-in (TIR, inbound)</td><td>Purchase</td><td>Detail (bill-wise)</td><td><span class="badge b-locked">format exists (Q20)</span></td></tr>
+      <tr><td>Counter sale (outbound)</td><td>Sales</td><td>TBD — per-bill vs daily summary per store</td><td><span class="badge b-open">to design</span></td></tr>
+      <tr><td>Cash/card/UPI collection (outbound)</td><td>Combined into daily sales voucher (tender legs)</td><td>Daily per store; legs: Cash, UPI-clearing, Card-clearing, Store-credit, Exchange-adj</td><td><span class="badge b-locked">Q3 locked</span></td></tr>
+      <tr><td>Vendor payment (payments)</td><td>Payment</td><td>Detail (Agst Ref)</td><td><span class="badge b-open">to design</span></td></tr>
+      <tr><td>Goods-return DN / brand CN (payments)</td><td>Debit/Credit Note</td><td>Detail</td><td><span class="badge b-open">to design</span></td></tr>
+      <tr><td>SOR/Consignment settlement (payments)</td><td>Journal</td><td>Summary (per brand per period)</td><td><span class="badge b-open">to design</span></td></tr>
+      <tr><td>Inter-store transfer, cross-GSTIN (outbound)</td><td>TBD (taxable supply?)</td><td>TBD</td><td><span class="badge b-open">to design</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="recon">
+  <h2 class="sec">6 · The recon loop &amp; failure queue <span class="badge b-locked">Q7 locked</span></h2>
+  <p>A small daily safety net so nothing silently fails to reach Tally:</p>
+  <ul style="margin:6px 0;padding-left:18px">
+    <li><strong>Daily check (tie-out):</strong> compare what KDPS sent vs what Tally accepted, matched on the unique voucher number (Q4). Totals match → green; else it lists exactly which vouchers didn't land.</li>
+    <li><strong>"Needs attention" list (failure queue):</strong> any refused voucher shows with a plain-words reason ("brand name not found", "already there"); it's fixed and re-sent. The shop floor never waits — back-office cleanup only (Rule 5: flag, never block).</li>
+    <li><strong>Owner:</strong> the <strong>Patna accountant</strong> (already lives in Tally). <strong>Cadence:</strong> once a day.</li>
+  </ul>
+  <p class="why">Rule: send → check next day → fix the few that bounced. Nothing is ever assumed to have arrived.</p>
+</section>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 2 — DECISIONS & GRILLING LOG                               -->
+<!-- ============================================================ -->
+<div class="tabpanel" id="tab-log">
+
+<section id="open">
+  <h2 class="sec">Open questions — D6 agenda</h2>
+  <table>
+    <thead><tr><th>#</th><th>Question</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Q1</td><td>Push route — Direct vs via TaxOne vs Hybrid</td><td><span class="pill-status b-locked">Locked — Hybrid</span></td></tr>
+      <tr><td>Q2</td><td>Sales voucher grain — per-bill vs daily summary per store</td><td><span class="pill-status b-locked">Locked — Hybrid by customer type</span></td></tr>
+      <tr><td>Q3</td><td>Money-in / receipt voucher — tender split &amp; grain</td><td><span class="pill-status b-locked">Locked — combined daily voucher</span></td></tr>
+      <tr><td>Q4</td><td>Voucher numbering &amp; the join key (idempotency / exactly-once)</td><td><span class="pill-status b-locked">Locked — KDPS-owned number</span></td></tr>
+      <tr><td>Q5</td><td>GST breakup per voucher type (incl. two-GSTIN routing, cross-state transfers)</td><td><span class="pill-status b-locked">Locked (Part 2 → client C3)</span></td></tr>
+      <tr><td>Q6</td><td>SOR statutory timing — purchase-at-delivery vs accrual-at-sale reconciliation</td><td><span class="pill-status b-locked">Locked — purchase at arrival</span></td></tr>
+      <tr><td>Q7</td><td>The recon loop + failure/retry queue — what the accountant sees</td><td><span class="pill-status b-locked">Locked — daily check + fix-it list</span></td></tr>
+      <tr><td>Q8</td><td>Cutover — does Tally start fresh from KDPS, or run in parallel? (links to D9)</td><td><span class="pill-status b-dep">Deferred → D8/D9</span></td></tr>
+    </tbody>
+  </table>
+  <p class="lead">Agenda is provisional — questions get added/split as we go.</p>
+</section>
+
+<section id="client-qs">
+  <h2 class="sec">Questions for the client — plain words, parked</h2>
+  <p class="lead">Facts only KDPS/the accountant can answer. Designing continues around them.</p>
+  <table>
+    <thead><tr><th>#</th><th>Ask the client</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>C1</td><td>Is Tally still your main accounts book, with TaxOne just feeding it — or have you moved your accounts fully into Vyapar?</td><td>Decides whether our design stays "feed Tally" or changes</td></tr>
+      <tr><td>C2</td><td>How do you pay for / log into TaxOne, and can it take a fixed Excel template every time without changing our numbers?</td><td>Confirms the via-TaxOne route is open and safe</td></tr>
+      <tr><td>C3</td><td>In Tally, are Bihar and Jharkhand kept as one company with two GST numbers, or as two separate companies?</td><td>Tells us where each store's vouchers should go</td></tr>
+      <tr><td>C4</td><td>Do you ever give a customer a proper GST bill in their company's name? How often?</td><td>Decides how much of the B2B sale path we build now</td></tr>
+      <tr><td>C5</td><td>For a sale-or-return brand, does the invoice that comes with the goods already charge GST at delivery?</td><td>Only detail affecting how the purchase is recorded</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="log">
+  <h2 class="sec">Grilling log</h2>
+  <div class="gq">
+    <div class="qh">Q1 · The push route <span class="pill-status b-locked">Locked — Hybrid (C), 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Settled by our own rules (not debated):</strong> one-way push, no re-keying; KDPS = operational truth, Tally = statutory truth; a structured export is the contract whichever route wins.</p>
+    <p style="margin:6px 0"><strong>Research:</strong> TaxOne posts to Tally via a Windows desktop connector and natively ingests structured Excel/PDF. Separately, Tally itself documents a native voucher import — XML over HTTP to the Tally gateway (default port 9000), or a one-click <code>vouchers.xml</code> import — so a self-built direct connector is a bounded, documented integration, not a research project.</p>
+    <div class="opt"><b>A — Direct.</b> Own Tally XML/TDL connector. Full control, no dependency; but we build and run a Windows bridge and own every Tally version quirk.</div>
+    <div class="opt"><b>B — Via TaxOne.</b> Clean export → TaxOne → Tally. Reuses what finance already trusts; but couples our format to their importer and to a third-party tool's roadmap.</div>
+    <div class="opt rec"><b>C — Hybrid (export-as-contract). ★ LOCKED.</b> The deterministic structured export is the real deliverable and the contract. <strong>TaxOne is the default importer now; direct-XML is the fallback AND the future self-built replacement path.</strong> Because the export is identical either way, replacing TaxOne later is not a new project — it is promoting the fallback to default.</div>
+    <p style="margin:8px 0 4px"><strong>Anand's decisions (20 Jun):</strong></p>
+    <ul style="margin:4px 0;padding-left:18px">
+      <li><strong>Scope stays open to replace TaxOne with our own software.</strong> Initially use TaxOne; in future build our own Tally connector to replace it. The hybrid keeps that door open at near-zero extra cost.</li>
+      <li><strong>"Rebuild all of TaxOne" is not the task</strong> — most of TaxOne is messy-PDF AI reading + GST OCR + WhatsApp collection, which we never need because our system is already the clean structured source. The only piece we'd build is the Tally voucher push (= Route A), a bounded medium effort.</li>
+      <li><strong>Deterministic Excel-template import into TaxOne is confirmed</strong> (Anand, 20 Jun) — it reads the template as-is, no AI re-interpretation. The earlier "TaxOne might re-read our numbers" concern is retired.</li>
+    </ul>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q2 · Sales voucher grain <span class="pill-status b-locked">Locked — Hybrid by customer type, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>The rule (same as the payables grain):</strong> detail where GST/party needs it, summary where it's just volume. GST law agrees — B2C sales are reported only as consolidated per-rate totals in GSTR-1; B2B (customer GSTIN) must be invoice-level so the buyer gets input credit.</p>
+    <div class="opt"><b>A — Per-bill vouchers.</b> One Tally sales voucher per POS bill. Thousands/store/month → Tally bloat; GSTR-1 discards the detail for B2C anyway. Per-item detail already lives in KDPS.</div>
+    <div class="opt"><b>B — Daily consolidated per store.</b> One sales voucher per store per day, split by GST slab + HSN summary, under that store's state GSTIN. Lean, matches GSTR-1's B2C consolidation.</div>
+    <div class="opt rec"><b>C — Hybrid by customer type. ★ LOCKED.</b> Default = B (daily consolidated per store per GST rate). Carve-out: any sale with a <strong>customer GSTIN</strong> gets its own <strong>per-bill detail voucher</strong> so the buyer's input credit + invoice-level GSTR-1 work. Future-proof if B2B sales grow.</div>
+    <p style="margin:6px 0" class="why">Open factual input: how often KDPS issues a GST invoice to a registered (B2B) customer — if essentially never, B2B stays a latent capability; if regular, build the carve-out fully now. This is only the revenue+GST leg; the money-in (receipt) leg is Q3.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q3 · Money-in / receipt voucher <span class="pill-status b-locked">Locked — combined daily voucher, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Decision:</strong> one combined daily sales voucher per store carries both the earned side (revenue + GST) and the collected side (the day's tender split as the money-in legs). Card &amp; UPI land in <strong>clearing ledgers</strong> that the later bank settlement clears — absorbing the settlement lag &amp; fees, which the KDPS money-collection audit already watches.</p>
+    <p style="margin:6px 0"><strong>Tender legs (Anand, 20 Jun):</strong> <span class="chip">Cash</span> <span class="chip">UPI</span> <span class="chip">Debit/Credit card</span> <span class="chip">Store credit</span> <span class="chip">Exchange adjustment</span>. Each maps to its own Tally ledger (cash-in-hand, UPI-clearing, card-clearing, store-credit liability, exchange nets within the sale).</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q4 · Voucher numbering &amp; exactly-once <span class="pill-status b-locked">Locked — KDPS-owned number, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Research:</strong> Tally has a native "prevent duplicate voucher number" guard; best-practice integrations carry an idempotency key so retries don't double-post.</p>
+    <p style="margin:6px 0"><strong>Decision (Option B):</strong> KDPS generates a <strong>deterministic, human-readable voucher number</strong> (e.g. <code>DEO-SAL-20260620-001</code> = store · type · date · sequence) and pushes it as the Tally voucher number with <strong>prevent-duplicates ON</strong>. That single number is both the <strong>idempotency guard</strong> (a retry bounces off Tally → exactly-once) and the <strong>join key</strong> for the daily tie-out. Tally auto-numbering rejected — it loses the join key and duplicates on retry.</p>
+    <p style="margin:6px 0" class="why">First-live-test check (not blocking): confirm our number passes through TaxOne unchanged rather than being reassigned. Deterministic template import is confirmed, so it should.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q5 · GST on each voucher + two GST numbers <span class="pill-status b-locked">Part 1 &amp; 3 locked · Part 2 → client (C3), 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Note:</strong> apparel slabs changed 22 Sep 2025 (now 5% up to ₹2,500/piece, 18% above) — proves GST must be <strong>dated data, never hardcoded</strong>.</p>
+    <p style="margin:6px 0"><strong>Part 1 — locked:</strong> KDPS works out the tax once, at the sale, using the right slab for that date. The voucher <strong>carries</strong> that tax breakup as-is. Tally and TaxOne <strong>never recompute GST</strong> — one calculator, everyone else records.</p>
+    <p style="margin:6px 0"><strong>Part 2 — parked for client (C3):</strong> whether Bihar &amp; Jharkhand are one Tally company with two GST numbers, or two separate companies. Decides how we address each store's vouchers. Both are easy for us.</p>
+    <p style="margin:6px 0"><strong>Part 3 — locked:</strong> stock moving <strong>between the two states</strong> is a taxable supply — needs an IGST tax invoice (an out-voucher at the sender, a matching purchase voucher at the receiver who claims the tax back). A move <strong>inside one state</strong> is just a stock move — no Tally voucher, only the stock ledger.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q6 · When Tally sees the purchase ("sale or return" brands) <span class="pill-status b-locked">Locked — at arrival, same for all, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Anand corrected the premise (20 Jun):</strong> the real KDPS process is — <strong>every goods arrival comes with an invoice</strong> → invoice becomes a <strong>PT file</strong> → loaded into the <strong>POS back office</strong> (stock-in) → <strong>POS sales report feeds Tally</strong> on the selling side. Brand ledgers are built from invoices in + payments out.</p>
+    <p style="margin:6px 0">This <strong>resolves the inbound open item</strong> (tax invoice at delivery vs approval-basis challan): brands bill with a <strong>tax invoice at delivery</strong>, not challan-then-bill.</p>
+    <p style="margin:6px 0"><strong>Decision (Option A):</strong> the Tally purchase voucher is created <strong>from the invoice at arrival, for every brand</strong> — no special-casing SOR, no waiting for the sale. Matches the already-designed TIR purchase export.</p>
+    <p style="margin:6px 0"><strong>The SOR difference is money only, not timing:</strong> the invoice is booked, but the brand is <strong>paid only when the item sells</strong>, and <strong>unsold stock returns with a credit note</strong>. That payment/return timing is already handled on the payments side and does not change when Tally sees the purchase.</p>
+    <p style="margin:6px 0" class="why">Parked for client (C5): for a sale-or-return brand, does the invoice that comes with the goods already charge GST at that point? Only detail that affects how the purchase is recorded.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q7 · Catching anything that fails to reach Tally <span class="pill-status b-locked">Locked — daily check + fix-it list, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Decision:</strong> a daily <strong>tie-out</strong> matches what KDPS sent against what Tally accepted (on the unique voucher number); any refused voucher goes to a plain-words <strong>"needs attention" list</strong> to fix and re-send. <strong>Never blocks the shop floor.</strong></p>
+    <p style="margin:6px 0"><strong>Owner:</strong> Patna accountant. <strong>Cadence:</strong> once a day.</p>
+  </div>
+
+  <div class="gq">
+    <div class="qh">Q8 · Turning it on (cutover) <span class="pill-status b-dep">Deferred to D8/D9, 20 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Anand (20 Jun):</strong> feeding Tally is <strong>not a priority now</strong> — it won't be implemented for the next couple of months. The go-live approach (safe overlap / parallel run vs sudden switch, how long, what "good enough to switch" means) is <strong>left open and will be decided in the rollout discussions (D8/D9)</strong>, when it's actually being built.</p>
+    <p style="margin:6px 0"><strong>Recorded for then (not decided):</strong> the safe default is a <strong>short overlap</strong> — the system feeds Tally automatically while the accountant keeps the manual way for a month or two, comparing daily, switching off the manual way only once the two match cleanly. Revisit in D9.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  KDPS · D6 Tally Sync · started 20 June 2026 · living document — updated after every question.<br>
+  Inherits: Payments Q-H (grain, one-way push), Inbound Q20 (TIR purchase format). Feeds: D9 migration (parallel-run &amp; cutover).
+</footer>
+
+</main>
+<script>
+function showTab(i){
+  document.querySelectorAll('.tabbtn').forEach((b,n)=>b.classList.toggle('active',n===i));
+  document.getElementById('tab-design').classList.toggle('show',i===0);
+  document.getElementById('tab-log').classList.toggle('show',i===1);
+}
+</script>
+</body>
+</html>

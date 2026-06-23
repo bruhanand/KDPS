@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How We Build KDPS — Development Plan</title>
+<style>
+  :root{
+    --ink:#1a1c23; --ink-soft:#4a4e5a; --muted:#7b8194;
+    --line:#e6e8ee; --bg:#f6f7f9; --card:#ffffff;
+    --accent:#4f46e5;        /* you / decide */
+    --code:#0f766e;          /* the AI codes */
+    --design:#be185d;        /* the AI designs */
+    --good:#15803d; --good-bg:#eaf6ee;
+    --warn:#b45309; --warn-bg:#fbf1e3;
+    --stop:#b91c1c; --stop-bg:#fbeceb;
+    --info:#1d4ed8; --info-bg:#eaf0fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:900px;margin:0 auto;padding:0 22px 80px}
+  header{background:linear-gradient(135deg,#1a1c23,#2b2f44);color:#fff;margin-bottom:30px;padding:42px 22px 36px}
+  header .wrap{padding-bottom:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;color:#aab0c8;font-weight:600;margin:0 0 10px}
+  h1{font-size:30px;line-height:1.15;margin:0 0 12px;font-weight:700}
+  header p{color:#c9cde0;font-size:15px;margin:0;max-width:660px}
+  .meta{margin-top:18px;font-size:12.5px;color:#9aa0bd}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:700;margin:48px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  h3{font-size:17px;margin:0 0 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:14px 0;box-shadow:0 1px 2px rgba(20,22,35,.04)}
+  .lead{font-size:16px;border-left:4px solid var(--accent);border-radius:0 14px 14px 0}
+  .lead strong{color:var(--ink)}
+  ul,ol{margin:8px 0 4px;padding-left:20px} li{margin:6px 0} p{margin:8px 0}
+  .small{font-size:13px;color:var(--ink-soft)} b.k{color:var(--ink)}
+  .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:3px 11px;letter-spacing:.02em;white-space:nowrap}
+  .b-good{background:var(--good-bg);color:var(--good)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-stop{background:var(--stop-bg);color:var(--stop)}
+  .b-info{background:var(--info-bg);color:var(--info)}
+  code{background:#eef0f4;border-radius:5px;padding:1px 6px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  /* term table */
+  table{border-collapse:collapse;width:100%;font-size:13.6px;margin:6px 0}
+  td,th{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+  td.was{color:var(--stop);text-decoration:line-through;white-space:nowrap;font-weight:600}
+  td.now{color:var(--good);font-weight:600;white-space:nowrap}
+  /* stages */
+  .stage{display:grid;grid-template-columns:30px 1fr auto;gap:14px;align-items:start;padding:13px 0;border-top:1px solid var(--line)}
+  .stage:first-child{border-top:none}
+  .stnum{width:30px;height:30px;border-radius:50%;background:#eef0fb;color:var(--accent);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .stage.done .stnum{background:var(--good-bg);color:var(--good)}
+  .stage.now .stnum{background:var(--accent);color:#fff}
+  .stage h3{font-size:15.5px;margin:1px 0 2px}
+  .pill{font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;align-self:center}
+  .p-done{background:var(--good-bg);color:var(--good)}
+  .p-now{background:#eef0fb;color:var(--accent)}
+  .p-next{background:var(--warn-bg);color:var(--warn)}
+  .p-later{background:#eef0f4;color:var(--muted)}
+  /* checklist */
+  .grp{margin:10px 0}
+  .grp h3{font-size:14px;margin:16px 0 2px}
+  .chk{display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:start;padding:9px 0;border-top:1px solid var(--line);font-size:13.6px}
+  .chk:first-of-type{border-top:none}
+  .box{width:16px;height:16px;border:2px solid #cdd2de;border-radius:4px;margin-top:2px}
+  .tag{font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;white-space:nowrap}
+  .t-have{background:var(--good-bg);color:var(--good)}
+  .t-extract{background:var(--warn-bg);color:var(--warn)}
+  .t-create{background:var(--info-bg);color:var(--info)}
+  /* loop */
+  .loop{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:6px 0 4px}
+  .step{flex:1 1 110px;min-width:108px;border-radius:11px;padding:11px 12px;color:#fff;position:relative}
+  .step .n{font-size:10.5px;opacity:.85;font-weight:700;letter-spacing:.07em}
+  .step .t{font-size:13.5px;font-weight:700;margin-top:1px}
+  .step .o{font-size:11px;opacity:.92;margin-top:3px}
+  .s-you{background:var(--accent)} .s-code{background:var(--code)} .s-design{background:var(--design)}
+  .gate{outline:3px solid #fbbf24;outline-offset:1px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:12px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  /* tools */
+  .tool{display:grid;grid-template-columns:1fr auto;gap:6px 14px;border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin:11px 0;background:#fff}
+  .tool h3{margin:0} .tool .what{color:var(--ink-soft);font-size:13.5px;margin:2px 0 0;grid-column:1/2}
+  .tool .why{grid-column:1/-1;font-size:13.5px;color:var(--ink-soft);border-top:1px dashed var(--line);padding-top:10px;margin-top:4px}
+  .tool .badge{justify-self:end;align-self:start}
+  .callout{border-radius:14px;padding:16px 18px;margin:14px 0;font-size:14px}
+  .c-stop{background:var(--stop-bg);border:1px solid #f3cfcc}
+  .c-good{background:var(--good-bg);border:1px solid #cce7d4}
+  .c-note{background:#eef0fb;border:1px solid #d7dbf6}
+  footer{margin-top:50px;border-top:1px solid var(--line);padding-top:18px;font-size:12px;color:var(--muted)}
+  @media(max-width:560px){h1{font-size:25px}.tool{grid-template-columns:1fr}.tool .badge{justify-self:start}.stage{grid-template-columns:30px 1fr}.pill{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">KDPS · Development Plan</p>
+    <h1>How we build this</h1>
+    <p>The standard software path from a finished design to a running system — in normal development terms. You design and review; the AI writes the code.</p>
+    <p class="meta">v3 · 23 June 2026 · rewritten in standard terms (replaces v2) · status corrected</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- TL;DR -->
+  <h2>The short answer</h2>
+  <p class="sub">Read this and you have it.</p>
+  <div class="card lead">
+    <p><strong>The design is essentially done.</strong> D1–D8 are complete; only D9 (migration &amp; rollout) is left to design. We are not at "start coding" yet — two normal stages come first: <b class="k">detailed design + data model</b>, then <b class="k">project setup</b>.</p>
+    <p><strong>Then build module by module</strong>, each as a thin slice that runs end to end (one real document → ledger → screen), starting with the simplest real path. You review every change; money code is always supervised.</p>
+    <p style="margin-bottom:0"><strong>You do not lock everything first.</strong> You write the spec for one feature, build it, move to the next. And the outside systems — POS, Tally, barcode — are <b class="k">connected later, when you reach the part that uses them</b>, not finalised up front.</p>
+  </div>
+
+  <!-- terminology fix -->
+  <h2>Words we're fixing</h2>
+  <p class="sub">The earlier version invented names. These are the normal ones any developer would recognise.</p>
+  <div class="card">
+    <table>
+      <tr><th>Earlier (made-up)</th><th>Standard term</th><th>What it actually means</th></tr>
+      <tr><td class="was">consolidation pass</td><td class="now">Detailed design</td><td>Turning the scattered design into one data model + the specs the code follows. (a.k.a. low-level design)</td></tr>
+      <tr><td class="was">build documents</td><td class="now">Technical design package</td><td>Data model, specs, interface contracts, test cases — the normal design outputs.</td></tr>
+      <tr><td class="was">feature inventory</td><td class="now">Product backlog</td><td>The list of features to build, each with a pass/fail acceptance check.</td></tr>
+      <tr><td class="was">constitution</td><td class="now">Engineering guidelines</td><td><code>CLAUDE.md</code> — the coding rules + the 11 architecture rules every change obeys.</td></tr>
+      <tr><td class="was">spikes</td><td class="now">Proof-of-concept (PoC)</td><td>A quick test to confirm an outside system works (e.g. "does the POS API exist?"). Done in the integration phase — not now.</td></tr>
+    </table>
+    <p class="small" style="margin-bottom:0">Terms kept because they <em>are</em> standard: <b>vertical slice</b> (a feature built top-to-bottom, not layer-by-layer), <b>TDD</b> (write the test first), <b>golden-master test</b> (real input → known-correct output, checked automatically), <b>ADR</b> (a short record of a decision and why).</p>
+  </div>
+
+  <!-- STAGES -->
+  <h2>Where we are — the development lifecycle</h2>
+  <p class="sub">The normal stages of a software project, start to finish. We're moving into stage 4.</p>
+  <div class="card">
+    <div class="stage done"><div class="stnum">1</div>
+      <div><h3>Requirements</h3><p class="small">What the client needs, captured and confirmed.</p></div>
+      <span class="pill p-done">Done</span></div>
+    <div class="stage done"><div class="stnum">2</div>
+      <div><h3>Process analysis (as-is workflow study)</h3><p class="small">How KDPS actually works today — the ground truth the design is built on.</p></div>
+      <span class="pill p-done">Done</span></div>
+    <div class="stage done"><div class="stnum">3</div>
+      <div><h3>System design / architecture (high-level design)</h3><p class="small">The 5 layers, the 11 rules, and modules D1–D8. <b>Only D9 (migration) is left to design.</b></p></div>
+      <span class="pill p-done">D1–D8 done</span></div>
+    <div class="stage now"><div class="stnum">4</div>
+      <div><h3>Detailed design + data model (low-level design)</h3><p class="small">One data model (ERD/schema) + the specs the code follows. The real next work. <b>See the checklist below.</b></p></div>
+      <span class="pill p-now">Next</span></div>
+    <div class="stage"><div class="stnum">5</div>
+      <div><h3>Project setup (scaffolding)</h3><p class="small">One repo, the database, login/roles, automated tests (CI), the component library, <code>CLAUDE.md</code>. The one step that isn't a feature.</p></div>
+      <span class="pill p-next">Then</span></div>
+    <div class="stage"><div class="stnum">6</div>
+      <div><h3>Development — module by module, in vertical slices</h3><p class="small">First slice = one branded shipment all the way to accurate stock. Then the rest, using the loop below.</p></div>
+      <span class="pill p-later">Then</span></div>
+    <div class="stage"><div class="stnum">7</div>
+      <div><h3>Integration — the outside systems</h3><p class="small">POS (Ten Software), Tally, barcode, bank, WhatsApp — connected as you reach the module that uses each. Woven into stage 6, not a phase you wait for.</p></div>
+      <span class="pill p-later">During build</span></div>
+    <div class="stage"><div class="stnum">8</div>
+      <div><h3>Data migration &amp; go-live</h3><p class="small">Import masters + opening stock, parallel run with Tally, store-by-store rollout. Designed in D9.</p></div>
+      <span class="pill p-later">Later</span></div>
+  </div>
+
+  <!-- DETAILED DESIGN DELIVERABLES -->
+  <h2>Stage 4 — the technical design package</h2>
+  <p class="sub">The documents the AI reads so it builds without guessing. Tag = whether you already have it.</p>
+  <div class="card">
+    <div class="grp">
+      <h3>A · Read every session</h3>
+      <div class="chk"><span class="box"></span><div><b>Engineering guidelines</b> (<code>CLAUDE.md</code>) — the coding rules, the 11 architecture rules, the domain facts, and the build/test commands. Keep it short.</div><span class="tag t-have">Have · adapt</span></div>
+      <div class="chk"><span class="box"></span><div><b>Glossary / domain dictionary</b> (<code>CONTEXT.md</code>) — every term defined once: SKU, SOR, GRN, PT, TIR, EOSS, GSTIN — so naming stays consistent.</div><span class="tag t-create">Create</span></div>
+    </div>
+    <div class="grp">
+      <h3>B · The model the code is built against</h3>
+      <div class="chk"><span class="box"></span><div><b>Data model (ERD) + database schema</b> — every table, column, key, relationship; SKU grain (style×size×colour) carried end-to-end; state/GSTIN on every document.</div><span class="tag t-create">Create</span></div>
+      <div class="chk"><span class="box"></span><div><b>Ledger posting specification</b> — each document → the exact accounting entries it writes (double-entry). The heart of correctness.</div><span class="tag t-extract">Extract</span></div>
+      <div class="chk"><span class="box"></span><div><b>State diagrams</b> — each document's status flow and who may move it.</div><span class="tag t-extract">Extract</span></div>
+      <div class="chk"><span class="box"></span><div><b>Reference / config data</b> — GST slabs (date-effective HSN) and the offer rules, modelled as data, not code.</div><span class="tag t-extract">Extract</span></div>
+    </div>
+    <div class="grp">
+      <h3>C · The plan of work</h3>
+      <div class="chk"><span class="box"></span><div><b>Product backlog</b> — every feature as a pass/fail item, in build order. This is also your progress dashboard.</div><span class="tag t-create">Create</span></div>
+      <div class="chk"><span class="box"></span><div><b>Technical spec per feature</b> — one short spec written just before each feature: names the files &amp; interfaces, states what's out of scope, ends with a runnable check.</div><span class="tag t-create">Create · each</span></div>
+    </div>
+    <div class="grp">
+      <h3>D · Interfaces &amp; test oracle</h3>
+      <div class="chk"><span class="box"></span><div><b>Interface / API contracts</b> — one per outside system (POS, Tally, bank): fields, join key, push/pull, retry, daily reconciliation. Firmed during integration.</div><span class="tag t-extract">Extract · firm later</span></div>
+      <div class="chk"><span class="box"></span><div><b>Golden-master tests</b> — real invoice in → known-correct PT/postings out, plus ledger invariants. Your anti-cheat for money logic.</div><span class="tag t-create">Create · from 150 invoices</span></div>
+    </div>
+    <div class="grp">
+      <h3>E · Decisions, UI &amp; seed data</h3>
+      <div class="chk"><span class="box"></span><div><b>ADRs (decision records)</b> — key calls (stack, model versions) with the "why", so settled questions don't reopen.</div><span class="tag t-create">Create · as decided</span></div>
+      <div class="chk"><span class="box"></span><div><b>Component library / design system</b> — ₹ Lakh/Crore formatting, tables, status chips, forms — the UI source of truth.</div><span class="tag t-create">Create · at setup</span></div>
+      <div class="chk"><span class="box"></span><div><b>Seed / test data</b> — store list, brand terms, roles, a few real SKUs — to run and test against.</div><span class="tag t-have">Have · shape</span></div>
+    </div>
+  </div>
+
+  <!-- THE LOOP -->
+  <h2>The build loop — one feature at a time</h2>
+  <p class="sub">The same cycle for every slice. The spec leads; the screen is designed near the end. You hold two gates.</p>
+  <div class="card">
+    <div class="loop">
+      <div class="step s-you gate"><div class="n">GATE 1</div><div class="t">Spec</div><div class="o">You approve</div></div>
+      <div class="step s-you"><div class="n">SAFETY</div><div class="t">Tests first</div><div class="o">You own money tests</div></div>
+      <div class="step s-code"><div class="n">DO</div><div class="t">Build</div><div class="o">The AI codes</div></div>
+      <div class="step s-code"><div class="n">PROVE</div><div class="t">Verify</div><div class="o">CI + golden-master</div></div>
+      <div class="step s-design"><div class="n">UI</div><div class="t">Design screen</div><div class="o">Claude Design</div></div>
+      <div class="step s-you gate"><div class="n">GATE 2</div><div class="t">Review</div><div class="o">AI + you</div></div>
+      <div class="step s-code"><div class="n">DONE</div><div class="t">Ship</div><div class="o">Merge, tick it</div></div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent)"></span>You decide</span>
+      <span><span class="dot" style="background:var(--code)"></span>The AI codes</span>
+      <span><span class="dot" style="background:var(--design)"></span>The AI designs</span>
+      <span><span class="dot" style="background:#fbbf24"></span>Your control gate</span>
+    </div>
+  </div>
+  <div class="card">
+    <ol style="margin:0">
+      <li><b>Spec</b> — a fresh session writes a short, self-contained spec for the feature; you approve it. Cheap to fix here.</li>
+      <li><b>Tests first</b> — for ledgers / GST / payments, you write or verify the expected input→output (golden-master). This is TDD — no fake implementations.</li>
+      <li><b>Build</b> — the AI implements until tests pass, on its own branch.</li>
+      <li><b>Verify</b> — automated tests green + golden-master match. Green = done; "looks done" doesn't count.</li>
+      <li><b>Design the screen</b> — now lay out this module's UI from the component library, and wire it in.</li>
+      <li><b>Review</b> — AI review in a fresh window, then <b>you</b> read the change. Mandatory on anything touching money.</li>
+      <li><b>Ship</b> — merge the branch, tick the backlog item, move to the next.</li>
+    </ol>
+  </div>
+  <div class="callout c-note"><b>Two speeds.</b> Money code (ledgers, payments, Tally) = supervised, you read every change. Screens, reports, scaffolding = let it run, review the result.</div>
+
+  <!-- TOOLS -->
+  <h2>The tools</h2>
+  <p class="sub">Two are your method; two are helpers. None is "the framework you build on."</p>
+  <div class="tool"><h3>Matt Pocock's skills</h3><span class="badge b-good">USE — the method</span>
+    <p class="what">Skills that match how you work.</p>
+    <p class="why"><code>grill-with-docs</code> → the spec + glossary + ADRs · <code>to-prd</code> → the backlog · <code>to-issues</code> → vertical-slice tickets · <code>tdd</code> → test-first · <code>review</code> → fresh-context review. Already installed. Your spine.</p>
+  </div>
+  <div class="tool"><h3>Sandcastle — single mode</h3><span class="badge b-info">USE — at build time</span>
+    <p class="what">Runs the coding AI in an isolated container on a branch you review.</p>
+    <p class="why">Container isolation (can't break your machine), a branch you check before merge, a test gate before review, and it can pick work from your backlog tickets. Enters at stage 6 (needs the project set up first). Keep parallel mode for chores only — never an unattended fleet on money code.</p>
+  </div>
+  <div class="tool"><h3>gstack skills</h3><span class="badge b-warn">BORROW a few</span>
+    <p class="what">~35 ready-made Claude Code skills.</p>
+    <p class="why">Keep: <code>plan-eng-review</code> (lock the design + test plan before a slice), <code>review</code> + <code>codex</code> (independent second opinion before merge), <code>cso</code> (security check on money/GST code), <code>qa</code> (drives a real browser — good for the store screens), <code>ship</code> / <code>land-and-deploy</code>, <code>investigate</code> (debugging). Ignore the rest.</p>
+  </div>
+  <div class="tool"><h3>Claude Design + DesignSync</h3><span class="badge b-warn">USE — narrowly</span>
+    <p class="what">Chat-to-screen UI with a live canvas; DesignSync keeps components in sync with code.</p>
+    <p class="why">This is the "design the screen" step. Set up the component library once, then lay out each module's screens. It designs surfaces, not the data model. It's a research preview and works best with React — fine, since the stack is React anyway.</p>
+  </div>
+  <div class="callout c-note"><b>One safeguard.</b> Some of these are pre-1.0 / preview tools. Keep the <em>method</em> independent of any one tool — the discipline (spec → test → build → verify → review → ship; golden-master tests; money code supervised) lives in <code>CLAUDE.md</code>, so if a tool changes, the plan survives.</div>
+
+  <!-- INTEGRATIONS -->
+  <h2>The outside systems — connected later</h2>
+  <p class="sub">These are integrations at the edges. You build the core without them and connect each when you reach the module that uses it.</p>
+  <div class="card">
+    <table>
+      <tr><th>System</th><th>Used by</th><th>When to connect</th></tr>
+      <tr><td><b>Ten Software (POS)</b></td><td>Selling / outbound, cash audit</td><td>Confirm it works (a quick PoC) <b>before</b> you build Selling — see the note below.</td></tr>
+      <tr><td><b>Tally</b> (via TaxOne)</td><td>Accounting sync</td><td>When you build the Tally-sync module (near the end).</td></tr>
+      <tr><td><b>Barcode tool</b></td><td>Selling / stock movement</td><td>When you build Selling.</td></tr>
+      <tr><td><b>Bank</b></td><td>Payments / cash audit</td><td>When you build Payments.</td></tr>
+      <tr><td><b>WhatsApp</b></td><td>Daily digest, alerts</td><td>When you build the reports module.</td></tr>
+    </table>
+    <div class="callout c-good" style="margin-bottom:0"><b>Everything before Selling needs none of these.</b> Booking, inbound, the PT maker, stock-to-ledger and payments all run without the POS. So you can start building immediately once the project is set up.</div>
+  </div>
+  <div class="callout c-stop"><b>The one thing not to leave to the last minute:</b> check the Ten Software POS API actually works <b>before</b> you build the Selling module. If it has no usable API, that part may need its own simple POS — a bigger decision you don't want to hit by surprise. Everything earlier is unaffected, so this is "before Selling", not "before anything".</div>
+
+  <!-- NEXT -->
+  <h2>What to do next</h2>
+  <div class="card">
+    <ol style="margin:0">
+      <li><b>Lock the stack, then build the foundation</b> (project setup) — start here. <span class="small">D9 migration is deferred to later, before go-live (Anand's call, 23 Jun).</span></li>
+      <li><b>Detailed design + data model</b> — produce the technical design package above (data model, posting spec, state diagrams, backlog, golden-master tests).</li>
+      <li><b>Set up the project</b> — repo, database, login/roles, CI, component library, <code>CLAUDE.md</code>.</li>
+      <li><b>Build module by module</b> — start with one branded shipment → ledger → accurate stock, then the rest, using the loop.</li>
+      <li><b>Connect the outside systems as you reach them</b>; then migrate and go live store by store.</li>
+    </ol>
+  </div>
+  <div class="callout c-good">
+    <b>Bottom line.</b> Design is nearly finished. Next is detailed design + project setup — not code yet. Then build one feature at a time, spec first, you review every money change. Connect POS / Tally / barcode when you reach the parts that use them. Nothing has to be fully locked before you start — each feature is locked just before it's built.
+  </div>
+
+  <footer>
+    KDPS · Development plan · v3 · 23 June 2026 — rewritten in standard software terms; status corrected (D1–D8 done, D9 remaining). Replaces v2 (21 June).<br>
+    Method grounded in standard practice: spec-driven development, test-first for financial code, vertical-slice delivery, and architecture-order build.
+  </footer>
+
+</div>
+</body>
+</html>

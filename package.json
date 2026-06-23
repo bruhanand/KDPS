@@ -1,0 +1,14 @@
+{
+  "name": "kdps",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sandcastle": "tsx .sandcastle/main.mts",
+    "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "^0.5.10",
+    "tsx": "^4.19.2"
+  }
+}

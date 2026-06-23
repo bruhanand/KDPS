@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — Analytics &amp; Intelligence Module</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:20px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:20px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  p{margin:7px 0;}
+  ul{margin:7px 0; padding-left:20px;}
+  li{margin:4px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  .mock{background:var(--soft); border:1px solid var(--line); border-radius:6px; padding:12px 14px; margin:10px 0; font-family:"Courier New",monospace; font-size:9.5pt; line-height:1.5; white-space:pre-wrap; page-break-inside:avoid;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 12px; margin:12px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;}
+  .ask li{margin:8px 0;}
+  footer{margin-top:24px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · System Design</div>
+  <h1>Analytics &amp; Intelligence Module</h1>
+  <p class="sub">The "brain" of the system — it watches every store every day, reports on WhatsApp in plain language, and helps you decide. It never moves money or stock on its own; a person always decides.</p>
+</header>
+
+<div class="scope">
+  <strong>Please confirm.</strong> Today KDPS has no analytics — every report is built by hand. Below is exactly what this module will give you and how. Read each point and tell us anything that does not match how you actually work, so we can correct it before building.
+</div>
+
+<section class="avoid">
+<h2><span class="num">1.</span>The big idea</h2>
+<ul>
+  <li><strong>One trusted set of numbers.</strong> Sales, stock, margin, ageing — each is worked out once, the same way everywhere, so every report agrees instead of contradicting.</li>
+  <li><strong>It only reads and reports.</strong> It sends messages, reports and suggestions. It never changes a price, pays a bill, or edits the accounts — <strong>a person always approves</strong>.</li>
+  <li><strong>It meets you on WhatsApp.</strong> Owners don't have to log into anything; the key numbers and warnings come to your phone.</li>
+  <li><strong>Honest, then smart.</strong> It starts with simple, dependable rules and gets cleverer as it sees more of your own sales — no empty "AI" promises.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">2.</span>First, it cleans up the data</h2>
+<ul>
+  <li>Today a single brand is recorded under many codes (Louis Philippe shows as LP, LR, LY, LA…) and many items have the wrong season on them. Any report built on that is unreliable.</li>
+  <li>The system maps everything to one clean structure: <strong>Supplier → Brand → Sub-brand</strong> (e.g. Aditya Birla → Van Heusen → V Dot), so brand totals are finally correct, and you can still drill into a sub-brand.</li>
+  <li>It shows a <strong>"data trust" figure</strong> — e.g. "94% of Louis Philippe items matched cleanly" — so you always know how solid a number is, and watch it improve.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">3.</span>The daily WhatsApp report</h2>
+<ul>
+  <li>One short message at <strong>9 PM</strong> — the day's close. Built to be read in seconds, not a wall of numbers.</li>
+  <li>A small summary on top (in <strong>percentages</strong> — vs target, vs last week), the <strong>money lower down</strong>, a <strong>store leaderboard</strong>, one "unusual today" line, and a short <strong>"needs a look"</strong> list you can tap into.</li>
+</ul>
+<div class="mock">KDPS · Mon 19 Jun · 9:00 PM
+
+Good day — +12% vs target, +9% vs last Monday.
+Patna &amp; Boring Rd led; Ranchi-2 slow on a stockout.
+
+Needs a look (3):
+ 1. Ranchi-2 is 32% below target
+ 2. LP slim-fit 32 out of stock in 4 stores
+ 3. Allen Solly over-discounted, gap ~₹3,200
+
+— the numbers —
+ Sales  ₹18.4L (target ₹16.4L) · Margin ₹6.0L (33%)
+ Top: Patna ₹3.1L · Boring Rd ₹2.4L · Bhagalpur ₹2.0L</div>
+</section>
+
+<section class="avoid">
+<h2><span class="num">4.</span>The right alert to the right person</h2>
+<ul>
+  <li>Each person gets only what is theirs — <strong>finance is not bothered with shop-floor issues, and the floor is not shown cash matters</strong>.</li>
+  <li>If something important is not acted on, it <strong>climbs up</strong> to the next person, and finally to the owner.</li>
+</ul>
+<table>
+  <tr><th>Role</th><th>Gets</th></tr>
+  <tr><td>Owner / Director</td><td>The 9 PM summary + anything that was escalated</td></tr>
+  <tr><td>Head of Business Development</td><td>Brand and store performance, for growth and brand tie-ups</td></tr>
+  <tr><td>Head of Operations</td><td>Store not opened, machine down, stock-outs, stuck transfers</td></tr>
+  <tr><td>Account Manager</td><td>Dead stock, broken sizes, re-order needs, supplier performance</td></tr>
+  <tr><td>Finance</td><td>Cash short, deposit gaps, over-discounting, dues</td></tr>
+  <tr><td>Store Manager</td><td>Their own store only — sales vs target, opening, machine, stock-outs</td></tr>
+</table>
+</section>
+
+<section class="avoid">
+<h2><span class="num">5.</span>The monthly brand report — made automatically</h2>
+<ul>
+  <li>The Sale (vouchers) and SOH (stock) sheets you send today, <strong>per brand per store, in the exact same format</strong> — but generated in <strong>one click</strong> instead of by hand.</li>
+  <li>No more gathering each shop's file, fixing bill numbers, or applying discounts by hand — the system already holds clean sales, real bill numbers and the discount that was given.</li>
+  <li><strong>Month-end target management:</strong> where a brand's report should line up to its monthly target, the system helps balance it across two neighbouring months and <strong>you approve</strong> it. <em>(Your statutory books in Tally stay exactly as they are.)</em></li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">6.</span>Profit by brand and by store</h2>
+<ul>
+  <li>Worked out automatically — <strong>cost from the PT at stock-in, sale price from the POS</strong> — never typed by hand.</li>
+  <li>Owned stock and <strong>SOR / consignment</strong> stock are judged <strong>differently</strong> (on SOR you risk no money, so the question is "is this brand worth the shelf space?", not "return on stock").</li>
+  <li>A simple <strong>scorecard</strong> shows which brands and stores to <strong>lean into vs pull back</strong>, and a "where did the margin go" view splits any discount into mark-down, free gifts and returns.</li>
+  <li>Full store profit after rent and salaries (pulled from Tally) can be added later.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">7.</span>Dead stock &amp; mark-down help</h2>
+<ul>
+  <li>It finds stock that is <strong>old and not selling</strong>, and "<strong>broken sizes</strong>" — where a style's popular sizes are sold out and only odd sizes are left (a hidden loss, because customers leave without buying).</li>
+  <li>For each, it <strong>suggests the right move</strong>: return to the brand (if within the window), move to a store where it sells, or mark it down — with a safe <strong>price floor</strong> so you never sell below an agreed margin.</li>
+  <li>It only <strong>suggests</strong>; the Account Manager and store decide.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">8.</span>The money watchdog</h2>
+<ul>
+  <li>Catches <strong>discount given beyond the offer rules</strong> (the biggest gap today, where discounts are keyed by hand), <strong>cash deposited short</strong>, and data mistakes (cost above MRP, stuck transfers).</li>
+  <li>Ranks the worst stores — and even a <strong>per-cashier figure</strong> — so a problem is easy to spot.</li>
+  <li>It <strong>flags for a person to check; it never blocks a sale or accuses anyone</strong>. A flag means "look here", and the person confirms or clears it.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">9.</span>Selling &amp; stock forecasting</h2>
+<ul>
+  <li>What's selling fast, what to <strong>re-order</strong>, and which stock to <strong>move between stores</strong> — automating the judgement you make today by feel.</li>
+  <li>For brand-new styles it learns from <strong>similar past styles</strong>; it builds <strong>size patterns per region</strong> so you buy the right size mix.</li>
+  <li><strong>Honest note:</strong> for new products this is a guide to "narrow the decision", not an exact number — it sharpens as a couple of clean seasons build up. The fully automatic "demand AI" is a <strong>later stage</strong>, once there is enough clean history.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">10.</span>It explains itself in plain Hindi</h2>
+<ul>
+  <li>The numbers are worked out by the system; the <strong>plain-language line on top</strong> ("sales up 12%, Patna led, Ranchi slow on a stock-out") is written in <strong>Hindi or English</strong>.</li>
+  <li>Later, a <strong>"just ask" assistant</strong> can be added on top so anyone can ask a question in their own words and get the answer for their stores — built to plug in without re-doing the system.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">11.</span>What comes now, and what comes later</h2>
+<table>
+  <tr><th>Now</th><th>Later (built open for it)</th></tr>
+  <tr><td>Clean data · 9 PM WhatsApp report · role alerts · brand report-maker · brand/store margin · dead-stock &amp; mark-down help · money watchdog · re-order &amp; store-balancing suggestions · Hindi explanations</td><td>Full store profit (with rent/salaries) · machine-learning demand "AI" · the "just ask" assistant · a browse-anywhere dashboard</td></tr>
+</table>
+</section>
+
+<section class="avoid">
+<h2><span class="num">12.</span>A few questions for you</h2>
+<div class="ask">
+<ol>
+  <li>Does <strong>every section above</strong> match how you actually work? Please mark anything that is wrong.</li>
+  <li>The roles in section 4 — Owner, Head of Business Development, Head of Operations, Account Manager, Finance, Store Managers — are these the <strong>right people</strong>, and when something is not handled, <strong>who should it go up to</strong>?</li>
+  <li>For "dead" stock, after how many days with <strong>no sale</strong> should an item be flagged — and does this differ for <strong>fast vs slow brands</strong>?</li>
+  <li>The <strong>monthly target</strong> for each brand (section 5) — where does it come from: set by the brand, or by you?</li>
+</ol>
+</div>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — Analytics &amp; Intelligence Module · For confirmation · Companion to the Vendor Management, Goods Inward, Outbound, Payments and Offers modules. The whole module only reads and reports — a person always decides.
+</footer>
+
+</div>
+</body>
+</html>

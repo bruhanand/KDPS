@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — POS Integration Requirements</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; color:var(--ink); background:var(--bg); font-family:"Helvetica Neue",Arial,sans-serif; font-size:11pt; line-height:1.5;}
+  .wrap{max-width:800px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:18px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:23pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:13.5pt; margin:20px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  p{margin:7px 0;} ul{margin:7px 0; padding-left:20px;} li{margin:4px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:9.8pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:6px 9px; font-weight:600; font-size:9.5pt;}
+  td{padding:6px 9px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10pt;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 12px; margin:12px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;} .ask li{margin:7px 0;}
+  .key{font-weight:700; color:var(--orange);}
+  section{margin-bottom:6px;} .avoid{page-break-inside:avoid;}
+  footer{margin-top:24px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · For Ten Software</div>
+  <h1>POS Integration Requirements</h1>
+  <p class="sub">The data KDPS's new system needs to send to, and read from, the POS — so the two stay in step. Please confirm what is available today and the timeline for the rest.</p>
+</header>
+
+<div class="scope">
+  <strong>Context.</strong> KDPS is building a system that holds the <strong>master stock and documents</strong>. The POS stays the <strong>billing counter</strong>. We are not asking you to change billing — we need a clean two-way data exchange (APIs). The shared key on both sides is the <strong>barcode</strong>.
+</div>
+
+<section class="avoid">
+<h2><span class="num">1.</span>How the integration works</h2>
+<ul>
+  <li><strong>Two directions:</strong> KDPS <strong>sends</strong> stock and documents to the POS, and <strong>reads</strong> sales and stock back.</li>
+  <li><strong>Timing:</strong> near-real-time where possible (every few minutes), plus one end-of-day batch as the daily close.</li>
+  <li><strong>Key:</strong> the <strong>barcode</strong> identifies the item on both sides.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">2.</span>What KDPS sends to the POS (push)</h2>
+<table>
+  <tr><th>Data</th><th>Fields</th><th>Why</th><th>When</th></tr>
+  <tr><td><strong>Item / price master</strong></td><td>barcode, MRP, HSN, GST%, brand, season, size, colour, category, design no.</td><td>So the POS can scan and sell the item</td><td>On inward / on change</td></tr>
+  <tr><td><strong>Per-store allocation (pending-inward)</strong></td><td>barcode, store, quantity</td><td>So the store sees incoming stock and scans it in to receive</td><td>On allocation / transfer</td></tr>
+  <tr><td><strong>Stock hold / reservation</strong></td><td>barcode, store, quantity held</td><td>Stock promised to a transfer or return must not be sellable</td><td>On the event</td></tr>
+  <tr><td><strong>Stock transfer</strong></td><td>from-store, to-store, barcode, qty, reference</td><td>Source stock held, destination shows pending-receipt</td><td>On transfer</td></tr>
+  <tr><td><strong>Active offers / EOSS</strong> <span style="color:var(--muted)">(later)</span></td><td>barcode or category, store, start/end date, discount%, funding source</td><td>So the POS applies the discount automatically at billing</td><td>On offer setup</td></tr>
+</table>
+</section>
+
+<section class="avoid">
+<h2><span class="num">3.</span>What KDPS reads from the POS (pull)</h2>
+<table>
+  <tr><th>Data</th><th>Fields</th><th>Why</th><th>When</th></tr>
+  <tr><td><strong>Sale lines</strong> <span style="color:var(--muted)">(your sale report)</span></td><td>bill date, bill no, barcode, qty, rate, gross, disc%, disc amt, net, salesman, store, customer/phone, payment split (cash/card/credit), product attributes</td><td>Stock reduction, revenue, profit, reconciliation</td><td>Near-real-time + EOD</td></tr>
+  <tr><td><strong>Stock-on-hand</strong></td><td>barcode, store, quantity</td><td>Reconcile against our records; catch negative stock</td><td>End of day / on demand</td></tr>
+  <tr><td><strong>Daily collection</strong></td><td>store, cash, card, credit totals</td><td>Collection-vs-bank audit</td><td>End of day</td></tr>
+  <tr><td><strong>Returns / exchanges</strong></td><td>bill ref, original bill ref, barcode, qty, amount</td><td>To match exchanges to the original bill and handle returns</td><td>Near-real-time + EOD</td></tr>
+</table>
+<p style="font-size:10pt;color:var(--muted)">We already have your sale-report format (<em>SALE REPORT FORMAT.xlsx</em>); the sale-lines fields above follow it.</p>
+</section>
+
+<section class="avoid">
+<h2><span class="num">4.</span>Capabilities to confirm</h2>
+<p>These few answers decide how the integration is built. Two are load-bearing (marked <span class="key">★</span>).</p>
+<div class="ask">
+<ol>
+  <li><span class="key">★</span> Can the API <strong>accept a pending-inward / incoming-transfer quantity</strong> (stock the store will receive but hasn't yet)?</li>
+  <li><span class="key">★</span> Can the POS <strong>export line-item sales</strong> (the sale report) automatically via API or scheduled file?</li>
+  <li>Can the POS accept a <strong>hold / reservation</strong> that reduces sellable quantity <strong>without removing</strong> the stock?</li>
+  <li>How does the POS record a <strong>customer exchange</strong> — as a single "exchange", or as a <strong>return + a new sale</strong>? Does it link to the original bill?</li>
+  <li>Can the POS <strong>accept and auto-apply offer / EOSS rules</strong> sent by us (later phase)?</li>
+  <li>Is the <strong>barcode</strong> an acceptable join key for all of the above, in both directions?</li>
+  <li>What <strong>method</strong> (REST API / webhook / scheduled file export), <strong>frequency</strong>, <strong>authentication</strong> and rate limits can you support?</li>
+  <li>Which of these are <strong>available today</strong>, and what is the <strong>timeline</strong> for the rest?</li>
+</ol>
+</div>
+</section>
+
+<section class="avoid">
+<h2><span class="num">5.</span>Note on approach</h2>
+<p>KDPS is building this so the POS connection sits behind a single, clean interface. Wherever the POS can provide the above, we use it directly. Where it cannot — or until it can — KDPS will build to this same specification (with offline-capable billing) so the rollout is not held up. A clear list of what is available now, and timelines for the rest, lets us plan accordingly.</p>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — POS Integration Requirements · Shared key: barcode · Companion to the Goods Inward and Outbound modules.
+</footer>
+
+</div>
+</body>
+</html>

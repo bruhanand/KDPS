@@ -1,0 +1,38 @@
+# --- Secrets / env ---
+.env*
+
+# --- Node ---
+node_modules/
+
+# --- Build output ---
+dist/
+
+# --- Sandcastle runtime ---
+.sandcastle/
+
+# --- Scratch / logs ---
+scratch/
+logs/
+worktrees/
+*.log
+
+# --- Confidential client data (do NOT push) ---
+data-from-kdps/
+MOU-KDPS-Anand.pdf
+__archive/
+
+# --- Meeting recordings / large media ---
+meetings/**/*.m4a
+meetings/**/*.mp3
+meetings/**/*.wav
+meetings/**/*.mp4
+meetings/**/*.mov
+meetings/audio-archive/
+
+# --- Python ---
+**/__pycache__/
+.venv/
+*.pyc
+
+# --- OS ---
+.DS_Store

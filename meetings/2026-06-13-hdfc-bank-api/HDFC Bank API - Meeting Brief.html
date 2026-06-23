@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HDFC Bank API — Meeting Brief</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --muted:#555; --line:#e2e2e2;
+    --accent:#004c8f; --accent-soft:#eef4fb; --flag:#b3261e; --flag-soft:#fdeceb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); line-height:1.55; margin:0; background:#f4f4f4;
+  }
+  .page{max-width:820px; margin:0 auto; background:#fff; padding:48px 56px;}
+  header{border-bottom:3px solid var(--accent); padding-bottom:18px; margin-bottom:28px;}
+  header .eyebrow{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700;}
+  header h1{font-size:26px; margin:6px 0 4px;}
+  header .meta{font-size:13px; color:var(--muted);}
+  h2{font-size:18px; margin:30px 0 10px; color:var(--accent); border-bottom:1px solid var(--line); padding-bottom:6px;}
+  h3{font-size:15px; margin:18px 0 6px;}
+  p{margin:8px 0;}
+  ul,ol{margin:8px 0 8px 0; padding-left:22px;}
+  li{margin:6px 0;}
+  .lead{background:var(--accent-soft); border-left:4px solid var(--accent); padding:14px 18px; border-radius:4px; font-size:15px;}
+  .quote{background:#fafafa; border:1px solid var(--line); border-radius:6px; padding:16px 20px; font-style:italic; color:#333; margin:12px 0;}
+  .flag{background:var(--flag-soft); border-left:4px solid var(--flag); padding:12px 16px; border-radius:4px;}
+  .flag strong{color:var(--flag);}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0;}
+  .card{border:1px solid var(--line); border-radius:8px; padding:14px 16px;}
+  .card .tag{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--accent);}
+  .card h4{margin:4px 0 6px; font-size:14px;}
+  .card p{font-size:13px; color:var(--muted); margin:0;}
+  .pick{border-color:var(--accent); background:var(--accent-soft);}
+  .num{counter-reset:item;}
+  footer{margin-top:36px; padding-top:14px; border-top:1px solid var(--line); font-size:11px; color:var(--muted);}
+  footer a{color:var(--accent); text-decoration:none;}
+  @media print{
+    body{background:#fff;}
+    .page{max-width:none; padding:24px 28px;}
+    h2{page-break-after:avoid;} .card,.flag,.quote,.lead{page-break-inside:avoid;}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="eyebrow">KDPS Lifestyle Pvt Ltd · Meeting Brief</div>
+    <h1>Bank API — what we need from HDFC</h1>
+    <div class="meta">Prepared for the finance discussion · 13 June 2026</div>
+  </header>
+
+  <div class="lead">
+    <strong>In one line:</strong> Our new system does a daily money audit across all 50+ stores.
+    To do that, our software needs to <em>read our own HDFC account statements automatically every day</em> —
+    no logging in, no PDF downloads. That automatic connection is called an <strong>API</strong>.
+    HDFC already supports this; we just need to know which method we use and how to switch it on.
+  </div>
+
+  <h2>1. Why the project needs this</h2>
+  <p>Every day, money comes into KDPS three ways: <strong>cash, card swipes, and UPI</strong>.
+  Right now, checking that the money a store <em>reported</em> actually <em>reached the HDFC account</em>
+  is a manual job in Excel and Tally, done after the fact.</p>
+  <p>The new system compares two things automatically, every morning:</p>
+  <ul>
+    <li>what the POS says was sold and collected, against</li>
+    <li>what actually landed in the bank account.</li>
+  </ul>
+  <p>If a store's card machine shows ₹40,000 but only ₹38,500 reached the bank, the system flags it the next day.
+  For this, the software must pull the bank's transactions on its own — that is the API.</p>
+
+  <h2>2. What an "API" is (plain version)</h2>
+  <div class="quote">
+    An API is a way for our software to talk directly to the bank's computer and ask,
+    “give me yesterday's transactions for this account” — and get the answer back instantly, in a clean format, automatically.
+  </div>
+  <p>Net-banking is a <strong>door for a human</strong> to log in and look.
+  An API is a <strong>window for software</strong> to pull the same data automatically. We want the window — read-only.</p>
+
+  <h2>3. What HDFC can give us (three routes)</h2>
+  <p>All three are real and work. We don't need to decide today — we just need HDFC to tell us which one they'll approve fastest.</p>
+  <div class="grid">
+    <div class="card pick">
+      <div class="tag">First choice</div>
+      <h4>HDFC API Banking</h4>
+      <p>Live APIs on HDFC's developer portal: Statement Download, Large Statement Generation, Balance Inquiry. Cleanest option for a daily audit.</p>
+    </div>
+    <div class="card">
+      <div class="tag">Reliable fallback</div>
+      <h4>Host-to-Host (H2H) file feed</h4>
+      <p>Bank drops an encrypted statement file daily into a secure folder (SFTP); our system reads it. Older but very dependable.</p>
+    </div>
+    <div class="card">
+      <div class="tag">Backup option</div>
+      <h4>Account Aggregator (RBI)</h4>
+      <p>RBI-regulated, consent-based way to pull statements. Useful if direct API approval is slow.</p>
+    </div>
+    <div class="card">
+      <div class="tag">Note</div>
+      <h4>Read-only, for now</h4>
+      <p>We are <strong>not</strong> asking to send money or make payments — only to read our own statements. This makes approval faster.</p>
+    </div>
+  </div>
+
+  <h2>4. What to ask HDFC for — our requirement list</h2>
+  <p>For the corporate current account(s) used for store collections, we need:</p>
+  <ol>
+    <li><strong>Statement / transaction API access</strong> — fetch all transactions for a date range (we'll pull daily).</li>
+    <li><strong>Each transaction must include</strong>: date, amount, debit/credit, running balance, the <strong>UTR / reference number</strong>, and the <strong>narration / remarks</strong> — this is how we match a UPI or card settlement back to a store.</li>
+    <li><strong>Balance inquiry</strong> — current / closing balance per account.</li>
+    <li><strong>Read-only access</strong> — no payment or fund-transfer rights needed.</li>
+    <li><strong>All accounts covered</strong> — if collections sit in more than one HDFC account, or there are sub-accounts / virtual accounts per store, we need each one.</li>
+    <li><strong>Sandbox / test access first</strong>, then production.</li>
+  </ol>
+
+  <h2>5. Questions to ask in the meeting</h2>
+  <ol>
+    <li>Which option does HDFC give us — live API, daily H2H file, or Account Aggregator? (Whichever is fastest.)</li>
+    <li>How do we apply, and how long does approval take? Any form, relationship manager, setup cost or annual fee?</li>
+    <li>How far back can the statement go, and how often can we pull? (At least daily; ideally on-demand.)</li>
+    <li>What format does the data come in? (JSON/XML for API, or what file layout for H2H — we'll need a sample.)</li>
+    <li>Does the transaction data include the UTR / reference and full narration?</li>
+    <li class="">Card settlements (POS machines): do those land in this same HDFC account, and do they show which store / terminal they came from? <strong>This is the single most important question for the audit.</strong></li>
+    <li>Who is HDFC's technical contact we'll work with once approved?</li>
+  </ol>
+
+  <div class="flag">
+    <strong>Opening line for the meeting:</strong> “I'm not asking the bank to do anything risky — I only need our software
+    to automatically read our own account statements every day, so we can check that store money actually reached the bank.
+    HDFC already supports this; I just need to know which method we use and how to get it switched on.”
+  </div>
+
+  <footer>
+    Sources: HDFC Bank API Portal —
+    <a href="https://developer.hdfc.bank.in/api-catalog">developer.hdfc.bank.in/api-catalog</a> ·
+    <a href="https://developer.hdfc.bank.in/">developer.hdfc.bank.in</a> ·
+    Account Aggregator framework (RBI) ·
+    ERPNext–HDFC H2H integration reference.
+  </footer>
+
+</div>
+</body>
+</html>

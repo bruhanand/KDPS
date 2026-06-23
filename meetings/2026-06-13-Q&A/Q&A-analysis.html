@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Q&amp;A Meeting Analysis (13 June 2026)</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e3e7ee; --bg:#f6f8fb; --card:#fff;
+    --q:#0b5cab; --a:#15803d; --note:#9a3412; --noteBg:#fff7ed; --noteLine:#fdba74;
+    --chip:#eef3fb; --chipInk:#0b5cab; --accent:#0b5cab;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;font-size:15.5px;}
+  .wrap{max-width:920px;margin:0 auto;padding:32px 22px 80px;}
+  header.top{border-bottom:3px solid var(--accent);padding-bottom:18px;margin-bottom:26px;}
+  .eyebrow{font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;}
+  h1{font-size:27px;margin:6px 0 8px;line-height:1.2;}
+  .sub{color:var(--muted);font-size:14px;}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .pill{background:var(--chip);color:var(--chipInk);border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:600;}
+  h2{font-size:19px;margin:38px 0 4px;padding-top:10px;border-top:1px solid var(--line);}
+  h2 .num{color:var(--accent);font-weight:700;margin-right:8px;}
+  .sectlede{color:var(--muted);font-size:13.5px;margin:2px 0 16px;}
+  .qa{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:0;margin:14px 0;overflow:hidden;
+    box-shadow:0 1px 2px rgba(20,30,50,.03);}
+  .qa .q,.qa .a{padding:13px 16px;}
+  .qa .q{border-left:4px solid var(--q);background:#fbfdff;}
+  .qa .a{border-left:4px solid var(--a);border-top:1px solid var(--line);}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+    margin-right:8px;vertical-align:1px;}
+  .tag.q{color:var(--q);}
+  .tag.a{color:var(--a);}
+  .qa p{margin:0;}
+  .note{margin:10px 16px 16px;background:var(--noteBg);border:1px solid var(--noteLine);border-left:4px solid var(--note);
+    border-radius:8px;padding:10px 13px;font-size:13.8px;color:#7c2d12;}
+  .note b{color:var(--note);}
+  ul.clean{margin:6px 0 0;padding-left:20px;}
+  ul.clean li{margin:4px 0;}
+  .deliv{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 8px;margin-top:8px;}
+  table{width:100%;border-collapse:collapse;font-size:14px;}
+  table th,table td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;}
+  table th{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:#fafbfd;}
+  table td.who{white-space:nowrap;color:var(--muted);font-size:13px;}
+  .done{color:var(--a);font-weight:700;}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin-bottom:8px;}
+  .toc ol{margin:8px 0 0;padding-left:22px;columns:2;column-gap:30px;}
+  .toc li{margin:5px 0;break-inside:avoid;}
+  .toc a{color:var(--ink);text-decoration:none;}
+  .toc a:hover{color:var(--accent);text-decoration:underline;}
+  .keymsg{background:#0b5cab;color:#fff;border-radius:12px;padding:18px 20px;margin:22px 0 6px;}
+  .keymsg h3{margin:0 0 8px;font-size:15px;letter-spacing:.04em;text-transform:uppercase;opacity:.9;}
+  .keymsg ul{margin:0;padding-left:20px;}
+  .keymsg li{margin:6px 0;}
+  footer{margin-top:50px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px;}
+  .small{font-size:12.5px;color:var(--muted);}
+  @media(max-width:640px){.toc ol{columns:1;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">KDPS Lifestyle · System Design · Meeting Analysis</div>
+  <h1>Q&amp;A Call — Requirements Clarification</h1>
+  <div class="sub">A long question-and-answer call where Anand asked the KDPS team to clear up how the business actually runs, before module design continues. This page captures every question, the answer given, and what it means for the system.</div>
+  <div class="meta">
+    <span class="pill">Date: 13 June 2026</span>
+    <span class="pill">Type: Q&amp;A / requirements</span>
+    <span class="pill">~40 questions covered</span>
+    <span class="pill">Next meet: tomorrow, ~12–1 PM (with Priyo)</span>
+  </div>
+</header>
+
+<div class="keymsg">
+  <h3>The 6 biggest things that came out of this call</h3>
+  <ul>
+    <li><b>SOR = Consignment.</b> Same thing, two names. Unsold stock goes back, no cap on return %.</li>
+    <li><b>A third stock model exists: "Correction" (collection).</b> The brand gives a % allowance calculated on <i>delivered</i> quantity, not booked quantity. So "buy &amp; sell" has 4 flavours: with-correction, without-correction, SOR, consignment.</li>
+    <li><b>Tag the supplier, not the brand.</b> One supplier can carry many brands (e.g. Madura = Allen Solly, Louis Philippe, Van Heusen, AS Kids).</li>
+    <li><b>Models change over time — design flexible, no hard constraints.</b> A separate "what can change vs what is fixed" discussion is planned for next week.</li>
+    <li><b>Ten Software has an API</b> and will share it + docs. Barcodes are generated inside Ten. Tally stays the accounting book.</li>
+    <li><b>Everything front-of-store</b> (exchange, defective, split payment, manual discount) is already handled by the POS; the system pulls it via API/report — it doesn't re-do it.</li>
+  </ul>
+</div>
+
+<div class="toc">
+  <div class="eyebrow">On this page</div>
+  <ol>
+    <li><a href="#s1">Stock ownership models (SOR / Consignment / Correction)</a></li>
+    <li><a href="#s2">Invoices &amp; PT file</a></li>
+    <li><a href="#s3">Brand incentives, margins &amp; offers</a></li>
+    <li><a href="#s4">Supplier vs Brand tagging</a></li>
+    <li><a href="#s5">Booking &amp; non-brand recording</a></li>
+    <li><a href="#s6">Inbound split &amp; store transfer</a></li>
+    <li><a href="#s7">Transport cost &amp; direct shipping idea</a></li>
+    <li><a href="#s8">Barcode &amp; Ten Software API</a></li>
+    <li><a href="#s9">Selling before scan / POS down</a></li>
+    <li><a href="#s10">Payments (split, UPI, credit)</a></li>
+    <li><a href="#s11">Discounts (manual, non-brand, brand)</a></li>
+    <li><a href="#s12">Exchange &amp; defective items</a></li>
+    <li><a href="#s13">Inter-store shortage &amp; damage</a></li>
+    <li><a href="#s14">Counting</a></li>
+    <li><a href="#s15">Cash, accounts &amp; expenses</a></li>
+    <li><a href="#s16">Users, stores &amp; access</a></li>
+    <li><a href="#s17">Dead stock, Tally, incentives, old data</a></li>
+    <li><a href="#deliverables">Deliverables &amp; action items</a></li>
+  </ol>
+</div>
+
+<!-- 1 -->
+<h2 id="s1"><span class="num">1</span>Stock ownership models</h2>
+<div class="sectlede">The single most important clarification of the call. There are three models, and "buy &amp; sell" turned out to have four flavours.</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>In SOR, what is the return %? Is "10%" fixed?</div>
+  <div class="a"><span class="tag a">A</span>The brand says 10%, but KDPS stretches it — up to 12% on some brands, up to 15% on others. It is a percentage <b>of the stock sent that season</b> (e.g. 1,000 pieces sent over Spring-Summer → 10% of 1,000).</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Is SOR the same as Consignment?</div>
+  <div class="a"><span class="tag a">A</span>Yes — same concept, parallel terms. SOR = "Sale or Return". Goods belong to the brand; whatever doesn't sell is returned, <b>with no cap</b> (10/20/30% — it doesn't matter). Old/new/season is not checked — leftover pieces go back as-is. The minor difference described: SOR = one lot, return the unsold; Consignment = repeated top-ups, return whatever is unsold across lots. <i>For design purposes, treat them as one model.</i></div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>So what is the "Correction" / collection model?</div>
+  <div class="a"><span class="tag a">A</span>A second model. The brand gives a % allowance (10/12/20%, varies) — but it is calculated on the quantity actually <b>serviced (delivered)</b>, not booked. Booked 1,000, delivered 900 → correction is on 900. Booked 800, sold them, took 200 more → correction is on 1,000 (the total delivered). Levi's does a variant based on <b>actual buying</b>.</div>
+</div>
+
+<div class="note"><b>Design implication:</b> Stock-ownership model is a first-class dimension (already a domain rule). Capture <b>four flavours</b>: <i>SOR/Consignment</i>, <i>Correction (on delivered qty)</i>, <i>without-correction</i>, plus brand-specific variants like Levi's actual-buying. The return-% cap is a per-brand stretchable number (10 → 12 → 15), not a constant. SOR return is calculated on <b>season stock sent</b>; correction is calculated on <b>delivered quantity</b> — two different bases, both must be derivable.</div>
+
+<!-- 2 -->
+<h2 id="s2"><span class="num">2</span>Invoices &amp; PT file</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>The invoice comes with the goods and has style code, size, quantity, price — right?</div>
+  <div class="a"><span class="tag a">A</span>Not consistently. <b>Different invoices carry different fields.</b> Some have no style code at all — just "this product, this brand, this many pieces". Colour may or may not be there; size may or may not be there.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Then how is a PT file made when the invoice has no style code? Is a new code generated?</div>
+  <div class="a"><span class="tag a">A</span>The style code usually exists elsewhere — on the <b>challan</b>, or written on the <b>box</b>. It gets added into the PT file <b>at the moment the PT file is created</b>, so it isn't a blocking problem.</div>
+</div>
+
+<div class="note"><b>Design implication:</b> The PT-file maker can't assume invoice fields. Source of style/size/colour can be invoice <i>or</i> challan <i>or</i> box label. The PT file is the normalisation point where missing identifiers are filled in. (Reinforces the existing pdf-to-pt blueprint.)</div>
+
+<!-- 3 -->
+<h2 id="s3"><span class="num">3</span>Brand incentives, margins &amp; offers</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Do brands give incentives to KDPS?</div>
+  <div class="a"><span class="tag a">A</span>Yes, definitely — but highly dynamic, many parameters, different per brand. Example: "open 6 of my stores → 2% extra commission; open 10 stores → 3% extra." Can be documented per brand on request.</div>
+</div>
+<div class="note"><b>Where it's used:</b> Anand placed this in the future <b>cash audit</b> flow — brand incentive feeds the cash/settlement reconciliation later, not the inbound flow.</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Discounts are per-brand and change often?</div>
+  <div class="a"><span class="tag a">A</span>Yes, dynamic — some brands change every week. KDPS can supply a month's snapshot (e.g. "May offers, all brands"). Anand asked for the <b>May brand-offers</b> file.</div>
+</div>
+
+<!-- 4 -->
+<h2 id="s4"><span class="num">4</span>Supplier vs Brand — which to tag?</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>There's a supplier and a brand. Which do we tag stock against?</div>
+  <div class="a"><span class="tag a">A</span><b>Tag the supplier.</b> One supplier can deliver multiple brands, so the supplier is the anchor. "Don't say brand, say supplier." KDPS will provide a <b>supplier-with-brand</b> mapping and a sample <b>supplier PT file</b>.</div>
+</div>
+<div class="note"><b>Design implication:</b> Supplier is the parent entity in the booking/inbound model; brand is an attribute that can be many-per-supplier. This affects how PT files, margins, return windows and payment terms are keyed.</div>
+
+<!-- 5 -->
+<h2 id="s5"><span class="num">5</span>Booking &amp; recording non-brand orders</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Do suppliers/vendors cancel bookings?</div>
+  <div class="a"><span class="tag a">A</span>Generally <b>not for brands</b>. It happens with <b>non-brands</b>. They may send a different quantity (booked 100, sent 90 + 10 of something else) but a full zero-cancellation hasn't been seen.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>How do we record non-brand bookings (which currently go unrecorded)?</div>
+  <div class="a"><span class="tag a">A</span>For non-brand, the <b>invoice that arrives becomes the booking record</b> ("what came is what I booked"). Anand proposed capturing the order at order-time via the app with <b>three input options: text, voice recording, or chat</b> — because non-brand orders happen over WhatsApp call/chat with no document. The team agreed to <b>try</b> it but <b>could not guarantee</b> it → flagged as <b>next-phase / planning only</b>.</div>
+</div>
+
+<!-- 6 -->
+<h2 id="s6"><span class="num">6</span>Inbound split &amp; store transfer</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>When stock is split store-wise, is the PT file made per-store or once?</div>
+  <div class="a"><span class="tag a">A</span><b>PT file is created first (once)</b> → uploaded to the software → then distribution/sorting decides which store gets what (done by whoever is responsible at the time, even over the phone). Four destinations → four separate stocks. That stock reaches Mahendra Ji, who <b>bills it under each store's name</b> and dispatches via transport.</div>
+</div>
+<div class="note"><b>Deliverable requested:</b> the <b>warehouse-to-store transfer bill format</b> (the document Mahendra Ji generates when billing to a store).</div>
+
+<!-- 7 -->
+<h2 id="s7"><span class="num">7</span>Transport cost &amp; a direct-shipping idea</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Who bears the transport cost from vendor/brand to KDPS?</div>
+  <div class="a"><span class="tag a">A</span><b>~90% borne by KDPS</b>; a few vendors bear it themselves. Per-vendor / per-consignment transport-cost tracking is wanted and considered doable (ties to the booking register).</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>(Idea raised mid-call) Can stock skip the warehouse and ship store-to-destination directly?</div>
+  <div class="a"><span class="tag a">A</span>Yes — to avoid <b>double courier cost</b> (e.g. Banka → HQ → Surat) and time lag, the ERP can let the source store do GR directly and ship to the destination, tracked centrally via consignment/docket number + image, with a <b>debit note issued from HQ</b>. Reduces warehouse GR load. Noted as a real future capability — reason it must stay <b>flexible</b> (direction can change from either side).</div>
+</div>
+
+<!-- 8 -->
+<h2 id="s8"><span class="num">8</span>Barcode &amp; Ten Software API</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>What tool generates barcodes?</div>
+  <div class="a"><span class="tag a">A</span><b>Ten Software</b> generates barcodes. KDPS has already spoken with Ten (in Dhanbad); Ten offered to build software but KDPS declined (half done already). <b>Ten confirmed they have an API</b> and will share it — integration expected to be easy. KDPS told Ten their own ERP is accounting-based, which Ten lacks, so the two are complementary.</div>
+</div>
+<div class="note"><b>Deliverable requested:</b> <b>Ten Software API + API documentation</b>. (Matches the standing assumption that the client supplies the POS API.)</div>
+
+<!-- 9 -->
+<h2 id="s9"><span class="num">9</span>Selling before scan / POS down</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>If an item is sold before it's scanned-in (direct brand→store or warehouse→store), how is it handled?</div>
+  <div class="a"><span class="tag a">A</span><b>Manual billing</b> — barcode written by hand, added later. When time permits and the item is inwarded, the proper bill is generated.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Inter-store movement — is "SOH" sent?</div>
+  <div class="a"><span class="tag a">A</span>"SOH" is the wrong term. A <b>system-generated, PT-file-like transfer document</b> is sent (POS generates it), and its data is <b>extracted to Excel</b>. If the receiving store doesn't scan-in the barcodes, the SOH goes <b>negative</b> there.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>If POS is down, a handwritten bill = ?</div>
+  <div class="a"><span class="tag a">A</span>Same as a <b>manual bill</b>.</div>
+</div>
+<div class="note"><b>Deliverable requested:</b> <b>sale export sample (POS)</b> and <b>SOH format</b> — Anand wants these to structure the data before the API docs arrive.</div>
+
+<!-- 10 -->
+<h2 id="s10"><span class="num">10</span>Payments — split, UPI, credit</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Do part-payments happen (some cash + some UPI)?</div>
+  <div class="a"><span class="tag a">A</span>Handled manually. UPI is taken on the <b>store manager's</b> device, not the company system — the company only cares that payment was made, not by whom. <b>Splits are allowed</b> (e.g. ₹1,000 item, ₹500 now / ₹500 next visit; manager fronts it and deposits to the company QR).</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Is credit / udhaar allowed?</div>
+  <div class="a"><span class="tag a">A</span><b>Absolutely not.</b> No credit at all.</div>
+</div>
+
+<!-- 11 -->
+<h2 id="s11"><span class="num">11</span>Discounts</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Manual discount — is it handled later in the report?</div>
+  <div class="a"><span class="tag a">A</span>Yes. The <b>sale export shows the discount</b> as a % (or as an amount if no %). It's all in the exported data, handled at report time.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>How do non-brand discounts work?</div>
+  <div class="a"><span class="tag a">A</span>Mostly "Buy One Get One" in-shop, otherwise no fixed structure — case-by-case (e.g. 5–10% to lock in a loyal/potential customer, within margin). Stores may discount <b>up to ~5%</b> at their discretion; beyond that needs a call + approval. <b>No report is needed for non-brand</b> (it's KDPS's own stock — just audit it; no claim to make from a brand). Floor rule: don't sell a ₹400 item for ₹200.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>And brand discounts?</div>
+  <div class="a"><span class="tag a">A</span>Fixed by the brand (which items, how much) — brand sends it; KDPS inputs the offers from the <b>back-end</b>. Front-end handles ad-hoc; report reconciles the rest.</div>
+</div>
+<div class="note"><b>Design implication:</b> Discount handling is layered — front-end (POS) for ad-hoc + non-brand, back-end offer rulebook for brand offers, report-time reconciliation for claims. Non-brand is profit-only (audit, no claim); brand discounts feed claims back to the brand. This is the D5 offer-rulebook + report territory.</div>
+
+<!-- 12 -->
+<h2 id="s12"><span class="num">12</span>Exchange &amp; defective items</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>What is the store exchange window?</div>
+  <div class="a"><span class="tag a">A</span><b>5 days</b> printed on the receipt, but stretched to <b>10–12 days</b> for repeat/loyal customers. → Treat as <b>soft, not a hard block.</b></div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Defective item flow (per model)?</div>
+  <div class="a"><span class="tag a">A</span>
+    <ul class="clean">
+      <li><b>Manufacturing defect</b> → no return-window hassle. Inspected, accepted, exchanged for <b>equal-or-higher value</b>.</li>
+      <li><b>Used item</b> → must be within the return window (5–7 days).</li>
+      <li><b>No tag</b> → still accepted; details pulled from <b>bill / barcode</b>.</li>
+      <li><b>Bill lost</b> → look up the customer by <b>phone number</b> (name can repeat, number generally doesn't) to retrieve date, items, value.</li>
+    </ul>
+    All of this is <b>POS front-end</b> work.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Where do defective pieces go back?</div>
+  <div class="a"><span class="tag a">A</span><b>All defectives route through the warehouse</b> — branded or non-branded, whatever path they came in by. The warehouse then runs the goods-return process to the brand (defective / correction / SOR / consignment).</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Special case — Madura pickup?</div>
+  <div class="a"><span class="tag a">A</span><b>Madura</b> (Allen Solly, Louis Philippe, Van Heusen, Allen Solly Kids) <b>picks up directly from the store</b> — their vehicle, their cost, KDPS pays nothing. <b>Only Madura</b> does this. Treat as a general "supplier-picks-from-store" capability that today only one supplier uses (and could change).</div>
+</div>
+
+<!-- 13 -->
+<h2 id="s13"><span class="num">13</span>Inter-store shortage &amp; transit damage</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Store A sends 100, Store B physically gets 95 — what happens?</div>
+  <div class="a"><span class="tag a">A</span>Receiver (Hazaribagh) <b>accepts all 100 on the system</b>, and sends the <b>5 short pieces back on paper</b> to the sending store (Ranchi), which then investigates the short shipment.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>And transit damage?</div>
+  <div class="a"><span class="tag a">A</span><b>Non-branded</b> → KDPS absorbs the loss. <b>Branded</b> → brand owners are emailed to recover as much as possible.</div>
+</div>
+
+<!-- 14 -->
+<h2 id="s14"><span class="num">14</span>Counting</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>When does counting happen?</div>
+  <div class="a"><span class="tag a">A</span>At <b>stock receipt</b>, and additionally a <b>"Global Counting" every Monday</b> — a stock count of a particular brand, at <b>store level</b> (not warehouse). Done more for branded, but also non-branded.</div>
+</div>
+
+<!-- 15 -->
+<h2 id="s15"><span class="num">15</span>Cash, accounts &amp; expenses</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>How is cash deposited?</div>
+  <div class="a"><span class="tag a">A</span>A <b>CIS agency</b> picks up the cash and deposits it. KDPS has <b>2 bank accounts</b>. Detailed cash-flow / account-mapping questions go to the <b>Patna accounts manager (madam)</b> on a separate con-call — Anand to prepare an <b>accounting questionnaire</b> (card settlements, totals, which stores → which account, etc.).</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Store-expense audit?</div>
+  <div class="a"><span class="tag a">A</span>No formal audit. An online <b>"Petty Cash" Excel sheet</b> per store; staff log expenses, request top-ups when low, and KDPS verifies entries are genuine (no out-of-the-way items). Can be handled within documentation.</div>
+</div>
+
+<!-- 16 -->
+<h2 id="s16"><span class="num">16</span>Users, stores &amp; access</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>How many users / what access levels?</div>
+  <div class="a"><span class="tag a">A</span>Roughly <b>one user per store</b>, plus <b>role-based access</b> (KD Uncle, Priyo, Anand all have different access). Anand to draft a <b>user-list + privileges</b> map. KDPS to send the <b>store list</b> (how many stores currently added).</div>
+</div>
+
+<!-- 17 -->
+<h2 id="s17"><span class="num">17</span>Dead stock, Tally, incentives, old data</h2>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>How is old / dead stock handled — what defines "dead"?</div>
+  <div class="a"><span class="tag a">A</span>Needs an <b>aging method</b>; how to classify dead is <b>pending</b> — to be decided with Priyo Sir at the next meeting.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Tally import?</div>
+  <div class="a"><span class="tag a">A</span>To be asked of the <b>Patna office</b>. (Tally remains the statutory book.)</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Who gets sales incentives?</div>
+  <div class="a"><span class="tag a">A</span>Only <b>store-level sales staff and store managers</b>. Management has none. Incentive logic must be includable in the system.</div>
+</div>
+
+<div class="qa">
+  <div class="q"><span class="tag q">Q</span>Old data — is the PT file the source of truth?</div>
+  <div class="a"><span class="tag a">A</span><b>No — the PT file is NOT the source of truth.</b> When KDPS shares the <b>SOH format</b>, filtering it will reveal where the discrepancies are; they'll highlight the problem columns. Important input for the migration (D9) discussion.</div>
+</div>
+
+<!-- Deliverables -->
+<h2 id="deliverables"><span class="num">★</span>Deliverables &amp; action items</h2>
+<div class="sectlede">Read back and confirmed by the KDPS team at the end of the call.</div>
+
+<div class="deliv">
+<table>
+  <thead><tr><th>#</th><th>Item</th><th class="who">Owner</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Brand list</td><td class="who">KDPS</td></tr>
+    <tr><td>2</td><td>Brand margins</td><td class="who">KDPS</td></tr>
+    <tr><td>3</td><td>Brand offers — <b>May</b> snapshot, all brands</td><td class="who">KDPS</td></tr>
+    <tr><td>4</td><td>Brand return windows &amp; payment terms</td><td class="who">KDPS</td></tr>
+    <tr><td>5</td><td>Supplier invoices (one supplier may have multiple brands)</td><td class="who">KDPS</td></tr>
+    <tr><td>6</td><td>Sample <b>PT file</b> (supplier, same format)</td><td class="who">KDPS</td></tr>
+    <tr><td>7</td><td><b>Supplier-with-brand</b> mapping</td><td class="who">KDPS</td></tr>
+    <tr><td>8</td><td>Warehouse-to-store <b>transfer bill format</b></td><td class="who">KDPS</td></tr>
+    <tr><td>9</td><td><b>Ten Software API</b> + API documentation</td><td class="who">KDPS / Ten</td></tr>
+    <tr><td>10</td><td><b>Bank API</b> + documentation</td><td class="who">KDPS</td></tr>
+    <tr><td>11</td><td><b>Sale report format</b> (POS sale export sample)</td><td class="who">KDPS</td></tr>
+    <tr><td>12</td><td><b>SOH format</b> (stock details; discrepancy columns highlighted)</td><td class="who">KDPS</td></tr>
+    <tr><td>13</td><td><b>Store list</b> (how many stores added)</td><td class="who">KDPS</td></tr>
+    <tr><td>14</td><td>SOR-vs-Correction explainer <b>Excel</b></td><td class="who">KDPS (Priyo)</td></tr>
+    <tr><td>15</td><td><b>Accounting questionnaire</b> → con-call with Patna manager</td><td class="who">Anand → KDPS</td></tr>
+    <tr><td>16</td><td><b>User list + access privileges</b> map</td><td class="who">Anand</td></tr>
+    <tr><td>17</td><td>"What can change vs what is fixed" discussion — <b>next week</b></td><td class="who">Both</td></tr>
+    <tr><td>18</td><td>Dead-stock aging rule — decide <b>with Priyo</b> (pending)</td><td class="who">Both</td></tr>
+    <tr><td>19</td><td>Tally import details — ask <b>Patna office</b></td><td class="who">KDPS</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="note" style="margin:18px 0 0;"><b>Open / parked:</b> non-brand order capture (voice/text/chat) → next phase, not guaranteed · direct store-to-destination shipping → flexible future capability · accounting detail (accounts, card settlement, store→account mapping) → Patna con-call · dead-stock aging → with Priyo. <b>Next meeting:</b> tomorrow ~12–1 PM with Priyo Sir.</div>
+
+<footer>
+  Source: <span class="small">08-meetings/2026-06-13-Q&amp;A/meeting.md</span> (full Hindi transcript + English translation, 3 parts). Speaker labels in the transcript are inconsistent across parts; this analysis is organised by topic and content, not by speaker. KDSP team voices: Debanjan, Priyo, and others.
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 6 — Request, Response &amp; APIs</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --brain:#1d4ed8; --brain-bg:#eff6ff; --brain-line:#bfdbfe; --brain-deep:#1e3a8a;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2; --bad-line:#fecaca;
+    --amber:#b45309; --amber-bg:#fff7ed; --amber-line:#fed7aa;
+    --kw:#c084fc; --str:#86efac; --fn:#fcd34d; --cmt:#64748b; --lbl:#7dd3fc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--brain)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--brain-deep)}
+  h3{font-size:18px; margin:26px 0 4px; color:var(--brain-deep)}
+  p{margin:13px 0}
+  .key{font-weight:600}
+
+  code,.inline{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .inline{background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px; font-size:14px}
+  pre{background:#0f172a; color:#e2e8f0; border-radius:12px; padding:15px 17px; overflow-x:auto; font-size:14px; line-height:1.7; margin:14px 0; font-family:ui-monospace,Menlo,monospace}
+  .kw{color:var(--kw); font-weight:700} .str{color:var(--str)} .fn{color:var(--fn)} .cmt{color:var(--cmt)} .lbl{color:var(--lbl)} .cnum{color:#fda4af}
+  .jsonbox.code .cap{background:#334155}
+
+  table{width:100%; border-collapse:collapse; font-size:14px; margin:14px 0; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  th,td{padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  th{background:var(--brain-bg); font-size:11.5px; letter-spacing:.03em; text-transform:uppercase; color:var(--brain-deep); font-weight:700}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:ui-monospace,Menlo,monospace; white-space:nowrap}
+  .tbl-wrap{overflow-x:auto}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:22px 0}
+  .callout p{margin:0; font-size:15px} .callout p+p{margin-top:8px}
+  .callout.brain{background:var(--brain-bg); border:1px solid var(--brain-line)} .callout.brain b{color:var(--brain-deep)}
+  .callout.ink{background:#1d2433; color:#fff} .callout.ink b{color:#bfdbfe}
+  .callout.warn{background:var(--amber-bg); border:1px solid var(--amber-line)} .callout.warn b{color:#7c2d12}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0}
+  @media(max-width:560px){.two{grid-template-columns:1fr}}
+  .jsonbox{border:1px solid var(--line); border-radius:12px; overflow:hidden; background:#fff}
+  .jsonbox .cap{font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:8px 13px; color:#fff}
+  .jsonbox.req .cap{background:var(--brain)} .jsonbox.res .cap{background:var(--good)}
+  .jsonbox pre{margin:0; border-radius:0; font-size:13px}
+
+  .badge{display:inline-block; font-size:11px; font-weight:800; padding:2px 8px; border-radius:6px}
+  .b2{background:var(--good-bg); color:#14532d} .b4{background:var(--amber-bg); color:#7c2d12} .b5{background:var(--bad-bg); color:#991b1b}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#bfdbfe; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#eff6ff,#f0fdf4); border:1px solid var(--brain-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--brain-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--brain); text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 6 · ~18 min · backend deep-dive 1 of 4 · updated 20 Jun 2026</div>
+  <h1>Request, response &amp; APIs</h1>
+  <p class="lede">In Lesson 2 you met "the Brain" — the box that decides. This lesson shows how the screen <i>talks</i> to the Brain: it sends a <b>request</b>, the Brain sends back a <b>response</b>. That back-and-forth is how every app works.</p>
+  <div class="mission"><b>Why this lesson:</b> the Brain is where your rules and money live — the box you'll review most. Before the rules, you need to see how a message reaches the Brain and comes back. That path is the request→response cycle.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — THE BRAIN, QUICKLY -->
+  <section>
+    <h2><span class="num">1</span> Quick recap: the Brain</h2>
+    <p class="kicker">The box that decides</p>
+    <p>From the four boxes in Lesson 2:</p>
+    <ul>
+      <li>🖥️ <b>Screen</b> — shows things, takes taps. Knows nothing on its own.</li>
+      <li>🧠 <b>Brain</b> — decides what is allowed. <b>This lesson.</b></li>
+      <li>🗄️ <b>Memory</b> — the database (you learned this in L4–L5).</li>
+      <li>🔌 <b>Outside world</b> — other systems (Tally, POS).</li>
+    </ul>
+    <p>The Screen cannot be trusted to decide anything. It only <b>asks</b>. The Brain decides and remembers. So the screen and the Brain must talk — and that is what we look at now.</p>
+  </section>
+
+  <!-- 2 — THE CYCLE -->
+  <section>
+    <h2><span class="num">2</span> The request → response cycle</h2>
+    <p class="kicker">Think of a restaurant</p>
+    <p>This is the heart of the whole lesson. Picture ordering food in a restaurant — it is the <i>same</i> shape as an app talking to its Brain.</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>#</th><th>What happens</th><th>🍽️ In a restaurant</th><th>🧾 In KDPS (making a bill)</th></tr>
+      <tr><td>1</td><td>You ask</td><td>You tell the waiter your order</td><td>Clerk taps "Bill" — the screen makes a <b>request</b></td></tr>
+      <tr><td>2</td><td>It travels</td><td>Waiter walks to the kitchen</td><td>The request goes over the internet to the Brain</td></tr>
+      <tr><td>3</td><td>The Brain decides</td><td>Kitchen checks: do we have it?</td><td>Brain checks rules: SKU exists? price right? GST ok?</td></tr>
+      <tr><td>4</td><td>It uses the store</td><td>Cook takes items from the store room</td><td>Brain reads / writes the <b>database</b> (the ledger)</td></tr>
+      <tr><td>5</td><td>It comes back</td><td>Waiter brings the food</td><td>Brain sends back a <b>response</b></td></tr>
+      <tr><td>6</td><td>You see it</td><td>You eat</td><td>Screen shows "Sold — stock now 4"</td></tr>
+    </table></div>
+    <div class="callout brain"><p>💡 <b>The one idea:</b> the screen <b>asks</b> (request), the Brain <b>answers</b> (response). Nothing else moves between them. Every feature you build is just a new version of this trip.</p></div>
+  </section>
+
+  <!-- 3 — APIs & ENDPOINTS -->
+  <section>
+    <h2><span class="num">3</span> The API — the Brain's menu</h2>
+    <p class="kicker">Each thing the Brain can do has an address</p>
+    <p>The Brain does not do "anything you say." It offers a fixed <b>menu</b> of things it can do. That menu is called the <span class="key">API</span>. Each item on the menu is one <span class="key">endpoint</span> — a thing the Brain can do, at an address.</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>What the screen wants</th><th>Endpoint (the address)</th></tr>
+      <tr><td>See all SKUs</td><td class="mono">/skus</td></tr>
+      <tr><td>See one SKU</td><td class="mono">/skus/NK-AM90-WHT-8</td></tr>
+      <tr><td>Make a sale</td><td class="mono">/sales</td></tr>
+      <tr><td>See today's sales per brand</td><td class="mono">/reports/sales-today</td></tr>
+    </table></div>
+    <p>So an endpoint = <b>one specific job</b> + <b>one address</b>. The menu (API) is the full list of jobs the Brain offers the screen.</p>
+  </section>
+
+  <!-- 4 — THE VERBS -->
+  <section>
+    <h2><span class="num">4</span> The four verbs</h2>
+    <p class="kicker">What you want done — and how it connects to SQL</p>
+    <p>With each request the screen also says <i>what kind</i> of action it wants. There are four main ones — and look how neatly they match the database verbs you already learned in Lesson 5:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Verb</th><th>Means</th><th>🍽️ In the kitchen</th><th>🗄️ Database verb (L5)</th></tr>
+      <tr><td class="mono">GET</td><td>read</td><td>"show me the menu"</td><td><span class="inline">SELECT</span></td></tr>
+      <tr><td class="mono">POST</td><td>create</td><td>"make a new dish"</td><td><span class="inline">INSERT</span></td></tr>
+      <tr><td class="mono">PUT / PATCH</td><td>change</td><td>"change my order"</td><td><span class="inline">UPDATE</span></td></tr>
+      <tr><td class="mono">DELETE</td><td>remove</td><td>"cancel that"</td><td><span class="inline">DELETE</span></td></tr>
+    </table></div>
+    <div class="callout soft"><p>🔗 <b>Connect it:</b> a request like <span class="inline">POST /sales</span> usually ends up as an <span class="inline">INSERT</span> into the <span class="inline">stock_movement</span> ledger. The verb on the outside maps to the database action on the inside. Same idea, two layers.</p></div>
+  </section>
+
+  <!-- 5 — JSON -->
+  <section>
+    <h2><span class="num">5</span> What travels: JSON</h2>
+    <p class="kicker">The shared language for the message</p>
+    <p>The request and response carry <i>data</i>. That data is written in a simple format called <span class="key">JSON</span> — just <b>label: value</b> pairs. Both the screen and the Brain understand it.</p>
+    <div class="two">
+      <div class="jsonbox req"><div class="cap">→ Request &nbsp;(POST /sales)</div>
+      <pre>{
+  <span class="lbl">"sku_id"</span>: <span class="str">"NK-AM90-WHT-8"</span>,
+  <span class="lbl">"qty"</span>: <span class="str">1</span>,
+  <span class="lbl">"store"</span>: <span class="str">"Store-7"</span>
+}</pre></div>
+      <div class="jsonbox res"><div class="cap">← Response</div>
+      <pre>{
+  <span class="lbl">"status"</span>: <span class="str">"ok"</span>,
+  <span class="lbl">"bill_no"</span>: <span class="str">"BILL#902"</span>,
+  <span class="lbl">"on_hand"</span>: <span class="str">4</span>
+}</pre></div>
+    </div>
+    <ul>
+      <li>The screen <b>sends</b> what it wants to do (sell 1 of this SKU at Store-7).</li>
+      <li>The Brain <b>sends back</b> what happened (saved as BILL#902, stock is now 4).</li>
+      <li>JSON is just text — easy to read, for you and for the computer.</li>
+    </ul>
+  </section>
+
+  <!-- 6 — STATUS CODES -->
+  <section>
+    <h2><span class="num">6</span> Status codes — "ok" or "error"</h2>
+    <p class="kicker">How the Brain says what happened</p>
+    <p>Every response also carries a small number — the <span class="key">status code</span> — that says how it went. You only need the families:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>Code</th><th>Family</th><th>Means</th><th>KDPS example</th></tr>
+      <tr><td><span class="badge b2">200 / 201</span></td><td>2xx — good</td><td>it worked</td><td>sale saved</td></tr>
+      <tr><td><span class="badge b4">400</span></td><td>4xx — your fault</td><td>the request was wrong</td><td><span class="inline">sku_id</span> was missing</td></tr>
+      <tr><td><span class="badge b4">401 / 403</span></td><td>4xx — your fault</td><td>not logged in / not allowed</td><td>cashier tries a manager-only action</td></tr>
+      <tr><td><span class="badge b4">404</span></td><td>4xx — your fault</td><td>not found</td><td>that SKU does not exist</td></tr>
+      <tr><td><span class="badge b5">500</span></td><td>5xx — Brain's fault</td><td>the backend broke</td><td>a bug on the server</td></tr>
+    </table></div>
+    <div class="callout brain"><p>🧠 <b>Easy way to remember:</b> <b>2xx</b> = good · <b>4xx</b> = <i>your</i> fault (the request) · <b>5xx</b> = the <i>server's</i> fault. When a screen shows an error, the code tells you which side to look at.</p></div>
+  </section>
+
+  <!-- 7 — INSIDE THE BRAIN -->
+  <section>
+    <h2><span class="num">7</span> Inside the Brain — the 6 stages</h2>
+    <p class="kicker">"The Brain decides" is really six small steps</p>
+    <p>Earlier we said step 3 is "the Brain decides." That is not one action. Inside, every request passes through a line of stages, <b>in order</b> — like stations in the kitchen. Each stage can stop the request and send back an error.</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>#</th><th>Stage</th><th>Its job</th><th>🧾 KDPS (POST /sales)</th></tr>
+      <tr><td>1</td><td>Route</td><td>find the right code for this address + verb</td><td>"POST /sales" → the make-a-sale code</td></tr>
+      <tr><td>2</td><td>Gatekeepers <span style="color:var(--muted)">(middleware)</span></td><td>run checks before any work</td><td>Are you logged in? Are you allowed?</td></tr>
+      <tr><td>3</td><td>Validate</td><td>is the request well-formed?</td><td>Is <span class="inline">sku_id</span> there? Is <span class="inline">qty</span> &gt; 0?</td></tr>
+      <tr><td>4</td><td>Business rules</td><td>apply the real logic</td><td>SOR vs outright, GST, flag-don't-block (L7)</td></tr>
+      <tr><td>5</td><td>Database</td><td>read / write the ledger</td><td><span class="inline">INSERT</span> a −1 movement; read on-hand</td></tr>
+      <tr><td>6</td><td>Response</td><td>shape the answer + status code</td><td><span class="inline">201</span> + <span class="inline">{ status: ok, on_hand: 4 }</span></td></tr>
+    </table></div>
+    <div class="callout warn"><p>🚦 <b>It stops at the first "no".</b> If the gatekeeper says "not allowed", the request stops at stage 2 and returns <span class="badge b4">403</span> — it never touches the database. If validation fails, it stops at stage 3 with <span class="badge b4">400</span>. Only a clean, allowed request reaches the ledger.</p></div>
+    <div class="callout soft"><p>🧠 <b>One more idea — the Brain forgets you.</b> After it sends the response, it remembers <i>nothing</i> about you. So the <b>next</b> request must again say who you are (it carries a small login "token"). This is called <b>stateless</b> — and it is why the gatekeeper runs on <i>every</i> request, not just at login. More in Lesson 8.</p></div>
+  </section>
+
+  <!-- 8 — REAL CODE -->
+  <section>
+    <h2><span class="num">8</span> What an endpoint really looks like</h2>
+    <p class="kicker">Real code — and you can already read it</p>
+    <p>Here is the make-a-sale endpoint as <b>actual code</b> (this is JavaScript, using a common tool called Express). The circled numbers match the stages above.</p>
+    <pre><span class="cmt">// POST /sales  — make a sale</span>
+app.<span class="fn">post</span>(<span class="str">'/sales'</span>, requireLogin, <span class="kw">async</span> (req, res) => {
+
+  <span class="kw">const</span> { sku_id, qty, store } = req.body;        <span class="cmt">// ① read the request (JSON)</span>
+
+  <span class="kw">if</span> (!sku_id || qty &lt;= <span class="cnum">0</span>)                          <span class="cmt">// ③ validate the input</span>
+    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="cnum">400</span>).<span class="fn">json</span>({ error: <span class="str">'bad request'</span> });
+
+  <span class="kw">const</span> sku = <span class="kw">await</span> db.sku.<span class="fn">find</span>(sku_id);          <span class="cmt">// ⑤ ask the database</span>
+  <span class="kw">if</span> (!sku)
+    <span class="kw">return</span> res.<span class="fn">status</span>(<span class="cnum">404</span>).<span class="fn">json</span>({ error: <span class="str">'SKU not found'</span> });
+
+  <span class="kw">await</span> db.stock_movement.<span class="fn">insert</span>({              <span class="cmt">// ⑤ write the ledger (−1)</span>
+    sku_id, type: <span class="str">'SALE'</span>, qty: -qty, store
+  });
+
+  <span class="kw">const</span> on_hand = <span class="kw">await</span> db.<span class="fn">onHand</span>(sku_id);      <span class="cmt">// read the new balance (SUM)</span>
+  res.<span class="fn">status</span>(<span class="cnum">201</span>).<span class="fn">json</span>({ status: <span class="str">'ok'</span>, on_hand }); <span class="cmt">// ⑥ send the response</span>
+});</pre>
+    <p>Read it line by line — it is almost English:</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>The code</th><th>In plain words</th></tr>
+      <tr><td class="mono">app.post('/sales', …)</td><td>"When a <b>POST</b> comes to <b>/sales</b>, run this."</td></tr>
+      <tr><td class="mono">requireLogin</td><td>The <b>gatekeeper</b> (stage 2) — runs first; blocks anyone not logged in.</td></tr>
+      <tr><td class="mono">req.body</td><td>The JSON the screen sent (sku_id, qty, store).</td></tr>
+      <tr><td class="mono">res.status(400)…</td><td>Send back a status code + JSON. Here: "your request was wrong."</td></tr>
+      <tr><td class="mono">…insert({ … qty: -qty … })</td><td>Write a movement row — <b>negative</b>, because it's a sale (the ledger!).</td></tr>
+      <tr><td class="mono">res.status(201).json(…)</td><td>"Created. Here's the result." The response.</td></tr>
+    </table></div>
+    <div class="callout soft"><p>🌍 <b>Different tool, same shape.</b> In Python it reads almost the same — don't worry about the language, worry about the <b>shape</b>:</p>
+    <div class="two" style="margin-top:10px">
+      <div class="jsonbox code"><div class="cap">JavaScript (Express)</div><pre>app.<span class="fn">post</span>(<span class="str">'/sales'</span>, ...)</pre></div>
+      <div class="jsonbox code"><div class="cap">Python (Flask)</div><pre><span class="fn">@app.post</span>(<span class="str">'/sales'</span>)
+<span class="kw">def</span> <span class="fn">make_sale</span>(): ...</pre></div>
+    </div>
+    <p style="margin:10px 0 0">Both say the same thing: "for a POST to /sales, run this code."</p></div>
+  </section>
+
+  <!-- 9 — REST -->
+  <section>
+    <h2><span class="num">9</span> What is REST?</h2>
+    <p class="kicker">The agreed habits for building an API</p>
+    <p>Good news: you already learned REST — just not the name. <span class="key">REST</span> is a set of agreed <b>habits</b> for designing an API so it is <b>predictable</b>. An API that follows them is called <b>RESTful</b>.</p>
+    <div class="tbl-wrap"><table>
+      <tr><th>REST habit</th><th>In simple words</th><th>Example</th></tr>
+      <tr><td>Addresses are <b>nouns</b></td><td>name the thing, not the action</td><td class="mono">/skus, /sales</td></tr>
+      <tr><td>The <b>verb</b> says the action</td><td>GET / POST / PUT / DELETE on that thing</td><td class="mono">GET /skus · POST /sales</td></tr>
+      <tr><td><b>Status codes</b> say the result</td><td>a number for ok / error</td><td class="mono">200 · 404</td></tr>
+      <tr><td><b>Stateless</b></td><td>each request carries its own info</td><td>token sent every time</td></tr>
+    </table></div>
+    <div class="callout brain"><p>💡 <b>Why you care:</b> when an API is RESTful, you can <i>guess</i> how it works — <span class="inline">GET /skus</span> lists SKUs · <span class="inline">GET /skus/5</span> is one SKU · <span class="inline">POST /skus</span> adds one · <span class="inline">DELETE /skus/5</span> removes it. Predictable APIs are far easier to build <i>and</i> to review.</p></div>
+    <div class="callout soft"><p>📎 <b>Note:</b> REST is the most common style, but not the only one (you may hear "GraphQL"). For KDPS, expect REST. What matters is the habit: <b>nouns + verbs + status codes</b>.</p></div>
+  </section>
+
+  <!-- 10 — REVIEWER -->
+  <section>
+    <h2><span class="num">10</span> Your reviewer's lens</h2>
+    <p class="kicker">What to check in any endpoint the AI builds</p>
+    <p>When the AI builds an endpoint — especially one that <b>writes</b> (POST / PUT / DELETE) — run down this short list:</p>
+    <table>
+      <tr><th>Check</th><th>The question to ask</th></tr>
+      <tr><td>Who is allowed?</td><td>Does it check the user's role before doing the action? (L8 next)</td></tr>
+      <tr><td>Is the input clean?</td><td>Does it reject a bad request (missing/odd values) with a 4xx?</td></tr>
+      <tr><td>Is the write scoped?</td><td>Does the database write touch only the right rows? (the <span class="inline">WHERE</span> from L5)</td></tr>
+      <tr><td>Is the answer clear?</td><td>Does it return a sensible status code and response?</td></tr>
+    </table>
+    <div class="callout ink"><p>🧭 <b>Tie it together:</b> a request comes in → the Brain checks <i>who</i> and <i>what</i> → it talks to the <i>database</i> → it sends a <i>response</i>. You now know the whole path. The next lessons go inside step 3 — the <b>rules</b> (L7) and <b>who's allowed</b> (L8).</p></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 10 quick ones</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">Pick an answer for instant feedback.</p>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 1 · The cycle</div>
+      <div class="qt">The screen taps "Bill". In the restaurant picture, what is this?</div>
+      <button class="opt">The food coming back</button>
+      <button class="opt">You giving your order to the waiter — a <b>request</b></button>
+      <button class="opt">The cook taking items from the store</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 2 · Verbs</div>
+      <div class="qt">The screen wants to <b>read</b> one SKU's details. Which verb?</div>
+      <button class="opt">POST</button>
+      <button class="opt">DELETE</button>
+      <button class="opt">GET</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 3 · Verbs → SQL</div>
+      <div class="qt">A <code>POST /sales</code> request usually becomes which database action?</div>
+      <button class="opt">An <code>INSERT</code> into the stock_movement ledger</button>
+      <button class="opt">A <code>SELECT</code> only</button>
+      <button class="opt">It deletes the table</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · Endpoint</div>
+      <div class="qt">What is an <b>endpoint</b>?</div>
+      <button class="opt">The screen the clerk looks at</button>
+      <button class="opt">One specific job the Brain can do, at an address (like <code>/sales</code>)</button>
+      <button class="opt">The database table</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 5 · JSON</div>
+      <div class="qt">What is JSON, in simple words?</div>
+      <button class="opt">A type of database</button>
+      <button class="opt">A programming language</button>
+      <button class="opt">A simple <b>label: value</b> format for the data sent in a request or response</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 6 · Status codes</div>
+      <div class="qt">A screen gets a <b>404</b>. What does it mean?</div>
+      <button class="opt">Not found — the thing asked for does not exist</button>
+      <button class="opt">It worked perfectly</button>
+      <button class="opt">The server has a bug</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 7 · Reviewer's lens</div>
+      <div class="qt">The AI builds a <code>POST /sales</code> endpoint that saves a sale but <b>never checks who is logged in</b>. Your call?</div>
+      <button class="opt">Fine — sales are not sensitive</button>
+      <button class="opt">Flag it — a write endpoint must check <b>who is allowed</b> first</button>
+      <button class="opt">Fine — the screen will handle it</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 8 · Inside the Brain</div>
+      <div class="qt">Which stage checks "are you allowed?" — and when does it run?</div>
+      <button class="opt">The gatekeeper (middleware) — first, before any work</button>
+      <button class="opt">The database — at the very end</button>
+      <button class="opt">The response stage</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 9 · Reading the code</div>
+      <div class="qt">In the code, <code>res.status(404)</code> is sent when…</div>
+      <button class="opt">the SKU asked for doesn't exist</button>
+      <button class="opt">the sale saved fine</button>
+      <button class="opt">the user isn't logged in</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 10 · REST</div>
+      <div class="qt">What is REST, in simple words?</div>
+      <button class="opt">A type of database</button>
+      <button class="opt">A set of agreed habits for predictable APIs (noun addresses + verbs + status codes)</button>
+      <button class="opt">A programming language</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 10</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Ask me anything — “show me what one endpoint looks like as real code,” “what is REST?”, or “next — Lesson 7, where the rules live.” Keep it simple, I'll match you.
+  </div>
+
+  <footer>
+    <p>Builds on <a href="0002-anatomy-of-a-running-app.html">Lesson 2 (the four boxes)</a> &amp; <a href="0005-reading-a-query.html">Lesson 5 (SQL verbs)</a>. Pairs with the <a href="../reference/backend-api-cheatsheet.html">Backend / API Cheat Sheet</a>.</p>
+    <p>Source: <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Overview">MDN — An overview of HTTP</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0006 · 🧠 backend deep-dive 1 of 4</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "Tapping 'Bill' is the screen asking for something — that's the request, like giving your order to the waiter.",
+    "GET means read / 'show me'. POST creates, DELETE removes.",
+    "Creating a sale is a POST on the outside, which becomes an INSERT of a new movement row on the inside.",
+    "An endpoint is one job the Brain offers, at an address — like /sales or /skus. The API is the full menu of endpoints.",
+    "JSON is just simple label: value text that both the screen and the Brain understand. Not a database, not a language.",
+    "4xx means the request was wrong; 404 specifically means the thing wasn't found. 2xx = good, 5xx = server bug.",
+    "Any write endpoint must first check who is allowed — never trust the screen to do it. That's the auth check (Lesson 8).",
+    "The gatekeeper (middleware) runs first, before any work — so a not-allowed request is stopped early and never reaches the database.",
+    "404 means 'not found' — in the code it's returned when the requested SKU isn't in the database.",
+    "REST is just agreed habits — noun addresses, the four verbs, and status codes — that make an API predictable and easy to review."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){ o.disabled = true; if (j === correct) o.classList.add('correct'); });
+        if (i === correct){
+          score++; document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok'; fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no'; fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

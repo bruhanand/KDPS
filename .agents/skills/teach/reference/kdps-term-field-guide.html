@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS Term Field Guide — Business &amp; Technical</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --biz:#b45309; --biz-bg:#fff7ed; --biz-line:#fed7aa;
+    --tech:#1d4ed8; --tech-bg:#eff6ff; --tech-line:#bfdbfe;
+    --card:#ffffff;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55; font-size:16px;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:48px 28px 80px}
+  header.top{border-bottom:3px solid var(--ink); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:34px; line-height:1.1; margin:10px 0 8px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:16px; max-width:62ch; margin:0}
+  .howto{background:#f1f5f9; border-radius:10px; padding:14px 18px; margin:22px 0 8px; font-size:14.5px; color:#334155}
+  .howto b{color:var(--ink)}
+  .legend{display:flex; gap:10px; flex-wrap:wrap; margin:18px 0 6px}
+  .pill{display:inline-flex; align-items:center; gap:8px; font-size:13px; font-weight:600; padding:6px 12px; border-radius:999px; border:1px solid}
+  .pill.biz{color:var(--biz); background:var(--biz-bg); border-color:var(--biz-line)}
+  .pill.tech{color:var(--tech); background:var(--tech-bg); border-color:var(--tech-line)}
+  .dot{width:9px;height:9px;border-radius:50%}
+  .dot.biz{background:var(--biz)} .dot.tech{background:var(--tech)}
+
+  .domain{margin-top:40px}
+  .domain-head{display:flex; align-items:center; gap:12px; margin-bottom:6px}
+  .domain-head h2{font-size:23px; margin:0; letter-spacing:-.01em}
+  .domain-head .tag{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; padding:4px 10px; border-radius:6px}
+  .biz .tag{color:var(--biz); background:var(--biz-bg); border:1px solid var(--biz-line)}
+  .tech .tag{color:var(--tech); background:var(--tech-bg); border:1px solid var(--tech-line)}
+  .domain > p.sub{color:var(--muted); margin:2px 0 18px; font-size:14.5px}
+
+  .group{margin:22px 0}
+  .group h3{font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 12px; padding-bottom:7px; border-bottom:1px solid var(--line)}
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:640px){.cards{grid-template-columns:1fr}}
+  .term{background:var(--card); border:1px solid var(--line); border-left:4px solid; border-radius:9px; padding:13px 15px}
+  .biz .term{border-left-color:var(--biz)}
+  .tech .term{border-left-color:var(--tech)}
+  .term .name{font-weight:700; font-size:15.5px; margin-bottom:3px}
+  .term .name span.full{font-weight:500; color:var(--muted); font-size:13px}
+  .term .def{font-size:14px; color:#2b3344; margin:0}
+  .term .kdps{font-size:13px; color:var(--muted); margin-top:7px; padding-top:7px; border-top:1px dashed var(--line)}
+  .term .kdps b{color:var(--ink); font-weight:600}
+
+  .callout{margin:34px 0 0; padding:18px 20px; border-radius:12px; background:linear-gradient(180deg,#fffbeb,#fff7ed); border:1px solid var(--biz-line)}
+  .callout.tech{background:linear-gradient(180deg,#eff6ff,#f5f9ff); border-color:var(--tech-line)}
+  .callout h4{margin:0 0 6px; font-size:16px}
+  .callout p{margin:0; font-size:14.5px; color:#334155}
+
+  footer{margin-top:54px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--tech); text-decoration:none}
+  footer a:hover{text-decoration:underline}
+  .ask{background:#1d2433; color:#fff; border-radius:12px; padding:16px 20px; margin-top:30px; font-size:14.5px}
+  .ask b{color:#ffd9a8}
+  sup a{color:inherit; text-decoration:none; font-size:11px; color:var(--muted)}
+
+  @media print{
+    body{background:#fff; font-size:11.5pt}
+    .wrap{padding:0; max-width:100%}
+    .term,.callout,.ask{break-inside:avoid}
+    .domain{break-before:auto}
+    .ask{background:#fff; color:var(--ink); border:1px solid var(--line)}
+    .ask b{color:var(--biz)}
+    footer a{color:var(--ink)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="eyebrow">KDPS · Field Guide · v1</div>
+    <h1>The words flying around your design</h1>
+    <p class="lede">Every business and technical term from our architecture chats, in one plain line each — grounded in your own workflow. Skim it, print it, keep it next to you.</p>
+  </header>
+
+  <div class="howto"><b>How to use:</b> you don't need to memorise this. Glance at it when a word trips you up. 🟧 amber = business, 🟦 blue = technical. The same colour-coding runs through every lesson.</div>
+
+  <div class="legend">
+    <span class="pill biz"><span class="dot biz"></span> Business term — the retail / money world</span>
+    <span class="pill tech"><span class="dot tech"></span> Technical term — the software world</span>
+  </div>
+
+  <!-- ============ BUSINESS ============ -->
+  <section class="domain biz">
+    <div class="domain-head"><span class="tag">Business</span><h2>The retail &amp; money world</h2></div>
+    <p class="sub">Mostly words you already live every day — here are their exact names so everyone means the same thing.</p>
+
+    <div class="group">
+      <h3>Commercial model &amp; money</h3>
+      <div class="cards">
+        <div class="term"><div class="name">Buy &amp; Sell <span class="full">(Outright)</span></div><p class="def">KDPS buys the stock outright and owns it from day one. <b>No returns</b>; profit is price minus cost (a margin).</p><p class="kdps"><b>In KDPS:</b> the system watches sell-through &amp; dead stock, not a return deadline.</p></div>
+        <div class="term"><div class="name">Correction <span class="full">(25-18-10)</span></div><p class="def">KDPS owns the stock, <i>but</i> the brand grants a <b>capped return allowance</b> (≈10% of goods, stretchable). Returns are manual, within a window and within the budget.</p><p class="kdps"><b>In KDPS:</b> the system tracks the allowance budget ("used ₹40k of ₹1L") and the 30/15/7-day window.</p></div>
+        <div class="term"><div class="name">SOR <span class="full">(Sale or Return)</span></div><p class="def">The <b>brand owns</b> the stock; KDPS sells on its behalf for a commission. <b>All unsold goes back, no cap.</b> To get more, raise a fresh booking.</p><p class="kdps"><b>In KDPS:</b> nothing is paid at inward — the vendor is paid as each piece sells.</p></div>
+        <div class="term"><div class="name">Consignment</div><p class="def">Same as SOR — brand-owned, all unsold returns, no cap — but the brand <b>keeps topping up</b>, so no fresh booking each time.</p><p class="kdps"><b>In KDPS:</b> near-identical to SOR downstream; the only difference is the rolling top-up.</p></div>
+        <div class="term"><div class="name">Margin</div><p class="def">Your profit slice on a sale — selling price minus cost — usually shown as a %.</p><p class="kdps"><b>In KDPS:</b> drops from ~25% to ~18% during EOSS.</p></div>
+        <div class="term"><div class="name">Commission</div><p class="def">The % KDPS earns on a brand-owned sale (SOR or Consignment), instead of a margin.</p></div>
+        <div class="term"><div class="name">Markdown</div><p class="def">Deliberately lowering a price (a discount) to clear stock.</p></div>
+        <div class="term"><div class="name">Profitability</div><p class="def">Whether something makes money after costs. In KDPS it's <i>calculated</i>, never typed in.</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Product &amp; identity</h3>
+      <div class="cards">
+        <div class="term"><div class="name">SKU <span class="full">(Stock Keeping Unit)</span></div><p class="def">One uniquely sellable, countable item.</p><p class="kdps"><b>In KDPS:</b> SKU = Style × Size × Color. "Air Max 90 · White · Size 8" is its own SKU.</p></div>
+        <div class="term"><div class="name">Style</div><p class="def">The design itself, before size and colour — e.g. "Nike Air Max 90".</p></div>
+        <div class="term"><div class="name">MRP <span class="full">(Maximum Retail Price)</span></div><p class="def">The legal top price printed on the tag in India. You may sell at or below it, never above.</p></div>
+        <div class="term"><div class="name">Barcode</div><p class="def">The scannable code that links a physical piece to its SKU in the system.</p></div>
+        <div class="term"><div class="name">Season</div><p class="def">Which selling period an item belongs to. SS26 = Spring/Summer 2026, AW26 = Autumn/Winter.</p></div>
+        <div class="term"><div class="name">Collection</div><p class="def">A grouping of stock — Core, Fresh, or Clearance.</p></div>
+        <div class="term"><div class="name">Dead stock</div><p class="def">Items that aren't selling — e.g. 45+ days with zero sales.</p></div>
+        <div class="term"><div class="name">Sell-through</div><p class="def">How fast stock is selling — the % sold over a period.</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Documents &amp; compliance</h3>
+      <div class="cards">
+        <div class="term"><div class="name">PT file</div><p class="def">Your master list of every item with its price and tax details — the main document a shipment travels with.</p><p class="kdps"><b>In KDPS:</b> every brand sends a different format; the system normalises them all.</p></div>
+        <div class="term"><div class="name">Invoice</div><p class="def">The vendor's bill listing what they sent and what it cost.</p></div>
+        <div class="term"><div class="name">GRN <span class="full">(Goods Received Note)</span></div><p class="def">The record of what <i>physically</i> arrived, checked against the invoice, noting shortages or damage.</p><p class="kdps"><b>In KDPS:</b> becomes a real system object — nothing moves downstream without it.</p></div>
+        <div class="term"><div class="name">Reconciliation <span class="full">(3-way match)</span></div><p class="def">Comparing Invoice ↔ GRN ↔ PT to catch anything that doesn't agree.</p></div>
+        <div class="term"><div class="name">Credit note</div><p class="def">A "the brand owes us" document raised when goods go back, reducing what KDPS must pay.</p></div>
+        <div class="term"><div class="name">GST / GSTIN</div><p class="def">India's sales tax (GST), and the tax registration number each vendor has (GSTIN).</p></div>
+        <div class="term"><div class="name">HSN code</div><p class="def">A standard product-category code that decides the GST rate for an item.</p></div>
+        <div class="term"><div class="name">Tally</div><p class="def">The accounting software that is the official "book of record" for the business.</p></div>
+        <div class="term"><div class="name">TIR</div><p class="def">Your internal name for the clean, accounting-ready dataset the books expect — not a standard industry term.</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Places, people &amp; selling</h3>
+      <div class="cards">
+        <div class="term"><div class="name">SBU <span class="full">(Strategic Business Unit)</span></div><p class="def">Any single location — a store, a warehouse, or a franchise.</p></div>
+        <div class="term"><div class="name">MBO <span class="full">(Multi-Brand Outlet)</span></div><p class="def">A store selling many brands. These shift stock between each other.</p></div>
+        <div class="term"><div class="name">EBO <span class="full">(Exclusive Brand Outlet)</span></div><p class="def">A single-brand store. Its stock is handled brand-to-store directly.</p></div>
+        <div class="term"><div class="name">POS <span class="full">(Point of Sale)</span></div><p class="def">The billing system at the counter where a sale is rung up.</p></div>
+        <div class="term"><div class="name">EOSS <span class="full">(End of Season Sale)</span></div><p class="def">The big seasonal clearance — Summer ~August, Winter ~February.</p></div>
+        <div class="term"><div class="name">SOH <span class="full">(Stock on Hand)</span></div><p class="def">How many units a location currently has.</p><p class="kdps"><b>In KDPS:</b> can briefly go negative when staff sell before inwarding — fixes on next sync.</p></div>
+        <div class="term"><div class="name">Inward</div><p class="def">Receiving stock into a store by scanning each piece in.</p></div>
+        <div class="term"><div class="name">Transfer voucher</div><p class="def">The document that moves stock from one SBU to another.</p></div>
+        <div class="term"><div class="name">Exchange</div><p class="def">A customer swap, valued against the original bill (MRP-to-MRP).</p></div>
+        <div class="term"><div class="name">Account manager</div><p class="def">The KDPS person who manages the relationship with a brand.</p></div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <h4>🟧 The one business choice that controls everything</h4>
+      <p><b>The commercial model</b> — one of four (Buy &amp; Sell, Correction, SOR, Consignment). It decides who owns the stock, whether &amp; how much can be returned, margin vs commission, and when the vendor gets paid. Set it right <b>on the brand</b> and most other rules fall out of it automatically.</p>
+    </div>
+  </section>
+
+  <!-- ============ TECHNICAL ============ -->
+  <section class="domain tech">
+    <div class="domain-head"><span class="tag">Technical</span><h2>The software world</h2></div>
+    <p class="sub">The words engineers use. For each, the plain idea — and the moment in <i>your</i> workflow where it already shows up.</p>
+
+    <div class="group">
+      <h3>The data core</h3>
+      <div class="cards">
+        <div class="term"><div class="name">Database</div><p class="def">The organised store that holds all the system's data.</p></div>
+        <div class="term"><div class="name">PostgreSQL <span class="full">(Postgres)</span></div><p class="def">A powerful, dependable open-source database — comfortable with millions of rows.</p><p class="kdps"><b>In KDPS:</b> 20K SKUs × 50 stores is a lot of rows; this is built for it.</p></div>
+        <div class="term"><div class="name">Table / row</div><p class="def">Like a spreadsheet: a table has columns; each record is a row.</p></div>
+        <div class="term"><div class="name">Ledger</div><p class="def">An add-only list of movements, like a bank statement. You never edit it; the balance is the sum of entries.</p><p class="kdps"><b>In KDPS:</b> the heart of stock — every +in / −out recorded forever.</p></div>
+        <div class="term"><div class="name">Append-only / immutable</div><p class="def">You can only add new records; existing ones are never changed. That's what gives a perfect audit trail.</p></div>
+        <div class="term"><div class="name">Event sourcing</div><p class="def">The grown-up name for the ledger idea: store every event, rebuild the current state by replaying them.</p></div>
+        <div class="term"><div class="name">Source of truth</div><p class="def">The one place that's authoritative; everything else is derived from it.</p></div>
+        <div class="term"><div class="name">Running balance</div><p class="def">A pre-saved current total so the system doesn't re-add the whole ledger every time you ask "how many?"</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Reliability</h3>
+      <div class="cards">
+        <div class="term"><div class="name">ACID</div><p class="def">A database's promise to keep data correct even if it crashes mid-save — saves are all-or-nothing.</p><p class="kdps"><b>In KDPS:</b> a sale can't deduct stock but fail to record the bill, or vice-versa.</p></div>
+        <div class="term"><div class="name">Transaction</div><p class="def">A bundle of changes that all succeed together or all fail together — never half-done.</p></div>
+        <div class="term"><div class="name">Audit trail</div><p class="def">A tamper-evident record of who did what, when, and why.</p></div>
+        <div class="term"><div class="name">Idempotent</div><p class="def">Safe to repeat: running the same action twice has the same result as once.</p><p class="kdps"><b>In KDPS:</b> if the POS sync runs twice, stock isn't deducted twice.</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Architecture &amp; flow</h3>
+      <div class="cards">
+        <div class="term"><div class="name">Spine / core</div><p class="def">The robust centre — the ledgers and masters — that must never be wrong.</p></div>
+        <div class="term"><div class="name">Edge</div><p class="def">The outer, helpful-but-fallible parts — the AI features.</p></div>
+        <div class="term"><div class="name">Rule engine</div><p class="def">Plain "if-this-then-that" logic in config, not AI — predictable and versionable.</p><p class="kdps"><b>In KDPS:</b> "if SOR and 30 days to deadline → alert." Always the same answer.</p></div>
+        <div class="term"><div class="name">Decoupling</div><p class="def">Letting parts run independently so one waiting doesn't block another.</p><p class="kdps"><b>In KDPS:</b> receive goods (GRN) without waiting for the PT file to arrive.</p></div>
+        <div class="term"><div class="name">Asynchronous <span class="full">(async)</span></div><p class="def">Things happen on their own timeline and reconcile later, not in lockstep.</p></div>
+        <div class="term"><div class="name">Event-driven</div><p class="def">Parts react to events ("invoice uploaded") instead of being called in a fixed order.</p></div>
+        <div class="term"><div class="name">Queue / job</div><p class="def">A background to-do list the system works through — e.g. "read this invoice".</p></div>
+        <div class="term"><div class="name">Confidence score</div><p class="def">How sure the AI is (0–100%). Used to decide: auto-accept, or ask a human.</p></div>
+        <div class="term"><div class="name">Draft / pending state</div><p class="def">AI output parked for approval before it's allowed to become real.</p></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>AI &amp; interfaces</h3>
+      <div class="cards">
+        <div class="term"><div class="name">LLM</div><p class="def">A large language model (like Claude) that understands and writes text.</p></div>
+        <div class="term"><div class="name">Vision</div><p class="def">AI that reads images and PDFs into structured data.</p><p class="kdps"><b>In KDPS:</b> turns a photo of an invoice or tag into clean rows.</p></div>
+        <div class="term"><div class="name">Forecasting</div><p class="def">Predicting future demand from past sales.</p><p class="kdps"><b>In KDPS:</b> at the <i>size</i> level — which sizes to send each store.</p></div>
+        <div class="term"><div class="name">Model</div><p class="def">A trained engine that makes a prediction or classification.</p></div>
+        <div class="term"><div class="name">Schema</div><p class="def">The defined shape of data — which columns exist and what type each is.</p></div>
+        <div class="term"><div class="name">Normalization</div><p class="def">Turning many messy formats into one standard shape.</p><p class="kdps"><b>In KDPS:</b> every brand's PT file → one KDPS format.</p></div>
+        <div class="term"><div class="name">Taxonomy</div><p class="def">The agreed category tree everything is filed under.</p></div>
+        <div class="term"><div class="name">API</div><p class="def">The doorway one system uses to talk to another.</p></div>
+        <div class="term"><div class="name">Sync</div><p class="def">Bringing two systems' data into agreement.</p><p class="kdps"><b>In KDPS:</b> reading each store's POS export every 15 minutes.</p></div>
+        <div class="term"><div class="name">PWA <span class="full">(Progressive Web App)</span></div><p class="def">A website that behaves like a phone app — camera, barcode, no app-store install.</p><p class="kdps"><b>In KDPS:</b> runs on cheap store Androids straight from the browser.</p></div>
+        <div class="term"><div class="name">Dashboard</div><p class="def">Visual screens of numbers you can drill into.</p></div>
+        <div class="term"><div class="name">Webhook</div><p class="def">An automatic "ping" one system sends another the moment something happens.</p></div>
+      </div>
+    </div>
+
+    <div class="callout tech">
+      <h4>🟦 The one technical word that makes it robust</h4>
+      <p><b>Ledger, not count.</b> Never store "size 8 = 3". Store the list of movements and add them up. You get a full audit trail, self-healing stock, and something that scales to millions of rows — for free.</p>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher, not just a document.</b> Any term here still feels fuzzy? Ask me "explain ___ with a KDPS example" and I'll go deeper — or build you a short lesson on it.
+  </div>
+
+  <footer>
+    <p><b>Sources:</b>
+      <a href="https://en.wikipedia.org/wiki/Sale_or_return">SOR</a> ·
+      <a href="https://en.wikipedia.org/wiki/Maximum_retail_price">MRP</a> ·
+      <a href="https://www.investopedia.com/terms/g/grossmargin.asp">Margin</a> ·
+      <a href="https://www.cbic-gst.gov.in/">GST (CBIC)</a> ·
+      <a href="https://martinfowler.com/eaaDev/EventSourcing.html">Ledger / Event Sourcing (Fowler)</a> ·
+      <a href="https://www.postgresql.org/docs/current/tutorial-transactions.html">ACID (PostgreSQL)</a> ·
+      <a href="https://web.dev/explore/progressive-web-apps">PWA (web.dev)</a> ·
+      <a href="https://erpnext.com/">ERPNext</a>
+    </p>
+    <p>KDPS Teaching Workspace · Field Guide v1 · colour-coded 🟧 business / 🟦 technical</p>
+  </footer>
+
+</div>
+</body>
+</html>

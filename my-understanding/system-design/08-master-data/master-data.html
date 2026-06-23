@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Master Data &amp; Users Design (One Owned Place for the Nouns)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4; --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  main{max-width:var(--maxw); margin:0 auto; padding:34px 28px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:6px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:74ch}
+  .tabbar{position:sticky; top:0; z-index:20; display:flex; gap:6px; background:var(--bg); padding:14px 0 10px; margin:6px 0 6px; border-bottom:1px solid var(--line)}
+  .tabbtn{border:1px solid var(--line); background:#fff; color:var(--navy2); font-weight:700; font-size:14.5px; padding:9px 16px; border-radius:10px 10px 0 0; cursor:pointer}
+  .tabbtn.active{background:var(--navy); color:#fff; border-color:var(--navy)}
+  .tabbtn small{display:block; font-weight:500; font-size:11.5px; opacity:.8}
+  .tabpanel{display:none}
+  .tabpanel.show{display:block}
+  section{margin:30px 0; scroll-margin-top:70px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:20px 0 8px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-dep{background:var(--blue-bg); color:var(--blue)}
+  .b-park{background:var(--purple-bg); color:var(--purple)}
+  .b-inherit{background:#fdeee8; color:#b4452f; border:1px solid #f0cdbe}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .why{color:var(--muted); font-size:14px; margin-top:6px}
+  .qref{font-size:12px; color:var(--rust); font-weight:700}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-park{background:var(--purple-bg); border-color:#dcd3f3}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--grey-bg);color:#41506b;margin:1px 2px}
+  .chip.out{background:#fdeee8;color:#b4452f}
+  .chip.in{background:var(--green-bg);color:var(--green)}
+  .chip.tbd{background:var(--amber-bg);color:var(--amber)}
+  dl.gloss dt{font-weight:700; color:var(--navy2); margin-top:12px}
+  dl.gloss dd{margin:2px 0 0; color:#33415c}
+  .gq{border-left:4px solid var(--rust); background:#fff; border:1px solid var(--line); border-radius:0 10px 10px 0; padding:11px 15px; margin:11px 0}
+  .gq .qh{font-weight:700; color:var(--navy)}
+  .pill-status{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
+  .opt{border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:8px 0;background:#fff}
+  .opt b{color:var(--navy)}
+  .opt.rec{border-color:#bfe2cd;background:var(--green-bg)}
+  .src{font-size:12.5px;color:var(--muted)}
+  .src a{color:var(--blue)}
+  ol.plan{counter-reset:q; list-style:none; padding-left:0}
+  ol.plan li{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:7px 0;position:relative;padding-left:48px}
+  ol.plan li::before{counter-increment:q;content:"Q" counter(q);position:absolute;left:12px;top:10px;font-weight:800;color:var(--rust)}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS · D8 · Master Data &amp; Users · Consolidation</div>
+  <h1>Master Data &amp; Users — System Design</h1>
+  <p class="sub">The <strong>nouns</strong> of the whole system — vendors, brands &amp; terms, stores, SKUs, barcodes, season &amp; taxonomy, offers, users — were each born quietly inside D1–D7. D8 pulls them into <strong>one owned place</strong> and answers, for every one: <strong>who owns it · who may change it · what is logged · how documents snapshot it</strong> so today's edit never rewrites yesterday's bill. This is the last consolidation before the build queue.</p>
+</header>
+
+<div class="tabbar">
+  <button class="tabbtn active" onclick="showTab(0)">① System Design<small>the masters &amp; their rules</small></button>
+  <button class="tabbtn" onclick="showTab(1)">② Decisions &amp; Grilling Log<small>the reasoning trail</small></button>
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 1 — THE SYSTEM DESIGN                                      -->
+<!-- ============================================================ -->
+<div class="tabpanel show" id="tab-design">
+
+<div class="callout co-dep" style="margin-top:4px">
+  <strong>D8 is designed — all 11 questions locked (21 Jun 2026).</strong> The master inventory (§2), the real-file grounding (§2b), the governance model (§3), the full edit-rights grid (§4), every per-master design (§5) and the common five-rule standard (§6) are complete. In short: <strong>hybrid stewardship</strong> (one HO data owner, delegated editing, a second eye on the dangerous four) · brand terms <strong>per brand per season</strong> · season a <strong>governed house calendar</strong> (Open → EOSS → Closed) · identity = <strong>barcode + season</strong> · product attributes come from the <strong>PT Master Sheet</strong> (KDPS's existing product master, promoted into governed tables) · store master = <strong>firm geography + flexible store-groups</strong> · vendor = HO-edited with bank+GSTIN second-eye · taxonomy promoted + <strong>GST as date-effective HSN+price-band data</strong> · offers placed (best-for-customer precedence) · users = <strong>configurable RBAC, shape only</strong>. What remains is purely <strong>client facts (§7, CD1–CD9)</strong> — collected after the design is shown, never guessed. POS integration is deliberately out of scope (scope note below).
+</div>
+
+<div class="callout co-note">
+  <strong>Scope note — POS.</strong> D8 designs the <strong>pure, POS-agnostic system</strong>: KDPS owns the truth and is built so a better in-house, season-aware POS can take over later. <strong>Integrating the current external POS (Ten Software) is out of scope here</strong> — it's ~2 months away and unlikely (≈80%) to expose a usable API. So every master must stand on its own; any quirk of the current till is parked to the integration/rollout work, never designed into the masters. The POS requirements we sent the vendor confirm the direction: barcode is the shared key and KDPS may send its <em>own</em> barcodes, and the item master carries season.
+</div>
+
+<section id="idea">
+  <h2 class="sec">1 · The one idea</h2>
+  <p>D8 <strong>invents almost nothing new</strong>. Every master already exists — inbound needed an SKU, vendor management needed brand terms, payments needed users. They were defined just enough to make each module work, and most were tagged "owner = D8". This discussion does three things and stops:</p>
+  <div class="card">
+    <ul style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Names one owned home for each master</strong> — so a brand's terms, a season, an SKU live in exactly one screen, not scattered across modules (Rule 3: master data lives in one place).</li>
+      <li><strong>Writes the edit-rights grid</strong> — for every master: who may create it, who may change it, which changes need a second person, what gets logged (Rule 10: every action has an actor).</li>
+      <li><strong>Closes the four master-level open items</strong> left hanging by earlier designs — <em>who may edit brand terms · the season open/close ritual · barcode reuse across seasons · how the under-defined store master is shaped.</em></li>
+    </ul>
+    <p class="why">It does <strong>not</strong> re-open how SKUs are minted (D2), how offers match (D5), or how roles approve payments (D4). Those are locked. D8 only settles <em>ownership, edit rights, audit, and snapshot</em> — the governance skin over masters that already work.</p>
+  </div>
+  <div class="callout co-note">
+    <strong>Two rules from the architecture carry this whole discussion.</strong>
+    <strong>Rule 3 — master data lives in one place; documents snapshot it:</strong> the master is the live reference; the moment a document is created it copies what it uses, so changing a brand's margin tomorrow never rewrites yesterday's booking.
+    <strong>Rule 10 — every action has an actor:</strong> who created, who changed, who approved, when — on every master row, not just on documents.
+  </div>
+</section>
+
+<section id="inventory">
+  <h2 class="sec">2 · What D8 consolidates — the master inventory</h2>
+  <p class="lead">Every reference list born across the seven locked designs. "Interim owner" = who touches it today, before D8 makes it official. The last column is the D8 agenda.</p>
+  <table>
+    <thead><tr><th>Master</th><th>What it holds</th><th>Born in</th><th>Interim owner today</th><th>What D8 must settle</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Vendor &amp; agent</strong></td>
+        <td>Branded record (v1): name, contact, GSTIN(s) per billing state, PAN + state (both derived from GSTIN), address, bank details, payment terms. Non-branded records + agent link = v2.</td>
+        <td>D1</td>
+        <td>Handler (single user)</td>
+        <td>Edit rights; bank-change control (2nd-eye, from D4); when the agent + non-branded record arrive (v2 scope line).</td>
+      </tr>
+      <tr>
+        <td><strong>Brand &amp; commercial terms</strong></td>
+        <td>Commercial model (Outright/Correction/SOR/Consignment), two margins (normal-sale, discount-sale), return window, Correction return-allowance % &amp; basis. Plus the supplier → brand → sub-brand hierarchy.</td>
+        <td>D1 (+ hierarchy from D7)</td>
+        <td>Handler; sub-brand crosswalk being cleaned in D7</td>
+        <td><strong>Who may edit terms (key Q)</strong>; date-effective term changes; promote D7's clean supplier/brand/sub-brand crosswalk into the official master.</td>
+      </tr>
+      <tr>
+        <td><strong>Store &amp; warehouse</strong></td>
+        <td>Locations, store codes, store-vs-warehouse, which POS install, state → GSTIN mapping, store-groups (city/region/format).</td>
+        <td>D2 (consumed everywhere, never actually defined)</td>
+        <td>Nobody owns the master</td>
+        <td><strong>Define the master fields</strong>; store → GSTIN (D6 needs it for voucher routing); store-groups (D5 offers need them); who maintains it.</td>
+      </tr>
+      <tr>
+        <td><strong>SKU registry</strong></td>
+        <td>Identity = brand + style + colour + size (this <em>is</em> the barcode). Branded = vendor's identity kept as-is; non-branded = KDPS deterministic reuse (vendor+style+size). Per-style "no-discount" flag (AMM) rides here.</td>
+        <td>D2</td>
+        <td>WH operator (PT step); per-brand mapping = developer</td>
+        <td>Governance; confirm the "collapsed identity" rule (P/M/E tier + Free Size); who may merge or correct a wrong SKU.</td>
+      </tr>
+      <tr>
+        <td><strong>Barcode registry</strong></td>
+        <td>One barcode → many pieces (it is the product identity, not a per-piece serial; stock is a count). Unique within a season; full key = <strong>barcode + season</strong>. Branded = vendor-supplied; non-branded = POS (Ten Software) generates.</td>
+        <td>D2</td>
+        <td>WH operator / POS generator</td>
+        <td><strong>Cross-season barcode reuse rule (key Q)</strong> — what happens when a brand reuses a barcode value next season.</td>
+      </tr>
+      <tr>
+        <td><strong>Taxonomy — category · season · collection</strong></td>
+        <td>Category (drives default margins, ~30–35% non-branded), <strong>season</strong> (fixed format, load-bearing on booking + PT + stock identity), collection.</td>
+        <td>D2</td>
+        <td>Master Sheet dropdown; <strong>season owned by nobody</strong> (interim rule only)</td>
+        <td><strong>Season open/close ritual + who corrects a wrong season (critical path)</strong>; who owns the category list; whether "collection" is a real master here.</td>
+      </tr>
+      <tr>
+        <td><strong>GST / HSN / tax-slab</strong></td>
+        <td>Date-effective apparel slabs (e.g. 5% up to ₹2,500/piece, 18% above, changed 22 Sep 2025), HSN per category. KDPS is the single GST calculator; vouchers carry the breakup, Tally never recomputes.</td>
+        <td>D6</td>
+        <td>KDPS (holder undefined)</td>
+        <td>Who owns and updates the dated slab table + HSN-per-category; how a new slab is added without touching code (data, not code).</td>
+      </tr>
+      <tr>
+        <td><strong>Offer rulebook</strong></td>
+        <td>Per offer: brand, trigger, reward, store scope, start/optional-end dates, item scope, funder tag, "can stack?" switch, approval limit, gift handover. 8 patterns + open model.</td>
+        <td>D5</td>
+        <td>Brand authors (AI-ingest + human confirm); KDPS authors its own</td>
+        <td>Confirm where ownership/edit-rights sit in the grid; lock the overlap-precedence rule (O3, still open in D5).</td>
+      </tr>
+      <tr>
+        <td><strong>Users &amp; roles</strong></td>
+        <td>Roles (Requestor · Approver(s) · Executor · Finance Controller · Owner · Store User · Admin). User row: name, phone/email, role, brand/store scope, active flag. SoD: maker ≠ checker ≠ payer. Approval bands (₹).</td>
+        <td>D4</td>
+        <td>Admin</td>
+        <td>Consolidate into the master; joiner/mover/leaver lifecycle; role-change &amp; login audit; who the Admin is.</td>
+      </tr>
+      <tr>
+        <td><strong>Voucher-number series</strong></td>
+        <td>KDPS-owned deterministic number: store · type · date · sequence (idempotency guard + Tally join key).</td>
+        <td>D6</td>
+        <td>KDPS (algorithmic)</td>
+        <td>Confirm it is a tiny owned series registry (one counter per store per type); minor.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="callout co-note"><strong>Read this table as the scope fence.</strong> Anything in the first two columns is already designed and locked upstream — D8 does not re-open it. Only the last column is D8's actual work. Every row resolves into one line of the edit-rights grid (§4).</div>
+
+  <h3>2b · Grounding — what the client's real files actually show</h3>
+  <p class="lead">Checked against everything KDPS has sent (store list, supplier/brand list, ~30 brand PT files, real invoices &amp; ledgers, the two new invoice/DN-CN sheets, the AMM list, offers, report formats). The masters below are designed against this reality, not in the abstract.</p>
+  <table>
+    <thead><tr><th>Master</th><th>What the real data shows</th><th>What it means for D8</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Vendor</strong></td><td>Supplier database ≈ <strong>261 vendors</strong>, but ~40% have no GSTIN and only ~65 carry bank details. Ledgers (Prem, Omkar) are plain running Dr/Cr accounts. The new DN/CN sheet holds <strong>13,164 debit notes (₹24 M)</strong> + 1,696 credit notes (₹3.1 M), reasons = stock correction · wrong invoice · damage · short received · target incentive · salary reimbursement.</td><td>The vendor master must absorb <em>partial</em> records (flag-don't-block). Vendor record completeness (GSTIN + bank) is a real data-quality job → CD9. DN/CN is a high-volume first-class flow (D4 owns the flow; the reason list is master data).</td></tr>
+      <tr><td><strong>Brand &amp; terms</strong></td><td><strong>1,163 brands ↔ 281 suppliers</strong>, clean 1-to-1 (38 brands have no supplier). Big distributors carry hundreds each (SSS 176, Variety 175, PM Sons 127); branded houses smaller — and "<strong>Aditya Birla Lifestyle</strong>" and "<strong>Madura Pvt Ltd</strong>" are listed as two suppliers though they're one house. Brand margins live inside the PT files (a MARGIN column); Madura's margin still pending.</td><td>Confirms supplier → brand is 1-to-1 and the canonical merge work is real (the Aditya Birla / Madura split is the textbook case). Brand terms (margin) are sourced from PT, not typed.</td></tr>
+      <tr><td><strong>Store &amp; warehouse</strong></td><td>The store list has only <strong>16 stores + 1 warehouse (Ranchi)</strong> — and it's the "stores <em>using software</em>" list, not the full 50+. Columns are just name, city, email, a CLOUD yes/no flag. <strong>No store code, no GSTIN, no state column, no shop-vs-warehouse type.</strong></td><td>The store master is built almost from scratch. Code, state, GSTIN, type all missing → CD1. Rollout starts from these 16; the rest arrive in D9.</td></tr>
+      <tr><td><strong>SKU</strong></td><td>The canonical PT format is: SEASON · BRAND · COLOR · GENDER · SUB&nbsp;CATEGORY · TYPE · ITEM · FIT · SIZE · BARCODE · DESIGN · HSN · QTY · MRP · BASIC · P&nbsp;RATE · MARGIN. DESIGN = the style code; colour and size are separate columns.</td><td>Confirms the SKU identity attributes exactly. The registry stores these; documents snapshot them.</td></tr>
+      <tr><td><strong>Barcode</strong></td><td><strong>Every file carries a 13-digit EAN</strong> — branded <em>and</em> the small local vendors (Suvidhi's "Item Code", Amidhara's "Barcode"). The supplier list even has a separate sheet flagging ~97 suppliers as "barcode = YES".</td><td>Softens the "non-branded always needs a POS-generated barcode" assumption — many locals bring a code already (it may not be a registered EAN, though). The YES-list tells us up front who supplies codes vs who needs one minted. Feeds Q4.</td></tr>
+      <tr><td><strong>Season</strong> <span class="badge b-open">critical</span></td><td>Every source spells season differently: <em>"SPRING SUMMER(May-26)"</em> (the canonical sheet + reports), <em>"SS26" / "AW24"</em> (ERP brands like Blackberry, Arvind), <em>"Spring Summer 2020"</em> (AMM list), a raw <em>timestamp</em> in one store's SOH, or <strong>no season at all</strong> (Mufti, Jockey, Madura, the locals).</td><td>This is exactly why the season master must own <em>one</em> canonical list and map every incoming spelling to it. The client's own canonical format is <strong>FAMILY(Mon-YY)</strong>. Directly feeds Q3.</td></tr>
+      <tr><td><strong>Category / GST</strong></td><td>Category depth varies wildly — Mufti has 5 category levels, Blackberry 2, locals one. HSN is 6–8 digits; GST is mostly 5%, with innerwear (Jockey) at 2.5%+2.5%.</td><td>Taxonomy master maps each vendor's categories → one canonical category/type. GST/HSN held as dated data (Q8).</td></tr>
+      <tr><td><strong>Offers</strong></td><td><strong>162 offers</strong> across 7 brand tabs; columns Brand · Offer Type (GWP/ATV/Promo/EOSS) · Season · free-text details · start · close · status. Brand-level — <em>no per-store column</em>.</td><td>Matches the D5 design. Per-store scope is KDPS's own addition on top of how brands send them.</td></tr>
+      <tr><td><strong>No-discount flag</strong></td><td>The AMM list = <strong>77,912 styles, only 453 marked "No Discount"</strong>, per-style, by Madura division code.</td><td>Confirms the no-discount flag is a per-style attribute on the SKU master, joined on style code (Q5).</td></tr>
+      <tr><td><strong>Users &amp; roles</strong></td><td>The client's own requirements tracker lists "<strong>complete list of probable software users and their privileges</strong>" as <em>still pending</em>; the USERS tab they sent is empty.</td><td>The users/roles master is explicitly owed by the client → CD5. Design the shape now, fill the people later.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout co-dep">
+    <strong>Key finding — the PT "Master Sheet" is already KDPS's product master.</strong> The KDPS PT workbook has one <strong>Master Sheet</strong> that feeds <strong>controlled dropdowns</strong> into every PT line, and its columns <em>are</em> the product-attribute masters:
+    <span class="chip">SEASON (FAMILY(Mon-YY))</span> <span class="chip">BRAND</span> <span class="chip">COLOR (incl. PREMIUM / MEDIUM / ECONOMY)</span> <span class="chip">GENDER</span> <span class="chip">SUB CATEGORY</span> <span class="chip">TYPE</span> <span class="chip">ITEM</span> <span class="chip">FIT</span> <span class="chip">SIZE (incl. Free)</span> <span class="chip">GST % (5/12/18/Tax-free)</span> <span class="chip">SUGGESTED SUB CATEGORY/TYPE (canonical re-map)</span>.
+    Every product field on a PT line is <strong>picked from this sheet, never free-typed</strong> — this is KDPS's master-data governance today, in Excel. The PT line then adds the per-piece facts: BARCODE, DESIGN (style code), HSN, QTY/NAG, MRP, BASIC (cost), P RATE, INPUT/OUTPUT TAX, MARGIN (computed). One PT per consignment = the source of truth for inbound stock.
+    <br><br><strong>What this means for D8:</strong> the season / brand / colour / gender / category / type / item / fit / size / GST masters already <em>exist</em> as this sheet — D8 <strong>promotes them into governed system tables</strong> under the Q1 hybrid rules, it does not reinvent them. It confirms several answers outright: <strong>P/M/E colour + Free Size are already handled</strong> (Q5 = Option A, baked into the COLOR/SIZE lists); the <strong>season list &amp; format already exist</strong> (Q3 only adds the open→EOSS→closed lifecycle); the <strong>GST % list + INPUT/OUTPUT split already exist</strong> (Q8 only adds date-effectiveness + the canonical mapping).
+  </div>
+</section>
+
+<section id="governance">
+  <h2 class="sec">3 · The governance model <span class="badge b-locked">Q1 locked — hybrid stewardship</span></h2>
+  <p class="lead">The house rule for who may change a master, applied to every row of the grid below. Decided 21 Jun 2026.</p>
+  <div class="card">
+    <h4>Hybrid stewardship — the four parts</h4>
+    <ol style="margin:6px 0 0;padding-left:18px">
+      <li><strong>One accountable owner.</strong> A single <strong>data owner</strong> role at head office (Patna) is answerable for the quality of every master — the one throat to choke. (Which person fills it is a client fact → CD5.)</li>
+      <li><strong>Editing is delegated to the nearest role.</strong> Day-to-day create/edit sits with whoever lives closest to the list — warehouse picks season &amp; makes SKUs, the buyer sets brand terms, the admin manages users. No bottleneck at HO for routine work.</li>
+      <li><strong>The dangerous masters need a second pair of eyes.</strong> A change only takes effect after a different person approves it (maker ≠ checker). The high-risk set: <span class="chip out">brand commercial terms</span> <span class="chip out">GST / tax slabs</span> <span class="chip out">vendor bank details</span> <span class="chip out">user roles &amp; rights</span>.</li>
+      <li><strong>Operational, store-scoped actions stay local</strong> — a store confirming its own day's collection needs no HO gate. And <em>every</em> master edit is logged with who + why + when, high-risk or not (Rule 10).</li>
+    </ol>
+    <p class="why">This is the federated/hybrid model the industry research lands on, and it formalises what KDPS already chose by instinct: bank changes already need a second eye (D4), and the warehouse — not Patna — already picks the season (D2). Each later question (Q2–Q10) just applies this rule to one master and confirms its delegated editor + whether it's in the high-risk set.</p>
+  </div>
+</section>
+
+<section id="grid">
+  <h2 class="sec">4 · The edit-rights grid <span class="badge b-locked">complete</span></h2>
+  <p class="lead">The centrepiece deliverable. One row per master: who is accountable, who may create, who edits day-to-day, which changes need a second person, what is logged, and whether documents snapshot it. <span class="chip tbd">TBD</span> cells fill as each question locks; <span class="chip in">locked upstream</span> cells are already fixed by an earlier design.</p>
+  <table>
+    <thead><tr><th>Master</th><th>Owner (accountable)</th><th>Create / edit day-to-day</th><th>Needs 2nd person</th><th>Audited</th><th>Snapshot onto docs?</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Vendor &amp; agent</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO/buyer; not store-editable</span></td><td><span class="chip in">bank + GSTIN = 2nd-eye (D4/Q7)</span></td><td><span class="chip in">every edit: who+why (D1)</span></td><td><span class="chip in">yes — statutory+bank onto each doc (D1)</span></td></tr>
+      <tr><td><strong>Brand &amp; terms</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">buyer; one card per brand per season</span></td><td><span class="chip in">yes — 2nd-eye approves each season's terms</span></td><td><span class="chip in">every edit: who+why (D1)</span></td><td><span class="chip in">yes — terms onto each booking (D1)</span></td></tr>
+      <tr><td><strong>Store &amp; warehouse</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO; not store-editable</span></td><td><span class="chip in">no — state/GSTIN change handled carefully</span></td><td><span class="chip in">all edits logged</span></td><td><span class="chip in">yes — store + its GSTIN onto each doc</span></td></tr>
+      <tr><td><strong>SKU registry</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">WH at PT (dropdowns); auto-dedup (D2)</span></td><td><span class="chip in">merge/correct = HO stewardship</span></td><td><span class="chip in">create/dedup at PT; merge/correct logged</span></td><td><span class="chip in">frozen at PT stock-in (D2)</span></td></tr>
+      <tr><td><strong>Barcode registry</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">vendor / POS-generated (D2)</span></td><td><span class="chip in">n/a — frozen at stock-in</span></td><td><span class="chip in">creation logged; reuse → oldest cohort first (Q4)</span></td><td><span class="chip in">frozen at stock-in; key=barcode+season (D2)</span></td></tr>
+      <tr><td><strong>Season</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">WH picks Open seasons; HO opens/closes</span></td><td><span class="chip in">no — single HO act, logged + impact summary</span></td><td><span class="chip in">open/close/correct all logged</span></td><td><span class="chip in">season stamped on PT + identity (D2)</span></td></tr>
+      <tr><td><strong>Category / taxonomy</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO; PT Master Sheet + vendor→canonical map</span></td><td><span class="chip in">no — light HO act</span></td><td><span class="chip in">adds logged</span></td><td><span class="chip in">category stamped on PT line</span></td></tr>
+      <tr><td><strong>GST / HSN / slab</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">HO; date-effective HSN + price-band</span></td><td><span class="chip in">yes — rate/threshold change = 2nd-eye</span></td><td><span class="chip in">dated versions; changes logged</span></td><td><span class="chip in">tax breakup carried on voucher (D6)</span></td></tr>
+      <tr><td><strong>Offer rulebook</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">author + AI-ingest (D5)</span></td><td><span class="chip in">sign-off above a depth (D5)</span></td><td><span class="chip in">per-line + daily reconcile (D5)</span></td><td><span class="chip in">yes — rule+values onto each bill line (D5)</span></td></tr>
+      <tr><td><strong>Users &amp; roles</strong></td><td><span class="chip in">HO data owner</span></td><td><span class="chip in">Admin; roles = config data</span></td><td><span class="chip in">role change = 2nd-eye (Q1/Q10)</span></td><td><span class="chip in">role-change history + login</span></td><td><span class="chip in">actor stamped on every doc step (D4)</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="permaster">
+  <h2 class="sec">5 · Per-master decisions <span class="badge b-locked">complete</span></h2>
+  <p class="lead">All locked — each master's settled design in plain words.</p>
+  <div class="card"><h4>Brand &amp; commercial terms <span class="badge b-locked">Q2 locked</span></h4>
+    <p><strong>Shape:</strong> one terms card <strong>per brand per season</strong>, holding the commercial model (Outright / Correction / SOR / Consignment), the full-price &amp; discount margins, the return window, and the Correction return-allowance % + basis.</p>
+    <p><strong>How it changes:</strong> opening a season for a brand copies last season's card forward as the starting point. The <strong>buyer</strong> adjusts it; a <strong>second person approves</strong> before it goes live (high-risk, Q1); within the season it's fixed. The commercial model rides forward unchanged unless deliberately changed.</p>
+    <p><strong>Why it's safe &amp; scalable:</strong> every booking snapshots the live season card at creation (Rule 3), so past deals never move. The season <em>is</em> the version — margin-by-season reporting is natural and history is automatic. Finer per-date control could be layered on later without changing the model.</p>
+    <p class="why">Owner = HO data owner · editor = buyer · approver = second person · every edit logged (who + why). Plugs into the season master (Q3): a season's terms card is created when that season is opened for the brand.</p>
+  </div>
+  <div class="card"><h4>Season master &amp; the open/close ritual <span class="badge b-locked">Q3 locked</span></h4>
+    <p><strong>Shape:</strong> one KDPS <strong>house season calendar</strong>. Each season is a record in a fixed format (FAMILY + Mon-YY, system-derived, never free text) with a lifecycle state: <strong>Open → EOSS / markdown → Closed</strong>. A brand-season <strong>mapping table</strong> translates each brand's incoming label ("SS26", "Spring Summer 2020", a date, or blank) into the house season.</p>
+    <p><strong>The ritual:</strong> the <strong>HO data-owner role opens</strong> a season (it becomes pickable on bookings/PTs and sellable) and <strong>closes</strong> it (no new stock-in; it flips to reporting-only). The <strong>warehouse only picks among Open seasons</strong> at PT — it cannot open or invent one. <strong>Closing</strong> first shows a "what this affects" summary (how many pieces become EOSS / return / dead-stock candidates) and lets the buyer set a <strong>carryover</strong> flag on core (never-out-of-stock) items so they roll into the next season instead of ageing out.</p>
+    <p><strong>What closing fires:</strong> EOSS / markdown eligibility, the return-window &amp; V-flip checks, and dead-stock surfacing — all per cohort (barcode + season).</p>
+    <p><strong>Corrections:</strong> a wrong season on a PT/piece is a <strong>controlled, logged, reversing correction</strong> by the HO role (not a silent edit), because identity = barcode + season. Opening/closing/correcting are all logged; closing needs no second person (reversible, reporting-only afterward).</p>
+    <p class="why">Owner = HO data-owner role · season pick at PT = warehouse · open/close/carryover = HO role · which person holds the role = client fact (parked). Feeds Q2 (a brand's per-season terms card is born when its season opens) and Q4 (cross-season barcode reuse).</p>
+  </div>
+  <div class="card"><h4>Barcode reuse across seasons <span class="badge b-locked">Q4 locked</span></h4>
+    <p><strong>Shape:</strong> the identity is the cohort = <strong>barcode + season</strong>. One barcode = one product = N pieces (a count); a season holds many barcodes. A barcode the brand reuses in a later season is simply a <em>different cohort</em> — no clash in our books.</p>
+    <p><strong>At the till:</strong> a scan resolves to the cohort actually present at that store. If both seasons are live in one store under the same barcode, the system takes the <strong>oldest season first</strong> (matches ageing/markdown); if it genuinely can't tell, it asks the salesperson "which season?" as a one-tap tiebreak.</p>
+    <p><strong>No re-stickering</strong> in the pure system — the season-aware identity dissolves the problem. Re-labelling a colliding arrival is kept on the shelf only as a fallback if some future <em>external</em> POS can't understand barcode + season (parked).</p>
+    <p class="why">Barcode is frozen at stock-in (branded = vendor's, non-branded = generated, per D2); creation logged; owner = HO data owner.</p>
+  </div>
+  <div class="card"><h4>SKU registry governance <span class="badge b-locked">Q5 locked</span></h4>
+    <p><strong>Shape:</strong> identity = brand + style(DESIGN) + colour + size = the barcode. Attributes are picked from the PT Master Sheet (controlled lists), never free-typed. Branded SKUs are kept as the vendor sends them; non-branded ones de-duplicate automatically (same vendor + style + size → reuse the SKU, add to count).</p>
+    <p><strong>Missing colour/size:</strong> already solved in the master lists — colour falls back to a <strong>P/M/E tier</strong>, size to <strong>"Free Size"</strong>. We record the coarsest honest identity and let the count carry the pieces; nothing is fabricated, nothing is blocked.</p>
+    <p><strong>Merge / correct:</strong> creating SKUs and the auto-dedup happen at the warehouse during the PT. <strong>Merging</strong> two SKUs that turn out to be one, or <strong>correcting</strong> a wrong attribute, is a logged <strong>HO data-owner stewardship action</strong> (keep the surviving identity, re-point its stock — survivorship). Never a floor edit, because identity is load-bearing.</p>
+    <p class="why">Owner = HO data owner · create/dedup = warehouse at PT · merge/correct = HO steward, logged · frozen onto the stock-in posting (Rule 3, D2).</p>
+  </div>
+  <div class="card"><h4>Store &amp; warehouse master <span class="badge b-locked">Q6 locked</span></h4>
+    <p><strong>Shape:</strong> one master for both stores and warehouses, separated by a <strong>type</strong> field. Firm columns: store code (short mnemonic) · name · type (store/warehouse) · format (EBO / MBO / own) + associated brand if EBO · city · <strong>state → state GSTIN</strong> · address · active flag.</p>
+    <p><strong>Grouping:</strong> geography stays firm (state/city — it drives GST and roll-ups), while clusters, tiers, offer scope and pilot sets are <strong>store-groups/tags</strong> a store can belong to many of. Offers (D5) and reports (D7) target any group; vouchers (D6) route by the firm state→GSTIN.</p>
+    <p class="why">Owner = HO data owner · edited at HO, never store-editable · all edits logged · a store's state/GSTIN change is tax-sensitive, handled carefully · every document snapshots the store + its GSTIN at the time. Starts with the 16 software stores; the full 50+ list is owed (CD1).</p>
+  </div>
+  <div class="card"><h4>Vendor &amp; agent edit rights <span class="badge b-locked">Q7 locked</span></h4>
+    <p><strong>Shape:</strong> branded vendor record (D1 fields — name, contact, GSTIN(s) per state, PAN + state derived, address, bank, payment terms). Statutory + bank identity snapshots onto each document.</p>
+    <p><strong>Edit rights:</strong> HO/buyer creates &amp; edits; never store-editable; every edit logged. <strong>Bank and GSTIN changes need a second eye</strong> (both are high-risk — money &amp; tax identity); no payment without a GSTIN and validated bank on file (D4 pay-gate).</p>
+    <p><strong>Merge:</strong> de-dup is a logged HO stewardship action with survivorship (keep the surviving party, re-point its ledger) — promotes D7's clean supplier→brand→sub-brand crosswalk into the official party master.</p>
+    <p class="why">Scope: branded vendor record built now; <strong>agent record + full non-branded vendor record deferred to the data-input discussion (v2)</strong> — the non-branded inbound flow still runs with a minimal on-the-fly vendor (name + city). Vendor GSTIN/bank completeness is a data-quality job → CD9.</p>
+  </div>
+  <div class="card"><h4>Taxonomy + GST/HSN slab master <span class="badge b-locked">Q8 locked</span></h4>
+    <p><strong>Taxonomy:</strong> the PT Master Sheet lists (sub-category / type / item / fit / gender) become governed system tables, owned by the HO data owner; adding a value is a light, logged act (not high-risk). A small <strong>vendor→canonical mapping master</strong> (from the "SUGGESTED" columns) folds each vendor's own category word into KDPS's canonical category/type — AI-drafted, human-confirmed.</p>
+    <p><strong>GST/HSN:</strong> a <strong>date-effective slab master keyed by HSN + price-band</strong> (e.g. apparel ₹2,500/piece → 5% / above → 18%, from 22 Sep 2025), held as <strong>data, never code</strong>. KDPS computes the tax per piece at PT/sale (input &amp; output can differ); the voucher carries the breakup; Tally/TaxOne never recompute (D6). HO-owned; a rate/threshold change is high-risk → second-eye.</p>
+    <p class="why"><strong>Collection:</strong> not a separate master in v1 — season + category already cover it; add later only if a brand needs it. HSN rides on each SKU/PT line; the slab master maps HSN + price + date → rate.</p>
+  </div>
+  <div class="card"><h4>Offer rulebook placement &amp; precedence <span class="badge b-locked">Q9 locked</span></h4>
+    <p><strong>Shape (D5):</strong> offer record = brand · trigger · reward · store scope · start/optional-end dates · item scope · funder tag · "can stack?" switch · approval limit · gift handover. Brand offers AI-ingested + human-confirmed; KDPS offers authored directly; an offer beyond a set depth needs a named sign-off before going live.</p>
+    <p><strong>Precedence (locked here):</strong> when two offers could apply to one item, <strong>best for the customer</strong> wins (lowest final price); stackable typed add-ons may sit on top; two brand offers never stack on one item.</p>
+    <p class="why">Owner = HO data owner · editor = offer author (brand-ingest + KDPS) · store scope via Q6 store-groups, no auto-enrol · per-line snapshot onto each bill + daily reconcile + month-end pack (D5).</p>
+  </div>
+  <div class="card"><h4>Users &amp; roles lifecycle <span class="badge b-locked">Q10 locked · shape only</span></h4>
+    <p><strong>Shape:</strong> configurable RBAC — the system stores a <strong>role → screen/action → allow matrix as data</strong>, so new roles or permission tweaks are configuration, not code. User record: name · phone/email · role(s) · <strong>data-scope</strong> (store / store-group from Q6 / region) · active flag · created &amp; last-login.</p>
+    <p><strong>Scoping:</strong> a store user sees only their own store; HO sees all — reuses the Q6 store-groups, no new grouping concept.</p>
+    <p><strong>Lifecycle:</strong> create by Admin; a move is an <strong>atomic role swap</strong> (remove old + add new together); a leaver is <strong>deactivated and fully revoked, never deleted</strong> (keep the audit), with delegation to a backup — guards against role creep.</p>
+    <p class="why">Role changes need a second eye + are logged (role-change history + login trail); separation of duties (maker ≠ checker ≠ payer) carries from D4. Owner = Admin role · the actual user types, hierarchy and people are the client's to define after the design is shown (CD5).</p>
+  </div>
+  <div class="card"><h4>The common audit + snapshot + effective-dating standard</h4><p class="why">→ Q11.</p></div>
+</section>
+
+<section id="parked">
+  <h2 class="sec">6 · The common standard — one rule for every master <span class="badge b-locked">Q11</span></h2>
+  <p class="lead">The five rules every master obeys, so the per-master sections above don't each re-state them. This is the consolidation's backbone.</p>
+  <div class="card">
+    <ol style="margin:6px 0 0;padding-left:18px">
+      <li><strong>Audit on everything.</strong> Every create / edit / merge / deactivate records <strong>who + why + when</strong>. Nothing is ever hard-deleted — a master row is deactivated and kept, so history always explains the present (Rule 10).</li>
+      <li><strong>Second eye on the dangerous four.</strong> A change to <span class="chip out">brand commercial terms</span> <span class="chip out">GST / tax slabs</span> <span class="chip out">vendor bank + GSTIN</span> <span class="chip out">user roles &amp; rights</span> takes effect only after a different person approves it (maker ≠ checker). Everything else is edit-then-logged.</li>
+      <li><strong>Documents snapshot the master (Rule 3).</strong> The moment a document is created it copies the master values it uses (terms, price, season, GSTIN, offer rule). Editing a master tomorrow never rewrites yesterday's document.</li>
+      <li><strong>Version only at the grain that matters.</strong> We don't make every master fully time-versioned. Brand terms version <strong>by season</strong>; GST versions <strong>by effective date</strong>; everywhere else the current value + the audit log + document snapshots are enough. Simple, not over-built — and finer dating can be added later without rework.</li>
+      <li><strong>Controlled vocabularies, one owner.</strong> Product attributes come from controlled lists (the promoted PT Master Sheet), never free text. One HO data owner is accountable for every master; merges and corrections are stewardship actions with survivorship (keep the surviving record, re-point what pointed at the loser), always logged.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="client">
+  <h2 class="sec">7 · Facts parked for the client</h2>
+  <p class="lead">Things only KDPS knows. Designed around, never guessed. Each gets a plain WhatsApp-style question when we collect.</p>
+  <table>
+    <thead><tr><th>#</th><th>Fact we need</th><th>Why D8 needs it</th><th>Also owed to</th></tr></thead>
+    <tbody>
+      <tr><td>CD1</td><td>The <strong>full</strong> store/warehouse list (the list on hand is only the 16 stores on software): for each — code, city, state (Bihar/Jharkhand), shop-or-warehouse, which POS. <span class="chip tbd">partly have it</span></td><td>Builds the store master + the store → GSTIN routing. Real list has no code/GSTIN/state/type.</td><td>D6, D9</td></tr>
+      <tr><td>CD2</td><td>Per-brand payment terms (credit days + any early-pay discount %).</td><td>Lives on the brand/vendor master; drives due dates.</td><td>D1, D4</td></tr>
+      <tr><td>CD3</td><td>Per-brand Correction return-allowance basis (% of money or % of pieces) + tier (10/12/15%); the Levi's "actual buying" variant.</td><td>A field on the brand-terms master.</td><td>D1, D4</td></tr>
+      <tr><td>CD4</td><td>In Tally: Bihar &amp; Jharkhand as one company with two GST numbers, or two companies?</td><td>Shapes the store → GSTIN → Tally mapping.</td><td>D6 (C3)</td></tr>
+      <tr><td>CD5</td><td>Who in the business holds each system role (Admin, approver levels, data owner) + the ₹ approval bands. <span class="chip tbd">on their own to-do, pending</span></td><td>Seeds the users &amp; roles master. (Already an open line on the client's requirements tracker.)</td><td>D4</td></tr>
+      <tr><td>CD6</td><td>Confirm the supplier merges — e.g. "Madura Pvt Ltd" and "Aditya Birla Lifestyle" are <em>seen as two suppliers</em> in the real list but are one house. Also the abbreviation duplicates (MN Garments etc.).</td><td>Promotes the clean supplier→brand crosswalk into the official brand master.</td><td>D7</td></tr>
+      <tr><td>CD7</td><td>The season calendar the brands actually run — the names used and roughly when each opens/closes. (Their canonical spelling is "FAMILY(Mon-YY)"; many brands send no season at all.)</td><td>Seeds the season master + its open/close ritual.</td><td>D2</td></tr>
+      <tr><td>CD8</td><td>Do any brands reuse the same barcode number in a later season? Which ones? (A ~97-supplier "barcode = YES" list exists — confirm it means they bring their own code.)</td><td>Confirms the barcode + season key is load-bearing in real life.</td><td>D2</td></tr>
+      <tr><td>CD9</td><td>Where do we complete the <strong>missing vendor GSTIN &amp; bank details</strong> (≈40% of vendors have no GSTIN, most have no bank on file) — from Tally, or collected fresh?</td><td>Vendor master quality; the D4 pay-gate needs both.</td><td>D4, D9</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+
+<!-- ============================================================ -->
+<!-- TAB 2 — DECISIONS & GRILLING LOG                               -->
+<!-- ============================================================ -->
+<div class="tabpanel" id="tab-log">
+
+<section>
+  <h2 class="sec">The D8 question plan</h2>
+  <p class="lead">Worked one at a time, each researched against industry + India practice before it is asked. Order: the framing rule first, then the high-heat masters, then the quieter ones, then the common standard.</p>
+  <ol class="plan">
+    <li><strong>Governance model</strong> — who, by default, may change a master; how the dangerous ones are guarded. <span class="badge b-locked">locked — hybrid</span></li>
+    <li><strong>Brand &amp; commercial terms</strong> — who may edit model/margins/return terms; how a term change is dated so old bookings keep their old terms. <span class="badge b-locked">locked — per season</span></li>
+    <li><strong>Season master</strong> — owner + open/close ritual + correcting a wrong season. <span class="badge b-locked">locked — house calendar</span></li>
+    <li><strong>Barcode reuse across seasons</strong> — the rule when a brand reuses a barcode value. <span class="badge b-locked">locked — barcode + season cohort</span></li>
+    <li><strong>SKU registry governance</strong> — collapsed-identity confirm; who merges/corrects a wrong SKU. <span class="badge b-locked">locked — PT Master Sheet + HO steward</span></li>
+    <li><strong>Store &amp; warehouse master</strong> — define the fields; store → GSTIN; store-groups; who maintains it. <span class="badge b-locked">locked — firm geo + store-groups</span></li>
+    <li><strong>Vendor &amp; agent edit rights</strong> — applies Q1 to the vendor record; bank-change control (from D4); agent/non-branded scope line. <span class="badge b-locked">locked</span></li>
+    <li><strong>Taxonomy + GST/HSN slab master</strong> — category list owner; the date-effective slab table as data. <span class="badge b-locked">locked</span></li>
+    <li><strong>Offer rulebook placement</strong> — confirm grid row; lock the overlap-precedence rule (O3). <span class="badge b-locked">locked — best for customer</span></li>
+    <li><strong>Users &amp; roles lifecycle</strong> — design the <em>shape</em> only (a user record, role-scoping, joiner/mover/leaver, role-change + login audit). The actual user types, hierarchy and who-holds-what are the client's to define after the design is shown — fully parked, not asked. <span class="badge b-locked">locked — configurable RBAC</span></li>
+    <li><strong>The common standard</strong> — one audit + snapshot + effective-dating rule across all masters. <span class="badge b-locked">locked — five-rule standard</span></li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">Grilling log</h2>
+
+  <div class="gq" id="q1">
+    <div class="qh">Q1 · Who is allowed to change the master lists? <span class="pill-status b-locked">LOCKED 21 Jun — Option C, hybrid stewardship</span></div>
+    <p><strong>Decision:</strong> one accountable data owner at HO; day-to-day editing delegated to the role nearest each master; the four dangerous masters (brand terms · GST slabs · vendor bank · user roles) require a second person to approve; store-scoped operational actions stay local; every edit logged. Full model in §3.</p>
+    <p>Every master needs one answer to "who can change this, and what stops a mistake or a fraud." We can set one house rule now and apply it to each master, instead of arguing it nine times. The choice is how tight to make it.</p>
+    <div class="opt"><b>Option A — Everything central.</b> One office team (Patna HO) creates and edits every master. Stores and warehouse staff only <em>use</em> the lists, never change them. <span class="why">Safest and most consistent — one source of truth. But slow: opening a new season, fixing a wrong SKU, adding a store all wait on HO, which is exactly the bottleneck big-MDM writeups warn about.</span></div>
+    <div class="opt"><b>Option B — Each list owned by whoever is closest.</b> Warehouse owns SKU/barcode/season, the buyer owns brand terms, the admin owns users, and so on — each edits their own freely. <span class="why">Fast and natural. But with 50+ stores and one developer, "everyone edits their own" is how lists quietly drift apart and two versions of the truth appear.</span></div>
+    <div class="opt rec"><b>Option C — Hybrid stewardship <span class="qref">(recommended)</span>.</b> One named <strong>data owner</strong> at HO is accountable for every master (the single throat to choke), but day-to-day editing is <em>delegated</em> to the role nearest each list (warehouse picks the season, buyer sets brand terms, admin manages users). The few <strong>high-risk</strong> masters — brand commercial terms, GST slabs, vendor bank details, user roles — need a <strong>second person to approve</strong> the change before it takes effect. Everything store-facing and operational stays local. <span class="why">This is the federated/hybrid model the research calls the winner, and it matches what KDPS has <em>already</em> chosen by instinct: bank-change is second-eye (D4), the warehouse — not Patna — picks the season (D2). Q1 just makes it the house rule and lists which masters are "high-risk."</span></div>
+    <div class="opt"><b>Option D — Central, but stores can "request a change".</b> Like A, but stores raise a request and HO approves it. <span class="why">A middle ground, but it adds a request queue for everything and still bottlenecks at HO — heavier than C for no extra safety.</span></div>
+    <p class="src"><strong>Research folded in:</strong> centralized MDM = one source of truth but "what took hours now takes weeks"; decentralized = agile but fragmentation; <em>hybrid/federated</em> (central governance + local stewardship, second-eye on sensitive domains) is the repeatedly-recommended balance.
+    Sources:
+    <a href="https://www.firstsanfranciscopartners.com/blog/centralized-or-decentralized-data-governance-choosing-the-right-model/">First San Francisco Partners — choosing a model</a>,
+    <a href="https://www.domo.com/blog/centralized-or-decentralized-data-the-answer-might-be-both">Domo — why hybrid wins</a>,
+    <a href="https://www.datamanagement.ai/blog/item-master-data-management/">Item master data best practices (retail)</a>,
+    <a href="https://blog.segudangloker.com/master-data-management-in-erp-governance-quality-and-standards/">MDM in ERP — governance &amp; stewardship</a>.</p>
+  </div>
+
+  <div class="gq" id="q2">
+    <div class="qh">Q2 · When a brand's terms change, how do we handle it? <span class="pill-status b-locked">LOCKED 21 Jun — Option C, terms per brand per season</span></div>
+    <p><strong>Decision:</strong> brand terms live as one card per brand per season; opening a season copies last season's card forward as defaults; the buyer adjusts and a second person approves; within the season terms are fixed; the commercial model carries forward unless deliberately changed. Chosen for scalability/flexibility — the season is the version, history is automatic, finer date-control can be added later without rework. Detail in §5.</p>
+    <p>A brand's terms = its commercial model (Outright / Correction / SOR / Consignment), its two margins (full-price &amp; discount), its return window and its Correction return-allowance. From Q1 we already know <em>who</em>: the buyer changes them, a second person approves (high-risk). The open part is <strong>how the master remembers terms over time</strong>. Note one thing is already handled: every booking <em>copies</em> its terms the moment it's created (Rule 3), so past bookings never change no matter what we pick here — this is only about the master's own memory and how staff set terms.</p>
+    <div class="opt"><b>Option A — One current card per brand; overwrite + log.</b> Each brand has one live terms card. Changing it records who/why/when and needs a second person. Old bookings already kept their own copy, so nothing breaks. <span class="why">Simplest. But the master itself can't tell you "what were Madura's terms last March" — you'd have to dig through old bookings. Reporting margin-by-season gets awkward.</span></div>
+    <div class="opt"><b>Option B — Dated versions (valid-from date).</b> Changing terms adds a new version stamped with a start date instead of overwriting; the system always knows which terms were live on any date. Second person approves each version. <span class="why">This is the textbook ERP way to keep price/margin history. Most flexible — but heavier, and it lets terms change on any random date, which isn't really how brands work.</span></div>
+    <div class="opt rec"><b>Option C — One card per brand <em>per season</em>; carry last season forward <span class="qref">(recommended)</span>.</b> Terms live as one card per brand per season. Opening a new season for a brand copies last season's terms as a starting point; the buyer tweaks the margins / return-allowance, a second person approves, and within the season they're fixed. The commercial model just rides along unchanged unless you deliberately change it. <span class="why">Matches how KDPS already works — the return-allowance is <em>already</em> tracked per brand per season, margins live in seasonal PT files, offers are per season. History comes for free (the season <em>is</em> the version), margin-by-season reporting is natural, and it plugs straight into the season master (Q3). Simpler than B because terms only change at season boundaries, not on arbitrary dates.</span></div>
+    <p class="src"><strong>Research folded in:</strong> effective-dated history (SCD Type 2 — valid-from/valid-to) is the standard for keeping price/margin history so past analysis stays valid; maker-checker / four-eyes on vendor &amp; price-master changes is standard ERP/SOX practice (the person entering a sensitive change shouldn't be the one approving it) — which Q1 already adopted. Option C applies the history idea at the grain the business actually uses (the season) instead of arbitrary dates.
+    Sources:
+    <a href="https://dataopsschool.com/blog/scd-type-2/">SCD Type 2 — effective-dated history</a>,
+    <a href="https://weld.app/blog/what-is-slowly-changing-dimensions">history tables / versioning explained</a>,
+    <a href="https://invoicedataextraction.com/blog/vendor-master-data-governance">vendor master governance &amp; maker-checker</a>,
+    <a href="https://en.wikipedia.org/wiki/Maker-checker">maker-checker (four-eyes)</a>.</p>
+  </div>
+
+  <div class="gq" id="q3">
+    <div class="qh">Q3 · Who owns the season, and what does opening / closing one actually do? <span class="pill-status b-locked">LOCKED 21 Jun — Option B, governed house calendar</span></div>
+    <p><strong>Decision:</strong> one KDPS house season calendar owned by the HO data-owner role, with a lifecycle Open → EOSS/markdown → Closed. Warehouse only picks among Open seasons at PT (can't open/invent one). Opening &amp; closing are single HO-role acts, logged; closing shows a "what this affects" summary and lets the buyer mark carryover for core items. Brand season labels are mapped into the house season. A wrong season is fixed by a controlled, logged, reversing correction (never a silent edit). Closing needs no second person (reversible, reporting-only afterward). <em>Which person holds the HO role = client fact (parked).</em> Detail in §5.</p>
+    <p>Season is the most load-bearing master in the system: the booking, the PT and stock identity itself (the unit key is <strong>barcode + season</strong>) all hang on it, and EOSS, aging, the return window, dead-stock and carryover all run <em>per season</em>. Today there's only a stop-gap rule (the warehouse picks a system-made season code when it makes the PT). D8 has to name the real owner and design the open/close ritual. The real files add urgency: <strong>every brand spells season differently</strong> (SS26 / "SPRING SUMMER(May-26)" / "Spring Summer 2020" / a raw date / nothing at all) — so the master must also normalise.</p>
+    <div class="opt"><b>Option A — A plain controlled list, no lifecycle.</b> Season is just a tidy dropdown in a fixed format; HO adds the next one; "closing" is informal (people stop picking it). <span class="why">Simple, but it throws away the whole point: nothing <em>fires</em> at season-end, so EOSS, returns, dead-stock and carryover have no trigger. The critical-path value is lost.</span></div>
+    <div class="opt rec"><b>Option B — Season as a calendar with a lifecycle <span class="qref">(recommended)</span>.</b> One KDPS <strong>house season calendar</strong>, owned at HO. Each season moves through clear states: <strong>Open</strong> (pickable on bookings/PTs, sellable) → <strong>EOSS / markdown</strong> (clearance pricing, return-window &amp; V-flip checks fire, aging surfaces) → <strong>Closed</strong> (no new stock-in under it; reporting only). The warehouse only <em>picks among Open seasons</em> at PT — it can't invent or open one. <strong>Opening &amp; closing are HO acts</strong>, logged; closing shows a "this is what it affects" summary first (how many pieces become EOSS / return candidates) and lets the buyer set <strong>carryover</strong> for core items into the next season. Each brand's incoming season label is <strong>mapped</strong> into the house season. Fixing a wrong season is a controlled, logged correction (a reversing move, since identity = barcode + season — never a silent edit). <span class="why">This is exactly how fashion systems run the season — a governed calendar that gives every downstream rule a clean trigger, plus carryover for never-out-of-stock cores. Scalable: any number of seasons, optional years, year-round (NOS) lines, and messy brand labels all fold into one house calendar.</span></div>
+    <div class="opt"><b>Option C — A separate season calendar per brand.</b> Each brand runs its own seasons (closer to how brands actually name them). <span class="why">More faithful to each brand, but it multiplies calendars and makes cross-brand aging, dead-stock and reporting painful. The industry norm is one house calendar with brand seasons mapped in — which is what B does, without the sprawl.</span></div>
+    <p class="src"><strong>Research folded in:</strong> fashion ERPs keep a multi-season calendar with milestones (receipt → launch → markdown) and an explicit end-of-season lifecycle; carryover flagging re-integrates core/NOS styles into the next season's plan; end-of-season planning is centralised on a single version of truth with clear price/move rules; master data is structured by Season → Collection → Style with a named owner for quality and clear rules for adding new entries; systems support extensive season codes, optional years and year-round styles.
+    Sources:
+    <a href="https://www.flowsense.solutions/blog/fashion-brand-d2c-erp-guide">Fashion ERP — multi-season calendar &amp; milestones</a>,
+    <a href="https://nul.global/seasonal-inventory-management/">seasonal inventory lifecycle &amp; carryover</a>,
+    <a href="https://xpedition.co.uk/how-is-apparel-erp-software-modernising-supply-chain-management-in-the-fashion-industry/">centralised end-of-season planning</a>,
+    <a href="https://www.netsuite.com/portal/resource/articles/erp/erp-implementation-fashion.shtml">apparel master data by season/collection/style</a>.</p>
+  </div>
+
+  <div class="gq" id="q4">
+    <div class="qh">Q4 · How does the pure system handle a barcode reused across seasons? <span class="pill-status b-locked">LOCKED 21 Jun — Option A, resolve by store stock, oldest-season-first</span></div>
+    <p><strong>Decision:</strong> identity is barcode + season; a reused barcode is just another cohort. A scan matches the cohort present at that store; if both seasons are live in one store under one barcode, take the oldest season first; if truly ambiguous, one-tap "which season?" to the salesperson. No re-stickering in the pure system — re-labelling is reserved only for a possible future external POS that can't read barcode + season (parked). Detail in §5.</p>
+    <p>Reframed for the pure system. Our system — and the season-aware POS we'll build — keys on <strong>barcode + season</strong>, so a barcode reused in a different season is <em>internally a non-issue</em>: the two are simply different cohorts. (Whatever the current external till can or can't do is parked — see the scope note.) The one real question left: when the <strong>same barcode number is live in two seasons at the same store at once</strong>, how does a scan know which cohort it is decrementing?</p>
+    <div class="opt rec"><b>Option A — Resolve by the store's own stock, oldest-season-first <span class="qref">(recommended)</span>.</b> A scan matches the cohort actually allocated/present at that store. In the rare case both seasons' stock sit in the same store under one barcode, the system takes the <strong>oldest season first</strong> (clears old stock, exactly how aging &amp; markdown already work). If it genuinely can't tell, it asks the salesperson "which season?" as a one-tap tiebreak. <span class="why">No stickers, no extra work — the system just knows, because it tracks season where a bare-barcode till can't. Reuse becomes a non-event.</span></div>
+    <div class="opt"><b>Option B — Mint a unique KDPS code for every cohort at goods-in.</b> Give each cohort its own guaranteed-unique code so a barcode can never point at two things. <span class="why">Bulletproof, but means re-stickering huge volumes of vendor pieces for a problem the barcode+season key already solves. Over-engineered for the pure system.</span></div>
+    <div class="opt"><b>Option C — Re-sticker only a colliding arrival (reserved fallback).</b> Print a fresh KDPS code for a new arrival only when its barcode clashes with live old stock. <span class="why">Not needed by our own system — kept on the shelf purely in case a future <em>external</em> POS can't understand barcode + season. Parked, not built now.</span></div>
+    <p class="src"><strong>Research folded in:</strong> GS1 now forbids reusing a GTIN once assigned (pre-2019 apparel allowed reuse after ~30 months), yet manufacturers (and non-GS1 local vendors) <em>do</em> put an old code on a new product — the documented failure is "old stock + new product, same code → inventory confusion." A season-aware identity (barcode + season) dissolves that at the source; only a bare-barcode external system would ever need re-labelling.
+    Sources:
+    <a href="https://www.gtin.info/gtin-reuse-policy-update/">GS1 GTIN reuse policy (no reuse)</a>,
+    <a href="https://www.gs1uk.org/knowledge-hub/product-identification/can-i-reuse-barcode-numbers">GS1 UK — reusing barcode numbers</a>,
+    <a href="https://blog.hyperdrivesolutions.com/tutorials/how-to-use-same-ean-code-for-multiple-items">same-code collision in real inventories</a>,
+    <a href="https://www.waspbarcode.co.uk/buzz/why-small-businesses-must-avoid-reusing-barcodes">why reusing barcodes breaks inventory</a>.</p>
+  </div>
+
+  <div class="gq" id="q5">
+    <div class="qh">Q5 · SKU registry — what to do when colour/size aren't stated, and who fixes a wrong SKU? <span class="pill-status b-locked">LOCKED 21 Jun — Option A (already in the PT Master Sheet) + HO stewardship for merge/correct</span></div>
+    <p><strong>Decision (confirmed by the PT Master Sheet, not newly invented):</strong> when colour isn't stated the PT records a P/M/E tier and when size isn't stated it records "Free Size" — both are already values in the COLOR/SIZE master lists, so no detail is fabricated and goods always move (Option A). Merging two SKUs that are really one, or correcting a mis-keyed one, is a logged HO data-owner stewardship action (keep the surviving identity, re-point its stock); never a floor edit. See §2b key finding and §5.</p>
+    <p>Most of the SKU registry is already locked: identity = <strong>brand + style + colour + size</strong> (which <em>is</em> the barcode); branded SKUs are kept as the vendor sends them; non-branded ones are de-duplicated automatically (same vendor + style + size → reuse the existing SKU, add to its count). Two governance gaps remain. <strong>(1)</strong> The real files show small local vendors often <em>don't state colour or size</em> (Suvidhi has no colour column; Amidhara's size is rough) — so what identity do we record? <strong>(2)</strong> Who may merge two SKUs that turn out to be the same, or fix a mis-keyed one?</p>
+    <div class="opt rec"><b>Option A — Record the coarsest honest identity <span class="qref">(recommended)</span>.</b> When colour isn't written, use a <strong>P/M/E tier</strong> (premium / medium / economy by price band); when size isn't on the invoice, use <strong>"Free Size"</strong>. We never invent detail we can't see — many pieces may share one identity/barcode and the count carries them. <span class="why">Honest and flag-don't-block: goods always move, and we don't fabricate a colour/size that would just be wrong. This is the interim rule from inbound — Q5 confirms it.</span></div>
+    <div class="opt"><b>Option B — Always force a real colour + size.</b> The warehouse must enter a genuine colour and size for every piece before it's accepted. <span class="why">Textbook apparel data — every colour×size its own SKU. But for the local supply base it means either guessing (dishonest data) or stopping goods at the door (breaks the rule). Impractical here.</span></div>
+    <div class="opt"><b>Option C — Honest-coarse by default, force real capture above a threshold.</b> Collapse is fine for cheap basics; for higher-value pieces or key categories, require a real colour/size. <span class="why">A sensible refinement — but it needs a threshold rule the business doesn't have yet. Better added later <em>onto</em> A once a category proves it needs the detail.</span></div>
+    <div class="card" style="margin-top:10px"><h4>Who may merge / correct an SKU — design default (from Q1)</h4>
+      <p>Creating SKUs and the automatic non-branded de-dup happen at the warehouse during the PT. But <strong>merging two SKUs</strong> that turn out to be one, or <strong>correcting</strong> a wrong style/colour/size, is a controlled <strong>stewardship action by the HO data-owner role</strong> — logged, with the surviving identity kept and its stock re-pointed (survivorship). It is never a floor edit, because identity is load-bearing. Confirm or adjust.</p>
+    </div>
+    <p class="src"><strong>Research folded in:</strong> MDM practice splits the roles — a data owner defines "good data" (required fields, naming) and a steward gatekeeps changes, reviews anomalies and approves merges; de-dup = match → survivorship → merge, with sensitive changes routed for approval. Apparel guidance wants every colour×size as its own SKU and warns missing size is the #1 fulfilment error — but that assumes the data exists; for KDPS's local vendors the honest-coarse identity avoids fabricating it.
+    Sources:
+    <a href="https://profisee.com/platform/golden-record-management/">golden record — match/survivorship/merge</a>,
+    <a href="https://www.datamanagement.ai/blog/item-master-data-management/">retail item-master governance (owner + steward)</a>,
+    <a href="https://bmdepotship.com/apparel-sku-management-guide-sizes-colors-variation-control/">apparel SKU variation control</a>,
+    <a href="https://dataladder.com/guide-to-data-survivorship-how-to-build-the-golden-record/">data survivorship on merge</a>.</p>
+  </div>
+
+  <div class="gq" id="q6">
+    <div class="qh">Q6 · How should the store &amp; warehouse master be shaped? <span class="pill-status b-locked">LOCKED 21 Jun — Option C, firm geography + flexible store-groups</span></div>
+    <p><strong>Decision:</strong> one master for stores and warehouses (a type field). Firm columns for the load-bearing parts — code · name · type · format (EBO/MBO/own + brand) · city · <strong>state → GSTIN</strong> · address · active — plus flexible <strong>store-groups/tags</strong> (clusters, tiers, offer scope, pilots) that a store can join many of. Owned &amp; edited at HO, not store-editable; all edits logged; state/GSTIN change handled carefully. Detail in §5.</p>
+    <p>This is the one master with almost nothing to inherit — the only store list on hand is 16 stores + 1 warehouse, with just name/city/email. Yet the rest of the system leans on it: vouchers route by the store's <strong>state GSTIN</strong> (D6), offers target <strong>store groups</strong> (D5), reports roll up by region/format (D7), and the store code is already used informally (VAS-DEO, BOKARO, HZB…). The fields are clear; the real choice is <strong>how to model grouping so it scales to 50+</strong>.</p>
+    <p><strong>Proposed master (the fields):</strong> store code (short mnemonic) · name · <strong>type</strong> (store / warehouse) · <strong>format</strong> (EBO / MBO / own) + associated brand if it's an exclusive-brand outlet · city · <strong>state → state GSTIN</strong> · address · active flag. Owned &amp; edited at HO (not store-editable); changes logged; a store's state/GSTIN mapping is tax-sensitive so that change is handled carefully.</p>
+    <div class="opt"><b>Option A — Flat list, everything is a tag (incl. state).</b> Each store is a row; grouping (state, format, cluster, pilot) is all done with free tags. <span class="why">Very flexible, but the state → GSTIN link is too load-bearing for tax to sit in a loose tag — it must be a firm single value.</span></div>
+    <div class="opt"><b>Option B — One fixed tree: region → city → store.</b> Each store sits in exactly one branch. <span class="why">Clean roll-up reports, but rigid — a store lives in only one branch, so cross-cutting groups ("all EBOs", "EOSS pilot stores") don't fit.</span></div>
+    <div class="opt rec"><b>Option C — Firm fields for the load-bearing parts + flexible store-groups on top <span class="qref">(recommended)</span>.</b> The things that must be exact are firm columns: <strong>state → GSTIN</strong>, city, type (store/warehouse), format (EBO/MBO) + brand. Everything else — clusters, tiers, offer scope, pilot sets — is done with <strong>store-groups/tags</strong>, and a store can be in many. <span class="why">Geography is genuinely hierarchical and load-bearing (it drives GST), while offer/report grouping needs to flex without restructuring — this gives both. Matches the industry model: an org/geo hierarchy for roll-ups plus store clusters/groups for flexible targeting.</span></div>
+    <p class="src"><strong>Research folded in:</strong> the store is the lowest node where transactions happen and belongs to an org/geo hierarchy (region → district → store) — but flexible <em>store groups / clusters</em> are modelled separately so a store can join many groups for targeting and comparison; standard store-master fields are store code, name, format, retailer, and full geography (state/region/city/address). Option C keeps geography (and the GSTIN it drives) firm while leaving grouping flexible.
+    Sources:
+    <a href="https://trailhead.salesforce.com/content/learn/modules/consumer-goods-cloud-data-model/understand-the-store-data-model">store data model — site vs business group</a>,
+    <a href="https://docs.oracle.com/cd/F11448_01/doc.160030/f11690/organizationalhierarchy.htm">retail org hierarchy</a>,
+    <a href="https://dotactiv.com/retail-data">store fields &amp; clusters</a>,
+    <a href="https://www.stibosystems.com/solution/location-data-cloud">location master data</a>.</p>
+  </div>
+
+  <div class="gq" id="q7">
+    <div class="qh">Q7 · Vendor &amp; agent master — edit rights <span class="pill-status b-locked">LOCKED 21 Jun — all 3 confirmed</span></div>
+    <p><strong>Decision:</strong> (1) GSTIN change joins bank as a second-eye change; (2) vendor de-dup/merge is a logged HO stewardship action with survivorship (promotes D7's supplier→brand→sub-brand crosswalk); (3) v1 scope holds — branded vendor record now, agent + full non-branded record deferred to the data-input discussion. All other vendor facts inherited from D1/D4. Detail in §5.</p>
+    <p>Most of the vendor master is already locked upstream; D8 only applies the Q1 hybrid rule and closes a few gaps.</p>
+    <div class="card"><h4>Inherited — not re-opened</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><strong>Fields</strong> (D1): name, contact, GSTIN(s) per billing state, PAN + state (derived from GSTIN), address, bank details, payment terms.</li>
+        <li><strong>Bank-detail change</strong> (D4): second-eye verified + logged + AI-flagged on the next payment.</li>
+        <li><strong>Pay-gate</strong> (D4): no payment without a GSTIN and validated bank on file.</li>
+        <li><strong>Edit rights</strong> (Q1): HO/buyer creates &amp; edits; never store-editable; every edit logged with who + why.</li>
+        <li><strong>Snapshot</strong> (D1): the vendor's statutory + bank identity is copied onto each document at creation.</li>
+      </ul>
+    </div>
+    <p><strong>Three points to confirm:</strong></p>
+    <div class="opt rec"><b>1. GSTIN change joins bank as second-eye.</b> A vendor's GSTIN is a tax identity (wrong GSTIN = wrong tax + blocked input credit), so changing it needs a second person too — same as bank. <span class="why">Consistent with Q1 putting GST in the high-risk set.</span></div>
+    <div class="opt rec"><b>2. Vendor de-dup / merge = HO stewardship.</b> The real list has duplicates ("MN Garments" variants; "Madura Pvt Ltd" vs "Aditya Birla Lifestyle" as one house). Merging is a logged HO data-owner action with survivorship (keep the surviving party, re-point its ledger), exactly like SKU merges. <span class="why">The clean supplier→brand→sub-brand crosswalk from D7 is promoted here as the official party master.</span></div>
+    <div class="opt rec"><b>3. v1 scope holds.</b> The branded vendor record is built now; the <strong>agent record</strong> and the <strong>non-branded vendor record</strong> stay deferred to the data-input discussion (v2) — the non-branded <em>inbound</em> flow still runs with a minimal on-the-fly vendor (name + city). <span class="why">Matches D1's locked scope line; nothing here blocks v1.</span></div>
+    <p class="src"><strong>Research (reused from Q2):</strong> maker-checker / four-eyes on vendor-master changes — especially the bank and tax-identity fields — is standard ERP/SOX practice; de-dup uses match → survivorship → merge with sensitive merges routed for approval.
+    Sources:
+    <a href="https://invoicedataextraction.com/blog/vendor-master-data-governance">vendor master governance &amp; maker-checker</a>,
+    <a href="https://profisee.com/platform/golden-record-management/">golden record / survivorship on merge</a>.</p>
+  </div>
+
+  <div class="gq" id="q8">
+    <div class="qh">Q8 · Taxonomy + GST/HSN slab master <span class="pill-status b-locked">LOCKED 21 Jun — all 3 confirmed</span></div>
+    <p><strong>Decision:</strong> (1) the PT Master Sheet's category/type/item/fit/gender lists become governed system tables (HO-owned, light logged adds) plus a vendor→canonical mapping master (AI-drafted, human-confirmed); (2) GST is a date-effective HSN + price-band slab master held as data, KDPS computes per piece, rate/threshold changes need a second eye; (3) "collection" is not a separate master in v1. Detail in §5.</p>
+    <p>The taxonomy lists already exist as the PT Master Sheet (category / sub-category / type / item / fit / gender + a SUGGESTED canonical re-map), and GST handling is half-locked by D6 (KDPS is the single calculator; tax is dated data; the voucher carries the breakup; Tally never recomputes). D8 only promotes them and closes three points.</p>
+    <div class="opt rec"><b>1. Promote the taxonomy lists + keep a vendor→canonical map.</b> The category/type/item/fit/gender lists become governed system tables owned by the HO data owner; adding a value is a light, logged HO act (not high-risk). The "SUGGESTED SUB CATEGORY/TYPE" becomes a small <strong>mapping master</strong>: each vendor's own category term → KDPS's canonical category/type, AI-drafted and human-confirmed. <span class="why">Lets messy vendor categories fold into one clean house taxonomy for reports, exactly as the sheet already does by hand.</span></div>
+    <div class="opt rec"><b>2. GST = a date-effective, HSN + price-band slab master.</b> A dated rule keyed by HSN, with the apparel price-band threshold (₹2,500/piece → 5% / above → 18%, from 22 Sep 2025) held as <strong>data, never code</strong>. KDPS computes the tax per piece at PT/sale (input &amp; output can differ, e.g. bought at 5% but sells at 18% above ₹2,500); the voucher carries it; Tally/TaxOne never recompute. Owned by the HO data owner; a rate/threshold change is high-risk → second-eye (Q1 puts GST in the dangerous set). <span class="why">India's slabs are date- and price-driven and change by Council notification — dated data is the only safe model; D6 already required this.</span></div>
+    <div class="opt rec"><b>3. Drop "collection" as a separate master for v1.</b> The real PT data has season + category but no "collection" field; season + category already cover the grouping. <span class="why">Avoid an empty master nobody fills. Add it later only if a brand genuinely needs a collection layer.</span></div>
+    <p class="src"><strong>Research folded in:</strong> after 22 Sep 2025 apparel is 5% up to ₹2,500/piece and 18% above, charged <em>per piece</em> (a multi-item bill doesn't aggregate); each textile product maps to an 8-digit HSN that fixes its slab; ERPs must update rates on the effective date — i.e. rates are dated, HSN-keyed data, not hardcode.
+    Sources:
+    <a href="https://www.gimbooks.com/blog/new-gst-rates-in-india-2025/">GST 2.0 effective 22 Sep 2025</a>,
+    <a href="https://themunim.com/gst-on-clothes-apparel/">apparel GST — per-piece price slab</a>,
+    <a href="https://cleartax.in/s/gst-hsn-lookup">HSN → GST rate mapping</a>,
+    <a href="https://busy.in/gst-rates/garments/">garments GST &amp; HSN</a>.</p>
+  </div>
+
+  <div class="gq" id="q9">
+    <div class="qh">Q9 · Offer rulebook — placement + the one open item <span class="pill-status b-locked">LOCKED 21 Jun — precedence = best for the customer</span></div>
+    <p><strong>Decision:</strong> overlap precedence = best for the customer (lowest final price wins; stackable typed add-ons may sit on top; two brand offers never stack on one item). All other offer-rulebook facts inherited from D5; owner = HO data owner, store scope via Q6 store-groups. Detail in §5.</p>
+    <p>The offer rulebook is fully designed in D5; D8 only places it in the grid and closes the single item D5 left open.</p>
+    <div class="card"><h4>Inherited — not re-opened (D5)</h4>
+      <ul style="margin:6px 0 0;padding-left:18px">
+        <li><strong>Offer record</strong>: brand · trigger · reward · store scope · start/optional-end dates · item scope · funder tag · "can stack?" switch · approval limit · gift handover.</li>
+        <li><strong>Authoring</strong>: brand offers are AI-ingested then human-confirmed; KDPS offers authored directly; an offer beyond a set depth needs a named sign-off before it goes live.</li>
+        <li><strong>Snapshot &amp; audit</strong>: each discounted bill line records the rule + values applied; daily reconcile flags mismatches; month-end per-brand pack.</li>
+        <li><strong>Store scope</strong> now uses the store-groups from Q6; a new store is never auto-enrolled.</li>
+      </ul>
+    </div>
+    <div class="opt rec"><b>Decision — lock overlap precedence = "best for the customer".</b> When two offers could apply to the same item, the one giving the customer the lowest final price wins; stackable typed add-ons may sit on top; two brand offers never stack on one item. <span class="why">D5's recommendation, the global default in Shopify / NetSuite / Oracle; with no claim/margin-split there's no reason to prefer one funder's offer over another. This was the one line D5 left for you.</span></div>
+    <p class="why">Owner = HO data owner · editor = offer author (brand-ingest + KDPS) · sign-off above a depth (D5) · per-line snapshot onto each bill (D5).</p>
+  </div>
+
+  <div class="gq" id="q10">
+    <div class="qh">Q10 · Users &amp; roles — the shape only <span class="pill-status b-locked">LOCKED 21 Jun — all 4 confirmed</span></div>
+    <p><strong>Decision:</strong> (1) roles &amp; permissions are configurable data (a role→action→allow matrix), not hardcoded; (2) user record carries role(s) + data-scope via Q6 store-groups; (3) joiner/mover/leaver with atomic role swaps and revoke-not-delete; (4) role changes need a second eye + full audit, SoD from D4. All people/types/hierarchy parked for the client (CD5). Detail in §5.</p>
+    <p>Per Anand's direction, D8 designs only the <strong>shape</strong>. The actual user types, hierarchy and who-holds-what are the client's to define after they see the whole system (CD5) — so the shape must be flexible enough to hold whatever they hand over, without a rebuild.</p>
+    <div class="opt rec"><b>1. Roles &amp; permissions are configurable data, not hardcoded.</b> The system stores a <strong>role → screen/action → allow</strong> matrix as data. New roles or permission tweaks are configuration, not code. <span class="why">This is the scalable core: when the client hands over their user list and hierarchy, we just configure — nothing is baked into code.</span></div>
+    <div class="opt rec"><b>2. User record + data-scoping.</b> A user row holds name · phone/email · role(s) · <strong>data-scope</strong> (which store(s) / store-groups from Q6 / region) · active flag · created &amp; last-login. A store user sees only their own store; HO sees all. <span class="why">Reuses the store-groups from Q6 — no new grouping concept.</span></div>
+    <div class="opt rec"><b>3. Joiner / mover / leaver lifecycle.</b> Create a user (Admin); a move is an <strong>atomic role swap</strong> (remove old + add new together, never just add); a leaver is <strong>deactivated and all rights revoked</strong>, never deleted (keep the audit), with delegation to a backup. <span class="why">Prevents "role creep" where people quietly accumulate access.</span></div>
+    <div class="opt rec"><b>4. Role changes = second eye + full audit.</b> User roles &amp; rights are in the Q1 high-risk set, so a role change needs a second person and is logged (role-change history + login trail). Separation of duties (maker ≠ checker ≠ payer) carries over from D4. <span class="why">Standard RBAC governance; matches the bank/GST treatment.</span></div>
+    <p class="why">Owner = Admin role (which person = client fact, CD5). Everything here is structure; no people, types or counts are assumed.</p>
+    <p class="src"><strong>Research folded in:</strong> RBAC's backbone is a configurable role → resource → action matrix that doubles as the audit basis; joiner/mover/leaver best practice removes old access on a move (atomic swap), revokes everything on exit, and relies on periodic access reviews to fight role creep; separation of duties is enforced across roles.
+    Sources:
+    <a href="https://www.nocobase.com/en/blog/how-to-design-rbac-role-based-access-control-system">designing an RBAC system (roles as data)</a>,
+    <a href="https://pathlock.com/blog/role-based-access-control-rbac/">RBAC + joiner/mover/leaver &amp; SoD</a>,
+    <a href="https://www.lumos.com/topic/access-control-matrix-implementation-guide">access-control matrix</a>,
+    <a href="https://www.ibm.com/think/topics/role-based-access-control-implementation">RBAC implementation &amp; access reviews</a>.</p>
+  </div>
+
+  <div class="gq" id="q11">
+    <div class="qh">Q11 · The common standard across all masters <span class="pill-status b-locked">LOCKED 21 Jun — five-rule standard adopted · D8 complete</span></div>
+    <p>The synthesis of everything above into one set of rules every master obeys, so it doesn't get re-argued per master. Proposed standard (full text in §6):</p>
+    <div class="opt rec"><b>Adopt the five-rule standard.</b> (1) Audit who+why+when on every change, never hard-delete; (2) a second eye on the dangerous four (brand terms · GST · vendor bank+GSTIN · user roles); (3) documents snapshot the master at creation; (4) version only at the grain that matters (terms by season, GST by date, current-value+log elsewhere); (5) controlled vocabularies + one HO owner + stewardship merges with survivorship. <span class="why">It's the consistent skin over the nine masters — each per-master decision is just this applied. Lightweight where it can be, strict where money/tax/identity demand it.</span></div>
+  </div>
+
+</section>
+
+</div>
+
+<footer>
+  KDPS · D8 Master Data &amp; Users · living design doc · started 21 Jun 2026.<br>
+  Consolidates registries born in D1 (vendor/brand), D2 (store/SKU/barcode/season/taxonomy), D4 (users/roles), D5 (offers), D6 (GST slab/voucher series) and D7 (supplier/brand crosswalk). Decisions here govern <em>ownership, edit rights, audit and snapshot</em> only — upstream module logic stays locked.
+</footer>
+
+<script>
+function showTab(i){
+  document.querySelectorAll('.tabbtn').forEach((b,j)=>b.classList.toggle('active',j===i));
+  document.querySelectorAll('.tabpanel').forEach((p,j)=>p.classList.toggle('show',j===i));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</main>
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — Outbound Module</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:0 4px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:20px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 4px; font-size:24pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt;}
+  h2{font-size:14pt; margin:20px 0 6px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange); page-break-after:avoid;}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  p{margin:7px 0;}
+  ul{margin:7px 0; padding-left:20px;}
+  li{margin:4px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:10px 0; font-size:10.5pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 10px; font-weight:600; font-size:10pt;}
+  td{padding:7px 10px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .scope{background:var(--soft); border:1px solid var(--line); border-left:4px solid var(--orange); padding:10px 14px; margin:14px 0; font-size:10.5pt;}
+  section{margin-bottom:6px;}
+  .avoid{page-break-inside:avoid;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:4px 14px 12px; margin:12px 0;}
+  .ask ol{margin:8px 0 0; padding-left:20px;}
+  .ask li{margin:8px 0;}
+  footer{margin-top:24px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · System Design</div>
+  <h1>Outbound Module</h1>
+  <p class="sub">How stock leaves the store — sale, exchange, transfer, defective return, season-end return, EOSS and stock count.</p>
+</header>
+
+<div class="scope">
+  <strong>Please confirm.</strong> Below is exactly how the system will handle each case. Read each point and tell us anything that does not match how you actually work, so we can correct it before building.
+</div>
+
+<section class="avoid">
+<h2><span class="num">1.</span>How stock is tracked</h2>
+<ul>
+  <li>Our system holds the <strong>master stock count</strong>. The POS stays your <strong>billing counter</strong> — sales flow from the POS into the system.</li>
+  <li>Stock is tracked by <strong>size, colour and season</strong>, not just by style.</li>
+  <li>A sale is <strong>never blocked</strong>. If the goods are physically there, they can be sold; any mismatch is flagged and sorted out separately.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">2.</span>Counter sale</h2>
+<ul>
+  <li>Item scanned at the POS, bill made, stock reduces.</li>
+  <li>The system reads every bill from the POS sale report — including the <strong>discount entered, the salesman, and the payment</strong> (cash / card / credit).</li>
+  <li>For <strong>SOR and Consignment</strong> brands, the amount payable to the brand is counted <strong>when the item sells</strong>.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">3.</span>When the POS is down</h2>
+<ul>
+  <li>Staff make a <strong>paper bill</strong> and serve the customer.</li>
+  <li>The paper bill is <strong>entered into the POS before end of day</strong>; stock then reduces.</li>
+  <li>At day-end the system checks for any <strong>paper bill not entered</strong>, or any <strong>double entry</strong>, and flags it for correction.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">4.</span>Customer exchange</h2>
+<ul>
+  <li>The old item comes back and the new item goes out, against the <strong>original bill</strong>.</li>
+  <li>Credit = <strong>what the customer actually paid</strong> for the returned item (not its MRP). The new item is charged at its <strong>current price / offer</strong>.</li>
+  <li>If the new item costs more, the customer <strong>pays the difference</strong>; if it costs less, the customer <strong>adds items</strong> to cover the gap.</li>
+  <li>Returned item: <strong>good → back on the shelf</strong>; <strong>damaged → kept aside</strong> for the defective return.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">5.</span>Store-to-store transfer (MBO stores)</h2>
+<ul>
+  <li>The transfer is made <strong>in the system first</strong>; the list reaches the receiving store <strong>before the goods</strong>.</li>
+  <li>The sending store's stock is <strong>held — it cannot be sold</strong> — the moment the transfer is made.</li>
+  <li>Goods travel (bus / courier / own vehicle / hand). We record <strong>how they were sent</strong>.</li>
+  <li>The receiving store <strong>scans the items in</strong> to make them sellable.</li>
+  <li>If something does not arrive, the <strong>shortfall is flagged</strong> against the people who sent and received it.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">6.</span>Defective / GR return to the brand</h2>
+<ul>
+  <li>Damaged stock is kept aside and returned to the brand on a <strong>return note that tracks the credit expected</strong>.</li>
+  <li><strong>Madura</strong> brands (Allen Solly, Louis Philippe, Van Heusen, Peter England) — collected <strong>directly from the store</strong>.</li>
+  <li><strong>All other brands</strong> — gathered at the <strong>warehouse</strong> and returned from there.</li>
+  <li>For brands you own (Outright / Correction), the <strong>credit due is tracked</strong>; Correction returns use the agreed <strong>return limit (25-18-10)</strong>.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">7.</span>Season-end SOR return</h2>
+<ul>
+  <li>Unsold SOR stock goes back to the brand <strong>within the agreed window</strong>; the system warns at <strong>30 / 15 / 7 days</strong> before the deadline.</li>
+  <li><strong>SOR:</strong> return all unsold, no limit.</li>
+  <li><strong>Correction:</strong> return up to the agreed limit; whatever <strong>cannot be returned</strong> becomes the <strong>V-brand stock</strong> (next section).</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">8.</span>The V-brand move (billed but kept in store)</h2>
+<ul>
+  <li>Unsold stock past the return window that the brand will not take back: <strong>shown as sold to the brand</strong> to claim the EOSS benefit.</li>
+  <li>The brand name is then marked with a <strong>"V"</strong> (Mufti → <strong>V Mufti</strong>), and the stock becomes <strong>KDPS's own</strong>.</li>
+  <li>It <strong>stays in the store</strong> and is sold to customers at any discount; it <strong>no longer appears in that brand's reports</strong>.</li>
+  <li>In the system the item keeps the <strong>same barcode</strong> — only the owner changes to KDPS and a "V" label shows.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">9.</span>EOSS / discount</h2>
+<ul>
+  <li>The discount entered at the POS shows in the sale report, and the system reads it.</li>
+  <li>Whether a discount was <strong>decided by the brand or by KDPS</strong> is worked out from the <strong>offer list</strong> (it is not in the POS) — used only to show how much margin each brand's discounting cost. A discount simply lowers the price; nothing is claimed back from the brand.</li>
+  <li>Later, the system can <strong>apply offers automatically</strong> at billing and ask for <strong>manager approval</strong> above a set limit.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">10.</span>Stock count</h2>
+<ul>
+  <li>Stock is counted in <strong>rounds</strong> (not one big count), fast-moving items more often.</li>
+  <li>A difference gets a <strong>recount and a reason</strong>; a <strong>manager approves</strong> large corrections.</li>
+  <li>If the POS ever shows <strong>less than zero</strong> (an item sold before it was entered), the system fixes it from the matching inward, or flags it.</li>
+</ul>
+</section>
+
+<section class="avoid">
+<h2><span class="num">11.</span>A few questions for you</h2>
+<div class="ask">
+<ol>
+  <li>Does <strong>every section above</strong> match how you actually work? Please mark anything that is wrong.</li>
+  <li>When a customer <strong>exchanges</strong> an item, how does your POS record it — as a single <strong>"exchange"</strong>, or as a <strong>return of the old item + a fresh sale</strong> of the new one? Does it link back to the original bill?</li>
+  <li>For <strong>Madura's direct-from-store</strong> pickups, is there a <strong>document or acknowledgement at handover</strong>, or does the brand simply collect and send a credit note later?</li>
+</ol>
+</div>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — Outbound Module · For confirmation · Companion to the Vendor Management and Goods Inward modules.
+</footer>
+
+</div>
+</body>
+</html>

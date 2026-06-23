@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Requirements Confirmation Document</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:15.5px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:860px; margin:0 auto; padding:36px 26px 90px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:18px; margin-bottom:10px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:27px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:14.5px; max-width:66ch}
+  h2{font-size:19px; color:var(--navy); border-left:4px solid var(--rust); padding-left:11px; margin:34px 0 10px}
+  h2 .n{color:var(--rust); margin-right:6px}
+  h3{font-size:15.5px; color:var(--navy2); margin:18px 0 6px}
+  p{margin:8px 0}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:10px 0; break-inside:avoid}
+  ul.ck{list-style:none; margin:6px 0; padding:0}
+  ul.ck li{margin:7px 0; padding-left:30px; position:relative}
+  ul.ck li::before{content:"☐"; position:absolute; left:4px; top:-1px; color:var(--navy2); font-size:17px}
+  ul.q{list-style:none; margin:6px 0; padding:0}
+  ul.q li{margin:7px 0; padding:7px 11px 7px 34px; position:relative; background:var(--amber-bg); border:1px solid #ecd9a6; border-radius:8px}
+  ul.q li::before{content:"?"; position:absolute; left:11px; top:7px; color:var(--amber); font-weight:800}
+  ul.d{list-style:none; margin:6px 0; padding:0}
+  ul.d li{margin:7px 0; padding:7px 11px 7px 34px; position:relative; background:var(--blue-bg); border:1px solid #bcd6f3; border-radius:8px}
+  ul.d li::before{content:"⇩"; position:absolute; left:11px; top:7px; color:var(--blue); font-weight:800}
+  .legend{display:flex; flex-wrap:wrap; gap:16px; margin:14px 0 0; font-size:13.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .lg{display:inline-block; width:22px; text-align:center; font-weight:800; border-radius:6px; padding:1px 0}
+  .lg.c{color:var(--navy2); font-size:16px}
+  .lg.q{background:var(--amber-bg); color:var(--amber)}
+  .lg.d{background:var(--blue-bg); color:var(--blue)}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  .note{background:#f3f1fb; border:1px solid #dcd3f3; border-radius:10px; padding:11px 14px; margin:12px 0; font-size:14px}
+  .sign{margin-top:46px; border:1.5px solid var(--navy2); border-radius:12px; padding:18px 22px; break-inside:avoid}
+  .sign .row{display:flex; gap:40px; flex-wrap:wrap; margin-top:18px}
+  .sign .slot{min-width:220px}
+  .sign .ln{border-bottom:1.5px solid var(--ink); height:30px; margin-bottom:6px}
+  .sign .lab{font-size:12.5px; color:var(--muted)}
+  footer{margin-top:40px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  .logo{height:44px; margin-bottom:10px; display:block}
+  @media print{
+    body{background:#fff; font-size:13px}
+    .wrap{padding:10px 0 30px; max-width:100%}
+    h2{margin:22px 0 8px}
+    .card,.note{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <img class="logo" src="../05-reference-data/KDPS-LIFE-STYLE-Copy.png" alt="KDPS Lifestyle" onerror="this.style.display='none'">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · New System · For Your Confirmation</div>
+  <h1>Requirements Confirmation Document</h1>
+  <p class="sub">This is everything we believe to be true about how KDPS works, and everything we still need from you. Nothing here is technical — it is your business, written down. Please go item by item.</p>
+  <div class="legend">
+    <span><span class="lg c">☐</span> Tick if correct — strike out &amp; correct if wrong</span>
+    <span><span class="lg q">?</span> Question — please answer</span>
+    <span><span class="lg d">⇩</span> Data / file we need from you</span>
+  </div>
+</header>
+
+<div class="note"><strong>How to use this document:</strong> read with a pen (or reply point by point on WhatsApp). Every ☐ is a fact we will build on — a wrong tick becomes a wrong system. Every <strong>?</strong> is a decision only you can make. Every <strong>⇩</strong> is a file or list we need handed over. Section 13 collects all the ⇩ items in one checklist.</div>
+
+<h2><span class="n">1.</span>The big picture</h2>
+<div class="card">
+  <ul class="ck">
+    <li>We are building one central system for KDPS covering: <strong>stock from brand to store</strong>, <strong>PT file making</strong>, <strong>stock aging</strong>, <strong>daily cash &amp; payment audit</strong>, and <strong>brand reports</strong>.</li>
+    <li>The billing software in stores (<strong>Ten Software POS</strong>) stays exactly as it is. Our system connects to it — staff keep billing the same way.</li>
+    <li><strong>Tally remains your account book.</strong> Our system prepares and sends entries to Tally; it never replaces it.</li>
+    <li><strong>Non-branded purchases are a core part of the system:</strong> photo/PDF of the vendor's invoice → the system reads it → a ready KDPS PT file with barcodes. (The "PT Mapper" — both kinds: brand PT files <em>and</em> plain invoices.)</li>
+    <li>One sitting is still needed on <strong>non-branded ordering &amp; vendor records</strong> (agents, verbal orders, vendors without GSTIN) — how that information should enter the system. Receiving and PT-making for non-branded goods is not waiting for that.</li>
+    <li>Owners will get key numbers on <strong>WhatsApp daily</strong>; staff will use the system in a browser on store phones — no app installs.</li>
+  </ul>
+  <ul class="ck">
+    <li>A <strong>central sales dashboard</strong> is included — every store's sales in one place, one login. (Confirmed 11 June.)</li>
+  </ul>
+</div>
+
+<h2><span class="n">2.</span>Brands &amp; buying terms</h2>
+<div class="card">
+  <h3>The three ways KDPS buys</h3>
+  <ul class="ck">
+    <li><strong>SOR (25-18-10):</strong> brand supplies stock. KDPS keeps 25% on full-price sales, 18% during discount/EOSS sales, and may return up to 10% of the season's goods.</li>
+    <li><strong>Outright (Buy &amp; Sell):</strong> KDPS buys and owns the stock. No returns. Two kinds: goods with the brand's barcode (MRP fixed by brand) and goods without (KDPS sets MRP).</li>
+    <li><strong>Consignment (2–3 vendors only):</strong> vendor's goods sit in KDPS stores; sold is sold, vendor takes back the rest himself.</li>
+    <li>A brand has one usual model, but an <strong>individual order can occasionally be on a different model</strong>.</li>
+  </ul>
+  <h3>Non-branded purchases (local / agent vendors)</h3>
+  <ul class="ck">
+    <li>Non-branded goods arrive at the <strong>warehouse only</strong>, with an invoice and no barcodes; the only reliable code on them is the style number.</li>
+    <li>The system reads the invoice, asks your person for whatever is missing, and produces the <strong>KDPS PT + barcode stickers</strong>.</li>
+    <li>When the invoice gives no size, the item is recorded as <strong>Free Size</strong>.</li>
+    <li>One <strong>agent per city</strong> introduces non-branded vendors and stays answerable until delivery. (Confirmed.)</li>
+    <li>MRP for untagged goods today = cost + ~1.1% transport + GST + <strong>30–35% margin by category</strong>. Correct?</li>
+  </ul>
+  <ul class="q">
+    <li>Do <strong>all</strong> your non-branded vendors have a <strong>GSTIN</strong>? (Why we ask: buying from a vendor without one is booked differently in the accounts, and payments need the GSTIN on file — so we have to know if such vendors exist.)</li>
+  </ul>
+  <h3>Questions on terms</h3>
+  <ul class="q">
+    <li>The <strong>10% return allowance</strong> — calculated on what value? The billed value of the season's purchases? Including GST or without GST? Does every SOR brand calculate it the same way?</li>
+    <li>The <strong>return window</strong> (60–120 days) — counted from which date? Goods receipt? Season end? Brand's invoice date?</li>
+    <li>When an SOR brand delivers goods, do they give a <strong>tax invoice immediately</strong>, or a delivery challan with the invoice coming later? (Please ask your CA — it decides how Tally entries are made.)</li>
+    <li>Are the two margins (25% / 18%) the <strong>same for every SOR brand</strong>, or do some brands have different percentages?</li>
+    <li>Do any brands give <strong>extra incentives</strong> — target bonus, display money, advertisement support? Should the system track them?</li>
+  </ul>
+  <h3>Data needed</h3>
+  <ul class="d">
+    <li><strong>Brand list</strong> — all 40+ brands with, for each: buying model (SOR / Outright / Consignment), margin %, return window days, payment terms (credit days).</li>
+    <li><strong>Per-brand PT file format</strong> — one sample PT Excel from every brand (the file they send with goods).</li>
+    <li>For each brand's PT: <strong>which column is the rate KDPS actually pays</strong>, and is GST included in that column?</li>
+  </ul>
+</div>
+
+<h2><span class="n">3.</span>Placing orders (booking)</h2>
+<div class="card">
+  <ul class="ck">
+    <li>Orders are placed <strong>in person at the brand</strong>; the brand gives a printed "receiving" paper listing styles, sizes, quantities.</li>
+    <li>In the system: photo/upload of that paper → order is drafted automatically → your person checks and confirms. The order exists in the system <strong>from day one</strong>, not when goods arrive.</li>
+    <li>An order is <strong>style + size + quantity</strong>. No colour, no prices at this stage — prices come with the goods (PT). Correct?</li>
+    <li>One order belongs to <strong>one brand and one season</strong>; goods may arrive in several lots against it.</li>
+    <li>The system will always show <strong>ordered vs received</strong>, and chase what hasn't come.</li>
+  </ul>
+  <ul class="q">
+    <li>Do brands ever <strong>part-cancel</strong> an order from their side? How do you come to know?</li>
+  </ul>
+</div>
+
+<h2><span class="n">4.</span>Goods arrival</h2>
+<div class="card">
+  <h3>What we understood</h3>
+  <ul class="ck">
+    <li>Branded goods arrive <strong>at the store</strong>, with an invoice; non-branded goods come to the warehouse. Every branded piece carries the brand's barcode.</li>
+    <li>The <strong>same style in a new season</strong> is kept separate, season-wise — and a barcode repeated in a later season is also separated by season.</li>
+    <li>When goods land at a <strong>store</strong>: store staff will open the order on their phone, mark what actually came, and press Done. The warehouse person then completes the entry.</li>
+    <li>When goods land at the <strong>warehouse</strong>: counting and entry happen there.</li>
+    <li><strong>Short supply / excess supply / damaged pieces</strong> happen. The system never stops work for this — goods keep moving, the difference is recorded and chased separately.</li>
+    <li>Damaged-on-arrival pieces are <strong>kept aside (not sellable)</strong> and go back to the brand.</li>
+    <li>Nothing becomes sellable until <strong>Patna (head office) approves</strong> — same as today, just on screen instead of paper.</li>
+    <li>The warehouse proposes <strong>which store gets how much</strong>; Patna confirms. Each store sees only its own share.</li>
+  </ul>
+  <h3>Questions</h3>
+  <ul class="q">
+    <li>Who decides the store-wise division today, and on what basis (store size, past sales, manager demand)?</li>
+    <li>Transport on purchases — who pays, KDPS or the brand? If KDPS: per shipment or monthly?</li>
+  </ul>
+  <h3>Data needed</h3>
+  <ul class="d">
+    <li><strong>Season list</strong> — the season names/codes KDPS uses (e.g. SS26, AW26) and when each opens/closes.</li>
+    <li><strong>The current barcode tool</strong> — which software/machine prints barcodes today (name, a sample sticker).</li>
+  </ul>
+</div>
+
+<h2><span class="n">5.</span>The billing software (Ten Software)</h2>
+<div class="card">
+  <ul class="ck">
+    <li>Every store bills on Ten Software POS, and it stays. Our system will <strong>send it</strong> new items and prices, and <strong>read from it</strong> daily sales, stock and collection.</li>
+    <li>Every store runs its <strong>own Ten Software</strong>, used only for billing. All bills, in every store, are made on the POS. (Confirmed.)</li>
+  </ul>
+  <ul class="q">
+    <li>From Ten Software we need just two things: the <strong>API and its documentation</strong>. Please connect us to your Ten Software contact for that.</li>
+    <li>Stores sometimes sell an item <strong>before it is entered in stock</strong> ("provisional sale" / minus stock). Does this happen? When and why?</li>
+  </ul>
+  <ul class="d">
+    <li>A <strong>sample sales export</strong> from the POS — one day of one store (the Excel/report it can produce today).</li>
+  </ul>
+</div>
+
+<h2><span class="n">6.</span>Selling &amp; customer rules</h2>
+<p class="sub" style="margin:6px 0 2px">These rules are needed for the next design stage. Please answer for <strong>how it works today</strong> — we will build exactly that, then improve.</p>
+<div class="card">
+  <h3>Billing</h3>
+  <ul class="q">
+    <li>When the POS or internet is <strong>down</strong>, what happens today — handwritten bill book? How is it entered later?</li>
+    <li>Can one bill be paid <strong>partly cash, partly UPI/card</strong>?</li>
+    <li>Any <strong>credit (udhaar) customers</strong> — bill now, money later? Which stores?</li>
+    <li>Can counter staff give a <strong>manual discount</strong> on their own? Up to how much, and who allows more?</li>
+  </ul>
+  <h3>Exchange — please confirm each rule</h3>
+  <ul class="q">
+    <li>Exchange allowed within how many <strong>days</strong>? Bill required, or without bill also?</li>
+    <li>Exchange at the <strong>same store only</strong>, or at any KDPS store?</li>
+    <li>New item <strong>costs more</strong> → customer pays the difference. Correct?</li>
+    <li>New item <strong>costs less</strong> → money back, or credit note, or "choose something else"?</li>
+    <li>Is a <strong>defective-item exchange</strong> treated differently from a size/colour change?</li>
+    <li>Is there any <strong>cash refund</strong> at all, or is it exchange-only?</li>
+    <li>Items bought <strong>on offer/EOSS</strong> — exchanged at the price paid, or today's price?</li>
+  </ul>
+  <h3>Between stores</h3>
+  <ul class="q">
+    <li>Stores transfer stock to each other. Who <strong>orders</strong> a transfer (store manager? Patna?), and how do the goods travel?</li>
+    <li>While goods are <strong>on the road</strong> between stores, whose responsibility are they?</li>
+  </ul>
+  <h3>Goods going back to brands</h3>
+  <ul class="q">
+    <li><strong>Defective pieces</strong>: where are they kept today, how do they go back, and does the brand give a credit note? How do you track that credit note today?</li>
+    <li><strong>Season-end SOR returns</strong>: who decides what goes back (Patna or store), and what is the basis — age of item, slow sellers, brand's instruction?</li>
+    <li><strong>Consignment vendors</strong>: they pick up unsold goods themselves — how is what-they-took recorded today?</li>
+  </ul>
+  <h3>EOSS / discount season</h3>
+  <ul class="q">
+    <li>Who declares EOSS — the <strong>brand gives dates</strong>, or KDPS decides? Same dates for all stores?</li>
+    <li>How do stores apply EOSS prices today — POS does it, or staff calculate by hand?</li>
+  </ul>
+</div>
+
+<h2><span class="n">7.</span>Counting stock</h2>
+<div class="card">
+  <ul class="ck">
+    <li>The system's stock and the racks will drift apart over time (theft, missed scans, mistakes) — so <strong>regular physical counting</strong> with the system is part of the plan, store by store, section by section.</li>
+  </ul>
+  <ul class="q">
+    <li>How is stock counted <strong>today</strong> — how often, full store or part, during business hours or after?</li>
+    <li>When a count finds a <strong>difference</strong>, what happens today — who answers for it?</li>
+    <li>Would stores accept a fixed counting rhythm (for example, <strong>one section every week</strong>, so the full store is covered monthly)?</li>
+  </ul>
+</div>
+
+<h2><span class="n">8.</span>Money — cash, banks &amp; vendor payments</h2>
+<div class="card">
+  <h3>Store collection</h3>
+  <ul class="q">
+    <li>Daily cash from each store — <strong>deposited when</strong> (same day / next day), by whom, into which bank?</li>
+    <li>Is it <strong>one company account</strong> for all stores, or different accounts per store/city?</li>
+    <li>UPI and card settlements land in which account, and after how many days?</li>
+    <li>Is any <strong>expense paid directly from store cash</strong> (tea, transport, repairs) before deposit? How is it noted?</li>
+  </ul>
+  <h3>Paying brands</h3>
+  <ul class="q">
+    <li>Who <strong>approves</strong> a vendor payment today? Is there an amount above which someone senior must approve?</li>
+    <li>For SOR brands — payment is made on <strong>sold goods</strong>: monthly statement? Brand raises demand? How does it work today?</li>
+  </ul>
+  <ul class="ck">
+    <li>New rule we propose: <strong>no payment to any vendor unless their bank details and GSTIN are on file.</strong> Acceptable?</li>
+  </ul>
+  <ul class="d">
+    <li><strong>List of KDPS bank accounts</strong> (bank + branch + which stores deposit where) — needed for the daily cash audit.</li>
+    <li><strong>Bank details + GSTIN of each brand/vendor</strong> — can come gradually, needed before payments go through the system.</li>
+  </ul>
+</div>
+
+<h2><span class="n">9.</span>Offers</h2>
+<div class="card">
+  <h3>What we understood (from the 1 June discussion)</h3>
+  <ul class="ck">
+    <li>Offers are <strong>brand-specific</strong> and change often. Types seen so far: <strong>value slabs</strong> (e.g. buy for ₹3,000 get X off), <strong>Buy 2 Get 1</strong> (cheapest free), <strong>gift above an amount</strong> (e.g. a bag), and combinations.</li>
+    <li>An offer can apply to <strong>some stores only</strong>, and has <strong>start/end dates</strong> — with a fallback offer after it ends.</li>
+    <li>The system will keep every offer on record, so bills can be <strong>checked against the offer</strong> later (as we do in the monthly reports).</li>
+  </ul>
+  <ul class="q">
+    <li>Who <strong>creates and approves</strong> an offer today, and how does it reach the stores (WhatsApp message? phone call?)</li>
+    <li>If <strong>two offers</strong> could apply to one bill, what wins — better for customer, or brand's instruction?</li>
+    <li>Gift items (bags etc.) — are they in stock records today, or outside?</li>
+  </ul>
+  <ul class="d">
+    <li><strong>Every offer circular/image</strong> as it comes from a brand — ongoing (like the FM offer list already shared).</li>
+  </ul>
+</div>
+
+<h2><span class="n">10.</span>Daily numbers &amp; reports</h2>
+<div class="card">
+  <ul class="ck">
+    <li>Every morning, owners get a <strong>WhatsApp summary</strong> of yesterday: sales, collection vs bank, and anything unusual.</li>
+    <li><strong>Monthly brand reports</strong> (Sale + Stock statements, as made today) continue — generated by the system instead of by hand.</li>
+    <li><strong>Stock aging</strong>: every item shows how old it is, so old stock is caught before it dies.</li>
+  </ul>
+  <ul class="q">
+    <li>Who should <strong>receive</strong> the daily WhatsApp (names + numbers)?</li>
+    <li>Which <strong>5 numbers</strong> matter most to you each morning? (Total sale, cash banked, top store, slow store, old-stock value… — tell us in your words.)</li>
+    <li>After how many days is stock "<strong>old</strong>" for you — 90? 120? 180? Same for every brand/category, or different?</li>
+    <li><strong>Profit view</strong>: who is allowed to see margins/profit — owners only, or also managers?</li>
+  </ul>
+</div>
+
+<h2><span class="n">11.</span>People &amp; access</h2>
+<div class="card">
+  <ul class="ck">
+    <li>Three kinds of users to start: <strong>Store</strong> (own store only), <strong>Warehouse</strong>, and <strong>Patna/Head Office</strong> (everything) — plus an admin.</li>
+    <li>Every action in the system records <strong>who did it and when</strong> — automatic, for everyone equally.</li>
+  </ul>
+  <ul class="q">
+    <li>One login <strong>per store</strong>, or per <strong>person</strong>? (Per person is better for responsibility — but needs each staff member to have a phone. Possible?)</li>
+    <li>Should staff screens be in <strong>Hindi</strong>, English, or both?</li>
+    <li>Staff change often in retail — who at KDPS will <strong>add/remove users</strong>?</li>
+  </ul>
+</div>
+
+<h2><span class="n">12.</span>Going live</h2>
+<div class="card">
+  <ul class="ck">
+    <li>Go-live is <strong>store by store</strong>, not all 50 at once. First 2–3 pilot stores, then waves.</li>
+    <li>Before a store goes live, its stock is <strong>physically counted once</strong> — that count becomes the opening stock. This is effort, and it is unavoidable.</li>
+    <li>For some time the system runs <strong>in parallel</strong> with today's Tally/Excel routine — nothing stops until the system has proven itself.</li>
+    <li>Staff training will be simple, in <strong>Hindi</strong>, mostly short videos/voice notes.</li>
+  </ul>
+  <ul class="q">
+    <li>Which <strong>2–3 stores</strong> are the best pilots (cooperative manager, decent volume, close to Patna)?</li>
+    <li>Any periods where stores must <strong>not be disturbed</strong> (festival rush, wedding season, audits)? Tell us the calendar to avoid.</li>
+  </ul>
+  <ul class="d">
+    <li><strong>Full store list</strong> — every store/warehouse with name, city, and the person in charge.</li>
+  </ul>
+</div>
+
+<h2><span class="n">13.</span>Everything we need from you — one checklist</h2>
+<table>
+  <tr><th>#</th><th>Item</th><th>Mentioned in</th><th>Needed</th></tr>
+  <tr><td>1</td><td>Brand list with model, margins, return window, payment terms per brand</td><td>§2</td><td>Now — before next design step</td></tr>
+  <tr><td>2</td><td>One sample PT Excel from every brand + which column is the paid rate (GST in/out)</td><td>§2, §4</td><td>Now — development depends on it</td></tr>
+  <tr><td>3</td><td>Ten Software contact person (intro)</td><td>§5</td><td>Now — biggest open point</td></tr>
+  <tr><td>4</td><td>Sample one-day sales export from POS</td><td>§5</td><td>Now</td></tr>
+  <tr><td>5</td><td>Season list (codes + dates)</td><td>§4</td><td>Now</td></tr>
+  <tr><td>6</td><td>Current barcode tool details + sample sticker</td><td>§4</td><td>Soon</td></tr>
+  <tr><td>7</td><td>KDPS bank-account list (which store deposits where)</td><td>§8</td><td>Before cash audit work</td></tr>
+  <tr><td>8</td><td>Vendor bank details + GSTINs</td><td>§8</td><td>Gradually, before payments</td></tr>
+  <tr><td>9</td><td>Offer circulars/images as they come</td><td>§9</td><td>Ongoing</td></tr>
+  <tr><td>10</td><td>Full store list with in-charge names</td><td>§12</td><td>Before pilot selection</td></tr>
+  <tr><td>11</td><td>Daily WhatsApp recipients (names + numbers)</td><td>§10</td><td>Before go-live</td></tr>
+</table>
+
+<h2><span class="n">14.</span>Added 11 June — new questions from the requirements review</h2>
+<div class="card">
+  <h3>Exchanges</h3>
+  <ul class="q">
+    <li>When a customer exchanges an item, does the billing software record <strong>which original bill</strong> it came from? And if the customer has <strong>no bill</strong> — is the exchange allowed, and how is it written down?</li>
+  </ul>
+  <h3>Stock nobody takes back</h3>
+  <ul class="q">
+    <li>Bought-and-owned stock that died, defective pieces no brand will accept, consignment goods a vendor never collects — <strong>what happens to them today</strong>? Would you accept: owner approves, and the piece leaves the books as a written-off loss?</li>
+  </ul>
+  <h3>Tax &amp; Tally — one sitting with your CA</h3>
+  <ul class="q">
+    <li>How many <strong>companies/entities and GSTINs</strong> does KDPS run (Bihar / Jharkhand)?</li>
+    <li>Does <strong>e-invoicing</strong> apply to KDPS (turnover rule)? Your CA will know.</li>
+    <li>Who makes <strong>e-way bills</strong> today when stock moves between stores or crosses the state line, and on which portal login?</li>
+    <li>How should vouchers be shaped for <strong>Tally import</strong> — company and ledger structure, in your CA's words?</li>
+  </ul>
+  <h3>Staff numbers</h3>
+  <ul class="q">
+    <li>Reports can show each <strong>salesperson's sales</strong> (value, pieces, per store, per month) straight from the billing data. Do you set <strong>targets</strong> per salesperson the report should compare against, or are actuals enough?</li>
+  </ul>
+  <h3>Old data</h3>
+  <ul class="q">
+    <li>How many <strong>years of past sales</strong> sit in the billing software, and can it export them? (Your earlier ask was "2 years clean" — we need to check that against what exists.)</li>
+  </ul>
+  <h3>Ownership &amp; success</h3>
+  <ul class="q">
+    <li>Who is the <strong>super-user</strong> — the one person at KDPS who owns the system day-to-day?</li>
+    <li>In the owner's own words: <strong>after 6 months, what numbers make this a success?</strong></li>
+    <li>The running-cost cap discussed earlier (<strong>₹25–40K/month</strong>) — does it still stand?</li>
+  </ul>
+  <h3>Data needed — additions to the Section 13 checklist</h3>
+  <ul class="d">
+    <li>A few photos of the brands' printed <strong>"receiving" order papers</strong> — needed to teach the system to read them.</li>
+    <li><strong>Ten Software API documentation</strong> (through your Ten Software contact — same as item 3 in the checklist).</li>
+  </ul>
+</div>
+
+<div class="sign">
+  <strong>Confirmation</strong>
+  <p style="font-size:14px; color:var(--muted)">All ☐ items above are correct as ticked; corrections are marked on the pages; answers to the ? questions are noted. We understand the system will be built on these confirmations.</p>
+  <div class="row">
+    <div class="slot"><div class="ln"></div><div class="lab">Name &amp; signature (KDPS)</div></div>
+    <div class="slot"><div class="ln"></div><div class="lab">Date</div></div>
+  </div>
+</div>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. · Requirements Confirmation v1 · 10 June 2026 · Prepared by Anand ·
+  A changed answer later is fine — but tell us, because the system is built exactly on what is written here.
+</footer>
+
+</div>
+</body>
+</html>

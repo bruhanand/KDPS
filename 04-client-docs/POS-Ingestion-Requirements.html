@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KDPS — POS Requirements (Ten Software)</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  :root{ --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573; --line:#d8dce2; }
+  *{box-sizing:border-box;}
+  body{margin:0; color:var(--ink); font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.45;}
+  .wrap{max-width:760px; margin:0 auto;}
+  header{border-bottom:3px solid var(--orange); padding-bottom:10px; margin-bottom:16px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase;}
+  h1{margin:6px 0 0; font-size:21pt; color:var(--navy);}
+  h2{font-size:13pt; margin:18px 0 4px; color:var(--navy); padding-left:9px; border-left:4px solid var(--orange);}
+  h2 .num{color:var(--orange); font-weight:700; margin-right:6px;}
+  ul{margin:5px 0 0; padding-left:20px;} li{margin:4px 0;}
+  .f{color:var(--muted); font-size:10pt;}
+  .key{color:var(--orange); font-weight:700;}
+  footer{margin-top:22px; padding-top:8px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · For Ten Software</div>
+  <h1>POS Requirements</h1>
+</header>
+
+<h2><span class="num">1.</span>Data we need to read from the POS</h2>
+<ul>
+  <li><strong>Sales (line items)</strong> <span class="f">— bill date, bill no, store, salesman, customer, phone, barcode, item, brand, colour, size, design no, sub-category, gender, fit, season, qty, rate, gross, disc%, disc amt, net, bill amount, cash/card/credit</span></li>
+  <li><strong>Stock-on-hand per store</strong> <span class="f">— store, barcode, qty, as-of date/time</span></li>
+  <li><strong>Daily collection per store</strong> <span class="f">— store, date, cash, card, UPI, credit, total</span></li>
+  <li><strong>Returns &amp; exchanges</strong> <span class="f">— bill no, original bill no, barcode, qty, amount, type, reason</span></li>
+  <li><strong>Item master</strong> <span class="f">— barcode, item, brand, colour, size, MRP, HSN, category, season</span></li>
+  <li><strong>Historical export</strong> (one-time) <span class="f">— past sales &amp; stock per store/barcode</span></li>
+</ul>
+
+<h2><span class="num">2.</span>Data the POS must accept from us</h2>
+<ul>
+  <li><strong>Item / price master</strong></li>
+  <li><strong>Per-store allocation (pending-inward)</strong> <span class="f">— barcode, store, qty</span></li>
+  <li><strong>Stock hold / reservation</strong> <span class="f">— barcode, store, qty</span></li>
+  <li><strong>Stock transfer</strong> <span class="f">— from-store, to-store, barcode, qty, ref</span></li>
+  <li><strong>Offers / EOSS</strong> (later)</li>
+  <li><strong>Barcode</strong> <span class="f">— return the generated code to us, or accept ours</span></li>
+</ul>
+
+<h2><span class="num">3.</span>Access &amp; technical</h2>
+<ul>
+  <li>API documentation</li>
+  <li>Access credentials + test/sandbox environment</li>
+  <li>Method: REST API / webhook / scheduled export</li>
+  <li>Authentication + rate limits</li>
+  <li>Format: JSON or CSV/Excel</li>
+  <li>Frequency per feed (real-time / every few minutes / end-of-day)</li>
+  <li>Stable record IDs (so a re-pull does not double-count)</li>
+  <li>Barcode as the shared key, both directions</li>
+</ul>
+
+<h2><span class="num">4.</span>Please confirm</h2>
+<ul>
+  <li><span class="key">★</span> Can the POS export line-item sales automatically (API / scheduled file)?</li>
+  <li><span class="key">★</span> Can the API accept a pending-inward / incoming-transfer quantity?</li>
+  <li>Can it accept a hold / reservation (reduce sellable without removing stock)?</li>
+  <li>How does it record an exchange — single "exchange", or return + new sale? Linked to the original bill?</li>
+  <li>Can it return a generated barcode to us, or accept barcodes we send?</li>
+  <li>What is available today, and the timeline for the rest?</li>
+</ul>
+
+<footer>
+  KDPS Lifestyle Pvt. Ltd. — POS Requirements · Shared key: barcode
+</footer>
+
+</div>
+</body>
+</html>

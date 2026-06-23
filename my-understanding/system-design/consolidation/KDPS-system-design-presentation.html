@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — One System for the Whole Business</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .top{position:sticky;top:0;z-index:20;background:rgba(31,45,77,.97);backdrop-filter:blur(6px);color:#dfe4ee;border-bottom:2px solid var(--rust)}
+  .top .in{max-width:var(--maxw);margin:0 auto;padding:10px 24px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center;font-size:13px}
+  .top b{color:#fff;margin-right:auto;letter-spacing:.02em}
+  .top a{color:#cdd4e2;text-decoration:none}
+  .top a:hover{color:#fff}
+  main{max-width:var(--maxw);margin:0 auto;padding:0 24px 120px}
+  section{padding:44px 0;border-bottom:1px solid var(--line)}
+  .eyebrow{color:var(--rust);font-weight:700;letter-spacing:.16em;text-transform:uppercase;font-size:12px}
+  h1{font-size:34px;line-height:1.15;margin:10px 0 10px;color:var(--navy)}
+  h2{font-size:23px;color:var(--navy);margin:0 0 6px}
+  h2 .n{color:var(--rust-soft);font-weight:800;margin-right:10px}
+  .lead{font-size:18px;color:var(--navy2);max-width:72ch}
+  .sub{color:var(--muted);font-size:15px;max-width:74ch}
+  p{margin:10px 0}
+  .hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+  .pill{display:inline-block;background:var(--purple-bg);color:var(--purple);font-weight:700;font-size:12.5px;padding:5px 12px;border-radius:999px;margin-top:14px}
+  .grid{display:grid;gap:14px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  @media(max-width:760px){.g2,.g3{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(20,30,60,.05)}
+  .card h4{margin:0 0 6px;font-size:16px;color:var(--navy)}
+  .card p{margin:6px 0;font-size:14.5px}
+  .pain{border-left:4px solid var(--rust)}
+  .ai-tag{display:inline-block;background:var(--purple-bg);color:var(--purple);font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:6px;margin-left:6px;letter-spacing:.03em;vertical-align:middle}
+  .no-tag{display:inline-block;background:#fde8e8;color:#a32a2a;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:6px;margin-left:6px}
+  .callout{border-radius:14px;padding:16px 20px;margin:16px 0;border:1px solid}
+  .co-rule{background:var(--purple-bg);border-color:#dcd3f3}
+  .co-rule b{color:var(--purple)}
+  .co-note{background:#eef1f7;border-color:#cdd6e6}
+  .co-win{background:var(--green-bg);border-color:#bfe2cf}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:14px;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th{background:var(--navy);color:#fff;text-align:left;padding:10px 13px;font-size:13px}
+  td{padding:10px 13px;border-top:1px solid var(--line);vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  /* module block */
+  .mod{background:#fff;border:1px solid var(--line);border-radius:16px;padding:4px 0;margin:16px 0;overflow:hidden;box-shadow:0 1px 3px rgba(20,30,60,.05)}
+  .mod-h{display:flex;align-items:center;gap:12px;padding:16px 22px;background:linear-gradient(90deg,#f3f6fb,#fff)}
+  .mod-h .ic{width:34px;height:34px;border-radius:9px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto}
+  .mod-h h3{margin:0;font-size:18px;color:var(--navy)}
+  .mod-h .tagline{font-size:12.5px;color:var(--muted)}
+  .mod-b{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+  @media(max-width:760px){.mod-b{grid-template-columns:1fr}}
+  .mod-b > div{padding:14px 22px;border-top:1px solid var(--line)}
+  .mod-b > div + div{border-left:1px solid var(--line)}
+  @media(max-width:760px){.mod-b > div + div{border-left:none}}
+  .lab{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+  .lab.s{color:var(--rust)} .lab.h{color:var(--green)} .lab.a{color:var(--purple)}
+  .mod-b p{font-size:13.5px;margin:4px 0;color:#33415c}
+  /* architecture map */
+  .arch{margin:16px 0}
+  .band{border:1.6px solid;border-radius:12px;padding:11px 14px;margin:7px 0;display:flex;gap:14px;align-items:center}
+  .band .who{flex:0 0 132px;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;line-height:1.3}
+  .band .boxes{display:flex;gap:8px;flex-wrap:wrap;flex:1}
+  .bx{background:#fff;border:1.5px solid;border-radius:9px;padding:8px 12px;font-size:13.5px;font-weight:700;flex:1;min-width:120px}
+  .bx small{display:block;font-weight:500;font-size:11px;color:var(--muted);margin-top:2px}
+  .brain{border-color:#9b7bd0;background:var(--purple-bg)} .brain .who{color:var(--purple)} .brain .bx{border-color:#9b7bd0;color:var(--purple)}
+  .spine{border-color:var(--navy2);background:#eef1f7} .spine .who{color:var(--navy)} .spine .bx{border-color:var(--navy2);color:var(--navy)}
+  .moneyb{border-color:var(--rust);background:#fdf1ea} .moneyb .who{color:var(--rust)} .moneyb .bx{border-color:var(--rust);color:#8a3f22}
+  .acct{border-color:#d9b65a;background:var(--amber-bg)} .acct .who{color:var(--amber)} .acct .bx{border-color:#cfa436;color:var(--amber)}
+  .base{border-color:#b8bfce;background:var(--grey-bg)} .base .who{color:#41506b} .base .bx{border-color:#9aa7c2;color:var(--navy2)}
+  .arrow{text-align:center;color:var(--rust);font-weight:800;font-size:16px;line-height:1}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .sw{width:13px;height:13px;border-radius:4px;border:1.5px solid}
+  /* journey */
+  .flow{display:flex;gap:0;flex-wrap:wrap;align-items:stretch;margin:14px 0}
+  .step{flex:1;min-width:135px;background:#fff;border:1.5px solid var(--navy2);border-radius:11px;padding:11px 13px;margin:5px;position:relative}
+  .step .st{font-size:9px;font-weight:800;color:var(--rust);letter-spacing:.06em;text-transform:uppercase}
+  .step h5{margin:3px 0 4px;font-size:14px;color:var(--navy)}
+  .step small{color:var(--muted);font-size:11.5px;display:block}
+  .track{background:var(--rust);color:#fff;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:600;margin:8px 0;text-align:center}
+  .tech{background:#1f2d4d;color:#e7ebf3;border-radius:16px;padding:6px 24px 22px;margin-top:18px}
+  .tech h2{color:#fff}
+  .tech .sub{color:#aeb8cc}
+  .tech .card{background:#27365a;border-color:#3a4straat;border:1px solid #39466a;color:#dfe5f0}
+  .tech .card h4{color:#fff}
+  .tech .card p{color:#c2cadc}
+  .tech .tagline{color:#9fb0cf}
+  .tk{display:inline-block;background:#33436b;color:#dbe3f2;border:1px solid #45557d;border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:700;margin:3px 4px 0 0}
+  footer{padding:40px 0;color:var(--muted);font-size:13px}
+  .skipnote{font-size:12.5px;color:#aeb8cc;font-style:italic;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="in">
+  <b>KDPS · System Design</b>
+  <a href="#map">The system</a>
+  <a href="#journey">The journey</a>
+  <a href="#modules">Modules</a>
+  <a href="#ai">AI</a>
+  <a href="#why">Why ours</a>
+  <a href="#tech">Technology</a>
+</div></div>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt Ltd · System Design</div>
+  <h1>One system for the whole business</h1>
+  <p class="lead">From the moment goods are ordered to the moment money is in the bank — every brand, every store, on one trustworthy system, with AI watching over it.</p>
+  <p class="sub">What we're building, module by module — what each one fixes, what it does, and where AI helps. Built for KDPS's exact way of working: 50+ stores across Bihar &amp; Jharkhand, 40+ brands, outright as well as sale-or-return.</p>
+  <div class="pill">The one rule: AI suggests — people and the books decide.</div>
+</header>
+
+<section id="problem">
+  <div class="eyebrow">Today</div>
+  <h2>Three separate worlds that don't talk</h2>
+  <p class="sub">The business runs on a per-store POS, Tally, and a pile of Excel sheets. Each holds a piece of the truth; none holds all of it.</p>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card pain"><h4>Stock is blind</h4><p>Each store's POS is its own island. No single, live picture of what's where — and size &amp; colour get lost.</p></div>
+    <div class="card pain"><h4>Money is guesswork</h4><p>What's owed to each brand, whether every store's cash reached the bank — nobody can say for sure.</p></div>
+    <div class="card pain"><h4>Everything is re-typed</h4><p>Invoices into Excel, Excel into Tally, reports by hand at month-end. Slow, and every copy can be wrong.</p></div>
+  </div>
+  <p class="lead" style="margin-top:16px">We replace the three worlds with <strong>one source of truth</strong> — and put AI on top of it.</p>
+</section>
+
+<section id="map">
+  <div class="eyebrow">The whole system</div>
+  <h2>Everything on one page</h2>
+  <p class="sub">Read it like the business runs: goods flow left to right; money and accounting track every step; the data foundation sits underneath; and the AI "brain" watches over all of it. <strong>The <span style="color:var(--purple)">AI</span> mark shows where AI helps — never on the books.</strong></p>
+
+  <div class="arch">
+    <div class="band brain">
+      <div class="who">The Brain · AI</div>
+      <div class="boxes"><div class="bx">Reads everything, writes nothing to the books<small>9 PM WhatsApp digest · forecasts · dead-stock · scorecards · anomaly watch · ask-anything assistant</small></div></div>
+    </div>
+    <div class="arrow">↑ reads from everything below</div>
+    <div class="band spine">
+      <div class="who">The Spine · flow of goods</div>
+      <div class="boxes">
+        <div class="bx">Vendors &amp; Buying <span class="ai-tag">AI</span><small>order → received → return windows</small></div>
+        <div class="bx">Goods In <span class="ai-tag">AI</span><small>invoice → count → priced stock → store</small></div>
+        <div class="bx">Selling &amp; Stock <span class="ai-tag">AI</span><small>sell · exchange · transfer · returns · count · <b>offers inside</b></small></div>
+      </div>
+    </div>
+    <div class="band moneyb">
+      <div class="who">Tracked at every step</div>
+      <div class="boxes"><div class="bx">Money <span class="ai-tag">AI</span><small>from the first order placed to the last rupee settled, and into the bank</small></div></div>
+    </div>
+    <div class="band acct">
+      <div class="who">Tracked at every step</div>
+      <div class="boxes"><div class="bx">Accounting · Tally <span class="no-tag">NO AI</span><small>ready-made GST entries flow into Tally — your official book</small></div></div>
+    </div>
+    <div class="arrow">↑ everything keys off the foundation</div>
+    <div class="band base">
+      <div class="who">The foundation</div>
+      <div class="boxes"><div class="bx">Master Records + Users <span class="ai-tag">AI drafts only</span><small>brands · vendors · stores · products · sizes · seasons · tax · offers · who-can-do-what</small></div></div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><span class="sw" style="border-color:#9b7bd0;background:var(--purple-bg)"></span>The Brain (AI)</span>
+    <span><span class="sw" style="border-color:var(--navy2);background:#eef1f7"></span>The spine (goods)</span>
+    <span><span class="sw" style="border-color:var(--rust);background:#fdf1ea"></span>Money</span>
+    <span><span class="sw" style="border-color:#cfa436;background:var(--amber-bg)"></span>Accounting</span>
+    <span><span class="sw" style="border-color:#9aa7c2;background:var(--grey-bg)"></span>Foundation</span>
+    <span><span class="ai-tag">AI</span> where AI helps</span>
+  </div>
+</section>
+
+<section id="journey">
+  <div class="eyebrow">The journey</div>
+  <h2>The life of one shirt — and its money</h2>
+  <p class="sub">The same picture, told as a story. Every step is a proper document; money and accounting follow along; AI helps where marked.</p>
+
+  <div class="flow">
+    <div class="step"><div class="st">1 · Buy</div><h5>Order placed</h5><small>Booking, by brand &amp; season</small><small style="margin-top:4px"><span class="ai-tag">AI</span> reads the order sheet</small></div>
+    <div class="step"><div class="st">2 · Goods in</div><h5>Goods arrive</h5><small>Invoice → counted (GRN)</small><small style="margin-top:4px"><span class="ai-tag">AI</span> reads the invoice</small></div>
+    <div class="step"><div class="st">3 · Goods in</div><h5>Priced &amp; stocked</h5><small>Price sheet (PT), to size &amp; colour, true cost</small></div>
+    <div class="step"><div class="st">4 · Goods in</div><h5>Sent to store</h5><small>Allocated; store scans to receive</small></div>
+    <div class="step"><div class="st">5 · Sell</div><h5>Sold at the till</h5><small>Right offer applied automatically</small></div>
+    <div class="step"><div class="st">6 · Brain</div><h5>Watched</h5><small>Digest, dead-stock, leaks</small><small style="margin-top:4px"><span class="ai-tag">AI</span> all the way through</small></div>
+  </div>
+  <div class="track">↓ Money tracked the whole way — vendor dues built as goods arrive/sell · cash matched to bank · ready-made entries into Tally ↓</div>
+</section>
+
+<section id="modules">
+  <div class="eyebrow">Module by module</div>
+  <h2>What each part fixes, what it does, and the AI in it</h2>
+  <p class="sub">Seven parts of one system. For each: the problem today, what it now does, and exactly how much AI is inside — honestly.</p>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">1</div><div><h3>Vendors &amp; Buying</h3><div class="tagline">The start of the spine</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>Orders live in people's heads. No one knows what was ordered versus what arrived — or when a brand's return window closes.</p></div>
+      <div><div class="lab h">What it has</div><p>Every order becomes a tracked booking, per brand and season. It updates itself as goods arrive (part-received → fully received), watches each brand's return deadline with alarms (30/15/7 days), and knows each brand's deal type — outright, margin, sale-or-return, consignment.</p></div>
+      <div><div class="lab a">The AI in it</div><p>Reads the brand's order sheet and fills the booking for you — you just check and confirm.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">2</div><div><h3>Goods In</h3><div class="tagline">Arrival → ready to sell</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>Every delivery is re-typed by hand into Excel. Stock has no price and no size/colour. Nothing checks the invoice against what actually arrived.</p></div>
+      <div><div class="lab h">What it has</div><p>One flow: invoice → count (GRN) → priced stock (PT) → sent to stores. Stock is tracked to the exact size and colour, with a barcode, priced at true cost. Money owed to the brand is recorded the right way for each deal type.</p></div>
+      <div><div class="lab a">The AI in it</div><p>Reads the invoice into the system and helps build the price sheet for unbranded goods. The price conversion itself is plain, exact software — not AI.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">3</div><div><h3>Selling &amp; Stock <span style="font-weight:500;font-size:13px;color:var(--muted)">· Offers inside</span></h3><div class="tagline">The end of the spine</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>Each store's POS is its own island. Exchanges, transfers, returns and stock counts are all manual. Discounts run on memory, with no proof the right one was given.</p></div>
+      <div><div class="lab h">What it has</div><p>One engine for sale, exchange, store-to-store transfer, returns, end-of-season sale and stock-count — always knowing what's truly free to sell. <b>Offers live here:</b> each brand's rules applied automatically at the till, best deal for the customer, with a daily check that the right discount was given.</p></div>
+      <div><div class="lab a">The AI in it</div><p>Suggests markdowns on slow stock (never below cost, with a step-down plan); reads messy brand offer sheets into clean rules.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">4</div><div><h3>Money</h3><div class="tagline">Tracked at every step</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>What's owed to each brand is guesswork. No one checks that each store's cash, card and UPI actually reached the bank.</p></div>
+      <div><div class="lab h">What it has</div><p>Every rupee tracked from the first order to the final payment. Vendor dues built from real documents, never typed. Payments go through proper approvals — different people raise, approve and pay. A daily check that every store's money landed in the bank.</p></div>
+      <div><div class="lab a">The AI in it</div><p>Reads bank statements, catches duplicate payments and a changed vendor account (fraud), gives a one-line "safe to pay?" check, matches cash to bank — all suggestions; a person approves.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">5</div><div><h3>Accounting · Tally</h3><div class="tagline">Tracked at every step</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>Everything is re-typed into Tally by hand.</p></div>
+      <div><div class="lab h">What it has</div><p>Ready-made GST entries flow into Tally automatically — once, correctly — with a daily check that nothing was missed. Tally stays your official book; the system feeds it, never replaces it.</p></div>
+      <div><div class="lab a">The AI in it</div><p><b>None — on purpose.</b> The books are exact and machine-made, never guessed.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">6</div><div><h3>The Brain · Reports &amp; AI</h3><div class="tagline">Reads everything, on top</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>Month-end is built by hand. There's no daily picture, and no early warning when something goes wrong.</p></div>
+      <div><div class="lab h">What it has</div><p>A 9 PM WhatsApp summary of the whole business; forecasts down to size; a dead-stock hunter; profit scorecards per brand and store; a watchdog for leaks and odd numbers; one-click brand reports; and an assistant you can ask, in Hindi or English.</p></div>
+      <div><div class="lab a">The AI in it</div><p>This is where the AI lives. It reads everything and writes only messages, reports and suggestions — and never touches the books.</p></div>
+    </div>
+  </div>
+
+  <div class="mod">
+    <div class="mod-h"><div class="ic">7</div><div><h3>Master Records &amp; Users</h3><div class="tagline">The foundation under everything</div></div></div>
+    <div class="mod-b">
+      <div><div class="lab s">What it solves</div><p>The same lists — brands, vendors, stores, sizes, seasons — are kept differently everywhere, and anyone can change anything.</p></div>
+      <div><div class="lab h">What it has</div><p>One trusted home for every list, with who-can-change-what rules, a second pair of eyes on the dangerous ones (brand terms, tax, vendor bank details, user roles), and a full history. Every document takes a snapshot — so changing something today never rewrites yesterday's bill.</p></div>
+      <div><div class="lab a">The AI in it</div><p>Only helps draft — reading offer sheets, cleaning up duplicate names. A person always confirms.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="ai">
+  <div class="eyebrow">Designed around AI</div>
+  <h2>AI everywhere it helps — never where it's dangerous</h2>
+
+  <div class="callout co-rule"><b>The one rule.</b> AI reads the mess, watches, forecasts and suggests. People and the books make every real decision. AI never moves a rupee on its own — code computes the numbers, AI only explains them, a human decides.</div>
+
+  <p class="sub">Here's exactly how much AI sits in each part — including where it's switched off:</p>
+  <table>
+    <tr><th>Part</th><th>The AI in it</th></tr>
+    <tr><td><strong>Vendors &amp; Buying</strong></td><td>Reads the order sheet → drafts the booking; you confirm.</td></tr>
+    <tr><td><strong>Goods In</strong></td><td>Reads invoices; helps build the unbranded price sheet. The conversion, matching and pricing are plain software.</td></tr>
+    <tr><td><strong>Selling &amp; Stock</strong></td><td>Suggests markdowns on slow stock (above a cost floor); reads brand offer sheets into rules.</td></tr>
+    <tr><td><strong>Money</strong></td><td>The busiest: reads bank lines, catches duplicates &amp; fraud, "safe to pay?" check, matches cash to bank — all suggestions.</td></tr>
+    <tr><td><strong>Accounting (Tally)</strong></td><td><span class="no-tag">None — by design.</span> The books are exact and machine-made.</td></tr>
+    <tr><td><strong>The Brain</strong></td><td>The concentrated layer: digest, forecasts, dead-stock, scorecards, watchdog, reports, the assistant.</td></tr>
+    <tr><td><strong>Master Records</strong></td><td>Drafts only (offer sheets, name clean-up); a person confirms.</td></tr>
+  </table>
+
+  <div class="card" style="margin-top:16px">
+    <h4>What it feels like — the 9 PM WhatsApp digest</h4>
+    <div style="background:#e9f7ef;border:1px solid #bfe2cf;border-radius:12px;padding:14px 16px;font-size:14px;line-height:1.6;color:#244">
+      <b>KDPS · Mon 19 Jun · 9:00 PM</b><br>
+      ✅ Good day — +12% vs target, +9% vs last Monday. Margin healthy ~33%. Patna &amp; Boring Rd led; Ranchi-2 slow on a stockout.<br>
+      ⚠️ Unusual: Van Heusen did 2× a normal Monday (EOSS).<br>
+      🔔 Needs a look (3): 1) Ranchi-2 is 32% below target · 2) LP slim-fit 32 out of stock in 4 stores · 3) Allen Solly over-discounted, gap ~₹3,200.<br>
+      — the numbers — Sales ₹18.4L (target ₹16.4L) · Margin ₹6.0L (33%) · Bills 412 · avg ₹4,466 · 🏆 Patna-Main ₹3.1L · 🐌 Ranchi-2 ₹0.4L<br>
+      <i>Reply a number for detail.</i>
+    </div>
+    <p style="font-size:13px;color:var(--muted);margin-top:8px">The owner gets the whole business on the phone every night — what's good, what's unusual, what needs a look. No login, no spreadsheet.</p>
+  </div>
+</section>
+
+<section id="why">
+  <div class="eyebrow">Why build ours</div>
+  <h2>Why this beats buying a ready-made system</h2>
+  <div class="callout co-win"><b>The edge:</b> KDPS runs outright, margin, sale-or-return and consignment brands side by side. Ready-made systems treat sale-or-return as an afterthought — a checkbox. <strong>Ours treats who-owns-the-stock as a core fact</strong>, so the brand's money is only owed when the item actually sells, returns are handled by the deal, and every report is right by brand.</div>
+  <div class="grid g3">
+    <div class="card"><h4>Built for your reality</h4><p>40+ brands, four deal types, two states and two GST numbers, low-bandwidth stores — modelled in, not worked around.</p></div>
+    <div class="card"><h4>Tally stays your book</h4><p>The system feeds Tally; it never replaces it. The leading Indian systems do exactly this — we do it cleanly and automatically.</p></div>
+    <div class="card"><h4>Best-practice spine</h4><p>Every design rule matches how the serious systems (SAP, Oracle, NetSuite) are built: documents write the books; the books are never typed; AI only at the edges.</p></div>
+  </div>
+</section>
+
+<section class="tech" id="tech">
+  <div style="padding-top:30px"></div>
+  <div class="eyebrow" style="color:var(--rust-soft)">For the team · technical overview</div>
+  <h2>How it's built</h2>
+  <p class="skipnote">— overview only; skip this part in the client walkthrough —</p>
+  <p class="sub">Deliberately boring and proven. One application, one database, everything in India.</p>
+
+  <div style="margin:14px 0">
+    <span class="tk">TypeScript · one language, front to back</span>
+    <span class="tk">PostgreSQL · built for ledgers</span>
+    <span class="tk">Vertex AI · best model for each job</span>
+    <span class="tk">Google Cloud · Mumbai · all in India</span>
+  </div>
+
+  <div class="grid g2" style="margin-top:10px">
+    <div class="card"><h4>The stack &amp; why</h4>
+      <p><b>TypeScript end-to-end</b> — one language top to bottom; types flow from the database to the screen, so money bugs get caught before they ship.</p>
+      <p><b>PostgreSQL</b> — relational, transactional, built for append-only ledgers; can scope each store/GST number so data is safe by design.</p>
+      <p><b>Google Cloud, Mumbai</b> — app, database and files all in India. The AI only ever sees safe, edge data and computed numbers — never raw customer or payment details.</p></div>
+    <div class="card"><h4>How AI plugs in</h4>
+      <p>One <b>read-only "ask the system" layer</b> (an MCP layer) over the agreed numbers. The assistant and the digest fetch through it, in Hindi or English, only within each person's access — and it can never write the books.</p>
+      <p><b>Option for later:</b> the same layer can draft an action (a markdown, a reorder) into a human's approval queue — still nothing goes live without a person.</p></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h4>Messaging — options</h4>
+      <p><b>WhatsApp</b> for owners and managers — where they already live (digests, alerts, the assistant).</p>
+      <p><b>Slack (option)</b> for the internal team's working chatter, if wanted, with WhatsApp kept for anything customer- and claim-related.</p></div>
+    <div class="card"><h4>Build approach</h4>
+      <p>One verified slice at a time — a full thread through the system, proven on real invoices, before widening. Money code is always supervised.</p>
+      <p>Migration &amp; rollout (moving the data, store-by-store go-live) is planned as its own step.</p></div>
+  </div>
+</section>
+
+<section style="border-bottom:none">
+  <h2>In one line</h2>
+  <p class="lead">One trustworthy system for the whole business — every brand, every store, every rupee — with AI watching over it and a simple rule underneath: <strong>AI suggests; people and the books decide.</strong></p>
+</section>
+
+<footer>
+  KDPS Lifestyle Pvt Ltd · System Design Overview · June 2026 · One system: Master Records &amp; Users → Vendors &amp; Buying → Goods In → Selling &amp; Stock → Money → Accounting → the Brain.
+</footer>
+
+</main>
+</body>
+</html>

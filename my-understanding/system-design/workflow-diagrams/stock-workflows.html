@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Stock Workflows</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #f8f9fa;
+    color: #1a1a2e;
+    padding: 48px 32px;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  header {
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a1a2e;
+    margin-bottom: 6px;
+  }
+
+  header p {
+    font-size: 14px;
+    color: #6b7280;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .tab {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .tab:hover { color: #1a1a2e; }
+
+  .tab.active {
+    color: #7c3aed;
+    border-bottom-color: #7c3aed;
+  }
+
+  /* Panels */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .panel-desc {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #6b7280;
+    margin-bottom: 24px;
+  }
+
+  .diagram-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+
+  .diagram-card h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .mermaid {
+    text-align: center;
+  }
+
+  /* Commercial terms cards */
+  .terms-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .term-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .term-card .label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .term-card .value {
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .term-card .note {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 4px;
+  }
+
+  .term-card.normal .value { color: #059669; }
+  .term-card.eoss .value { color: #d97706; }
+  .term-card.return .value { color: #2563eb; }
+
+  @media (max-width: 640px) {
+    body { padding: 24px 16px; }
+    .terms-grid { grid-template-columns: 1fr; }
+    .tab { padding: 10px 8px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>KDPS — Stock Workflows</h1>
+    <p>Booking → store ingestion for every goods type. Switch tabs to compare the branded and non-branded flows.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" role="tab" aria-selected="true" data-panel="overall">Overall Workflow</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="branded">Branded</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="nb-with">Non-Branded — With Barcode</button>
+    <button class="tab" role="tab" aria-selected="false" data-panel="nb-without">Non-Branded — Without Barcode</button>
+  </div>
+
+  <!-- ============ OVERALL WORKFLOW ============ -->
+  <section class="panel active" id="overall" role="tabpanel">
+    <p class="panel-desc">
+      KDPS is one business — this is the whole goods-inward process on a single map.
+      Branded and non-branded goods diverge right after booking, then reconverge at
+      PT-file verification and share one path to the store floor. Roughly 70% of
+      volume is branded, 30% non-branded. A non-branded consignment is counted as
+      branded only when it carries the vendor's barcode + tag, a proper invoice, and
+      a vendor PT file; missing any one keeps it in the non-branded flow.
+    </p>
+
+    <div class="diagram-card">
+      <h2>End-to-End Flow: Booking → Sellable Stock</h2>
+      <pre class="mermaid">
+flowchart TD
+  booking["<b>Booking</b><br/>Branded: 6-8 months ahead · Non-branded: 3-4 months ahead<br/>verbal, placed with the vendor / city agent"]:::phase
+
+  gtype{"Branded or<br/>non-branded?"}:::decision
+
+  dispatch["<b>Brand dispatches</b><br/>stock + invoice"]:::brand
+  dest{"Shipment<br/>sent to?"}:::decision
+  store_recv["<b>Goods received at the store</b>"]:::field
+  store_inv["<b>Invoice received at the store</b>"]:::field
+  store_send["<b>Store sends the invoice</b><br/>to the warehouse"]:::field
+  wh_recv["<b>Goods &amp; invoice received</b><br/>together at the warehouse"]:::field
+  invoice_wh["<b>Invoice is now at the warehouse</b><br/>warehouse processing begins"]:::field
+  master_req["<b>Operations lead requests</b><br/>the master PT file from the brand"]:::office
+  pt_branded["<b>KDPS-format PT file generated</b><br/>matched against the brand's 15-day master PT file"]:::office
+
+  wh_nb["<b>Stock received at the KDPS warehouse</b><br/>~99.9% of non-branded routes through the warehouse"]:::field
+  counting["<b>Counting done</b><br/>physical piece-count vs the vendor invoice / proforma"]:::field
+  ptsplit{"PT file —<br/>what did the vendor send?"}:::decision
+  path_pt["<b>Vendor sent a PT file</b><br/>converted &amp; mapped into the KDPS format"]:::office
+  invcheck{"Invoice detailed<br/>enough?"}:::decision
+  callvendor["<b>Call the vendor</b><br/>for the missing details (size, item type)"]:::office
+  buildpt["<b>PT file built from the invoice</b>"]:::office
+  bccheck{"Vendor barcode +<br/>MRP tag on the items?"}:::decision
+  withbc["<b>With vendor barcode + tag</b><br/>barcode &amp; MRP read from the tag; when no PT file came,<br/>KDPS builds the PT — tag MRP is the base, company margin kept"]:::office
+  nobc["<b>Without vendor barcode</b><br/>KDPS sets the MRP (base + 1.1% transport + GST + 30-35%)<br/>&amp; generates + tags the barcodes"]:::office
+
+  verified["<b>PT file verified</b><br/>GST &amp; margin checked, then approved"]:::office
+  patna["<b>Patna office inwards</b><br/>the PT file into the system"]:::office
+  send_store["<b>Stock distributed to the stores</b><br/>split by sales %, PT file + stock sent"]:::office
+  store_scan["<b>Store scans each barcode to inward</b><br/>Received qty ↑ · Pending qty ↓ · SOH shows negative if sold before 'in' · sellable once complete<br/>(detail: Store Workflow → Inward tab)"]:::done
+
+  booking --> gtype
+  gtype -- "Branded · ~70%" --> dispatch
+  gtype -- "Non-branded · ~30%" --> wh_nb
+
+  dispatch --> dest
+  dest -- "Store · majority" --> store_recv
+  store_recv --> store_inv
+  store_inv --> store_send
+  store_send --> invoice_wh
+  dest -- "Warehouse · minority" --> wh_recv
+  wh_recv -- "invoice stays here" --> invoice_wh
+  invoice_wh --> master_req
+  master_req --> pt_branded
+  pt_branded --> verified
+
+  wh_nb --> counting
+  counting --> ptsplit
+  ptsplit -- "PT file" --> path_pt
+  ptsplit -- "Invoice only" --> invcheck
+  invcheck -- "Yes" --> buildpt
+  invcheck -- "No" --> callvendor
+  callvendor --> buildpt
+  path_pt --> bccheck
+  buildpt --> bccheck
+  bccheck -- "Yes" --> withbc
+  bccheck -- "No" --> nobc
+  withbc --> verified
+  nobc --> verified
+
+  verified --> patna
+  patna --> send_store
+  send_store --> store_scan
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef brand fill:#dbeafe,stroke:#2563eb,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ BRANDED ============ -->
+  <section class="panel" id="branded" role="tabpanel">
+    <p class="panel-desc">
+      Roughly 70% of stock volume. The brand books 6–8 months ahead, then dispatches the goods with an
+      invoice — most shipments go straight to the store, the rest to the warehouse. Either way the invoice
+      reaches the warehouse, which builds the KDPS-format PT file from the brand's 15-day master PT file.
+      The finished PT file is then sent back to the specific store for that invoice.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Commercial Terms</h2>
+      <div class="terms-grid">
+        <div class="term-card normal">
+          <div class="label">Normal Margin</div>
+          <div class="value">25%</div>
+        </div>
+        <div class="term-card eoss">
+          <div class="label">EOSS Margin</div>
+          <div class="value">18%</div>
+          <div class="note">End-of-season sale</div>
+        </div>
+        <div class="term-card return">
+          <div class="label">Return to Vendor</div>
+          <div class="value">10%</div>
+          <div class="note">Within defined window</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="diagram-card">
+      <h2>Flow: Booking → Store Ingestion</h2>
+      <pre class="mermaid">
+flowchart TD
+  booking["<b>1 · Booking</b><br/>Order placed 6–8 months<br/>before the season starts"]:::phase
+
+  dispatch["<b>2 · Brand dispatches</b><br/>stock + invoice"]:::brand
+
+  dest{Shipment sent to?}
+
+  store_recv["Goods received at the store"]:::field
+  store_inv["Invoice received at the store"]:::field
+  store_send["Store sends the invoice<br/>to the warehouse"]:::field
+
+  wh_recv["Goods &amp; invoice received<br/>together at the warehouse"]:::field
+
+  invoice_wh["<b>3 · Invoice is now at the warehouse</b><br/>warehouse processing begins"]:::field
+
+  master_req["<b>4 · Operations lead requests</b><br/>master PT file from the brand"]:::office
+
+  pt_gen["<b>5 · KDPS-format PT file</b><br/>generated at the warehouse"]:::office
+
+  verify_inward["<b>6 · PT file verified &amp; inwarded</b><br/>into the system"]:::office
+
+  send_store["<b>7 · PT file sent back to the store</b><br/>to the specific store, for that invoice"]:::office
+
+  store_scan["<b>8 · Store scans each barcode to inward</b><br/>Received qty ↑ · Pending qty ↓ · negative SOH if sold before 'in'<br/>(detail: Store Workflow → Inward tab)"]:::done
+
+  booking --> dispatch
+  dispatch --> dest
+  dest -- "Store · majority" --> store_recv
+  store_recv --> store_inv
+  store_inv --> store_send
+  store_send --> invoice_wh
+  dest -- "Warehouse · minority" --> wh_recv
+  wh_recv -- "invoice stays here" --> invoice_wh
+  invoice_wh --> master_req
+  master_req -- "brand sends master PT" --> pt_gen
+  pt_gen --> verify_inward
+  verify_inward --> send_store
+  send_store --> store_scan
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef brand fill:#dbeafe,stroke:#2563eb,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ NON-BRANDED — WITH BARCODE ============ -->
+  <section class="panel" id="nb-with" role="tabpanel">
+    <p class="panel-desc">
+      Roughly half of all non-branded volume. The vendor pre-prints the barcode and MRP tag — KDPS reads both
+      straight off the tag, and the MRP is capped by the vendor. The PT file may arrive from the vendor or be
+      built from the invoice. When such goods arrive with the vendor's barcode + tag, a proper detailed
+      invoice, and a vendor PT file all together, KDPS counts them as branded; if any of the three is
+      missing they stay in this non-branded flow.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Booking → Store Ingestion</h2>
+      <pre class="mermaid">
+flowchart TD
+  booking["<b>1 · Booking</b><br/>Order placed 3-4 months before the<br/>season — verbal, at the vendor"]:::phase
+
+  warehouse["<b>2 · Stock received</b><br/>at the KDPS warehouse — items already<br/>carry the vendor's barcode + MRP tag"]:::field
+
+  counting["<b>3 · Counting done</b><br/>physical piece-count vs the vendor invoice / proforma"]:::field
+
+  ptsplit{"PT file —<br/>what did the vendor send?"}:::decision
+
+  path_pt["<b>Vendor sent a PT file</b><br/>converted &amp; mapped into the KDPS format"]:::office
+
+  invcheck{"Invoice detailed<br/>enough?"}:::decision
+
+  callvendor["<b>Call the vendor</b><br/>for the missing details (size, item type)"]:::office
+
+  buildpt["<b>No PT file — KDPS builds the PT file</b><br/>from the invoice — the tag's MRP is the base,<br/>the company's already-decided margin is kept"]:::office
+
+  ptready["<b>4 · PT file ready in KDPS format</b><br/>barcode &amp; MRP taken from the vendor's<br/>pre-printed tag — MRP capped by the vendor"]:::office
+
+  approval["<b>5 · PT file verified</b><br/>GST &amp; margin checked, then approved"]:::office
+
+  patna["<b>6 · Patna office inwards</b><br/>the PT file into the system"]:::office
+
+  send_store["<b>7 · Another staff member sends</b><br/>the PT file + stock to the stores (split by sales %)"]:::office
+
+  store_scan["<b>8 · Store scans each barcode to inward</b><br/>Received qty ↑ · Pending qty ↓ · negative SOH if sold before 'in'<br/>(detail: Store Workflow → Inward tab)"]:::done
+
+  booking --> warehouse
+  warehouse --> counting
+  counting --> ptsplit
+  ptsplit -- "PT file" --> path_pt
+  ptsplit -- "Invoice only" --> invcheck
+  invcheck -- "Yes" --> buildpt
+  invcheck -- "No" --> callvendor
+  callvendor --> buildpt
+  path_pt --> ptready
+  buildpt --> ptready
+  ptready --> approval
+  approval --> patna
+  patna --> send_store
+  send_store --> store_scan
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+  <!-- ============ NON-BRANDED — WITHOUT BARCODE ============ -->
+  <section class="panel" id="nb-without" role="tabpanel">
+    <p class="panel-desc">
+      The other half of non-branded volume. The vendor ships no barcode, no MRP and no tag — KDPS generates the
+      barcode and sets the MRP itself (base rate + transport + GST + margin). The PT file may arrive from the
+      vendor or be built from the invoice.
+    </p>
+
+    <div class="diagram-card">
+      <h2>Flow: Booking → Store Ingestion</h2>
+      <pre class="mermaid">
+flowchart TD
+  booking["<b>1 · Booking</b><br/>Order placed 3-4 months before the<br/>season — verbal, at the vendor"]:::phase
+
+  warehouse["<b>2 · Stock received</b><br/>at the KDPS warehouse — items arrive<br/>with no barcode, no MRP, no tag"]:::field
+
+  counting["<b>3 · Counting done</b><br/>physical piece-count vs the vendor invoice / proforma"]:::field
+
+  ptsplit{"PT file —<br/>what did the vendor send?"}:::decision
+
+  path_pt["<b>Vendor sent a PT file</b><br/>converted &amp; mapped into the KDPS format"]:::office
+
+  invcheck{"Invoice detailed<br/>enough?"}:::decision
+
+  callvendor["<b>Call the vendor</b><br/>for the missing details (size, item type)"]:::office
+
+  buildpt["<b>PT file built from the invoice</b>"]:::office
+
+  ptready["<b>4 · PT file ready in KDPS format</b><br/>KDPS sets the MRP — base rate + 1.1% transport<br/>+ GST + 30-35% margin"]:::office
+
+  barcode["<b>5 · Barcodes generated &amp; tagged</b><br/>by KDPS, onto the items"]:::office
+
+  approval["<b>6 · PT file verified</b><br/>GST &amp; margin checked, then approved"]:::office
+
+  patna["<b>7 · Patna office inwards</b><br/>the PT file into the system"]:::office
+
+  send_store["<b>8 · Another staff member sends</b><br/>the PT file + stock to the stores (split by sales %)"]:::office
+
+  store_scan["<b>9 · Store scans each barcode to inward</b><br/>Received qty ↑ · Pending qty ↓ · negative SOH if sold before 'in'<br/>(detail: Store Workflow → Inward tab)"]:::done
+
+  booking --> warehouse
+  warehouse --> counting
+  counting --> ptsplit
+  ptsplit -- "PT file" --> path_pt
+  ptsplit -- "Invoice only" --> invcheck
+  invcheck -- "Yes" --> buildpt
+  invcheck -- "No" --> callvendor
+  callvendor --> buildpt
+  path_pt --> ptready
+  buildpt --> ptready
+  ptready --> barcode
+  barcode --> approval
+  approval --> patna
+  patna --> send_store
+  send_store --> store_scan
+
+  classDef phase fill:#ede9fe,stroke:#7c3aed,color:#1a1a2e
+  classDef field fill:#f3f4f6,stroke:#6b7280,color:#1a1a2e
+  classDef office fill:#fff,stroke:#374151,color:#1a1a2e
+  classDef decision fill:#fef3c7,stroke:#d97706,color:#1a1a2e
+  classDef done fill:#d1fae5,stroke:#059669,color:#1a1a2e
+      </pre>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, sans-serif',
+      fontSize: '13px',
+      primaryColor: '#f3f4f6',
+      primaryTextColor: '#1a1a2e',
+      primaryBorderColor: '#374151',
+      lineColor: '#6b7280',
+      background: '#ffffff',
+      mainBkg: '#ffffff',
+      nodeBorder: '#374151'
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 16,
+      nodeSpacing: 30,
+      rankSpacing: 40
+    }
+  });
+
+  var tabs = document.querySelectorAll('.tab');
+  var panels = document.querySelectorAll('.panel');
+  var renderedPanels = {};
+
+  // Mermaid cannot lay out a diagram inside a display:none container, so each
+  // panel's diagram is rendered the first time its tab becomes visible.
+  function renderPanel(panelId) {
+    if (renderedPanels[panelId]) return;
+    var el = document.querySelector('#' + panelId + ' .mermaid');
+    if (!el) return;
+    renderedPanels[panelId] = true;
+    mermaid.run({ nodes: [el] });
+  }
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      panels.forEach(function (p) { p.classList.remove('active'); });
+
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      document.getElementById(tab.dataset.panel).classList.add('active');
+      renderPanel(tab.dataset.panel);
+    });
+  });
+
+  // Render the panel that is visible on first load. Wait for the webfont so
+  // Mermaid measures label widths with Inter rather than a fallback font —
+  // otherwise long node labels are sized too narrow and clip on first paint.
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { renderPanel('overall'); });
+  } else {
+    renderPanel('overall');
+  }
+</script>
+</body>
+</html>

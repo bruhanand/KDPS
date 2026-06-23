@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Current Workflow Understanding</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --primary: #6C3CE1;
+    --primary-light: #8B5CF6;
+    --primary-bg: #F5F0FF;
+    --dark: #1A1A2E;
+    --text: #374151;
+    --text-light: #6B7280;
+    --border: #E5E7EB;
+    --bg-subtle: #F9FAFB;
+    --accent-green: #059669;
+    --accent-red: #DC2626;
+    --accent-amber: #D97706;
+    --accent-blue: #2563EB;
+  }
+
+  @page {
+    size: A4;
+    margin: 40px 48px 48px 48px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    font-size: 10pt;
+    line-height: 1.55;
+    background: white;
+  }
+
+  /* Cover Page */
+  .cover {
+    page-break-after: always;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(108, 60, 225, 0.08) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -150px;
+    left: -150px;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(108, 60, 225, 0.05) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover-badge {
+    display: inline-block;
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-size: 9pt;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 8px 24px;
+    border-radius: 100px;
+    margin-bottom: 40px;
+  }
+
+  .cover h1 {
+    font-size: 36pt;
+    font-weight: 800;
+    color: var(--dark);
+    letter-spacing: -1px;
+    margin-bottom: 8px;
+  }
+
+  .cover h1 span {
+    color: var(--primary);
+  }
+
+  .cover-subtitle {
+    font-size: 16pt;
+    color: var(--primary-light);
+    font-weight: 500;
+    margin-bottom: 48px;
+  }
+
+  .cover-divider {
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--primary-light));
+    border-radius: 2px;
+    margin-bottom: 48px;
+  }
+
+  .cover-meta {
+    font-size: 10pt;
+    color: var(--text-light);
+    line-height: 2;
+  }
+
+  .cover-meta strong {
+    color: var(--text);
+  }
+
+  /* Content flows naturally — only explicit page-break-before where needed */
+  .page-break {
+    page-break-before: always;
+  }
+
+  /* Prevent orphaned headers */
+  h2, h3 {
+    page-break-after: avoid;
+  }
+
+  /* Keep cards/tables together */
+  table, .path-grid, .pain-grid, .module-row, .commercial-grid, .feature-strip, .format-row {
+    page-break-inside: avoid;
+  }
+
+  /* Section headers */
+  .section-number {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    font-size: 9pt;
+    font-weight: 700;
+    width: 26px;
+    height: 26px;
+    line-height: 26px;
+    text-align: center;
+    border-radius: 7px;
+    margin-right: 10px;
+    vertical-align: middle;
+  }
+
+  h2 {
+    font-size: 17pt;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section-desc {
+    font-size: 9.5pt;
+    color: var(--text-light);
+    margin-bottom: 20px;
+    padding-left: 36px;
+  }
+
+  h3 {
+    font-size: 11.5pt;
+    font-weight: 600;
+    color: var(--dark);
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+
+  /* Profile cards */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .profile-card {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .profile-card .number {
+    font-size: 20pt;
+    font-weight: 800;
+    color: var(--primary);
+  }
+
+  .profile-card .label {
+    font-size: 7.5pt;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+    margin-top: 2px;
+  }
+
+  /* Store format boxes */
+  .format-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .format-box {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .format-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+
+  .format-box.ebo::before { background: var(--accent-blue); }
+  .format-box.mbo::before { background: var(--primary); }
+
+  .format-box .tag {
+    display: inline-block;
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+
+  .format-box.ebo .tag { background: #EFF6FF; color: var(--accent-blue); }
+  .format-box.mbo .tag { background: var(--primary-bg); color: var(--primary); }
+
+  .format-box p {
+    font-size: 8.5pt;
+    color: var(--text-light);
+    line-height: 1.45;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 8px 0 16px;
+    font-size: 9pt;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  thead th {
+    background: var(--dark);
+    color: white;
+    font-weight: 600;
+    text-align: left;
+    padding: 9px 12px;
+    font-size: 7.5pt;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  tbody tr:nth-child(even) {
+    background: var(--bg-subtle);
+  }
+
+  td strong {
+    color: var(--dark);
+  }
+
+  /* Path cards */
+  .path-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 16px;
+  }
+
+  .path-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    position: relative;
+  }
+
+  .path-card .path-label {
+    display: inline-block;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+
+  .path-card.path-a .path-label { background: #ECFDF5; color: var(--accent-green); }
+  .path-card.path-b .path-label { background: #FEF3C7; color: var(--accent-amber); }
+  .path-card.path-c .path-label { background: #FEE2E2; color: var(--accent-red); }
+
+  .path-card h4 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 4px;
+  }
+
+  .path-card p {
+    font-size: 8pt;
+    color: var(--text-light);
+    line-height: 1.45;
+  }
+
+  .path-card .examples {
+    font-size: 7.5pt;
+    color: var(--text-light);
+    margin-top: 6px;
+    font-style: italic;
+  }
+
+  /* Pain points */
+  .pain-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 12px 0;
+  }
+
+  .pain-item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 12px;
+    background: #FEF2F2;
+    border-radius: 8px;
+    border-left: 3px solid var(--accent-red);
+  }
+
+  .pain-item .icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    background: var(--accent-red);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10pt;
+    font-weight: 700;
+    line-height: 1;
+    margin-top: 1px;
+  }
+
+  .pain-item .pain-title {
+    font-size: 9pt;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 1px;
+  }
+
+  .pain-item .pain-desc {
+    font-size: 7.5pt;
+    color: var(--text-light);
+    line-height: 1.35;
+  }
+
+  /* Solution section */
+  .module-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 12px 0 20px;
+  }
+
+  .module-card {
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .module-card.iine {
+    background: linear-gradient(135deg, #6C3CE1 0%, #8B5CF6 100%);
+    color: white;
+  }
+
+  .module-card.pascs {
+    background: linear-gradient(135deg, var(--dark) 0%, #2D2D4A 100%);
+    color: white;
+  }
+
+  .module-card .module-tag {
+    font-size: 7.5pt;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 4px;
+  }
+
+  .module-card h4 {
+    font-size: 11pt;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .module-card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .module-card li {
+    font-size: 8.5pt;
+    padding: 2px 0;
+    padding-left: 14px;
+    position: relative;
+    opacity: 0.9;
+  }
+
+  .module-card li::before {
+    content: '>';
+    position: absolute;
+    left: 0;
+    font-weight: 700;
+    opacity: 0.6;
+  }
+
+  /* Agent table special */
+  .agent-table thead th {
+    background: var(--primary);
+  }
+
+  .agent-num {
+    display: inline-block;
+    background: rgba(255,255,255,0.2);
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 4px;
+    font-size: 7.5pt;
+    font-weight: 700;
+  }
+
+  /* Fashion features */
+  .feature-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 12px 0 20px;
+  }
+
+  .feature-item {
+    background: var(--primary-bg);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .feature-item .feat-title {
+    font-size: 9pt;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 3px;
+  }
+
+  .feature-item .feat-desc {
+    font-size: 7.5pt;
+    color: var(--text-light);
+    line-height: 1.35;
+  }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    margin: 14px 0;
+    padding-left: 0;
+  }
+
+  .timeline-row {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 16px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .timeline-phase {
+    text-align: right;
+    padding-top: 4px;
+  }
+
+  .timeline-phase .phase-badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    font-size: 7.5pt;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+    letter-spacing: 0.5px;
+  }
+
+  .timeline-phase .phase-time {
+    font-size: 7.5pt;
+    color: var(--text-light);
+    margin-top: 3px;
+  }
+
+  .timeline-content {
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    position: relative;
+  }
+
+  .timeline-content::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 12px;
+    width: 0;
+    height: 0;
+    border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent;
+    border-right: 7px solid var(--border);
+  }
+
+  .timeline-content h4 {
+    font-size: 10pt;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 3px;
+  }
+
+  .timeline-content p {
+    font-size: 8.5pt;
+    color: var(--text-light);
+    line-height: 1.4;
+  }
+
+  .timeline-content .hard-cut {
+    display: inline-block;
+    background: #FEE2E2;
+    color: var(--accent-red);
+    font-size: 7pt;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Quote */
+  .quote {
+    background: var(--primary-bg);
+    border-left: 4px solid var(--primary);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-style: italic;
+    font-size: 9.5pt;
+    color: var(--primary);
+  }
+
+  .quote .attribution {
+    font-style: normal;
+    font-size: 8pt;
+    color: var(--text-light);
+    margin-top: 4px;
+  }
+
+  /* Workflow steps */
+  .workflow-steps {
+    display: flex;
+    gap: 0;
+    margin: 12px 0 18px;
+    align-items: stretch;
+  }
+
+  .wf-step {
+    flex: 1;
+    text-align: center;
+    padding: 10px 6px;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .wf-step:first-child { border-radius: 8px 0 0 8px; }
+  .wf-step:last-child { border-radius: 0 8px 8px 0; }
+
+  .wf-step .step-num {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    border-radius: 50%;
+    font-size: 7.5pt;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .wf-step .step-title {
+    font-size: 8pt;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 2px;
+  }
+
+  .wf-step .step-desc {
+    font-size: 7pt;
+    color: var(--text-light);
+    line-height: 1.25;
+  }
+
+  .wf-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--primary);
+    font-size: 12pt;
+    font-weight: 700;
+    padding: 0 1px;
+  }
+
+  /* Commercial model */
+  .commercial-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 10px 0 16px;
+  }
+
+  .comm-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+
+  .comm-card .comm-name {
+    font-size: 10pt;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 6px;
+  }
+
+  .comm-card p {
+    font-size: 8pt;
+    color: var(--text-light);
+    line-height: 1.4;
+  }
+
+  /* Bullet lists */
+  ul {
+    padding-left: 18px;
+    margin: 4px 0;
+  }
+
+  li {
+    margin-bottom: 2px;
+    font-size: 9pt;
+  }
+
+  /* Print */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  .highlight-box {
+    background: linear-gradient(135deg, #FEFCE8 0%, #FEF9C3 100%);
+    border: 1px solid #FDE68A;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-size: 9pt;
+  }
+
+  .highlight-box strong {
+    color: var(--accent-amber);
+  }
+
+  p {
+    font-size: 9.5pt;
+    margin-bottom: 6px;
+  }
+
+  .footer-note {
+    text-align: center;
+    margin-top: 24px;
+    padding: 14px;
+    background: var(--bg-subtle);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+
+  .footer-note p {
+    font-size: 8.5pt;
+    color: var(--text-light);
+    margin-bottom: 2px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== COVER PAGE ==================== -->
+<div class="cover">
+  <div class="cover-badge">Workflow Understanding Document</div>
+  <h1>KDPS <span>Lifestyle</span></h1>
+  <div class="cover-subtitle">Current Workflow &amp; Proposed AI Operating System</div>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <strong>Prepared for:</strong> KDPS Lifestyle Pvt Ltd<br>
+    <strong>Date:</strong> 15 May 2026<br>
+    <strong>Version:</strong> 1.0
+  </div>
+</div>
+
+<!-- ==================== SECTION 1: WHO YOU ARE ==================== -->
+<h2><span class="section-number">1</span> Who You Are</h2>
+<div class="section-desc">A snapshot of KDPS Lifestyle's business profile</div>
+
+<div class="profile-grid">
+  <div class="profile-card">
+    <div class="number">50+</div>
+    <div class="label">SBUs (Stores + Warehouses)</div>
+  </div>
+  <div class="profile-card">
+    <div class="number">20,000+</div>
+    <div class="label">Active SKUs</div>
+  </div>
+  <div class="profile-card">
+    <div class="number">40+</div>
+    <div class="label">Brands</div>
+  </div>
+  <div class="profile-card">
+    <div class="number">100–500</div>
+    <div class="label">Staff</div>
+  </div>
+  <div class="profile-card">
+    <div class="number">~200</div>
+    <div class="label">Invoices / Day (Peak)</div>
+  </div>
+  <div class="profile-card">
+    <div class="number">~10</div>
+    <div class="label">New Vendors / Month</div>
+  </div>
+</div>
+
+<h3>Store Formats</h3>
+<div class="format-row">
+  <div class="format-box ebo">
+    <div class="tag">EBO — Exclusive Business Outlet</div>
+    <p>Single-brand store. Brand owns inventory, manages software, decides stock. KDPS earns ~20% flat commission on monthly sales (covers rent + salaries + profit).</p>
+  </div>
+  <div class="format-box mbo">
+    <div class="tag">MBO — Multi-Brand Outlet</div>
+    <p>Multiple brands under one roof. KDPS-managed. Two sub-formats: pure male (Levis, LP, Status Quo) and mixed gender (male + female + kids). 1,000 to 6,000 sq. ft.</p>
+  </div>
+</div>
+
+<h3>Three Commercial Models (MBOs)</h3>
+<div class="commercial-grid">
+  <div class="comm-card">
+    <div class="comm-name">25-18-10 Commission</div>
+    <p>Vendor supplies stock. KDPS keeps <strong>25%</strong> on full-price, <strong>18%</strong> during EOSS/discount. <strong>10%</strong> goods return allowance per season.</p>
+  </div>
+  <div class="comm-card">
+    <div class="comm-name">Buy &amp; Sell (BNS)</div>
+    <p>KDPS buys outright, sets own MRP. Two sub-types: with vendor barcode (MRP capped) or without barcode (KDPS sets price).</p>
+  </div>
+  <div class="comm-card">
+    <div class="comm-name">Consignment</div>
+    <p>Vendor's goods sit in KDPS stores. KDPS sells, takes commission. Unsold returns to vendor. Used with ~2-3 vendors only.</p>
+  </div>
+</div>
+
+<h3>Vendor Mix</h3>
+<table>
+  <thead>
+    <tr><th>Category</th><th>Examples</th><th>PT File Status</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Branded (with PT)</strong></td>
+      <td>Aditya Birla (LP, Allen Solly, Van Heusen, Peter England), Arvind (US Polo, Arrow)</td>
+      <td>Vendor provides PT file (format varies per brand)</td>
+    </tr>
+    <tr>
+      <td><strong>Branded (invoice only)</strong></td>
+      <td>D Apparel (Status Quo, Khushaal), DD Sales (Killer), regional distributors</td>
+      <td>No PT file. Staff builds from invoice + product codes</td>
+    </tr>
+    <tr>
+      <td><strong>Non-branded / Local</strong></td>
+      <td>A S Textile, Vishal Marketing, BK Enterprise, Variety Textile</td>
+      <td>No PT, no barcode, often no MRP. Staff invents entire SKU</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ==================== SECTION 2: CURRENT WORKFLOW ==================== -->
+<h2 class="page-break"><span class="section-number">2</span> How Things Work Today</h2>
+<div class="section-desc">The current end-to-end flow — from goods arrival to sales</div>
+
+<h3>The Current Flow (Simplified)</h3>
+<div class="workflow-steps">
+  <div class="wf-step">
+    <div class="step-num">1</div>
+    <div class="step-title">Goods Arrive</div>
+    <div class="step-desc">Warehouse / store receives physical goods</div>
+  </div>
+  <div class="wf-arrow">&#8594;</div>
+  <div class="wf-step">
+    <div class="step-num">2</div>
+    <div class="step-title">Manual Check</div>
+    <div class="step-desc">Match items against invoice by hand</div>
+  </div>
+  <div class="wf-arrow">&#8594;</div>
+  <div class="wf-step">
+    <div class="step-num">3</div>
+    <div class="step-title">PT File Entry</div>
+    <div class="step-desc">Staff types into personal Excel tab</div>
+  </div>
+  <div class="wf-arrow">&#8594;</div>
+  <div class="wf-step">
+    <div class="step-num">4</div>
+    <div class="step-title">Tag &amp; Barcode</div>
+    <div class="step-desc">Non-brand: price, classify, barcode</div>
+  </div>
+  <div class="wf-arrow">&#8594;</div>
+  <div class="wf-step">
+    <div class="step-num">5</div>
+    <div class="step-title">Distribute</div>
+    <div class="step-desc">Split stock across stores</div>
+  </div>
+  <div class="wf-arrow">&#8594;</div>
+  <div class="wf-step">
+    <div class="step-num">6</div>
+    <div class="step-title">Inward &amp; Sell</div>
+    <div class="step-desc">Store uploads PT, items sellable</div>
+  </div>
+</div>
+
+<h3>Three Goods Arrival Paths</h3>
+<div class="path-grid">
+  <div class="path-card path-a">
+    <div class="path-label">Path A</div>
+    <h4>Branded + Vendor PT</h4>
+    <p>Vendor ships goods with their own PT file. Staff opens manually, interprets columns (different per brand), maps to KDPS categories by experience.</p>
+    <div class="examples">LP, Allen Solly, Van Heusen, Peter England</div>
+  </div>
+  <div class="path-card path-b">
+    <div class="path-label">Path B</div>
+    <h4>Branded, Invoice Only</h4>
+    <p>Vendor ships goods with barcode/tags + invoice but no PT file. Staff builds PT rows from scratch using invoice lines and product codes.</p>
+    <div class="examples">D Apparel (Status Quo), DD Sales (Killer)</div>
+  </div>
+  <div class="path-card path-c">
+    <div class="path-label">Path C</div>
+    <h4>Non-Branded — Invent SKU</h4>
+    <p>Local goods with no barcode, no MRP, no tag. Staff classifies, calculates MRP (cost + transport + GST + 20-25% margin), generates barcode.</p>
+    <div class="examples">A S Textile, Vishal Marketing, BK Enterprise</div>
+  </div>
+</div>
+
+<h3>The PT File System — Per-Staff Excel Sheets</h3>
+<p>The current "system" is a single Google Sheets workbook with <strong>a separate tab per warehouse staff member</strong> (Debanjan, Naresh, Santosh, Mahendra, Pravin Ji, Ankit, Gulshan). Each person processes invoices into their own tab. There is no single source of truth — the master inventory is the union of all these tabs, manually merged.</p>
+
+<div class="highlight-box">
+  <strong>Known data quality issue:</strong> The COLOR column in the master sheet mixes price tiers (PREMIUM / MEDIUM / ECONOMY) with actual visual colors (BLACK / BLUE / OLIVE). Staff must know which is which from memory.
+</div>
+
+<h3>Payments &amp; Ledger</h3>
+<table>
+  <thead>
+    <tr><th>Aspect</th><th>How It Works Today</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Vendor Relationship</strong></td><td>KDPS is a creditor — vendor bills first, KDPS pays later</td></tr>
+    <tr><td><strong>Cash Discount (CD)</strong></td><td>Calculated on pre-tax base only. GST line never shrinks</td></tr>
+    <tr><td><strong>Lump-Sum Payments</strong></td><td>e.g., ₹6L paid against ₹10L across 10 invoices. Attribution is manual — described as "a headache"</td></tr>
+    <tr><td><strong>Ledger Matching</strong></td><td>KDPS vs vendor accounting matched manually, bill by bill, by one person</td></tr>
+    <tr><td><strong>Payment Approval</strong></td><td>Verbal or WhatsApp. No system link between invoice, GRN, PT, and payment</td></tr>
+  </tbody>
+</table>
+
+<h3>Goods Returns (Three Types)</h3>
+<table>
+  <thead>
+    <tr><th>Type</th><th>What Happens</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Seasonal Return</strong></td><td>End of AW/SS season — vendor takes back ~10% unsold stock</td></tr>
+    <tr><td><strong>Defective</strong></td><td>Damaged goods returned, debit note issued</td></tr>
+    <tr><td><strong>Unauthorized / Extra</strong></td><td>Vendor over-shipped — returned immediately or billed internally under "V-Spiker" to cover loss</td></tr>
+  </tbody>
+</table>
+
+<div class="quote">
+  "Isko automate karna hi hai" — Monthly sales report generation, with date-specific promotional offer attribution, must be fully automated.
+  <div class="attribution">— KDPS Owner, Conversation 1</div>
+</div>
+
+<!-- ==================== SECTION 3: WHERE IT BREAKS ==================== -->
+<h2 class="page-break"><span class="section-number">3</span> Where It Breaks</h2>
+<div class="section-desc">The structural gaps in today's workflow</div>
+
+<div class="pain-grid">
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">No Single Source of Truth</div>
+      <div class="pain-desc">Per-staff Excel tabs, manually merged. Master inventory is a "hope it adds up." Each staff member's tab is an island.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">No Structured Reconciliation</div>
+      <div class="pain-desc">Invoice vs physical receipt vs PT file vs Tally — no automated matching. Errors surface days or weeks later.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">Trust-Based Payments</div>
+      <div class="pain-desc">No system link between invoice, GRN, PT file, and payment. Approvals happen verbally or on WhatsApp.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">No Audit Trail</div>
+      <div class="pain-desc">Who mapped what? Who approved which discount? Why was a classification changed? Not traceable.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">Manual PT Creation Bottleneck</div>
+      <div class="pain-desc">Every invoice processed by hand. Non-brand path is 100% manual: classify, price, barcode, tag. Biggest time sink.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">Lump-Sum Payment Chaos</div>
+      <div class="pain-desc">Bulk payments split across fractional invoices with no system to track which invoice is covered by how much.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">SOR Return Deadlines Untracked</div>
+      <div class="pain-desc">Missing a 60–120 day return window = KDPS owns dead stock by default. No alerts exist today. Lakhs at risk.</div>
+    </div>
+  </div>
+  <div class="pain-item">
+    <div class="icon">!</div>
+    <div>
+      <div class="pain-title">No Profitability Visibility</div>
+      <div class="pain-desc">No per-brand, per-store P&amp;L. Owner cannot see which brands or stores actually make money.</div>
+    </div>
+  </div>
+</div>
+
+<div class="highlight-box" style="background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%); border-color: #FECACA;">
+  <strong style="color: var(--accent-red);">Scale pressure:</strong> KDPS adds ~10 new vendors every month. Each new vendor means a new invoice format, a new manual learning curve. The current manual process doesn't scale.
+</div>
+
+<div class="quote">
+  "Data loss rokne ke liye ek insaan chahiye jo data verify kare ki enter kiya hua data sahi hai."<br>— A human is needed to verify every entry to prevent data loss.
+  <div class="attribution">— KDPS Operations Lead, Conversation 1</div>
+</div>
+
+<!-- ==================== SECTION 4: WHAT WE ARE BUILDING ==================== -->
+<h2 class="page-break"><span class="section-number">4</span> What We Are Building</h2>
+<div class="section-desc">A single AI-powered operating system — fashion-retail-aware from the ground up</div>
+
+<div class="module-row">
+  <div class="module-card iine">
+    <div class="module-tag">Module 1</div>
+    <h4>IINE — Inventory Ingestion &amp; Normalization Engine</h4>
+    <ul>
+      <li>Upload invoice (photo/PDF) — AI reads any vendor format</li>
+      <li>Auto-generates PT file in KDPS taxonomy</li>
+      <li>3-way reconciliation: Invoice vs GRN vs PT (nightly)</li>
+      <li>Non-brand: auto-calculates MRP with margin rules</li>
+      <li>Every entry audited — who, when, why</li>
+    </ul>
+  </div>
+  <div class="module-card pascs">
+    <div class="module-tag">Module 2</div>
+    <h4>PASCS — Payment Authorization &amp; Settlement Control</h4>
+    <ul>
+      <li>Payment only when Invoice + GRN + PT + TIR all align</li>
+      <li>Multi-level WhatsApp approval workflow</li>
+      <li>Lump-sum payments auto-attributed across invoices</li>
+      <li>Pre-tax CD calculation enforced by system</li>
+      <li>Bank statement auto-reconciliation</li>
+    </ul>
+  </div>
+</div>
+
+<h3>Your 10 AI Agents — Digital Workforce</h3>
+<table class="agent-table">
+  <thead>
+    <tr><th style="width:30px">#</th><th style="width:120px">Agent Name</th><th>What It Does</th><th style="width:140px">Replaces</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><span class="agent-num">1</span></td><td><strong>Invoice Reader</strong></td><td>Photo/PDF &rarr; structured data. Any vendor, any format.</td><td>Manual data entry</td></tr>
+    <tr><td><span class="agent-num">2</span></td><td><strong>PT Mapper</strong></td><td>Any brand PT format &rarr; KDPS taxonomy. Style+Size+Color.</td><td>Manual PT processing</td></tr>
+    <tr><td><span class="agent-num">3</span></td><td><strong>Reconciliation</strong></td><td>Nightly 3-way match: Invoice &harr; GRN &harr; PT. Fuzzy matching.</td><td>Weekly manual matching</td></tr>
+    <tr><td><span class="agent-num">4</span></td><td><strong>POS Harvester</strong></td><td>Reads any POS export every 15 min. Auto stock deduction.</td><td>Manual sales recording</td></tr>
+    <tr><td><span class="agent-num">5</span></td><td><strong>Attendance</strong></td><td>Face check-in + GPS + liveness detection. Auto payroll.</td><td>Manual attendance</td></tr>
+    <tr><td><span class="agent-num">6</span></td><td><strong>Daily Digest</strong></td><td>9 PM WhatsApp: revenue, stock, attendance, alerts.</td><td>WhatsApp groups + Excel</td></tr>
+    <tr><td><span class="agent-num">7</span></td><td><strong>Demand AI</strong></td><td>Size-level forecasting. Store affinity. Weather-aware.</td><td>Gut-feel ordering</td></tr>
+    <tr><td><span class="agent-num">8</span></td><td><strong>Dead Stock Hunter</strong></td><td>Hot/Warm/Cold/Dead classification. Per-SBU action recs.</td><td>Seasonal audits (if any)</td></tr>
+    <tr><td><span class="agent-num">9</span></td><td><strong>Profitability</strong></td><td>Auto P&amp;L per brand, per store. Margin alerts.</td><td>No tracking today</td></tr>
+    <tr><td><span class="agent-num">10</span></td><td><strong>Anomaly Watch</strong></td><td>Shrinkage, fraud, stuck transfers, payment anomalies.</td><td>Quarterly audits (if any)</td></tr>
+  </tbody>
+</table>
+
+<h3>Fashion-Retail Aware — Not Generic Inventory</h3>
+<div class="feature-strip">
+  <div class="feature-item">
+    <div class="feat-title">Size x Color Matrix</div>
+    <div class="feat-desc">Every SKU tracked as Style x Size x Color — not just a barcode. "Size 8: 3 units, Size 9: STOCKOUT"</div>
+  </div>
+  <div class="feature-item">
+    <div class="feat-title">SOR Return Deadline Agent</div>
+    <div class="feat-desc">Alerts at 30/15/7 days before return window expires. Missing a deadline = KDPS owns dead stock. Saves lakhs.</div>
+  </div>
+  <div class="feature-item">
+    <div class="feat-title">Season &amp; Collection Tags</div>
+    <div class="feat-desc">Every item carries Season (SS26, AW26), Collection (Core/Fresh/Clearance), and Age. Auto-detected from style codes.</div>
+  </div>
+</div>
+
+<!-- ==================== SECTION 5: TIMELINE ==================== -->
+<h2><span class="section-number">5</span> Delivery Timeline</h2>
+<div class="section-desc">8 months, 4 phases — inventory live by Month 3</div>
+
+<div class="timeline">
+  <div class="timeline-row">
+    <div class="timeline-phase">
+      <div class="phase-badge">Phase 1</div>
+      <div class="phase-time">Month 1–3</div>
+    </div>
+    <div class="timeline-content">
+      <h4>Real-Time Stock Engine</h4>
+      <p>Masters (SBU, SKU, Brand), PWA shell, Invoice Reader, PT Mapper, GRN, POS Harvester (15-min sync), nightly reconciliation, WhatsApp daily digest, SOR deadline tracking. Pilot at 5 SBUs.</p>
+      <div class="hard-cut">Hard Cut: Stock visible by Style x Size x Color across 5 SBUs</div>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-phase">
+      <div class="phase-badge">Phase 2</div>
+      <div class="phase-time">Month 4–5</div>
+    </div>
+    <div class="timeline-content">
+      <h4>Fashion AI + Profitability + Scale</h4>
+      <p>Roll out to all 50+ SBUs. Fashion Demand AI, Dead Stock Hunter, brand/store P&amp;L, season tagging, Anomaly Watchdog, EOSS module, size rebalancing.</p>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-phase">
+      <div class="phase-badge">Phase 3</div>
+      <div class="phase-time">Month 6–7</div>
+    </div>
+    <div class="timeline-content">
+      <h4>Workforce + Payments + Incentives</h4>
+      <p>Attendance Guardian (face + GPS), PASCS payment module, WhatsApp approval flow, incentive auto-calculator, payroll, Tally XML export.</p>
+    </div>
+  </div>
+  <div class="timeline-row">
+    <div class="timeline-phase">
+      <div class="phase-badge">Phase 4</div>
+      <div class="phase-time">Month 8</div>
+    </div>
+    <div class="timeline-content">
+      <h4>Tally Auto-Sync + Polish</h4>
+      <p>TallyPrime API push nightly, performance optimization, staff training (3 batches, Hindi videos), documentation, source handover.</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer-note">
+  <p>This document reflects our understanding based on conversations with the KDPS team, the PRD, and the Definitive Plan.</p>
+  <p>Any corrections or additions are welcome.</p>
+</div>
+
+</body>
+</html>

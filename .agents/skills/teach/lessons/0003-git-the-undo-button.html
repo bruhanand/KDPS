@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lesson 3 — Git, Your Undo Button</title>
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6678; --line:#e6e9f0; --bg:#fbfcfe;
+    --git:#be3d2a; --git-bg:#fef3f0; --git-line:#f6c9bd; --git-deep:#8f2c1e;
+    --save:#15803d; --save-bg:#f0fdf4; --undo:#b45309; --undo-bg:#fff7ed;
+    --good:#15803d; --good-bg:#f0fdf4; --bad:#b91c1c; --bad-bg:#fef2f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.6; font-size:16.5px;}
+  .wrap{max-width:760px; margin:0 auto; padding:48px 26px 90px}
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--muted); font-weight:700}
+  h1{font-size:33px; line-height:1.12; margin:10px 0 10px; letter-spacing:-.02em}
+  .lede{color:var(--muted); font-size:17px; max-width:60ch}
+  .mission{font-size:13.5px; color:var(--muted); background:#f1f5f9; border-radius:10px; padding:12px 16px; margin:20px 0 0}
+  .mission b{color:var(--ink)}
+  .progress{display:flex; gap:6px; margin:30px 0 0}
+  .progress div{height:5px; flex:1; border-radius:3px; background:var(--line)}
+  .progress div.on{background:var(--ink)}
+
+  h2{font-size:25px; margin:54px 0 6px; letter-spacing:-.01em; display:flex; align-items:center; gap:11px}
+  h2 .num{font-size:14px; font-weight:800; width:30px; height:30px; border-radius:8px; display:inline-flex; align-items:center; justify-content:center; color:#fff; background:var(--git)}
+  .kicker{font-size:13px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 2px; color:var(--git-deep)}
+  p{margin:14px 0}
+  .key{font-weight:600}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:14px; background:#0f172a; color:#e2e8f0; padding:2px 7px; border-radius:6px}
+
+  .callout{padding:16px 20px; border-radius:12px; margin:24px 0}
+  .callout.git{background:var(--git-bg); border:1px solid var(--git-line)}
+  .callout.ink{background:#1d2433; color:#fff}
+  .callout.soft{background:#f1f5f9; border:1px solid var(--line)}
+  .callout b{font-weight:700}
+  .callout.git b{color:var(--git-deep)} .callout.ink b{color:#ffd9a8}
+  .callout p{margin:0; font-size:15px}
+
+  /* commit timeline */
+  .tl{margin:22px 0 6px; padding:0; list-style:none; position:relative}
+  .tl::before{content:""; position:absolute; left:13px; top:6px; bottom:34px; width:2px; background:var(--line)}
+  .tl li{position:relative; padding:6px 0 16px 40px; font-size:14.5px}
+  .tl li .dot{position:absolute; left:5px; top:7px; width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid var(--save)}
+  .tl li.bad .dot{border-color:var(--bad); background:var(--bad-bg)}
+  .tl li.now .dot{border-color:var(--undo); background:var(--undo-bg)}
+  .tl li .msg{font-weight:600}
+  .tl li .sub{color:var(--muted); font-size:13.5px; margin-top:2px}
+  .tl li .cmt{font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:var(--save); font-weight:700; margin-right:6px}
+
+  .loop{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:18px 0 4px; font-size:14px}
+  .loop .step{background:#fff; border:1px solid var(--line); border-radius:999px; padding:6px 13px; font-weight:600}
+  .loop .step.save{background:var(--save-bg); border-color:#bbf7d0; color:#14532d}
+  .loop .step.undo{background:var(--undo-bg); border-color:#fed7aa; color:#7c2d12}
+  .loop .arr{color:var(--muted)}
+
+  .cmds{border:1px solid var(--line); border-radius:12px; overflow:hidden; margin:18px 0}
+  .cmds .r{display:flex; gap:14px; padding:12px 16px; border-top:1px solid var(--line); align-items:baseline}
+  .cmds .r:first-child{border-top:0}
+  .cmds .r code{flex:0 0 auto; min-width:170px}
+  .cmds .r span{font-size:14px; color:var(--muted)}
+
+  .cmp{width:100%; border-collapse:collapse; margin:18px 0 4px; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  .cmp th,.cmp td{padding:10px 13px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+  .cmp th{background:#f1f5f9; font-size:12.5px; letter-spacing:.02em; color:var(--ink)}
+  .cmp th.r{color:var(--undo)} .cmp th.v{color:var(--git-deep)}
+  .cmp tr:last-child td{border-bottom:0}
+  .cmp td:first-child,.cmp th:first-child{font-weight:700; background:#fafbfd; white-space:nowrap; color:var(--ink)}
+
+  /* QUIZ */
+  .quiz{margin-top:46px; border-top:3px solid var(--ink); padding-top:8px}
+  .q{background:#fff; border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:18px 0}
+  .q .qn{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+  .q .qt{font-weight:600; font-size:17px; margin:6px 0 14px}
+  .opt{display:block; width:100%; text-align:left; font:inherit; font-size:15px; padding:12px 15px; margin:8px 0; border:1.5px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.12s}
+  .opt:hover{border-color:#94a3b8; background:#f8fafc}
+  .opt.correct{border-color:var(--good); background:var(--good-bg)}
+  .opt.wrong{border-color:var(--bad); background:var(--bad-bg)}
+  .opt:disabled{cursor:default}
+  .fb{display:none; margin-top:12px; padding:12px 15px; border-radius:10px; font-size:14.5px}
+  .fb.show{display:block}
+  .fb.ok{background:var(--good-bg); color:#14532d; border:1px solid #bbf7d0}
+  .fb.no{background:var(--bad-bg); color:#7f1d1d; border:1px solid #fecaca}
+  .score{position:sticky; bottom:14px; margin-top:26px; background:#1d2433; color:#fff; border-radius:12px; padding:14px 20px; font-size:15px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 8px 24px rgba(15,23,42,.25)}
+  .score b{color:#ffd9a8; font-size:18px}
+
+  .ask{background:linear-gradient(180deg,#fef3f0,#fff7ed); border:1px solid var(--git-line); border-radius:12px; padding:16px 20px; margin-top:34px; font-size:15px}
+  .ask b{color:var(--git-deep)}
+  footer{margin-top:30px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  footer a{color:var(--git); text-decoration:none} footer a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">KDPS · Lesson 3 · ~11 min</div>
+  <h1>Git, your undo button</h1>
+  <p class="lede">The single skill that turns "I'm scared to let the AI touch my code" into "go ahead — I can undo anything." It's one idea you already understand: a <b>ledger, for your code</b>.</p>
+  <div class="mission"><b>Why this lesson:</b> you want to build KDPS <i>without fear</i>. Fear comes from "what if the AI breaks it and I can't get back?" Git is the answer — a save point you can always return to. This is the safety net under every other build skill.</div>
+  <div class="progress"><div class="on"></div><div class="on"></div><div class="on"></div></div>
+
+  <!-- 1 — GIT IS A LEDGER FOR YOUR CODE -->
+  <section>
+    <h2><span class="num">1</span> It's a ledger — for your code</h2>
+    <p class="kicker">You already know how this works</p>
+    <p>Remember the stock ledger from Lesson 1? Nothing is ever overwritten — every change is a new entry, the full history is kept, and the truth is the sum of all movements. <span class="key">Git is the exact same idea, applied to your code.</span></p>
+
+    <div class="callout soft">
+      <p>📒 <b>Stock ledger:</b> each <i>movement</i> (+5 GRN, −1 sale) is added, never edited — you can rewind to any past balance.<br>
+      💾 <b>Git:</b> each <i>commit</i> (a save point) is added, never edited — you can rewind your whole project to any past state.</p>
+    </div>
+
+    <p>A <b>commit</b> is one save point: a snapshot of every file, with a short note. They line up in order, like ledger rows:</p>
+
+    <ul class="tl">
+      <li><span class="dot"></span><span class="cmt">a1f3</span><span class="msg">first working bill screen</span><div class="sub">Monday — the counter sale works end to end.</div></li>
+      <li><span class="dot"></span><span class="cmt">7c20</span><span class="msg">add GST line to the bill</span><div class="sub">Tuesday — your last <b>good</b> save point. 👍</div></li>
+      <li class="bad"><span class="dot"></span><span class="msg" style="color:var(--bad)">…you let the AI add discounts — it breaks the whole screen</span><div class="sub">Not saved yet. Just messy files on your machine.</div></li>
+      <li class="now"><span class="dot"></span><span class="msg" style="color:var(--undo)">git restore .  →  you're back at <code>7c20</code>, instantly</span><div class="sub">The broken mess is gone. Nothing good was lost.</div></li>
+    </ul>
+
+    <div class="callout git">
+      <p>💡 <b>The whole point:</b> because <code>7c20</code> is saved, the AI's mess is never scary. Worst case, you throw away everything since your last save point and you're <b>exactly back where you started</b>. That's the end of the fear.</p>
+    </div>
+  </section>
+
+  <!-- 2 — THE FOUR MOVES -->
+  <section>
+    <h2><span class="num">2</span> The only four moves you need</h2>
+    <p class="kicker">See · Save · Undo · (Branch)</p>
+    <p>Git has hundreds of commands. As a vibe coder you start with four. That's genuinely enough to be safe.</p>
+
+    <div class="cmds">
+      <div class="r"><code>git status</code><span><b>See</b> — what's changed since my last save point? Run it all the time.</span></div>
+      <div class="r"><code>git add . </code><span><b>Stage</b> — line up all my changes, ready to save.</span></div>
+      <div class="r"><code>git commit -m "…"</code><span><b>Save</b> — make the checkpoint, with a note like <code>"add return-window alert"</code>.</span></div>
+      <div class="r"><code>git restore .</code><span><b>Undo</b> — the panic button. Throw away everything since the last save point.</span></div>
+    </div>
+
+    <p>Strung together, they make <b>the fearless loop</b> — the rhythm of vibe coding:</p>
+    <div class="loop">
+      <span class="step save">commit (good state)</span><span class="arr">→</span>
+      <span class="step">let the AI build</span><span class="arr">→</span>
+      <span class="step">works?</span><span class="arr">→</span>
+      <span class="step save">yes → commit</span><span class="arr">/</span>
+      <span class="step undo">no → git restore .</span>
+    </div>
+    <p style="font-size:14px; color:var(--muted)">The one habit that makes it work: <b>commit <i>before</i> you let the AI loose</b>, not after it's already a mess.</p>
+  </section>
+
+  <!-- 3 — BRANCH -->
+  <section>
+    <h2><span class="num">3</span> Branches — a safe sandbox</h2>
+    <p class="kicker">For the genuinely risky experiments</p>
+    <p>Sometimes you want to try something big — "let the AI rebuild the whole stock screen" — without risking your working version at all. A <b>branch</b> is a side copy of the project.</p>
+    <div class="callout ink">
+      <p>🌿 <b>git switch -c try-discounts</b> makes a sandbox. Experiment freely. If it works, fold it back in (<code>merge</code>). If it doesn't, switch back to <code>main</code> and delete it — your working version <b>never even saw</b> the experiment.</p>
+    </div>
+    <p>You don't need branches on day one — <code>commit</code> + <code>restore</code> already keep you safe. But the day you think "this might be a disaster," that's what a branch is for.</p>
+  </section>
+
+  <!-- 4 — RESTORE vs REVERT -->
+  <section>
+    <h2><span class="num">4</span> Undo, two ways: restore vs revert</h2>
+    <p class="kicker">The one question: have you saved it yet?</p>
+    <p>You've met <code>git restore</code> — the panic button. It has a sibling, <code>git revert</code>. They sound alike but answer different moments, and the whole difference is one question: <span class="key">has the change already been committed?</span></p>
+
+    <table class="cmp">
+      <tr><th></th><th class="r">git restore</th><th class="v">git revert</th></tr>
+      <tr><td>Use when…</td><td>the change is <b>not saved yet</b> (loose files)</td><td>the change is <b>already a commit</b> in your history</td></tr>
+      <tr><td>What it does</td><td>erases the changes — like they never happened</td><td>adds a <b>new commit</b> that cancels the old one</td></tr>
+      <tr><td>History</td><td>nothing recorded</td><td>both the mistake <b>and</b> the fix stay visible</td></tr>
+      <tr><td>Command</td><td><code>git restore .</code></td><td><code>git revert &lt;commit&gt;</code></td></tr>
+    </table>
+
+    <div class="callout soft">
+      <p>📒 <b>The ledger way to remember it:</b> a customer return in your stock ledger is a <b>revert</b> — you don't go back and edit the original sale row, you <i>add</i> a <code>+1 return</code> movement that cancels it, and both stay on record. <b>restore</b> is the opposite: scrapping a draft <i>before</i> it ever became a real ledger entry.</p>
+    </div>
+    <p style="font-size:15px"><b>Rule of thumb:</b> uncommitted mess → <code>restore</code>. &nbsp;Committed mistake → <code>revert</code>.</p>
+  </section>
+
+  <!-- 5 — A LITTLE MORE -->
+  <section>
+    <h2><span class="num">5</span> Two more things worth knowing</h2>
+    <p class="kicker">Cloud backup · keeping secrets out</p>
+
+    <p><b>1 · A remote — your cloud backup.</b> So far, every save point lives <i>only on your laptop</i>. A <b>remote</b> (like GitHub) is a copy in the cloud. Two reasons you want one: if your laptop dies, your KDPS code is safe — and it's where the app will later be <b>deployed to your stores</b> from.</p>
+    <div class="cmds">
+      <div class="r"><code>git push</code><span><b>Send</b> your save points up to the cloud copy.</span></div>
+      <div class="r"><code>git pull</code><span><b>Bring down</b> changes from the cloud copy.</span></div>
+      <div class="r"><code>git clone &lt;url&gt;</code><span><b>Copy</b> an existing cloud project onto your machine.</span></div>
+    </div>
+
+    <p style="margin-top:28px"><b>2 · .gitignore — what Git should never save.</b> A small list of files to skip. Two kinds: auto-generated junk (big folders you don't need), and — far more important — <b>secrets</b>.</p>
+    <div class="callout git">
+      <p>🔒 <b>The golden safety rule:</b> never commit a password, API key, or database login. Once it's in a commit it's in the history <i>forever</i> — even after you "delete" it later. Put such files in <code>.gitignore</code> <b>before</b> your first commit. This matters more for KDPS than almost anything else here — it holds money and customer data.</p>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section class="quiz" id="quiz">
+    <div class="eyebrow" style="color:var(--ink)">Check yourself — 8 quick scenarios</div>
+    <p style="color:var(--muted); font-size:14.5px; margin-top:6px">Pick an answer for instant feedback. These are the exact moments you'll hit while building KDPS.</p>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 1 · The habit</div>
+      <div class="qt">You're about to ask the AI to rebuild the stock-ledger screen — a big, risky change. What do you do <b>first</b>?</div>
+      <button class="opt">Nothing — just let it run and hope</button>
+      <button class="opt"><code>git commit</code> your current working version, so you have a save point to return to</button>
+      <button class="opt">Email yourself a copy of the files</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 2 · The panic button</div>
+      <div class="qt">The AI's change broke the app. You <b>haven't committed</b> since your last good save. Fastest way back?</div>
+      <button class="opt">Rewrite the broken parts by hand</button>
+      <button class="opt">Restart the computer</button>
+      <button class="opt"><code>git restore .</code> — throw away changes since the last save point</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 3 · The habit</div>
+      <div class="qt">Why commit <b>small and often</b> instead of one big commit at the end of the day?</div>
+      <button class="opt">Small save points let you rewind to just before the thing that broke — losing minutes, not a day's work</button>
+      <button class="opt">Git charges you for big commits</button>
+      <button class="opt">It makes the app run faster</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 4 · Branches</div>
+      <div class="qt">What's a <b>branch</b> for?</div>
+      <button class="opt">Permanently deleting old code</button>
+      <button class="opt">Trying something risky on a side copy, without touching your working version</button>
+      <button class="opt">Making the app go live to the stores</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 5 · The big idea</div>
+      <div class="qt">How is Git like your KDPS <b>stock ledger</b>?</div>
+      <button class="opt">Both store one number that gets overwritten each time</button>
+      <button class="opt">Neither keeps any history</button>
+      <button class="opt">Both only ever <b>add</b> entries, keep the full history, and let you rewind to any past point</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="0">
+      <div class="qn">Question 6 · Good habits</div>
+      <div class="qt">Which is a <b>good</b> commit message?</div>
+      <button class="opt"><code>"add return-window alert to vendor page"</code></button>
+      <button class="opt"><code>"stuff"</code></button>
+      <button class="opt"><code>"asdf wip final FINAL2"</code></button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="1">
+      <div class="qn">Question 7 · Undo two ways</div>
+      <div class="qt">You committed "add discounts" <b>yesterday</b> — it's saved in your history — and now it's clearly broken. Which command?</div>
+      <button class="opt"><code>git restore .</code></button>
+      <button class="opt"><code>git revert &lt;commit&gt;</code> — add a new commit that cancels the bad one</button>
+      <button class="opt">Delete the project and start over</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="q" data-correct="2">
+      <div class="qn">Question 8 · Safety</div>
+      <div class="qt">You're about to commit and spot your <b>database password</b> sitting in a file. What's right?</div>
+      <button class="opt">Commit it — the code is private anyway</button>
+      <button class="opt">Commit it now, delete it in the next commit</button>
+      <button class="opt">Put that file in <code>.gitignore</code> so it's never committed — secrets stay out of history</button>
+      <div class="fb"></div>
+    </div>
+
+    <div class="score" id="score">
+      <span>Your score</span><span><b id="scoreNum">0</b> / 8</span>
+    </div>
+  </section>
+
+  <div class="ask">
+    💬 <b>I'm your teacher.</b> Want to make this real? Ask me — “walk me through committing for the first time on the pdf-to-pt project,” “what's the difference between <code>restore</code> and <code>revert</code>?”, or “I'm ready for Lesson 4 — reading the database.” I'll build on this.
+  </div>
+
+  <footer>
+    <p>Pairs with the <a href="../reference/git-vibe-coder-cheatsheet.html">Git Cheat Sheet</a> · builds on <a href="0001-the-two-spines.html">Lesson 1 (the ledger)</a> and <a href="0002-anatomy-of-a-running-app.html">Lesson 2 (the four boxes)</a>.</p>
+    <p>Source: <a href="https://git-scm.com/book/en/v2">Pro Git book (free), ch. 1–3</a>.</p>
+    <p>KDPS Teaching Workspace · Lesson 0003 · 💾 a ledger for your code</p>
+  </footer>
+
+</div>
+
+<script>
+  let score = 0;
+  const why = [
+    "Always commit a known-good state before a risky AI change — that commit is the save point you'll restore to if it goes wrong.",
+    "If you haven't committed, the broken changes are just loose files. git restore . wipes them and snaps you back to your last save point.",
+    "Frequent small commits give you fine-grained rewind points — you lose only the work since the last one, not the whole day.",
+    "A branch is a side copy for risky experiments. Your working version stays clean until (and unless) you choose to merge.",
+    "Exactly — Git is append-only, like your stock ledger: add entries, keep full history, rewind any time. Same idea you already know.",
+    "A good message tells your future self what changed. 'stuff' and 'asdf' are useless when you're hunting for the right save point.",
+    "It's already committed, so there are no loose changes to discard — git revert adds a new commit that cancels the bad one, keeping the history honest. (restore is only for uncommitted work.)",
+    "Secrets must never enter a commit — once in the history they're effectively permanent. .gitignore keeps them out from the very start."
+  ];
+  document.querySelectorAll('.q').forEach(function(q){
+    const correct = parseInt(q.dataset.correct, 10);
+    const opts = q.querySelectorAll('.opt');
+    const fb = q.querySelector('.fb');
+    const qIndex = [...document.querySelectorAll('.q')].indexOf(q);
+    opts.forEach(function(opt, i){
+      opt.addEventListener('click', function(){
+        if (q.dataset.answered) return;
+        q.dataset.answered = "1";
+        opts.forEach(function(o, j){
+          o.disabled = true;
+          if (j === correct) o.classList.add('correct');
+        });
+        if (i === correct){
+          score++;
+          document.getElementById('scoreNum').textContent = score;
+          fb.className = 'fb show ok';
+          fb.textContent = "✓ Correct. " + why[qIndex];
+        } else {
+          opt.classList.add('wrong');
+          fb.className = 'fb show no';
+          fb.textContent = "✗ The green answer is right. " + why[qIndex];
+        }
+      });
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS — Full System Map</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-dim: #6b6b6b;
+    --paper: #fafaf7;
+    --rule: #e3e1da;
+    --rule-strong: #c8c4b8;
+    --accent: #1b4d8a;
+    --accent-soft: #e8eef7;
+    --warm: #c75c1e;
+    --warm-soft: #fbeede;
+    --green: #2f6e3a;
+    --green-soft: #e6f1e8;
+    --gold: #b58a00;
+    --gold-soft: #fdf3d0;
+    --plum: #6b2d5c;
+    --plum-soft: #f3e6f0;
+    --teal: #1f6b6b;
+    --teal-soft: #e0f0f0;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", system-ui, sans-serif;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; }
+
+  header.hero {
+    background: linear-gradient(180deg, #fcfbf6 0%, var(--paper) 100%);
+    border-bottom: 1px solid var(--rule);
+    padding: 56px 32px 40px;
+    text-align: center;
+  }
+  header.hero .badge {
+    display: inline-block; margin-bottom: 16px; padding: 4px 12px;
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 999px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  header.hero h1 {
+    margin: 0 0 8px; font-size: 32px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  header.hero p.lede { margin: 0 auto; max-width: 680px; color: var(--ink-soft); font-size: 17px; }
+  header.hero .companion {
+    margin-top: 16px; font-size: 13px; color: var(--ink-dim);
+  }
+  header.hero .companion a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+
+  nav.sticky {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(250, 250, 247, 0.96);
+    backdrop-filter: saturate(180%) blur(8px);
+    border-bottom: 1px solid var(--rule);
+  }
+  nav.sticky ol {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    max-width: 1200px; margin: 0 auto;
+  }
+  nav.sticky a {
+    display: inline-block; padding: 14px 14px;
+    color: var(--ink-soft); text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  nav.sticky a:hover { color: var(--accent); }
+  nav.sticky a.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  section.chapter {
+    padding: 56px 0 32px;
+    border-bottom: 1px solid var(--rule);
+  }
+  section.chapter:last-child { border-bottom: none; }
+  section.chapter h2 {
+    margin: 0 0 6px; font-size: 24px; font-weight: 600; letter-spacing: -0.01em;
+  }
+  section.chapter h2 .num {
+    display: inline-block; width: 28px; height: 28px; line-height: 28px;
+    background: var(--accent); color: #fff;
+    border-radius: 999px; font-size: 13px; font-weight: 700;
+    text-align: center; margin-right: 10px; vertical-align: 2px;
+  }
+  section.chapter p.sub { margin: 0 0 28px 38px; color: var(--ink-soft); font-size: 15px; }
+
+  .card {
+    background: #fff; border: 1px solid var(--rule);
+    border-radius: 8px; padding: 18px;
+  }
+  .card.muted { background: #fcfbf6; }
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  .g5 { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 900px) { .g3, .g4, .g5 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .g2, .g3, .g4, .g5 { grid-template-columns: 1fr; } }
+
+  .stat {
+    background: #fff; border: 1px solid var(--rule); border-radius: 8px;
+    padding: 16px; text-align: center;
+  }
+  .stat .num { font-size: 28px; font-weight: 700; color: var(--accent); display: block; }
+  .stat .lbl { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+
+  /* ---------- Requirements ---------- */
+  .req-tabs { display: flex; gap: 4px; margin: 0 0 16px; flex-wrap: wrap; }
+  .req-tabs button {
+    border: 1px solid var(--rule); background: #fff;
+    border-radius: 999px; padding: 6px 14px; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--ink-soft);
+    transition: all 0.15s;
+  }
+  .req-tabs button:hover { border-color: var(--accent); color: var(--accent); }
+  .req-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .req-pane { display: none; }
+  .req-pane.show { display: block; }
+  .req-list { list-style: none; padding: 0; margin: 0; }
+  .req-list li {
+    background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+    padding: 12px 14px; margin-bottom: 8px;
+    display: grid; grid-template-columns: 60px 1fr; gap: 14px;
+    align-items: start;
+  }
+  .req-list .id {
+    font-family: "SF Mono", Menlo, monospace; font-size: 12px;
+    color: var(--accent); font-weight: 600;
+    background: var(--accent-soft); padding: 2px 8px; border-radius: 4px;
+    text-align: center; align-self: center;
+  }
+  .req-list .body strong { font-weight: 600; }
+  .req-list .body small { display: block; color: var(--ink-soft); margin-top: 4px; font-size: 13px; }
+
+  /* ---------- Block diagram ---------- */
+  .diagram {
+    background: linear-gradient(180deg, #fcfbf6 0%, #fff 100%);
+    border: 1px solid var(--rule); border-radius: 12px;
+    padding: 24px 16px; position: relative;
+    overflow-x: auto;
+  }
+  .layer {
+    display: grid; grid-template-columns: 160px 1fr; gap: 16px;
+    align-items: center; padding: 10px 0;
+  }
+  .layer-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--ink-dim);
+    text-align: right; padding-right: 8px; border-right: 2px solid var(--rule);
+  }
+  .layer-cells {
+    display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-start;
+  }
+  .cell {
+    flex: 1 1 140px; min-width: 130px; max-width: 220px;
+    border: 1.5px solid var(--rule-strong); border-radius: 8px;
+    background: #fff; padding: 10px 12px;
+    cursor: pointer; transition: all 0.15s;
+    font-size: 13px; line-height: 1.35;
+  }
+  .cell:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.06); border-color: var(--accent); }
+  .cell.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px rgba(27,77,138,0.15); }
+  .cell .ttl { font-weight: 600; font-size: 13px; color: var(--ink); display: block; margin-bottom: 2px; }
+  .cell .agents { font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: 0.04em; }
+  .cell .sub { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+
+  .cell.input    { border-top: 3px solid var(--teal); }
+  .cell.iine     { border-top: 3px solid var(--accent); }
+  .cell.core     { border-top: 3px solid var(--plum); background: var(--plum-soft); }
+  .cell.module   { border-top: 3px solid var(--green); }
+  .cell.intel    { border-top: 3px solid var(--gold); }
+  .cell.output   { border-top: 3px solid var(--warm); }
+  .cell.related-on { box-shadow: 0 0 0 3px var(--gold); border-color: var(--gold); }
+
+  .layer-arrow { color: var(--rule-strong); text-align: center; font-size: 22px; margin: 4px 0 4px 168px; }
+
+  .diagram-detail {
+    margin-top: 18px; padding: 16px 18px;
+    background: #fff; border: 1px solid var(--rule); border-radius: 8px;
+    min-height: 80px;
+  }
+  .diagram-detail .empty { color: var(--ink-soft); font-style: italic; }
+  .diagram-detail h4 { margin: 0 0 6px; color: var(--accent); font-size: 16px; }
+  .diagram-detail .meta { color: var(--ink-soft); font-size: 12px; margin-bottom: 8px; }
+  .diagram-detail .meta span { margin-right: 14px; }
+  .diagram-detail p { margin: 6px 0; font-size: 14px; }
+
+  /* ---------- Agents ---------- */
+  .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .agent-card {
+    border: 1.5px solid var(--rule-strong); border-radius: 8px;
+    background: #fff; padding: 14px; transition: all 0.15s; cursor: pointer;
+  }
+  .agent-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .agent-card .id {
+    display: inline-block; padding: 2px 8px; background: var(--accent);
+    color: #fff; border-radius: 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  }
+  .agent-card h4 { margin: 8px 0 4px; font-size: 15px; }
+  .agent-card .trig { font-size: 12px; color: var(--ink-soft); }
+  .agent-card .job { font-size: 13px; margin-top: 8px; color: var(--ink); }
+  .agent-card .phase { font-size: 11px; margin-top: 8px; color: var(--green); font-weight: 600; }
+
+  /* ---------- Workflow walkthrough ---------- */
+  .wf-step {
+    display: grid; grid-template-columns: 50px 1fr; gap: 16px;
+    padding: 14px; background: #fff; border: 1px solid var(--rule); border-radius: 8px;
+    margin-bottom: 8px; transition: all 0.15s;
+  }
+  .wf-step.active { border-color: var(--accent); background: var(--accent-soft); }
+  .wf-step .num {
+    width: 32px; height: 32px; border-radius: 999px; background: var(--accent); color: #fff;
+    text-align: center; line-height: 32px; font-weight: 700; font-size: 14px;
+  }
+  .wf-step h4 { margin: 0 0 4px; font-size: 15px; }
+  .wf-step .who { font-size: 11px; color: var(--ink-soft); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 4px; }
+  .wf-step p { margin: 6px 0; font-size: 14px; color: var(--ink-soft); }
+  .wf-step .who span {
+    display: inline-block; margin-right: 6px; padding: 1px 7px;
+    border-radius: 3px; font-size: 11px; font-weight: 600;
+  }
+  .who-h  { background: var(--gold-soft); color: var(--gold); }
+  .who-a  { background: var(--accent-soft); color: var(--accent); }
+  .who-c  { background: var(--green-soft); color: var(--green); }
+  .who-x  { background: var(--warm-soft); color: var(--warm); }
+
+  .wf-controls { display: flex; gap: 8px; margin: 16px 0; align-items: center; }
+
+  /* ---------- Phasing timeline ---------- */
+  .phase-timeline { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 12px 0; }
+  .phase-cell {
+    background: #fff; border: 1px solid var(--rule); padding: 12px 8px;
+    text-align: center; font-size: 12px; min-height: 80px;
+  }
+  .phase-cell .m { font-weight: 700; font-size: 14px; color: var(--accent); }
+  .phase-cell .t { color: var(--ink-soft); margin-top: 4px; line-height: 1.3; }
+  .phase-1 { background: var(--accent-soft); }
+  .phase-2 { background: var(--green-soft); }
+  .phase-3 { background: var(--gold-soft); }
+  .phase-4 { background: var(--warm-soft); }
+
+  .phase-card {
+    border: 1.5px solid var(--rule-strong); border-radius: 8px;
+    padding: 16px; background: #fff; margin-bottom: 8px;
+  }
+  .phase-card h4 { margin: 0 0 6px; font-size: 16px; }
+  .phase-card .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    margin-right: 6px;
+  }
+  .phase-card.p1 { border-top: 4px solid var(--accent); }
+  .phase-card.p1 .pill { background: var(--accent-soft); color: var(--accent); }
+  .phase-card.p2 { border-top: 4px solid var(--green); }
+  .phase-card.p2 .pill { background: var(--green-soft); color: var(--green); }
+  .phase-card.p3 { border-top: 4px solid var(--gold); }
+  .phase-card.p3 .pill { background: var(--gold-soft); color: var(--gold); }
+  .phase-card.p4 { border-top: 4px solid var(--warm); }
+  .phase-card.p4 .pill { background: var(--warm-soft); color: var(--warm); }
+  .phase-card ul { margin: 8px 0 0 18px; font-size: 13px; color: var(--ink-soft); }
+
+  /* ---------- Tech stack table ---------- */
+  table.stack {
+    width: 100%; border-collapse: collapse; font-size: 14px; background: #fff;
+    border: 1px solid var(--rule); border-radius: 6px; overflow: hidden;
+  }
+  table.stack th, table.stack td {
+    padding: 10px 12px; text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.stack th { background: #f3f1ea; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
+  table.stack tr:last-child td { border-bottom: none; }
+  table.stack td.tech { font-weight: 600; color: var(--accent); white-space: nowrap; }
+
+  /* ---------- Glossary ---------- */
+  details.glossary {
+    background: #fff; border: 1px solid var(--rule); border-radius: 6px;
+    padding: 12px 16px; margin-bottom: 8px;
+  }
+  details.glossary summary { font-weight: 500; cursor: pointer; outline: none; }
+  details.glossary summary::marker { color: var(--accent); }
+  details.glossary[open] { border-color: var(--accent); }
+  details.glossary p { margin: 8px 0 0; color: var(--ink-soft); font-size: 14px; }
+
+  footer {
+    padding: 32px; text-align: center; color: var(--ink-soft); font-size: 13px;
+    border-top: 1px solid var(--rule); margin-top: 40px;
+  }
+
+  .hint { color: var(--accent); font-weight: 500; }
+  .pain { color: var(--warm); font-weight: 500; }
+
+  /* Legend */
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; padding: 8px 12px; background: #fcfbf6; border-radius: 6px; font-size: 12px; }
+  .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 4px; vertical-align: -2px; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <span class="badge">KDPS · Full system map</span>
+  <h1>The whole ERP, on one page</h1>
+  <p class="lede">Every input, module, agent, data store, and output that makes up KDPS — wired together so you can see how a t-shirt gets from a vendor's truck to a Tally voucher with no manual rework in between.</p>
+  <p class="companion">Companion to <a href="workflow-explainer.html">workflow-explainer.html</a> — that one zooms into the <em>ingestion</em> step (invoice → PT). This one zooms <em>out</em> to the whole system.</p>
+</header>
+
+<nav class="sticky">
+  <ol>
+    <li><a href="#desc">1 · Description</a></li>
+    <li><a href="#req">2 · Requirements</a></li>
+    <li><a href="#diagram">3 · Block diagram</a></li>
+    <li><a href="#agents">4 · The 10 agents</a></li>
+    <li><a href="#workflow">5 · End-to-end workflow</a></li>
+    <li><a href="#phases">6 · 8-month phasing</a></li>
+    <li><a href="#stack">7 · Tech stack</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============== 1. DESCRIPTION ============== -->
+<section class="chapter" id="desc">
+  <h2><span class="num">1</span>What KDPS is</h2>
+  <p class="sub">An AI-powered, fashion-retail-aware operating system that replaces a fragmented stack of per-store POS + Tally + Excel + WhatsApp groups with one coherent, audit-ready platform.</p>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <p style="margin: 0 0 12px;">
+      KDPS is being built for a multi-brand Indian fashion retailer running across <strong>Bihar &amp; Jharkhand</strong> with stores in Ranchi, Deoghar, Bhagalpur, Hazaribagh, Bokaro and beyond. The current operation is functional but <span class="pain">human-heavy at every stage</span> — staff manually re-type invoice rows into per-person Excel sheets, account managers chase PT files over WhatsApp, payments are released on memory, and reconciliation only happens after the fact.
+    </p>
+    <p style="margin: 0;">
+      The goal is not "another inventory app." It is a <strong>single canonical truth</strong> for inventory, sales, money, and people — wired to the brands' systems via PT files, to Tally via the TIR format, and to owners/managers via WhatsApp. <strong>Fashion-specific assumptions override generic ERP defaults</strong>: SKUs always carry size×color, every brand is either Sale-or-Return or Outright, every item has a Season and a Collection, and EOSS discounts must be enforced at POS with a full audit trail.
+    </p>
+  </div>
+
+  <div class="grid g5" style="margin-bottom: 20px;">
+    <div class="stat"><span class="num">50+</span><span class="lbl">SBUs<br/><small>(stores · warehouses · franchise)</small></span></div>
+    <div class="stat"><span class="num">20K+</span><span class="lbl">SKUs<br/><small>(style × size × color)</small></span></div>
+    <div class="stat"><span class="num">40+</span><span class="lbl">Brands<br/><small>(branded + non-branded)</small></span></div>
+    <div class="stat"><span class="num">100–500</span><span class="lbl">Staff<br/><small>(face check-in)</small></span></div>
+    <div class="stat"><span class="num">8</span><span class="lbl">Months<br/><small>(target M3 = stock live)</small></span></div>
+  </div>
+
+  <h3 style="font-size: 17px; margin: 20px 0 8px;">Five domain invariants you cannot violate</h3>
+  <div class="grid g3">
+    <div class="card muted">
+      <strong>1 · SKU = Style × Size × Color</strong>
+      <p style="font-size: 13px; color: var(--ink-soft); margin: 6px 0 0;">Never collapse stock to a single barcode. "Size 8: 3 units, Size 9: 0 (STOCKOUT)" is the granularity, not "Nike 11 units."</p>
+    </div>
+    <div class="card muted">
+      <strong>2 · Dual-track: SOR vs Outright</strong>
+      <p style="font-size: 13px; color: var(--ink-soft); margin: 6px 0 0;">Each brand is one or the other (or hybrid). Drives ownership, return windows (60–120 days for SOR), margin, EOSS funding, and agent behaviour.</p>
+    </div>
+    <div class="card muted">
+      <strong>3 · Season &amp; Collection tagging</strong>
+      <p style="font-size: 13px; color: var(--ink-soft); margin: 6px 0 0;">Every item carries Season (SS26, AW26), Collection (Core/Fresh/Clearance), and Age. Auto-detected from PT style codes.</p>
+    </div>
+    <div class="card muted">
+      <strong>4 · Profitability is derived</strong>
+      <p style="font-size: 13px; color: var(--ink-soft); margin: 6px 0 0;">Cost from PT/invoice at stock-in. Revenue from POS at sale. Margin computed per transaction. No separate P&amp;L entry flow.</p>
+    </div>
+    <div class="card muted">
+      <strong>5 · EOSS discount control</strong>
+      <p style="font-size: 13px; color: var(--ink-soft); margin: 6px 0 0;">During EOSS, the active offer must be applied from the scanned barcode, overrides must require approval, and each bill must keep discount and margin history.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== 2. REQUIREMENTS ============== -->
+<section class="chapter" id="req">
+  <h2><span class="num">2</span>Requirements</h2>
+  <p class="sub">What the system must do (functional), how it must behave (non-functional), and the non-negotiables (domain). <span class="hint">Click a tab</span> to switch.</p>
+
+  <div class="req-tabs">
+    <button class="on" data-tab="fr">Functional (FR)</button>
+    <button data-tab="nfr">Non-functional (NFR)</button>
+    <button data-tab="dom">Domain invariants (DI)</button>
+    <button data-tab="phase">By phase</button>
+  </div>
+
+  <div class="req-pane show" data-pane="fr">
+    <ul class="req-list">
+      <li><span class="id">FR-1</span><div class="body"><strong>Invoice ingestion (mandatory entry point).</strong> Upload PDF/photo of vendor invoice from any device. Auto-extract header + line items. <small>Triggers Agent 1 (Invoice Reader). No downstream processing happens without an invoice.</small></div></li>
+      <li><span class="id">FR-2</span><div class="body"><strong>PT file ingestion &amp; mapping.</strong> Upload vendor PT file (varying format per brand). Auto-detect headers and map to KDPS taxonomy. <small>Triggers Agent 2 (PT Mapper). Brand-specific mapping rules versioned, editable without code.</small></div></li>
+      <li><span class="id">FR-3</span><div class="body"><strong>GRN (Goods Receipt Note) creation.</strong> Confirm physical receipt independently of invoice. Mark shortages, damages, scan barcodes, manual entry fallback. <small>The third leg of 3-way reconciliation.</small></div></li>
+      <li><span class="id">FR-4</span><div class="body"><strong>Non-branded SKU creation.</strong> For local goods with no barcode/MRP: classify, generate KDPS barcode, derive MRP via cost+transport+GST+(20–25%) margin, prevent duplicates via similarity detection. <small>Centralised SKU registry.</small></div></li>
+      <li><span class="id">FR-5</span><div class="body"><strong>Stock ledger by Style × Size × Color.</strong> Per-SBU view, real-time updates, inter-SBU transfer with barcode scan, and immediate deduction on completed sale. <small>Drives stockout alerts, transfer suggestions, dead-stock classification.</small></div></li>
+      <li><span class="id">FR-6</span><div class="body"><strong>POS harvester (15-min sync).</strong> Reads any POS export (CSV/Excel/API), deducts stock by barcode, captures sale price + discount + promo applied. <small>Agent 4. Works against multiple POS systems including the existing TEN.</small></div></li>
+      <li><span class="id">FR-7</span><div class="body"><strong>3-way reconciliation.</strong> Nightly fuzzy match: Invoice ↔ GRN ↔ PT. Mismatches surface, never get buried. <small>Agent 3.</small></div></li>
+      <li><span class="id">FR-8</span><div class="body"><strong>SOR return deadline tracking.</strong> Track return window (60–120 days from PT date) per SOR brand. Alert at 30 / 15 / 7 days. <small>Highest-ROI safety net — missing a deadline = dead stock KDPS owns by default.</small></div></li>
+      <li><span class="id">FR-9</span><div class="body"><strong>Goods Return (GR) processing.</strong> Three types: Seasonal (10% allowance), Defective, Unauthorised stock (debit note). Track against SOR deadline. <small>Vendor ledger reconciliation.</small></div></li>
+      <li><span class="id">FR-10</span><div class="body"><strong>Payment lifecycle (PASCS).</strong> Eligible → Requested → Approved → Executed → Confirmed → Reconciled. Eligibility requires invoice + GRN + PT + TIR aligned. <small>Lump-sum payments attribute across multiple invoices. Pre-tax CD calc. Multi-level WhatsApp approval by amount/vendor threshold.</small></div></li>
+      <li><span class="id">FR-11</span><div class="body"><strong>Bank statement reconciliation.</strong> Upload bank PDF, system matches transactions to executed payments by ref/amount. <small>Closes the payment loop. Status → Reconciled.</small></div></li>
+      <li><span class="id">FR-12</span><div class="body"><strong>Attendance (face + GPS + liveness).</strong> Browser-based check-in for store staff, no app install. Tied to incentive eligibility. <small>Agent 5. face-api.js, runs on low-end Android phones.</small></div></li>
+      <li><span class="id">FR-13</span><div class="body"><strong>Sales incentive auto-calc.</strong> Target-based + per-unit + brand-specific (SPF) + tiered. Tied to attendance (absences reduce eligibility). <small>Per the Definitive Plan §7.</small></div></li>
+      <li><span class="id">FR-14</span><div class="body"><strong>EOSS module.</strong> Pre-EOSS markdown suggestions, POS-enforced discount rules, manager approval above floor limit, daily WhatsApp summary, SOR brand-funded portion calc. <small>Drives margin from 25% → 18%.</small></div></li>
+      <li><span class="id">FR-15</span><div class="body"><strong>Daily digest at 9 PM.</strong> WhatsApp summary: revenue, stock, attendance, alerts. Per-SBU and consolidated. <small>Agent 6. Primary observability surface for owners.</small></div></li>
+      <li><span class="id">FR-16</span><div class="body"><strong>Fashion Demand AI (weekly).</strong> Size-level forecasting, store affinity, weather-aware. Outputs replenishment recommendations. <small>Agent 7. Prophet + scikit-learn.</small></div></li>
+      <li><span class="id">FR-17</span><div class="body"><strong>Dead Stock Hunter (daily).</strong> Hot / Warm / Cold / Dead (45+ days zero sales). Per-SBU action recs differ by SOR vs Outright. <small>Agent 8.</small></div></li>
+      <li><span class="id">FR-18</span><div class="body"><strong>Profitability tracker (continuous + weekly digest).</strong> Per-brand, per-store, per-style P&amp;L. Margin derived per transaction. <small>Agent 9.</small></div></li>
+      <li><span class="id">FR-19</span><div class="body"><strong>Anomaly Watchdog (continuous).</strong> Shrinkage, fraud, stuck transfers, payment anomalies. <small>Agent 10.</small></div></li>
+      <li><span class="id">FR-20</span><div class="body"><strong>Tally / TIR sync.</strong> Phase 3: XML export. Phase 4: TallyPrime API push nightly. GST-ready vouchers (purchase, sales, stock journals, credit notes). <small>Tally remains the book of record.</small></div></li>
+      <li><span class="id">FR-21</span><div class="body"><strong>Store closure workflow (5-step).</strong> Mark Closing → AI stock categorisation → Liquidation dashboard → Staff reassignment → Final reconciliation. <small>Must produce zero leftover stock + Tally closing entries.</small></div></li>
+      <li><span class="id">FR-22</span><div class="body"><strong>New store setup.</strong> AI-suggested seed stock from similar stores' sales curves; regional size distributions differ (North vs South India). <small>Reduces opening dead-stock.</small></div></li>
+      <li><span class="id">FR-23</span><div class="body"><strong>Network → store drilldown dashboards.</strong> Region → Store → Brand → Style → Size. Metabase. <small>Replaces ad-hoc Excel reports.</small></div></li>
+      <li><span class="id">FR-24</span><div class="body"><strong>Vendor / brand master with commercial model.</strong> SOR vs Outright vs Hybrid, agreed margin model (25-18-10 / B&amp;S / Consignment), CD%, credit days, agent details, bank account. <small>Drives downstream rules.</small></div></li>
+      <li><span class="id">FR-25</span><div class="body"><strong>Promotional offer master (date-bound).</strong> GWP / ATV / threshold offers per brand-season with start/close dates. POS Harvester attributes sales to active offers. <small>Solves the monthly sales-report pain from Conversation 1.</small></div></li>
+      <li><span class="id">FR-26</span><div class="body"><strong>Audit trail.</strong> Every classification, mapping, override, approval, payment carries who/when/why. Immutable. <small>The PRD's §4.F gap.</small></div></li>
+    </ul>
+  </div>
+
+  <div class="req-pane" data-pane="nfr">
+    <ul class="req-list">
+      <li><span class="id">NFR-1</span><div class="body"><strong>Mobile-first PWA.</strong> Runs on low-end Android in-browser. Camera, barcode, face-recognition all in browser. <small>No app store install — staff turnover is high.</small></div></li>
+      <li><span class="id">NFR-2</span><div class="body"><strong>WhatsApp as the primary interaction surface.</strong> Approvals (payments, transfers, markdowns) happen in WhatsApp, not a web admin panel. Owners read digests in WhatsApp. <small>Web admin is for ops desks; WhatsApp for everyone else.</small></div></li>
+      <li><span class="id">NFR-3</span><div class="body"><strong>Indian context.</strong> ₹ INR, Lakh/Crore formatting, GST mandatory (GSTIN/HSN/tax breakup), Hindi training videos, English dashboards. <small>Tally is the book of record.</small></div></li>
+      <li><span class="id">NFR-4</span><div class="body"><strong>Volume.</strong> 20K SKUs × 50+ SBUs ≈ millions of stock rows. ~200 invoices/day during peaks. <small>PostgreSQL sized accordingly; partition by SBU/season.</small></div></li>
+      <li><span class="id">NFR-5</span><div class="body"><strong>Cost envelope.</strong> ~₹25–40K/month operational including hosting, AI inference, WhatsApp BSP. <small>Hetzner 2-server hosting. Claude Vision via Anthropic API with prompt caching for the Reader.</small></div></li>
+      <li><span class="id">NFR-6</span><div class="body"><strong>Latency budgets.</strong> Invoice upload → PT in &lt; 60s. POS sync 15-min. Reconciliation nightly. Daily digest at 21:00 IST. <small>Real-time stock visibility, batch back-office.</small></div></li>
+      <li><span class="id">NFR-7</span><div class="body"><strong>Onboardability.</strong> 10 new vendors/month must onboard with zero code changes. <small>Reader generalises across formats; Rule Engine versioned mapping rules.</small></div></li>
+      <li><span class="id">NFR-8</span><div class="body"><strong>Auditability.</strong> Every row, every override, every approval — who/when/why. Immutable change log. <small>Required for Tally reconciliation and disputes.</small></div></li>
+      <li><span class="id">NFR-9</span><div class="body"><strong>Resilience.</strong> Store can keep selling during internet outage; manual billing reconciles next day (per Conversation 1). Agents retry; reconciliation engine is idempotent. <small>Network at stores is unreliable.</small></div></li>
+      <li><span class="id">NFR-10</span><div class="body"><strong>Role-based access.</strong> Warehouse staff / store manager / account manager / finance / owner. Tied to approval thresholds. <small>ERPNext provides the role primitive.</small></div></li>
+      <li><span class="id">NFR-11</span><div class="body"><strong>Storage.</strong> Invoice photos, PT files, employee docs in object storage with free egress (Cloudflare R2). <small>~50–200 GB at scale.</small></div></li>
+      <li><span class="id">NFR-12</span><div class="body"><strong>Extensibility.</strong> ERPNext extension over conformance — fashion retail assumptions override generic ERP defaults. <small>Per CLAUDE.md.</small></div></li>
+    </ul>
+  </div>
+
+  <div class="req-pane" data-pane="dom">
+    <ul class="req-list">
+      <li><span class="id">DI-1</span><div class="body"><strong>SKU = Style × Size × Color.</strong> Every stock table, dashboard, transfer, and forecast preserves the size–color matrix. <small>Single-barcode SKUs silently break dead-stock alerts.</small></div></li>
+      <li><span class="id">DI-2</span><div class="body"><strong>SOR vs Outright as a first-class dimension.</strong> Set in Brand Master, drives ownership, return window, margin, EOSS, and per-agent behaviour. <small>Not a flag — a top-level dimension in every schema, API, UI.</small></div></li>
+      <li><span class="id">DI-3</span><div class="body"><strong>Season &amp; Collection on every item.</strong> Auto-detected from PT style code. Aging thresholds configurable (30/60/90 days). <small>Drives EOSS, dead-stock, demand forecasting.</small></div></li>
+      <li><span class="id">DI-4</span><div class="body"><strong>Profitability is derived, never entered.</strong> Cost from PT at stock-in, revenue from POS at sale. <small>No separate P&amp;L data entry flow exists.</small></div></li>
+      <li><span class="id">DI-5</span><div class="body"><strong>EOSS discount history.</strong> Every discounted sale must preserve original MRP, discount %, final selling price, offer rule, funding source, cashier, approver if any, and timestamp. <small>Needed for margin, brand-funded claim, and leakage audits.</small></div></li>
+      <li><span class="id">DI-6</span><div class="body"><strong>Cash Discount on pre-tax base only.</strong> CD reduces principal; GST line is unchanged because vendor has already remitted GST on the original taxable value. <small>Tested invariant in <code>pdf-to-pt/tests/test_pricing.py</code>.</small></div></li>
+      <li><span class="id">DI-7</span><div class="body"><strong>Non-brand MRP composition order.</strong> (Base + Transport) → GST → margin. Margin must be in [20%, 25%]. Round to ₹5. <small>Wrong order produces ~5–8% systematic mispricing.</small></div></li>
+      <li><span class="id">DI-8</span><div class="body"><strong>Invoice is the mandatory entry point.</strong> No GRN, no PT, no payment without an invoice in the system. <small>Per PRD §IINE workflow.</small></div></li>
+    </ul>
+  </div>
+
+  <div class="req-pane" data-pane="phase">
+    <ul class="req-list">
+      <li><span class="id">P1</span><div class="body"><strong>Phase 1 (M1–M3): Real-Time Stock Engine.</strong> FR-1 through FR-8 + FR-15 + FR-23 + FR-24. <small>Hard cut at M3: PT → stock visible by Style×Size×Color across 5 SBUs with nightly reconciliation running.</small></div></li>
+      <li><span class="id">P2</span><div class="body"><strong>Phase 2 (M4–M5): Fashion AI + Profitability + Scale.</strong> FR-16, FR-17, FR-18, FR-19, FR-14. Roll out from 5 → 25 → all 50+ SBUs. <small>Adds the intelligence layer.</small></div></li>
+      <li><span class="id">P3</span><div class="body"><strong>Phase 3 (M6–M7): Workforce + Payments + Incentives.</strong> FR-10, FR-11, FR-12, FR-13, FR-21, FR-22. Tally XML export. <small>Money + people layer.</small></div></li>
+      <li><span class="id">P4</span><div class="body"><strong>Phase 4 (M8): Tally Auto-Sync + Polish.</strong> FR-20 (TallyPrime API). Performance, training (3 batches), docs, source handover. <small>Sealing the system.</small></div></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============== 3. BLOCK DIAGRAM ============== -->
+<section class="chapter" id="diagram">
+  <h2><span class="num">3</span>Block diagram</h2>
+  <p class="sub">Inputs flow top-to-bottom through ingestion, into the central data store, out to the operational modules, observed by the intelligence agents, and surfaced via outputs. <span class="hint">Click any block</span> to read what it does and where its agents fire.</p>
+
+  <div class="legend">
+    <span><span class="sw" style="background: var(--teal);"></span>External input</span>
+    <span><span class="sw" style="background: var(--accent);"></span>Ingestion (IINE)</span>
+    <span><span class="sw" style="background: var(--plum);"></span>Core data</span>
+    <span><span class="sw" style="background: var(--green);"></span>Operational module</span>
+    <span><span class="sw" style="background: var(--gold);"></span>Intelligence agent</span>
+    <span><span class="sw" style="background: var(--warm);"></span>Output</span>
+  </div>
+
+  <div class="diagram" id="diagram">
+    <div class="layer">
+      <div class="layer-label">External<br/>Inputs</div>
+      <div class="layer-cells">
+        <div class="cell input" data-block="vendors"><span class="ttl">Vendors</span><span class="sub">Brands &amp; non-brand suppliers · ship goods + invoice (± PT)</span></div>
+        <div class="cell input" data-block="pos"><span class="ttl">POS terminals</span><span class="sub">In-store sale events · TEN &amp; others</span></div>
+        <div class="cell input" data-block="customers"><span class="ttl">Customers</span><span class="sub">Walk-in · pay cash / UPI · receipts</span></div>
+        <div class="cell input" data-block="bank"><span class="ttl">Bank statements</span><span class="sub">PDF upload · transaction matching</span></div>
+        <div class="cell input" data-block="staffin"><span class="ttl">Staff phones</span><span class="sub">Face check-in · GPS · uploads</span></div>
+      </div>
+    </div>
+    <div class="layer-arrow">↓</div>
+
+    <div class="layer">
+      <div class="layer-label">Ingestion<br/>(IINE)</div>
+      <div class="layer-cells">
+        <div class="cell iine" data-block="invoice-reader"><span class="ttl">Invoice Reader</span><span class="agents">A1</span><span class="sub">PDF/photo → structured JSON via Claude Vision</span></div>
+        <div class="cell iine" data-block="pt-mapper"><span class="ttl">PT Mapper</span><span class="agents">A2</span><span class="sub">Any vendor PT → KDPS taxonomy</span></div>
+        <div class="cell iine" data-block="grn"><span class="ttl">GRN Engine</span><span class="sub">Physical receipt confirmation, shortages, damages</span></div>
+        <div class="cell iine" data-block="rule-engine"><span class="ttl">Rule Engine</span><span class="sub">Brand-specific mappings · versioned · editable without code</span></div>
+        <div class="cell iine" data-block="sku-engine"><span class="ttl">SKU &amp; Barcode</span><span class="sub">Unique creation · duplicate detection · barcode generation</span></div>
+      </div>
+    </div>
+    <div class="layer-arrow">↓</div>
+
+    <div class="layer">
+      <div class="layer-label">Core<br/>Data</div>
+      <div class="layer-cells">
+        <div class="cell core" data-block="postgres"><span class="ttl">PostgreSQL — Source of truth</span><span class="sub">Brand · Vendor · SBU · SKU · GRN · PTRow · Invoice · StockLedger · Sale · Payment · Staff · Offer · TIR</span></div>
+        <div class="cell core" data-block="r2"><span class="ttl">Cloudflare R2</span><span class="sub">Invoice photos · PT files · employee docs · bank PDFs</span></div>
+      </div>
+    </div>
+    <div class="layer-arrow">↓</div>
+
+    <div class="layer">
+      <div class="layer-label">Operational<br/>Modules</div>
+      <div class="layer-cells">
+        <div class="cell module" data-block="stock"><span class="ttl">Stock Engine</span><span class="sub">Style×Size×Color ledger · transfers · sale deduction · SOR deadline</span></div>
+        <div class="cell module" data-block="sales"><span class="ttl">Sales / POS Harvester</span><span class="agents">A4</span><span class="sub">15-min sync · stock deduction · promo attribution</span></div>
+        <div class="cell module" data-block="pascs"><span class="ttl">PASCS — Payments</span><span class="sub">Eligible→Requested→Approved→Executed→Confirmed→Reconciled</span></div>
+        <div class="cell module" data-block="workforce"><span class="ttl">Workforce</span><span class="agents">A5</span><span class="sub">Attendance · roster · incentive calc · payroll</span></div>
+        <div class="cell module" data-block="returns"><span class="ttl">Returns / EOSS</span><span class="sub">Seasonal · defective · debit notes · markdown approvals</span></div>
+      </div>
+    </div>
+    <div class="layer-arrow">↓</div>
+
+    <div class="layer">
+      <div class="layer-label">Intelligence<br/>(Agents)</div>
+      <div class="layer-cells">
+        <div class="cell intel" data-block="recon"><span class="ttl">Reconciliation Engine</span><span class="agents">A3</span><span class="sub">Nightly · 3-way fuzzy match Invoice ↔ GRN ↔ PT</span></div>
+        <div class="cell intel" data-block="anomaly"><span class="ttl">Anomaly Watchdog</span><span class="agents">A10</span><span class="sub">Continuous · shrinkage · fraud · stuck transfers</span></div>
+        <div class="cell intel" data-block="profit"><span class="ttl">Profitability Tracker</span><span class="agents">A9</span><span class="sub">Continuous · per-brand &amp; per-store P&amp;L</span></div>
+        <div class="cell intel" data-block="demand"><span class="ttl">Fashion Demand AI</span><span class="agents">A7</span><span class="sub">Weekly · size-level forecast · weather-aware</span></div>
+        <div class="cell intel" data-block="dead"><span class="ttl">Dead Stock Hunter</span><span class="agents">A8</span><span class="sub">Daily · Hot / Warm / Cold / Dead classification</span></div>
+        <div class="cell intel" data-block="digest"><span class="ttl">Daily Digest</span><span class="agents">A6</span><span class="sub">9 PM · WhatsApp summary per SBU and consolidated</span></div>
+      </div>
+    </div>
+    <div class="layer-arrow">↓</div>
+
+    <div class="layer">
+      <div class="layer-label">Outputs</div>
+      <div class="layer-cells">
+        <div class="cell output" data-block="whatsapp"><span class="ttl">WhatsApp</span><span class="sub">Interactive · approvals · digests · alerts</span></div>
+        <div class="cell output" data-block="metabase"><span class="ttl">Metabase</span><span class="sub">Network → Region → Store → Brand → Style → Size</span></div>
+        <div class="cell output" data-block="tally"><span class="ttl">Tally / TIR</span><span class="sub">XML / API · GST-ready vouchers</span></div>
+        <div class="cell output" data-block="receipts"><span class="ttl">Customer receipts</span><span class="sub">POS print · digital copy</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="diagram-detail" id="diagram-detail">
+    <p class="empty">Click any block in the diagram above to see what it does, who reads/writes it, and which agents touch it.</p>
+  </div>
+</section>
+
+<!-- ============== 4. AGENTS ============== -->
+<section class="chapter" id="agents">
+  <h2><span class="num">4</span>The 10 AI agents</h2>
+  <p class="sub">Each agent is a separate scheduled job with its own trigger and scope. Don't conflate them. <span class="hint">Click an agent</span> to see what it touches in the block diagram (it will highlight there).</p>
+
+  <div class="agent-grid" id="agent-grid"></div>
+</section>
+
+<!-- ============== 5. WORKFLOW ============== -->
+<section class="chapter" id="workflow">
+  <h2><span class="num">5</span>End-to-end workflow — a day in the life of one t-shirt</h2>
+  <p class="sub">From the moment a Status Quo t-shirt leaves D Apparel's warehouse in Surat to the moment its margin shows up in Tally. <span class="hint">Press Play</span> to step through, or click any step.</p>
+
+  <div class="wf-controls">
+    <button onclick="wfPrev()" style="background: #fff; border: 1px solid var(--accent); color: var(--accent); border-radius: 6px; padding: 8px 14px; cursor: pointer;">‹ Prev</button>
+    <button onclick="wfNext()" style="background: var(--accent); border: none; color: #fff; border-radius: 6px; padding: 8px 14px; cursor: pointer;">Next ›</button>
+    <button onclick="wfReset()" style="background: #fff; border: 1px solid var(--rule-strong); color: var(--ink-soft); border-radius: 6px; padding: 8px 14px; cursor: pointer;">Reset</button>
+    <span id="wf-counter" style="margin-left: 10px; color: var(--ink-soft); font-size: 13px;"></span>
+  </div>
+
+  <div id="wf-steps"></div>
+
+  <div class="card muted" style="margin-top: 16px;">
+    <strong>Legend:</strong>
+    <span class="who-h" style="padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">HUMAN</span>
+    <span class="who-a" style="padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 4px;">AGENT</span>
+    <span class="who-c" style="padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 4px;">CODE</span>
+    <span class="who-x" style="padding: 1px 7px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 4px;">EXTERNAL</span>
+    <p style="margin: 8px 0 0; font-size: 13px; color: var(--ink-soft);">Each step shows who acts. Most steps are agents or pure code; humans only intervene at upload, approval, and override moments.</p>
+  </div>
+</section>
+
+<!-- ============== 6. PHASING ============== -->
+<section class="chapter" id="phases">
+  <h2><span class="num">6</span>The 8-month phasing</h2>
+  <p class="sub">Each month builds on the previous. The hard cut is M3 — by then PT → stock must be visible by Style×Size×Color across 5 pilot SBUs with nightly reconciliation running.</p>
+
+  <div class="phase-timeline">
+    <div class="phase-cell phase-1"><div class="m">M1</div><div class="t">Masters · PWA shell · Invoice Reader</div></div>
+    <div class="phase-cell phase-1"><div class="m">M2</div><div class="t">PT Mapper · GRN · POS Harvester</div></div>
+    <div class="phase-cell phase-1"><div class="m">M3</div><div class="t">5-SBU pilot · reconcile · digest · SOR</div></div>
+    <div class="phase-cell phase-2"><div class="m">M4</div><div class="t">25-SBU rollout · Demand AI · Dead Stock</div></div>
+    <div class="phase-cell phase-2"><div class="m">M5</div><div class="t">All 50+ SBUs · P&amp;L · Anomaly · EOSS</div></div>
+    <div class="phase-cell phase-3"><div class="m">M6</div><div class="t">Attendance · Payments · WhatsApp approvals</div></div>
+    <div class="phase-cell phase-3"><div class="m">M7</div><div class="t">Incentives · Payroll · Tally XML · Closures</div></div>
+    <div class="phase-cell phase-4"><div class="m">M8</div><div class="t">TallyPrime API · Perf · Training · Handover</div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="phase-card p1">
+      <span class="pill">Phase 1 · M1–M3</span>
+      <h4>Real-Time Stock Engine</h4>
+      <p style="font-size: 14px; color: var(--ink-soft); margin: 6px 0;">Get PT → stock visibility working on real invoices, end to end. Single most important phase.</p>
+      <ul>
+        <li>Masters: SBU, SKU, Brand, Vendor, HSN, Size, Color, Season</li>
+        <li>PWA shell with camera + barcode</li>
+        <li>Agent 1 (Invoice Reader) + Agent 2 (PT Mapper)</li>
+        <li>GRN, SBU transfer with barcode</li>
+        <li>Agent 4 (POS Harvester, 15-min)</li>
+        <li>Agent 3 (nightly reconciliation)</li>
+        <li>Agent 6 (WhatsApp daily digest)</li>
+        <li>SOR return deadline tracking</li>
+        <li>Pilot at 5 SBUs by end of M3</li>
+      </ul>
+    </div>
+    <div class="phase-card p2">
+      <span class="pill">Phase 2 · M4–M5</span>
+      <h4>Fashion AI + Profitability + Scale</h4>
+      <p style="font-size: 14px; color: var(--ink-soft); margin: 6px 0;">Roll out from 5 → 25 → 50+ SBUs and add the intelligence layer.</p>
+      <ul>
+        <li>Agent 7 (Fashion Demand AI, weekly)</li>
+        <li>Agent 8 (Dead Stock Hunter, daily)</li>
+        <li>Brand &amp; store P&amp;L (Agent 9)</li>
+        <li>Season tagging across all SKUs</li>
+        <li>Agent 10 (Anomaly Watchdog)</li>
+        <li>EOSS module</li>
+        <li>Size rebalancing across SBUs</li>
+        <li>Credit note tracking</li>
+      </ul>
+    </div>
+    <div class="phase-card p3">
+      <span class="pill">Phase 3 · M6–M7</span>
+      <h4>Workforce + Payments + Incentives</h4>
+      <p style="font-size: 14px; color: var(--ink-soft); margin: 6px 0;">Money and people layer.</p>
+      <ul>
+        <li>Agent 5 (Attendance Guardian — face + GPS)</li>
+        <li>PASCS payment module with WhatsApp approvals</li>
+        <li>Incentive auto-calculator</li>
+        <li>Payroll</li>
+        <li>Tally XML export</li>
+        <li>Store restructuring workflow (close / open)</li>
+      </ul>
+    </div>
+    <div class="phase-card p4">
+      <span class="pill">Phase 4 · M8</span>
+      <h4>Tally Auto-Sync + Polish</h4>
+      <p style="font-size: 14px; color: var(--ink-soft); margin: 6px 0;">Sealing the system and handing it over.</p>
+      <ul>
+        <li>TallyPrime API push nightly</li>
+        <li>Performance optimisation</li>
+        <li>Staff training (3 batches, Hindi videos)</li>
+        <li>Documentation</li>
+        <li>Source handover</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============== 7. TECH STACK ============== -->
+<section class="chapter" id="stack">
+  <h2><span class="num">7</span>Tech stack</h2>
+  <p class="sub">Decisions deviating from this stack must be justified and recorded — the choices are tied to the cost model (~₹25–40K/month post-launch).</p>
+
+  <table class="stack">
+    <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>ERP platform</td><td class="tech">Frappe / ERPNext</td><td>Item variants (size×color), batch tracking, stock ledger, role primitives all built in</td></tr>
+      <tr><td>Web / mobile</td><td class="tech">Next.js PWA</td><td>Runs on any store phone; camera + barcode via browser; no app install</td></tr>
+      <tr><td>Invoice / PT AI</td><td class="tech">Claude Vision + Sonnet API</td><td>Reads any vendor format; understands fashion terminology; generalises to ~10 new vendors/month</td></tr>
+      <tr><td>Demand forecasting</td><td class="tech">Prophet + scikit-learn</td><td>Seasonality, size curves, store affinity, weather-aware. No GPU needed</td></tr>
+      <tr><td>Dashboards</td><td class="tech">Metabase</td><td>Network → region → store → brand → style → size drilldown</td></tr>
+      <tr><td>Alerts &amp; approvals</td><td class="tech">WhatsApp Business API</td><td>Interactive: approve payments / transfers / markdowns inline</td></tr>
+      <tr><td>Face recognition</td><td class="tech">face-api.js (browser)</td><td>No app install; works on staff phones</td></tr>
+      <tr><td>Tally sync</td><td class="tech">XML export → TallyPrime API</td><td>GST-ready vouchers (purchase, sales, stock journals, credit notes)</td></tr>
+      <tr><td>Database</td><td class="tech">PostgreSQL</td><td>20K SKUs × 50 SBUs = millions of rows. Partition by SBU/season</td></tr>
+      <tr><td>Agent runtime</td><td class="tech">Celery + Redis</td><td>10 agents on schedule + event triggers</td></tr>
+      <tr><td>Hosting</td><td class="tech">Hetzner (2 servers) ~₹12K/mo</td><td>Sized for 50+ SBUs</td></tr>
+      <tr><td>Storage</td><td class="tech">Cloudflare R2</td><td>Invoice photos, PT files, employee docs; free egress</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============== GLOSSARY ============== -->
+<section class="chapter" id="glossary">
+  <h2><span class="num">G</span>Glossary (system-level)</h2>
+  <p class="sub">For ingestion-specific terms (PT, GRN, TIR, SOR, EOSS, HSN, etc.) see the <a href="workflow-explainer.html#glossary">ingestion glossary</a>.</p>
+
+  <details class="glossary"><summary>SBU (Strategic Business Unit)</summary><p>A single profit-and-loss unit — a store, a warehouse, or a franchise location. KDPS has 50+ SBUs across Bihar &amp; Jharkhand.</p></details>
+  <details class="glossary"><summary>EBO vs MBO</summary><p>Exclusive Business Outlet (single brand, brand-managed) vs Multi-Brand Outlet (multiple brands, KDPS-managed). Different commercial structure: EBO = flat 20% commission to store; MBO = 25-18-10.</p></details>
+  <details class="glossary"><summary>IINE</summary><p>Inventory Ingestion &amp; Normalisation Engine. Module 1 of the system. Turns vendor invoices + PT files + physical receipts into one canonical normalised dataset.</p></details>
+  <details class="glossary"><summary>PASCS</summary><p>Payment Authorisation &amp; Settlement Control System. Module 2. Sits after IINE; enforces that money moves only when invoice + GRN + PT + TIR are aligned and approved.</p></details>
+  <details class="glossary"><summary>TEN</summary><p>The existing POS / ERP system referenced in <code>Invoice Status: Uploaded In TEN</code>. KDPS coexists with / wraps it during transition; eventually replaces.</p></details>
+  <details class="glossary"><summary>BSP (WhatsApp Business Solution Provider)</summary><p>Required intermediary for WhatsApp Business API. Not free — adds to the operational cost envelope.</p></details>
+  <details class="glossary"><summary>GWP / ATV (offer types)</summary><p>GWP = Gift With Purchase ("Buy ₹7,999 get a duffel bag"). ATV = Average Transaction Value bump ("Buy ₹14,999 get ₹3,000 off"). Date-bound, brand-specific. Tracked in the Offer master.</p></details>
+  <details class="glossary"><summary>SPF (Sales Performance Factor)</summary><p>Brand-specific incentive multiplier applied per unit sold of that brand. Part of the incentive auto-calculator.</p></details>
+  <details class="glossary"><summary>Liveness check</summary><p>Anti-spoofing for face recognition — confirms a real person is present (blink, head turn) rather than a photo. Runs in browser via face-api.js.</p></details>
+  <details class="glossary"><summary>Hetzner</summary><p>European-based bare-metal / cloud hosting. Chosen for cost efficiency at the system's scale (~₹12K/month for 2 servers).</p></details>
+</section>
+
+</main>
+
+<footer>
+  Companion to <code>workflow-explainer.html</code>. Sources: KDPS Definitive Plan, KDPS PRD (IINE + PASCS modules), CLAUDE.md, Conversations 1 &amp; 2 transcripts, real artefacts in <code>document/</code>, existing scaffold in <code>pdf-to-pt/</code>.
+</footer>
+
+<script>
+/* ====================== DATA ====================== */
+
+const BLOCK_DETAILS = {
+  vendors:        { layer:"Input",       desc:"Brand houses (Aditya Birla, Vishal Marketing, D Apparel) and ~40+ non-branded local suppliers (Variety Textile, BK Enterprise, Anand Fabrics). Each operates under one of three commercial models: 25-18-10 commission, Buy-and-Sell, or Consignment.", reads:"-", writes:"Goods, invoices, sometimes PT files", agents:"-" },
+  pos:            { layer:"Input",       desc:"In-store point-of-sale terminals — currently TEN, but the harvester is designed to absorb any POS export format. Each transaction includes barcode, sale price, discount applied, optional offer reference.", reads:"-", writes:"Sale events", agents:"A4" },
+  customers:      { layer:"Input",       desc:"Walk-in retail customers paying via cash or UPI. During EOSS the customer buys at the active discounted price and the sale deducts stock immediately.", reads:"-", writes:"Payment events, receipt requests", agents:"-" },
+  bank:           { layer:"Input",       desc:"Vendor &amp; KDPS bank statements (PDF upload). Used by PASCS to close the payment loop — match each executed payment to a real bank transaction.", reads:"-", writes:"Statement records (parsed)", agents:"A10" },
+  staffin:        { layer:"Input",       desc:"Store staff phones running the PWA. Submit face check-ins with GPS + liveness. Also the upload device for invoices and PT files.", reads:"Roster, schedule", writes:"Attendance events, file uploads", agents:"A5" },
+
+  "invoice-reader":{ layer:"Ingestion",  desc:"Agent 1. Triggered on upload. PDF/photo → structured Invoice JSON via Claude Vision with a forced tool call. Prompt-cached system prompt for batch efficiency. Decimal-safe money fields.", reads:"R2 (file), Vendor master", writes:"Invoice records", agents:"A1" },
+  "pt-mapper":    { layer:"Ingestion",   desc:"Agent 2. Triggered on PT upload. Reads any vendor PT format (15+ active today, 10 new/month) and maps to KDPS taxonomy: Style+Size+Color, Brand, Season, Color/Tier, Item, Fit, etc. Mappings are versioned in the Rule Engine.", reads:"PT taxonomy, Brand mappings", writes:"PTRow records", agents:"A2" },
+  grn:            { layer:"Ingestion",   desc:"Goods Receipt Note engine. Confirms physical receipt independently of the invoice. Tracks shortages, damages, partial receipts. Manual barcode scan or fallback entry.", reads:"Invoice (for expected qty)", writes:"GRN records", agents:"-" },
+  "rule-engine":  { layer:"Ingestion",   desc:"Brand-specific category/subcategory mapping rules. Versioned, editable without code (per PRD §5.C). Same 'Allen Solly Kids → Aditya Birla Lifestyle' kind of disambiguation that is currently human-only.", reads:"-", writes:"Mapping rule sets", agents:"-" },
+  "sku-engine":   { layer:"Ingestion",   desc:"Centralised SKU registry. For non-branded path, generates KDPS barcodes; for all paths, prevents duplicates via similarity detection (avoids 'same product, two SKUs' which is currently rampant).", reads:"-", writes:"SKU master", agents:"-" },
+
+  postgres:       { layer:"Core",        desc:"Source of truth. ~20 core tables covering Brand, Vendor, SBU, SKU (Style×Size×Color), GRN, PTRow, Invoice, StockLedger, Sale, Payment, Staff, Offer, TIRRow. Partitioned by SBU/season for the high-volume tables.", reads:"All modules", writes:"All modules", agents:"All" },
+  r2:             { layer:"Core",        desc:"Object storage for binary artifacts: invoice PDFs/photos, PT Excel files, bank statement PDFs, employee docs. Cloudflare R2 chosen for free egress (cost containment).", reads:"Reader, viewers", writes:"Upload endpoints", agents:"A1, A2" },
+
+  stock:          { layer:"Module",      desc:"Stock ledger by Style × Size × Color, per SBU. Handles inter-SBU transfers (with barcode scan), immediate sale deduction, and the SOR return deadline timer (alert at 30/15/7 days).", reads:"PTRow, GRN, Sale, Transfer", writes:"StockLedger entries", agents:"A8 (Dead Stock)" },
+  sales:          { layer:"Module",      desc:"POS Harvester (Agent 4). 15-min sync from in-store POS exports. Deducts stock, captures price/discount, attributes to the active offer in the Offer master. Solves the 'monthly sales report by promo window' pain.", reads:"POS exports, Offer master", writes:"Sale records, stock deductions", agents:"A4" },
+  pascs:          { layer:"Module",      desc:"Payment lifecycle: Eligible (invoice+GRN+PT+TIR aligned) → Requested → Approved (multi-level by amount/vendor) → Executed (bank reference captured) → Confirmed → Reconciled (bank statement matched). Lump-sum payments fragment across invoices.", reads:"Invoice, GRN, PT, TIR, Bank stmt", writes:"Payment records", agents:"A10" },
+  workforce:      { layer:"Module",      desc:"Attendance (Agent 5: face + GPS + liveness), roster, leave, sales-incentive auto-calculator (target + per-unit + brand-SPF + tiered), payroll → Tally voucher.", reads:"Attendance events, Sales by staff", writes:"Salary/Incentive records", agents:"A5" },
+  returns:        { layer:"Module",      desc:"Three GR types: Seasonal (~10% allowance bound by AW/SS), Defective, Unauthorised (debit note, sometimes V-Spiker). EOSS markdown engine with manager approval above 40% and SOR brand-funded portion calc.", reads:"Stock, SOR deadline, Brand commercial", writes:"GR records, EOSS approvals", agents:"-" },
+
+  recon:          { layer:"Intel",       desc:"Agent 3. Nightly. Fuzzy 3-way match: Invoice ↔ GRN ↔ PT. Mismatches surface to a Reconciliation Panel — they do not get buried. Idempotent across runs.", reads:"Invoice, GRN, PT", writes:"ReconResult records", agents:"A3" },
+  anomaly:        { layer:"Intel",       desc:"Agent 10. Continuous. Detects shrinkage, fraud (e.g. unusual discount patterns), stuck transfers, payment anomalies (over-payment, double-payment).", reads:"Stock, Sale, Payment, Transfer", writes:"Anomaly alerts", agents:"A10" },
+  profit:         { layer:"Intel",       desc:"Agent 9. Continuous + weekly digest. Per-brand, per-store, per-style P&amp;L. Profitability is derived (cost from PT, revenue from POS) — never separately entered.", reads:"PTRow, Sale, Return", writes:"Profit aggregates", agents:"A9" },
+  demand:         { layer:"Intel",       desc:"Agent 7. Weekly. Size-level forecasting using Prophet + scikit-learn. Considers seasonality, store affinity, weather. Output: replenishment recommendations with size curves.", reads:"Sale history, Stock, Weather, Calendar", writes:"Forecasts, Replenishment recs", agents:"A7" },
+  dead:           { layer:"Intel",       desc:"Agent 8. Daily. Classifies stock into Hot / Warm / Cold / Dead (45+ days zero sales). Per-SBU action recs depend on SOR vs Outright (return vs liquidate).", reads:"Stock, Sale velocity, SOR deadline", writes:"Dead Stock Report", agents:"A8" },
+  digest:         { layer:"Intel",       desc:"Agent 6. 9 PM daily. Builds a per-SBU and consolidated WhatsApp digest: revenue, stock health, attendance, alerts. Primary observability surface for owners.", reads:"All modules", writes:"WhatsApp messages", agents:"A6" },
+
+  whatsapp:       { layer:"Output",      desc:"WhatsApp Business API via a BSP. Used for: daily digest (broadcast), payment approval (interactive button), markdown approval, transfer approval, anomaly alerts. Approvals carry the audit trail.", reads:"Digest, Approval requests", writes:"-", agents:"A6" },
+  metabase:       { layer:"Output",      desc:"Self-service dashboards. Drilldown: Network → Region → Store → Brand → Style → Size. Replaces ad-hoc Excel reporting. Connected directly to PostgreSQL read replica.", reads:"PostgreSQL", writes:"-", agents:"-" },
+  tally:          { layer:"Output",      desc:"Tally remains the book of record. Phase 3: XML voucher export. Phase 4: TallyPrime API push nightly. GST-ready vouchers: purchase, sales, stock journal, credit note, payroll. TIR is the structured intermediate.", reads:"Invoice, Sale, Payment, GR, Salary", writes:"Tally vouchers", agents:"-" },
+  receipts:       { layer:"Output",      desc:"In-store thermal-print POS receipt + optional digital copy via WhatsApp/SMS to the customer (with their consent).", reads:"Sale", writes:"-", agents:"-" },
+};
+
+const AGENTS = [
+  { id:"A1",  name:"Invoice Reader",      trig:"On upload",        job:"Photo/PDF → structured invoice via Claude Vision",                phase:"Phase 1 · M1",  blocks:["invoice-reader"] },
+  { id:"A2",  name:"PT Mapper",           trig:"On PT upload",     job:"Any brand PT format → KDPS taxonomy (Style+Size+Color)",          phase:"Phase 1 · M2",  blocks:["pt-mapper"] },
+  { id:"A3",  name:"Reconciliation",      trig:"Nightly",          job:"3-way fuzzy match: Invoice ↔ GRN ↔ PT",                           phase:"Phase 1 · M3",  blocks:["recon"] },
+  { id:"A4",  name:"POS Harvester",       trig:"15-min sync",      job:"Read any POS export, deduct stock, attribute promo",              phase:"Phase 1 · M2",  blocks:["sales"] },
+  { id:"A5",  name:"Attendance Guardian", trig:"Real-time",        job:"Face + GPS + liveness check-in",                                  phase:"Phase 3 · M6",  blocks:["workforce","staffin"] },
+  { id:"A6",  name:"Daily Digest",        trig:"9 PM daily",       job:"WhatsApp summary — revenue, stock, attendance, alerts",           phase:"Phase 1 · M3",  blocks:["digest","whatsapp"] },
+  { id:"A7",  name:"Fashion Demand AI",   trig:"Weekly",           job:"Size-level forecasting · store affinity · weather-aware",         phase:"Phase 2 · M4",  blocks:["demand"] },
+  { id:"A8",  name:"Dead Stock Hunter",   trig:"Daily",            job:"Hot/Warm/Cold/Dead classification, per-SBU action recs",          phase:"Phase 2 · M4",  blocks:["dead","stock"] },
+  { id:"A9",  name:"Profitability",       trig:"Continuous + weekly digest", job:"Per-brand, per-store, per-style P&amp;L derived from PT × POS", phase:"Phase 2 · M5", blocks:["profit"] },
+  { id:"A10", name:"Anomaly Watchdog",    trig:"Continuous",       job:"Shrinkage, fraud, stuck transfers, payment anomalies",            phase:"Phase 2 · M5",  blocks:["anomaly","pascs","bank"] },
+];
+
+const WORKFLOW = [
+  { who:[{c:"who-x",t:"EXTERNAL"}], h:"Goods leave the vendor", p:"D Apparel ships ~126 t-shirts of design <code>SQ-CL-26099 (PKT)</code> from Surat to KDPS Vaishnavi Deoghar. Tax invoice DA/26-27/0119 is generated in their system. Goods carry vendor barcodes; one barcode per physical unit." },
+  { who:[{c:"who-h",t:"HUMAN"}],   h:"Goods arrive at Deoghar warehouse", p:"Warehouse staff opens the PWA on their phone, takes a photo of the invoice, and uploads. <strong>This upload is the mandatory entry point</strong> — nothing downstream happens without it." },
+  { who:[{c:"who-a",t:"AGENT"},{c:"who-c",t:"CODE"}], h:"Invoice Reader fires (Agent 1)", p:"Within ~30 seconds, Claude Vision extracts the invoice header (number, date, GSTINs, transport, CD%, totals) and 65 line items. The Reader emits decimal-string money values, prompt-cached system prompt for cost efficiency. Output written to PostgreSQL as <code>Invoice</code> record + <code>InvoiceLine</code> rows." },
+  { who:[{c:"who-h",t:"HUMAN"}],   h:"Staff confirms physical receipt (GRN)", p:"On the same screen, staff scans the barcodes of the bundled goods (or counts and enters quantities). Shortages/damages flagged inline. The system creates a <code>GRN</code> record independent of the invoice — separate truth, ready for cross-check." },
+  { who:[{c:"who-a",t:"AGENT"},{c:"who-c",t:"CODE"}], h:"PT Mapper or non-branded synth (Agent 2)", p:"Path B (D Apparel = branded, no vendor PT): Processor decomposes each invoice line — <code>SQ-CL-26099 (PKT) WHITE 587 L</code> → DESIGN/COLOR-hint/BARCODE-suffix/SIZE — explodes by Qty into PT rows, classifies into KDPS taxonomy via Rule Engine, derives Season from style prefix, calculates landed P RATE. 126 PT rows produced." },
+  { who:[{c:"who-h",t:"HUMAN"}],   h:"Account manager spot-checks margin", p:"Things flagged in the Needs Review queue (dropdown miss, ambiguous color tier, margin outside 25-18-10) get human eyes. Approved rows go to canonical <code>PTRow</code> table. Rejected rows return to staff for fix." },
+  { who:[{c:"who-c",t:"CODE"}],    h:"Stock visible end-to-end", p:"<code>StockLedger</code> updated: SBU=Vaishnavi-Deoghar gets +1 unit per barcode, fully classified. The dashboard now shows <em>Status Quo · Casual Wear · T-Shirt · SLIM · 3XL: 12 units · MRP ₹1,649</em>. EBO/MBO POS terminal can sell starting now." },
+  { who:[{c:"who-x",t:"EXTERNAL"},{c:"who-a",t:"AGENT"}], h:"Customer buys one (POS Harvester · A4)", p:"Two days later, a customer at Vaishnavi-Deoghar buys SIZE=L. POS scans barcode <code>8905699695587</code>, charges ₹1,499 (full price). 15-minute later POS Harvester syncs the export, decrements stock, captures sale + offer applied (none, this was full-price), attributes margin = MRP − cost = 1499 − 1169.22 = <strong>₹329.78</strong>." },
+  { who:[{c:"who-a",t:"AGENT"}], h:"Profitability Tracker updates (A9)", p:"Continuous aggregation: this sale rolls up into Status Quo brand P&amp;L · Vaishnavi-Deoghar SBU P&amp;L · April-26 Spring-Summer collection P&amp;L. No human entry — pure derivation." },
+  { who:[{c:"who-a",t:"AGENT"},{c:"who-c",t:"CODE"}], h:"Nightly reconciliation (A3)", p:"At 02:00 IST, Agent 3 fuzzy-matches Invoice DA/26-27/0119 ↔ GRN-12345 ↔ 126 PTRows. All three legs align (qty, value, brand). Marked <code>RECONCILED</code>. Any mismatch surfaces in the Reconciliation Panel for the account manager next morning." },
+  { who:[{c:"who-a",t:"AGENT"}], h:"Daily Digest at 9 PM (A6)", p:"Owner's WhatsApp pings: <em>Vaishnavi-Deoghar today — Revenue ₹1,82,400 · 38 invoices reconciled · 2 Status Quo XL stockouts · 4 absent staff · 1 anomaly (manager review needed).</em> One tap drills into details." },
+  { who:[{c:"who-a",t:"AGENT"}], h:"PASCS readies the payment", p:"Once Invoice + GRN + PT + TIR all align (Agent 3 = pass), payment status flips Eligible → Requested. The system constructs the payable: invoice base ₹1,07,328 − 2% CD on pre-tax = ₹2,146.56 + GST on original base ₹5,366.40 (unchanged) = payable ₹1,10,547.84." },
+  { who:[{c:"who-h",t:"HUMAN"}], h:"Owner approves on WhatsApp", p:"Owner sees <em>Pay D Apparel · ₹1,10,547.84 · DA/26-27/0119 · CD 2% applied</em> with Approve / Reject buttons. Tap Approve. Approval recorded with timestamp + role + identity. Status → Approved." },
+  { who:[{c:"who-h",t:"HUMAN"},{c:"who-c",t:"CODE"}], h:"Executor pays", p:"Finance team logs into bank, transfers, captures bank reference ID + payment mode + bank account used in the system. Status → Executed." },
+  { who:[{c:"who-h",t:"HUMAN"},{c:"who-a",t:"AGENT"}], h:"Bank statement reconciled", p:"Next month's bank statement PDF uploaded; PASCS matches the executed payment by ref + amount. Status → Reconciled. Closed loop. Anomaly Watchdog (A10) double-checks no drift." },
+  { who:[{c:"who-c",t:"CODE"}], h:"Tally TIR sync nightly", p:"Phase 4: TallyPrime API push at 03:00 IST creates the GST-ready vouchers: a Purchase voucher for the invoice, Stock Journal for the GRN, Payment voucher for the bank transfer. Tally is the book of record; KDPS just provides clean, perfectly-formed input. Owner's CA opens Tally next morning — everything is already there." },
+];
+
+/* ====================== RENDER ====================== */
+
+/* Tabs */
+document.querySelectorAll('.req-tabs button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.req-tabs button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('.req-pane').forEach(p => p.classList.remove('show'));
+    document.querySelector(`[data-pane="${b.dataset.tab}"]`).classList.add('show');
+  });
+});
+
+/* Diagram clicks */
+document.querySelectorAll('#diagram .cell').forEach(c => {
+  c.addEventListener('click', () => {
+    document.querySelectorAll('#diagram .cell').forEach(x => x.classList.remove('selected','related-on'));
+    c.classList.add('selected');
+    showBlockDetail(c.dataset.block);
+  });
+});
+function showBlockDetail(key) {
+  const d = BLOCK_DETAILS[key];
+  if (!d) return;
+  const dd = document.getElementById('diagram-detail');
+  dd.innerHTML = `
+    <h4>${document.querySelector('[data-block="'+key+'"] .ttl').textContent}</h4>
+    <div class="meta">
+      <span><strong>Layer:</strong> ${d.layer}</span>
+      <span><strong>Reads from:</strong> ${d.reads}</span>
+      <span><strong>Writes to:</strong> ${d.writes}</span>
+      <span><strong>Agents:</strong> ${d.agents}</span>
+    </div>
+    <p>${d.desc}</p>`;
+}
+
+/* Agents */
+const ag = document.getElementById('agent-grid');
+AGENTS.forEach(a => {
+  const card = document.createElement('div');
+  card.className = 'agent-card';
+  card.innerHTML = `
+    <span class="id">${a.id}</span>
+    <h4>${a.name}</h4>
+    <div class="trig">⏱ ${a.trig}</div>
+    <p class="job">${a.job}</p>
+    <div class="phase">▶ ${a.phase}</div>`;
+  card.addEventListener('click', () => {
+    document.querySelectorAll('#diagram .cell').forEach(x => x.classList.remove('related-on','selected'));
+    a.blocks.forEach(b => {
+      const el = document.querySelector(`[data-block="${b}"]`);
+      if (el) el.classList.add('related-on');
+    });
+    document.getElementById('diagram').scrollIntoView({behavior:'smooth', block:'start'});
+  });
+  ag.appendChild(card);
+});
+
+/* Workflow */
+const wfWrap = document.getElementById('wf-steps');
+let wfIdx = -1;
+function renderWf() {
+  wfWrap.innerHTML = '';
+  WORKFLOW.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'wf-step' + (i === wfIdx ? ' active' : '');
+    div.innerHTML = `
+      <div class="num">${i+1}</div>
+      <div>
+        <div class="who">${s.who.map(w => `<span class="${w.c}">${w.t}</span>`).join('')}</div>
+        <h4>${s.h}</h4>
+        <p>${s.p}</p>
+      </div>`;
+    div.addEventListener('click', () => { wfIdx = i; renderWf(); });
+    wfWrap.appendChild(div);
+  });
+  document.getElementById('wf-counter').textContent = wfIdx >= 0 ? `Step ${wfIdx+1} of ${WORKFLOW.length}` : '';
+}
+function wfNext() { wfIdx = Math.min(wfIdx + 1, WORKFLOW.length - 1); renderWf(); document.querySelectorAll('.wf-step')[wfIdx]?.scrollIntoView({behavior:'smooth', block:'center'}); }
+function wfPrev() { wfIdx = Math.max(wfIdx - 1, 0); renderWf(); document.querySelectorAll('.wf-step')[wfIdx]?.scrollIntoView({behavior:'smooth', block:'center'}); }
+function wfReset() { wfIdx = -1; renderWf(); }
+renderWf();
+
+/* Sticky nav */
+const navLinks = document.querySelectorAll('nav.sticky a');
+const sections = [...document.querySelectorAll('section.chapter')];
+function syncNav() {
+  const y = window.scrollY + 120;
+  let active = sections[0].id;
+  for (const s of sections) { if (s.offsetTop <= y) active = s.id; }
+  navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + active));
+}
+window.addEventListener('scroll', syncNav, { passive: true });
+syncNav();
+
+navLinks.forEach(a => a.addEventListener('click', e => {
+  const id = a.getAttribute('href').slice(1);
+  const t = document.getElementById(id);
+  if (!t) return;
+  e.preventDefault();
+  window.scrollTo({ top: t.offsetTop - 60, behavior: 'smooth' });
+}));
+</script>
+
+</body>
+</html>

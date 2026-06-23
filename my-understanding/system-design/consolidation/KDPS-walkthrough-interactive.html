@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — The Whole System, Walk It Through</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#1d2330; --muted:#6b7280; --line:#e3e6ec; --bg:#eef1f6; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple2:#8a5cd0; --purple-bg:#f0e9fb;
+    --gold:#c79a2e;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:
+      radial-gradient(1200px 600px at 80% -5%, #f6efe9 0%, transparent 55%),
+      radial-gradient(1000px 700px at -10% 30%, #e9eefb 0%, transparent 50%),
+      var(--bg);
+    color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+
+  /* ---- top bar ---- */
+  .top{position:sticky;top:0;z-index:40;background:rgba(31,45,77,.96);backdrop-filter:blur(8px);
+       color:#dfe4ee;border-bottom:2px solid var(--rust)}
+  .top .in{max-width:1100px;margin:0 auto;padding:11px 22px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+  .top b{color:#fff;letter-spacing:.02em;margin-right:auto;font-size:15px}
+  .top .tog{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{cursor:pointer;border:1px solid #46557d;background:#2c3e63;color:#dbe3f2;font-size:12.5px;font-weight:700;
+       padding:6px 13px;border-radius:999px;transition:.18s;user-select:none}
+  .btn:hover{background:#39497099;border-color:#6076ad}
+  .btn.on{background:var(--purple);border-color:var(--purple2);color:#fff;box-shadow:0 0 0 3px #8a5cd055}
+  .btn.amber.on{background:var(--rust);border-color:var(--rust-soft);box-shadow:0 0 0 3px #c4623f55}
+
+  main{max-width:1100px;margin:0 auto;padding:0 22px 120px}
+
+  /* ---- hero ---- */
+  header.hero{padding:54px 0 26px}
+  .eyebrow{color:var(--rust);font-weight:800;letter-spacing:.16em;text-transform:uppercase;font-size:12px}
+  h1{font-size:38px;line-height:1.12;margin:12px 0 10px;color:var(--navy);letter-spacing:-.01em}
+  .lead{font-size:18px;color:var(--navy2);max-width:70ch}
+  .rule{display:inline-flex;align-items:center;gap:9px;margin-top:18px;background:var(--purple-bg);
+        border:1px solid #ddd0f3;color:var(--purple);font-weight:700;font-size:13.5px;padding:8px 15px;border-radius:999px}
+  .rule .dot{width:8px;height:8px;border-radius:50%;background:var(--purple);box-shadow:0 0 0 4px #8a5cd033}
+
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:22px 0 6px;align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:13px;height:13px;border-radius:4px;border:1.5px solid}
+  .hint{font-size:12.5px;color:var(--muted);font-style:italic;margin:4px 0 0}
+
+  /* ---- the spine ---- */
+  .spine{position:relative;margin:26px 0 0;padding-left:8px}
+  .spine::before{content:"";position:absolute;left:31px;top:14px;bottom:90px;width:4px;border-radius:4px;
+    background:linear-gradient(var(--navy2),var(--rust) 55%,var(--purple));opacity:.32}
+
+  .stage{position:relative;margin:0 0 12px;display:flex;gap:18px;align-items:flex-start}
+  .node{flex:0 0 60px;display:flex;flex-direction:column;align-items:center;z-index:2}
+  .num{width:60px;height:60px;border-radius:16px;background:var(--navy);color:#fff;display:flex;align-items:center;
+       justify-content:center;font-weight:800;font-size:22px;box-shadow:0 6px 16px rgba(31,45,77,.28);border:3px solid #fff}
+  .stage[data-band="sell"] .num{background:var(--rust)}
+  .stage[data-band="money"] .num{background:#9a4a2b}
+  .stage[data-band="tally"] .num{background:var(--amber)}
+  .stage[data-band="brain"] .num{background:var(--purple)}
+  .arrowdown{color:var(--rust);font-size:20px;line-height:1;margin:6px 0 -2px;opacity:.5}
+
+  .body{flex:1 1 auto;min-width:0}
+  .scard{background:var(--card);border:1px solid var(--line);border-radius:16px;
+         box-shadow:0 3px 14px rgba(20,30,60,.06);overflow:hidden;transition:.2s}
+  .scard:hover{box-shadow:0 8px 26px rgba(20,30,60,.11);border-color:#cfd6e4}
+  .shead{padding:16px 20px;cursor:pointer;display:flex;align-items:center;gap:14px}
+  .kick{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--rust);margin-bottom:2px}
+  .stage[data-band="brain"] .kick{color:var(--purple)} .stage[data-band="tally"] .kick{color:var(--amber)}
+  .stage[data-band="money"] .kick{color:#9a4a2b}
+  .shead h3{margin:0;font-size:20px;color:var(--navy);line-height:1.15}
+  .shead .sub{font-size:13.5px;color:var(--muted);margin-top:3px}
+  .shgrow{flex:1 1 auto;min-width:0}
+  .chev{flex:0 0 auto;color:var(--muted);font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;
+        border:1px solid var(--line);border-radius:999px;padding:4px 11px;transition:.18s}
+  .scard.open .chev{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chev .ar{transition:.2s;display:inline-block}
+  .scard.open .chev .ar{transform:rotate(180deg)}
+
+  /* AI chips on the head */
+  .aichips{display:flex;gap:6px;flex-wrap:wrap;flex:0 0 auto;max-width:340px;justify-content:flex-end}
+  .aichip{cursor:pointer;display:inline-flex;align-items:center;gap:5px;background:var(--purple-bg);
+    border:1.5px solid #d6c6f1;color:var(--purple);font-size:11.5px;font-weight:800;padding:5px 11px;border-radius:999px;
+    transition:.16s;white-space:nowrap}
+  .aichip:hover{background:#e6d9fa;transform:translateY(-1px)}
+  .aichip .spark{font-size:11px}
+  .aichip.noai{background:#fbe9e6;border-color:#f0c9c1;color:#a33b22;cursor:default}
+  .aichip.noai:hover{transform:none}
+  body.spotlight .aichip:not(.noai){animation:pulse 1.5s infinite;box-shadow:0 0 0 0 #8a5cd055}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 #8a5cd066}70%{box-shadow:0 0 0 9px #8a5cd000}100%{box-shadow:0 0 0 0 #8a5cd000}}
+
+  /* expanded body */
+  .sbody{display:none;border-top:1px solid var(--line);padding:4px 20px 20px}
+  .scard.open .sbody{display:block;animation:fade .25s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  @media(max-width:720px){.row{grid-template-columns:1fr}}
+  .blk{}
+  .blk .lab{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;margin-bottom:7px;color:var(--navy2)}
+  .blk .lab.solve{color:var(--rust)} .blk .lab.money{color:#9a4a2b} .blk .lab.ai{color:var(--purple)}
+  ul.tick{margin:0;padding:0;list-style:none}
+  ul.tick li{position:relative;padding:3px 0 3px 20px;font-size:14px;color:#33415c}
+  ul.tick li::before{content:"›";position:absolute;left:4px;color:var(--rust);font-weight:800}
+  .docline{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .doctag{background:#eef1f7;border:1px solid #d6deeb;color:var(--navy2);font-size:11.5px;font-weight:600;
+          padding:3px 9px;border-radius:7px}
+  .moneynote{margin-top:14px;background:#fdf1ea;border:1px solid #f0d3c2;border-radius:11px;padding:11px 14px;font-size:13.5px;color:#7a3a20}
+  .moneynote b{color:#9a4a2b}
+
+  /* branch (branded vs non-branded) */
+  .branch{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  @media(max-width:720px){.branch{grid-template-columns:1fr}}
+  .brbox{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:#fafbfc}
+  .brbox h5{margin:0 0 6px;font-size:13.5px;color:var(--navy)}
+  .brbox.b1{border-color:#bcd6f3;background:var(--blue-bg)} .brbox.b1 h5{color:var(--blue)}
+  .brbox.b2{border-color:#e8c69c;background:#fdf6ea} .brbox.b2 h5{color:var(--amber)}
+  .brbox p{margin:0;font-size:12.5px;color:#42506a}
+
+  /* payment two-sided mini diagram */
+  .pay{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  @media(max-width:720px){.pay{grid-template-columns:1fr}}
+  .payside{border:1.5px solid var(--line);border-radius:13px;padding:14px;background:#fafbfc}
+  .payside h5{margin:0 0 4px;font-size:14px;display:flex;align-items:center;gap:8px}
+  .payside.in h5{color:var(--green)} .payside.out h5{color:#9a4a2b}
+  .payside .tag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+                padding:2px 7px;border-radius:6px}
+  .payside.in .tag{background:var(--green-bg);color:var(--green)}
+  .payside.out .tag{background:#fdeee6;color:#9a4a2b}
+  .steps{margin:10px 0 0;padding:0;list-style:none;counter-reset:s}
+  .steps li{position:relative;padding:6px 0 6px 28px;font-size:12.8px;color:#33415c;border-left:2px solid #e0e4ec;margin-left:9px}
+  .steps li::before{counter-increment:s;content:counter(s);position:absolute;left:-12px;top:5px;width:22px;height:22px;
+     background:#fff;border:1.5px solid #c9d2e2;border-radius:50%;font-size:11px;font-weight:800;color:var(--navy2);
+     display:flex;align-items:center;justify-content:center}
+  .payside.in .steps li::before{border-color:#a9d6bf;color:var(--green)}
+  .payside.out .steps li::before{border-color:#e6b89e;color:#9a4a2b}
+  .sod{margin-top:13px;font-size:12.5px;background:#eef1f7;border:1px dashed #b9c4da;border-radius:9px;padding:9px 12px;color:var(--navy2)}
+  .sod b{color:var(--navy)}
+
+  /* role chips */
+  .roles{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+  .rolechip{cursor:pointer;border:1.5px solid var(--line);background:#fff;border-radius:11px;padding:9px 13px;
+            font-size:13px;font-weight:700;color:var(--navy);transition:.16s;display:flex;flex-direction:column;gap:1px;min-width:120px}
+  .rolechip small{font-weight:500;color:var(--muted);font-size:11px}
+  .rolechip:hover{border-color:var(--purple2);transform:translateY(-1px)}
+  .rolechip.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .rolechip.active small{color:#aebcd6}
+  .rolepanel{margin-top:13px;border:1.5px solid #d6c6f1;background:var(--purple-bg);border-radius:13px;padding:15px 17px;display:none}
+  .rolepanel.show{display:block;animation:fade .25s}
+  .rolepanel h5{margin:0 0 4px;color:var(--purple);font-size:15px}
+  .rolepanel .scope{font-size:12px;color:#6a5a86;margin-top:9px;border-top:1px dashed #cdbbed;padding-top:9px}
+
+  /* foundation band */
+  .foundation{margin:24px 0 0 78px;background:linear-gradient(#fff,#f6f8fc);border:1.5px solid #cdd6e6;
+              border-radius:16px;padding:18px 22px}
+  .foundation .ft{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#41506b;margin-bottom:4px}
+  .foundation h3{margin:0 0 8px;color:var(--navy);font-size:18px}
+  .mboxes{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .mbox{background:#fff;border:1.5px solid #b8c2d6;border-radius:9px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--navy2)}
+
+  /* side rail labels */
+  .rail{position:relative;margin:18px 0;display:flex;gap:14px;align-items:center;justify-content:center}
+  .rail .pill{font-size:12px;font-weight:800;letter-spacing:.04em;padding:7px 15px;border-radius:999px}
+  .rail .pill.m{background:#fdf1ea;border:1px solid #f0d3c2;color:#9a4a2b}
+  .rail .pill.a{background:var(--purple-bg);border:1px solid #ddd0f3;color:var(--purple)}
+
+  /* ---- drawer ---- */
+  .scrim{position:fixed;inset:0;background:rgba(20,28,48,.46);backdrop-filter:blur(2px);opacity:0;pointer-events:none;
+         transition:.25s;z-index:60}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .drawer{position:fixed;top:0;right:0;height:100%;width:min(460px,94vw);background:#fff;z-index:70;
+          box-shadow:-12px 0 40px rgba(15,22,40,.25);transform:translateX(102%);transition:.28s cubic-bezier(.4,0,.2,1);
+          display:flex;flex-direction:column}
+  .drawer.show{transform:none}
+  .dhead{padding:20px 22px;background:linear-gradient(135deg,var(--purple),#5a32a0);color:#fff;flex:0 0 auto}
+  .dhead.money{background:linear-gradient(135deg,#9a4a2b,#7a3014)}
+  .dhead .kk{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;opacity:.85}
+  .dhead h4{margin:6px 0 0;font-size:21px}
+  .dhead .ds{font-size:13px;opacity:.92;margin-top:6px;line-height:1.5}
+  .dclose{position:absolute;top:16px;right:18px;cursor:pointer;color:#fff;font-size:22px;opacity:.85;line-height:1}
+  .dclose:hover{opacity:1}
+  .dbody{padding:20px 22px;overflow:auto}
+  .dbody h6{margin:18px 0 7px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--purple);font-weight:800}
+  .dhead.money ~ .dbody h6{color:#9a4a2b}
+  .dbody h6:first-child{margin-top:0}
+  .dbody ul{margin:0;padding:0;list-style:none}
+  .dbody ul li{position:relative;padding:5px 0 5px 18px;font-size:13.8px;color:#33415c}
+  .dbody ul li::before{content:"";position:absolute;left:2px;top:11px;width:7px;height:7px;border-radius:50%;background:var(--purple2)}
+  .dhead.money ~ .dbody ul li::before{background:#c4623f}
+  .reads{display:flex;gap:8px;margin-top:14px}
+  .rb{flex:1;border-radius:11px;padding:11px 12px;font-size:12px;line-height:1.4}
+  .rb .h{font-weight:800;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px;display:block}
+  .rb.read{background:var(--green-bg);border:1px solid #bfe2cf;color:#1c5e3c}
+  .rb.never{background:#fbe9e6;border:1px solid #f0c9c1;color:#9a3320}
+  .quote{margin-top:16px;background:#f3f0fb;border-left:3px solid var(--purple);border-radius:0 10px 10px 0;
+         padding:11px 14px;font-size:13.5px;color:#4a3b6b;font-style:italic}
+  .dhead.money ~ .dbody .quote{background:#fdf2ec;border-left-color:#c4623f;color:#7a3a20}
+
+  footer{margin-top:50px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:22px}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="in">
+  <b>KDPS · One System, end to end</b>
+  <div class="tog">
+    <span class="btn amber" id="tExpand" onclick="toggleAll()">⇕ Expand all</span>
+    <span class="btn" id="tSpot" onclick="toggleSpot()">✦ Spotlight the AI</span>
+  </div>
+</div></div>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt Ltd · System Design · Walkthrough</div>
+  <h1>Follow one shirt — and its money —<br>from order to the bank.</h1>
+  <p class="lead">The whole business as one trustworthy system, told top to bottom in the order it actually happens: booking → goods to the store → selling → the money → the books → the intelligence. Every <b style="color:var(--purple)">✦ AI</b> mark is a place AI helps — click it to see exactly what it does.</p>
+  <div class="rule"><span class="dot"></span>The one rule everywhere: AI reads, watches and suggests — people and the books decide.</div>
+
+  <div class="legend">
+    <span><span class="sw" style="border-color:#1f2d4d;background:#1f2d4d"></span>The spine — flow of goods</span>
+    <span><span class="sw" style="border-color:var(--rust);background:#fdf1ea"></span>Money, tracked every step</span>
+    <span><span class="sw" style="border-color:var(--amber);background:var(--amber-bg)"></span>The books · Tally</span>
+    <span><span class="sw" style="border-color:var(--purple);background:var(--purple-bg)"></span>AI · the intelligence</span>
+  </div>
+  <p class="hint">Click any card to open it. Click a purple ✦ chip to see what the AI is doing there. Try “Spotlight the AI” to light up every place AI helps.</p>
+</header>
+
+<div class="spine" id="spine"></div>
+
+<div class="foundation">
+  <div class="ft">Underneath all of it · the foundation</div>
+  <h3>Master Records &amp; Users — one trusted home for every list</h3>
+  <p style="margin:0;font-size:14px;color:#42506a;max-width:80ch">Brands &amp; their deal terms, vendors, stores, products (the PT Master Sheet), sizes, seasons, tax slabs, the offer rulebook, and who-can-do-what. One owner per list, a second pair of eyes on the dangerous ones (brand terms, tax, vendor bank, user roles), and a full history. <b>Every document takes a snapshot</b> — so changing something today never rewrites yesterday's bill.</p>
+  <div class="mboxes">
+    <span class="mbox">Brands &amp; terms</span><span class="mbox">Vendors</span><span class="mbox">Stores &amp; warehouses</span>
+    <span class="mbox">Products · SKU</span><span class="mbox">Barcodes · season</span><span class="mbox">Tax · GST slabs</span>
+    <span class="mbox">Offer rulebook</span><span class="mbox">Users &amp; roles</span>
+  </div>
+</div>
+
+<footer>
+  KDPS Lifestyle Pvt Ltd · System design walkthrough · June 2026 · One system: Booking → Goods In → Store → Selling → Money → Tally → the Brain, on a foundation of master records.<br>
+  Built from the eight locked designs (D1–D8). AI sits only at the edges — it never moves a rupee or writes a book.
+</footer>
+
+</main>
+
+<!-- drawer -->
+<div class="scrim" id="scrim" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="dhead" id="dhead">
+    <span class="dclose" onclick="closeDrawer()">✕</span>
+    <div class="kk" id="dkk">AI helper</div>
+    <h4 id="dtitle">—</h4>
+    <div class="ds" id="dsub"></div>
+  </div>
+  <div class="dbody" id="dbody"></div>
+</aside>
+
+<script>
+/* ---------------- DATA ---------------- */
+const STAGES = [
+ {
+  id:'booking', band:'spine', num:1, kick:'Buy · the start of the spine',
+  title:'Booking', sub:'Order placed → tracked → received, by brand &amp; season',
+  solve:['Orders live in people’s heads — WhatsApp, phone, scattered.',
+         'No one knows what was ordered versus what actually arrived.',
+         'A brand’s return window quietly closes and the chance is lost.'],
+  has:['Every order becomes a tracked <b>Booking</b> (one vendor + one brand + one season).',
+       'Status is computed, never typed: <b>Booked → Part-received → Fully received → Return window → Closed</b>.',
+       'One booking, many deliveries — goods arrive in batches across a season.',
+       'Knows each brand’s deal: Buy&amp;Sell, Correction (25-18-10), SOR, Consignment.',
+       'Return deadlines are data — alarms at <b>30 / 15 / 7 days</b> before a window shuts.'],
+  docs:['Booking · BK-SS26-0012','Deal type snapshot','Return-window clock'],
+  money:'The deal type decides everything downstream — who owns the stock, when the brand is owed, and what can be returned.',
+  ai:[{id:'reading-reader'}]
+ },
+ {
+  id:'goodsin', band:'spine', num:2, kick:'Goods in · arrival → ready to sell',
+  title:'Goods In', sub:'Invoice → counted → priced → barcoded → sent to the store',
+  solve:['Every delivery is re-typed by hand into Excel.',
+         'Stock has no price and no size/colour — just a style.',
+         'Nothing checks the invoice against what actually came in the box.'],
+  has:['One clean flow: <b>invoice → GRN (count) → PT file (price) → barcode → store allocation</b>.',
+       'Goods arrive at the store, staff log in, receive against the order and photograph the invoice.',
+       'Stock is tracked to the exact <b>size &amp; colour</b>, priced at <b>true landed cost</b>.',
+       'Money owed to the brand is booked the right way for the deal type (SOR/Consignment owe nothing until sold).',
+       'A notification fires to the PT-file maker the moment goods are received.'],
+  branch:true,
+  docs:['Shipment','GRN (ordered vs received)','PT file','Store split','Patna inward'],
+  money:'<b>The PT file is the source of truth</b> for all data entering KDPS. Data “matures” only when both are true — goods physically arrived AND the PT is complete. That is the one moment it becomes official.',
+  ai:[{id:'invoice-reader'},{id:'pt-chat'},{id:'store-split'}]
+ },
+ {
+  id:'store', band:'spine', num:3, kick:'At the store',
+  title:'In the Store, ready to sell', sub:'Received by scan · only what is truly free-to-sell',
+  solve:['A store’s stock and the system’s stock drift apart.',
+         'Pieces already promised to a transfer or a return still look sellable.'],
+  has:['The store <b>scans to receive</b> — the piece becomes available only then.',
+       '<b>Free-to-sell = physical on hand − everything locked</b> by an open transfer, defect or return.',
+       'That free-to-sell number is what the till sees — so it can never sell a piece already promised elsewhere.',
+       'Stock position is always known per barcode, per season, per location.'],
+  docs:['Scan-to-receive','Available-to-sell','Per-store SOH'],
+  money:'No money moves here yet — but this is the honest stock picture every sale, transfer and report leans on.',
+  ai:[]
+ },
+ {
+  id:'selling', band:'sell', num:4, kick:'Sell · the end of the spine · offers inside',
+  title:'Selling &amp; Stock', sub:'Sale · exchange · transfer · returns · EOSS · count — offers applied automatically',
+  solve:['Each store’s POS is its own island.',
+         'Exchanges, transfers, returns and stock-counts are all manual.',
+         'Discounts run on memory — no proof the right one was given.'],
+  has:['<b>One engine, every move:</b> counter sale, exchange, store-to-store transfer, returns to brand, customer returns, end-of-season sale, stock-count.',
+       '<b>Offers live here:</b> each brand’s rules applied at the till automatically — best deal for the customer.',
+       'Two sources of offer: the brand’s scheme, and KDPS’s own discount on its own stock.',
+       'A discount simply lowers the price → KDPS earns less margin. No claim, no billback.',
+       'A daily check re-computes every bill’s discount against the rulebook and flags any gap.'],
+  transfer:true,
+  ecom:true,
+  docs:['Sale record','Exchange note','Transfer (two-step)','GR / SOR return','EOSS · V-flip','Stocktake'],
+  money:'Every sale collects cash / card / UPI — and that is exactly where the <b>payment flow</b> below begins.',
+  ai:[{id:'markdown'},{id:'offer-reader'}]
+ },
+ {
+  id:'money', band:'money', num:5, kick:'Money · tracked at every step',
+  title:'The Payment Flow', sub:'Money in to the bank · money out to the brands — both watched',
+  solve:['What’s owed to each brand is guesswork.',
+         'No one checks that each store’s cash, card and UPI actually reached the bank.',
+         'Vendor payments are exposed to the most common frauds — duplicates and changed bank accounts.'],
+  has:['Two sides, both fully tracked: <b>money in</b> (store → bank) and <b>money out</b> (KDPS → brands).',
+       'Vendor dues are built from real documents, never typed.',
+       'Payments go through proper separation — different people raise, approve and pay.',
+       'A daily audit proves every store’s money landed in the bank, rail by rail.'],
+  payflow:true,
+  docs:['Payable','Payment proposal','Approval (tiered)','UTR / bank ref','Store-collection audit'],
+  money:'<b>This is the heart of the money layer.</b> AI does the busiest reading here — but it only suggests; a person approves every rupee.',
+  ai:[{id:'bank-reader'},{id:'dup-fraud'},{id:'safe-to-pay'},{id:'cash-match'}]
+ },
+ {
+  id:'tally', band:'tally', num:6, kick:'The books · the statutory record',
+  title:'Accounting · Tally', sub:'Ready-made GST vouchers flow in — exactly once, never re-typed',
+  solve:['Everything is re-typed into Tally by hand at month-end.'],
+  has:['Every event already booked in KDPS is copied into Tally as a proper <b>GST voucher</b>, exactly once.',
+       'A KDPS-owned voucher number stops duplicates and is the key for a daily tie-out.',
+       'GST is computed once at the sale on the dated slab — <b>Tally never recomputes it</b>.',
+       'Pushed through a deterministic export (via Vyapar TaxOne, with a direct fallback).',
+       'A daily “needs attention” list shows anything Tally refused, for the Patna accountant.'],
+  docs:['Purchase voucher','Sales voucher','Receipts','Payments','DN / CN','Daily tie-out'],
+  money:'Tally stays the official book of record. The system <b>feeds</b> it — it never replaces it.',
+  ai:[{id:'no-ai'}]
+ },
+ {
+  id:'brain', band:'brain', num:7, kick:'The Brain · reads everything, writes nothing to the books',
+  title:'Analytics &amp; AI', sub:'The whole business, watched — digest, forecasts, dead-stock, watchdog, assistant',
+  solve:['Month-end is built by hand.',
+         'There’s no daily picture, and no early warning when something goes wrong.'],
+  has:['A <b>9 PM WhatsApp digest</b> of the whole business — what’s good, what’s unusual, what needs a look.',
+       'Size-level <b>forecasts</b> that feed the store-allocation split.',
+       'A <b>dead-stock hunter</b> and markdown helper (age × velocity).',
+       'Profit <b>scorecards</b> per brand and per store, with a leakage waterfall.',
+       'An <b>anomaly watchdog</b> — discount leakage, cash shortfalls, data errors. Flags &amp; ranks, never blocks.',
+       'An <b>ask-anything assistant</b>, in Hindi or English, over the numbers.'],
+  docs:['Daily digest','Forecasts','Dead-stock','Scorecards','Watchdog','Assistant'],
+  money:'Code computes every number; the AI only phrases and explains it. The worst it can do is send a wrong message — never write a wrong book.',
+  ai:[{id:'brain-ai'}]
+ },
+ {
+  id:'peruser', band:'brain', num:8, kick:'Everyone’s own view',
+  title:'Per-User Analytics', sub:'Each person sees only their slice — and only what their role may see',
+  solve:['One giant dashboard helps no one — the owner, a buyer and a store manager need different things.',
+         'And no one should see numbers outside their responsibility.'],
+  has:['Each role gets its <b>own scoped view</b> — graphs, alerts and numbers that matter to them.',
+       'Scope is enforced at the data layer: the tools simply never return data outside your role.',
+       'A store manager’s view filters to <b>their store only</b>; an account manager’s to <b>their brands</b>.',
+       'The same read-only layer powers the assistant — ask in plain language, get only what you’re allowed to see.'],
+  roles:true,
+  docs:['Role-scoped tools','Owner digest','Store-only view','Brand-scoped view'],
+  money:'The whole intelligence layer is read-only and role-scoped — safe to put in everyone’s hands.',
+  ai:[{id:'scoped-ai'}]
+ }
+];
+
+/* AI / money drawer detail */
+const DETAIL = {
+ 'reading-reader':{kk:'AI helper · Booking',title:'The Receiving Reader',
+   sub:'Reads the brand’s order / receiving sheet and drafts the booking for you.',
+   does:['Reads style, size and quantity off the brand’s printed order sheet — even a photo.',
+         'Fills the booking as a <b>draft</b>, presenting partial results even at 70–80% confidence.',
+         'Asks for a clearer photo only when too much is unreadable.'],
+   read:'The vendor’s order sheet — messy, printed, photographed.',
+   never:'It never creates the booking silently and never sets the deal terms. You review and confirm.',
+   quote:'“You ordered 50 of style X in 3 sizes— here’s the draft. Check and confirm.”'},
+
+ 'invoice-reader':{kk:'AI helper · Goods In',title:'The Invoice Reader',
+   sub:'Turns a delivery invoice — PDF or phone photo — into structured lines.',
+   does:['Reads any invoice form: printed, scanned, or a photo of paper.',
+         'Extracts the lines and feeds them into the goods-receipt and price sheet.',
+         'Genuinely unstructured reading — the one job software alone can’t do.'],
+   read:'The vendor’s invoice that arrives with the goods.',
+   never:'It does not match quantities or compute money — that is exact software, never guessed.',
+   quote:'“I read 18 lines off this invoice. Here they are, ready to count against.”'},
+
+ 'pt-chat':{kk:'AI helper · Goods In',title:'Non-branded PT Assistant',
+   sub:'Guides you through pricing unbranded goods that arrive with no PT file.',
+   does:['Reads the bare invoice, then chats: “this is filled, this is missing.”',
+         'You fill the gaps with type-and-select boxes (colour tier, size, category).',
+         'Out comes a clean, editable price sheet — and the POS generates a barcode.'],
+   read:'A non-branded invoice with no barcode and no price file (~99% of such shipments).',
+   never:'The price formula and the SKU matching are exact software — the AI only helps you fill the blanks.',
+   quote:'“Colour and size are missing on 4 lines — pick a tier and I’ll finish the sheet.”'},
+
+ 'store-split':{kk:'AI helper · Goods In · later stage',title:'Store-Allocation Forecast',
+   sub:'Suggests which store should get what — item by item, with a confidence score.',
+   does:['Looks at how each store has sold this kind of item before.',
+         'Proposes the split: this size, this style, this many → this store.',
+         'Gives a confidence score; you open it, adjust, and approve.'],
+   read:'Past sales by store, size and style.',
+   never:'It never moves stock on its own — it proposes, you approve. (Built in stages once clean sales history exists.)',
+   quote:'“Ranchi-2 sells size 32 slim fast — send 60% of the slim run there. Confidence 0.8.”'},
+
+ 'markdown':{kk:'AI helper · Selling',title:'Markdown Suggester',
+   sub:'Watches slow KDPS-owned stock and proposes a clearance plan — never a bare number.',
+   does:['Tracks age, sell-through, weeks-of-cover and broken-size runs on KDPS-owned stock.',
+         'Proposes a package: a discount band, the pattern to use, expected clearance, a step-down plan.',
+         'Snaps to the allowed ladder (15%, 20%, 30%…), never below the cost floor.'],
+   read:'Stock age and sales velocity on KDPS’s own stock.',
+   never:'It never sets a price. A person reviews, adjusts and creates the actual offer.',
+   quote:'“FM jackets, 120 days, slow — try 30–40%, ~60% clears in 3 weeks, floor ₹X.”'},
+
+ 'offer-reader':{kk:'AI helper · Selling',title:'Offer-Sheet Reader',
+   sub:'Turns a brand’s messy offer photo or PDF into clean, exact rules.',
+   does:['Reads the WhatsApp photo / PDF the brand sends.',
+         'Drafts it into the offer rulebook (trigger + reward + the dials).',
+         'A human approves before it ever goes live at the till.'],
+   read:'The brand’s offer message — photo, PDF, or pasted text.',
+   never:'Applying the offer at the till is exact code — “best for the customer” is a deterministic rule, not a guess.',
+   quote:'“Spend ₹6,999 → ₹600 off, this brand, these stores, till the 30th. Approve?”'},
+
+ 'bank-reader':{kk:'AI helper · Money',title:'Bank-Statement Reader',
+   sub:'Turns bank-narration gibberish into “what this credit actually is.”',
+   does:['Parses lines like INF/NEFT/IN4260… + a UTR into a real meaning.',
+         '“This credit = Allen Solly refund” / “this = this store’s UPI settlement.”',
+         'Becomes the match key for both the money-in and money-out reconciliations.'],
+   read:'The daily bank statement (read-only).',
+   never:'It never moves money — it only labels what the bank already did.',
+   quote:'“This ₹42,000 credit is Madura’s return refund, not a sale.”'},
+
+ 'dup-fraud':{kk:'AI helper · Money',title:'Duplicate &amp; Fraud Catch',
+   sub:'Catches the two most common ways money leaks out — before it leaves.',
+   does:['Spots near-duplicate payments (same vendor + amount, OCR noise), not just exact ones.',
+         'Flags a <b>changed vendor bank account</b>: “Madura’s account changed since last payment — verify.”',
+         'Cuts duplicate-payment losses by 80–95%.'],
+   read:'The payment history and the vendor master.',
+   never:'It blocks nothing on its own — it raises a flag for a person to clear before release.',
+   quote:'“⚠ This vendor’s bank number is new since last time. Confirm before paying.”'},
+
+ 'safe-to-pay':{kk:'AI helper · Money',title:'“Safe to pay?” Brief',
+   sub:'A one-line summary that lets an approver sign off with full context.',
+   does:['Rolls the whole payment into one human sentence for the approver.',
+         'Also answers plain questions: “Madura ko is season kitna dena hai?”',
+         'Pulls from the ledger — instant, with the breakdown.'],
+   read:'The payables ledger and the matched documents.',
+   never:'It recommends; the approver decides. AI is never a step inside the approval itself.',
+   quote:'“Pay ₹4.2L to Madura · 12 invoices · all 3-way matched · within terms · nothing unusual.”'},
+
+ 'cash-match':{kk:'AI helper · Money',title:'Cash-to-Bank Matcher',
+   sub:'Proves each store’s takings reached the bank — across all three rails.',
+   does:['Three-way match per rail: POS gross ↔ settlement report (net of fees) ↔ bank credit.',
+         'Card T+2, UPI T+1, cash lumpy — handled with fuzzy, many-to-many logic.',
+         'Clears ~90% automatically; surfaces only the exceptions: short, missing, slow, fee-off.'],
+   read:'POS collections, settlement reports and the bank statement.',
+   never:'It never adjusts a number — late or short money is flagged for that day’s owner to chase.',
+   quote:'“Boring Rd: card settlement ₹2,200 short of POS — MDR or a missed swipe. Check.”'},
+
+ 'no-ai':{kk:'On purpose',title:'No AI in the books',money:true,
+   sub:'Accounting is the one place AI is switched off, deliberately.',
+   does:['Every voucher is exact and machine-made, computed by plain code.',
+         'GST is dated data carried as-is; Tally never recomputes and AI never touches it.',
+         'A wrong forecast wastes attention; a wrong posting corrupts the books — so AI stays out.'],
+   read:'Nothing — the books are written by deterministic code only.',
+   never:'AI never reads, drafts or posts a single accounting entry here.',
+   quote:'“The books are exact and machine-made. AI is not invited.”'},
+
+ 'brain-ai':{kk:'The Brain',title:'Where the AI actually lives',
+   sub:'The whole intelligence layer — read-only, and the safest place for AI.',
+   does:['Reads ledgers, masters and the POS pull; writes only messages, reports and suggestions.',
+         '<b>Code computes every number; the LLM only phrases, explains and translates.</b>',
+         'Digest, forecasts, dead-stock, scorecards, watchdog, assistant — all live here.',
+         'Built crawl → walk → run: clear rules now, machine-learning wraps them later.'],
+   read:'Everything below it — every ledger and master, read-only.',
+   never:'It never writes a ledger and never sits inside an approval. Copilot, not autopilot.',
+   quote:'“Reads the whole business, writes only the message. The book stays untouched.”'},
+
+ 'scoped-ai':{kk:'Per-user',title:'Role-scoped intelligence',
+   sub:'The same brain, fenced to exactly what each person is allowed to see.',
+   does:['Each role gets read-only tools that return only that role’s data.',
+         'Store manager → their store. Account manager → their brands. Finance → the money.',
+         'Ask in plain Hindi or English — the answer never crosses your scope.'],
+   read:'Only the slice of data your role permits.',
+   never:'It can never fetch beyond your scope, and never writes anything.',
+   quote:'“Ask anything — you’ll only ever get back what you’re allowed to see.”'}
+};
+
+const ROLES = [
+ {k:'Owner / Director', s:'Whole business', d:'The curated 9 PM digest plus anything escalated, and a weekly deep-dive. No login needed — it comes on WhatsApp.', scope:'Sees everything; receives the summary and escalations, not the noise.'},
+ {k:'Head of Operations', s:'All stores, day-to-day', d:'Network alerts the moment they matter: a store didn’t open, a terminal is down, a stockout, a stuck transfer. The escalation point for store managers.', scope:'All stores — operational interrupts by responsibility.'},
+ {k:'Account Manager', s:'Suppliers &amp; buying', d:'Dead stock, broken sizes, what to reorder, SOR return-window deadlines, and supplier / brand performance.', scope:'Scoped to the suppliers and brands assigned to him.'},
+ {k:'Finance', s:'The money', d:'Cash shortfalls, deposit gaps, discount leakage, payment due-dates, and profitability / margin.', scope:'Company-wide financial metrics — deposits, leakage, payments.'},
+ {k:'Store Manager', s:'Their one store', d:'Their store’s sales vs target, opening, terminal health, stockouts and local dead stock.', scope:'STORE-SCOPED ONLY — their own store’s data, never another’s.'}
+];
+
+/* ---------------- RENDER ---------------- */
+const spine = document.getElementById('spine');
+STAGES.forEach((st,i)=>{
+  const wrap=document.createElement('div');
+  wrap.className='stage'; wrap.dataset.band=st.band;
+
+  // AI chips
+  let chips='';
+  (st.ai||[]).forEach(a=>{
+    const d=DETAIL[a.id];
+    if(a.id==='no-ai'){ chips+=`<span class="aichip noai" title="AI is switched off here">⊘ No AI — on purpose</span>`; }
+    else { chips+=`<span class="aichip" onclick="openDrawer('${a.id}',event)"><span class="spark">✦</span>${d.title.replace(/&amp;/g,'&')}</span>`; }
+  });
+
+  // body sections
+  const solveLi=st.solve.map(x=>`<li>${x}</li>`).join('');
+  const hasLi=st.has.map(x=>`<li>${x}</li>`).join('');
+  const docTags=st.docs.map(x=>`<span class="doctag">${x}</span>`).join('');
+
+  let extra='';
+  if(st.branch){
+    extra=`<div class="branch">
+      <div class="brbox b1"><h5>Branded — the easy path</h5><p>Barcode + invoice + price file all arrive together. The price sheet converts by exact software, immediately. ~1% of shipments, but the simplest.</p></div>
+      <div class="brbox b2"><h5>Non-branded — the careful path</h5><p>Invoice only, no barcode (~99% of shipments). AI reads it, you fill the gaps in a chat, the POS makes the barcode. Built first as a simple version, then refined.</p></div>
+    </div>`;
+  }
+  if(st.transfer){
+    extra+=`<div class="moneynote" style="background:#eef1f7;border-color:#c9d2e2;color:#33415c">
+      <b style="color:var(--navy)">Stock transfer, end to end:</b> create it → the destination store gets a notification → scan out → <b>in-transit</b> → scan in to receive. Transport details (vehicle / driver) ride along, with an estimated time, an aging alert if it’s late, and an escalation call if no one picks up.</div>`;
+  }
+  if(st.ecom){
+    extra+=`<div class="moneynote" style="background:#f0e9fb;border-color:#d6c6f1;color:#4a3b6b">
+      <b style="color:var(--purple)">E-commerce — the next channel:</b> when KDPS sells online, an online order joins this <i>same</i> spine and the <i>same</i> payment flow below — one stock truth, one money truth, whether it sold at the till or on the web. <span style="opacity:.8">(Designed-in, switched on when KDPS goes online.)</span></div>`;
+  }
+  if(st.payflow){
+    extra+=`<div class="pay">
+      <div class="payside in">
+        <h5>Money in <span class="tag">store → bank</span></h5>
+        <ol class="steps">
+          <li>Sale collects cash / card / UPI at the till.</li>
+          <li>Daily <b>store-collection audit</b>, three-way per rail.</li>
+          <li>POS gross ↔ settlement report (net of fees) ↔ bank credit.</li>
+          <li>~90% auto-matched; only the gaps surface to chase.</li>
+        </ol>
+      </div>
+      <div class="payside out">
+        <h5>Money out <span class="tag">KDPS → brands</span></h5>
+        <ol class="steps">
+          <li><b>Payable</b> created (at goods-in for owned; on sale for SOR / Consignment).</li>
+          <li><b>Eligibility gate</b> — bank &amp; GSTIN valid, tied to a real PT.</li>
+          <li><b>Proposed</b> by the account manager, allocated bill-wise.</li>
+          <li><b>Approved</b> up a tiered ladder, then paid &amp; UTR captured.</li>
+          <li><b>Reconciled</b> when the statement shows it landed.</li>
+        </ol>
+      </div>
+    </div>
+    <div class="sod"><b>Separation of duties, always:</b> the person who raises a payment, the one who approves it, and the one who releases it are never the same — maker ≠ checker ≠ payer.</div>`;
+  }
+  if(st.roles){
+    let rc=ROLES.map((r,ri)=>`<div class="rolechip" onclick="pickRole(${ri},event)">${r.k}<small>${r.s}</small></div>`).join('');
+    extra+=`<div class="roles">${rc}</div><div class="rolepanel" id="rolepanel"></div>`;
+  }
+
+  wrap.innerHTML=`
+    <div class="node">
+      <div class="num">${st.num}</div>
+      ${i<STAGES.length-1?'<div class="arrowdown">▼</div>':''}
+    </div>
+    <div class="body">
+      <div class="scard" id="card-${st.id}">
+        <div class="shead" onclick="toggleCard('${st.id}',event)">
+          <div class="shgrow">
+            <div class="kick">${st.kick}</div>
+            <h3>${st.title}</h3>
+            <div class="sub">${st.sub}</div>
+          </div>
+          <div class="aichips">${chips}</div>
+          <div class="chev"><span class="lab-x">Details</span> <span class="ar">▾</span></div>
+        </div>
+        <div class="sbody">
+          <div class="row">
+            <div class="blk"><div class="lab solve">What it fixes</div><ul class="tick">${solveLi}</ul></div>
+            <div class="blk"><div class="lab">What it does</div><ul class="tick">${hasLi}</ul></div>
+          </div>
+          ${extra}
+          <div class="docline">${docTags}</div>
+          <div class="moneynote"><b>Money &amp; truth:</b> ${st.money}</div>
+        </div>
+      </div>
+    </div>`;
+  spine.appendChild(wrap);
+});
+
+/* ---------------- INTERACTION ---------------- */
+function toggleCard(id,e){
+  if(e && e.target.closest('.aichip')) return;
+  document.getElementById('card-'+id).classList.toggle('open');
+}
+let allOpen=false;
+function toggleAll(){
+  allOpen=!allOpen;
+  document.querySelectorAll('.scard').forEach(c=>c.classList.toggle('open',allOpen));
+  document.getElementById('tExpand').classList.toggle('on',allOpen);
+  document.getElementById('tExpand').textContent = allOpen?'⇕ Collapse all':'⇕ Expand all';
+}
+let spot=false;
+function toggleSpot(){
+  spot=!spot;
+  document.body.classList.toggle('spotlight',spot);
+  document.getElementById('tSpot').classList.toggle('on',spot);
+}
+
+function pickRole(ri,e){
+  e.stopPropagation();
+  const chips=document.querySelectorAll('.rolechip');
+  chips.forEach((c,ci)=>c.classList.toggle('active',ci===ri));
+  const r=ROLES[ri];
+  const p=document.getElementById('rolepanel');
+  p.innerHTML=`<h5>${r.k} — sees: ${r.s}</h5><div style="font-size:13.5px;color:#4a3b6b">${r.d}</div><div class="scope"><b>Scope:</b> ${r.scope}</div>`;
+  p.classList.add('show');
+}
+
+function openDrawer(id,e){
+  if(e) e.stopPropagation();
+  const d=DETAIL[id]; if(!d) return;
+  const head=document.getElementById('dhead');
+  head.classList.toggle('money', !!d.money);
+  document.getElementById('dkk').innerHTML=d.kk;
+  document.getElementById('dtitle').innerHTML=d.title;
+  document.getElementById('dsub').innerHTML=d.sub;
+  const doesLi=d.does.map(x=>`<li>${x}</li>`).join('');
+  document.getElementById('dbody').innerHTML=`
+    <h6>What it does</h6>
+    <ul>${doesLi}</ul>
+    <div class="reads">
+      <div class="rb read"><span class="h">It reads</span>${d.read}</div>
+      <div class="rb never"><span class="h">It never</span>${d.never}</div>
+    </div>
+    <div class="quote">${d.quote}</div>`;
+  document.getElementById('scrim').classList.add('show');
+  document.getElementById('drawer').classList.add('show');
+  document.getElementById('drawer').setAttribute('aria-hidden','false');
+}
+function closeDrawer(){
+  document.getElementById('scrim').classList.remove('show');
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('drawer').setAttribute('aria-hidden','true');
+}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer();});
+</script>
+</body>
+</html>
