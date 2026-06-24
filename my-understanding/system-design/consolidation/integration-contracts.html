@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Integration Contracts (one contract per edge)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:264px; flex:0 0 264px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:64ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-spike{background:var(--red-bg); color:var(--red)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-spike{background:var(--red-bg); border-color:#f0c4bd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:10px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; background:#f0f2f6; padding:1px 4px; border-radius:4px}
+  ol,ul{margin:8px 0; padding-left:22px} li{margin:6px 0}
+  /* the contract grid that opens each edge */
+  .contract{border:1.5px solid var(--blue); border-radius:12px; overflow:hidden; margin:14px 0}
+  .contract .row{display:flex; border-top:1px solid #cfe0f3}
+  .contract .row:first-child{border-top:none}
+  .contract .k{flex:0 0 160px; background:var(--blue-bg); color:var(--navy); font-weight:700; font-size:12.5px; letter-spacing:.03em; padding:11px 13px; text-transform:uppercase}
+  .contract .v{flex:1 1 auto; padding:11px 14px; font-size:14px; min-width:0}
+  @media(max-width:560px){.contract .row{flex-direction:column}.contract .k{flex-basis:auto}}
+  .pill{display:inline-block; font-size:11.5px; font-weight:700; padding:2px 8px; border-radius:6px; background:var(--grey-bg); color:var(--navy2); margin:1px 2px}
+  .footer-note{color:var(--muted); font-size:13px}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Frame</h2>
+  <a href="#what">What this is</a>
+  <a href="#shape">The contract shape</a>
+  <h2>The four edges</h2>
+  <a href="#pos">1 · POS</a>
+  <a href="#tally">2 · Tally</a>
+  <a href="#bank">3 · Bank</a>
+  <a href="#whatsapp">4 · WhatsApp</a>
+  <h2>Across all edges</h2>
+  <a href="#recon">Daily reconciliation board</a>
+  <a href="#spikes">Open spike questions</a>
+</nav>
+
+<main>
+<header class="doc" id="what">
+  <div class="eyebrow">KDPS · Consolidation · Integration Contracts</div>
+  <h1>Integration contracts — one per edge</h1>
+  <p class="sub">Rule 7 made concrete: every connection to the outside world is a written contract — what we <strong>push</strong>, what we <strong>pull</strong>, the <strong>join key</strong>, what happens on <strong>retry</strong>, the <strong>daily reconciliation</strong>, and the <strong>failure queue</strong>. Four edges touch the books: POS, Tally, Bank, WhatsApp.</p>
+  <div class="stamp footer-note" style="margin-top:8px">25 June 2026 · Assembled from the locked module designs (D2 inbound · D3 outbound · D4 payments · D6 Tally · D7 analytics) and the 16 Q&amp;A decisions. The <a href="../00-system-architecture.html">architecture</a> is the constitution; this is the edge appendix a developer builds the adapters from.</div>
+</header>
+
+<section>
+  <div class="callout co-key">
+    <strong>The one principle every edge obeys (Rule 7).</strong> Never assume the other side received anything. Every push is retry-safe and idempotent; every pull is deduplicated on a stable key; a tie-out runs daily and lists exactly what didn't match; anything that fails goes to a <em>named</em> queue with a <em>named</em> owner — the shop floor never waits on an integration (Rule 5: flag, never block). Every edge sits <strong>behind a swappable adapter</strong>, so the outside system can be replaced without touching the spine.
+  </div>
+</section>
+
+<section id="shape">
+  <h2 class="sec">The contract shape — read every edge this way</h2>
+  <p>Each of the four edges below is written to the same six-line shape, so a developer can build any adapter from a single mental model.</p>
+  <table>
+    <tr><th style="width:22%">Line</th><th>What it answers</th></tr>
+    <tr><td><strong>Push</strong></td><td>What KDPS sends out, and when.</td></tr>
+    <tr><td><strong>Pull</strong></td><td>What KDPS reads in, and how often.</td></tr>
+    <tr><td><strong>Join key</strong></td><td>The single field both sides agree identifies a record. If it's wrong, everything double-counts or goes missing.</td></tr>
+    <tr><td><strong>Retry / idempotency</strong></td><td>How a re-send or a re-read avoids creating a duplicate. The heart of "exactly once".</td></tr>
+    <tr><td><strong>Daily reconciliation</strong></td><td>The once-a-day tie-out that proves the two sides agree, and surfaces the few that don't.</td></tr>
+    <tr><td><strong>Failure queue</strong></td><td>Where a mismatch waits, who owns it, and why the floor keeps moving regardless.</td></tr>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<!-- 1 · POS                                                       -->
+<!-- ============================================================ -->
+<section id="pos">
+  <h2 class="sec">1 · POS edge <span class="badge b-locked">behind one swappable adapter</span> <span class="badge b-spike">3 spike Qs open</span></h2>
+  <p>The most important edge: this is where the sale actually happens. <strong>Two concurrent sources sit behind one adapter</strong> — the bought <strong>Ten Software</strong> POS that runs the counters today, and a <strong>future KDPS-owned POS</strong> built in parallel (Q8). They are not a migration with a cut-over date; they coexist. Critically, <strong>each store runs exactly one POS</strong> — a hard configuration invariant — so the two sources never overlap inside a store. The Sale document is <strong>source-agnostic</strong>: <code>source = Ten&nbsp;Software | manual&nbsp;bill | KDPS&nbsp;POS</code>, and all posting logic lives on the Sale, never in the adapter.</p>
+
+  <div class="contract">
+    <div class="row"><div class="k">Push</div><div class="v">Item master per store (barcode → MRP, tax/HSN, brand, season, category), <strong>pending-inward quantities</strong> per store (so the counter scans goods in against them), and <strong>EOSS / offer price rules</strong> per barcode per store with start/end dates. Bulk on first load, incremental thereafter.</div></div>
+    <div class="row"><div class="k">Pull</div><div class="v">Line-item sales per bill (barcode, qty, rate=MRP, disc%, disc amt, net, store, date/time, payment mode, bill no, cashier, season if echoed), <strong>SOH per store</strong>, and the <strong>daily collection</strong> (cash / card / UPI totals). Cadence: a near-real-time poll <strong>plus</strong> an authoritative end-of-day batch that is the daily close and the negative-SOH catch.</div></div>
+    <div class="row"><div class="k">Join key</div><div class="v"><strong>Barcode + season.</strong> The supplier barcode is a <em>non-unique scan-alias</em> pointing to a SKU cohort, not the identity itself (Q7) — brands reuse the same barcode in a later season. <strong>Season is inferred at the adapter</strong>, not demanded of the POS (Q6, no re-barcoding): one cohort match → post; many → oldest-season-first (FIFO); genuinely ambiguous → one-tap "which season?"; <em>never block</em>. The adapter re-attaches season via the effective-dated (SCD-2) master for that barcode at that store on that sale date. A true two-SKU collision is caught at <em>inbound</em> (internal barcode assigned), not here.</div></div>
+    <div class="row"><div class="k">Retry / idempotency</div><div class="v"><strong>Dedup key = store + bill-no.</strong> Each store runs one POS, so the two sources never share a bill-no space — the key is collision-free by the "one store, one POS" invariant. For the KDPS-owned POS, every sale also carries a <strong>client-UUID</strong> generated offline at the terminal; the server does an <strong>idempotent upsert</strong> keyed on that UUID and returns the <em>same</em> Sale-ID on any retry, so an offline outbox can re-send safely after a network drop with zero double-posting. Re-reading the same Ten Software bill on the next poll resolves to the same <code>store + bill-no</code> and is a no-op.</div></div>
+    <div class="row"><div class="k">Daily reconciliation</div><div class="v"><strong>POS recon, daily:</strong> their SOH per store ↔ our stock-ledger SOH per store (the EOD batch). Also reconciles our ledger vs paper bills (manual fallback) and dispatched-vs-received for transfers. A negative SOH explained by a known allocation → auto-creates the missing inward; unexplained → HO exception. Negative SOH never persists.</div></div>
+    <div class="row"><div class="k">Failure queue</div><div class="v">An unmatched bill, an unresolved barcode-season, or an unexplained negative SOH lands in the <strong>HO exception queue</strong> with a plain-words reason; the counter keeps selling. A POS that is down falls back to the <strong>manual bill</strong> — a real document reconciled later — so a sale is never lost.</div></div>
+  </div>
+
+  <div class="callout co-note"><strong>Reader before writer (Q8 guardrail).</strong> The adapter ships first as a <em>reader</em> of Ten Software. Ten ingest and the daily POS recon must be green before any KDPS-owned-POS store goes live. Counter bills are normal B2C GST tax invoices — <strong>no IRP/IRN</strong> (e-invoicing is B2B-only). Idempotency is non-negotiable: a client-UUID per sale, an idempotent server upsert, offline outbox, and offline bill-numbering at the terminal are the thin spike's success criteria.</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 2 · Tally                                                     -->
+<!-- ============================================================ -->
+<section id="tally">
+  <h2 class="sec">2 · Tally edge <span class="badge b-locked">designed (D6, locked 20 Jun)</span></h2>
+  <p>The statutory edge. KDPS stays the live operational truth; <strong>Tally stays the filed book of record</strong> (Rule 4). Every business event was already booked in the spine and payments — D6 only copies those events into Tally as proper GST vouchers, <strong>one-way, exactly once</strong>, with a daily tie-out. Route is hybrid: a deterministic structured export is the real contract; <strong>Vyapar TaxOne</strong> imports it today, with direct Tally-XML as the fallback and the future self-built path.</p>
+
+  <div class="contract">
+    <div class="row"><div class="k">Push</div><div class="v">GST-ready vouchers — purchase / TIR (booked at arrival for every brand, Q6), daily consolidated sales per store (per-bill only for a customer GSTIN), combined money-in with the tender split, payments, DN/CN, and SOR/Consignment settlement journals. <strong>Cross-state stock moves carry an IGST tax invoice</strong> (out-voucher at the sender, matching purchase voucher at the receiver); intra-state moves are stock-ledger-only, no voucher (Q3 / F3). GST is computed once by KDPS at the right dated slab and <strong>carried, never recomputed</strong> downstream.</div></div>
+    <div class="row"><div class="k">Pull</div><div class="v">Acknowledgement / import logs only — which vouchers Tally accepted. Tally is never read for truth; it is fed.</div></div>
+    <div class="row"><div class="k">Join key</div><div class="v"><strong>KDPS-owned deterministic voucher number</strong> — e.g. <code>DEO-SAL-20260620-001</code> (store · type · date · sequence). One number is <em>both</em> the idempotency guard and the tie-out key. Tally auto-numbering is rejected because it would lose the join key and duplicate on retry.</div></div>
+    <div class="row"><div class="k">Retry / idempotency</div><div class="v"><strong>Exactly-once via an outbox</strong> (F9 noted): the voucher is staged in an append-only outbox with its deterministic number; Tally runs with <strong>prevent-duplicate-voucher-number ON</strong>, so a retry of an already-accepted number simply bounces — exactly once. A first-live-test check confirms the number passes through TaxOne unchanged rather than being reassigned. <em>(F9 caution: the SOR lot carries a <code>gst_recognised=(date,&nbsp;voucher_no)</code> invariant so GST is recognised once — at the arrival voucher <em>or</em> the settlement journal, never both; one convention, CA to confirm — see spike list.)</em></div></div>
+    <div class="row"><div class="k">Daily reconciliation</div><div class="v"><strong>Tally tie-out, daily:</strong> what KDPS sent ↔ what Tally accepted, matched on the unique voucher number. Totals match → green; otherwise it lists exactly which vouchers didn't land. Separately, a daily AP-to-Tally tie-out reconciles the KDPS payables balance against Tally's control account — the safety net against silent drift.</div></div>
+    <div class="row"><div class="k">Failure queue</div><div class="v">A refused voucher goes to a plain-words <strong>"needs attention" list</strong> ("brand name not found", "already there") — fixed and re-sent. <strong>Owner: the Patna accountant</strong> (already lives in Tally). Cadence: once a day. The shop floor never waits; back-office cleanup only (Q3/Q4/F9 — the tie-out and failure queue are first-class, built as their own slice, not deferred).</div></div>
+  </div>
+
+  <div class="callout co-warn"><strong>Open for the client / CA (parked, non-blocking).</strong> Whether Bihar &amp; Jharkhand are one Tally company with two GSTINs or two companies (C3 / Q3) decides where each store's vouchers are addressed — both are easy for us. Whether the SOR delivery invoice charges GST at delivery (C5 / Q4) is the only detail affecting how the purchase is recorded, and is the input to the <code>gst_recognised</code> convention.</div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 3 · Bank                                                      -->
+<!-- ============================================================ -->
+<section id="bank">
+  <h2 class="sec">3 · Bank edge <span class="badge b-locked">designed (D4)</span></h2>
+  <p>The proof-of-money edge — read-only. KDPS pushes nothing to the bank; it <strong>pulls statements</strong> and uses them for two reconciliations: money-out (did the vendor payment actually leave) and money-in (did the store's reported collection actually land). The bank is a <em>variable</em> — three banks, ICICI access first — so it sits behind its own adapter like every other edge.</p>
+
+  <div class="contract">
+    <div class="row"><div class="k">Push</div><div class="v">Nothing. The bank edge is read-only.</div></div>
+    <div class="row"><div class="k">Pull</div><div class="v">Bank statements (CSV / PDF to start, an API pull where a bank allows it), daily. For the money-in side these are joined with <strong>acquirer / aggregator settlement reports</strong> (Pine Labs / Razorpay / Paytm…) so the card and UPI rails can be disaggregated — client to confirm which acquirers and arrange the daily reports.</div></div>
+    <div class="row"><div class="k">Join key</div><div class="v"><strong>UTR</strong> (the bank reference) is the primary key; where a UTR isn't present, <strong>date + amount + store ref</strong> is the fallback match. An AI bank-narration parser turns <code>INF/NEFT/IN4260…</code> gibberish into "this credit = Allen Solly refund / this store's UPI settlement" using the UTR + narration; the UTR is the match key for <em>both</em> reconciliations.</div></div>
+    <div class="row"><div class="k">Retry / idempotency</div><div class="v">Statements are re-pullable and overlapping by nature, so each bank line is <strong>deduplicated on (UTR, amount, date)</strong> — re-importing yesterday's statement matches existing lines and creates nothing new. A captured payment UTR <strong>auto-closes its payable</strong> exactly once (the payment roundtrip); a second sight of the same UTR is a no-op.</div></div>
+    <div class="row"><div class="k">Daily reconciliation</div><div class="v"><strong>Bank audit, daily,</strong> on two rails. <em>Money-out:</em> vendor payments ↔ bank debits on UTR — auto-closes the payable, chases the DN-without-CN gap. <em>Money-in (three-rail):</em> cash deposits, card settlements (gross − MDR, by MID/terminal), and UPI ↔ bank credits, matched by narration / UTR with fuzzy, many-to-many logic. The lag (T+1 cash, T+2 card net-of-MDR, T+1 UPI) is carried as "expected / in-transit" until the money lands, so the audit can always say <em>why</em> a number differs.</div></div>
+    <div class="row"><div class="k">Failure queue</div><div class="v">Only genuinely <strong>late, short, or missing</strong> settlements are flagged — raised on the day, for the day's named owner (store user confirms their own store's deposit; HO sees all). Money carries a real <strong>hard gate</strong>: no vendor payment without bank + GSTIN, and no pay before reconciliation is clean (Rule 5 + the D1 pay-gate). Unmatched lines wait in the recon exception queue; they never block the counter.</div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- 4 · WhatsApp                                                  -->
+<!-- ============================================================ -->
+<section id="whatsapp">
+  <h2 class="sec">4 · WhatsApp edge <span class="badge b-locked">designed (D7)</span> <span class="badge b-ai">AI lives upstream</span></h2>
+  <p>The owner-facing edge — outbound only. Owners live on WhatsApp, not logins. This edge carries the daily digest, deadline alarms and anomaly alerts <em>out</em>; it reads nothing back. Everything it sends is produced in the read-only intelligence layer — a wrong message wastes attention, never corrupts a book (Rule 8).</p>
+
+  <div class="contract">
+    <div class="row"><div class="k">Push</div><div class="v">The <strong>digest</strong> (a day-close exception feed), deadline alarms (return windows 30/15/7, payment due dates, EOSS windows) and anomaly / leakage alerts. <strong>Both the digest TYPE and its TIMING are per-user configurable (Q15)</strong> — configuration data, not code (Rule 12, "variation is data, not code"). The <strong>default is a 9 PM close-of-day</strong> digest; a user can choose a different cut, a different time, or a different recipient role.</div></div>
+    <div class="row"><div class="k">Pull</div><div class="v">Nothing. The edge is one-way out.</div></div>
+    <div class="row"><div class="k">Join key</div><div class="v"><strong>Phone number per role</strong> — each recipient maps to a role, and the role's per-user config decides what they receive and when.</div></div>
+    <div class="row"><div class="k">Retry / idempotency</div><div class="v">Each scheduled message carries a <strong>(recipient, digest-type, period)</strong> key, so a retry after a send failure resends the same message rather than a second copy. A delivery webhook failure re-queues; a duplicate provider callback for an already-sent key is dropped.</div></div>
+    <div class="row"><div class="k">Daily reconciliation</div><div class="v">A daily <strong>send log</strong> — every scheduled digest/alarm for the day vs what the provider confirmed delivered, per recipient. A digest that was due but never confirmed is surfaced for re-send.</div></div>
+    <div class="row"><div class="k">Failure queue</div><div class="v">An undelivered or bounced message lands in a small <strong>delivery exception list</strong> (bad number, provider error) for re-send or a contact-detail fix. Nothing in the spine waits on a WhatsApp send.</div></div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<!-- Across all edges                                              -->
+<!-- ============================================================ -->
+<section id="recon">
+  <h2 class="sec">The daily reconciliation board — all four edges at a glance</h2>
+  <p>Every edge produces one daily tie-out and one failure queue. This is the controls layer (L3) seen from the edge side: each loop runs on a schedule, produces differences, and pushes them to a named queue. They <strong>flag; they never block the floor.</strong></p>
+  <table>
+    <tr><th>Edge</th><th>Daily tie-out compares</th><th>Join key</th><th>Failure queue → owner</th></tr>
+    <tr><td><strong>POS</strong></td><td>POS SOH per store ↔ our stock-ledger SOH; sales pulled ↔ posted; manual bills ↔ ledger; transfers dispatched ↔ received</td><td>Barcode + season<br>(dedup: store + bill-no; KDPS-POS: client-UUID)</td><td>HO exception queue (negative-SOH, unmatched bill, ambiguous season)</td></tr>
+    <tr><td><strong>Tally</strong></td><td>Vouchers sent ↔ accepted; KDPS payables ↔ Tally control account</td><td>Deterministic voucher number</td><td>"Needs attention" list → Patna accountant</td></tr>
+    <tr><td><strong>Bank</strong></td><td>Vendor payments ↔ bank debits; store collections (cash / card net-MDR / UPI) ↔ bank credits</td><td>UTR (fallback: date + amount + store ref)</td><td>Recon exception queue → store user (own store) / HO; hard pay-gate</td></tr>
+    <tr><td><strong>WhatsApp</strong></td><td>Scheduled digests / alarms ↔ provider-confirmed deliveries</td><td>Phone per role (msg key: recipient + type + period)</td><td>Delivery exception list → HO</td></tr>
+  </table>
+</section>
+
+<section id="spikes">
+  <h2 class="sec">Open spike &amp; forward questions — close before the slice that consumes them</h2>
+  <p>These do not block the foundation build; they gate the specific slices that touch them, and they have lead time — so they start now in parallel (Q14). Three are Ten Software spike questions about exactly how much the POS edge can carry.</p>
+
+  <div class="card"><h4>Ten Software POS spike <span class="badge b-spike">spike now</span></h4>
+    <ul>
+      <li><strong>Can the sale line carry season / MRP?</strong> If Ten Software echoes the season or the sale-line MRP, season resolution becomes deterministic and the MRP gives a second collision-check; if not, the adapter infers season from the SCD-2 master (Q6) and the one-tap fallback stands.</li>
+      <li><strong>Void / edit handling.</strong> How does the POS represent a voided or edited bill, and does it come through the pull as a reversal line with a reference to the original bill-no? This decides how the adapter reverses a posted Sale idempotently.</li>
+      <li><strong>Stable bill-no.</strong> Is the bill number stable and unique per store (never reused, never renumbered)? The whole dedup key (<code>store + bill-no</code>) and the "one store, one POS" invariant depend on it.</li>
+    </ul>
+    <p class="footer-note">Plus the load-bearing access questions (already drafted for Ten Software): a documented API for sales / SOH / returns / collections pull and master / pending-inward / offer push; auth scoped per store; rate limits; a test store; timeline.</p>
+  </div>
+
+  <div class="card"><h4>Tally / GST forwards <span class="badge b-open">client &amp; CA</span></h4>
+    <ul>
+      <li><strong>One Tally company with two GSTINs, or two companies</strong> (C3 / Q3) — voucher addressing.</li>
+      <li><strong>SOR delivery invoice — GST at delivery or not</strong> (C5 / Q4) — sets the <code>gst_recognised</code> convention so the arrival voucher and the settlement journal never recognise GST twice (F9). One convention, CA confirms.</li>
+      <li><strong>Cross-state IGST</strong> (Q3) — confirm KDPS is one company with two state GSTINs; then the slab basis on the transfer invoice and the Jharkhand e-way carve-out are CA mechanics.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h4>Bank forwards <span class="badge b-open">client</span></h4>
+    <ul>
+      <li><strong>Acquirer settlement reports</strong> — which acquirers (Pine Labs / Razorpay / Paytm…) and daily access — the feed that makes the card / UPI rails reconcile.</li>
+      <li><strong>Bank statement access</strong> per bank (ICICI now; three banks total) — read-only API where available, else CSV/PDF.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  KDPS · Integration Contracts · 25 June 2026 · One contract per edge (POS · Tally · Bank · WhatsApp). Assembled from D2/D3/D4/D6/D7 and the 16 Q&amp;A decisions; edge appendix to <a href="../00-system-architecture.html">00-system-architecture.html</a>. Changes here must stay reconciled with the module designs.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Data Model &amp; ERD (Schema Reference)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1300px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:268px; flex:0 0 268px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:13.5px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:70ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:10px}
+  section{margin:40px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:26px 0 8px}
+  h4{font-size:15px; color:var(--navy2); margin:18px 0 6px}
+  p{margin:10px 0}
+  .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-master{background:var(--blue-bg); color:var(--blue)}
+  .b-doc{background:var(--green-bg); color:var(--green)}
+  .b-ledger{background:var(--amber-bg); color:var(--amber)}
+  .b-scd2{background:var(--purple-bg); color:var(--purple)}
+  .b-pk{background:var(--navy); color:#fff}
+  .b-fk{background:var(--grey-bg); color:#41506b}
+  .b-money{background:var(--red-bg); color:var(--red)}
+  .b-key{background:var(--red-bg); color:var(--red)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:16px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.3px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.3px; letter-spacing:.02em}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.3px; background:#f0f2f6; padding:1px 5px; border-radius:4px}
+  td code{font-size:11.8px}
+  .pk{color:var(--rust); font-weight:700}
+  .fk{color:var(--blue); font-weight:600}
+  ol,ul{margin:9px 0; padding-left:22px} li{margin:5px 0}
+  .tbl-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700; color:var(--navy)}
+  /* ERD figure */
+  .erd{background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 18px; margin:16px 0; overflow-x:auto}
+  .erd-row{display:flex; gap:14px; flex-wrap:wrap; justify-content:center; margin:10px 0}
+  .layer-label{font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--navy2); text-align:center; margin:18px 0 4px; border-bottom:1px dashed var(--line); padding-bottom:4px}
+  .ent{border-radius:9px; padding:8px 12px; min-width:120px; font-size:12.5px; text-align:center; border:1.5px solid}
+  .ent b{display:block; font-size:12.8px}
+  .ent small{display:block; color:var(--muted); font-size:10.8px; margin-top:2px}
+  .e-master{background:var(--blue-bg); border-color:#bcd6f3; color:var(--navy)}
+  .e-scd2{background:var(--purple-bg); border-color:#d3c4ee; color:var(--navy)}
+  .e-doc{background:var(--green-bg); border-color:#bfe0cd; color:var(--navy)}
+  .e-ledger{background:var(--amber-bg); border-color:#ecd9a6; color:var(--navy)}
+  .e-spine{background:#fff; border-color:var(--rust); color:var(--navy)}
+  .arrow{text-align:center; color:var(--muted); font-size:18px; line-height:1; margin:2px 0}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; margin-top:14px; justify-content:center}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .sw{width:14px; height:14px; border-radius:4px; border:1.5px solid}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .note-inline{font-size:12.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Orient</h2>
+  <a href="#intro">1 · What this document is</a>
+  <a href="#principles">2 · The five schema laws</a>
+  <a href="#erd">3 · The ERD on one page</a>
+  <h2>Masters</h2>
+  <a href="#identity">4 · Identity — SKU, barcode, cohort</a>
+  <a href="#geography">5 · Entity → GSTIN → Store</a>
+  <a href="#commercial">6 · Commercial model registry</a>
+  <a href="#masters">7 · The other masters</a>
+  <a href="#scd2">8 · SCD-2 effective dating</a>
+  <h2>Transactions</h2>
+  <a href="#document">9 · Document skeleton</a>
+  <a href="#ptline">10 · The PT line (product spine)</a>
+  <a href="#ledgers">11 · The three ledgers</a>
+  <a href="#money">12 · Money &amp; the SOR clocks</a>
+  <h2>Reference</h2>
+  <a href="#table-index">13 · Full table index</a>
+</nav>
+
+<main>
+<header class="doc" id="intro">
+  <div class="eyebrow">KDPS · Consolidation · Schema Reference</div>
+  <h1>Data Model &amp; ERD</h1>
+  <p class="sub">The relational schema for the KDPS operating system — the entities, their keys, and how they relate. This is the <strong>shape of the database</strong>: identity, money, ledgers, masters, documents. It is the picture a developer holds while writing the first migration.</p>
+  <div class="stamp">25 June 2026 · Schema-of-record · Encodes the 16 locked Q&amp;A decisions + the money-critical open items. Source of truth: <code>.context/qa-decisions.md</code>, the reconciliation plan, and the 24-Jun review.</div>
+</header>
+
+<section id="intro-body">
+  <div class="callout co-key">
+    <strong>This is the schema, not the posting rules.</strong> This document says <em>what tables exist and how they relate</em> — the nouns of the database. It deliberately does <strong>not</strong> say which document posts which ledger legs under which commercial model — that is the <code>posting-catalog.html</code>, the heart of correctness. Read the two together: this gives you the columns; the catalog gives you the rules that fill the ledger tables.
+  </div>
+  <p>Everything below traces to a locked decision. Five ideas carry the whole model and must never be compromised:</p>
+  <ul>
+    <li><strong>Identity is the cohort.</strong> A real product is <code>SKU</code> = Brand + Style(Design) + Colour + Size; what we count and price is the <strong>cohort</strong> = barcode + season. The barcode is a non-unique scan-alias that <em>resolves to</em> a cohort — it is not the identity (Q6, Q7).</li>
+    <li><strong>Money is integer paise.</strong> Every amount is a <code>BIGINT</code> count of paise. Never a float, never a decimal-that-rounds. ₹28,50,000 is stored as <code>285000000</code>.</li>
+    <li><strong>Ledgers are append-only.</strong> Stock, vendor and cash ledgers only ever receive rows; a balance is always the sum of its postings; a correction is a new reversing row, never an edit (FD-6, ADR-0004/0006).</li>
+    <li><strong>History-driving masters are effective-dated (SCD-2).</strong> Only the five masters whose change must not rewrite an old bill — GST slab, GSTIN, cost, price, brand terms — carry from/to dates. Everything else is current-value + audit + document snapshot (Q11/Q15).</li>
+    <li><strong>Every ledger leg carries its dimensions.</strong> Store, brand, season and state-GSTIN are declared foreign-key columns on every posting from day one — scoping and reporting are built in, not retrofitted (Q12, FD-3).</li>
+  </ul>
+</section>
+
+<section id="principles">
+  <h2 class="sec">2 · The five schema laws</h2>
+  <p class="lead">Conventions every table obeys. These are code-level invariants, enforced by the database and the central posting engine — not coding-style preferences.</p>
+
+  <div class="card">
+    <h4>① Money = integer paise <span class="badge b-money">money-critical</span></h4>
+    <p>Every monetary column is <code>BIGINT</code> holding paise. ₹1 = <code>100</code>; ₹28,50,000 = <code>285000000</code>. No <code>FLOAT</code>, no <code>NUMERIC</code> with a scale that can silently round in arithmetic. Display formats to Lakh/Crore (<code>₹28,50,000</code>) at the screen edge only. Tax, cost, MRP, P RATE, margin, payable, payment — all paise. This makes <code>Σ debits = Σ credits</code> an exact integer test, which the CI gate checks on every posting.</p>
+  </div>
+
+  <div class="card">
+    <h4>② Append-only ledgers, balance = Σ postings</h4>
+    <p>The three ledger tables grant <code>INSERT</code> only — <code>UPDATE</code>/<code>DELETE</code> are revoked at the role level and blocked by a trigger. No row ever stores a running balance; a balance is computed by summing postings with the relevant dimension filters. A mistake is undone by posting a reversing entry (same legs, opposite sign, today's date, a reason code), never by editing or deleting the original.</p>
+  </div>
+
+  <div class="card">
+    <h4>③ Documents write ledgers; ledgers are derived</h4>
+    <p>Only a <em>document</em> (GRN, PT, Sale, Payment, …) writes ledger rows, through one central <code>post_entries(document, legs)</code> call that is balanced-or-fails. Humans and AI only read ledgers. Every ledger row carries a <span class="fk">FK</span> back to the source document and its line, so any number traces home.</p>
+  </div>
+
+  <div class="card">
+    <h4>④ SCD-2 only where history drives money</h4>
+    <p>Five masters carry <code>valid_from</code> / <code>valid_to</code> / <code>is_current</code> and a fresh row per change (Type-2): <strong>GST slab, GSTIN, brand cost, price, brand commercial terms</strong>. Everywhere else, the master holds the current value, the audit log holds who/why/when, and documents snapshot what they used — that is enough, and cheaper to keep correct.</p>
+  </div>
+
+  <div class="card">
+    <h4>⑤ Dimensions on every ledger leg</h4>
+    <p><code>store_id</code>, <code>brand_id</code>, <code>season_id</code> and <code>state_gstin_id</code> are real FK columns on every stock, vendor and cash posting — declared from the kernel. App-layer scoping (<code>django-scopes</code>, fail-closed) filters on them; the schema stays RLS-ready. Cross-store isolation is a CI test (Q12, ADR-0003).</p>
+  </div>
+
+  <div class="callout co-note">
+    <strong>Common columns on every table.</strong> Every row carries <code>id</code> (surrogate PK), <code>created_at</code>, <code>created_by</code>, and — where editable — <code>updated_at</code>, <code>updated_by</code>. Masters add <code>is_active</code> (soft-delete; nothing is ever hard-deleted, Rule 10). Documents add the skeleton in §9. Ledgers are insert-only and never updated.
+  </div>
+</section>
+
+<section id="erd">
+  <h2 class="sec">3 · The ERD on one page</h2>
+  <p class="lead">The whole schema as five bands, top to bottom: geography &amp; identity masters → the commercial registry → the document spine (PT at its heart) → the three append-only ledgers. Arrows read "is referenced by / flows into".</p>
+
+  <div class="erd">
+
+    <div class="layer-label">Geography &amp; identity masters</div>
+    <div class="erd-row">
+      <div class="ent e-master"><b>LegalEntity</b><small>PAN / company</small></div>
+      <div class="ent e-scd2"><b>GSTIN</b><small>per state · SCD-2</small></div>
+      <div class="ent e-master"><b>Store</b><small>+ store-groups</small></div>
+      <div class="ent e-master"><b>Brand</b><small>supplier→brand→sub</small></div>
+      <div class="ent e-master"><b>Vendor</b><small>party · bank · GSTIN</small></div>
+      <div class="ent e-master"><b>Season</b><small>house calendar</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-master"><b>SKU</b><small>Brand+Style+Colour+Size</small></div>
+      <div class="ent e-master"><b>BarcodeAlias</b><small>non-unique → cohort</small></div>
+      <div class="ent e-spine"><b>Cohort</b><small>barcode + season</small></div>
+      <div class="ent e-scd2"><b>GstSlab</b><small>HSN×band×date · SCD-2</small></div>
+      <div class="ent e-master"><b>Taxonomy</b><small>category/type/…</small></div>
+      <div class="ent e-master"><b>OfferRule</b><small>trigger+reward</small></div>
+      <div class="ent e-master"><b>User / Role</b><small>RBAC as data</small></div>
+    </div>
+
+    <div class="arrow">▼&nbsp;&nbsp;snapshotted per brand per season&nbsp;&nbsp;▼</div>
+
+    <div class="layer-label">Commercial model registry (two-axis)</div>
+    <div class="erd-row">
+      <div class="ent e-scd2"><b>BrandTerms</b><small>per brand · per season · SCD-2 · ownership × return-terms + top-up + window + liability-trigger + gst-recognition-point</small></div>
+    </div>
+
+    <div class="arrow">▼&nbsp;&nbsp;document snapshots master values (Rule 3)&nbsp;&nbsp;▼</div>
+
+    <div class="layer-label">Documents — the spine (each = skeleton + lines)</div>
+    <div class="erd-row">
+      <div class="ent e-doc"><b>Booking</b><small>order book</small></div>
+      <div class="ent e-doc"><b>Shipment</b><small>arrival anchor</small></div>
+      <div class="ent e-doc"><b>GRN</b><small>posts QTY</small></div>
+      <div class="ent e-spine"><b>PT&nbsp;+&nbsp;PT&nbsp;Line</b><small>posts VALUE · product spine</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-doc"><b>Sale / Exchange</b><small>+ SOR liability</small></div>
+      <div class="ent e-doc"><b>Transfer</b><small>intra / cross-GSTIN</small></div>
+      <div class="ent e-doc"><b>Return / RTV</b><small>window-driven</small></div>
+      <div class="ent e-doc"><b>Payment + Allocation</b><small>D4</small></div>
+      <div class="ent e-doc"><b>TallyVoucher</b><small>deterministic no.</small></div>
+    </div>
+
+    <div class="arrow">▼&nbsp;&nbsp;documents write legs · balance = Σ legs&nbsp;&nbsp;▼</div>
+
+    <div class="layer-label">Ledgers — append-only, dimensioned</div>
+    <div class="erd-row">
+      <div class="ent e-ledger"><b>StockLedger</b><small>qty · cohort · location · cost</small></div>
+      <div class="ent e-ledger"><b>VendorLedger</b><small>Dr/Cr per vendor</small></div>
+      <div class="ent e-ledger"><b>CashLedger</b><small>store×day×mode</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-ledger"><b>SorLot</b><small>two clocks · gst_recognised guard</small></div>
+    </div>
+
+    <div class="legend">
+      <span><span class="sw e-master"></span>master (current-value)</span>
+      <span><span class="sw e-scd2"></span>master (SCD-2 effective-dated)</span>
+      <span><span class="sw e-doc"></span>document (skeleton + lines)</span>
+      <span><span class="sw e-spine"></span>spine / cohort</span>
+      <span><span class="sw e-ledger"></span>ledger (append-only)</span>
+    </div>
+  </div>
+
+  <div class="callout co-key">
+    <strong>How to read the flow.</strong> A masters layer feeds a thin <code>BrandTerms</code> registry; documents are created and <em>snapshot</em> the masters they touch; documents write the append-only ledgers; every balance is a sum over ledger rows filtered by the dimension FKs. The <code>PT Line</code> is the one row where all product truth crystallises at once — the whole model is built outward from it.
+  </div>
+</section>
+
+<section id="identity">
+  <h2 class="sec">4 · Identity — SKU, barcode, cohort <span class="badge b-key">Q6 · Q7 locked</span></h2>
+  <p class="lead">The single most load-bearing decision in the schema. Stock is a <strong>count under a cohort</strong>, never one row per physical piece, and the barcode is an <strong>alias</strong>, never the key.</p>
+
+  <div class="callout co-key">
+    <strong>The identity chain.</strong> <code>SKU</code> (the real product = Brand + Style + Colour + Size) → <code>Cohort</code> (what we count and price = barcode + season) ← <code>BarcodeAlias</code> (the scanned EAN, <em>non-unique</em>, resolves to a cohort). A scan never identifies a piece — it points at a cohort, and the stock is the integer count under that cohort. There is no "one barcode per piece"; that stale phrasing is corrected everywhere (F8).
+  </div>
+
+  <h3>SKU — the real product</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>Surrogate key.</td></tr>
+    <tr><td><span class="fk">brand_id</span></td><td>FK → Brand</td><td rowspan="4">Natural key = <code>(brand, style, colour, size)</code> — unique. This <em>is</em> the SKU identity (Q5/Q7).</td></tr>
+    <tr><td>style_code</td><td>text</td></tr>
+    <tr><td>colour</td><td>text</td></tr>
+    <tr><td>size</td><td>text</td></tr>
+    <tr><td>colour_tier</td><td>enum</td><td><code>P / M / E</code> (Premium/Medium/Economy) when exact colour isn't tracked — colour collapses to a tier (Q7a). <code>size</code> may be <code>Free Size</code>.</td></tr>
+    <tr><td>no_discount</td><td>bool</td><td>The AMM per-style flag (453 of 77,912 styles).</td></tr>
+    <tr><td>is_branded</td><td>bool</td><td>Branded = vendor's identity kept as-is; non-branded = KDPS deterministic reuse (vendor+style+size).</td></tr>
+  </table>
+
+  <h3>Cohort — what we count &amp; price</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>Surrogate key.</td></tr>
+    <tr><td><span class="fk">sku_id</span></td><td>FK → SKU</td><td>Which real product this cohort is.</td></tr>
+    <tr><td>barcode</td><td>text</td><td>The 13-digit EAN value (vendor's, else POS-generated). <strong>Not unique</strong> across the table.</td></tr>
+    <tr><td><span class="fk">season_id</span></td><td>FK → Season</td><td rowspan="2"><strong>Natural key = <code>(barcode, season)</code></strong> — this is the cohort, and the unit of count. A barcode reused next season is simply a different cohort, no clash (Q4/Q6).</td></tr>
+    <tr><td>mrp_paise</td><td>BIGINT</td></tr>
+    <tr><td>unit_cost_paise</td><td>BIGINT</td><td>Landed cost, frozen at PT stock-in (Q5). See §10.</td></tr>
+    <tr><td>owned_flag</td><td>enum</td><td><code>owned / not-owned / provisional</code> — finalised at PT from the brand's commercial model.</td></tr>
+  </table>
+
+  <h3>BarcodeAlias — the scan resolver</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td></td></tr>
+    <tr><td>barcode</td><td>text · indexed</td><td>The scanned value. <strong>Non-unique</strong> — one barcode may map to several cohorts across seasons (intentional reuse) or, rarely, a true collision.</td></tr>
+    <tr><td><span class="fk">cohort_id</span></td><td>FK → Cohort</td><td>The cohort this alias resolves to <em>at a given store on a given date</em>.</td></tr>
+    <tr><td>resolution</td><td>enum</td><td>How the adapter resolved it: <code>single-match</code> · <code>oldest-season-first (FIFO)</code> · <code>tiebreak-asked</code> (Q6).</td></tr>
+  </table>
+
+  <div class="callout co-warn">
+    <strong>Two repeat cases, handled in data — never blocked.</strong>
+    <ul style="margin:6px 0 0">
+      <li><strong>Intentional reuse</strong> — many physical items share one barcode by design (colour collapsed to a P/M/E tier; same price/brand/style/size). Genuinely interchangeable: a sale just reduces the count. No ambiguity (Q7a).</li>
+      <li><strong>Accidental collision</strong> — two different-price SKUs share a vendor barcode. Caught <em>at inbound</em> (flag + assign an internal barcode via the existing generator — 68% have no vendor barcode anyway). Targeted, never a blanket re-barcode (Q7b).</li>
+    </ul>
+    At the POS edge: one match → post; many → oldest-season-first; ambiguous → one-tap "which season?". Never block the sale (Q6).
+  </div>
+</section>
+
+<section id="geography">
+  <h2 class="sec">5 · LegalEntity → GSTIN → Store <span class="badge b-key">Q3 · ADR-0007 locked</span></h2>
+  <p class="lead">The geography that drives tax. Bihar and Jharkhand are <strong>two GSTINs = distinct persons</strong>; a cross-state move between them is a taxable IGST supply, an intra-state move is stock-only.</p>
+
+  <div class="erd" style="padding:18px">
+    <div class="erd-row">
+      <div class="ent e-master"><b>LegalEntity</b><small>one PAN / company</small></div>
+    </div>
+    <div class="arrow">▼ 1 : many</div>
+    <div class="erd-row">
+      <div class="ent e-scd2"><b>GSTIN — Bihar (10xxxx)</b><small>state code 10 · SCD-2</small></div>
+      <div class="ent e-scd2"><b>GSTIN — Jharkhand (20xxxx)</b><small>state code 20 · SCD-2</small></div>
+    </div>
+    <div class="arrow">▼ 1 : many</div>
+    <div class="erd-row">
+      <div class="ent e-master"><b>Store / Warehouse</b><small>each maps to exactly one state-GSTIN</small></div>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
+    <tr><td class="tbl-name">LegalEntity</td><td><span class="pk">id</span>, pan, legal_name</td><td>The company. (Client fact CD4: one company with two GSTINs, or two companies — confirms how many LegalEntity rows exist. Pending.)</td></tr>
+    <tr><td class="tbl-name">GSTIN <span class="badge b-scd2">SCD-2</span></td><td><span class="pk">id</span>, <span class="fk">legal_entity_id</span>, gstin (15-char), state_code, <code>valid_from/to</code>, <code>is_current</code></td><td>First two digits = state code, which drives intra- vs inter-state treatment. Effective-dated so an old voucher keeps the GSTIN it was billed under.</td></tr>
+    <tr><td class="tbl-name">Store</td><td><span class="pk">id</span>, store_code, name, type (store/warehouse), format (EBO/MBO/own), <span class="fk">state_gstin_id</span>, city, state, is_active</td><td>Each store/warehouse routes its vouchers through its state-GSTIN (Q6/D8). Starts with the 16 software stores; rest in D9 (CD1).</td></tr>
+    <tr><td class="tbl-name">StoreGroup</td><td><span class="pk">id</span>, name, kind (cluster/tier/pilot/offer-scope)</td><td>Flexible tags; a store belongs to many. Offers (D5) and reports (D7) target groups; vouchers route by the firm state→GSTIN.</td></tr>
+    <tr><td class="tbl-name">StoreGroupMember</td><td><span class="fk">store_id</span>, <span class="fk">store_group_id</span></td><td>Many-to-many join.</td></tr>
+  </table>
+
+  <div class="callout co-key">
+    <strong>Why this matters for every ledger.</strong> Because store → state-GSTIN is firm geography, <code>state_gstin_id</code> can be a declared dimension on every posting (§2 law ⑤). Treatment is driven off the two GSTINs' state codes: same code → intra-state, stock-only; different code → cross-state, taxable IGST supply with a tax invoice + e-way bill on consignment value (₹50,000 cross-state threshold). This closes the D3-vs-D6 contradiction (F3).
+  </div>
+</section>
+
+<section id="commercial">
+  <h2 class="sec">6 · Commercial model — the two-axis registry <span class="badge b-key">Q10 locked</span></h2>
+  <p class="lead">The first-class ownership dimension. We do <strong>not</strong> store the friendly label (Outright/Correction/SOR/Consignment) as the source of truth — we store the <strong>two axes plus the timing attributes</strong>, snapshot them per brand per season, and <em>derive</em> the label for screens.</p>
+
+  <div class="callout co-key">
+    <strong>Store the axes, derive the label.</strong> Two brands the client describes differently can land on the same record; one client answer can't break the data model. Screens still read "Outright / Correction / SOR / Consignment" — that string is computed from the axes, never typed.
+  </div>
+
+  <h3>BrandTerms — per brand, per season <span class="badge b-scd2">SCD-2</span></h3>
+  <table>
+    <tr><th>Column</th><th>Type / values</th><th>What it decides</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td></td></tr>
+    <tr><td><span class="fk">brand_id</span>, <span class="fk">season_id</span></td><td>FK</td><td>One terms card per brand per season (the season <em>is</em> the version). Opening a season copies last season's card forward.</td></tr>
+    <tr><td><b>ownership</b></td><td>enum <code>KDPS-owns / brand-owns</code></td><td><strong>Axis 1.</strong> Drives the GST trigger and whether stock value sits on-book.</td></tr>
+    <tr><td><b>return_terms</b></td><td>enum <code>none / capped / uncapped</code></td><td><strong>Axis 2.</strong> Whether and how much can be returned to the brand.</td></tr>
+    <tr><td><b>rolling_top_up</b></td><td>bool</td><td>Distinguishes Consignment (true) from SOR (false).</td></tr>
+    <tr><td><b>return_window_days</b></td><td>int</td><td>60–120; the commercial clock (alarmed 30/15/7). See §12.</td></tr>
+    <tr><td><b>liability_trigger</b></td><td>enum <code>RECEIPT / SALE / SETTLEMENT</code></td><td>When the vendor liability posts: Outright/Correction = RECEIPT (at PT), SOR = SALE, Consignment = never from the PT (SETTLEMENT). Read by the posting catalog.</td></tr>
+    <tr><td><b>gst_recognition_point</b></td><td>enum <code>ARRIVAL / SALE</code></td><td>Where input GST is legally recognised (Q4): Schedule-I agent → ARRIVAL; true sale-or-return (Rule 55 challan) → SALE. Per-brand tax characterisation = CA call.</td></tr>
+    <tr><td>normal_margin_pct, discount_margin_pct</td><td>numeric</td><td>The two margins.</td></tr>
+    <tr><td>correction_allowance_pct, allowance_basis</td><td>numeric, enum</td><td>Correction return-allowance % and basis (money or pieces).</td></tr>
+    <tr><td>credit_days, early_pay_discount_pct</td><td>int, numeric</td><td>Payment terms → drives due dates (D4).</td></tr>
+    <tr><td><code>valid_from / valid_to / is_current</code></td><td>date, bool</td><td>SCD-2 — an old booking keeps the terms it was created under.</td></tr>
+  </table>
+
+  <h3>The derived label (a view, not a stored column)</h3>
+  <table>
+    <tr><th>ownership</th><th>return_terms</th><th>rolling_top_up</th><th>liability_trigger</th><th>→ derived label</th></tr>
+    <tr><td>KDPS-owns</td><td>none</td><td>false</td><td>RECEIPT</td><td><strong>Outright</strong> (Buy &amp; Sell / BNS)</td></tr>
+    <tr><td>KDPS-owns</td><td>capped</td><td>false</td><td>RECEIPT</td><td><strong>Correction</strong> (25-18-10)</td></tr>
+    <tr><td>brand-owns</td><td>uncapped</td><td>false</td><td>SALE</td><td><strong>SOR</strong> (sale-or-return)</td></tr>
+    <tr><td>brand-owns</td><td>uncapped</td><td>true</td><td>SETTLEMENT</td><td><strong>Consignment</strong></td></tr>
+  </table>
+  <p class="note-inline">A new commercial model is a new combination of axes — a new row, never a code change (the extensibility seam, Rule 12).</p>
+</section>
+
+<section id="masters">
+  <h2 class="sec">7 · The other masters</h2>
+  <p class="lead">The remaining nouns, each with one owned home (D8). Current-value masters unless marked SCD-2.</p>
+  <table>
+    <tr><th>Master</th><th>Key / shape</th><th>Effective-dated?</th></tr>
+    <tr><td class="tbl-name">Vendor</td><td><span class="pk">id</span>, name, party_type, pan, address, bank_account, payment_terms; GSTIN(s) per billing state via a child table</td><td>No — current value + audit. Bank &amp; GSTIN changes need a second eye (D4/Q7). Absorbs partial records (~40% lack GSTIN).</td></tr>
+    <tr><td class="tbl-name">Brand</td><td><span class="pk">id</span>, name, <span class="fk">supplier_id</span>, <span class="fk">parent_brand_id</span> (supplier→brand→sub-brand)</td><td>No. 1,163 brands ↔ 281 suppliers, ~1:1. Canonical merge (Aditya Birla / Madura) is a logged stewardship action.</td></tr>
+    <tr><td class="tbl-name">Season</td><td><span class="pk">id</span>, code <code>FAMILY(Mon-YY)</code>, state <code>Open → EOSS → Closed</code></td><td>No — but lifecycle-stated. A brand-season mapping table folds each brand's spelling ("SS26", a date, blank) into the house season.</td></tr>
+    <tr><td class="tbl-name">GstSlab</td><td><span class="pk">id</span>, <span class="fk">hsn</span>, price_band_floor_paise, price_band_ceiling_paise, rate_pct, <code>valid_from/to</code></td><td><span class="badge b-scd2">SCD-2</span> — e.g. 5% ≤ ₹2,500/pc, 18% above, effective 22 Sep 2025. Data, never code. A new slab is a new row. Rate change = second eye.</td></tr>
+    <tr><td class="tbl-name">Taxonomy</td><td><span class="pk">id</span>, kind (category/sub-category/type/item/fit/gender), value, <span class="fk">parent_id</span></td><td>No — promoted from the PT Master Sheet. A vendor→canonical mapping table folds each vendor's word into KDPS's canonical value.</td></tr>
+    <tr><td class="tbl-name">OfferRule</td><td><span class="pk">id</span>, <span class="fk">brand_id</span>, trigger, reward, store_scope, start/optional-end, item_scope, funder_tag, can_stack, approval_limit_paise</td><td>No — current value + per-line snapshot onto each bill. 8 patterns + open model; best-for-customer precedence (D5).</td></tr>
+    <tr><td class="tbl-name">User</td><td><span class="pk">id</span>, name, phone/email, data_scope (store/group/region), is_active, last_login</td><td>No — role-change history + login trail logged. Leaver = deactivated, never deleted.</td></tr>
+    <tr><td class="tbl-name">Role / Permission</td><td>role → screen/action → allow matrix, stored as <strong>data</strong> (configurable RBAC)</td><td>No — new role/permission is config, not code. SoD: maker ≠ checker ≠ payer (D4).</td></tr>
+    <tr><td class="tbl-name">VoucherSeries</td><td>one counter per <code>(store, doc-type)</code> → deterministic number</td><td>No — the idempotency guard + Tally join key (<code>DEO-SAL-20260620-001</code>).</td></tr>
+  </table>
+</section>
+
+<section id="scd2">
+  <h2 class="sec">8 · SCD Type-2 effective dating <span class="badge b-key">Q11 / Q15 locked</span></h2>
+  <p class="lead">Versioning is applied <strong>only at the grain that drives money history</strong>. Over-versioning everything is the wrong kind of complexity; under-versioning these five rewrites old bills. These exactly are the SCD-2 masters:</p>
+  <table>
+    <tr><th>SCD-2 master</th><th>Why it must be effective-dated</th><th>Grain of the version</th></tr>
+    <tr><td><strong>GST slab</strong></td><td>A slab change (e.g. 22 Sep 2025) must not re-tax a bill from before it.</td><td>By effective date.</td></tr>
+    <tr><td><strong>GSTIN</strong></td><td>A store's GSTIN change must leave old vouchers on their original number.</td><td>By effective date.</td></tr>
+    <tr><td><strong>Cost</strong> (brand cost / landed)</td><td>Cost is frozen at stock-in and read by all profitability; a later cost edit must not move an old margin.</td><td>By stock-in event (and the cohort holds the frozen value).</td></tr>
+    <tr><td><strong>Price</strong> (MRP / sell)</td><td>An old bill carries the price it sold at, not today's.</td><td>By effective date / season.</td></tr>
+    <tr><td><strong>Brand terms</strong></td><td>Margin/model/return-window per brand; yesterday's booking keeps yesterday's deal.</td><td>By season (the season is the version).</td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <strong>The standard SCD-2 columns</strong> on each of these tables: <code>valid_from</code> (date), <code>valid_to</code> (date, NULL = open), <code>is_current</code> (bool, exactly one true per natural key). A change inserts a new row and closes the old one's <code>valid_to</code> — it never updates the value in place. A document that needs the value resolves it by <em>(natural key, document date)</em>.
+  </div>
+  <div class="callout co-key">
+    <strong>Everything else is not versioned — by design.</strong> Vendor, store, brand, taxonomy, offers, users, roles hold a current value; their history lives in the audit log (who/why/when) and in the snapshots documents take. This is "version only at the grain that matters" (D8 Rule 4) — simple, not over-built, and finer dating can be layered on later without rework.
+  </div>
+</section>
+
+<section id="document">
+  <h2 class="sec">9 · The document skeleton</h2>
+  <p class="lead">Every document — present and future — reuses one skeleton. This is what makes a new document type an <em>addition</em>, not a reshape (the extensibility kernel).</p>
+  <table>
+    <tr><th>Field group</th><th>Columns</th><th>Notes</th></tr>
+    <tr><td><strong>Number</strong></td><td>doc_number, <span class="fk">voucher_series_id</span></td><td>KDPS-owned deterministic number (store · type · date · seq) — idempotency guard + Tally join key.</td></tr>
+    <tr><td><strong>Type &amp; reason</strong></td><td>doc_type, reason_code</td><td>Posting is keyed by <code>(doc_type, reason_code)</code> — both are config data (Rule 12). A new movement = a new reason code.</td></tr>
+    <tr><td><strong>Status</strong></td><td>docstatus, status</td><td>The lifecycle state (e.g. <code>Draft → Pending → Approved → Executed → Confirmed</code>). State machines live in <code>lifecycles.html</code>.</td></tr>
+    <tr><td><strong>Actor / audit</strong></td><td>created_by, created_at, approved_by, executed_by, …</td><td>Every step's actor stamped (Rule 10). AI suggestion and human decision logged separately.</td></tr>
+    <tr><td><strong>Snapshots</strong></td><td>snapshot_* columns / JSON</td><td>The master values the document used at creation — terms, price, season, GSTIN, offer rule — copied in so a later master edit never rewrites it (Rule 3).</td></tr>
+    <tr><td><strong>Dimensions</strong></td><td><span class="fk">store_id</span>, <span class="fk">brand_id</span>, <span class="fk">season_id</span>, <span class="fk">state_gstin_id</span>, <span class="fk">vendor_id</span></td><td>Carried for scoping &amp; routing; flow down onto the ledger legs.</td></tr>
+    <tr><td><strong>Lines</strong></td><td>a child <code>*_line</code> table</td><td>One row per cohort/SKU; <code>voucher_detail_no</code> links a correction back to the exact line it reverses.</td></tr>
+    <tr><td><strong>Links</strong></td><td>source_doc_id, source_line_id</td><td>Retro-link (e.g. booking-less GRN → later booking) and corrections, never a silent rewrite (Q9).</td></tr>
+  </table>
+  <p class="note-inline">Document tables that use this skeleton: Booking · Shipment · GRN · PT · Store-split · Sale · Exchange · Transfer · RTV · Seasonal-return · EOSS · Stocktake · Payment · Allocation · TallyVoucher. Their state machines and posting legs live in their own reference docs.</p>
+</section>
+
+<section id="ptline">
+  <h2 class="sec">10 · The PT line — the product spine</h2>
+  <p class="lead">One PT row carries product identity, classification, pricing, cost, margin and tax <strong>together</strong> — so the masters normalise out of it and the two core postings (priced stock-in, vendor liability) compute from it. The model is built outward from this row. It is the <strong>denormalised spine</strong> — wide on purpose.</p>
+  <table>
+    <tr><th>PT-line column</th><th>Type</th><th>Resolves to / feeds</th></tr>
+    <tr><td>season</td><td><span class="fk">FK → Season</span></td><td>Cohort key half. <code>FAMILY(Mon-YY)</code>, system-derived, never free text.</td></tr>
+    <tr><td>brand</td><td><span class="fk">FK → Brand</span></td><td rowspan="4">SKU identity = <strong>brand + design + colour + size</strong>.</td></tr>
+    <tr><td>design</td><td>text</td></tr>
+    <tr><td>colour</td><td>text</td></tr>
+    <tr><td>size</td><td>text</td></tr>
+    <tr><td>barcode</td><td>text</td><td>Cohort key half → <code>(barcode, season)</code>. Vendor's, else POS-generated.</td></tr>
+    <tr><td>gender · sub_category · type · item · fit</td><td><span class="fk">FK → Taxonomy</span></td><td>Canonical classification (vendor terms mapped in via the suggested-column map).</td></tr>
+    <tr><td>hsn</td><td>text</td><td>→ GstSlab lookup (HSN × price-band × date).</td></tr>
+    <tr><td>mrp_paise</td><td>BIGINT</td><td>Retail price → Cohort.</td></tr>
+    <tr><td>basic_paise</td><td>BIGINT</td><td>Brand's own convention column — <em>informational</em>. Do <strong>not</strong> derive ex-GST cost from it (F5).</td></tr>
+    <tr><td>p_rate_paise</td><td>BIGINT</td><td><strong>Unit cost = P RATE directly</strong> (the per-piece vendor payable), + value-weighted freight, − value-weighted discount. Never ÷(1+slab). Frozen at stock-in (Q5).</td></tr>
+    <tr><td>margin_paise</td><td>BIGINT</td><td>Computed, never hand-entered (derived).</td></tr>
+    <tr><td>input_tax_paise · output_tax_paise</td><td>BIGINT</td><td>Recoverable / chargeable GST per piece (may differ — inverted duty). Carried to Tally; never recomputed there.</td></tr>
+    <tr><td>qty</td><td>int</td><td>Pieces received for this line (one barcode → many pieces) → the stock-in posting quantity.</td></tr>
+  </table>
+  <div class="callout co-warn">
+    <strong>Two-step posting (Q1 / F1) — the PT line is read in two passes.</strong> The <strong>GRN</strong> posts the <em>quantity</em> movement (qty, location, condition, season, owned-flag provisional, no unit cost). The <strong>PT</strong> at Patna inward posts the <em>valuation</em> (unit cost stamped, owned-flag finalised) <em>plus</em> vendor liability per the commercial model. So the stock ledger gets quantity at the GRN and value at the PT. The exact legs are in the posting catalog, not here.
+  </div>
+</section>
+
+<section id="ledgers">
+  <h2 class="sec">11 · The three ledgers <span class="badge b-key">append-only</span></h2>
+  <p class="lead">The derived books. Only documents write them; every balance is the sum of postings filtered by dimensions; corrections are reversing rows. Each row carries the dimension FKs (law ⑤) and a link back to its source document line.</p>
+
+  <h3>StockLedger</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>Insert-only.</td></tr>
+    <tr><td><span class="fk">cohort_id</span></td><td>FK → Cohort</td><td>What moved (barcode + season → SKU).</td></tr>
+    <tr><td>qty_delta</td><td>int</td><td>Signed quantity (+ in / − out). Balance = Σ over filters.</td></tr>
+    <tr><td>unit_cost_paise</td><td>BIGINT</td><td>Stamped at PT (NULL on the GRN quantity leg).</td></tr>
+    <tr><td>location_type, condition, owned_flag</td><td>enum</td><td>on-hand / in-transit / quarantine / liquidation; condition flag; owned/not-owned.</td></tr>
+    <tr><td><span class="fk">store_id, brand_id, season_id, state_gstin_id</span></td><td>FK</td><td>Dimensions on the leg.</td></tr>
+    <tr><td>reason_code, <span class="fk">source_doc_id, source_line_id</span></td><td>—</td><td>Why it moved + the document that wrote it. Written by GRN, PT, split, sale, exchange, transfer, returns, adjustment.</td></tr>
+  </table>
+
+  <h3>VendorLedger</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>Insert-only.</td></tr>
+    <tr><td><span class="fk">vendor_id, brand_id</span></td><td>FK</td><td>Who we owe; payables accrue per brand.</td></tr>
+    <tr><td>amount_paise, dr_cr</td><td>BIGINT, enum</td><td>One credit/debit per document. Balance: <em>Opening + Invoices − cash discount − goods return − Payments + Interest = Due.</em></td></tr>
+    <tr><td><span class="fk">state_gstin_id</span></td><td>FK</td><td>Dimension.</td></tr>
+    <tr><td>reason_code, <span class="fk">source_doc_id</span></td><td>—</td><td>Written by PT (liability per model: Outright/Correction at RECEIPT; SOR at SALE; Consignment at SETTLEMENT), returns (debit), payments (debit).</td></tr>
+  </table>
+
+  <h3>CashLedger</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>Insert-only.</td></tr>
+    <tr><td><span class="fk">store_id</span>, business_date, payment_mode</td><td>—</td><td>Grain = store × day × mode (cash / card net-of-MDR / UPI).</td></tr>
+    <tr><td>amount_paise</td><td>BIGINT</td><td>Collections in. Three-rail audit vs bank, daily.</td></tr>
+    <tr><td><span class="fk">state_gstin_id</span></td><td>FK</td><td>Dimension.</td></tr>
+    <tr><td>reason_code, <span class="fk">source_doc_id</span></td><td>—</td><td>Written by POS collections, manual bills, deposits.</td></tr>
+  </table>
+</section>
+
+<section id="money">
+  <h2 class="sec">12 · Money &amp; the SOR clocks <span class="badge b-money">money-critical</span></h2>
+  <p class="lead">The schema must carry the integrity guards that cannot be tested away later — the GST single-recognition invariant and the two statutory clocks on a SOR/Consignment lot.</p>
+
+  <h3>SorLot — the lot under two clocks</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">id</span></td><td>PK</td><td>One lot per SOR/Consignment receipt.</td></tr>
+    <tr><td><span class="fk">cohort_id, vendor_id, brand_id, season_id</span></td><td>FK</td><td>What &amp; whose.</td></tr>
+    <tr><td>removal_date</td><td>date</td><td>The single date both clocks compute off.</td></tr>
+    <tr><td>commercial_return_due</td><td>date</td><td><strong>Clock 1</strong> — the 60–120-day commercial return window (from BrandTerms), alarmed 30/15/7.</td></tr>
+    <tr><td>deemed_supply_due</td><td>date</td><td><strong>Clock 2</strong> — the statutory 6-month deemed-supply clock (CGST §31(7)), computed as <code>removal_date + 6 calendar months</code>, alarmed 30/15/7. A distinct clock, greenfield.</td></tr>
+    <tr><td><b>gst_recognised</b></td><td>(date, voucher_no) — nullable</td><td><strong>The single-recognition invariant (F9).</strong> Once GST is recognised at the point set by <code>gst_recognition_point</code>, this is stamped; it can be recognised <em>once only</em>. Prevents the arrival-voucher + settlement-journal double count.</td></tr>
+    <tr><td>qty_remaining</td><td>int</td><td>Drives settlement and the return exposure.</td></tr>
+  </table>
+
+  <div class="callout co-warn">
+    <strong>Money-critical open items the schema is shaped to hold</strong> (closed with the CA before the money slices, per the reconciliation plan):
+    <ul style="margin:6px 0 0">
+      <li><strong>F9 · GST recognised once</strong> — the <code>gst_recognised=(date, voucher_no)</code> guard above; one convention per brand, keyed by <code>gst_recognition_point</code>.</li>
+      <li><strong>Two clocks</strong> — both modelled off one <code>removal_date</code>; never collapsed into one field.</li>
+      <li><strong>Late freight after PT</strong> — no reposting; a forward-only rate-adjust or a separate cost-correction <em>event</em>, never an edit of the frozen cost.</li>
+      <li><strong>Sold-before-PT</strong> — a memo value vs block-the-sale decision; the schema must let a sale reference a cohort whose PT valuation is still pending.</li>
+      <li><strong>No-reposting</strong> — every correction is a new today-dated event + reason code, linked via <code>voucher_detail_no</code>. Append-only is a code-level invariant (REVOKE UPDATE/DELETE + trigger), not a convention.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="table-index">
+  <h2 class="sec">13 · Full table index</h2>
+  <p class="lead">Every table, grouped by kind. <span class="badge b-master">master</span> current-value · <span class="badge b-scd2">SCD-2</span> effective-dated · <span class="badge b-doc">document</span> skeleton+lines · <span class="badge b-ledger">ledger</span> append-only.</p>
+  <table>
+    <tr><th>Kind</th><th>Tables</th></tr>
+    <tr><td><span class="badge b-master">geography</span></td><td><code>legal_entity</code> · <code>store</code> · <code>store_group</code> · <code>store_group_member</code></td></tr>
+    <tr><td><span class="badge b-master">identity</span></td><td><code>sku</code> · <code>cohort</code> · <code>barcode_alias</code> · <code>season</code> · <code>brand</code> · <code>vendor</code> · <code>vendor_gstin</code> · <code>taxonomy</code> · <code>taxonomy_vendor_map</code></td></tr>
+    <tr><td><span class="badge b-scd2">SCD-2 masters</span></td><td><code>gstin</code> · <code>gst_slab</code> · <code>brand_terms</code> · <code>cohort.unit_cost_paise</code> (frozen) · price/MRP versions</td></tr>
+    <tr><td><span class="badge b-master">other masters</span></td><td><code>offer_rule</code> · <code>user</code> · <code>role</code> · <code>permission</code> · <code>voucher_series</code></td></tr>
+    <tr><td><span class="badge b-doc">documents</span></td><td><code>booking</code> · <code>shipment</code> · <code>grn</code> · <code>pt</code> + <code>pt_line</code> · <code>store_split</code> · <code>sale</code> · <code>exchange</code> · <code>transfer</code> · <code>rtv</code> · <code>seasonal_return</code> · <code>eoss</code> · <code>stocktake</code> · <code>payment</code> · <code>allocation</code> · <code>tally_voucher</code> (each + its <code>*_line</code> child)</td></tr>
+    <tr><td><span class="badge b-ledger">ledgers</span></td><td><code>stock_ledger</code> · <code>vendor_ledger</code> · <code>cash_ledger</code> · <code>sor_lot</code></td></tr>
+    <tr><td><span class="badge b-master">audit</span></td><td><code>audit_log</code> (who/why/when on every master edit) · separate AI-suggestion vs human-decision rows</td></tr>
+  </table>
+
+  <div class="callout co-dep">
+    <strong>Read next.</strong> <code>posting-catalog.html</code> — which document writes which ledger legs, per commercial model (the correctness heart). <code>lifecycles.html</code> — every document's state machine + the POS sync lifecycle. <code>glossary.html</code> — the one controlled vocabulary. <code>docs/adr/0004</code> &amp; <code>0007</code> — the DB-convention and entity-scoping decisions this schema ratifies.
+  </div>
+</section>
+
+<footer>
+  KDPS · Data Model &amp; ERD · Schema reference · 25 June 2026 · The columns and relationships; not the posting rules (those live in the posting catalog). Encodes the 16 locked Q&amp;A decisions + the money-critical open items.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

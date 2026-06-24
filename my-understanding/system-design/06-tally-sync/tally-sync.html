@@ -86,7 +86,7 @@
 <div class="tabpanel show" id="tab-design">
 
 <div class="callout co-dep" style="margin-top:4px">
-  <strong>Where D6 stands (20 Jun 2026).</strong> The <strong>voucher design is done</strong>: push route, sales grain, money-in legs, numbering/exactly-once, GST handling, the "sale or return" purchase timing, and the daily safety-net are all locked (see grilling log). <strong>Implementation is not a priority for ~2 months</strong> — the actual go-live / cutover is deliberately left to the rollout discussions (D8/D9). Five small facts are <strong>parked for the client</strong> (C1–C5). Nothing here blocks the build queue.
+  <strong>Where D6 stands (updated 25 Jun 2026).</strong> The <strong>voucher design is done</strong>: push route, sales grain, money-in legs, numbering/exactly-once, GST handling, and the daily safety-net are all locked (see grilling log). The <strong>"sale or return" purchase timing</strong> is now sharpened (§7): GST recognition follows the <em>supplier tax invoice</em>, giving <strong>two recognition paths</strong> guarded by a recognise-<em>once</em> stamp — only the per-brand path classification waits on the CA. The cross-GSTIN inter-store transfer is locked to <strong>taxable IGST</strong> (Q5 Part 3) throughout. <strong>Implementation is not a priority for ~2 months</strong> — the actual go-live / cutover is deliberately left to the rollout discussions (D8/D9). Five small facts are <strong>parked for the client</strong> (C1–C5). Nothing here blocks the build queue.
 </div>
 
 <section id="idea">
@@ -112,7 +112,7 @@
       <tr><td><strong>The grain</strong>: detail for what GST/party needs (purchase bill, payment, DN/CN, store receipt — keep GSTIN·HSN·party·Agst Ref); summary for high-volume per-piece SOR/Consignment accruals (one settlement voucher per brand per period)</td><td>Payments Q-H</td><td>This <em>is</em> the voucher catalog's shape — D6 fills in the legs</td></tr>
       <tr><td><strong>TIR purchase export</strong> already designed — fires at Patna inward, strict reproducible format, pure algorithm</td><td>Inbound Q20</td><td>Becomes the first voucher type in the catalog (purchase); D6 makes the rest match its discipline</td></tr>
       <tr><td><strong>Two GSTINs</strong> — Bihar &amp; Jharkhand are distinct persons; every store maps to a state GSTIN; cross-state transfers are taxable supplies</td><td>Domain fact</td><td>Voucher routing keys off the store's state GSTIN; transfers may need tax vouchers</td></tr>
-      <tr><td><strong>SOR statutory-timing question</strong> — TIR books a purchase at Patna inward while the SOR payable accrues only on sale; confirm how brands bill SOR (tax invoice at delivery vs approval-basis challan)</td><td>Inbound open item (flagged for D6)</td><td>D6 must reconcile the two timings in the voucher design</td></tr>
+      <tr><td><strong>SOR/Consignment GST recognition</strong> — purchase/ITC follows the <em>supplier's tax invoice</em>, not the stock movement; two paths by how the brand bills (tax invoice at dispatch vs Rule 55 challan with invoice deferred to sale)</td><td>Inbound open item · resolved by D6 Q6 (Q4 / F9)</td><td>D6 splits the purchase voucher into two recognition paths and guards against booking GST twice (see §7)</td></tr>
       <tr><td><strong>Daily AP-to-Tally tie-out</strong> is the agreed control</td><td>Payments Q-H</td><td>D6 designs the actual reconciliation loop + failure queue</td></tr>
     </tbody>
   </table>
@@ -157,8 +157,9 @@
       <tr><td>Cash/card/UPI collection (outbound)</td><td>Combined into daily sales voucher (tender legs)</td><td>Daily per store; legs: Cash, UPI-clearing, Card-clearing, Store-credit, Exchange-adj</td><td><span class="badge b-locked">Q3 locked</span></td></tr>
       <tr><td>Vendor payment (payments)</td><td>Payment</td><td>Detail (Agst Ref)</td><td><span class="badge b-open">to design</span></td></tr>
       <tr><td>Goods-return DN / brand CN (payments)</td><td>Debit/Credit Note</td><td>Detail</td><td><span class="badge b-open">to design</span></td></tr>
-      <tr><td>SOR/Consignment settlement (payments)</td><td>Journal</td><td>Summary (per brand per period)</td><td><span class="badge b-open">to design</span></td></tr>
-      <tr><td>Inter-store transfer, cross-GSTIN (outbound)</td><td>TBD (taxable supply?)</td><td>TBD</td><td><span class="badge b-open">to design</span></td></tr>
+      <tr><td>SOR/Consignment settlement (payments)</td><td>Journal — carries GST <strong>only</strong> if the brand's recognition point is "at sale" (challan path); carries none if GST already booked at arrival (dispatch-invoice path)</td><td>Summary (per brand per period)</td><td><span class="badge b-locked">Q6 — two paths, recognise once</span></td></tr>
+      <tr><td>Inter-store transfer <strong>across</strong> GSTINs (Bihar↔Jharkhand, outbound)</td><td>IGST tax invoice: out-voucher at the sending GSTIN + matching Purchase voucher at the receiving GSTIN</td><td>Detail (per consignment, at landed cost)</td><td><span class="badge b-locked">Q5 Part 3 locked</span></td></tr>
+      <tr><td>Inter-store transfer <strong>inside</strong> one state (outbound)</td><td>None — stock-ledger move only</td><td>—</td><td><span class="badge b-locked">Q5 Part 3 locked</span></td></tr>
     </tbody>
   </table>
 </section>
@@ -172,6 +173,40 @@
     <li><strong>Owner:</strong> the <strong>Patna accountant</strong> (already lives in Tally). <strong>Cadence:</strong> once a day.</li>
   </ul>
   <p class="why">Rule: send → check next day → fix the few that bounced. Nothing is ever assumed to have arrived.</p>
+</section>
+
+<section id="sor-gst">
+  <h2 class="sec">7 · SOR &amp; Consignment — when GST is recognised <span class="badge b-locked">Q6 · locked (path per brand pending CA)</span></h2>
+  <p>For a sale-or-return / consignment brand, the key question is <strong>when the purchase (and the input tax credit on it) hits Tally</strong>. The answer is simple and important: <strong>GST recognition follows the brand's <em>supplier tax invoice</em> — not the moment the goods physically move.</strong> Which means there are <strong>two paths</strong>, and which one a brand is on is a property of the brand, not of any single shipment.</p>
+
+  <table>
+    <thead><tr><th>Path</th><th>How the brand bills</th><th>What Tally records, and when</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>A · Consignment-as-agent</strong><br>(Schedule I — supply to an agent)</td>
+        <td>A proper <strong>tax invoice travels with the goods at dispatch</strong>. The GST is legally due at dispatch even though KDPS only sells later.</td>
+        <td><strong>Purchase voucher + input GST (ITC) at arrival</strong>, off that invoice — exactly like an outright purchase. The later sale/settlement journal carries <strong>no GST</strong> (it is money settlement only — pay-on-sale, return-on-unsold).</td>
+      </tr>
+      <tr>
+        <td><strong>B · True sale-or-return</strong><br>(Rule 55 delivery challan; invoice under Sec 31(7))</td>
+        <td>Goods arrive on a <strong>delivery challan, not a tax invoice</strong>. The brand raises its <strong>tax invoice only when the item sells</strong>, or at the <strong>6-month</strong> deemed-supply mark, whichever is earlier.</td>
+        <td><strong>No purchase, no ITC at arrival</strong> — stock is held quantity-only. The <strong>purchase voucher + input GST is created at the sale (settlement)</strong>, when the brand's invoice legally arrives.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout co-note"><strong>The point both paths share:</strong> stock <em>quantity</em> is in KDPS from arrival either way (the count is real); what differs is purely <strong>when the value, the payable and the tax credit are booked</strong> — and that is decided by where the brand's tax invoice legally sits, never by the stock movement. Carry a per-brand-per-season <strong>"GST recognition point"</strong> attribute (<code>at-arrival</code> vs <code>at-sale</code>) right next to the commercial-model flag in the brand master; the voucher builder reads it to pick the path.</div>
+
+  <div class="callout co-key">
+    <strong>The recognise-ONCE guard.</strong> The real danger is booking the same GST twice — once on an arrival purchase voucher <em>and</em> again on a settlement journal. To make that impossible, every SOR/consignment lot carries a stamp <code>gst_recognised = (date, voucher_no)</code>. It starts empty; the <strong>first</strong> voucher that books the GST writes it; any later voucher that would book GST on the same lot <strong>checks the stamp first</strong> and refuses if it is already set. So GST lands on exactly one voucher per lot, by construction — Path A writes it at arrival, Path B writes it at sale, neither can write it twice.
+  </div>
+
+  <div class="callout co-open">
+    <strong>Pending the CA (per-brand path):</strong> which path a given brand is on — agent-under-Schedule I (Path A) vs true sale-or-return-under-31(7) (Path B) — is a tax characterisation we do <strong>not</strong> guess. Verified research points to KDPS's dominant regime being principal-agent consignment under Schedule I (Path A), but the per-brand classification is a <strong>CA call</strong> (parked as C5). The two-path machinery and the recognise-once guard are built either way; only the per-brand <code>GST recognition point</code> value waits on the ruling.
+  </div>
+
+  <h3>The deferred-billing direct-receipt case (any brand)</h3>
+  <p>A related case from the booking-less direct-to-store receipt (D2 / inbound Q9): goods can <strong>arrive and sell before the supplier invoice exists</strong>. Here Tally records the stock-in as a <strong>"received but not billed" accrual (SRBNB)</strong> at receipt — quantity and a held value, but <strong>no vendor payable and no ITC yet</strong>. The <strong>purchase voucher with input GST is created on invoice-match</strong>, when the vendor's tax invoice arrives and is reconciled against the GRN/PT (ITC then gated on it appearing in GSTR-2B). Same principle as the two SOR paths: <strong>the tax credit follows the tax invoice, never the goods movement.</strong></p>
 </section>
 
 </div>
@@ -191,7 +226,7 @@
       <tr><td>Q3</td><td>Money-in / receipt voucher — tender split &amp; grain</td><td><span class="pill-status b-locked">Locked — combined daily voucher</span></td></tr>
       <tr><td>Q4</td><td>Voucher numbering &amp; the join key (idempotency / exactly-once)</td><td><span class="pill-status b-locked">Locked — KDPS-owned number</span></td></tr>
       <tr><td>Q5</td><td>GST breakup per voucher type (incl. two-GSTIN routing, cross-state transfers)</td><td><span class="pill-status b-locked">Locked (Part 2 → client C3)</span></td></tr>
-      <tr><td>Q6</td><td>SOR statutory timing — purchase-at-delivery vs accrual-at-sale reconciliation</td><td><span class="pill-status b-locked">Locked — purchase at arrival</span></td></tr>
+      <tr><td>Q6</td><td>SOR/Consignment GST recognition — by supplier-invoice timing</td><td><span class="pill-status b-locked">Locked — two paths + recognise-once guard (path per brand → CA)</span></td></tr>
       <tr><td>Q7</td><td>The recon loop + failure/retry queue — what the accountant sees</td><td><span class="pill-status b-locked">Locked — daily check + fix-it list</span></td></tr>
       <tr><td>Q8</td><td>Cutover — does Tally start fresh from KDPS, or run in parallel? (links to D9)</td><td><span class="pill-status b-dep">Deferred → D8/D9</span></td></tr>
     </tbody>
@@ -262,12 +297,16 @@
   </div>
 
   <div class="gq">
-    <div class="qh">Q6 · When Tally sees the purchase ("sale or return" brands) <span class="pill-status b-locked">Locked — at arrival, same for all, 20 Jun 2026</span></div>
-    <p style="margin:6px 0"><strong>Anand corrected the premise (20 Jun):</strong> the real KDPS process is — <strong>every goods arrival comes with an invoice</strong> → invoice becomes a <strong>PT file</strong> → loaded into the <strong>POS back office</strong> (stock-in) → <strong>POS sales report feeds Tally</strong> on the selling side. Brand ledgers are built from invoices in + payments out.</p>
-    <p style="margin:6px 0">This <strong>resolves the inbound open item</strong> (tax invoice at delivery vs approval-basis challan): brands bill with a <strong>tax invoice at delivery</strong>, not challan-then-bill.</p>
-    <p style="margin:6px 0"><strong>Decision (Option A):</strong> the Tally purchase voucher is created <strong>from the invoice at arrival, for every brand</strong> — no special-casing SOR, no waiting for the sale. Matches the already-designed TIR purchase export.</p>
-    <p style="margin:6px 0"><strong>The SOR difference is money only, not timing:</strong> the invoice is booked, but the brand is <strong>paid only when the item sells</strong>, and <strong>unsold stock returns with a credit note</strong>. That payment/return timing is already handled on the payments side and does not change when Tally sees the purchase.</p>
-    <p style="margin:6px 0" class="why">Parked for client (C5): for a sale-or-return brand, does the invoice that comes with the goods already charge GST at that point? Only detail that affects how the purchase is recorded.</p>
+    <div class="qh">Q6 · When Tally sees the purchase &amp; the GST ("sale or return" brands) <span class="pill-status b-locked">Locked — two recognition paths + recognise-once guard, 25 Jun 2026</span></div>
+    <p style="margin:6px 0"><strong>Anand's 20-Jun premise:</strong> the real KDPS process is — <strong>every goods arrival comes with an invoice</strong> → invoice becomes a <strong>PT file</strong> → loaded into the <strong>POS back office</strong> (stock-in) → <strong>POS sales report feeds Tally</strong> on the selling side. Brand ledgers are built from invoices in + payments out. The first read (Option A) was: book the purchase from the invoice at arrival for every brand, the SOR difference being "money only, not timing".</p>
+    <p style="margin:6px 0"><strong>Why that needed sharpening (25 Jun, F9):</strong> booking an input-GST purchase voucher at arrival for <em>every</em> brand <strong>and</strong> running an SOR/consignment settlement journal risks recognising the <strong>same GST twice</strong>. The fix is to anchor recognition to the one place GST legally lives — the <strong>supplier's tax invoice</strong> — not to the goods movement.</p>
+    <p style="margin:6px 0"><strong>Refined decision (Option 2 — two paths, keyed to a per-brand-per-season "GST recognition point"):</strong></p>
+    <div class="opt"><b>Path A — Consignment-as-agent (Schedule I).</b> A <strong>tax invoice travels with the goods at dispatch</strong> → <strong>purchase + input GST (ITC) booked at arrival</strong>, like an outright purchase; the later settlement journal carries <strong>no GST</strong> (money settlement only).</div>
+    <div class="opt"><b>Path B — True sale-or-return (Rule 55 challan, Sec 31(7)).</b> Goods arrive on a <strong>delivery challan, no tax invoice</strong>; the brand invoices <strong>at sale, or at 6 months, whichever first</strong> → <strong>no purchase / no ITC at arrival</strong> (quantity-only); the <strong>purchase + input GST is booked at the sale (settlement)</strong>.</div>
+    <p style="margin:8px 0 4px"><strong>The recognise-ONCE guard (F9):</strong> every SOR/consignment lot carries <code>gst_recognised = (date, voucher_no)</code>. The first voucher to book the GST writes the stamp; any later voucher checks it and refuses if already set. GST therefore lands on <strong>exactly one</strong> voucher per lot — Path A at arrival, Path B at sale — never both.</p>
+    <p style="margin:6px 0"><strong>Still true (unchanged from 20 Jun):</strong> stock <em>quantity</em> is in KDPS from arrival on both paths; the brand is <strong>paid only when the item sells</strong>, and <strong>unsold stock returns with a credit note</strong> — that payment/return timing is handled on the payments side.</p>
+    <p style="margin:6px 0" class="why"><strong>Pending CA (path per brand, parked as C5):</strong> which brand sits on Path A vs Path B is a tax characterisation — verified research leans to principal-agent consignment under Schedule I (Path A) as KDPS's dominant regime, but the per-brand call is the CA's. The machinery and the once-guard are built either way; only the <code>GST recognition point</code> value per brand waits on the ruling.</p>
+    <p style="margin:6px 0" class="why"><strong>Deferred-billing direct receipt (Q9):</strong> for goods that arrive and sell before any supplier invoice exists (booking-less direct-to-store receipt), Tally records a <strong>"received but not billed" accrual (SRBNB)</strong> at receipt — quantity + held value, no payable, no ITC — and the <strong>purchase voucher with input GST is created on invoice-match</strong> (ITC gated on GSTR-2B). Same rule: the tax credit follows the tax invoice, not the goods.</p>
   </div>
 
   <div class="gq">

@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Consolidated System Design (design-of-record)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1300px; margin:0 auto; gap:0;}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:268px; flex:0 0 268px; padding:26px 16px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:20px 0 7px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:4px 10px; border-radius:7px; font-size:13.5px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:38px 46px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){ nav.toc{display:none} main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:29px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:68ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:34px 0; scroll-margin-top:14px}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  h4{margin:0 0 5px; font-size:15px; color:var(--navy)}
+  p{margin:9px 0}
+  .lead{font-size:15px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 8px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-no{background:#fde8e8; color:#a32a2a}
+  .b-ext{background:#e9f6f1; color:#0f7a55; border:1px solid #bfe6d6}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .mod{border-left:4px solid var(--navy2)}
+  .mod.base{border-left-color:#7d8aa8} .mod.spine{border-left-color:var(--navy)} .mod.cross{border-left-color:var(--rust)} .mod.brain{border-left-color:var(--purple)}
+  .card .lab{font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .card dl{margin:9px 0 0} .card dt{font-weight:700; color:var(--navy2); font-size:13px; letter-spacing:.02em; margin-top:9px} .card dd{margin:2px 0 0 0; font-size:14px}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-ext{background:#e9f6f1; border-color:#bfe6d6}
+  .co-money{background:#fdf1ea; border-color:#eccbb9}
+  .callout strong{color:var(--navy)}
+  .callout p{margin:6px 0}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{background:#eef0f4; padding:1px 5px; border-radius:5px; font-size:12.5px}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  ul.tight li{margin:3px 0}
+  /* figure */
+  figure.fig{margin:14px 0}
+  figure.fig svg{width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:12px; background:#fff; padding:10px}
+  .legend{display:flex; flex-wrap:wrap; gap:8px 18px; margin:10px 2px 0; font-size:12.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .legend i{width:24px; border-top:3px solid; display:inline-block}
+  .lg-navy i{border-color:#2c3e63} .lg-rust i{border-color:#c4623f} .lg-grey i{border-color:#7d8aa8} .lg-purple i{border-color:#9b7bd0; border-top-style:dashed}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Document</h2>
+  <a href="#what">What this is</a>
+  <a href="#picture">The system in one picture</a>
+  <a href="#rules">Design principles</a>
+  <h2>The spine of data</h2>
+  <a href="#pt">The PT file — source of truth</a>
+  <h2>The modules (merged)</h2>
+  <a href="#m-master">0 · Master data &amp; users</a>
+  <a href="#m-vendor">1 · Vendor &amp; buying</a>
+  <a href="#m-inbound">2 · Inbound (goods-in)</a>
+  <a href="#m-outbound">3 · Selling &amp; stock + offers</a>
+  <a href="#m-money">4 · Money (payments)</a>
+  <a href="#m-tally">5 · Accounting (Tally)</a>
+  <a href="#m-brain">6 · The Brain (analytics + AI)</a>
+  <h2>The spine of truth</h2>
+  <a href="#ledgers">The ledgers</a>
+  <a href="#controls">Controls</a>
+  <a href="#edges">The edges</a>
+  <h2>Future-proofing</h2>
+  <a href="#extend">Extensibility — how it grows</a>
+  <a href="#scope">Scope &amp; client-PRD mapping</a>
+  <a href="#tech">Tech shape</a>
+  <a href="#status">Status &amp; next</a>
+</nav>
+
+<main>
+<header class="doc" id="what">
+  <div class="eyebrow">KDPS · Consolidated System Design · Design-of-Record</div>
+  <h1>The whole system as one design</h1>
+  <p class="sub">Eight module discussions (D1–D8), reconciled into a single coherent design. The document a developer reads to understand the entire system.</p>
+  <div class="stamp">Consolidated 24 June 2026 · Living document · Supersedes reading D1–D8 separately (those remain the deep-dive appendices).</div>
+</header>
+
+<section>
+  <p class="lead">Three ideas hold the whole system together:</p>
+  <ul>
+    <li><strong>The data spine is the PT file.</strong> From inbound onward, one record carries all product truth — identity, price, cost, tax. Everything keys off it.</li>
+    <li><strong>The structural spine is documents → ledgers.</strong> Every event is a document; documents are the only things that write the books; the books are derived, never hand-edited.</li>
+    <li><strong>The system is built to grow.</strong> New modules and a future in-house POS slot in without rebuilds.</li>
+  </ul>
+
+  <div class="callout co-note">
+    <strong>How this fits with the other documents.</strong>
+    <ul class="tight" style="margin-bottom:0">
+      <li><strong>Above — the frame:</strong> <a href="../00-system-architecture.html">00-system-architecture.html</a> is the constitution (the 11 rules, the layer map). It is the law; this is the design built under it.</li>
+      <li><strong>This document:</strong> the whole system as one reconciled design.</li>
+      <li><strong>Below — the detailed specs (now written):</strong> <a href="glossary.html">glossary.html</a> (the controlled vocabulary), <a href="data-model.html">data-model.html</a> (the PT-spine schema), <a href="posting-catalog.html">posting-catalog.html</a> (every document → ledger legs, per model), <a href="lifecycles.html">lifecycles.html</a> (each document's state machine), <a href="integration-contracts.html">integration-contracts.html</a> (POS · Tally · Bank · WhatsApp).</li>
+      <li><strong>D1–D8:</strong> now the appendices — the full reasoning behind every decision summarised here.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="picture">
+  <h2 class="sec">The system in one picture</h2>
+  <p>Read it as a flow. Goods move <strong>left → right</strong> along the spine. <strong>Master data</strong> feeds down into every step. The spine writes the <strong>ledgers</strong> below it, which feed <strong>Tally</strong>. The <strong>Brain</strong> reads everything on top. And the <strong>Money</strong> layer (rust) sits under the spine and <em>fans up to touch every stage</em> — payment is the connective tissue, not a separate silo.</p>
+
+  <figure class="fig">
+  <svg viewBox="0 0 1000 800" role="img" aria-label="KDPS system block diagram">
+    <defs>
+      <marker id="aNavy" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#2c3e63"/></marker>
+      <marker id="aRust" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7.5,3.2 L0,6.4 Z" fill="#c4623f"/></marker>
+      <marker id="aGrey" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#8a96ad"/></marker>
+      <marker id="aPurp" markerWidth="9" markerHeight="9" refX="6.5" refY="3" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L7,3 L0,6 Z" fill="#9b7bd0"/></marker>
+      <style>
+        .tt{font:700 14px -apple-system,Segoe UI,Roboto,sans-serif}
+        .ti{font:600 12px -apple-system,Segoe UI,Roboto,sans-serif}
+        .ts{font:500 11.5px -apple-system,Segoe UI,Roboto,sans-serif}
+        .tl{font:700 10.5px -apple-system,Segoe UI,Roboto,sans-serif}
+        .tn{font:600 11px -apple-system,Segoe UI,Roboto,sans-serif}
+      </style>
+    </defs>
+
+    <!-- BRAIN -->
+    <rect x="24" y="20" width="950" height="56" rx="10" fill="#efe7fb" stroke="#9b7bd0"/>
+    <text x="44" y="44" class="tt" fill="#6b3fb0">THE BRAIN — Analytics &amp; AI</text>
+    <text x="44" y="63" class="ts" fill="#6b3fb0">Reads ledgers · masters · POS  →  writes only digests, reports, suggestions.  Never posts to the books.</text>
+    <text x="956" y="44" class="tl" fill="#6b3fb0" text-anchor="end">reads all ▾</text>
+    <line x1="170" y1="76" x2="170" y2="92" stroke="#9b7bd0" stroke-dasharray="3 3" marker-end="url(#aPurp)"/>
+    <line x1="500" y1="76" x2="500" y2="92" stroke="#9b7bd0" stroke-dasharray="3 3" marker-end="url(#aPurp)"/>
+    <line x1="830" y1="76" x2="830" y2="92" stroke="#9b7bd0" stroke-dasharray="3 3" marker-end="url(#aPurp)"/>
+
+    <!-- MASTER -->
+    <rect x="24" y="100" width="950" height="58" rx="10" fill="#eef0f4" stroke="#9aa7c2"/>
+    <text x="44" y="124" class="tt" fill="#41506b">MASTER DATA &amp; USERS — the base (every document snapshots it)</text>
+    <text x="44" y="144" class="ts" fill="#41506b">vendors &amp; brand terms · stores → GSTIN · SKU · barcode + season · season calendar · taxonomy · GST/HSN · offer rulebook · roles</text>
+    <!-- snapshot arrows down to spine -->
+    <line x1="173" y1="158" x2="173" y2="186" stroke="#8a96ad" marker-end="url(#aGrey)"/>
+    <line x1="499" y1="158" x2="499" y2="186" stroke="#8a96ad" marker-end="url(#aGrey)"/>
+    <line x1="825" y1="158" x2="825" y2="186" stroke="#8a96ad" marker-end="url(#aGrey)"/>
+    <text x="183" y="176" class="tl" fill="#6b7280">snapshot</text>
+
+    <!-- SPINE blocks -->
+    <rect x="24" y="188" width="298" height="130" rx="10" fill="#eef1f7" stroke="#2c3e63"/>
+    <text x="40" y="212" class="tt" fill="#1f2d4d">① VENDOR &amp; BUYING</text>
+    <text x="40" y="236" class="ti" fill="#2c3e63">Booking (vendor·brand·season)</text>
+    <text x="40" y="256" class="ti" fill="#2c3e63">Commercial model snapshot</text>
+    <text x="40" y="276" class="ti" fill="#2c3e63">Return-window alarms</text>
+    <text x="40" y="304" class="tn" fill="#6b7280">posts: nothing — order book only</text>
+
+    <rect x="350" y="188" width="298" height="130" rx="10" fill="#eef1f7" stroke="#2c3e63" stroke-width="2.4"/>
+    <text x="366" y="212" class="tt" fill="#1f2d4d">② INBOUND (Goods-In)</text>
+    <text x="366" y="236" class="ti" fill="#2c3e63">Shipment → GRN → PT</text>
+    <text x="366" y="256" class="ti" fill="#c4623f">★ PT = priced, barcoded stock-in</text>
+    <text x="366" y="276" class="ti" fill="#2c3e63">Store split → TIR</text>
+    <text x="366" y="304" class="tn" fill="#6b7280">posts: Stock ▼ · Vendor liability ▼</text>
+
+    <rect x="676" y="188" width="298" height="130" rx="10" fill="#eef1f7" stroke="#2c3e63"/>
+    <text x="692" y="212" class="tt" fill="#1f2d4d">③ SELLING &amp; STOCK</text>
+    <text x="692" y="236" class="ti" fill="#2c3e63">Sale · Exchange · Transfer</text>
+    <text x="692" y="256" class="ti" fill="#2c3e63">Returns · EOSS · Stocktake</text>
+    <text x="692" y="276" class="ti" fill="#2c3e63">Offers applied inside</text>
+    <text x="692" y="304" class="tn" fill="#6b7280">posts: Stock ▼ · Cash ▼ · Vendor(SOR) ▼</text>
+
+    <!-- spine flow arrows -->
+    <line x1="322" y1="250" x2="350" y2="250" stroke="#2c3e63" stroke-width="2.2" marker-end="url(#aNavy)"/>
+    <line x1="648" y1="250" x2="676" y2="250" stroke="#2c3e63" stroke-width="2.2" marker-end="url(#aNavy)"/>
+
+    <!-- MONEY fan-up arrows to every spine stage (the connective tissue) -->
+    <line x1="402" y1="372" x2="178" y2="320" stroke="#c4623f" stroke-width="2" marker-end="url(#aRust)"/>
+    <line x1="500" y1="372" x2="500" y2="320" stroke="#c4623f" stroke-width="2" marker-end="url(#aRust)"/>
+    <line x1="598" y1="372" x2="820" y2="320" stroke="#c4623f" stroke-width="2" marker-end="url(#aRust)"/>
+    <text x="232" y="352" class="tl" fill="#8a3f22">payment terms</text>
+    <text x="455" y="352" class="tl" fill="#8a3f22">PT → payable</text>
+    <text x="690" y="352" class="tl" fill="#8a3f22">SOR liability + cash</text>
+
+    <!-- MONEY hub -->
+    <rect x="338" y="372" width="324" height="96" rx="11" fill="#f7d9c9" stroke="#c4623f" stroke-width="2.6"/>
+    <text x="358" y="396" class="tt" fill="#8a3f22">MONEY · PAYMENTS</text>
+    <text x="358" y="417" class="ts" fill="#8a3f22">Payable ↔ Payment · bill-wise allocation</text>
+    <text x="358" y="434" class="ts" fill="#8a3f22">Draft → Approved → Executed → Reconciled</text>
+    <text x="358" y="451" class="ts" fill="#8a3f22">maker ≠ checker ≠ payer · daily collection audit</text>
+
+    <!-- spine → stock ledger (goods, routed left of money hub) -->
+    <line x1="360" y1="318" x2="176" y2="510" stroke="#2c3e63" stroke-width="1.8" marker-end="url(#aNavy)"/>
+    <text x="120" y="432" class="tl" fill="#2c3e63">stock moves</text>
+
+    <!-- money → vendor & cash ledgers -->
+    <line x1="492" y1="468" x2="499" y2="510" stroke="#c4623f" stroke-width="2" marker-end="url(#aRust)"/>
+    <line x1="612" y1="468" x2="816" y2="510" stroke="#c4623f" stroke-width="2" marker-end="url(#aRust)"/>
+    <text x="505" y="494" class="tl" fill="#8a3f22">debit / liability</text>
+    <text x="700" y="494" class="tl" fill="#8a3f22">collections</text>
+
+    <!-- LEDGERS -->
+    <rect x="24" y="510" width="298" height="92" rx="10" fill="#fdf1ea" stroke="#c4623f"/>
+    <text x="40" y="534" class="tt" fill="#8a3f22">STOCK LEDGER</text>
+    <text x="40" y="555" class="ts" fill="#8a3f22">every piece · every move</text>
+    <text x="40" y="573" class="ts" fill="#8a3f22">SOH &amp; aging derived</text>
+    <text x="40" y="591" class="ts" fill="#8a3f22">append-only · balance = Σ postings</text>
+
+    <rect x="350" y="510" width="298" height="92" rx="10" fill="#fdf1ea" stroke="#c4623f"/>
+    <text x="366" y="534" class="tt" fill="#8a3f22">VENDOR LEDGER</text>
+    <text x="366" y="555" class="ts" fill="#8a3f22">what we owe each brand</text>
+    <text x="366" y="573" class="ts" fill="#8a3f22">per commercial model</text>
+    <text x="366" y="591" class="ts" fill="#8a3f22">Opening + Invoices − returns − Payments</text>
+
+    <rect x="676" y="510" width="298" height="92" rx="10" fill="#fdf1ea" stroke="#c4623f"/>
+    <text x="692" y="534" class="tt" fill="#8a3f22">CASH LEDGER</text>
+    <text x="692" y="555" class="ts" fill="#8a3f22">store × day × mode</text>
+    <text x="692" y="573" class="ts" fill="#8a3f22">cash · card · UPI</text>
+    <text x="692" y="591" class="ts" fill="#8a3f22">reconciled vs bank daily</text>
+
+    <!-- ledgers → Tally -->
+    <line x1="200" y1="602" x2="220" y2="656" stroke="#2c3e63" stroke-width="1.8" marker-end="url(#aNavy)"/>
+    <line x1="492" y1="602" x2="480" y2="656" stroke="#2c3e63" stroke-width="1.8" marker-end="url(#aNavy)"/>
+    <line x1="800" y1="602" x2="740" y2="656" stroke="#2c3e63" stroke-width="1.8" marker-end="url(#aNavy)"/>
+    <text x="500" y="640" class="tl" fill="#2c3e63">GST vouchers ▾</text>
+
+    <!-- TALLY -->
+    <rect x="24" y="658" width="950" height="58" rx="10" fill="#eef1f7" stroke="#2c3e63"/>
+    <text x="44" y="682" class="tt" fill="#1f2d4d">ACCOUNTING (Tally) — the statutory book, fed exactly once <tspan class="tl" fill="#a32a2a">· NO AI</tspan></text>
+    <text x="44" y="701" class="ts" fill="#2c3e63">vouchers: purchase · sales · receipt · payment · DN/CN · journal — deterministic number · daily tie-out · flag, never block</text>
+
+    <!-- EDGES strip -->
+    <rect x="24" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
+    <text x="114" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">Vendor paper →</text>
+    <text x="114" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">invoices · brand PT</text>
+    <rect x="216" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
+    <text x="306" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">↔ POS</text>
+    <text x="306" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">Ten Software → own POS</text>
+    <rect x="408" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
+    <text x="498" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">↔ Bank</text>
+    <text x="498" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">statements for recon</text>
+    <rect x="600" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
+    <text x="690" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">↔ Tally</text>
+    <text x="690" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">statutory book</text>
+    <rect x="792" y="740" width="182" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
+    <text x="883" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">WhatsApp ←</text>
+    <text x="883" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">digests &amp; alerts out</text>
+  </svg>
+  </figure>
+
+  <div class="legend">
+    <span class="lg-navy"><i></i> goods / document flow</span>
+    <span class="lg-rust"><i></i> money</span>
+    <span class="lg-grey"><i></i> snapshot from masters</span>
+    <span class="lg-purple"><i></i> Brain reads (writes nothing)</span>
+  </div>
+
+  <div class="callout co-money">
+    <strong>Follow the rust line — Money touches every module.</strong> That is the point of the diagram: payment is woven through the system, not bolted on the side.
+    <ul class="tight" style="margin-bottom:0">
+      <li><strong>Vendor &amp; Buying</strong> → sets the payment terms (who we pay, when).</li>
+      <li><strong>Inbound (PT)</strong> → creates the payable (vendor liability is born here).</li>
+      <li><strong>Selling &amp; Stock</strong> → SOR/Consignment liability accrues on sale, and cash is collected.</li>
+      <li><strong>Ledgers</strong> → payments debit the vendor ledger; collections feed the cash ledger.</li>
+      <li><strong>Tally</strong> → payment &amp; receipt vouchers are pushed.</li>
+      <li><strong>The Brain</strong> → reads it all for safe-to-pay, duplicate and fraud checks.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="rules">
+  <h2 class="sec">Design principles — the rules the whole design obeys</h2>
+  <p>The twelve rules are stated in full on the architecture page. Here they are in one breath — every module below honours them.</p>
+  <ol>
+    <li><strong>Every business event is a document</strong> with a numbered identity and a status life cycle.</li>
+    <li><strong>Documents write ledgers; ledgers are never hand-edited</strong> — balances are sums of postings; corrections are reversing entries.</li>
+    <li><strong>Master data lives in one place; documents snapshot it</strong> — changing a margin tomorrow never rewrites yesterday's bill.</li>
+    <li><strong>Every fact has exactly one owner</strong> — stock = stock ledger, the sale moment = POS, statutory truth = Tally, offer logic = rulebook.</li>
+    <li><strong>Flag, never block</strong> — mismatches raise an exception with a named owner; goods, sales and files keep moving.</li>
+    <li><strong>Derived numbers are computed, never typed</strong> — cost, profit, aging, MRP.</li>
+    <li><strong>Integrations are contracts, reconciled daily</strong> — push/pull, join key, retry, failure queue.</li>
+    <li><strong>AI at the edges only</strong> <span class="badge b-ai">AI</span> — reads messy inputs, writes read-only suggestions; never posts.</li>
+    <li><strong>Identity discipline on every line</strong> — quantity only at SKU grain; every piece carries barcode + season + commercial model.</li>
+    <li><strong>Every action has an actor</strong> — who created / edited / approved, on every document.</li>
+    <li><strong>Deadlines are data, not memory</strong> — return windows, offer dates, due dates, EOSS windows are stored and alarmed.</li>
+    <li><strong>Variation is data, not code</strong> — document types, posting reasons, commercial models, offers, roles, taxonomy, GST slabs and seasons are configuration rows, not code; the small kernel stays frozen.</li>
+  </ol>
+  <div class="callout co-ext">
+    <strong>Rule 12 in practice — Built to grow.</strong> <span class="badge b-ext">extensibility</span>
+    <p>The system has a small <strong>stable kernel</strong> (documents → postings → ledgers + identity + masters). Everything variable is <strong>configuration data, not code</strong> — document types, posting reasons, commercial models, offer patterns, roles, taxonomy, GST slabs, seasons.</p>
+    <p style="margin-bottom:0">New modules and a future in-house POS <em>attach</em> to the kernel; they never reshape it. Flexibility comes from the kernel and from data-driven config — never from making everything generic. See <a href="#extend">Extensibility</a>.</p>
+  </div>
+</section>
+
+<section id="pt">
+  <h2 class="sec">The data spine — the PT file is the source of truth</h2>
+  <p>From inbound onward, one record is where <strong>all product truth crystallises at once</strong>: the <strong>PT line</strong> (the OWNER work-sheet row).</p>
+  <p>A single PT row carries product identity, classification, pricing, cost, margin and tax — together. So almost every <em>master</em> can be normalised out of it, and the two core <em>postings</em> (priced stock-in, vendor liability) are computed from it. That is why the data model is built <strong>outward from the PT</strong>.</p>
+  <table>
+    <tr><th>PT column</th><th>What it is</th><th>Feeds (in the data model)</th></tr>
+    <tr><td>SEASON</td><td><code>FAMILY(Mon-YY)</code>, system-derived, never free text</td><td>Season master · cohort key</td></tr>
+    <tr><td>BRAND</td><td>Controlled list</td><td>Brand master</td></tr>
+    <tr><td>DESIGN</td><td>Style code (vendor/internal)</td><td rowspan="3">SKU identity = <strong>BRAND + DESIGN + COLOR + SIZE</strong></td></tr>
+    <tr><td>COLOR</td><td>Real colour, or P/M/E tier (Premium/Medium/Economy)</td></tr>
+    <tr><td>SIZE</td><td>Stated size, or "Free Size"</td></tr>
+    <tr><td>BARCODE</td><td>13-digit EAN; vendor's, else POS-generated</td><td>Barcode registry · piece identity = <strong>BARCODE + SEASON</strong></td></tr>
+    <tr><td>GENDER · SUB&nbsp;CATEGORY · TYPE · ITEM · FIT</td><td>Canonical classification (vendor terms mapped in)</td><td>Taxonomy masters (+ AI <em>suggested</em> columns)</td></tr>
+    <tr><td>HSN</td><td>Tax code (6–8 digit)</td><td>GST/HSN slab lookup (date-effective)</td></tr>
+    <tr><td>MRP · BASIC · P&nbsp;RATE · MARGIN</td><td>Retail price · base cost · per-piece payable · margin</td><td>Pricing; <strong>unit cost = landed ex-GST</strong> = P&nbsp;RATE − INPUT&nbsp;TAX + spread invoice charges</td></tr>
+    <tr><td>INPUT&nbsp;TAX · OUTPUT&nbsp;TAX</td><td>Recoverable / chargeable GST per piece</td><td>Tax breakup carried to Tally</td></tr>
+    <tr><td>QTY</td><td>Pieces received for this line (one barcode → many pieces)</td><td>Stock-in posting quantity</td></tr>
+  </table>
+  <div class="callout co-key">
+    <strong>Why the PT — and not the booking — is the spine.</strong>
+    <ul class="tight" style="margin-bottom:0">
+      <li><strong>Booking is deliberately thin</strong> — style + size only, no colour, barcode or price (it posts to no ledger, so full grain isn't needed yet).</li>
+      <li><strong>The GRN → PT fills identity to full grain</strong> — this is where SKU, barcode+season, cost and tax all first exist together.</li>
+      <li><strong>Everything downstream only references that identity</strong> — sale, exchange, transfer, return and stocktake look up the barcode+season the PT established; they never recreate it.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== MODULES ===================== -->
+<section id="m-master">
+  <h2 class="sec">The modules, merged into one design</h2>
+  <p>The system is one spine of goods (left → right), with cross-cutting tracks (money, accounting) and a read-only Brain on top, all standing on a base of master data.</p>
+  <p>Each card below gives the final, reconciled design: what it <em>solves</em>, the <em>documents</em> it owns, what they <em>post</em>, the locked <em>decisions</em>, the <em>AI</em> inside it, and the <em>seam</em> through which it extends.</p>
+
+  <div class="card mod base">
+    <div class="lab">Base layer · D8 · master-data &amp; users</div>
+    <h4>0 · Master Data &amp; Users — the one owned home</h4>
+    <dl>
+      <dt>Solves</dt><dd>The same lists kept differently everywhere; anyone could change anything; no audit trail.</dd>
+      <dt>Owns</dt><dd>Vendor &amp; commercial terms (<em>per brand, per season</em>) · brand (supplier → brand → sub-brand) · store/warehouse (+ store-groups → state GSTIN) · SKU registry · barcode + season cohort · the season calendar (Open → EOSS → Closed) · taxonomy (from the PT Master Sheet) · date-effective GST/HSN · the offer rulebook (+ the no-discount "AMM" list) · users &amp; roles (RBAC as data).</dd>
+      <dt>Governance</dt><dd>Hybrid stewardship — one HO owner accountable, editing delegated to the nearest role. A <strong>"dangerous four"</strong> need a second pair of eyes: brand terms, GST slabs, vendor bank/GSTIN, user roles. Every change logged; documents snapshot masters.</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">drafts only</span> reads brand offer sheets, suggests category/vendor cleanup — a person confirms.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new master is a new governed table under the same audit + snapshot + second-eye standard.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod spine" id="m-vendor">
+    <div class="lab">Spine · start · D1 · vendor management &amp; booking</div>
+    <h4>1 · Vendor &amp; Buying — orders with deadlines, not memory</h4>
+    <dl>
+      <dt>Solves</dt><dd>Orders live in people's heads; no track of booked-vs-received or return deadlines.</dd>
+      <dt>Documents</dt><dd><strong>Booking</strong> — one vendor + one brand + one season; lines at style + size grain. Status derived from goods received: <code>Booked → Partially → Fully received → Return window open → Closed/Cancelled</code>.</dd>
+      <dt>Posts</dt><dd>Nothing — the order book only. (The conscious identity exception: full SKU grain begins at GRN/PT.)</dd>
+      <dt>Decisions</dt><dd>The commercial model is stored as a <strong>two-axis registry</strong> — <em>ownership</em> (KDPS-owns vs brand-owns) × <em>return-terms</em> (none / capped / uncapped), plus a <em>rolling-top-up</em> flag — and the friendly label is <strong>derived</strong> from those axes. Screens still read <strong>Outright (BNS) · Correction (25-18-10) · SOR · Consignment</strong>, but the books key off the axes (ownership drives the GST trigger), so a new deal shape is a new combination, not new code. Snapshotted per brand per season (a first-class dimension, not a flag). A return-allowance budget per brand for Correction. Return-window alarms at 30/15/7 days. v1 = branded vendors; non-branded records → v2 (the non-branded <em>inbound flow</em> is v1).</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">AI</span> reads the brand's order paper → drafts the booking; a person confirms.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new commercial model is a new row in the model registry.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod spine" id="m-inbound">
+    <div class="lab">Spine · D2 · inbound ingestion</div>
+    <h4>2 · Inbound (Goods-In) — from arrival to priced, sellable stock</h4>
+    <dl>
+      <dt>Solves</dt><dd>Every arrival re-typed by hand into Excel; no priced size×colour stock; no reconciliation.</dd>
+      <dt>Documents</dt><dd><strong>Shipment</strong> (anchor; invoice upload triggers it) → <strong>GRN</strong> (count vs order list; over-receipt flagged; counted-by ≠ entered-by) → <strong>PT</strong> (priced, barcoded — the data spine) → <strong>Store split</strong> → <strong>TIR export</strong> (→ Tally purchase).</dd>
+      <dt>Posts</dt><dd>Two steps. <strong>GRN posts the quantity</strong> — pieces in at SKU grain (location, condition, season, owned-flag provisional), so goods are sellable day one even before pricing. <strong>PT at Patna inward posts the valuation</strong> — priced stock-in per piece at landed ex-GST cost — and the <strong>Outright/Correction vendor liability</strong> (incl. GST) on receipt. For SOR/Consignment the PT only flags the piece <em>not-owned</em>; the sold-liability is posted later by the <strong>Sale</strong> (D3), never from the PT.</dd>
+      <dt>Decisions</dt><dd>Both paths v1 — branded (AI invoice → per-brand mapping → PT) and non-branded (AI invoice → chat-assist → editable PT, the "PT Mapper Type 2"). One barcode → many pieces. Season system-derived. Unit cost frozen at stock-in. <strong>Booking-less direct receipt works for any brand</strong> — the <strong>Shipment</strong> (not the booking) is the anchor; a "Receive without order" GRN posts the quantity, the model is snapshotted from the effective-dated brand master, no phantom booking is created, and the GRN can be retro-linked to a later booking.</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">AI</span> reads invoices into data, chat-builds the non-branded PT, fuzzy item-name match. Conversion, recon, pricing and Tally export are <strong>plain software</strong>.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new vendor PT layout is a new mapping rule (data).</dd>
+    </dl>
+  </div>
+
+  <div class="card mod spine" id="m-outbound">
+    <div class="lab">Spine · end · D3 + D5 · outbound &amp; offers</div>
+    <h4>3 · Selling &amp; Stock (Offers inside) — one machine, many reasons</h4>
+    <dl>
+      <dt>Solves</dt><dd>POS per store with no central truth; exchange / transfer / returns / counts all manual; discounts run on memory.</dd>
+      <dt>Documents</dt><dd><strong>Sale</strong> (Ten Software ingest · own KDPS POS, concurrent · manual-bill fallback) · <strong>Exchange</strong> · <strong>Inter-store transfer</strong> (two-step, in-transit) · <strong>RTV</strong> (defective/GR, credit or replacement) · <strong>Seasonal return</strong> (window-driven) · <strong>EOSS / V-flip</strong> · <strong>Stocktake + adjustment</strong> (ABC blind counts; negative-SOH policy).</dd>
+      <dt>Posts</dt><dd><strong>Stock</strong> (out / in-transit / quarantine / liquidation, with reason) · <strong>Cash</strong> (collections in) · <strong>Vendor</strong> (SOR/Consignment liability accrues <em>on sale</em>; returns debit).</dd>
+      <dt>Decisions</dt><dd>Our system is the book of record; POS is the sale counter (we ingest, we don't recreate) — joined on <strong>barcode + season</strong>, with <em>season inferred at the adapter</em> (a reused barcode resolves oldest-cohort-first; ambiguity is a one-tap "which season?", never a blocked sale), all behind one swappable adapter. <strong>Our own POS is an in-scope, concurrent Sale source</strong> running alongside Ten Software (each store runs exactly one POS; both write the same source-agnostic Sale document). Free-to-sell = physical − locked. Exchange credit = what the customer paid; new item at live offer price. EOSS V-flip flips ownership to KDPS (keep real brand, owner = KDPS, status = liquidation, "V&lt;brand&gt;", barcode unchanged).</dd>
+      <dt>Offers (inside)</dt><dd>One rulebook — <strong>trigger + reward + dials</strong>, eight patterns + an open model. Applied <em>per item</em> (a multi-brand bill carries many offers); <strong>best-for-customer</strong> precedence; brand vs KDPS funder tag (reporting, never a claim); a daily applied-vs-rulebook audit. Offers post nothing — a discount only lowers price.</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">AI</span> markdown suggestions on dead stock (cost floor + step-down) → a human authors the offer; reads offer sheets into clean rules.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new movement = new document type + reason code; a new offer = a new pattern row; <strong>a new sales channel (online) = a new Location type + a new Sale source.</strong></dd>
+    </dl>
+  </div>
+
+  <div class="card mod cross" id="m-money">
+    <div class="lab">Cross-cutting · D4 · payments &amp; collection audit</div>
+    <h4>4 · Money — every rupee justified, approved, traceable</h4>
+    <dl>
+      <dt>Solves</dt><dd>What's owed to which brand is guesswork; cash-to-bank unchecked; duplicate/fraud risk.</dd>
+      <dt>Documents</dt><dd>Two layers — <strong>Payable</strong> (the debt, derived) ↔ <strong>Payment</strong> (the disbursement), linked by <strong>Allocation</strong> (bill-wise). Plus the daily <strong>Store-collection audit</strong>.</dd>
+      <dt>Lifecycle</dt><dd><code>Draft → Pending approval → Approved → Executed → Confirmed (UTR) → Reconciled</code> (side branches: Rejected / On-hold / Failed / Cancelled).</dd>
+      <dt>Posts</dt><dd><strong>Vendor ledger</strong> debit on payment. <strong>Cash ledger</strong> for the three-rail store audit. Balance derived: <em>Opening + Invoices − cash discount − goods return − Payments + Interest = Due.</em></dd>
+      <dt>Decisions</dt><dd>Payables accrue per brand; payments anchor to the vendor (legal entity, bank, GSTIN). Eligibility gates — hard blocks (no bank+GSTIN, not tied to TIR, SOR not sold) and soft holds (discrepancy, over-allowance, over-tolerance → flag, human releases). Segregation of duties: <strong>maker ≠ checker ≠ payer</strong>, tiered by ₹. Three-rail collection audit: cash / card net-of-MDR / UPI vs bank, daily.</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">copilot, read-only</span> bank-narration reader · duplicate-payment guard · vendor bank-change fraud alert · one-line "safe to pay?" brief · cash-to-bank auto-match · brand-statement reconciler. A human always approves and posts.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> approval bands and tiers are configuration; new payment rails reuse the Payment lifecycle.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod cross" id="m-tally">
+    <div class="lab">Cross-cutting · D6 · Tally sync</div>
+    <h4>5 · Accounting (Tally) — the statutory book, fed exactly once</h4>
+    <dl>
+      <dt>Solves</dt><dd>Everything re-keyed into Tally by hand.</dd>
+      <dt>Documents (vouchers)</dt><dd>Purchase (from TIR) · Sales (per-bill for B2B with customer GSTIN; daily consolidated per store per GST rate for B2C) · Receipt (combined daily per store; tender split) · Payment (from D4) · Debit/Credit Note · Journal (SOR/Consignment settlement).</dd>
+      <dt>Posts</dt><dd>To <strong>Tally only</strong> — one-way push, no re-keying. Tally stays the statutory book; this system feeds it, never replaces it.</dd>
+      <dt>Decisions</dt><dd>KDPS-owned <strong>deterministic voucher number</strong> (<code>DEO-SAL-20260620-001</code> = store · type · date · seq) = idempotency guard + Tally join key (outbox → exactly-once). GST computed once by KDPS, carried, never recomputed; date-effective slab; cross-state = IGST. Hybrid route: export → Vyapar TaxOne (default), direct-XML fallback. Daily tie-out + a plain-words "needs attention" list.</dd>
+      <dt>AI</dt><dd><span class="badge b-no">None — by design.</span> The books are exact, machine-made.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> the export contract is stable, so a self-built Tally bridge later is a drop-in.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod brain" id="m-brain">
+    <div class="lab">Top layer · D7 · analytics &amp; intelligence</div>
+    <h4>6 · The Brain — reads everything, writes only suggestions</h4>
+    <dl>
+      <dt>Solves</dt><dd>Month-end built by hand; no daily picture; no early warnings.</dd>
+      <dt>Has</dt><dd>A <strong>9 PM WhatsApp digest</strong> (exception feed) · a one-click <strong>report-maker</strong> (brand Sale + SOH pack) · <strong>size-level forecast</strong> (feeds the store split) · <strong>dead-stock hunter</strong> (age × velocity → markdown band) · <strong>profit &amp; store scorecards</strong> · an <strong>anomaly / leakage watchdog</strong> · a read-only <strong>ask-anything assistant</strong>.</dd>
+      <dt>Posts</dt><dd>Nothing. Reads ledgers + masters + POS; writes only messages, reports and suggestions. The worst failure is a wrong message, never a wrong book.</dd>
+      <dt>Decisions</dt><dd>Built on a clean data spine (canonicalisation → a metrics layer where every number is defined once → a data-trust score). The assistant answers <em>through the defined metrics</em>, never raw SQL. Stockout windows logged from day one. AI has its own login; the suggestion and the human decision are logged separately.</dd>
+      <dt>AI</dt><dd><span class="badge b-ai">AI lives here</span> code computes, AI narrates, a human decides.</dd>
+      <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new report or model is a new read over the same metrics layer — it can never corrupt the books.</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- ===================== LEDGERS ===================== -->
+<section id="ledgers">
+  <h2 class="sec">The ledgers — where the spine converges</h2>
+  <p>Three derived books. Only documents write them; humans and AI only read. Every balance is the sum of its postings; corrections are reversing entries; every row traces to a document.</p>
+  <table>
+    <tr><th>Ledger</th><th>One row =</th><th>Written by</th><th>Answers</th></tr>
+    <tr><td>Stock ledger</td><td>One movement of one piece/SKU: qty, location, condition, season, reason, source document, owned-flag, unit cost</td><td><strong>GRN</strong> (quantity in), <strong>PT</strong> (valuation), split, sale, exchange, transfer, returns, adjustment</td><td>SOH anywhere, aging, what moved and why</td></tr>
+    <tr><td>Vendor ledger</td><td>One credit/debit per vendor per document</td><td><strong>PT</strong> (Outright/Correction liability), <strong>Sale</strong> (SOR/Consignment sold-liability), returns (debit), payments (debit)</td><td>What we owe each brand, return-window exposure</td></tr>
+    <tr><td>Cash ledger</td><td>Store × day × payment mode</td><td>POS collections, manual bills, deposits</td><td>Did yesterday's cash reach the bank</td></tr>
+  </table>
+  <div class="callout co-note">
+    <strong>Build-ready sharpenings folded in:</strong>
+    <ul class="tight" style="margin-bottom:0">
+      <li>Masters that drive history (GST slab, GSTIN, cost, price) are <em>effective-dated</em> (SCD Type 2), not only snapshotted — so an old bill never changes.</li>
+      <li>A <em>second clock</em> runs per SOR/Consignment lot (India GST deems a supply at ~6 months even if unsold), alarmed alongside the vendor return window.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="controls">
+  <h2 class="sec">Controls — keeping the truth honest</h2>
+  <p>Four reconciliations. Each is a small loop: runs on a schedule, produces differences, pushes them to an exception queue with a named owner. They flag; they never block the floor.</p>
+  <table>
+    <tr><th>Reconciliation</th><th>Compares</th><th>Cadence</th></tr>
+    <tr><td>Stocktake</td><td>Physical count ↔ stock ledger</td><td>Cyclic (ABC, by store / brand)</td></tr>
+    <tr><td>Bank audit</td><td>Bank statement ↔ cash ledger</td><td>Daily</td></tr>
+    <tr><td>POS recon</td><td>POS SOH ↔ our SOH per store</td><td>Daily</td></tr>
+    <tr><td>Tally recon</td><td>Vouchers sent ↔ accepted in Tally (on voucher number)</td><td>Daily</td></tr>
+  </table>
+  <p>On top sit the spine of accountability — <strong>roles &amp; approvals</strong> as steps inside each document's state machine — and a full <strong>audit trail</strong> (who created / edited / approved, and what AI suggested vs what a human decided).</p>
+</section>
+
+<section id="edges">
+  <h2 class="sec">The edges — integration contracts</h2>
+  <p>Each edge is a written contract — what we push, what we pull, the join key, retry behaviour, a daily reconciliation, a failure queue. Every edge is <strong>swappable behind an adapter</strong>, which is what lets the POS be replaced later without touching the spine.</p>
+  <table>
+    <tr><th>Edge</th><th>We push</th><th>We pull</th><th>Join key</th></tr>
+    <tr><td>POS (Ten Software + own KDPS POS, concurrent)</td><td>Item master + MRP/tax/HSN, pending-inward per store, EOSS price rules</td><td>Line-item sales, SOH per store, daily collection</td><td>Barcode + season (season inferred at the adapter)</td></tr>
+    <tr><td>Tally</td><td>GST-ready vouchers (deterministic export, via Vyapar TaxOne; direct-XML fallback)</td><td>Acknowledgement / import logs</td><td>Voucher number</td></tr>
+    <tr><td>Bank</td><td>—</td><td>Statements (CSV/PDF to start)</td><td>Date + amount + store ref</td></tr>
+    <tr><td>WhatsApp</td><td>Daily digest, deadline alarms, anomaly alerts</td><td>—</td><td>Phone per role</td></tr>
+    <tr><td>Vendor paper</td><td>—</td><td>Invoices (AI-read), brand PT files (mapped)</td><td>Per-brand mapping</td></tr>
+  </table>
+</section>
+
+<!-- ===================== EXTENSIBILITY ===================== -->
+<section id="extend">
+  <h2 class="sec">Extensibility — how the system grows <span class="badge b-ext">future modules · own POS</span></h2>
+  <p>This is a multi-year operating system, not a one-off build. New modules, a future in-house POS and new channels are expected — so the design carries that expectation in its <em>structure</em>. Growth is configuration and addition, never a rewrite.</p>
+
+  <h3>The stable kernel — what new things attach to</h3>
+  <p>Five things almost never change. Everything else is built on them:</p>
+  <ol>
+    <li><strong>Identity</strong> — SKU (brand+style+colour+size) and the piece cohort (barcode+season). Every module speaks this language.</li>
+    <li><strong>The document skeleton</strong> — number, type, status, actor/audit fields, snapshots. Every document, present and future, reuses it.</li>
+    <li><strong>The posting model</strong> — append-only entries into the three ledgers, keyed by <em>(document type, reason code)</em>.</li>
+    <li><strong>The masters</strong> — one owned home, snapshotted onto documents.</li>
+    <li><strong>The edge-contract pattern</strong> — push/pull + join key + recon + failure queue, behind a swappable adapter.</li>
+  </ol>
+
+  <h3>Configuration (data) vs code</h3>
+  <table>
+    <tr><th>Configuration — add a row, no release</th><th>Code — changes deliberately, money-safe</th></tr>
+    <tr><td>Document types &amp; status flows · posting <strong>reason codes</strong> · commercial models · offer patterns · roles &amp; the permission matrix · taxonomy · GST/HSN slabs · season calendar · approval bands · store-groups</td><td>The posting <em>rules</em> (which reason posts what, per model) · the ledger invariants (append-only, balance = Σ postings) · the unit-cost formula · the edge adapters</td></tr>
+  </table>
+
+  <h3>Worked examples</h3>
+  <div class="callout co-ext">
+    <strong>Building our own POS later.</strong> The <strong>Sale</strong> is already source-agnostic — <code>source = Ten&nbsp;Software | manual&nbsp;bill | KDPS&nbsp;POS</code>, joined on barcode+season.
+    <ul class="tight" style="margin-bottom:0">
+      <li>Today an adapter pulls Ten Software's sales into Sale documents.</li>
+      <li>A future KDPS POS simply becomes a new <em>writer</em> of the same Sale document.</li>
+      <li>Stock/cash/vendor postings, offers, Tally vouchers and every report are unchanged — the book of record was always ours; only the counter changes.</li>
+    </ul>
+  </div>
+  <div class="callout co-ext">
+    <strong>Adding the Attendance &amp; Payroll module (the client's WAPCS) later.</strong>
+    <ul class="tight" style="margin-bottom:0">
+      <li>It arrives as a new bounded module with its own documents (employee, attendance event, payroll input) and masters (employee, store assignment, shift rules).</li>
+      <li>It reuses the document skeleton, the actor/audit standard, the roles model and the store master.</li>
+      <li>If it ever touches money (salary payouts) it posts through the same Payment lifecycle. Nothing in the spine moves to accommodate it.</li>
+    </ul>
+  </div>
+  <div class="callout co-ext">
+    <strong>Selling online later.</strong> An online channel is a new <em>Location type</em> and a new <em>Sale source</em>. The offer rulebook already anticipates online-only offers (parked). Stock, identity, ledgers and Tally treat an online sale like any other.
+  </div>
+
+  <div class="callout co-warn">
+    <strong>The guardrail — flexibility, not over-engineering.</strong> The verified build research warns against the opposite failure, so this system is deliberately <em>not</em>:
+    <ul class="tight" style="margin-bottom:0">
+      <li>microservices · event-sourced · a plugin runtime · attribute-everything (EAV).</li>
+    </ul>
+    <p style="margin-bottom:0">It is one modular monolith over one database. Flexibility comes from the <strong>stable kernel + data-driven config + clean boundaries</strong> — the cheapest kind to maintain, and the only kind a small team can keep correct.</p>
+  </div>
+</section>
+
+<section id="scope">
+  <h2 class="sec">Scope, boundaries &amp; the client-PRD mapping</h2>
+  <p>The client's PRD describes four modules. It is <strong>requirements input — their vision, not the design.</strong> Three map cleanly onto this system; the fourth is a planned future module.</p>
+  <p>Crucially, this system is <em>broader</em> than the client's four modules — the master-data foundation, the offer rulebook and the AI Brain are things their PRD never asked for, but the operating system needs them.</p>
+  <table>
+    <tr><th>Client PRD module</th><th>What they asked for</th><th>Where it lives here</th></tr>
+    <tr><td><strong>IINE</strong><br>Inventory Ingestion &amp; Normalization</td><td>Invoice → GRN → PT → TIR, SKU/barcode control, reconciliation, no manual Excel</td><td>D1 (vendor &amp; booking) + <strong>D2 (inbound)</strong> + D6 (TIR → Tally) <span class="badge b-locked">designed</span></td></tr>
+    <tr><td><strong>PASCS</strong><br>Payment Authorization &amp; Settlement</td><td>Eligible → approved → executed → reconciled lifecycle, hierarchy, traceability</td><td><strong>D4 (money / payments)</strong> <span class="badge b-locked">designed</span></td></tr>
+    <tr><td><strong>SIMAS</strong><br>Store Inventory Movement &amp; Sell-Through</td><td>Sale / transfer / defect / return / EOSS as distinct states; POS integration; billed-but-retained</td><td><strong>D3 (selling &amp; stock)</strong> — billed-but-retained = the V-flip mechanic <span class="badge b-locked">designed</span></td></tr>
+    <tr><td><strong>WAPCS</strong><br>Workforce Attendance &amp; Payroll</td><td>Face check-in/out on a store device, employee master, payroll input</td><td><span class="badge b-next">Deferred — future module.</span> Slots in via the extensibility seam; does not block the foundation.</td></tr>
+  </table>
+  <h3>In scope now / deferred by decision</h3>
+  <table>
+    <tr><th>In this design (D1–D8)</th><th>Deferred (revisit before go-live)</th></tr>
+    <tr><td>Master data &amp; users · vendor &amp; booking · inbound · outbound &amp; offers · money · Tally · the Brain</td><td><strong>WAPCS</strong> attendance &amp; payroll · <strong>D9</strong> migration &amp; rollout · the <strong>deep roles/access</strong> model (D4 left it thin)</td></tr>
+  </table>
+</section>
+
+<section id="tech">
+  <h2 class="sec">Tech shape — deliberately boring</h2>
+
+  <div class="card"><h4>One modular monolith, one database</h4>
+    <ul class="tight" style="margin-bottom:0">
+      <li>Modules in code mirror the modules above, with clean internal boundaries — but one application over one relational database (<strong>PostgreSQL</strong> with app-layer scoping — <code>django-scopes</code>, fail-closed; the schema is RLS-ready). Store / brand / season / state-GSTIN are carried as <strong>foreign-key dimensions on every ledger leg</strong>, so the books can always be sliced by any of them.</li>
+      <li>No microservices, no queues between services, no second database.</li>
+      <li>One developer, fifty stores: strong by being simple. The rules are enforceable because everything lives in one place.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h4>Browser PWA, light and offline-tolerant</h4>
+    <ul class="tight" style="margin-bottom:0">
+      <li>A browser app on the store's POS machine — no installs, light pages, bad-network tolerant, big tap targets for low-end Android.</li>
+      <li>Hindi where staff face it. Owners get WhatsApp, not logins. INR in Lakh/Crore format (₹28,50,000).</li>
+      <li><strong>Typed end-to-end</strong> — a typed React/TypeScript PWA on the glass, a typed Python/Django engine (mypy + pydantic), and a <strong>generated typed client at the API seam</strong> so the two halves agree by construction. Money bugs are caught by the compilers, not in production.</li>
+    </ul>
+  </div>
+
+  <div class="card"><h4>AI &amp; hosting — India-resident</h4>
+    <ul class="tight" style="margin-bottom:0">
+      <li>Hosted top model via <strong>Vertex AI (Mumbai)</strong>, model swappable; app + DB on <strong>Google Cloud, Mumbai (asia-south1)</strong>.</li>
+      <li>AI only ever sees edge data and computed numbers, never raw customer/payment data.</li>
+      <li>All AI combined &lt; ₹2,000/month — the cost is the always-on database, not the models. <span class="badge b-open">Confirm in-region AI processing live before go-live.</span></li>
+    </ul>
+  </div>
+
+  <div class="card"><h4>Degraded modes are designed, not improvised</h4>
+    <ul class="tight" style="margin-bottom:0">
+      <li>POS down → manual-bill fallback (a real document, reconciled later).</li>
+      <li>Internet down → capture offline, sync when back.</li>
+      <li>Tally rejects a voucher → failure queue, not a phone call.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="status">
+  <h2 class="sec">Status &amp; what's next</h2>
+  <table>
+    <tr><th>Piece</th><th>Status</th></tr>
+    <tr><td>D1–D8 module designs</td><td><span class="badge b-locked">locked</span></td></tr>
+    <tr><td>This consolidated System Design (the design-of-record)</td><td><span class="badge b-locked">drafted 24 Jun 2026 — for review</span></td></tr>
+    <tr><td>Glossary · data model (PT-spine schema)</td><td><span class="badge b-locked">drafted 25 Jun 2026</span></td></tr>
+    <tr><td>Posting catalog · lifecycles · integration contracts</td><td><span class="badge b-locked">drafted 25 Jun 2026</span></td></tr>
+    <tr><td>KDPS PRD (feature inventory / testable checklist)</td><td><span class="badge b-next">after the specs</span></td></tr>
+    <tr><td>D9 migration &amp; rollout · deep roles · attendance/payroll</td><td><span class="badge b-open">deferred by decision</span></td></tr>
+  </table>
+  <div class="callout co-key"><strong>Review gate.</strong> This is the centerpiece — the whole plan in one design. When you say move ahead, the next step is the <strong>PT-spine data model</strong>, then the posting catalog + lifecycles, then the PRD.</div>
+</section>
+
+<footer>
+  KDPS · Consolidated System Design v0.3 · 25 June 2026 · Living document.<br>
+  Derived from: <a href="../00-system-architecture.html">00-system-architecture.html</a>, the eight locked module designs (D1–D8), the consolidation source-of-truth, and the client PRD (requirements input only). Field-level names are reconciled against the D1–D8 source docs; flag any drift on review.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

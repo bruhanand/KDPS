@@ -158,6 +158,16 @@
   </div>
   <p style="font-size:13px; color:var(--muted); margin-top:-4px;">SOR and Consignment are the same concept (brand-owned, return the unsold); the only difference is the rolling top-up. Treat as near-identical downstream.</p>
 
+  <div class="callout">
+    <div class="label">How the model is stored — two axes, label derived</div>
+    <p style="margin:0 0 6px;">The brand record does not store the friendly name as a free choice. It stores <strong>two plain facts</strong> and the system <strong>derives</strong> the Outright / Correction / SOR / Consignment label from them — so the same data answers cleanly however the client describes a deal:</p>
+    <ul style="margin:0;">
+      <li><strong>Ownership</strong> — does KDPS own the goods, or does the brand?</li>
+      <li><strong>Return terms</strong> — none, capped, or uncapped — plus a <strong>rolling top-up</strong> yes/no flag that separates Consignment (tops up) from SOR (fresh booking each time).</li>
+    </ul>
+    <p style="margin:6px 0 0; font-size:13.5px; color:var(--muted);">Screens still read the four familiar names. Ownership is also what decides GST timing downstream, so storing it as its own axis keeps that derivation honest.</p>
+  </div>
+
   <h2><span class="num">4.</span>Booking — structure</h2>
   <div class="card">
     <ul>
@@ -207,6 +217,17 @@
   <div class="callout">
     <div class="label">Module boundary</div>
     The <strong>GRN object itself lives in the Inbound module</strong>. Booking <strong>provides the order list</strong> that pre-fills it, and <strong>receives the close-out</strong> when goods are verified. The two modules share the order list and the received result.
+  </div>
+
+  <div class="card">
+    <h3>Direct receipt — a GRN with no booking <span class="pill green">added 25 June</span></h3>
+    <p>Goods can land at a store or the warehouse with <strong>no booking ever recorded</strong> — it happens for branded brands too, not only non-branded. The system must take them in, so the <strong>shipment, not the booking, is the real anchor of inbound</strong>: a GRN is allowed to stand alone with <strong>no parent booking</strong> at all.</p>
+    <ul>
+      <li><strong>"Receive without order".</strong> The receiver opens a plain <strong>simple-receipt GRN</strong> (no order list to confirm against) and counts what physically came in. The commercial model is taken from the brand's current terms at the moment of receipt — snapshotted, like everywhere else (Rule 3) — defaulting to Outright if the brand isn't yet known, flagged for head office. <strong>No phantom booking is invented</strong> — that would pollute booked-vs-received.</li>
+      <li><strong>The status lifecycle is unaffected.</strong> The booking statuses in §7 are computed from a booking's own GRNs; a booking-less GRN sits in <strong>no booking's GRN-set</strong>, so it simply never touches the lifecycle. No new status is needed — the machine is robust to a missing parent by construction.</li>
+      <li><strong>Retro-link.</strong> If a booking for these goods turns up later, the receiver can <strong>attach the Direct GRN to it</strong>. The link re-runs the booked-vs-received and invoice match as a tracked correction (a new dated event, never a silent rewrite of history).</li>
+    </ul>
+    <p style="font-size:13.5px; color:var(--muted); margin-bottom:0;">The posting side of this — quantity in at the GRN, value and vendor liability at the PT — is owned by Inbound (see the Inbound design).</p>
   </div>
 
   <h2><span class="num">7.</span>Booking status lifecycle</h2>

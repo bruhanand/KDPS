@@ -105,7 +105,7 @@
   <a href="#what">What this is</a>
   <a href="#picture">The whole system</a>
   <h2>Architecture</h2>
-  <a href="#rules">The 11 rules</a>
+  <a href="#rules">The 12 rules</a>
   <a href="#layers">Layer by layer</a>
   <a href="#edges">The edges (contracts)</a>
   <h2>Plan</h2>
@@ -126,7 +126,7 @@
 </header>
 
 <section>
-  <p><strong>How to use this document.</strong> Before any design discussion, read the <a href="#rules">11 rules</a> and find the module's slot in the <a href="#discussions">discussion plan</a>. Every discussion ends by answering the same three questions: <em>what documents exist, what life cycle does each have, and what does each post to which ledger.</em> If a discussion produces an answer that breaks a rule here, either the answer is wrong or the rule must be consciously changed on this page first — never silently.</p>
+  <p><strong>How to use this document.</strong> Before any design discussion, read the <a href="#rules">12 rules</a> and find the module's slot in the <a href="#discussions">discussion plan</a>. Every discussion ends by answering the same three questions: <em>what documents exist, what life cycle does each have, and what does each post to which ledger.</em> If a discussion produces an answer that breaks a rule here, either the answer is wrong or the rule must be consciously changed on this page first — never silently.</p>
   <div class="callout co-note">
     <strong>Why this exists.</strong> Vendor management and inbound were designed one at a time and came out consistent by instinct. From outbound onwards the modules start touching money, statutory books and AI — instinct is not enough. This page made the shared skeleton explicit so the later discussions (outbound, payments, offers, Tally, analytics) could run independently and still snap together — which they did. Only rollout (D9) now remains.
   </div>
@@ -211,12 +211,12 @@
 </section>
 
 <section id="rules">
-  <h2 class="sec">The 11 rules — every module obeys these</h2>
+  <h2 class="sec">The 12 rules — every module obeys these</h2>
   <p>These are the best practices of every serious retail/ERP system, written as binding rules. All are now in force across the eight locked designs (D1–D8) — each rule notes where.</p>
 
   <div class="card"><div class="rule-head"><span class="rule-num">1</span><h4>Every business event is a document with a life cycle</h4></div>
     <p>Nothing happens "loosely". A booking, a goods receipt, a sale, a transfer, a return, a payment — each is a numbered document with line items and an explicit status flow (a state machine). No document, no event.</p>
-    <div class="seen">✓ Already in force: Booking (Booked → Partially → Fully received → Return window → Closed; statuses derived from GRNs, arrival lives on the Shipment — revised 10 Jun 2026), GRN, PT.</div></div>
+    <div class="seen">✓ Already in force: Booking (Booked → Partially → Fully received → Return window → Closed; statuses derived from GRNs, arrival lives on the Shipment — revised 10 Jun 2026), GRN (writes the stock ledger as a quantity movement — qty, location, condition, season — no unit cost), PT (writes the priced valuation + vendor liability per model at Patna inward).</div></div>
 
   <div class="card"><div class="rule-head"><span class="rule-num">2</span><h4>Documents write ledgers; ledgers are never hand-edited</h4></div>
     <p>Stock-on-hand, payables and cash positions are <em>sums of postings</em>, never typed numbers. Corrections are reversing entries — nothing is ever deleted or overwritten, so the history always explains the present.</p>
@@ -258,6 +258,10 @@
   <div class="card"><div class="rule-head"><span class="rule-num">11</span><h4>Deadlines are data, not memory</h4></div>
     <p>Anything that can expire is stored with its date and alarmed before it dies: SOR return windows (60–120 days), offer start/end dates, payment due dates, season EOSS windows. No deadline lives in anyone's head.</p>
     <div class="seen">✓ Already in force: booking carries "return window open" as a status; offers carry start/end with fallback.</div></div>
+
+  <div class="card"><div class="rule-head"><span class="rule-num">12</span><h4>Variation is data, not code</h4></div>
+    <p>The things that vary between brands, stores, states and seasons live as <em>configuration rows</em>, never as branches in the program. Document types, posting reasons, commercial models (Outright / Correction / SOR / Consignment), offer rules, roles &amp; rights, taxonomy (category / season / collection), GST slabs and the report/digest schedule are all data a steward can add or change — adding a new brand model, a new offer pattern, a new GST slab or a new season must never need a code release. The kernel that posts the books stays small and frozen; everything business-specific is a row above it. Test: if a business change forces editing code instead of a master row, the design has leaked.</p>
+    <div class="seen">✓ Already in force: commercial models, season calendar and GST as date-effective HSN+price-band rows (D8); offer rulebook as data (D5); RBAC as configurable rights (D4); per-user digest type &amp; timing as config (D7).</div></div>
 </section>
 
 <section id="layers">
@@ -271,7 +275,7 @@
     <tr><td>Brand &amp; commercial terms</td><td>Outright (BNS) / Correction (25-18-10) / SOR / Consignment, margin tiers, return windows</td><td>Vendor management ✓</td></tr>
     <tr><td>Store &amp; warehouse</td><td>Locations, store codes, which POS install</td><td>Inbound ✓</td></tr>
     <tr><td>SKU registry</td><td>brand + style + colour + size; deterministic reuse for non-branded (non-branded → v2)</td><td>Inbound ✓</td></tr>
-    <tr><td>Barcode registry</td><td>One per piece; unique within season (key = barcode + season)</td><td>Inbound ✓</td></tr>
+    <tr><td>Barcode registry</td><td>Barcode is a non-unique scan-alias → stock is a count under it; resolves to a cohort (key = barcode + season). The same barcode may recur across/within seasons; true collisions are split at inbound</td><td>Inbound ✓</td></tr>
     <tr><td>Taxonomy</td><td>Category, season, collection — drives margins, aging, EOSS</td><td>Inbound ✓</td></tr>
     <tr><td>Offer rulebook</td><td>Value slabs, B2G1 lowest-free, gift thresholds, per-store applicability, date windows + fallback</td><td>Offers (D5) ✓</td></tr>
     <tr><td>Users &amp; roles</td><td>3 login roles to start; approval rights per document step</td><td>Payments (D4) ✓</td></tr>
@@ -281,13 +285,13 @@
   <table>
     <tr><th>Document</th><th>Module</th><th>Posts to</th><th>Status</th></tr>
     <tr><td>Booking</td><td>Vendor management</td><td>— (order book only)</td><td><span class="badge b-locked">designed</span></td></tr>
-    <tr><td>Shipment + GRN</td><td>Inbound</td><td>Stock ledger (receipt, condition flag)</td><td><span class="badge b-locked">designed</span></td></tr>
-    <tr><td>PT (product transfer file)</td><td>Inbound</td><td>Stock ledger (priced stock-in) · Vendor ledger (liability per model)</td><td><span class="badge b-locked">designed</span></td></tr>
+    <tr><td>Shipment + GRN</td><td>Inbound</td><td>Stock ledger (quantity/receipt — qty, location, condition, season; no unit cost)</td><td><span class="badge b-locked">designed</span></td></tr>
+    <tr><td>PT (product transfer file)</td><td>Inbound</td><td>Stock ledger (priced valuation — stamps unit cost on the GRN quantity) · Vendor ledger (liability per model — Outright/Correction at inward, SOR on sale, Consignment never)</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>Store split</td><td>Inbound</td><td>Stock ledger (WH → store)</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>TIR export</td><td>Inbound</td><td>→ Tally (purchase side)</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>Sale record (POS ingest) &amp; manual bill fallback</td><td>Outbound</td><td>Stock ledger (out) · Cash ledger (in) · Vendor ledger (SOR sold-liability)</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>Exchange note</td><td>Outbound</td><td>Stock ledger (in + out) · Cash ledger (difference)</td><td><span class="badge b-locked">designed</span></td></tr>
-    <tr><td>Inter-store transfer note</td><td>Outbound</td><td>Stock ledger (store → store, in-transit state)</td><td><span class="badge b-locked">designed</span></td></tr>
+    <tr><td>Inter-store transfer note</td><td>Outbound</td><td>Stock ledger (store → store, in-transit state). Cross-state (Bihar↔Jharkhand, different GSTINs) = taxable IGST supply → tax invoice + e-way bill at landed cost; intra-state = stock-only, no tax</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>Defective / GR return to brand</td><td>Outbound</td><td>Stock ledger (quarantine → out) · Vendor ledger (debit)</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>Seasonal / allowance return (Correction · SOR · Consignment)</td><td>Outbound</td><td>Stock ledger (out) · Vendor ledger (debit) — driven by booking return windows; Correction is capped (D1 §8 pool), SOR/Consignment uncapped</td><td><span class="badge b-locked">designed</span></td></tr>
     <tr><td>EOSS application</td><td>Outbound (uses offer rulebook)</td><td>→ POS price push; audit trail</td><td><span class="badge b-locked">designed</span></td></tr>
@@ -301,7 +305,7 @@
   <table>
     <tr><th>Ledger</th><th>Grain (one row =)</th><th>Written by</th><th>Answers</th></tr>
     <tr><td>Stock ledger</td><td>One movement of one piece/SKU: qty, location, condition, season, reason, source document</td><td>GRN, PT, split, sale, exchange, transfer, returns, adjustment</td><td>SOH anywhere, aging, what moved and why</td></tr>
-    <tr><td>Vendor ledger</td><td>One credit/debit per vendor per document</td><td>PT (liability: Outright/Correction on receipt, SOR/Consignment as sold), returns (debit), payments (debit)</td><td>What we owe each brand, return-window exposure</td></tr>
+    <tr><td>Vendor ledger</td><td>One credit/debit per vendor per document</td><td>PT (liability at inward for Outright/Correction only), Sale (writes the SOR/Consignment sold-liability when the piece sells — D3), returns (debit), payments (debit)</td><td>What we owe each brand, return-window exposure</td></tr>
     <tr><td>Cash ledger</td><td>Store × day × payment mode</td><td>POS collections pull, manual bills, deposits</td><td>Did yesterday's cash reach the bank</td></tr>
   </table>
 
@@ -352,11 +356,11 @@
   <p>Each discussion produced one design doc in its own folder under <code>my-understanding/system-design/</code>, ending with a locked-decisions table + an open-items list. <strong>D1–D8 are locked; only D9 remains.</strong> The rows below record the scope each covered and what each settled.</p>
   <table>
     <tr><th>#</th><th>Discussion</th><th>Scope</th><th>Key questions to settle</th></tr>
-    <tr><td>D3</td><td><strong>Outbound</strong> <span class="badge b-locked">designed</span><br><code>03-outbound/</code></td><td>Counter sale (POS link), manual-billing fallback, exchange, inter-store transfer, defective/GR return, seasonal/allowance return (Correction capped · SOR/Consignment uncapped), EOSS application, <strong>stocktake</strong></td><td>Exchange pricing &amp; same/cross-store rules · transfer in-transit ownership · quarantine → GR flow · return picking (aging + window driven; Correction draws the §8 pool) · manual-bill dedup against POS · count cadence · <strong>negative-SOH policy</strong> (POS shows minus stock — how it's reconciled &amp; corrected; added 10 Jun from inbound Q40)</td></tr>
+    <tr><td>D3</td><td><strong>Outbound</strong> <span class="badge b-locked">designed</span><br><code>03-outbound/</code></td><td>Counter sale (POS link), manual-billing fallback, exchange, inter-store transfer, defective/GR return, seasonal/allowance return (Correction capped · SOR/Consignment uncapped), EOSS application, <strong>stocktake</strong></td><td>Exchange pricing &amp; same/cross-store rules · transfer in-transit ownership (cross-state = taxable IGST supply + e-way bill; intra-state = stock-only) · quarantine → GR flow · return picking (aging + window driven; Correction draws the §8 pool) · manual-bill dedup against POS · count cadence · <strong>negative-SOH policy</strong> (POS shows minus stock — how it's reconciled &amp; corrected; added 10 Jun from inbound Q40)</td></tr>
     <tr><td>D4</td><td><strong>Payments &amp; roles</strong> <span class="badge b-locked">designed</span><br><code>04-payments/</code></td><td>Vendor payment lifecycle (eligible → approved → executed → bank-reconciled), approval hierarchy, daily store-collection audit, users &amp; roles for the whole system</td><td>Correction settlement maths (25-18-10 — return-allowance pool tracking designed in D1 §8; D4 settles return debits &amp; pool overflow in rupees) · SOR/Consignment payable settles on sale (uncapped returns) · payment terms per brand (data owed by client — D1 §11) · who approves what amount · bank statement ingestion · role grid per document step</td></tr>
     <tr><td>D5</td><td><strong>Offer rulebook</strong> <span class="badge b-locked">designed</span><br><code>05-offers/</code></td><td>Formalize the June-1 offer logic as a data model: slabs, B2G1 lowest-free, gifts, per-store applicability, date windows + fallback</td><td>Rule precedence when offers overlap · POS push format · how the report maker audits applied vs configured</td></tr>
     <tr><td>D6</td><td><strong>Tally sync</strong> <span class="badge b-locked">designed</span><br><code>06-tally-sync/</code></td><td>Full voucher catalog (sales, receipts, payments, return journals — purchase/TIR exists), push mechanics, recon loop</td><td><strong>Settled:</strong> hybrid push (deterministic export → Vyapar TaxOne now, direct-XML fallback &amp; future self-built) · daily summary sales voucher per store (per-bill only for GSTIN customers) · combined money-in voucher with tender split · KDPS-owned voucher number for exactly-once + join key · GST carried not recomputed · cross-state = IGST invoice · purchase booked at arrival for all brands · daily tie-out + "needs attention" list (Patna accountant). <strong>Deferred to D8/D9:</strong> go-live / cutover. 5 facts parked for client.</td></tr>
-    <tr><td>D7</td><td><strong>Analytics &amp; AI</strong> <span class="badge b-locked">designed</span><br><code>07-analytics-ai/</code></td><td>Digest content &amp; timing, size-level forecast (cold start → suggest → refine), dead-stock rules, profitability formulas, anomaly watchdog</td><td>What the owner sees at 9am · forecast trust-building stages · alert fatigue control</td></tr>
+    <tr><td>D7</td><td><strong>Analytics &amp; AI</strong> <span class="badge b-locked">designed</span><br><code>07-analytics-ai/</code></td><td>Digest content &amp; timing, size-level forecast (cold start → suggest → refine), dead-stock rules, profitability formulas, anomaly watchdog</td><td>What the owner sees, and when — digest type &amp; timing are per-user configurable (config data, Rule 12), default 9 PM close-of-day · forecast trust-building stages · alert fatigue control</td></tr>
     <tr><td>D8</td><td><strong>Master data &amp; users consolidation</strong> <span class="badge b-locked">designed</span><br><a href="08-master-data/master-data.html">design doc</a></td><td>Pulled every registry from D1–D7 into one owned place: edit-rights grid, audit, snapshots</td><td><strong>Settled (Q1–Q11, 21 Jun):</strong> hybrid stewardship + dangerous-four second-eye · brand terms per brand per season · season = governed house calendar (Open→EOSS→Closed) · identity = barcode+season · PT Master Sheet promoted to governed product tables (P/M/E &amp; Free Size already handled) · store master = firm geography + store-groups · vendor bank+GSTIN second-eye · GST = date-effective HSN+price-band · offers best-for-customer · users = configurable RBAC (shape only, people parked). POS integration deliberately out of scope.</td></tr>
     <tr><td>D9</td><td><strong>Migration &amp; rollout</strong> <span class="badge b-next">remaining</span><br><code>09-migration/</code></td><td>Masters import (from Tally / Excel / POS), opening stock capture, store-by-store rollout order, parallel run with Tally, training, go-live criteria</td><td>Opening stock = each store's first stocktake? · which source wins for each master · pilot store choice · when Excel officially stops · rollback if a store fails go-live</td></tr>
   </table>
@@ -369,7 +373,7 @@
   <p>Decided 10 June 2026 from a verified deep-research pass over Anthropic's Claude Code guidance, GitHub's Spec Kit, Thoughtworks and ledger-engineering sources. The short version: <strong>one thin planning layer upfront, then one verified slice at a time</strong> — never all PRDs written first, never one module built to completion before the next starts.</p>
 
   <div class="card"><h4>1 · Two upfront artifacts — instead of a PRD library</h4>
-    <p><strong>The constitution:</strong> this page (the 11 rules) — every spec and every coding session obeys it. <strong>The feature inventory:</strong> the whole system enumerated as user-testable, end-to-end outcomes ("a branded shipment's PT converts, posts to stock + vendor ledgers, and the store sees pending inward"), each carrying a pass/fail status. It is born in the consolidation pass after the design discussions close (D9). This inventory <em>is</em> the master PRD — a checklist, not a book. The documented failure it avoids: full upfront spec sets drift, slow feedback "as in early waterfall", and push agents to one-shot whole systems until context runs out mid-build.</p></div>
+    <p><strong>The constitution:</strong> this page (the 12 rules) — every spec and every coding session obeys it. <strong>The feature inventory:</strong> the whole system enumerated as user-testable, end-to-end outcomes ("a branded shipment's PT converts, posts to stock + vendor ledgers, and the store sees pending inward"), each carrying a pass/fail status. It is born in the consolidation pass after the design discussions close (D9). This inventory <em>is</em> the master PRD — a checklist, not a book. The documented failure it avoids: full upfront spec sets drift, slow feedback "as in early waterfall", and push agents to one-shot whole systems until context runs out mid-build.</p></div>
 
   <div class="card"><h4>2 · Specs just-in-time, one vertical slice at a time</h4>
     <p>When a slice starts: a session interviews Anand → writes a <strong>self-contained spec</strong> (names the files and interfaces, states what is out of scope, ends with a runnable end-to-end verification step) → a <strong>fresh session executes it</strong>. Slices cut down through the layers (document + posting + screen together), never sideways through one layer. <strong>Slice #1 is the walking skeleton:</strong> one branded shipment travels booking → GRN → PT → ledger postings → store split → POS push, using real sample files — proving every layer and every edge contract before anything is widened.</p></div>
@@ -389,12 +393,12 @@
 <section id="tech">
   <h2 class="sec">Tech shape — deliberately boring</h2>
   <div class="card"><h4>One codebase, one database (a modular monolith)</h4>
-    <p>Modules in code mirror the modules on this page, with clean internal boundaries — but it is one application over one relational database. No microservices, no queues between services, no second database. One developer, fifty stores: the architecture must be strong by being simple, not clever. The 11 rules are enforceable precisely because everything lives in one place.</p></div>
+    <p>Modules in code mirror the modules on this page, with clean internal boundaries — but it is one application over one relational database. No microservices, no queues between services, no second database. One developer, fifty stores: the architecture must be strong by being simple, not clever. The 12 rules are enforceable precisely because everything lives in one place.</p></div>
   <div class="card"><h4>Browser app, light and offline-tolerant</h4>
     <p>Each store runs on a computer (the POS machine); KDPS is a browser app on it — no installs, light pages, works on bad networks, big tap targets for any low-end device staff use. Hindi where staff face it. Owners get WhatsApp, not logins. INR everywhere in Lakh/Crore format (₹28,50,000).</p></div>
   <div class="card"><h4>Degraded modes are designed, not improvised</h4>
     <p>POS down → manual bill fallback (a real document, reconciled later). Internet down at a store → capture offline, sync when back. Tally rejects a voucher → failure queue, not a phone call. Every edge has a "what if it's down" answer in its contract.</p></div>
-  <div class="callout co-open"><strong>Open by design:</strong> the specific stack (framework, database product, hosting) is chosen when code resumes after D3/D4 — nothing on this page depends on that choice.</div>
+  <div class="callout co-open"><strong>Stack — ratified.</strong> The engine language, framework, database and hosting are now decided in <strong>ADR-0001</strong> (25 Jun 2026): <strong>Python/Django</strong> back end, <strong>React/TypeScript</strong> PWA front end, <strong>PostgreSQL</strong>, hosted in an India region. Typed at both ends with a generated typed client at the API seam; <em>not</em> Frappe — ERPNext's contracts are re-implemented as plain Django models so the kernel stays small and frozen (Rule 12). See <code>adr/0001-stack.md</code> and <code>consolidation/stack-decision.html</code>. Nothing else on this page depends on that choice.</div>
 </section>
 
 <section id="status">
@@ -432,7 +436,8 @@
 </section>
 
 <footer>
-  KDPS · System architecture v2 · 21 June 2026 (born 10 June) · Living document — changes here must be conscious and dated.<br>
+  KDPS · System architecture v2 · 25 June 2026 (born 10 June) · Living document — changes here must be conscious and dated.<br>
+  Reconciled 25 Jun 2026 against the 16 locked Q&amp;A decisions and the system-review of 24 Jun: added Rule 12 (variation is data), split the GRN/PT posting (GRN = quantity, PT = priced valuation + liability per model), named the Sale as writer of SOR/Consignment sold-liability, fixed cross-state transfer to taxable IGST, made the digest per-user configurable (default 9 PM), and ratified the stack in ADR-0001. See <code>consolidation/system-review-2026-06-24.html</code> and <code>consolidation/document-reconciliation-plan.html</code>.<br>
   Derived from: <code>my-understanding/workflow/KDPS-current-workflow.pdf</code>, the eight locked design docs (D1–D8), and the June 1 &amp; June 5 meeting outputs.
 </footer>
 

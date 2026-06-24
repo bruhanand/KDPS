@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Posting Catalog (Every Event → Ledgers → Legs, per Commercial Model)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1360px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:272px; flex:0 0 272px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 44px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:980px){
+    nav.toc{display:none}
+    main{padding:24px 16px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:70ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:12px}
+  section{margin:40px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:26px 0 8px}
+  h4.evt-title{font-size:17px; color:var(--navy); margin:0 0 4px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-ca{background:var(--red-bg); color:var(--red)}
+  .b-stat{background:var(--blue-bg); color:var(--blue)}
+  .b-op{background:var(--purple-bg); color:var(--purple)}
+  .b-none{background:var(--grey-bg); color:#41506b}
+  /* commercial-model pills */
+  .m{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; white-space:nowrap}
+  .m-out{background:#e6f0fb; color:#1e5fa8}
+  .m-cor{background:#fdf3da; color:#9a6700}
+  .m-sor{background:#e7f4ee; color:#1f7a4d}
+  .m-con{background:#efe7fb; color:#6b3fb0}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-ca{background:var(--red-bg); border-color:#f0c4bd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; background:#f0f2f6; padding:1px 4px; border-radius:4px}
+  ol,ul{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  .dr{color:#1e5fa8; font-weight:700}
+  .cr{color:#b4452f; font-weight:700}
+  .leg-tbl td{font-size:12.5px}
+  .leg-tbl td:first-child{white-space:nowrap; font-weight:600}
+  .no-post{color:var(--muted); font-style:italic}
+  /* the event block */
+  .event{border:1px solid var(--line); border-left:4px solid var(--rust); border-radius:0 12px 12px 0; padding:16px 18px 6px; margin:18px 0; background:#fff}
+  .event .meta{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:2px 0 10px}
+  .event .what{color:#33415c; font-size:14px; margin:4px 0 8px}
+  .ledger-tag{display:inline-block; font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; padding:2px 7px; border-radius:5px; margin-right:5px}
+  .lt-stock{background:#fdf1ea; color:#8a3f22; border:1px solid #f0cdbe}
+  .lt-vendor{background:#eef1f7; color:var(--navy); border:1px solid #c3cde0}
+  .lt-cash{background:#e7f4ee; color:var(--green); border:1px solid #bfe0cd}
+  .lt-tally{background:#efe7fb; color:var(--purple); border:1px solid #d3c4ee}
+  .legend{display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color:var(--muted); margin:10px 0 0}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .twoclock td:first-child{font-weight:700; color:var(--navy2); white-space:nowrap}
+  .keymap{font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Read first</h2>
+  <a href="#intro">What this is</a>
+  <a href="#rules">The posting rules</a>
+  <a href="#models">The four models</a>
+  <a href="#clocks">The two clocks</a>
+  <a href="#cost">Unit cost = P RATE</a>
+  <h2>Inbound</h2>
+  <a href="#e-grn">GRN (arrival)</a>
+  <a href="#e-pt">PT (Patna inward)</a>
+  <a href="#e-split">Store split</a>
+  <h2>Outbound</h2>
+  <a href="#e-sale">Sale</a>
+  <a href="#e-exchange">Exchange</a>
+  <a href="#e-transfer-intra">Transfer — intra-state</a>
+  <a href="#e-transfer-cross">Transfer — cross-state</a>
+  <a href="#e-rtv">RTV / defective</a>
+  <a href="#e-seasonal">Seasonal return</a>
+  <a href="#e-eoss">EOSS / V-flip</a>
+  <a href="#e-stocktake">Stocktake adjustment</a>
+  <h2>Money</h2>
+  <a href="#e-payment">Payment (money out)</a>
+  <a href="#e-receipt">Receipt (money in)</a>
+  <h2>Reference</h2>
+  <a href="#matrix">Master matrix</a>
+  <a href="#ca">Pending CA rulings</a>
+</nav>
+
+<main>
+<header class="doc" id="intro">
+  <div class="eyebrow">KDPS · Consolidation · Document #4 · The Heart of Correctness</div>
+  <h1>Posting Catalog</h1>
+  <p class="sub">Every business event → which ledgers it writes → the exact debit/credit legs → for each of the four commercial models, plus the Tally voucher it produces. This is the one place that decides whether the books are right. A developer builds the posting engine from this page; an accountant audits it against this page.</p>
+  <div class="stamp">25 June 2026 · Resolves the locked posting decisions Q1, Q2, Q3, Q4, Q5 and the F9 guard from <code>.context/qa-decisions.md</code>. Derived from D2 Inbound (Q36, Q37), D3 Outbound, D4 Payments (Q-A…Q-G), D6 Tally sync (Q5, Q6). Companion to <code>data-model.html</code> and <code>lifecycles.html</code>.</div>
+</header>
+
+<section id="intro-body">
+  <div class="callout co-key">
+    <strong>How to read every event below.</strong> Each event shows three things — what moves in stock, what moves in the vendor account, what moves in cash — and then the four model columns (<span class="m m-out">Outright</span> <span class="m m-cor">Correction</span> <span class="m m-sor">SOR</span> <span class="m m-con">Consignment</span>). Where a model posts nothing, the cell says so plainly. The last column of each event names the <strong>Tally voucher</strong> the event produces (or "none — stock-ledger only"). Money is in INR, Lakh/Crore format (₹28,50,000). The four ledgers are colour-tagged:
+    <div class="legend" style="margin-top:8px">
+      <span><span class="ledger-tag lt-stock">Stock</span> every piece, every move — quantity and (once priced) value</span>
+      <span><span class="ledger-tag lt-vendor">Vendor</span> what we owe each brand</span>
+      <span><span class="ledger-tag lt-cash">Cash</span> what each store collected and where it went</span>
+      <span><span class="ledger-tag lt-tally">Tally</span> the statutory voucher pushed to the book of record</span>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <h2 class="sec">The posting rules this catalog enforces</h2>
+  <p>These are not new — they are the architecture rules (documents write ledgers, append-only, one owner per fact) made concrete for posting. Read these once; every event obeys them.</p>
+
+  <div class="card">
+    <h4>R1 · Quantity at the GRN, value at the PT <span class="badge b-locked">Q1 locked</span></h4>
+    <p>Two-step inbound posting. The <strong>GRN at arrival posts the quantity movement only</strong> — qty, location, condition, season, owned-flag (provisional), <strong>no unit cost</strong>. The <strong>PT at Patna inward posts the valuation movement</strong> — it stamps the frozen landed ex-GST unit cost (= P RATE, see <a href="#cost">below</a>), finalises the owned-flag, and posts the vendor liability per model. This is what lets goods that arrive direct-to-store sell on day one before they are priced.</p>
+  </div>
+
+  <div class="card">
+    <h4>R2 · Vendor liability timing depends on the model <span class="badge b-locked">Q2 locked</span></h4>
+    <p>The PT does <em>not</em> always post a vendor liability. The PT creates priced stock truth for <strong>all four models</strong> and carries the settlement basis — but <strong>who owes what, and when</strong>, splits:</p>
+    <ul style="margin:6px 0 0">
+      <li><span class="m m-out">Outright</span> <span class="m m-cor">Correction</span> — incl-GST payable posts at the PT (Patna inward).</li>
+      <li><span class="m m-sor">SOR</span> — nothing at the PT; the payable accrues <strong>on the sale</strong>, per piece.</li>
+      <li><span class="m m-con">Consignment</span> — <strong>nothing from the PT, ever</strong>; the payable exists only at the sale.</li>
+    </ul>
+    <p>So the <strong>Sale document (D3) is the writer</strong> of the SOR and Consignment sold-liability. The PT for those two models only flags the stock <em>not owned</em>.</p>
+  </div>
+
+  <div class="card">
+    <h4>R3 · Corrections are new events, never edits <span class="badge b-locked">no-reposting</span></h4>
+    <p>Nothing posted is ever overwritten or deleted. A mistake is fixed by a <strong>new, today-dated reversing event</strong> with a reason code, linked to the source document. Balances are sums of postings; history always explains the present. (Code-level invariant: <code>REVOKE UPDATE/DELETE</code> on ledger tables + a trigger.)</p>
+  </div>
+
+  <div class="card">
+    <h4>R4 · GST is recognised exactly once <span class="badge b-ca">F9 guard · CA to confirm</span></h4>
+    <p>For SOR and Consignment, the input GST must be recognised at <strong>one</strong> point — never both at the arrival purchase voucher and again at the settlement journal. The SOR/Consignment lot carries a <code>gst_recognised = (date, voucher_no)</code> stamp; once set, no second voucher may recognise GST on that lot. Which point is the legal one is keyed to the supplier's tax-invoice timing (see <a href="#models">the four models</a> and <a href="#ca">pending CA rulings</a>).</p>
+  </div>
+
+  <div class="card">
+    <h4>R5 · Every leg balances; every leg carries its dimensions</h4>
+    <p>For every event, the debits equal the credits (or, for the operational ledgers, the movement nets to the documented quantity/value). Every ledger leg carries its <strong>store · brand · season · state-GSTIN</strong> as declared columns, so the books read per store, per brand, per state without reconstruction.</p>
+  </div>
+</section>
+
+<section id="models">
+  <h2 class="sec">The four commercial models — what each one means for posting</h2>
+  <p>The commercial model is snapshotted onto the document at creation (Rule 3) and decides ownership, when the vendor liability lands, and the GST recognition point. The friendly label is <em>derived</em> from two stored axes — ownership (KDPS-owns vs brand-owns) and return terms — but for posting, these four behaviours are what matter.</p>
+  <table>
+    <tr>
+      <th style="width:14%">Model</th>
+      <th style="width:12%">Owner</th>
+      <th style="width:24%">Vendor liability — when</th>
+      <th style="width:26%">GST / statutory purchase</th>
+      <th style="width:24%">Returns</th>
+    </tr>
+    <tr>
+      <td><span class="m m-out">Outright</span><br><span style="font-size:11px;color:var(--muted)">Buy &amp; Sell / BNS</span></td>
+      <td>KDPS owns</td>
+      <td>At the <strong>PT</strong> (Patna inward): full invoice incl. GST → payable.</td>
+      <td>Purchase voucher + ITC at arrival (the invoice is a tax invoice).</td>
+      <td>Defective only → brand credit.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-cor">Correction</span><br><span style="font-size:11px;color:var(--muted)">25-18-10</span></td>
+      <td>KDPS owns</td>
+      <td>At the <strong>PT</strong>: full invoice incl. GST → payable, exactly like Outright.</td>
+      <td>Purchase voucher + ITC at arrival.</td>
+      <td>Capped return allowance (D1 §8 pool); within cap nets the payable, over-cap → V-flip.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-sor">SOR</span><br><span style="font-size:11px;color:var(--muted)">sale-or-return</span></td>
+      <td>Brand owns</td>
+      <td>On the <strong>Sale</strong>: per piece, at the settlement rate, as it sells.</td>
+      <td><strong>Two paths (Q4 / CA):</strong> if a tax invoice accompanies delivery (Schedule I / agent) → purchase + ITC at arrival; if a Rule 55 challan only (true sale-on-approval, Sec 31(7)) → no purchase/ITC until sale. The <code>gst_recognised</code> guard ensures once-only either way.</td>
+      <td>All unsold returns, uncapped, no money owed.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-con">Consignment</span></td>
+      <td>Brand owns</td>
+      <td>On the <strong>Sale</strong>: per piece, at the settlement rate. <strong>Never from the PT.</strong></td>
+      <td>Same two-path Q4 question as SOR; pure consignment with no PT value must not book ITC at arrival.</td>
+      <td>Unsold returns, uncapped; rolling top-up.</td>
+    </tr>
+  </table>
+  <div class="callout co-note"><strong>The standing position vs the open question.</strong> D6 Q6 locked a working default — a Tally purchase voucher is booked from the invoice <em>at arrival for every brand</em>, "the SOR difference is money only, not timing." But the F9 review found that this, combined with a settlement journal that also carries GST, can recognise GST twice. So the SOR/Consignment <strong>statutory purchase row in this catalog is marked CA-pending</strong>: the recognition <em>point</em> is keyed per brand to how that brand actually bills (Q4), and the <code>gst_recognised</code> stamp makes it once-only. The <strong>operational payable timing (on sale) is settled and is not in question.</strong></div>
+</section>
+
+<section id="clocks">
+  <h2 class="sec">The two clocks — never collapse them</h2>
+  <p>Every model runs <strong>two independent clocks</strong>. They look like they should be the same; they are not, and a reader who merges them corrupts either the books or the cash. This table shows both, side by side, so no one ever does.</p>
+  <table class="twoclock">
+    <tr>
+      <th style="width:14%">Model</th>
+      <th style="width:43%"><span class="ledger-tag lt-tally">Statutory purchase clock</span> when Tally sees the purchase (D6)</th>
+      <th style="width:43%"><span class="ledger-tag lt-vendor">Operational payable clock</span> when we may actually pay the brand (D4)</th>
+    </tr>
+    <tr>
+      <td><span class="m m-out">Outright</span></td>
+      <td><strong>At arrival.</strong> Purchase voucher from the invoice, ITC claimed. Locked.</td>
+      <td><strong>At the PT</strong> (Patna inward) the payable opens, due per brand terms; pay after the eligibility gate clears.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-cor">Correction</span></td>
+      <td><strong>At arrival.</strong> Same as Outright.</td>
+      <td><strong>At the PT</strong>; net of the return allowance as returns draw it down.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-sor">SOR</span></td>
+      <td><span class="badge b-ca">CA · Q4</span> Arrival <em>if</em> the brand bills with a tax invoice at delivery (the D6 default); deferred to sale if true Sec 31(7) approval-basis. <code>gst_recognised</code> guard = once only.</td>
+      <td><strong>On the sale</strong> — per-piece accrual at the settlement rate. <strong>Hard gate:</strong> an unsold SOR piece can never be paid.</td>
+    </tr>
+    <tr>
+      <td><span class="m m-con">Consignment</span></td>
+      <td><span class="badge b-ca">CA · Q4</span> Same question as SOR; pure consignment with no PT value must <strong>not</strong> book ITC at arrival.</td>
+      <td><strong>On the sale</strong> — like SOR. Never payable before the piece sells.</td>
+    </tr>
+  </table>
+  <div class="callout co-warn"><strong>Why two clocks at all.</strong> Tally is the statutory book — it must show the purchase when the law says the supply happened (often at delivery). But KDPS must <em>not pay</em> a brand for an SOR/Consignment piece until that piece sells. So the same goods can be a booked purchase in Tally while still being an un-payable, brand-owned item in the operational ledger. The catalog keeps these on separate ledgers (Tally voucher vs vendor ledger) precisely so they never overwrite each other.</div>
+</section>
+
+<section id="cost">
+  <h2 class="sec">Unit cost = P RATE, taken directly <span class="badge b-locked">Q5 locked</span></h2>
+  <div class="card">
+    <p>The canonical cost stamped on the PT valuation posting is the <strong>per-piece landed ex-GST vendor payable</strong>, and it is taken <strong>directly from the P RATE column</strong> of the PT — <em>not</em> derived by dividing P RATE by (1 + GST slab).</p>
+    <ul style="margin:6px 0 0">
+      <li><strong>Start from P RATE</strong> (the per-piece payable to the vendor after line-level discounts). In the real sample PT, P RATE = MRP − margin% (e.g. ₹1,649 × 0.78 = ₹1,286.22).</li>
+      <li><strong>Add</strong> this piece's value-weighted share of invoice-level freight / handling; <strong>subtract</strong> its value-weighted share of invoice-level trade discount. Spread by line <em>value</em>, never by piece count.</li>
+      <li><strong>Do NOT strip a GST rate from P RATE.</strong> The raw data showed P RATE = BASIC × 1.20 on every row including 5%-slab brands — the 1.20 is a flat markup convention, not the GST rate, so dividing by (1+slab) yields a wrong cost. If an ex-GST figure is ever needed for a Tally line, compute it from the <em>actual HSN slab</em>, not from BASIC.</li>
+    </ul>
+    <p>The result is <strong>frozen</strong> on the stock-in posting (Rule 3 snapshot). Profitability reads it (POS revenue − this cost); aging and dead-stock value with it. One definition for all four models — for SOR and Consignment it is simply the settlement rate, taken as P RATE.</p>
+    <div class="callout co-ca" style="margin-bottom:0"><strong>CA sign-off (Q5):</strong> confirm against a live PT sample that no brand embeds GST inside P RATE, and that Ind AS 2 treatment of recoverable ITC-as-not-cost holds. Inverted-duty rows (INPUT TAX ≠ OUTPUT TAX) exist — handle per actual HSN.</div>
+  </div>
+</section>
+
+<!-- ====================================================== -->
+<!-- INBOUND -->
+<!-- ====================================================== -->
+<section id="e-grn">
+  <h2 class="sec">Inbound events</h2>
+
+  <div class="event">
+    <h4 class="evt-title">GRN — goods receipt at arrival</h4>
+    <div class="meta">
+      <span class="badge b-locked">Q1 · quantity only</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-tally">no Tally voucher</span>
+    </div>
+    <p class="what">Goods physically arrive (at a store or the warehouse) and are counted against the order (branded) or as a simple receipt (non-branded / booking-less). The GRN records <strong>what came in</strong> — it writes the quantity into the stock ledger so the piece can move and even sell, but it puts <strong>no money on the books</strong>. Same for all four models.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models — <span class="m m-out">Outright</span> <span class="m m-cor">Correction</span> <span class="m m-sor">SOR</span> <span class="m m-con">Consignment</span></th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Stock-IN, <strong>quantity movement</strong>: + qty at <code>(barcode + season)</code>, location, condition flag, owned-flag provisional. <strong>No unit cost.</strong></td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing — the GRN never posts a liability.</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td class="no-post">No voucher. (The statutory purchase fires off the PT / invoice, not the GRN.)</td></tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:4px"><strong>Why qty-only:</strong> goods that arrive direct-to-store must be sellable before they are priced; pricing happens at the PT. Damage is not inspected at arrival (caught at selling) — the arrival damage-flag is available but never blocks (Rule 5). A piece received damaged enters stock <em>quarantined</em>.</p>
+  </div>
+
+  <div class="event" id="e-pt">
+    <h4 class="evt-title">PT — valuation &amp; liability at Patna inward</h4>
+    <div class="meta">
+      <span class="badge b-locked">Q1 · Q2 · Q5</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">At Patna inward the PT becomes official. It <strong>stamps the frozen unit cost (= P RATE)</strong> on the stock-in for every model, finalises the owned-flag, and — depending on the model — posts the vendor liability. This is the one moment the data becomes official; the TIR purchase export fires here.</p>
+    <table class="leg-tbl">
+      <tr>
+        <th style="width:14%">Ledger</th>
+        <th style="width:21.5%"><span class="m m-out">Outright</span></th>
+        <th style="width:21.5%"><span class="m m-cor">Correction</span></th>
+        <th style="width:21.5%"><span class="m m-sor">SOR</span></th>
+        <th style="width:21.5%"><span class="m m-con">Consignment</span></th>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-stock">Stock</span></td>
+        <td>Stamp value: unit cost = P RATE (landed, ex-GST). Owned = <strong>yes</strong>.</td>
+        <td>Stamp value = P RATE. Owned = <strong>yes</strong>.</td>
+        <td>Stamp value = P RATE, flagged <strong>not owned</strong>.</td>
+        <td>Stamp value = P RATE, flagged <strong>not owned</strong>.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-vendor">Vendor</span></td>
+        <td><span class="cr">Cr</span> Vendor payable = <strong>invoice total incl. GST</strong>, due per brand terms.</td>
+        <td><span class="cr">Cr</span> Vendor payable = <strong>invoice total incl. GST</strong> (owned, like Outright). Return allowance (D1 §8 pool) tracked on the booking, not posted yet.</td>
+        <td class="no-post"><strong>Nothing at inward.</strong> Payable accrues per piece on the sale.</td>
+        <td class="no-post"><strong>Nothing from the PT, ever.</strong></td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-cash">Cash</span></td>
+        <td colspan="4" class="no-post">Nothing — no money leaves until D4.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-tally">Tally</span></td>
+        <td><span class="badge b-stat">Purchase voucher</span> (bill-wise / detail), ITC claimed. <span class="dr">Dr</span> Stock/Purchases ex-GST + <span class="dr">Dr</span> Input GST · <span class="cr">Cr</span> the brand party ledger (incl. GST).</td>
+        <td><span class="badge b-stat">Purchase voucher</span>, same as Outright.</td>
+        <td><span class="badge b-ca">CA · Q4</span> Purchase voucher + ITC at arrival <em>if</em> tax-invoice-at-delivery; else no voucher until sale. <code>gst_recognised</code> set here if posted.</td>
+        <td><span class="badge b-ca">CA · Q4</span> Pure consignment with no PT value → <strong>no purchase voucher / no ITC</strong> at arrival.</td>
+      </tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:4px"><strong>Two numbers off one PT line, each with one owner:</strong> stock carries cost <em>ex-GST</em> (profit truth); the payable carries <em>incl. GST</em> (what we actually owe). D3 writes the sale-side postings; D4 consumes the payables this event creates.</p>
+  </div>
+
+  <div class="event" id="e-split">
+    <h4 class="evt-title">Store split — warehouse → store allocation</h4>
+    <div class="meta">
+      <span class="badge b-locked">stock-ledger only</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+    </div>
+    <p class="what">The warehouse proposes a per-store allocation; Patna confirms and inwards the per-store PT. Stock moves location; <strong>no money, no GST</strong> (it is an intra-entity move within one GSTIN — the warehouse and the destination stores are the same legal person). Same for all four models.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Stock-OUT at warehouse, Stock-IN at store — same qty, same frozen unit cost, same owned-flag carried across. Reason = allocation, linked to the Shipment.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td class="no-post">No voucher (same-GSTIN move). A split that crosses state GSTINs is a <a href="#e-transfer-cross">cross-state transfer</a>, not a split.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ====================================================== -->
+<!-- OUTBOUND -->
+<!-- ====================================================== -->
+<section id="e-sale">
+  <h2 class="sec">Outbound events</h2>
+
+  <div class="event">
+    <h4 class="evt-title">Sale — counter sale (and manual-bill fallback)</h4>
+    <div class="meta">
+      <span class="badge b-locked">writer of SOR/Consignment liability</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-cash">Cash</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">A barcode is scanned at POS and a bill printed; we pull the sale line (near-real-time poll + authoritative EOD batch). The manual-bill fallback re-enters a paper bill and posts identically. The Sale is the document that <strong>accrues the SOR / Consignment payable</strong> — the single most important "who writes it" call in the system.</p>
+    <table class="leg-tbl">
+      <tr>
+        <th style="width:14%">Ledger</th>
+        <th style="width:21.5%"><span class="m m-out">Outright</span></th>
+        <th style="width:21.5%"><span class="m m-cor">Correction</span></th>
+        <th style="width:21.5%"><span class="m m-sor">SOR</span></th>
+        <th style="width:21.5%"><span class="m m-con">Consignment</span></th>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-stock">Stock</span></td>
+        <td colspan="4">Stock-OUT −1 at the store, off <em>available</em>, at <code>(barcode + season)</code>. Same for all four.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-vendor">Vendor</span></td>
+        <td class="no-post">Nothing (payable already booked at the PT).</td>
+        <td class="no-post">Nothing (booked at the PT).</td>
+        <td><span class="cr">Cr</span> Vendor payable <strong>accrues now</strong> = settlement rate × 1, this piece. (Releases the D4 hard gate for this piece.)</td>
+        <td><span class="cr">Cr</span> Vendor payable <strong>accrues now</strong> = settlement rate × 1, this piece.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-cash">Cash</span></td>
+        <td colspan="4"><span class="dr">Dr</span> the tender taken (Cash / UPI-clearing / Card-clearing / Store-credit), per the bill's tender split, into that store × day. Same for all four.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-tally">Tally</span></td>
+        <td colspan="4"><span class="badge b-stat">Sales voucher</span> — default <strong>daily consolidated per store</strong>, split by GST slab + HSN summary under that store's state GSTIN (B2C); any sale with a <strong>customer GSTIN</strong> gets its own per-bill detail voucher (B2B, for the buyer's ITC). The day's tender split rides the same combined voucher as the money-in legs (cash-in-hand, UPI-clearing, card-clearing, store-credit liability). GST is computed once at the sale at the right dated slab and <strong>carried, never recomputed</strong> downstream.</td>
+      </tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:4px"><strong>Apparel GST slab is dated data:</strong> 5% up to ₹2,500/piece, 18% above (effective 22 Sep 2025). Never hardcoded — read from the date-effective HSN+price-band master.</p>
+  </div>
+
+  <div class="event" id="e-exchange">
+    <h4 class="evt-title">Exchange — customer swaps an item</h4>
+    <div class="meta">
+      <span class="badge b-locked">return leg + sale leg</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-cash">Cash</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">One Exchange document = a <strong>return leg</strong> (old piece back) + a <strong>sale leg</strong> (new piece out), linked to the original bill, reason-coded. Value is <strong>not MRP-to-MRP</strong>: credit = what the customer actually paid; the new item at its live offer price; net = the difference (collected, or items added to cover a gap).</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models (model only affects the vendor leg, via the two underlying sales)</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Old piece <strong>+1</strong> back in (good → available; defective → quarantine, then event RTV). New piece <strong>−1</strong> out.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td>Reverse the old sale's effect and apply the new one, <em>per each piece's model</em>: an old <span class="m m-sor">SOR</span>/<span class="m m-con">Consignment</span> piece coming back <span class="dr">Dr</span> reverses its accrued payable; the new piece, if <span class="m m-sor">SOR</span>/<span class="m m-con">Consignment</span>, <span class="cr">Cr</span> accrues. <span class="m m-out">Outright</span>/<span class="m m-cor">Correction</span> pieces touch no vendor leg (already booked at PT).</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td>Net cash only: reverse the old revenue (credit = paid), book the new sale at live offer price, settle the difference in the tender taken.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td><span class="badge b-stat">in the daily sales voucher</span> — exchange nets within the sale (the "Exchange adjustment" tender leg); the new sale's revenue + GST and the reversal both land in that store-day consolidated voucher.</td></tr>
+    </table>
+  </div>
+
+  <div class="event" id="e-transfer-intra">
+    <h4 class="evt-title">Inter-store transfer — INTRA-state (same GSTIN)</h4>
+    <div class="meta">
+      <span class="badge b-locked">Q3 · stock-ledger only</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+    </div>
+    <p class="what">A two-step transfer order between two stores <strong>within the same state GSTIN</strong> (both Bihar, or both Jharkhand). It is just a stock move — no taxable supply, no Tally voucher. Same for all four models.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Dispatch: source pieces <strong>held</strong> (not sellable) → <strong>in-transit</strong>; destination shows <em>pending-receipt</em>. Receive-scan: → <strong>available</strong> at destination. Same frozen cost &amp; owned-flag carried. Dispatched − received gap is flagged on the open doc (Rule 5). Mandatory transport ref.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td class="no-post"><strong>No voucher.</strong> Intra-state move = stock ledger only. (E-way bill only if consignment value &gt; ₹1,00,000 — the intra-state threshold in both Bihar and Jharkhand; a logistics document, not a posting.)</td></tr>
+    </table>
+  </div>
+
+  <div class="event" id="e-transfer-cross">
+    <h4 class="evt-title">Inter-store transfer — CROSS-state (Bihar ↔ Jharkhand, two GSTINs)</h4>
+    <div class="meta">
+      <span class="badge b-locked">Q3 · taxable IGST supply</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-tally">Tally ×2</span>
+      <span class="badge b-ca">deemed-supply value · CA</span>
+    </div>
+    <p class="what">A transfer <strong>across the two state GSTINs</strong> is a <strong>taxable inter-state supply between distinct persons</strong> (Sec 25 distinct persons; Schedule I) — not an internal move. It needs an IGST tax invoice and an e-way bill, with mirror vouchers at sender and receiver. This corrects the old D3 "internal — none" and matches D6. Treatment is driven off the first two digits (state code) of the two GSTINs. Same mechanics for all four models — the goods' commercial model does not change that a cross-state move between KDPS's own GSTINs is a supply.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Stock-OUT at the sending store (its GSTIN), Stock-IN at the receiving store (the other GSTIN), via in-transit — same two-step as intra-state. Frozen cost &amp; owned-flag carried.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing (this is KDPS-to-KDPS, not a brand event).</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td>
+        <strong>At the sender:</strong> <span class="badge b-stat">out-voucher + IGST tax invoice</span> on the consignment value incl. IGST. <span class="dr">Dr</span> inter-branch / receiver · <span class="cr">Cr</span> outward supply + <span class="cr">Cr</span> IGST output.<br>
+        <strong>At the receiver:</strong> <span class="badge b-stat">matching purchase voucher</span>, <span class="dr">Dr</span> stock + <span class="dr">Dr</span> IGST input (ITC) · <span class="cr">Cr</span> inter-branch / sender.<br>
+        <strong>E-way bill</strong> required (cross-state threshold ₹50,000) on consignment value incl. IGST.
+      </td></tr>
+    </table>
+    <div class="callout co-ca" style="margin-bottom:0;margin-top:8px"><strong>CA / client to confirm:</strong> the <strong>taxable value</strong> — Rule 28 second proviso lets KDPS use cost as the deemed open-market value when the receiver gets full ITC; confirm the slab basis on the transfer invoice and the Jharkhand e-way carve-out. <strong>Contingent on</strong> the client confirming KDPS = one company / one PAN with two state GSTINs (the registration-reality questionnaire). If two firms, the mechanics differ.</div>
+  </div>
+
+  <div class="event" id="e-rtv">
+    <h4 class="evt-title">RTV — defective / goods-return to brand</h4>
+    <div class="meta">
+      <span class="badge b-locked">D3 Q10</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">A defective piece is sent back to the brand from quarantine — Credit or Replacement, reason-coded. What it posts depends on whether KDPS owns the piece.</p>
+    <table class="leg-tbl">
+      <tr>
+        <th style="width:14%">Ledger</th>
+        <th style="width:21.5%"><span class="m m-out">Outright</span></th>
+        <th style="width:21.5%"><span class="m m-cor">Correction</span></th>
+        <th style="width:21.5%"><span class="m m-sor">SOR</span></th>
+        <th style="width:21.5%"><span class="m m-con">Consignment</span></th>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-stock">Stock</span></td>
+        <td colspan="4">Stock-OUT from quarantine → gone. Same for all four.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-vendor">Vendor</span></td>
+        <td><span class="dr">Dr</span> Vendor (reduce payable / build brand credit) — owned, so we recover value.</td>
+        <td><span class="dr">Dr</span> Vendor — owned; the Correction GR allowance is the seasonal pool (next event), a defective RTV is a brand credit like Outright.</td>
+        <td class="no-post">Brand-owned: just returns, recorded. No money was owed (never sold), nothing to reverse.</td>
+        <td class="no-post">Brand-owned: just returns, recorded.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-cash">Cash</span></td>
+        <td colspan="4" class="no-post">Nothing.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-tally">Tally</span></td>
+        <td><span class="badge b-stat">Debit Note</span> (detail) — goods-return DN reduces the payable; brand's Credit Note tracked as acknowledgment.</td>
+        <td><span class="badge b-stat">Debit Note</span>, as Outright.</td>
+        <td class="no-post">No DN (no purchase was booked against an owned position for this piece).</td>
+        <td class="no-post">No DN.</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="event" id="e-seasonal">
+    <h4 class="evt-title">Seasonal / allowance return — unsold stock back to brand</h4>
+    <div class="meta">
+      <span class="badge b-locked">D3 Q11</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">Good (not defective) unsold stock returned in bulk by brand + season, driven by the booking's return window (alerts 30/15/7 days). The money differs sharply by model.</p>
+    <table class="leg-tbl">
+      <tr>
+        <th style="width:14%">Ledger</th>
+        <th style="width:21.5%"><span class="m m-out">Outright</span></th>
+        <th style="width:21.5%"><span class="m m-cor">Correction</span></th>
+        <th style="width:21.5%"><span class="m m-sor">SOR</span></th>
+        <th style="width:21.5%"><span class="m m-con">Consignment</span></th>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-stock">Stock</span></td>
+        <td class="no-post">N/A — Outright has no seasonal-return right (defective only → RTV).</td>
+        <td>Stock-OUT (available → gone), bulk.</td>
+        <td>Stock-OUT (available → gone), bulk.</td>
+        <td>Stock-OUT (available → gone), bulk.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-vendor">Vendor</span></td>
+        <td class="no-post">—</td>
+        <td><span class="dr">Dr</span> Vendor: draws the <strong>25-18-10 GR allowance pool</strong> (D1 §8) — nets the payable within cap. <strong>Over-cap → V-flip</strong> (next event); over-cap recovery is a pending claim in D4.</td>
+        <td class="no-post"><strong>Nothing owed</strong> — the piece never sold, no payable ever accrued, uncapped return.</td>
+        <td class="no-post"><strong>Nothing owed</strong> — never sold, uncapped return.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-cash">Cash</span></td>
+        <td colspan="4" class="no-post">Nothing.</td>
+      </tr>
+      <tr>
+        <td><span class="ledger-tag lt-tally">Tally</span></td>
+        <td class="no-post">—</td>
+        <td><span class="badge b-stat">Debit Note</span> for the allowance draw-down (within cap).</td>
+        <td class="no-post">No voucher if no purchase was booked at arrival. <span class="badge b-ca">If a purchase WAS booked at arrival (Q4 path) → a return Debit Note / Credit Note reverses it.</span></td>
+        <td class="no-post">No voucher (no purchase booked).</td>
+      </tr>
+    </table>
+    <div class="callout co-ca" style="margin-bottom:0;margin-top:8px"><strong>F9 link:</strong> for SOR/Consignment, whether a return needs a reversing voucher depends entirely on whether GST was recognised at arrival (Q4). The <code>gst_recognised</code> stamp on the lot is the single source of truth — if it is set, the return must reverse it; if not, the return is stock-only.</div>
+  </div>
+
+  <div class="event" id="e-eoss">
+    <h4 class="evt-title">EOSS &amp; the V-flip — markdown, and the brand-owned → KDPS-owned flip</h4>
+    <div class="meta">
+      <span class="badge b-locked">D3 Q12</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what"><strong>EOSS discount</strong> is just a lower selling price — it flows through the ordinary Sale event (Disc%/Disc Amt captured from the POS report). KDPS simply earns less margin; <strong>nothing is claimed back from the brand</strong> (a normal discount is not a claim). The <strong>V-flip</strong> is the distinct posting event: dead stock past the return window the brand won't take back is reported "sold under EOSS", the brand settlement is claimed, and ownership flips to KDPS.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>EOSS discount (any model) &amp; the V-flip (brand-owned models)</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td><strong>EOSS discount:</strong> no stock event beyond the sale itself. <strong>V-flip:</strong> the piece <strong>stays on the shelf</strong> — owner flips brand-owned → <strong>KDPS-owned</strong>, status = liquidation, real brand kept, "V&nbsp;&lt;brand&gt;" display label, <strong>barcode unchanged</strong>. It then sells as ordinary KDPS stock.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td><strong>EOSS discount:</strong> nothing. <strong>V-flip:</strong> the brand EOSS settlement is claimed → a <strong>pending claim</strong> in D4 (no physical return behind it, so it nets only when the brand agrees, at the agreed amount). For <span class="m m-cor">Correction</span> over-cap, the over-allowance recovery is the same kind of pending claim.</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td>EOSS discount: lower net in the ordinary sale. V-flip: nothing at flip; cash comes when the flipped piece later sells.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td>EOSS discount: carried in the daily sales voucher (lower revenue). V-flip settlement: <span class="badge b-stat">Journal</span> when the claim is agreed (the settlement leg), drops the piece out of brand reports.</td></tr>
+    </table>
+  </div>
+
+  <div class="event" id="e-stocktake">
+    <h4 class="evt-title">Stocktake adjustment — count vs ledger</h4>
+    <div class="meta">
+      <span class="badge b-locked">D3 Q13</span>
+      <span class="ledger-tag lt-stock">Stock</span>
+    </div>
+    <p class="what">A blind cycle count surfaces a variance against the stock ledger. Within tolerance → auto-adjust + log; above → recount by a second person → reason-coded Adjustment with a named approver. Negative-SOH (POS sold what the books say isn't there) auto-resolves via a known allocation (auto-create the missing inward) or, unexplained, goes to an HO exception — it never persists.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
+      <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Stock adjustment ± to reconcile to physical reality, valued at the frozen unit cost, with a reason code (shrinkage / miscount / mislabel / unexplained). Append-only — a correction is a new event, never an edit (Rule 3).</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing (shrinkage of brand-owned stock is a recon/claim question for D4, not a posting at count time).</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td class="no-post">No voucher at count. (Any P&amp;L impact of written-off owned stock is a period-end accounting question, handled in Tally as the statutory book.)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ====================================================== -->
+<!-- MONEY -->
+<!-- ====================================================== -->
+<section id="e-payment">
+  <h2 class="sec">Money events</h2>
+
+  <div class="event">
+    <h4 class="evt-title">Payment — money out to a brand</h4>
+    <div class="meta">
+      <span class="badge b-locked">D4 Q-A…Q-G</span>
+      <span class="ledger-tag lt-vendor">Vendor</span>
+      <span class="ledger-tag lt-cash">Cash</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">Payments does not decide what is owed — the spine already booked the debt. A Payment is a document that settles one or many open payables (full or partial) by bill-wise allocation (Tally's <em>Agst Ref</em>), through the lifecycle Draft → Pending approval → Approved → Executed → Confirmed → Reconciled. Money leaves the bank manually in v1; the UTR closes the payable. The <strong>posting is the same shape for all four models</strong> — what differs is <em>which</em> payables are eligible (the gate below).</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td><span class="dr">Dr</span> Vendor payable (per allocation, partials included) — reduces the open payable. Balance is derived (Opening + Invoices − CD − GR − Payments + Interest = Due), read at both brand and vendor grain.</td></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td><span class="cr">Cr</span> Bank — money out, matched to the bank statement by UTR + narration (the §6 reconciler auto-closes the loop).</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td><span class="badge b-stat">Payment voucher</span> (detail, <em>Agst Ref</em> to the bill). <span class="dr">Dr</span> brand party ledger · <span class="cr">Cr</span> bank ledger.</td></tr>
+    </table>
+    <p style="font-size:12.5px;color:var(--muted);margin-top:4px"><strong>The eligibility gate decides what may be paid (hard blocks, never overridable):</strong> no validated bank details or no GSTIN on the vendor · payable not tied to an inwarded PT/TIR · <strong>an SOR/Consignment piece that hasn't actually sold</strong>. The last one is the operational-clock guard in code: an unsold brand-owned piece can never be paid.</p>
+  </div>
+
+  <div class="event" id="e-receipt">
+    <h4 class="evt-title">Receipt — money in from a store (collection audit)</h4>
+    <div class="meta">
+      <span class="badge b-locked">D4 Q-F</span>
+      <span class="ledger-tag lt-cash">Cash</span>
+      <span class="ledger-tag lt-tally">Tally</span>
+    </div>
+    <p class="what">Every day the store's collection (cash / card / UPI) is matched against what actually landed in the bank — three rails, each behaving differently. Card settles T+n net of MDR; cash is deposited in lumps; UPI settles to the store. This is the money-in half: the collection was already captured as cash-ledger legs on the Sale; the Receipt event is the <strong>bank-side clearing</strong> of those legs. Model-independent — it is store money, not brand money.</p>
+    <table class="leg-tbl">
+      <tr><th style="width:16%">Ledger</th><th>All models (store money — model does not apply)</th></tr>
+      <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td>At the sale the collection posted into clearing legs (cash-in-hand, UPI-clearing, card-clearing). On bank settlement: <span class="dr">Dr</span> Bank · <span class="cr">Cr</span> the matching clearing leg (net of MDR for card). The 3-way auto-match (deposit / card net-of-MDR / UPI ↔ bank credit) clears the easy 90%; shortfalls / slow settlements / MDR-off raise a same-day exception.</td></tr>
+      <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing.</td></tr>
+      <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td><span class="badge b-stat">Receipt</span> — the bank-clearing of the day's tender already rides the combined daily sales voucher (Q3); the clearing ledgers (UPI-clearing, card-clearing) are cleared by the later bank settlement, absorbing the lag &amp; fees the collection audit watches.</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ====================================================== -->
+<!-- MASTER MATRIX -->
+<!-- ====================================================== -->
+<section id="matrix">
+  <h2 class="sec">Master matrix — every event × every model, on one screen</h2>
+  <p>The whole catalog compressed: rows = events, the cells show the vendor-ledger / cash effect per model and the Tally voucher. <strong>Stock effect is shown once</strong> (it is model-independent except where noted). Read it as the index; the event blocks above carry the legs.</p>
+  <table style="font-size:12px">
+    <tr>
+      <th style="width:15%">Event</th>
+      <th style="width:13%">Stock</th>
+      <th style="width:17%"><span class="m m-out">Outright</span></th>
+      <th style="width:17%"><span class="m m-cor">Correction</span></th>
+      <th style="width:17%"><span class="m m-sor">SOR</span></th>
+      <th style="width:17%"><span class="m m-con">Consignment</span></th>
+    </tr>
+    <tr>
+      <td><strong>GRN</strong> (arrival)</td>
+      <td>+qty, no cost</td>
+      <td colspan="4" class="no-post">Vendor: nothing · Tally: none — quantity only, all models</td>
+    </tr>
+    <tr>
+      <td><strong>PT</strong> (Patna inward)</td>
+      <td>stamp cost = P RATE</td>
+      <td><span class="cr">Cr</span> payable incl-GST · <span class="badge b-stat">Purchase</span></td>
+      <td><span class="cr">Cr</span> payable incl-GST · <span class="badge b-stat">Purchase</span></td>
+      <td>nothing · <span class="badge b-ca">Purchase Q4</span></td>
+      <td>nothing · <span class="badge b-ca">no ITC</span></td>
+    </tr>
+    <tr>
+      <td><strong>Store split</strong></td>
+      <td>WH→store, same cost</td>
+      <td colspan="4" class="no-post">Vendor: nothing · Tally: none (same GSTIN)</td>
+    </tr>
+    <tr>
+      <td><strong>Sale</strong></td>
+      <td>−1 available; cash in</td>
+      <td>nothing (booked at PT)</td>
+      <td>nothing (booked at PT)</td>
+      <td><span class="cr">Cr</span> payable accrues</td>
+      <td><span class="cr">Cr</span> payable accrues</td>
+    </tr>
+    <tr>
+      <td colspan="2"></td>
+      <td colspan="4" class="no-post" style="text-align:center"><span class="badge b-stat">Sales voucher</span> — daily consolidated per store (B2C); per-bill if customer GSTIN (B2B). Same for all four.</td>
+    </tr>
+    <tr>
+      <td><strong>Exchange</strong></td>
+      <td>old +1, new −1</td>
+      <td colspan="4">Reverse old + book new, <em>each leg per its own model</em>; net cash; in daily sales voucher</td>
+    </tr>
+    <tr>
+      <td><strong>Transfer intra-state</strong></td>
+      <td>store→store (in-transit)</td>
+      <td colspan="4" class="no-post">Vendor: nothing · Tally: none — stock-ledger only, all models</td>
+    </tr>
+    <tr>
+      <td><strong>Transfer cross-state</strong></td>
+      <td>store→store (in-transit)</td>
+      <td colspan="4"><span class="badge b-stat">IGST tax invoice (sender) + purchase voucher/ITC (receiver) + e-way bill</span> — taxable supply, all models <span class="badge b-ca">value/slab CA</span></td>
+    </tr>
+    <tr>
+      <td><strong>RTV / defective</strong></td>
+      <td>quarantine → out</td>
+      <td><span class="dr">Dr</span> brand credit · <span class="badge b-stat">DN</span></td>
+      <td><span class="dr">Dr</span> brand credit · <span class="badge b-stat">DN</span></td>
+      <td class="no-post">returns only</td>
+      <td class="no-post">returns only</td>
+    </tr>
+    <tr>
+      <td><strong>Seasonal return</strong></td>
+      <td>available → out (bulk)</td>
+      <td class="no-post">N/A (defective only)</td>
+      <td><span class="dr">Dr</span> GR allowance · <span class="badge b-stat">DN</span>; over-cap → V-flip</td>
+      <td class="no-post">nothing owed · <span class="badge b-ca">reverse if Q4-booked</span></td>
+      <td class="no-post">nothing owed</td>
+    </tr>
+    <tr>
+      <td><strong>EOSS / V-flip</strong></td>
+      <td>flip: brand→KDPS-owned, stays on shelf</td>
+      <td colspan="2" class="no-post">EOSS = lower price, no claim</td>
+      <td colspan="2">V-flip: settlement = <strong>pending claim</strong> (D4) · <span class="badge b-stat">Journal on agreement</span></td>
+    </tr>
+    <tr>
+      <td><strong>Stocktake adj.</strong></td>
+      <td>± to physical, reason-coded</td>
+      <td colspan="4" class="no-post">Vendor: nothing at count · Tally: none — stock-ledger only, all models</td>
+    </tr>
+    <tr>
+      <td><strong>Payment</strong></td>
+      <td class="no-post">—</td>
+      <td colspan="4"><span class="dr">Dr</span> payable · <span class="cr">Cr</span> bank · <span class="badge b-stat">Payment voucher</span> — same shape all models; SOR/Consign gated to sold pieces only</td>
+    </tr>
+    <tr>
+      <td><strong>Receipt</strong></td>
+      <td class="no-post">—</td>
+      <td colspan="4"><span class="dr">Dr</span> bank · <span class="cr">Cr</span> clearing legs (net MDR for card) · <span class="badge b-stat">in daily voucher (Q3)</span> — store money, model-independent</td>
+    </tr>
+  </table>
+  <div class="legend">
+    <span><span class="badge b-stat">blue</span> produces a statutory Tally voucher</span>
+    <span><span class="badge b-ca">red</span> pending a CA ruling — see below</span>
+    <span><span class="no-post">italic</span> posts nothing on that ledger</span>
+  </div>
+</section>
+
+<!-- ====================================================== -->
+<!-- CA -->
+<!-- ====================================================== -->
+<section id="ca">
+  <h2 class="sec">Items pending a CA ruling — do not hardcode until confirmed</h2>
+  <p>Five money-critical points in this catalog wait on a Chartered Accountant's confirmation (and, for one, the client's registration reality). They are marked <span class="badge b-ca">CA</span> wherever they appear. Each is modelled as <strong>data, not code</strong>, so the ruling sets a value rather than forcing a rewrite.</p>
+  <table>
+    <tr><th style="width:22%">Item</th><th style="width:40%">The open question</th><th style="width:38%">What the catalog does meanwhile</th></tr>
+    <tr>
+      <td><strong>Q4 · SOR/Consignment GST recognition point</strong></td>
+      <td>Per brand: is delivery accompanied by a tax invoice (Schedule I / agent → recognise GST at arrival) or a Rule 55 challan only (true Sec 31(7) sale-on-approval → no GST until sale or 6 months)? D6 Q6 defaulted to "purchase at arrival for all"; F9 says that risks double-count.</td>
+      <td>Carries a per-brand-per-season "GST recognition point" attribute next to the model flag. The PT row and the seasonal-return row both branch on it. Default follows D6 (arrival) until the CA rules per brand.</td>
+    </tr>
+    <tr>
+      <td><strong>F9 · GST recognised exactly once</strong></td>
+      <td>Pick one convention so the arrival purchase voucher and the settlement journal can never both carry GST on the same lot.</td>
+      <td>The SOR/Consignment lot carries <code>gst_recognised = (date, voucher_no)</code>. Once set, no second voucher recognises GST. A code-level invariant — "not testable away later."</td>
+    </tr>
+    <tr>
+      <td><strong>Q3 · Cross-state transfer value &amp; basis</strong></td>
+      <td>Taxable value on the Bihar↔Jharkhand transfer invoice — Rule 28 second-proviso cost-as-OMV (when receiver gets full ITC)? Slab basis? Jharkhand e-way carve-out? <strong>Contingent</strong> on the client confirming one company / two state GSTINs (not two firms).</td>
+      <td>Posts the IGST tax-invoice + mirror purchase voucher + e-way bill on consignment value incl. IGST; the <em>value rule</em> is a config the CA sets. Routed off the GSTIN state codes.</td>
+    </tr>
+    <tr>
+      <td><strong>6-month deemed-supply clock</strong></td>
+      <td>For genuinely sale-on-approval brands, Sec 31(7) deems a supply at 6 months even if unsold/unreturned — a second statutory clock distinct from the 60–120-day commercial return window.</td>
+      <td>The SOR lot carries <strong>two clocks off one <code>removal_date</code></strong> (commercial return window + the 6-month statutory clock), alarmed 30/15/7. Computed as +6 calendar months, not +181 days. Only for brands the CA confirms are on approval terms.</td>
+    </tr>
+    <tr>
+      <td><strong>Q5 · Unit-cost statutory sign-off</strong></td>
+      <td>Confirm cost = P RATE directly (no ÷(1+slab)); Ind AS 2 treatment of recoverable ITC as not-cost; per-brand check that no brand embeds GST in P RATE; inverted-duty (INPUT≠OUTPUT) rows.</td>
+      <td>Stamps cost = P RATE (+value-weighted freight, −value-weighted discount). Any ex-GST figure for Tally is computed from the actual HSN slab, never from BASIC.</td>
+    </tr>
+  </table>
+  <div class="callout co-note"><strong>Also forwarded (not blocking this catalog):</strong> <em>Late freight after PT</em> — reposting is forbidden (Rule 3), so a freight figure that lands after the PT is a forward-only rate adjust <em>or</em> a separate cost-correction event, never a rewrite (decide before the inbound slice). <em>Sold-before-PT</em> — a piece that sells before it is priced uses an SRBNB-style memo value vs blocking the sale (Anand + accountant).</div>
+</section>
+
+<footer>
+  KDPS · Posting Catalog · 25 June 2026 · The heart of correctness — every event, every ledger leg, per commercial model.<br>
+  Sources: <code>.context/qa-decisions.md</code> (Q1–Q5, F9) · D2 Inbound (Q36/Q37) · D3 Outbound (Q1–Q14) · D4 Payments (Q-A…Q-G) · D6 Tally sync (Q5/Q6) · <code>system-review-2026-06-24.html</code> (F1–F9).<br>
+  Companion to <code>data-model.html</code> (the schema these legs write to) and <code>lifecycles.html</code> (the document state machines that fire them).
+</footer>
+
+</main>
+</div>
+</body>
+</html>
