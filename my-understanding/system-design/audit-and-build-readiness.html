@@ -197,7 +197,7 @@
   <p class="secsub">Grade = design quality. Readiness = how close to writing code (1 = concept · 5 = ready). Most modules are 4: strong shape, waiting on the consolidation pass + client facts.</p>
   <table>
     <tr><th>Design</th><th style="width:62px">Grade</th><th style="width:96px">Readiness</th><th>One-line read</th></tr>
-    <tr><td class="v">00 Architecture (5 layers + 11 rules)</td><td><span class="chip c-a">A</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Coherent, acyclic, buildable. The strongest asset you have.</td></tr>
+    <tr><td class="v">00 Architecture (5 layers + 12 rules)</td><td><span class="chip c-a">A</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Coherent, acyclic, buildable. The strongest asset you have.</td></tr>
     <tr><td class="v">D1 Vendor &amp; booking</td><td><span class="chip c-a">A</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Commercial model on the brand + snapshots = right. Return-window anchor date still open.</td></tr>
     <tr><td class="v">D2 Inbound ingestion</td><td><span class="chip c-a">A</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Cost-vs-payable posting spec is the standout. Gated on the POS answers.</td></tr>
     <tr><td class="v">D3 Outbound (+ stocktake)</td><td><span class="chip c-a">A</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>"One machine, eight settings" is elegant. <b>Carries the cross-state GST bug</b> (see §4).</td></tr>
@@ -239,7 +239,7 @@
     <tr><td><b>Booking price conflict.</b> D1 locks "no price at booking"; the 21-Jun client ask wants MRP/value captured at booking — and booking is what you build first. Re-decide consciously.</td><td>D1 vs 21-Jun meeting</td><td><span class="chip c-high">high</span></td></tr>
     <tr><td><b>Two roles models.</b> D4 (payments roles, 18 Jun) and D8 (edit-rights grid, 21 Jun) each define access independently, with no reconciliation. Merge into one RBAC matrix in the foundation slice.</td><td>D4 vs D8</td><td><span class="chip c-med">medium</span></td></tr>
     <tr><td><b>Dual master drift.</b> D7 builds its own brand/supplier crosswalk that's meant to "seed" D8 later — but the handoff/owner is undefined. Exactly the two-owners trap Rule 4 warns against.</td><td>D7 vs D8</td><td><span class="chip c-med">medium</span></td></tr>
-    <tr><td><b>Stack: locked or deferred?</b> Consolidation + AI docs say the stack is <em>locked</em> (TypeScript + Postgres + GCP Mumbai); the architecture + CLAUDE.md say it's <em>deferred until after the spikes</em>. Reconcile so the build isn't pre-committed.</td><td>consolidation vs architecture</td><td><span class="chip c-low">low</span></td></tr>
+    <tr><td><b>Stack: locked or deferred?</b> Consolidation + AI docs say the stack is <em>locked</em> (TypeScript + Postgres); the architecture + CLAUDE.md say it's <em>deferred until after the spikes</em>. Reconcile so the build isn't pre-committed.</td><td>consolidation vs architecture</td><td><span class="chip c-low">low</span></td></tr>
     <tr><td><b>Stale build docs.</b> <code>build-playbook.html</code> says "stage 2 / D6 not designed" — but D1–D8 are all locked. If Claude Code loads it to build, it acts on a false belief. Refresh or stamp superseded.</td><td>build-playbook / how-to-build</td><td><span class="chip c-med">medium</span></td></tr>
   </table>
 
@@ -263,9 +263,9 @@
 
   <h3>D · Client must-haves not yet covered</h3>
   <div class="card"><ul style="margin:0">
-    <li><b>Attendance &amp; Payroll (WAPCS)</b> — a named PRD must-have with no design folder and a hardware contradiction (store Android + face vs browser + GPS). Decide in/out explicitly; if in, it needs its own discussion.</li>
+    <li><b>Attendance &amp; Payroll (WAPCS)</b> — a named PRD must-have with no design folder and a hardware contradiction (a store device + face vs browser + GPS). Decide in/out explicitly; if in, it needs its own discussion.</li>
     <li><b>POS / billing / loyalty</b> — the PRD assumed you'd build it; your later docs correctly rule it out of scope (Ten Software owns it). That's the right call — but flag the reversal to the client, don't drop it silently.</li>
-    <li><b>The CA-led facts</b> (number of GSTINs/entities, one Tally company or two, e-invoicing applicability, SOR invoice vs challan) gate D6 vouchers, D4 P&amp;L and SOR booking at once — one conversation unblocks several modules.</li>
+    <li><b>The CA-led facts</b> (e-invoicing applicability, SOR invoice vs challan, ledger structure) gate D6 vouchers, D4 P&amp;L and SOR booking at once — one conversation unblocks several modules. <em>(Entity count settled 26 Jun 2026: one PAN, two GSTINs, one Tally company.)</em></li>
   </ul></div>
 </section>
 
@@ -294,19 +294,19 @@
   <table>
     <tr><th>Layer</th><th>Choice</th><th>Note</th></tr>
     <tr><td class="v">Frontend</td><td>Next.js (React) PWA on the store computer</td><td>Offline-tolerant: cache app shell + prices + offers so price-lookup &amp; the manual-bill fallback survive a dead network.</td></tr>
-    <tr><td class="v">Backend</td><td>Modular monolith, TypeScript end-to-end</td><td>One app, one module per design folder, strict internal seams. No microservices, no GraphQL — each extra service is a 2am failure for a team of one.</td></tr>
-    <tr><td class="v">Database</td><td>PostgreSQL on Cloud SQL (Mumbai)</td><td>Append-only ledgers, double-entry on money + SOR, state/GSTIN as a first-class column. The server is the single writer of any posting.</td></tr>
-    <tr><td class="v">Hosting</td><td>Google Cloud, asia-south1 (Mumbai)</td><td>Cloud Run + Cloud SQL + Storage + Vertex AI, one region. Legally clean for India. Azure + Azure OpenAI is the named fallback.</td></tr>
-    <tr><td class="v">AI</td><td>Vertex AI (Gemini / Claude via Model Garden)</td><td>Edges only, read-only. Forecasting = classical ML, never LLM. Chat answers via a governed metrics layer (MCP-style tools), never raw SQL.</td></tr>
+    <tr><td class="v">Backend</td><td>Modular monolith — Python/Django engine, typed React PWA at the glass (ADR-0001)</td><td>One app, one module per design folder, strict internal seams. No microservices, no GraphQL — each extra service is a 2am failure for a team of one.</td></tr>
+    <tr><td class="v">Database</td><td>PostgreSQL</td><td>Append-only ledgers, double-entry on money + SOR, state/GSTIN as a first-class column. The server is the single writer of any posting.</td></tr>
+    <tr><td class="v">Hosting</td><td>To be decided later</td><td>Provider and region deferred — pick after the spikes. The build stays hosting-agnostic until then.</td></tr>
+    <tr><td class="v">AI</td><td>A hosted top model (AI platform to be decided later)</td><td>Edges only, read-only. Forecasting = classical ML, never LLM. Chat answers via a governed metrics layer (MCP-style tools), never raw SQL.</td></tr>
   </table>
-  <div class="callout co-note"><strong>One research correction worth knowing.</strong> The generic 2026 consensus for a solo build is Supabase + PowerSync (offline-first sync). The advice here is to <em>keep your own GCP Postgres for the money core</em> — auditable server-side single-writer isolation beats offline-write convenience for ledgers, and the Feb-2026 India Supabase DNS block (~8 days) is an extra reason to own the database. Borrow the <em>pattern</em> (local cache + idempotency keys for offline resilience); the PWA never does optimistic offline money writes.</div>
+  <div class="callout co-note"><strong>One research correction worth knowing.</strong> The generic 2026 consensus for a solo build is Supabase + PowerSync (offline-first sync). The advice here is to <em>keep your own Postgres for the money core</em> — auditable server-side single-writer isolation beats offline-write convenience for ledgers, and the Feb-2026 India Supabase DNS block (~8 days) is an extra reason to own the database. Borrow the <em>pattern</em> (local cache + idempotency keys for offline resilience); the PWA never does optimistic offline money writes.</div>
 
   <h3>The gate — finish these before slice&nbsp;#1</h3>
   <div class="card"><ol style="margin:0">
     <li><b>Spike #1 — Ten Software POS API</b> (highest priority). Get docs + a sandbox. Two make-or-break answers: can it accept pending-inward qty per store, and export line-item sales? Pre-decide the "no" fallback + the build-own-POS go/no-go with an August deadline.</li>
     <li><b>Spike #2 — Tally via TaxOne.</b> Actually post a sales + a transfer voucher to their TallyPrime; confirm deterministic import (no AI re-interpretation) and idempotency. Generate one IRN + one e-way bill in sandbox.</li>
     <li><b>Spike #3 — Barcode tool.</b> Sample sticker + Code 128 generation + HID-mode scanning (not keyboard-wedge).</li>
-    <li><b>The CA sitting</b> — GSTINs/entities, one Tally company or two, e-invoicing applicability, ledger structure.</li>
+    <li><b>The CA sitting</b> — e-invoicing applicability, SOR invoice vs challan, ledger structure <em>(entity count settled: one PAN / two GSTINs / one Tally company)</em>.</li>
     <li><b>Consolidation pass</b> — data model, posting catalog, state machines, golden files (from the ~150 real invoices, covering brand/PT-format variety), feature inventory.</li>
     <li><b>Collect blocking client facts</b> — store list + state-GSTINs, vendor GSTIN/bank (40% missing GSTIN blocks the pay-gate), per-category margin list, role bands, owner's 5 morning numbers.</li>
     <li><b>Design D9</b> + fold in the 7 sharpenings + fix the 2 compliance bugs.</li>
@@ -314,7 +314,7 @@
 
   <h3>The build sequence — thin vertical slices, in architecture order</h3>
   <div class="card">
-    <div class="slice"><div class="snum">0</div><div><h4>Foundation scaffold <span class="chip c-grey">the one flat step</span></h4><div class="d">Repo · Cloud SQL · migrations · login + RBAC skeleton (roles as data, reconciling D4+D8) · CI test gate · Dockerfile for sandcastle · design system (₹ Lakh/Crore, status chips) · seed masters · CLAUDE.md. <b>No business logic.</b></div></div></div>
+    <div class="slice"><div class="snum">0</div><div><h4>Foundation scaffold <span class="chip c-grey">the one flat step</span></h4><div class="d">Repo · Postgres · migrations · login + RBAC skeleton (roles as data, reconciling D4+D8) · CI test gate · Dockerfile for sandcastle · design system (₹ Lakh/Crore, status chips) · seed masters · CLAUDE.md. <b>No business logic.</b></div></div></div>
     <div class="slice"><div class="snum">1</div><div><h4>Walking skeleton — one branded shipment → ledger</h4><div class="d">One real invoice travels booking → GRN → PT → <b>stock + vendor postings</b> → a store screen showing accurate cross-store stock. Validated by a golden file. <b>End at the ledger, not at POS</b> — so your first proof isn't hostage to the riskiest unknown. First visible client win: accurate stock before POS is ever touched.</div></div></div>
     <div class="slice"><div class="snum">2</div><div><h4>Booking + order-vs-received tracking</h4><div class="d">Build first per the 21-Jun meeting (August = peak booking). Branded capture → AI draft → human confirm; status derived from GRNs. <b>Resolve the booking-price conflict in the spec first.</b></div></div></div>
     <div class="slice"><div class="snum">3</div><div><h4>Non-branded inbound — the AI PT maker</h4><div class="d">~99% of warehouse volume and the harder, AI-on-the-critical-path half. Invoice read → chat fill → editable PT → stock-in via the non-branded margin formula. Needs the per-category margin list.</div></div></div>
@@ -337,7 +337,7 @@
     <div class="pstep"><div class="n">Slice</div><div class="t">Cut</div><div class="tools">MP <code>to-issues</code> → tracer-bullet slices · 1 issue = 1 branch</div></div>
     <div class="pstep"><div class="n">Do</div><div class="t">Implement</div><div class="tools">sandcastle single-mode + MP <code>implement</code>/<code>tdd</code> · gate on <code>npm test</code></div></div>
     <div class="pstep gate"><div class="n">Gate 2 · Review</div><div class="t">Review</div><div class="tools">gstack <code>review</code> + MP <code>review</code> + <code>codex</code> (cross-model) · <code>cso</code> on money/GST · <b>human reads every money diff</b></div></div>
-    <div class="pstep"><div class="n">Prove</div><div class="t">QA</div><div class="tools">gstack <code>qa</code> on a real low-end Android PWA profile</div></div>
+    <div class="pstep"><div class="n">Prove</div><div class="t">QA</div><div class="tools">gstack <code>qa</code> on a real low-end PWA profile</div></div>
     <div class="pstep"><div class="n">Done</div><div class="t">Ship</div><div class="tools">gstack <code>ship</code> → <code>land-and-deploy</code> → <code>canary</code> · MP <code>handoff</code></div></div>
   </div>
 

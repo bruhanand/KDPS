@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Extensibility & Customization — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html" class="cur"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 10 · Control plane</div>
+  <h1>Extensibility & Customization</h1>
+  <p class="sub">The extend-without-forking toolkit: hooks.py event subscriptions and class overrides, Custom Fields and Property Setters as data, client/server scripts, regional overrides, fixtures, and schema migrations (patches).</p>
+</header>
+
+<section>
+<h2 class="sec">Why this is the subsystem that decides whether the ERP lives</h2>
+
+<p>Every other chapter in this handbook describes a thing the ERP <em>does</em>: post a ledger, move stock, run a workflow. This chapter describes the thing that decides whether any of that survives contact with real customers. An ERP is not bought and left alone — it is bought and <strong>bent</strong>. Customer A wants two extra fields on the item master. Customer B operates in a state with a tax regime your core knows nothing about. Customer C's offer logic is unlike anyone else's. And six months later the vendor ships v15 with bug fixes everyone needs.</p>
+
+<p>There are exactly two ways this can go. In the first, every customer's bend is a patch to the core code — a forked branch, a hand-edited controller, a hard-coded <code>if customer == "ACME"</code>. That ERP is dead within two upgrade cycles: the vendor cannot push v15 to any customer without re-merging dozens of private forks by hand, so they stop upgrading, so the product rots. In the second way — ERPNext's way — every bend is <strong>data or a layer</strong>, never an edit to a shipped file. The customer is deeply customized <em>and</em> the vendor can still drop v15 on top, because the core source on disk is byte-for-byte the same on every site. That single property is the difference between an ERP business and a graveyard of one-off forks.</p>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>Build the ERP so that <strong>variation is data and layers, never forks</strong>. The data model is itself data (custom fields, property setters); behavior is extended only through a <strong>closed, declared catalog of hook points</strong>; every region / vertical / client tweak ships as a <strong>separate installable app</strong> that depends on core; cross-cutting policy lives in <strong>named data lists</strong> a generic engine reads; and schema evolves through an <strong>ordered, run-once, idempotent migration list</strong>. The payoff is the one thing a long-lived ERP must have: customers can be deeply customized and the vendor can still upgrade them.</p>
+</div>
+
+<p>ERPNext proves this works at the most demanding scale possible: the entire India GST regime — GSTIN validation, e-invoicing, HSN tax tables, GSTR returns — has been <strong>extracted out of the core app entirely</strong> into a separate <code>india_compliance</code> app. There is no longer an <span class="fileref">erpnext/regional/india</span> directory at all. A whole national tax system lives outside the core and plugs in through nothing but the public extension catalog. If a tax regime can be a layer, so can your client's quirks.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · the framework half is not in this checkout</span>
+<p>ERPNext is an <em>application</em>; the machinery that <em>reads</em> hooks, realizes custom fields against the live schema, runs the patch log, and resolves overrides lives one layer down in the <strong>Frappe framework</strong> <span class="badge b-frappe">Frappe core</span>, which is not in this source tree. ERPNext shows you how to <em>use</em> every seam — <code>create_custom_fields(...)</code>, <code>@erpnext.allow_regional</code>, <code>hooks.py</code> entries, <code>patches.txt</code> — but the resolver behind each is framework code. If you rebuild this on Django, you are building <em>both</em> halves: the declarations <em>and</em> the engine that wires them.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The two layers that make it work</h2>
+
+<p>The whole story is two layers stacked on each other, and it is worth fixing the mental model before the patterns.</p>
+
+<div class="band l-master">
+  <div class="bname">Layer 1 · Frappe framework — DocType is data</div>
+  <div class="boxes">
+    <div class="bx">DocType JSON schema<small>fields, perms, autoname</small></div>
+    <div class="bx">Custom Field<small>add a field as a row</small></div>
+    <div class="bx">Property Setter<small>override a property as a row</small></div>
+    <div class="bx">Client / Server Script<small>add code as a record</small></div>
+    <div class="bx">Patch log<small>run-once migrations</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-doc">
+  <div class="bname">Layer 2 · ERPNext app — extends Frappe only through hooks.py</div>
+  <div class="boxes">
+    <div class="bx">hooks.py manifest<small>the closed catalog</small></div>
+    <div class="bx">doc_events<small>lifecycle subscriptions</small></div>
+    <div class="bx">regional_overrides<small>per-country function swaps</small></div>
+    <div class="bx">named policy lists<small>auto_cancel_exempted, etc.</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-ctrl">
+  <div class="bname">Layer 3 · Region / vertical / client apps — extend ERPNext through the same hooks</div>
+  <div class="boxes">
+    <div class="bx">india_compliance<small>whole GST regime, out of core</small></div>
+    <div class="bx">erpnext/regional/uae<small>VAT via custom fields</small></div>
+    <div class="bx">your client app<small>their tweaks, isolated</small></div>
+  </div>
+</div>
+
+<p>Layer 1 makes the <em>data model</em> extensible: because a table is a JSON schema record rather than hand-written DDL, you add a field by inserting a <strong>Custom Field</strong> row and change a property by inserting a <strong>Property Setter</strong> row — no schema fork. Layer 2 makes <em>behavior</em> extensible: ERPNext never reaches into Frappe's internals; it only appends entries to the <span class="fileref">erpnext/hooks.py</span> manifest, which Frappe reads. Layer 3 is the same trick recursively — every region, vertical, and customer is another app that extends ERPNext through that same catalog, with conflicts resolved by install order. The patterns below walk each layer in turn.</p>
+</section>
+
+<section>
+<h2 class="sec">The doctypes you will keep meeting</h2>
+
+<p>A handful of doctypes appear over and over in this chapter. Most of them are <em>not</em> business objects — they are the customization machinery itself, modelled as ordinary doctypes so that customizing is just creating records.</p>
+
+<table>
+<tr><th>DocType</th><th>Kind</th><th>Role in extensibility</th></tr>
+<tr>
+  <td><code>Item</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/stock/doctype/item/item.json</span></td>
+  <td>master</td>
+  <td>The canonical "doctype-as-data" example: a JSON schema (fields, <code>autoname:"field:item_code"</code>, permissions) plus a thin Python controller. Because the schema is data, fields can be added to it at runtime without editing the JSON.</td>
+</tr>
+<tr>
+  <td><code>Custom Field</code> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/setup/install.py</span></td>
+  <td>setup</td>
+  <td>Each record adds <strong>one field to an existing doctype</strong> without touching its JSON. ERPNext creates them in bulk via <code>create_custom_fields(...)</code>.</td>
+</tr>
+<tr>
+  <td><code>Property Setter</code> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/setup/install.py</span></td>
+  <td>setup</td>
+  <td>Each record overrides <strong>one property</strong> of an existing field or doctype (a default print format, a Select's option list) as data — so core stays untouched and upgrades survive.</td>
+</tr>
+<tr>
+  <td><code>Accounting Dimension</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.py</span></td>
+  <td>setup</td>
+  <td>The <strong>end-user</strong> face of field injection: creating one injects a Link custom field into every doctype in the <code>accounting_dimension_doctypes</code> hook, at runtime, with no developer.</td>
+</tr>
+<tr>
+  <td><code>Sales Invoice</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span></td>
+  <td>transaction</td>
+  <td>A submittable transaction with explicit <strong>override seams</strong>: <code>make_regional_gl_entries</code> is decorated <code>@erpnext.allow_regional</code> so a country app can replace its ledger-posting logic without forking.</td>
+</tr>
+<tr>
+  <td><code>UAE VAT Settings</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/regional/united_arab_emirates/setup.py</span></td>
+  <td>setup</td>
+  <td>The canonical in-tree example of layering a tax regime: <code>setup()</code> adds VAT/TRN fields via <code>create_custom_fields</code> plus permissions and print formats — not a single core edit.</td>
+</tr>
+<tr>
+  <td><code>GL Entry</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/hooks.py</span></td>
+  <td>ledger</td>
+  <td>Immutable ledger: listed in <code>auto_cancel_exempted_doctypes</code> so cancelling a parent never auto-cancels it — reversal entries are posted instead. A cross-cutting policy expressed as a data list.</td>
+</tr>
+<tr>
+  <td><code>Accounts Settings</code> <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/setup/install.py</span></td>
+  <td>single</td>
+  <td>A single doctype (one global row) of tunable config; toggling a flag drives <code>toggle_hidden_fields()</code>, which flips Property Setters to show or hide whole sections.</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">Pattern 1 · A fixed catalog of declared hook points</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>The closed hook manifest (hooks.py)</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>An app extends another app <strong>only</strong> through a closed, named set of extension points declared in one manifest file — never by importing and monkey-patching internals.</p>
+      <p>The host <em>reads</em> the manifest and wires the callbacks. New behavior is added by <em>appending entries</em>, so apps compose cleanly and a host upgrade can never break an extender, because the extender touched nothing in the host.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><span class="fileref">erpnext/hooks.py</span> is the manifest; Frappe reads it via <code>frappe.get_hooks(...)</code>. The catalog is exhaustive — <code>doc_events</code> (per-doctype lifecycle), <code>scheduler_events</code> (cron jobs), <code>extend_doctype_class</code>, <code>override_whitelisted_methods</code>, <code>regional_overrides</code>, <code>doctype_js</code>, <code>jinja.methods</code>, <code>notification_config</code>, <code>on_session_creation</code>, <code>boot_session</code>, <code>website_route_rules</code>, <code>after_install</code>.</p>
+      <p>Crucially, <code>get_hooks</code> <strong>merges</strong> the same key across <em>all</em> installed apps — so a client app appends to the very lists ERPNext defined.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>On Django/Postgres: a registry module exposing a settings dict <code>{model:{event:[dotted.path]}}</code> plus signal connectors. Use Django signals (<code>pre_save</code>/<code>post_save</code>) as the <code>doc_events</code> analog, Celery beat for <code>scheduler_events</code>, and a settings list of installed extension apps.</p>
+      <p>The discipline is the whole point: <strong>one declarative manifest per app, the host iterates it, no extension ever edits host code.</strong></p>
+    </div>
+  </div>
+</div>
+
+<p>The heart of the manifest is <code>doc_events</code> — the lifecycle event bus. It maps a doctype (or a wildcard, or a <em>list</em> of doctypes) to lifecycle events (<code>validate</code>, <code>on_submit</code>, <code>on_cancel</code>, <code>on_trash</code>, <code>after_insert</code>, <code>on_update</code>) and the dotted paths to call. Three keying styles do an enormous amount of work:</p>
+
+<pre><code>doc_events = {
+    <span class="s">"*"</span>: {
+        <span class="s">"validate"</span>: [
+            <span class="s">"erpnext.support.doctype.service_level_agreement.service_level_agreement.apply"</span>,
+        ],
+    },
+    tuple(period_closing_doctypes): {
+        <span class="s">"validate"</span>: <span class="s">"erpnext.accounts.doctype.accounting_period.accounting_period.validate_accounting_period_on_doc_save"</span>,
+    },
+    <span class="s">"Stock Entry"</span>: {
+        <span class="s">"on_submit"</span>: <span class="s">"erpnext.stock.doctype.material_request.material_request.update_completed_and_requested_qty"</span>,
+        <span class="s">"on_cancel"</span>: <span class="s">"erpnext.stock.doctype.material_request.material_request.update_completed_and_requested_qty"</span>,
+    },
+}</code></pre>
+<p><span class="fileref">erpnext/hooks.py</span> <span class="srcline">:351</span></p>
+
+<ul>
+  <li>The <code>"*"</code> <strong>wildcard</strong> subscribes a handler to <em>every</em> doctype — here, SLA application runs on the validate of any document.</li>
+  <li>The <code>tuple(period_closing_doctypes)</code> <strong>list-key</strong> binds one handler to a <em>whole named list</em> at once — every period-closing doctype gets the accounting-period guard with no repetition. (Note how the key is a named list defined elsewhere in the same file — pattern 6.)</li>
+  <li>The plain <code>"Stock Entry"</code> key is the ordinary per-doctype case: submit and cancel both keep Material Request quantities in sync — <strong>without Stock Entry's controller ever importing Material Request.</strong></li>
+</ul>
+
+<p>That last point is the whole reason the bus exists: it decouples modules. Stock and purchasing stay in separate files that never reference each other; the manifest is the only thing that knows they are related. When a fourth module needs to react to a Stock Entry submit, it appends one line to <em>its own</em> <code>hooks.py</code> — nothing in stock changes.</p>
+
+<div class="callout co-note"><span class="lbl">The dispatch flow, end to end</span>
+<div class="flow col">
+  <div class="node">User submits a document<small>any doctype, docstatus 0 → 1</small></div>
+  <div class="arr"></div>
+  <div class="node">Frappe reads doc_events from ALL apps<small>get_hooks merges every installed app's manifest</small></div>
+  <div class="arr"></div>
+  <div class="node">Match this doctype + "*" + any list-key containing it<small>collect every subscribed dotted path</small></div>
+  <div class="arr"></div>
+  <div class="node">Run each handler in turn<small>SLA apply, period lock, UAE reverse-charge, MR qty update</small></div>
+</div>
+<p>None of those handlers live in the submitting doctype's controller. The manifest is the wiring; the doctypes stay ignorant of each other.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 2 · DocType-as-data — custom fields & property setters</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Make the data model itself data</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>A table/form is a <strong>declarative schema record</strong>, not hand-written code. So fields can be added and properties overridden by <em>inserting more records</em> — customization needs no code change and no schema fork.</p>
+      <p>Customizations live in their <strong>own rows</strong>, separate from the core definition, so they re-apply cleanly over a core upgrade instead of being clobbered by it.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Each doctype is a <code>.json</code> schema plus a thin controller (<span class="fileref">erpnext/stock/doctype/item/item.json</span> carries <code>fields[]</code>, <code>permissions[]</code>, <code>autoname:"field:item_code"</code>).</p>
+      <p>To extend an existing doctype ERPNext calls <code>create_custom_fields({Doctype:[{fieldname,label,fieldtype,insert_after}]})</code> and <code>frappe.make_property_setter({doctype,property,value,...})</code> — both in <span class="fileref">erpnext/setup/install.py</span> and the regional setups.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Store model definitions in a metadata table. Add a <strong>CustomField</strong> table whose rows become real columns (or JSONB attributes) at migrate time, plus a <strong>PropertyOverride</strong> table consulted when rendering forms and validations.</p>
+      <p>Postgres JSONB or an EAV side-table gives you "add a field as data." A metadata layer reads core schema + override rows to build the <em>effective</em> form. Keep each customer's customizations in their own rows so upgrades never touch them.</p>
+    </div>
+  </div>
+</div>
+
+<p>The developer-facing API is one call. A regional or client setup builds a dict of <code>{Doctype: [field specs]}</code> and hands the whole thing to <code>create_custom_fields</code> once. The UAE VAT setup is the textbook example — it adds tax fields to <code>Item</code> and <code>Sales Invoice</code> with no edit to either doctype's JSON:</p>
+
+<pre><code><span class="k">from</span> frappe.custom.doctype.custom_field.custom_field <span class="k">import</span> create_custom_fields
+
+custom_fields = {
+    <span class="s">"Item"</span>: [
+        dict(fieldname=<span class="s">"tax_code"</span>, label=<span class="s">"Tax Code"</span>, fieldtype=<span class="s">"Data"</span>, insert_after=<span class="s">"item_group"</span>),
+        dict(fieldname=<span class="s">"is_zero_rated"</span>, label=<span class="s">"Is Zero Rated"</span>, fieldtype=<span class="s">"Check"</span>,
+             insert_after=<span class="s">"tax_code"</span>, print_hide=1),
+    ],
+    <span class="s">"Sales Invoice"</span>: sales_invoice_fields + invoice_fields,
+}
+create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)</code></pre>
+<p><span class="fileref">erpnext/regional/united_arab_emirates/setup.py</span> <span class="srcline">:185</span></p>
+
+<p>Note the <code>insert_after</code> key on every spec: a custom field is positioned <em>relative to an existing core field</em>, so it lands in a sensible place on the form. That is also where the first real hazard hides.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · insert_after binds to the live schema, and ordering is install-order</span>
+<p>Custom Fields and Property Setters are realized against the <strong>live</strong> schema, so <code>insert_after</code> must reference a field that <em>exists at apply time</em>. If two apps both insert after the same field, the resulting order depends on <strong>install order</strong>, not on what you intended. Pin <code>insert_after</code> to a stable core field, and write the injection idempotently — check the doctype's existing fieldnames before adding, exactly as the dimension code does (next section).</p>
+</div>
+
+<h3>The runtime case: end-user field injection</h3>
+
+<p>Custom fields are not only a developer tool. The <strong>Accounting Dimension</strong> doctype hands the same power to an end user with no code at all. When a user saves a new dimension, its handler loops every doctype named in the <code>accounting_dimension_doctypes</code> hook and injects a Link field into each — at runtime, on a live system:</p>
+
+<pre><code><span class="c"># accounting_dimension.make_dimension_in_accounting_doctypes (paraphrased)</span>
+<span class="k">for</span> doctype <span class="k">in</span> frappe.get_hooks(<span class="s">"accounting_dimension_doctypes"</span>):
+    <span class="k">if</span> dimension.fieldname <span class="k">in</span> frappe.get_meta(doctype).get_valid_columns():
+        <span class="k">continue</span>                      <span class="c"># idempotent: skip if already injected</span>
+    create_custom_field(doctype, df, ignore_validate=<span class="k">True</span>)
+    frappe.clear_cache(doctype=doctype)  <span class="c"># bust stale meta so the new field shows</span></code></pre>
+<p><span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.py</span> <span class="srcline">:129</span></p>
+
+<p>For the special case of Budget, the same flow goes one step further and <em>edits a Property Setter</em> to append the new dimension to a Select field's option list — proving that even a field's allowed values is data you can rewrite at runtime. The flow:</p>
+
+<div class="flow col">
+  <div class="node">User creates an Accounting Dimension<small>e.g. "Brand", "Region"</small></div>
+  <div class="arr"></div>
+  <div class="node">on_update enqueues the injector<small>to a background queue — bulk injection is slow</small></div>
+  <div class="arr"></div>
+  <div class="node">Loop accounting_dimension_doctypes hook<small>GL Entry, Sales Invoice, Journal Entry, ...</small></div>
+  <div class="arr"></div>
+  <div class="node">create_custom_field + clear_cache per doctype<small>skip ones that already have it</small></div>
+  <div class="arr"></div>
+  <div class="node">For Budget: edit Property Setter Select options<small>add the dimension as a choosable value</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · injection mutates the meta cache — and is slow</span>
+<p><code>create_custom_fields</code> and <code>make_property_setter</code> mutate <code>frappe.get_meta</code>'s cache. You <strong>must</strong> <code>frappe.clear_cache(doctype=...)</code> afterward, or stale metadata keeps serving the <em>old</em> form. That is why the dimension loop clears the cache per doctype. And because realizing fields against a live table is expensive, bulk injection is <strong>enqueued to a background queue</strong>, never run inline in the request — design your own field-injection the same way.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is exactly how to honour KDPS's Rule 12 ("variation is data, not code") for item attributes. <strong>Season, Collection, and Age</strong> tags and brand-specific attributes should be <em>custom fields</em> on the item, not new columns hand-cut into the core SKU table — so that <code>SKU = style × size × colour</code> stays the immovable spine while every brand decorates it differently. When a brand needs one more attribute, it is a row, not a migration of the core table.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 3 · App layering — region & vertical as a separate app</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Variation ships as a stacked app, not in core</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Variation — a country's tax law, an industry vertical, one client's tweaks — is a <strong>separate installable app stacked on top</strong>, using only the public hook catalog and data-defined fields.</p>
+      <p>The base product never carries the variation. When two layers conflict, <strong>layering order resolves it</strong>: last installed app wins.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>ERPNext is itself an app on Frappe (<span class="fileref">erpnext/modules.txt</span> lists 21 modules; <code>hooks.py</code> is its manifest). In-tree, <span class="fileref">erpnext/regional/*</span> holds UAE, Italy, US, South Africa, Turkey setups, all wired through hooks.</p>
+      <p>The clinching proof: India GST is extracted to a standalone <code>india_compliance</code> app — there is <strong>no</strong> <span class="fileref">erpnext/regional/india</span> directory at all. A whole tax regime lives outside core.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Make every customer / region / vertical a Python package (a Django app) that <strong>depends on the base ERP app</strong> and registers only through the same hook manifest. Resolve overrides by install order.</p>
+      <p>Never put a client's or country's logic in core. If core lacks a seam, <strong>add a generic decorated-overridable function to core first</strong>, then implement it in the layer (pattern 4).</p>
+    </div>
+  </div>
+</div>
+
+<p>The India extraction is the single most instructive fact in this chapter. GST is not a small feature — it is GSTIN validation, place-of-supply rules, e-invoice JSON generation, e-way bills, HSN-coded tax tables, and three flavours of GSTR return. All of it once lived under <code>erpnext/regional/india</code>; all of it now lives in a separate <code>india_compliance</code> app and the core directory is gone. If the most invasive tax regime ERPNext supports can be a clean layer, the bar for "this must go in core" is very high indeed. The default answer to "where does this variation live?" is <strong>a layer</strong>.</p>
+
+<div class="callout co-note"><span class="lbl">What "depends on core, registers through hooks" buys you</span>
+<p>Because the layer only <em>appends</em> to merged hook lists and <em>adds</em> custom-field rows, the core source on disk is identical whether the layer is installed or not. That is what makes vendor upgrades safe: <code>bench update</code> replaces core files wholesale, the layer's rows and manifest entries are untouched, and the merged behaviour re-composes on next boot. Forking would break this; layering preserves it by construction.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 4 · Overridable function seams (the allow_regional decorator)</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Explicit, decorated override points</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Designate <strong>specific functions</strong> as official override points with a decorator, so an extending app can replace just that function's body for its context — without subclassing or monkey-patching.</p>
+      <p>The seam is <strong>explicit and discoverable</strong> (it is right there in the source), and the default body is a safe <strong>no-op / passthrough</strong>, so an unconfigured tenant runs base behaviour.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>@erpnext.allow_regional</code> wraps a function; at call time it looks up <code>frappe.get_hooks("regional_overrides")[get_region()]</code> and, if the company's country maps this function path to a replacement, calls that instead (<span class="fileref">erpnext/__init__.py</span> :133–152).</p>
+      <p>Core declares the seam as a passthrough; a regional app's <code>hooks.py</code> maps the path to its own implementation. The class-level cousin is <code>extend_doctype_class</code> (Address → ERPNextAddress, chaining <code>super().validate()</code>).</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Wrap extensible business logic in a small dispatcher: a decorator (or strategy lookup) keyed by tenant / region / company that resolves to a registered override or falls back to the default.</p>
+      <p>On Django: a registry dict <code>{('region','func'):callable}</code> populated by each app's <code>AppConfig.ready()</code>, consulted by a decorator. Keep defaults as <strong>explicit no-ops</strong> so an unconfigured tenant runs base behaviour.</p>
+    </div>
+  </div>
+</div>
+
+<p>The decorator itself is small enough to read whole. The mechanism is: compute the fully-qualified path of the wrapped function, look up the current company's region in the merged <code>regional_overrides</code> map, and if that region remaps this exact path, call the remapped target — otherwise call the original:</p>
+
+<pre><code><span class="k">def</span> <span class="t">allow_regional</span>(fn):
+    <span class="s">"""Decorator to make a function regionally overridable"""</span>
+    @functools.wraps(fn)
+    <span class="k">def</span> <span class="t">caller</span>(*args, **kwargs):
+        overrides = frappe.get_hooks(<span class="s">"regional_overrides"</span>, {}).get(get_region())
+        function_path = f<span class="s">"{inspect.getmodule(fn).__name__}.{fn.__name__}"</span>
+        <span class="k">if</span> <span class="k">not</span> overrides <span class="k">or</span> function_path <span class="k">not</span> <span class="k">in</span> overrides:
+            <span class="k">return</span> fn(*args, **kwargs)
+        <span class="c"># Priority given to last installed app</span>
+        <span class="k">return</span> frappe.get_attr(overrides[function_path][-1])(*args, **kwargs)
+    <span class="k">return</span> caller</code></pre>
+<p><span class="fileref">erpnext/__init__.py</span> <span class="srcline">:133</span></p>
+
+<p>Two details carry the whole design philosophy. First, <code>overrides[function_path][-1]</code> — the value is a <em>list</em> (because <code>get_hooks</code> merges across apps), and the code deliberately takes the <strong>last</strong> one: "priority given to last installed app." Second, the fallback is <code>return fn(*args, **kwargs)</code> — if no region remaps this path, the original runs unchanged. Now look at how core <em>declares</em> the seam — it is a one-line passthrough that returns its input untouched:</p>
+
+<pre><code>@erpnext.allow_regional
+<span class="k">def</span> <span class="t">make_regional_gl_entries</span>(gl_entries, doc):
+    <span class="k">return</span> gl_entries</code></pre>
+<p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span> <span class="srcline">:1206</span></p>
+
+<p>On a plain-vanilla company this does nothing — the GL entries pass straight through. But the UAE layer maps this function path in its <code>hooks.py</code> to <span class="fileref">erpnext/regional/united_arab_emirates/utils.py</span> :148, whose version <em>adds reverse-charge lines</em> to the ledger entries before returning them. The Sales Invoice controller never knows UAE exists; it just calls <code>make_regional_gl_entries</code> at the right moment, and the right body runs based on the company's country.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · you can only override what core decorated</span>
+<p><code>regional_overrides</code> fires <strong>only</strong> through functions explicitly decorated <code>@erpnext.allow_regional</code>. You cannot override an arbitrary core function this way — there is no monkey-patch escape hatch, by design. If core lacks a seam where you need one, you must first <strong>add the decorated passthrough to core</strong> (a small upstream change), then override it from your layer. This is a feature, not a limitation: every override point is visible in the source, so the set of things a layer can change is auditable.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · class overrides must call super() defensively</span>
+<p>The class-level seam, <code>extend_doctype_class</code> (e.g. Address → <span class="fileref">erpnext/accounts/custom/address.py</span>'s ERPNextAddress), chains to the parent with <code>if hasattr(super(), "validate"): super().validate()</code> — guarded, because the parent may or may not implement <code>validate</code> depending on the framework version. Assume the method exists and your subclass breaks across an upgrade. Always probe before chaining.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>KDPS's two-GSTIN reality (Bihar and Jharkhand are <em>distinct persons</em>; cross-state transfers are taxable IGST, intra-state is CGST/SGST) is precisely a <code>make_regional_gl_entries</code>-shaped problem. Model an <code>allow_regional</code>-style dispatcher keyed by <strong>store → state-GSTIN</strong>, so the IGST-vs-CGST/SGST posting decision lives in <em>one</em> overridable place rather than branching through every posting path. The default body posts the simple intra-state case; the inter-state body adds the IGST line. When the apparel GST slab changes (it is date-effective), you edit the data behind that seam — not the posting code in twenty documents.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 5 · Ordered, idempotent, run-once migrations (patches.txt)</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>The checked-in migration ledger</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Schema and data evolution is a <strong>checked-in, ordered list</strong> of single-purpose migration scripts, each of which runs <strong>exactly once per site</strong> and is written to be safely re-runnable / guarded.</p>
+      <p>A persistent log records what has already run, so upgrades are <strong>deterministic</strong> across any starting state — fresh, half-upgraded, or years old.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><span class="fileref">erpnext/patches.txt</span> is a ~490-line ordered list, split into <code>[pre_model_sync]</code> (run before new DocType JSONs are imported) and <code>[post_model_sync]</code> (after the schema is current).</p>
+      <p>Each non-comment line is a dotted path to a module under <span class="fileref">erpnext/patches/</span> exposing <code>def execute()</code>. Frappe records each path in a patch-log table and skips ones already run; date comments and <code>#1</code>/<code>#2</code> suffixes force a known patch to re-run.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Beyond Django's auto-migrations (schema), keep a <strong>separate ordered list of hand-written data migrations</strong> with a runner that records applied names and skips them.</p>
+      <p>Order matters (before vs after schema apply); each guards its own preconditions so partial states don't crash. <strong>Never edit a shipped migration in place — append a new one.</strong> Treat the migration log as the source of truth for DB state.</p>
+    </div>
+  </div>
+</div>
+
+<p>The file's two-section structure is not cosmetic — it is a hard ordering contract against the schema import that happens between them:</p>
+
+<div class="flow">
+  <div class="node">[pre_model_sync]<small>run vs OLD schema</small></div>
+  <div class="arr"></div>
+  <div class="node">import DocType JSONs<small>schema becomes current</small></div>
+  <div class="arr"></div>
+  <div class="node">[post_model_sync]<small>run vs NEW schema</small></div>
+</div>
+
+<p>A patch that must read or write a field in the <em>new</em> schema belongs in <code>[post_model_sync]</code>. A patch that must run against the <em>old</em> schema — say, to copy data out of a column before a later schema change drops or renames it — belongs in <code>[pre_model_sync]</code>. Put it in the wrong half and you get either an "unknown column" crash or a silent no-op.</p>
+
+<p>The defining property of every patch is <strong>defensive idempotence</strong>: it can run on millions of sites in unknown states, so it must guard its own preconditions and tolerate being re-applied. This finance-book patch is the model — early-return if there is no India company, and <code>update=1</code> so re-adding the field is harmless:</p>
+
+<pre><code><span class="k">def</span> <span class="t">execute</span>():
+    company = frappe.get_all(<span class="s">"Company"</span>, filters={<span class="s">"country"</span>: <span class="s">"India"</span>})
+    <span class="k">if</span> <span class="k">not</span> company:
+        <span class="k">return</span>                       <span class="c"># guard: nothing to do for non-India sites</span>
+    custom_field = {
+        <span class="s">"Finance Book"</span>: [
+            {<span class="s">"fieldname"</span>: <span class="s">"for_income_tax"</span>, <span class="s">"label"</span>: <span class="s">"For Income Tax"</span>,
+             <span class="s">"fieldtype"</span>: <span class="s">"Check"</span>, <span class="s">"insert_after"</span>: <span class="s">"finance_book_name"</span>}
+        ]
+    }
+    create_custom_fields(custom_field, update=1)  <span class="c"># update=1 → safe to re-apply</span></code></pre>
+<p><span class="fileref">erpnext/patches/v13_0/create_custom_field_for_finance_book.py</span></p>
+
+<p>The list also supports <code>execute:</code> inline one-liners (e.g. a single <code>frappe.reload_doc</code> or <code>db.set_value</code> right in <code>patches.txt</code>) for trivial one-off statements that don't warrant a module. Larger structural patches get their own files — see <span class="fileref">erpnext/patches/v14_0/rearrange_company_fields.py</span>.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · never edit a shipped patch; the log keys on the path</span>
+<p>Frappe's patch log keys on the <strong>dotted path</strong>. So editing a shipped patch in place will <em>not</em> re-run it — the path is already logged as done. To force a re-run, ERPNext appends a date comment and a <code>#1</code>/<code>#2</code> suffix to change the recorded key. This trick is easy to get wrong (wrong suffix, wrong section). The safe default is the universal one: <strong>append a new patch, never mutate an old one</strong>, and write every patch to tolerate any starting state — fresh install, half-upgraded, country not India, doctype since renamed.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 6 · Cross-cutting policy as named data lists</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Behaviour registries, not scattered conditionals</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Express system-wide rules — which doctypes are period-locked, exempt from auto-cancel, carry accounting dimensions, or trigger which jobs — as <strong>named lists/dicts in the manifest</strong>, not scattered <code>if</code> conditionals.</p>
+      <p>Generic engines iterate the list. So opting a doctype into a behaviour is a <strong>one-line data change</strong>, and the policy stays auditable in one place.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><span class="fileref">erpnext/hooks.py</span> defines named lists: <code>period_closing_doctypes</code>, <code>pre_submit_validation_doctypes</code>, <code>accounting_dimension_doctypes</code>, <code>auto_cancel_exempted_doctypes</code>, <code>repost_allowed_doctypes</code>, <code>global_search_doctypes</code>.</p>
+      <p><code>doc_events</code> then binds a handler to a whole list at once via <code>tuple(period_closing_doctypes)</code> (pattern 1). <span class="fileref">erpnext/startup/notifications.py</span>'s <code>notification_config</code> is a data dict of <code>{doctype: filter}</code> the desk reads for unread counts.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Keep behaviour registries as plain data (lists / dicts / settings) and write <strong>one generic engine per behaviour</strong> that consults the registry — instead of <code>if doctype in (...)</code> sprinkled through code.</p>
+      <p>To opt a model into a behaviour, add its name to the list. Because the registry is a hook key, extension apps can <strong>extend the list</strong> through the same <code>get_hooks</code> merge — without touching the engine.</p>
+    </div>
+  </div>
+</div>
+
+<p>The most consequential of these lists encodes the ledger's most important invariant. <code>auto_cancel_exempted_doctypes</code> names the immutable ledgers — GL Entry, Stock Ledger Entry, Payment Ledger Entry. When a parent transaction is cancelled, Frappe's generic cancel cascade walks its children and cancels them too — <em>except</em> anything in this list. Those are never cancelled; instead, the controller posts <strong>reversal entries</strong>. The append-only book stays append-only.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · ledger immutability is a data convention, not a framework guarantee</span>
+<p>Nothing in the framework <em>forces</em> GL Entry to be immutable — it is immutable <strong>because it is in the exemption list</strong>. The list <em>is</em> the rule. Reimplement a cancel cascade naively (cancel every child) and you will corrupt the books: a cancelled invoice would erase its postings instead of reversing them. When you build your own ledger, the exemption registry and the reverse-don't-delete engine that reads it are <em>both</em> mandatory. See <a href="03-accounting-ledger.html">the accounting ledger</a> and <a href="04-stock-ledger.html">the stock ledger</a> for how the reversal entries are written.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is the mechanism behind KDPS's "documents write ledgers; ledgers are append-only" rule. The PT-posts-value-and-liability and GRN-posts-quantity events should be <code>doc_events</code>-style lifecycle handlers, and the resulting GL / Stock-Ledger entries belong on an <code>auto_cancel_exempted</code>-style list — so a cancelled or amended receipt <em>reverses</em>, never deletes. With Tally as the statutory book of record, an entry that was silently deleted instead of reversed would put the two books out of sync — which is exactly the failure the exemption list prevents.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The seams, side by side</h2>
+
+<p>Six seams, each for a different shape of change. Reach for the lightest one that fits.</p>
+
+<table>
+<tr><th>Seam</th><th>What it changes</th><th>Who uses it</th><th>Mechanism</th></tr>
+<tr>
+  <td><code>Custom Field</code> <span class="badge b-frappe">Frappe core</span></td>
+  <td>Add a field to an existing doctype</td>
+  <td>Developer (bulk) or end user (via tools)</td>
+  <td><code>create_custom_fields({Doctype:[...]})</code> — realized as a row</td>
+</tr>
+<tr>
+  <td><code>Property Setter</code> <span class="badge b-frappe">Frappe core</span></td>
+  <td>Override one property of a field/doctype</td>
+  <td>Developer or end user</td>
+  <td><code>make_property_setter(...)</code> — consulted at render/validate</td>
+</tr>
+<tr>
+  <td><code>doc_events</code> <span class="badge b-erpnext">ERPNext</span></td>
+  <td>React to a lifecycle event on a doctype</td>
+  <td>Any app</td>
+  <td>Manifest map → Frappe runs subscribed dotted paths</td>
+</tr>
+<tr>
+  <td><code>@allow_regional</code> seam <span class="badge b-erpnext">ERPNext</span></td>
+  <td>Replace one decorated function's body, per region</td>
+  <td>Regional / vertical app</td>
+  <td><code>regional_overrides</code> map resolved by company country</td>
+</tr>
+<tr>
+  <td><code>extend_doctype_class</code> <span class="badge b-erpnext">ERPNext</span></td>
+  <td>Swap in a controller subclass</td>
+  <td>App, for whole-controller changes</td>
+  <td>Subclass chaining <code>super()</code> defensively</td>
+</tr>
+<tr>
+  <td><code>override_whitelisted_methods</code> <span class="badge b-erpnext">ERPNext</span></td>
+  <td>Reroute a public API endpoint</td>
+  <td>App</td>
+  <td>Manifest map of endpoint → replacement path</td>
+</tr>
+<tr>
+  <td>named policy list <span class="badge b-erpnext">ERPNext</span></td>
+  <td>Opt a doctype into a system behaviour</td>
+  <td>Any app (lists merge via hooks)</td>
+  <td>Generic engine iterates the list</td>
+</tr>
+<tr>
+  <td><code>patches.txt</code> <span class="badge b-erpnext">ERPNext</span></td>
+  <td>Evolve schema/data, once per site</td>
+  <td>Developer, at release time</td>
+  <td>Ordered, logged, idempotent <code>execute()</code> scripts</td>
+</tr>
+</table>
+
+<div class="callout co-note"><span class="lbl">Decision rule</span>
+<p>Add a field → <strong>Custom Field</strong>. Change a default / option / label → <strong>Property Setter</strong>. React to a save/submit → <strong>doc_events</strong>. Change one piece of regional posting logic → <strong>decorated seam + regional_overrides</strong>. Replace a whole controller → <strong>extend_doctype_class</strong>. Make a doctype participate in a system-wide behaviour → <strong>add it to the named list</strong>. Migrate existing data → <strong>a new patch</strong>. If none fit because core lacks a seam, the right move is to <em>add a decorated passthrough to core</em>, not to fork.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Putting it together: adding a country without forking</h2>
+
+<p>The patterns are not separate tricks — they compose into one repeatable recipe. Here is the entire flow for teaching ERPNext a new country's tax behaviour, using only public seams:</p>
+
+<div class="flow col">
+  <div class="node">1 · Write setup.py<small>build a {Doctype:[fields]} dict, call create_custom_fields — adds VAT/TRN fields to Item &amp; Sales Invoice (pattern 2)</small></div>
+  <div class="arr"></div>
+  <div class="node">2 · Register replacements in hooks.py regional_overrides<small>map make_regional_gl_entries, update_itemised_tax_data → your functions (patterns 1 &amp; 4)</small></div>
+  <div class="arr"></div>
+  <div class="node">3 · Core's @allow_regional routes at runtime<small>by company country — your reverse-charge body runs, nobody else's changes (pattern 4)</small></div>
+  <div class="arr"></div>
+  <div class="node">4 · Ship a patch if existing data needs backfilling<small>ordered, idempotent, logged (pattern 5)</small></div>
+  <div class="arr"></div>
+  <div class="node">5 · For a big regime, lift the whole thing into its own app<small>exactly what india_compliance did (pattern 3)</small></div>
+</div>
+
+<p>Not one of those five steps edits a core file. The Item and Sales Invoice JSONs are untouched; the Sales Invoice controller is untouched; the ledger engine is untouched. The new country is entirely additive — and that is precisely why the next core upgrade lands cleanly on top of it.</p>
+</section>
+
+<section>
+<h2 class="sec">Gotchas, collected</h2>
+
+<p>The hazards in this subsystem are not edge cases — they are the places where a naive reimplementation quietly corrupts data or breaks on upgrade. Keep this list at hand while building.</p>
+
+<dl class="gloss">
+  <dt><code>insert_after must already exist; order is install-order</code></dt>
+  <dd>Custom Fields/Property Setters apply against the <em>live</em> schema. If two apps insert after the same field, ordering is decided by install order. Pin to a stable core field and check existing fieldnames first.</dd>
+  <dt><code>patches must be idempotent and section-correct</code></dt>
+  <dd>Guard every precondition (<code>if not company: return</code>, <code>frappe.db.exists</code>, <code>update=1</code>). And <code>[pre_model_sync]</code> vs <code>[post_model_sync]</code> is load-bearing: read/write a new field → post; touch a soon-to-be-dropped column → pre. Wrong half throws "unknown column" or silently no-ops.</dd>
+  <dt><code>never edit a shipped patch in place</code></dt>
+  <dd>The log keys on the dotted path; editing won't re-run. Append a new patch. The date-comment + <code>#1</code>/<code>#2</code> re-run trick exists but is easy to get wrong.</dd>
+  <dt><code>you can only override decorated functions</code></dt>
+  <dd><code>regional_overrides</code> fires only through <code>@erpnext.allow_regional</code>. No monkey-patch escape hatch — if the seam isn't there, add the passthrough to core first.</dd>
+  <dt><code>subclass overrides must probe super()</code></dt>
+  <dd><code>extend_doctype_class</code> subclasses use <code>if hasattr(super(), "validate"): super().validate()</code> because the parent may not implement it on every framework version. Assume it exists and you break on upgrade.</dd>
+  <dt><code>field injection mutates the meta cache and is slow</code></dt>
+  <dd><code>frappe.clear_cache(doctype=...)</code> after injecting, or stale metadata serves the old form. Enqueue bulk injection to a background queue — never run it inline in a request.</dd>
+  <dt><code>ledger immutability is convention, enforced by a list</code></dt>
+  <dd>GL Entry / Stock Ledger Entry / Payment Ledger Entry are in <code>auto_cancel_exempted_doctypes</code> so a parent cancel never cancels them — reversals are posted instead. Reimplement the cancel cascade naively and you corrupt the books. The exemption list <em>is</em> the rule.</dd>
+</dl>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4>
+<ol>
+  <li><strong>Variation is data and layers, never forks.</strong> The single property that keeps a long-lived ERP alive is that the core source on disk is identical on every site, so the vendor can always upgrade. Every customization must preserve that property by construction.</li>
+  <li><strong>Make the data model itself data.</strong> A table/form is a schema record; add fields with a <code>CustomField</code> table and change properties with a <code>PropertyOverride</code> table. Customer customizations live in their own rows and survive core upgrades untouched. (Frappe: <code>create_custom_fields</code>, <code>make_property_setter</code>.)</li>
+  <li><strong>Publish one closed manifest of named hook points</strong> — lifecycle events keyed per-model with a <code>"*"</code> wildcard and list-keys, scheduled jobs, class overrides, whitelisted-method overrides, and decorated overridable-function seams. The host iterates the manifest; extensions append, never patch. (ERPNext: <span class="fileref">hooks.py</span>, read via <code>get_hooks</code>.)</li>
+  <li><strong>Ship every region / vertical / client tweak as a separate installable app</strong> that depends on core and registers only through the manifest, with conflicts resolved by install order (last app wins). Proof it scales: India GST is an entire app outside core.</li>
+  <li><strong>Make override points explicit and discoverable.</strong> A decorated dispatcher (<code>@allow_regional</code>) with a safe no-op default means unconfigured tenants run base behaviour and there is no monkey-patch back door — the set of overridable points is auditable in the source.</li>
+  <li><strong>Put cross-cutting policy in named data lists</strong> that generic engines consult, not in scattered conditionals. Opting a doctype into a behaviour becomes a one-line data change — and ledger immutability is exactly such a list (<code>auto_cancel_exempted_doctypes</code>): the list is the rule, so build the reverse-don't-delete engine that honours it.</li>
+  <li><strong>Evolve schema and data through an ordered, run-once, idempotent, logged migration list</strong> split into before-schema and after-schema phases. Each patch guards its preconditions and tolerates any starting state; never edit a shipped patch — append a new one.</li>
+  <li><strong>For KDPS:</strong> design the hook catalog and custom-field / override seams <em>up front in the foundation build</em>. That is what lets 40+ brands, two state GSTINs, SOR/Outright/Hybrid commercial models, and an evolving offer engine be <em>configured rather than re-coded</em> — the concrete shape of Rule 12, "variation is data, not code."</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="09-workflow-engine.html"><small>← Previous</small>Workflow engine</a>
+<a class="next" href="11-reporting-and-printing.html"><small>Next →</small>Reporting & printing</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 10. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

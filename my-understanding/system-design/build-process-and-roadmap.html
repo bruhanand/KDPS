@@ -102,7 +102,7 @@
   <h2 class="sec">Build philosophy &mdash; what this is &amp; how we build</h2>
 
   <h3>What this is</h3>
-  <p>This is the <strong>concrete plan for turning the finished design into running software</strong>. The thinking is done: the system is settled as <strong>5 layers and 11 rules</strong> (master data &rarr; documents &rarr; ledgers &rarr; controls &rarr; intelligence), and every module D1&ndash;D8 is designed and locked. What remains is to <em>build</em> &mdash; and the builder is unusual: <strong>one architect (Anand) working with AI agents</strong>, not a team. That single fact shapes every rule below. A solo-plus-AI build cannot afford a big-bang, cannot hold ten half-finished modules in its head, and cannot trust generated code on money without a gate. So the plan is deliberately narrow at any one moment: one thing scaffolded, then one slice proven, then the next.</p>
+  <p>This is the <strong>concrete plan for turning the finished design into running software</strong>. The thinking is done: the system is settled as <strong>5 layers and 12 rules</strong> (master data &rarr; documents &rarr; ledgers &rarr; controls &rarr; intelligence), and every module D1&ndash;D8 is designed and locked. What remains is to <em>build</em> &mdash; and the builder is unusual: <strong>one architect (Anand) working with AI agents</strong>, not a team. That single fact shapes every rule below. A solo-plus-AI build cannot afford a big-bang, cannot hold ten half-finished modules in its head, and cannot trust generated code on money without a gate. So the plan is deliberately narrow at any one moment: one thing scaffolded, then one slice proven, then the next.</p>
 
   <div class="callout co-key">
     <strong>The agreed shape, in one line:</strong> build the <strong>foundation first</strong> (repo, database, login, roles, deploy), then <strong>one verified vertical slice at a time</strong>, in engineering order along the spine &mdash; <em>never</em> all the PRDs upfront, <em>never</em> one module built to completion before the next is started.</p>
@@ -182,7 +182,7 @@
 <tr><td><code>/plan-ceo-review</code></td><td>CEO/founder-mode review — rethink the problem, find the 10-star product</td><td>When the framing may be wrong, not just the execution</td></tr>
 <tr><td><code>/plan-eng-review</code></td><td>Eng-manager review — locks architecture &amp; execution plan</td><td>Before a slice that touches the ledger/posting spine</td></tr>
 <tr><td><code>/plan-design-review</code></td><td>Designer's-eye plan review — rates each design dimension 0&ndash;10</td><td>Before building a store-facing screen</td></tr>
-<tr><td><code>/plan-devex-review</code></td><td>Developer-experience review — personas, onboarding</td><td>When low-end-Android store staff are the users</td></tr>
+<tr><td><code>/plan-devex-review</code></td><td>Developer-experience review — personas, onboarding</td><td>When store staff are the users</td></tr>
 <tr><td><code>/autoplan</code></td><td>Runs CEO + design + eng + DX reviews sequentially with auto-decisions, no human gate</td><td>Fast plan pressure-test when you don't want four separate sittings</td></tr>
 </table>
 
@@ -216,7 +216,7 @@
 <tr><td><code>/qa</code> <span class="badge b-ai">autonomous</span></td><td>Systematically QA-tests a web app <em>and fixes</em> bugs found</td><td>Shake out a slice end-to-end when you want it self-healing</td></tr>
 <tr><td><code>/qa-only</code> <span class="badge b-ai">autonomous</span></td><td>Same QA pass but report-only — tests, never fixes</td><td>When you want the bug list without auto-edits (money paths)</td></tr>
 <tr><td><code>/browse</code> <span class="badge b-ai">autonomous</span></td><td>Fast headless browser — navigate, click, screenshot</td><td>Dogfood the running app; capture proof a slice works</td></tr>
-<tr><td><code>/benchmark</code> <span class="badge b-ai">autonomous</span></td><td>Performance regression detection via the browse daemon</td><td>Guard screen load on low-end Android over patchy networks</td></tr>
+<tr><td><code>/benchmark</code> <span class="badge b-ai">autonomous</span></td><td>Performance regression detection via the browse daemon</td><td>Guard screen load in-browser over patchy networks</td></tr>
 </table>
 
 <h4>SHIP &middot; DEPLOY &middot; OBSERVE</h4>
@@ -381,21 +381,21 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
   <p>This is <strong>slice 0</strong>: the scaffold that must exist before a single line of business logic is written. It carries <em>no</em> domain rules &mdash; no booking, no GRN, no sale &mdash; only the rails every later slice rides on. The test of "foundation done" is mechanical: the repo builds, CI is green on an empty walking skeleton, login works with one seeded role, and a throwaway document can post one balanced pair of ledger legs into Postgres and be read back through the app-layer scoped access (<code>django-scopes</code>, FD-8). Nothing here is a business decision; everything here is a <em>correctness</em> decision that would be ruinous to retrofit. The patterns are ported from ERPNext as <strong>plain Django code + migrations</strong> &mdash; never the Frappe meta-runtime (<code>frappe.model.document.Document</code> is a separate engine, not vendored, and copying it violates Rule&nbsp;12).</p>
 
   <div class="callout co-key">
-    <strong>The stack is ratified (Q11, FD-0), not assumed.</strong> The engine is <strong>Python/Django + React-TS-PWA + PostgreSQL, GCP Mumbai</strong> &mdash; the earlier "TypeScript end-to-end" sketch and the "decide later" framing are both dead. ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations; the Frappe DocType meta-runtime is rejected (Rule&nbsp;12). Cards 1&ndash;7 build directly on this answer; the only stack-bound mechanics (auth in card&nbsp;3, the CI shape in card&nbsp;6, deploy in card&nbsp;7) are now settled too. Scaffolding can begin.</p>
+    <strong>The stack is ratified (Q11, FD-0), not assumed.</strong> The engine is <strong>Python/Django + React-TS-PWA + PostgreSQL</strong> &mdash; the earlier "TypeScript end-to-end" sketch is dead (hosting to be decided later). ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations; the Frappe DocType meta-runtime is rejected (Rule&nbsp;12). Cards 1&ndash;7 build directly on this answer; the only stack-bound mechanics (auth in card&nbsp;3, the CI shape in card&nbsp;6, deploy in card&nbsp;7) are now settled too. Scaffolding can begin.</p>
   </div>
 
   <h3>Foundation decisions to RATIFY <span class="badge b-open">replaces the distrust-set ADRs</span></h3>
   <p>The seven ADRs (0001&ndash;0007) are treated as <em>input ideas only</em> and are being deleted. Below, each is re-issued as a foundation decision (FD) to ratify fresh. The stack (FD-0, Q11) and data-scoping (FD-8, Q12) calls are now <strong>closed</strong>; the rest are stack-independent and ratify as a block.</p>
   <table>
     <tr><th>FD</th><th>Area (old ADR)</th><th>What to ratify</th><th>Status</th></tr>
-    <tr><td><strong>FD-0</strong></td><td>Stack (0001)</td><td><strong>Ratified (Q11):</strong> Python/Django engine + React-TS-PWA + PostgreSQL, GCP Mumbai. "TS everywhere" is dead &mdash; the stack is a <em>typed PWA (TS) + typed Django (mypy/pydantic) + a generated typed client at the API seam</em>, not one language. The Frappe DocType meta-runtime is rejected (Rule&nbsp;12); ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations.</td><td><span class="badge b-locked">RATIFIED</span></td></tr>
+    <tr><td><strong>FD-0</strong></td><td>Stack (0001)</td><td><strong>Ratified (Q11):</strong> Python/Django engine + React-TS-PWA + PostgreSQL (hosting to be decided later). "TS everywhere" is dead &mdash; the stack is a <em>typed PWA (TS) + typed Django (mypy/pydantic) + a generated typed client at the API seam</em>, not one language. The Frappe DocType meta-runtime is rejected (Rule&nbsp;12); ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations.</td><td><span class="badge b-locked">RATIFIED</span></td></tr>
     <tr><td><strong>FD-1</strong></td><td>Repo layout (0002)</td><td>Monorepo, one Django app per design module + thin <code>core</code> kernel, downward-FK-only, scaffold <em>only</em> the early-slice apps (masters, inbound, vendors).</td><td><span class="badge b-locked">RATIFY</span> (sound; grow per slice)</td></tr>
     <tr><td><strong>FD-2</strong></td><td>DB conventions (0004)</td><td>Integer paise, append-only ledgers, effective-dated masters, three keys, snapshotted state+GSTIN. <strong>The most stack-independent and load-bearing set.</strong></td><td><span class="badge b-locked">RATIFY</span> (heart of correctness)</td></tr>
     <tr><td><strong>FD-3</strong></td><td>RBAC (0003)</td><td>One unified RBAC = roles+perms as data + data-scoping + maker-checker in <code>core</code>. Merges D4 payments-roles with D8 edit-grid. <em>Required</em> before login.</td><td><span class="badge b-locked">RATIFY</span> (the needed merge)</td></tr>
     <tr><td><strong>FD-4</strong></td><td>Entity/GSTIN (0007)</td><td><code>LegalEntity &rarr; GSTIN &rarr; Store</code> relationally, so one-company-vs-two is a data row not a migration. Highest blast radius.</td><td><span class="badge b-locked">RATIFY</span> (hedge the open CA fact)</td></tr>
     <tr><td><strong>FD-5</strong></td><td>CI gate (0005)</td><td>Green-required-to-merge: typecheck + lint + tests on real Postgres incl. golden-file, ledger-invariant, append-only-as-restricted-role, cross-store-isolation. Money code = mandatory human read.</td><td><span class="badge b-locked">RATIFY</span> (principles stack-independent)</td></tr>
-    <tr><td><strong>FD-6</strong></td><td>Auth + UI + seed (0006)</td><td>Session-cookie auth (httpOnly/Secure/SameSite, CSRF), lockout; light Tailwind+Radix component system for low-end Android; idempotent seed.</td><td><span class="badge b-locked">RATIFY</span> (auth mech settled with FD-0)</td></tr>
-    <tr><td><strong>FD-7</strong></td><td>Deploy (0001 tail)</td><td>GCP Mumbai &mdash; Cloud Run (Django serves built SPA, same-origin) + Cloud SQL Postgres + Secret Manager + Vertex later. Data resident in India region.</td><td><span class="badge b-locked">RATIFY</span> (settled with FD-0)</td></tr>
+    <tr><td><strong>FD-6</strong></td><td>Auth + UI + seed (0006)</td><td>Session-cookie auth (httpOnly/Secure/SameSite, CSRF), lockout; light Tailwind+Radix component system for store computers and browsers; idempotent seed.</td><td><span class="badge b-locked">RATIFY</span> (auth mech settled with FD-0)</td></tr>
+    <tr><td><strong>FD-7</strong></td><td>Deploy (0001 tail)</td><td>Deploy / hosting &mdash; to be decided later. The same-origin shape is settled (one service serving the built SPA, no CORS, one cookie domain) + managed Postgres + a secrets store + an AI platform later; the cloud provider and region are not yet chosen.</td><td><span class="badge b-warn">DEFERRED</span> (hosting to be decided)</td></tr>
     <tr><td><strong>FD-8</strong></td><td>Data scoping</td><td><strong>Ratified (Q12):</strong> store/GSTIN/brand/season isolation via <strong>app-layer scoping (<code>django-scopes</code>)</strong>, fail-closed, with the schema kept <strong>RLS-ready</strong> (carry store/brand/season/state-GSTIN as declared FK dimension columns on every ledger leg from the kernel, so Postgres RLS can be switched on later without a retrofit). Stronger than ERPNext's app-level <code>company=</code> filter &mdash; see card 3.</td><td><span class="badge b-locked">RATIFIED</span></td></tr>
   </table>
 
@@ -417,7 +417,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
   <!-- ============ CARD 2 ============ -->
   <div class="card mod.spine">
     <div class="lab">2 &mdash; DB CONVENTIONS (FD-2) &middot; the heart of correctness</div>
-    <p>The most stack-independent, most load-bearing card. These conventions are properties of the ledger, not of Django, and align one-for-one with the 11 rules.</p>
+    <p>The most stack-independent, most load-bearing card. These conventions are properties of the ledger, not of Django, and align one-for-one with the 12 rules.</p>
     <dl>
       <dt>Money = integer paise</dt><dd>All amounts <code>bigint</code> paise (Rs 28,50,000 stored as <code>285000000</code>). Rates and GST% are <code>NUMERIC</code>. GST / discount split computed in <code>Decimal</code>, rounded half-up, with an explicit rounding line so &Sigma;dr=&Sigma;cr holds &mdash; mirrors ERPNext's round-off GLE in <code>general_ledger.py</code>. <em>Never float.</em></dd>
       <dt>Append-only ledgers</dt><dd>Ledger rows INSERT-only, enforced three ways: app writes only via the posting engine; <code>REVOKE UPDATE, DELETE</code> from the app role; a trigger as backstop. Correction = a new dated reversing row, originals untouched &mdash; ported from ERPNext's immutable-ledger mode (<code>gl_entry.py:325</code> hard-throws on single-leg cancel; <code>general_ledger.py:make_reverse_gl_entries</code> posts sign-swapped legs with today's date).</dd>
@@ -451,18 +451,18 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
     <dl>
       <dt>Accounting dimensions</dt><dd>Every ledger leg carries <code>store_id</code>, <code>brand_id</code>, <code>season_id</code>, <code>gstin_id</code> as <strong>declared FK columns</strong> set from the document snapshot at post time. ERPNext gets dimensions by injecting custom fields onto every accounting doctype <em>at runtime</em> (<code>accounting_dimension.py:129 make_dimension_in_accounting_doctypes</code> &rarr; <code>:158 create_custom_field</code>) &mdash; right idea, wrong mechanism. <strong>Keep the dimension; drop the runtime schema-mutation.</strong></dd>
       <dt>Snapshot down the tree</dt><dd>Documents snapshot <code>store &rarr; gstin &rarr; entity</code> at post time so history always explains itself even if a store later remaps.</dd>
-      <dt>Tally mapping falls out</dt><dd>One Tally company per <code>LegalEntity</code> &mdash; one-vs-two Tally companies is decided by counting rows, settled at the CA sitting, not by code.</dd>
+      <dt>Tally mapping falls out</dt><dd>One Tally company per <code>LegalEntity</code> &mdash; confirmed one PAN / one entity (26 Jun 2026) = one Tally company; the relational model still supports two by counting rows.</dd>
       <dt>RBAC reuse</dt><dd>The card-3 data-scoping resolves against this exact tree &mdash; one structure, two consumers (postings + permissions).</dd>
     </dl>
-    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> Hand-write the four models in <code>core</code>/<code>masters</code>; add the dimension FKs to the <code>LedgerEntry</code> base. <code>/grill-with-docs</code> against the open CA fact (how many GSTINs/entities, e-invoicing applicability) so the count is a confirmed data assumption, recorded as an ADR replacing 0007.</div>
+    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> Hand-write the four models in <code>core</code>/<code>masters</code>; add the dimension FKs to the <code>LedgerEntry</code> base. <code>/grill-with-docs</code> against the remaining open CA fact (e-invoicing applicability); the entity count is confirmed (one PAN / two GSTINs / one Tally company, 26 Jun 2026), recorded in ADR-0007.</div>
   </div>
 
   <!-- ============ CARD 5 ============ -->
   <div class="card mod.brain">
     <div class="lab">5 &mdash; COMPONENT LIBRARY + SEED DATA (FD-6)</div>
-    <p>Build the design system <em>once</em>, light enough for low-end Android in stores (browser/PWA, no installs).</p>
+    <p>Build the design system <em>once</em>, light enough for store computers and browsers (browser/PWA, no installs).</p>
     <dl>
-      <dt>Component system</dt><dd>Own components on <strong>Tailwind + Radix (shadcn pattern)</strong> + Tremor (charts) + TanStack Table. Built once: a money input/reader that displays Rs Lakh/Crore (<code>&#8377;28,50,000</code>) while reading integer paise; status chips (the docstatus states); data-table; app shell; Hindi/English helper. Light bundle = fast on cheap phones, and Claude-Design-friendly.</dd>
+      <dt>Component system</dt><dd>Own components on <strong>Tailwind + Radix (shadcn pattern)</strong> + Tremor (charts) + TanStack Table. Built once: a money input/reader that displays Rs Lakh/Crore (<code>&#8377;28,50,000</code>) while reading integer paise; status chips (the docstatus states); data-table; app shell; Hindi/English helper. Light bundle = fast in the browser, and Claude-Design-friendly.</dd>
       <dt>Idempotent seed</dt><dd>One re-runnable seed: 9 roles + the permission matrix + 16 stores + Ranchi WH + the GSTINs + brands across the 4 commercial models (SOR/Outright/Hybrid +) + the date-effective GST slab table. Idempotent so dev/staging/prod converge.</dd>
       <dt>Golden seed for tests</dt><dd>Wire the ~150 real invoices in <code>code/pdf-to-pt/document/</code> as the corpus golden files (card&nbsp;6) read by per-slice tests.</dd>
     </dl>
@@ -484,20 +484,20 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 
   <!-- ============ CARD 7 ============ -->
   <div class="card mod.cross">
-    <div class="lab">7 &mdash; DEPLOY TO GCP MUMBAI (FD-7)</div>
-    <p>Data resident in an India region (<code>asia-south1</code>, Mumbai). No backend-as-a-service.</p>
+    <div class="lab">7 &mdash; DEPLOY / HOSTING &mdash; TO BE DECIDED LATER (FD-7)</div>
+    <p>The cloud provider and region are <strong>to be decided later</strong>. No backend-as-a-service. The shape below is provider-agnostic; the specific host gets chosen before the money slices.</p>
     <dl>
-      <dt>Runtime</dt><dd><strong>Cloud Run</strong> &mdash; one service, <strong>same-origin</strong>: Django serves the built Vite SPA (no CORS, one cookie domain, simplest auth). Containerized.</dd>
-      <dt>Database</dt><dd><strong>Cloud SQL for PostgreSQL</strong> in Mumbai, private IP, automated backups + PITR. Migrations run as a deploy step.</dd>
-      <dt>Secrets / config</dt><dd>Secret Manager for DB creds, session keys, GSP/LLM API keys. No secrets in the repo.</dd>
-      <dt>Later</dt><dd>Vertex AI (Mumbai) for the layer-4 read-only intelligence; reserved, not wired in foundation.</dd>
+      <dt>Runtime</dt><dd>One containerized service, <strong>same-origin</strong>: Django serves the built Vite SPA (no CORS, one cookie domain, simplest auth).</dd>
+      <dt>Database</dt><dd>Managed <strong>PostgreSQL</strong>, private networking, automated backups + PITR. Migrations run as a deploy step.</dd>
+      <dt>Secrets / config</dt><dd>A managed secrets store for DB creds, session keys, GSP/LLM API keys. No secrets in the repo.</dd>
+      <dt>Later</dt><dd>A hosted top model (AI platform to be decided later) for the layer-4 read-only intelligence; reserved, not wired in foundation.</dd>
     </dl>
     <div class="callout co-ext"><strong>Tasks &middot; tool.</strong> Use <code>/setup-deploy</code> then <code>/land-and-deploy</code> to wire the pipeline; smoke the empty skeleton end-to-end (login + one seeded role) with <code>/canary</code> after the first deploy. The walking-skeleton slices (1&ndash;2: master data, then inbound to the ledger) deploy through this same path &mdash; foundation proves the pipeline before any business logic rides it.</div>
   </div>
 
   <h3>Definition of "foundation done"</h3>
   <div class="callout co-key">
-    <strong>Foundation is complete when the empty skeleton is provably real, not when it is feature-rich.</strong> Concretely: (1) monorepo builds, import-linter contracts pass; (2) a throwaway document posts one balanced paise leg-pair into Cloud SQL inside a transaction and is read back; (3) the four foundation tests are green on real Postgres in CI, green-required-to-merge is on, pre-commit + git guardrails active; (4) one seeded user logs in through the same-origin Cloud Run service and sees only their scoped rows; (5) the seed is idempotent across dev/staging/prod; (6) FD-0 through FD-8 are ratified ADRs replacing the deleted distrust set. <strong>Then &mdash; and only then &mdash; slice 1 (master data + identity + the PT-line model) begins, followed by slice 2 (the GRN&rarr;PT&rarr;ledger inbound walking skeleton).</strong> The three externals (Ten Software POS API, Tally/TaxOne import, barcode tool) spike <em>in parallel</em> through all of this &mdash; they have lead time and gate later slices, not the foundation.</p>
+    <strong>Foundation is complete when the empty skeleton is provably real, not when it is feature-rich.</strong> Concretely: (1) monorepo builds, import-linter contracts pass; (2) a throwaway document posts one balanced paise leg-pair into Postgres inside a transaction and is read back; (3) the four foundation tests are green on real Postgres in CI, green-required-to-merge is on, pre-commit + git guardrails active; (4) one seeded user logs in through the same-origin service and sees only their scoped rows; (5) the seed is idempotent across dev/staging/prod; (6) FD-0 through FD-8 are ratified ADRs replacing the deleted distrust set. <strong>Then &mdash; and only then &mdash; slice 1 (master data + identity + the PT-line model) begins, followed by slice 2 (the GRN&rarr;PT&rarr;ledger inbound walking skeleton).</strong> The three externals (Ten Software POS API, Tally/TaxOne import, barcode tool) spike <em>in parallel</em> through all of this &mdash; they have lead time and gate later slices, not the foundation.</p>
   </div>
 </section>
 
@@ -582,7 +582,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
     <tr>
       <td>9</td>
       <td><strong>DEPLOY</strong></td>
-      <td>Merge the PR, wait for CI + the deploy to finish, confirm the release is live in the India-region environment. First time only: <code>setup-deploy</code> detects/configures the deploy platform that <code>land-and-deploy</code> then drives.</td>
+      <td>Merge the PR, wait for CI + the deploy to finish, confirm the release is live in the deploy environment. First time only: <code>setup-deploy</code> detects/configures the deploy platform that <code>land-and-deploy</code> then drives.</td>
       <td><code>land-and-deploy</code> (one-time: <code>setup-deploy</code>) <span class="badge b-ai">autonomous</span></td>
       <td>Slice merged to the default branch and deployed.</td>
     </tr>
@@ -627,7 +627,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
       <li><strong>Golden files pass.</strong> The real-invoice golden files written at the SPEC gate are green in CI &mdash; expected ledger rows match to the paise.</li>
       <li><strong>Reconciles.</strong> Derived balances (outstanding, on-hand, profitability) computed as a sum over the ledger match the source documents; cross-store / cross-GSTIN isolation tests pass.</li>
       <li><strong>Flagged-not-blocked.</strong> Edge cases raise flags for human review rather than hard-stopping the workflow (Rule 7).</li>
-      <li><strong>Deployed.</strong> Live in the India-region environment, canary clean, docs updated.</li>
+      <li><strong>Deployed.</strong> Live in the deploy environment, canary clean, docs updated.</li>
     </ul>
   </div>
 
@@ -676,7 +676,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
     <div class="lab">SLICE 0 &middot; FOUNDATION</div>
     <dl>
       <dt>Delivers (end-to-end)</dt>
-      <dd>The project skeleton: repo, PostgreSQL, the <strong>document skeleton</strong> (number / type / status state-machine / actor-audit / snapshots), the <strong>one central posting engine</strong> (balanced-or-fail, append-only, correct-by-reversal), login, user-roles, and India-region deploy. No business document yet &mdash; just the kernel every slice writes through.</dd>
+      <dd>The project skeleton: repo, PostgreSQL, the <strong>document skeleton</strong> (number / type / status state-machine / actor-audit / snapshots), the <strong>one central posting engine</strong> (balanced-or-fail, append-only, correct-by-reversal), login, user-roles, and deploy. No business document yet &mdash; just the kernel every slice writes through.</dd>
       <dt>Borrows from ERPNext</dt>
       <dd>The Frappe <em>lifecycle contract</em>: <code>docstatus</code> draft(0)&rarr;submitted(1)&rarr;cancelled(2), ledgers written only in <code>on_submit</code> / reversed only in <code>on_cancel</code>, free audit fields <code>owner/creation/modified/modified_by</code> + <code>track_changes</code> (<code>stock/doctype/stock_entry/stock_entry.py</code>). The posting engine shape: <code>accounts/general_ledger.py:make_gl_entries</code> + <code>process_debit_credit_difference</code> (&Sigma;debit=&Sigma;credit or the whole write fails, line 460) + immutable cancel via <code>gl_entry.py:GLEntry.on_cancel</code> (hard-throws) &rarr; <code>make_reverse_gl_entries</code> (line 607). Composer-per-document-type pattern (<code>.../services/gl_composer.py:compose</code>).</dd>
       <dt>External spike</dt>
@@ -716,7 +716,7 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
       <dt>External spike</dt>
       <dd><span class="badge b-ext">Barcode tool</span> (scan at GRN). No POS / Tally dependency yet.</dd>
       <dt>Golden file / recon that proves it</dt>
-      <dd>One real outright-brand invoice &rarr; GRN qty matches counted qty; PT lands ex-GST unit cost = P-RATE &minus; input-tax + value-weighted freight share; stock ledger shows the exact pieces at the frozen cost across the store-split. Golden file = the per-SKU landed cost + the SLE rows; recon = total invoice value vs sum of landed lines (the inbound tie-out).</dd>
+      <dd>One real outright-brand invoice &rarr; GRN qty matches counted qty; PT lands unit cost = P-RATE directly (already ex-GST, never strip GST per Q5) + value-weighted freight share, less discounts; stock ledger shows the exact pieces at the frozen cost across the store-split. Golden file = the per-SKU landed cost + the SLE rows; recon = total invoice value vs sum of landed lines (the inbound tie-out).</dd>
     </dl>
   </div>
 
@@ -988,12 +988,12 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 <tr>
 <td><strong>Tally / TaxOne import</strong> <span class="badge b-ext">EXT</span></td>
 <td>Tally stays the statutory book of record (Rule). If the TaxOne / XML import path can't take our deterministic vouchers cleanly, the daily tie-out (slice 7) has no landing zone and GST filing breaks.</td>
-<td><strong>Spike now, in parallel.</strong> Push a sample Sale + Purchase + Journal voucher through TaxOne import; confirm the deterministic voucher number (<code>DEO-SAL-20260620-001</code>, store·type·date·seq) survives as the idempotency join key with prevent-duplicates ON. <em>Checkpoint:</em> import proven before slice 7. Pair with the CA sitting (below) — one or two Tally companies depends on the entity count.</td>
+<td><strong>Spike now, in parallel.</strong> Push a sample Sale + Purchase + Journal voucher through TaxOne import; confirm the deterministic voucher number (<code>DEO-SAL-20260620-001</code>, store·type·date·seq) survives as the idempotency join key with prevent-duplicates ON. <em>Checkpoint:</em> import proven before slice 7. Pair with the CA sitting (below) — entity count confirmed (one PAN → one Tally company).</td>
 </tr>
 
 <tr>
 <td><strong>Barcode generator</strong> <span class="badge b-ext">EXT</span></td>
-<td>Lowest risk of the three, but still external — inbound labelling (PT → printed label) can't go live without a working barcode/label tool that low-end store printers accept.</td>
+<td>Lowest risk of the three, but still external — inbound labelling (PT → printed label) can't go live without a working barcode/label tool that the store's label printers accept.</td>
 <td><strong>Spike now, in parallel.</strong> Confirm symbology, label size, and printer compatibility against real store hardware. <em>Checkpoint:</em> proven before the inbound slice (slice 2, where scan-at-GRN lands) and store labelling go live.</td>
 </tr>
 
@@ -1065,11 +1065,11 @@ The implement phase opens <em>commits on a branch</em>, not literally a PR — a
 
 <h3>First concrete actions this week</h3>
 <ol class="tight">
-<li><strong>Ratify the foundation decisions.</strong> The stack (FD-0, Q11: Python/Django + React-TS-PWA + PostgreSQL, GCP Mumbai) and data-scoping (FD-8, Q12: app-layer <code>django-scopes</code>, schema RLS-ready) calls are closed; ratify them with the stack-independent set as a block: integer-paise + append-only + snapshot-state DB conventions, the relational LegalEntity → GSTIN → Store hedge, unified RBAC, the golden-file + ledger-invariant + cross-store-isolation CI gate, and the light Tailwind/Radix component system + seed data.</li>
+<li><strong>Ratify the foundation decisions.</strong> The stack (FD-0, Q11: Python/Django + React-TS-PWA + PostgreSQL; hosting to be decided later) and data-scoping (FD-8, Q12: app-layer <code>django-scopes</code>, schema RLS-ready) calls are closed; ratify them with the stack-independent set as a block: integer-paise + append-only + snapshot-state DB conventions, the relational LegalEntity → GSTIN → Store hedge, unified RBAC, the golden-file + ledger-invariant + cross-store-isolation CI gate, and the light Tailwind/Radix component system + seed data.</li>
 <li><strong>Delete the distrust set.</strong> Remove ADRs 0001–0007 — unratified sketches presented as LOCKED. They were input/ideas; the ratified set from action 1 replaces them.</li>
 <li><strong>Scaffold repo + DB + auth.</strong> Slice 0: foundation only, no business logic — monorepo, database with the agreed conventions, login + identity/session. Scaffold only what slice 1 needs (core + masters + vendors + inbound); grow apps per slice.</li>
 <li><strong>Open the foundation issues.</strong> One issue per scaffold piece + the slice-1 (master data) and slice-2 walking-skeleton spec (GRN → PT → ledger postings → store stock screen, ending at the ledger).</li>
-<li><strong>Kick off the 3 spikes in parallel.</strong> Ten Software POS API, Tally/TaxOne import, barcode generator — plus book the CA sitting (entity/GSTIN count, one Tally company or two, e-invoicing applicability, SOR deemed-supply ruling). They have lead time; start them the same day as the scaffold.</li>
+<li><strong>Kick off the 3 spikes in parallel.</strong> Ten Software POS API, Tally/TaxOne import, barcode generator — plus book the CA sitting (e-invoicing applicability, SOR deemed-supply ruling, slab basis — entity count confirmed: one PAN / one Tally company). They have lead time; start them the same day as the scaffold.</li>
 </ol>
 
 </section>

@@ -264,7 +264,7 @@
   <dl class="gloss">
     <dt id="gstin">GSTIN <span class="alias">distinct persons · Bihar &amp; Jharkhand</span> <span class="pill p-rule">posting rule</span></dt>
     <dd>A state-level tax identity. KDPS has <strong>two GSTINs — Bihar and Jharkhand — and they are separate "distinct persons"</strong> under GST. Every store/warehouse maps to a state GSTIN; documents snapshot store → GSTIN → entity. Treatment is driven off the first two digits (state code) of the two GSTINs.</dd>
-    <dd class="seealso"><b>See also</b> <a href="#deemed-transfer">cross-state transfer</a>, <a href="#entity">LegalEntity → GSTIN → Store</a>. <span class="badge b-ca">client</span> How many GSTINs, one PAN or two firms, and one Tally company or two — pending client confirmation.</dd>
+    <dd class="seealso"><b>See also</b> <a href="#deemed-transfer">cross-state transfer</a>, <a href="#entity">LegalEntity → GSTIN → Store</a>. <span class="badge b-ca">client</span> Confirmed 26 Jun 2026: one PAN (one firm) holding two GSTINs (Bihar &amp; Jharkhand), one Tally company.</dd>
 
     <dt id="deemed-transfer">Cross-state transfer <span class="alias">Bihar ↔ Jharkhand stock move</span> <span class="pill p-rule">posting rule</span> <span class="pill p-money">money</span></dt>
     <dd>A stock move between the two GSTINs is a <strong>taxable IGST supply</strong> — a tax invoice with IGST out at the sender, a matching purchase voucher with ITC at the receiver, plus an e-way bill on the consignment value. It is <em>not</em> "internal — none". An <strong>intra-state</strong> move (within one GSTIN) stays stock-ledger-only. E-way bill thresholds are state/direction data: ₹50,000 cross-state; ₹1,00,000 intra-state in both Bihar and Jharkhand. <span class="badge b-ca">CA</span> slab basis on the transfer invoice + the Jharkhand e-way carve-out.</dd>
@@ -372,7 +372,7 @@
     <tr><td><a href="#offer">Offer</a></td><td>Brand-specific slab/condition discounts, applied on-invoice at the till.</td></tr>
     <tr><td><a href="#ai-edges">AI at the edges</a></td><td>AI reads &amp; suggests, never posts or approves.</td></tr>
     <tr><td><a href="#variation-rule">Variation is data</a></td><td>Rule 12 — anything that varies is config rows over a frozen kernel.</td></tr>
-    <tr><td><a href="#entity">LegalEntity → GSTIN → Store</a></td><td>Relational geography; one-vs-two companies is a data row.</td></tr>
+    <tr><td><a href="#entity">LegalEntity → GSTIN → Store</a></td><td>Relational geography; one PAN / one entity confirmed (the two-company shape stays a data row).</td></tr>
     <tr><td><a href="#flag-dont-block">Flag, don't block</a></td><td>Mismatches go to the exception queue; the flow never stops.</td></tr>
   </table>
 </section>

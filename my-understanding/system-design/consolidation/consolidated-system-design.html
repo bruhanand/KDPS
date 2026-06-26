@@ -122,7 +122,7 @@
   <div class="callout co-note">
     <strong>How this fits with the other documents.</strong>
     <ul class="tight" style="margin-bottom:0">
-      <li><strong>Above — the frame:</strong> <a href="../00-system-architecture.html">00-system-architecture.html</a> is the constitution (the 11 rules, the layer map). It is the law; this is the design built under it.</li>
+      <li><strong>Above — the frame:</strong> <a href="../00-system-architecture.html">00-system-architecture.html</a> is the constitution (the 12 rules, the layer map). It is the law; this is the design built under it.</li>
       <li><strong>This document:</strong> the whole system as one reconciled design.</li>
       <li><strong>Below — the detailed specs (now written):</strong> <a href="glossary.html">glossary.html</a> (the controlled vocabulary), <a href="data-model.html">data-model.html</a> (the PT-spine schema), <a href="posting-catalog.html">posting-catalog.html</a> (every document → ledger legs, per model), <a href="lifecycles.html">lifecycles.html</a> (each document's state machine), <a href="integration-contracts.html">integration-contracts.html</a> (POS · Tally · Bank · WhatsApp).</li>
       <li><strong>D1–D8:</strong> now the appendices — the full reasoning behind every decision summarised here.</li>
@@ -327,7 +327,7 @@
     <tr><td>BARCODE</td><td>13-digit EAN; vendor's, else POS-generated</td><td>Barcode registry · piece identity = <strong>BARCODE + SEASON</strong></td></tr>
     <tr><td>GENDER · SUB&nbsp;CATEGORY · TYPE · ITEM · FIT</td><td>Canonical classification (vendor terms mapped in)</td><td>Taxonomy masters (+ AI <em>suggested</em> columns)</td></tr>
     <tr><td>HSN</td><td>Tax code (6–8 digit)</td><td>GST/HSN slab lookup (date-effective)</td></tr>
-    <tr><td>MRP · BASIC · P&nbsp;RATE · MARGIN</td><td>Retail price · base cost · per-piece payable · margin</td><td>Pricing; <strong>unit cost = landed ex-GST</strong> = P&nbsp;RATE − INPUT&nbsp;TAX + spread invoice charges</td></tr>
+    <tr><td>MRP · BASIC · P&nbsp;RATE · MARGIN</td><td>Retail price · base cost · per-piece payable · margin</td><td>Pricing; <strong>unit cost = P&nbsp;RATE directly</strong> (already the ex-GST per-piece payable) + value-weighted invoice charges, less discounts; <strong>never strip GST</strong> (Q5)</td></tr>
     <tr><td>INPUT&nbsp;TAX · OUTPUT&nbsp;TAX</td><td>Recoverable / chargeable GST per piece</td><td>Tax breakup carried to Tally</td></tr>
     <tr><td>QTY</td><td>Pieces received for this line (one barcode → many pieces)</td><td>Stock-in posting quantity</td></tr>
   </table>
@@ -366,7 +366,7 @@
       <dt>Solves</dt><dd>Orders live in people's heads; no track of booked-vs-received or return deadlines.</dd>
       <dt>Documents</dt><dd><strong>Booking</strong> — one vendor + one brand + one season; lines at style + size grain. Status derived from goods received: <code>Booked → Partially → Fully received → Return window open → Closed/Cancelled</code>.</dd>
       <dt>Posts</dt><dd>Nothing — the order book only. (The conscious identity exception: full SKU grain begins at GRN/PT.)</dd>
-      <dt>Decisions</dt><dd>The commercial model is stored as a <strong>two-axis registry</strong> — <em>ownership</em> (KDPS-owns vs brand-owns) × <em>return-terms</em> (none / capped / uncapped), plus a <em>rolling-top-up</em> flag — and the friendly label is <strong>derived</strong> from those axes. Screens still read <strong>Outright (BNS) · Correction (25-18-10) · SOR · Consignment</strong>, but the books key off the axes (ownership drives the GST trigger), so a new deal shape is a new combination, not new code. Snapshotted per brand per season (a first-class dimension, not a flag). A return-allowance budget per brand for Correction. Return-window alarms at 30/15/7 days. v1 = branded vendors; non-branded records → v2 (the non-branded <em>inbound flow</em> is v1).</dd>
+      <dt>Decisions</dt><dd>The commercial model is stored as a <strong>two-axis registry</strong> — <em>ownership</em> (KDPS-owns vs brand-owns) × <em>return-terms</em> (none / capped / uncapped), plus a <em>rolling-top-up</em> flag — and the friendly label is <strong>derived</strong> from those axes. Screens still read <strong>Outright (BNS) · Correction (25-18-10) · SOR · Consignment</strong>, but the books key off the axes (ownership drives the GST trigger), so a new deal shape is a new combination, not new code. The model <strong>defaults from the brand master but is overridable per booking / per stock-received</strong> (one brand can run any of the four models) — 26 Jun 2026. <strong>Margin % and return-window are configurable per brand</strong> (not fixed), filled by a KDPS steward. Snapshotted per brand per season (a first-class dimension, not a flag). A return-allowance budget per brand for Correction. Return-window alarms at 30/15/7 days. v1 = branded vendors; non-branded records → v2 (the non-branded <em>inbound flow</em> is v1).</dd>
       <dt>AI</dt><dd><span class="badge b-ai">AI</span> reads the brand's order paper → drafts the booking; a person confirms.</dd>
       <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new commercial model is a new row in the model registry.</dd>
     </dl>
@@ -379,7 +379,7 @@
       <dt>Solves</dt><dd>Every arrival re-typed by hand into Excel; no priced size×colour stock; no reconciliation.</dd>
       <dt>Documents</dt><dd><strong>Shipment</strong> (anchor; invoice upload triggers it) → <strong>GRN</strong> (count vs order list; over-receipt flagged; counted-by ≠ entered-by) → <strong>PT</strong> (priced, barcoded — the data spine) → <strong>Store split</strong> → <strong>TIR export</strong> (→ Tally purchase).</dd>
       <dt>Posts</dt><dd>Two steps. <strong>GRN posts the quantity</strong> — pieces in at SKU grain (location, condition, season, owned-flag provisional), so goods are sellable day one even before pricing. <strong>PT at Patna inward posts the valuation</strong> — priced stock-in per piece at landed ex-GST cost — and the <strong>Outright/Correction vendor liability</strong> (incl. GST) on receipt. For SOR/Consignment the PT only flags the piece <em>not-owned</em>; the sold-liability is posted later by the <strong>Sale</strong> (D3), never from the PT.</dd>
-      <dt>Decisions</dt><dd>Both paths v1 — branded (AI invoice → per-brand mapping → PT) and non-branded (AI invoice → chat-assist → editable PT, the "PT Mapper Type 2"). One barcode → many pieces. Season system-derived. Unit cost frozen at stock-in. <strong>Booking-less direct receipt works for any brand</strong> — the <strong>Shipment</strong> (not the booking) is the anchor; a "Receive without order" GRN posts the quantity, the model is snapshotted from the effective-dated brand master, no phantom booking is created, and the GRN can be retro-linked to a later booking.</dd>
+      <dt>Decisions</dt><dd>Both paths v1 — branded (AI invoice → per-brand mapping → PT) and non-branded (AI invoice → chat-assist → editable PT, the "PT Mapper Type 2"). One barcode → many pieces. Season system-derived. Unit cost frozen at stock-in. <strong>Booking-less direct receipt works for any brand</strong> — the <strong>Shipment</strong> (not the booking) is the anchor; a "Receive without order" GRN posts the quantity, the model defaults from the effective-dated brand master but is <strong>overridable on this receipt</strong> (26 Jun 2026), no phantom booking is created, and the GRN can be retro-linked to (and its booking details updated by) a later booking.</dd>
       <dt>AI</dt><dd><span class="badge b-ai">AI</span> reads invoices into data, chat-builds the non-branded PT, fuzzy item-name match. Conversion, recon, pricing and Tally export are <strong>plain software</strong>.</dd>
       <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new vendor PT layout is a new mapping rule (data).</dd>
     </dl>
@@ -392,7 +392,7 @@
       <dt>Solves</dt><dd>POS per store with no central truth; exchange / transfer / returns / counts all manual; discounts run on memory.</dd>
       <dt>Documents</dt><dd><strong>Sale</strong> (Ten Software ingest · own KDPS POS, concurrent · manual-bill fallback) · <strong>Exchange</strong> · <strong>Inter-store transfer</strong> (two-step, in-transit) · <strong>RTV</strong> (defective/GR, credit or replacement) · <strong>Seasonal return</strong> (window-driven) · <strong>EOSS / V-flip</strong> · <strong>Stocktake + adjustment</strong> (ABC blind counts; negative-SOH policy).</dd>
       <dt>Posts</dt><dd><strong>Stock</strong> (out / in-transit / quarantine / liquidation, with reason) · <strong>Cash</strong> (collections in) · <strong>Vendor</strong> (SOR/Consignment liability accrues <em>on sale</em>; returns debit).</dd>
-      <dt>Decisions</dt><dd>Our system is the book of record; POS is the sale counter (we ingest, we don't recreate) — joined on <strong>barcode + season</strong>, with <em>season inferred at the adapter</em> (a reused barcode resolves oldest-cohort-first; ambiguity is a one-tap "which season?", never a blocked sale), all behind one swappable adapter. <strong>Our own POS is an in-scope, concurrent Sale source</strong> running alongside Ten Software (each store runs exactly one POS; both write the same source-agnostic Sale document). Free-to-sell = physical − locked. Exchange credit = what the customer paid; new item at live offer price. EOSS V-flip flips ownership to KDPS (keep real brand, owner = KDPS, status = liquidation, "V&lt;brand&gt;", barcode unchanged).</dd>
+      <dt>Decisions</dt><dd>Our system is the book of record; POS is the sale counter (we ingest, we don't recreate) — joined on <strong>barcode + season</strong>, with <em>season inferred at the adapter</em> (a reused barcode resolves oldest-cohort-first; ambiguity is a one-tap "which season?", never a blocked sale), all behind one swappable adapter. <strong>POS integration is deferred — the last module, not in the current build (26 Jun 2026):</strong> Ten Software will sell API access at a cost plus lead time; when POS is built KDPS uses their API if ready, else builds its own (decided then). The Sale stays source-agnostic so any source (Ten Software · own KDPS POS · manual bill) writes the same document; each store runs exactly one POS. Free-to-sell = physical − locked. Exchange credit = what the customer paid; new item at live offer price. EOSS V-flip flips ownership to KDPS (keep real brand, owner = KDPS, status = liquidation, "V&lt;brand&gt;", barcode unchanged).</dd>
       <dt>Offers (inside)</dt><dd>One rulebook — <strong>trigger + reward + dials</strong>, eight patterns + an open model. Applied <em>per item</em> (a multi-brand bill carries many offers); <strong>best-for-customer</strong> precedence; brand vs KDPS funder tag (reporting, never a claim); a daily applied-vs-rulebook audit. Offers post nothing — a discount only lowers price.</dd>
       <dt>AI</dt><dd><span class="badge b-ai">AI</span> markdown suggestions on dead stock (cost floor + step-down) → a human authors the offer; reads offer sheets into clean rules.</dd>
       <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new movement = new document type + reason code; a new offer = a new pattern row; <strong>a new sales channel (online) = a new Location type + a new Sale source.</strong></dd>
@@ -417,10 +417,10 @@
     <div class="lab">Cross-cutting · D6 · Tally sync</div>
     <h4>5 · Accounting (Tally) — the statutory book, fed exactly once</h4>
     <dl>
-      <dt>Solves</dt><dd>Everything re-keyed into Tally by hand.</dd>
+      <dt>Solves</dt><dd>Everything re-keyed into Tally by hand. <strong>Scope (26 Jun 2026): the Tally / accounting sync is deferred — not in the current build; this is the design of record for when it is built.</strong></dd>
       <dt>Documents (vouchers)</dt><dd>Purchase (from TIR) · Sales (per-bill for B2B with customer GSTIN; daily consolidated per store per GST rate for B2C) · Receipt (combined daily per store; tender split) · Payment (from D4) · Debit/Credit Note · Journal (SOR/Consignment settlement).</dd>
       <dt>Posts</dt><dd>To <strong>Tally only</strong> — one-way push, no re-keying. Tally stays the statutory book; this system feeds it, never replaces it.</dd>
-      <dt>Decisions</dt><dd>KDPS-owned <strong>deterministic voucher number</strong> (<code>DEO-SAL-20260620-001</code> = store · type · date · seq) = idempotency guard + Tally join key (outbox → exactly-once). GST computed once by KDPS, carried, never recomputed; date-effective slab; cross-state = IGST. Hybrid route: export → Vyapar TaxOne (default), direct-XML fallback. Daily tie-out + a plain-words "needs attention" list.</dd>
+      <dt>Decisions</dt><dd>KDPS-owned <strong>deterministic voucher number</strong> (<code>DEO-SAL-20260620-001</code> = store · type · date · seq) = idempotency guard + Tally join key (outbox → exactly-once). GST computed once by KDPS, carried, never recomputed; date-effective slab; a <strong>cross-state (Bihar↔Jharkhand) move is legally a taxable IGST supply between distinct persons</strong>, but the system only records the move and <strong>flags it</strong> — the IGST tax invoice and e-way bill are produced <strong>manually by KDPS, outside the system</strong> (26 Jun 2026 scope decision); intra-state moves are stock-ledger-only. Hybrid route: export → Vyapar TaxOne (default), direct-XML fallback. Daily tie-out + a plain-words "needs attention" list. <strong>Open (26 Jun 2026): IRN / e-invoicing ownership</strong> — assign an owning module and confirm applicability at the CA sitting; most is external/manual (counter bills are B2C, no IRN; cross-state paperwork is manual), but B2B / cross-state IGST invoices need an IRN above the turnover threshold.</dd>
       <dt>AI</dt><dd><span class="badge b-no">None — by design.</span> The books are exact, machine-made.</dd>
       <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> the export contract is stable, so a self-built Tally bridge later is a drop-in.</dd>
     </dl>
@@ -549,8 +549,8 @@
   </table>
   <h3>In scope now / deferred by decision</h3>
   <table>
-    <tr><th>In this design (D1–D8)</th><th>Deferred (revisit before go-live)</th></tr>
-    <tr><td>Master data &amp; users · vendor &amp; booking · inbound · outbound &amp; offers · money · Tally · the Brain</td><td><strong>WAPCS</strong> attendance &amp; payroll · <strong>D9</strong> migration &amp; rollout · the <strong>deep roles/access</strong> model (D4 left it thin)</td></tr>
+    <tr><th>Designed (D1–D8)</th><th>Deferred (revisit before go-live)</th></tr>
+    <tr><td>Master data &amp; users · vendor &amp; booking · inbound · outbound &amp; offers · money · Tally · the Brain. <span class="footer-note">(26 Jun 2026 — the <strong>Tally / accounting sync</strong> and <strong>POS integration</strong> are designed but deferred from the current build; POS is the last module.)</span></td><td><strong>POS integration</strong> &amp; <strong>Tally / accounting sync</strong> (designed, not in the current build) · <strong>WAPCS</strong> attendance &amp; payroll · <strong>D9</strong> migration &amp; rollout · the <strong>deep roles/access</strong> model (D4 left it thin)</td></tr>
   </table>
 </section>
 
@@ -567,17 +567,17 @@
 
   <div class="card"><h4>Browser PWA, light and offline-tolerant</h4>
     <ul class="tight" style="margin-bottom:0">
-      <li>A browser app on the store's POS machine — no installs, light pages, bad-network tolerant, big tap targets for low-end Android.</li>
+      <li>A browser app on the store's POS machine — no installs, light pages, bad-network tolerant, big tap targets.</li>
       <li>Hindi where staff face it. Owners get WhatsApp, not logins. INR in Lakh/Crore format (₹28,50,000).</li>
       <li><strong>Typed end-to-end</strong> — a typed React/TypeScript PWA on the glass, a typed Python/Django engine (mypy + pydantic), and a <strong>generated typed client at the API seam</strong> so the two halves agree by construction. Money bugs are caught by the compilers, not in production.</li>
     </ul>
   </div>
 
-  <div class="card"><h4>AI &amp; hosting — India-resident</h4>
+  <div class="card"><h4>AI &amp; hosting</h4>
     <ul class="tight" style="margin-bottom:0">
-      <li>Hosted top model via <strong>Vertex AI (Mumbai)</strong>, model swappable; app + DB on <strong>Google Cloud, Mumbai (asia-south1)</strong>.</li>
+      <li>Hosted top model (AI platform to be decided later), model swappable; hosting to be decided later.</li>
       <li>AI only ever sees edge data and computed numbers, never raw customer/payment data.</li>
-      <li>All AI combined &lt; ₹2,000/month — the cost is the always-on database, not the models. <span class="badge b-open">Confirm in-region AI processing live before go-live.</span></li>
+      <li>All AI combined &lt; ₹2,000/month — the cost is the always-on database, not the models. <span class="badge b-open">Confirm AI processing arrangements before go-live.</span></li>
     </ul>
   </div>
 

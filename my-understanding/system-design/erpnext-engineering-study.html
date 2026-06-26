@@ -105,7 +105,7 @@
   <p>This is an <strong>engineering study</strong>, not a product decision. We take <code>erpnext</code> and its <code>india-compliance</code> app apart at source-code grain and hold every piece up against the KDPS design (the architecture, the eleven rules, and the D1&ndash;D8 module designs). The goal is to make KDPS's home-built system <em>battle-tested by reference</em>: where a fifteen-year-old, production-proven Indian-GST retail system has already solved a problem the way we want it solved, we borrow the pattern; where it solves a problem a way that fights a KDPS domain fact, we diverge consciously and write down why.</p>
 
   <div class="callout co-warn">
-    <strong>This is NOT a decision to adopt Frappe/ERPNext.</strong> The stack stays exactly as decided: a browser-based <strong>React (TypeScript) PWA</strong> front end, a <strong>Python/Django</strong> back end, and <strong>PostgreSQL</strong> in an India region. We re-implement ERPNext's <em>contracts</em> (the submit/cancel lifecycle, one central posting engine, atomic naming series, accounting dimensions, RBAC-as-data, child tables) as plain Django models and migrations. We do <em>not</em> adopt the Frappe metadata DocType runtime &mdash; that meta-engine is the one thing this study most firmly tells us to leave behind.</p>
+    <strong>This is NOT a decision to adopt Frappe/ERPNext.</strong> The stack stays exactly as decided: a browser-based <strong>React (TypeScript) PWA</strong> front end, a <strong>Python/Django</strong> back end, and <strong>PostgreSQL</strong> (hosting to be decided later). We re-implement ERPNext's <em>contracts</em> (the submit/cancel lifecycle, one central posting engine, atomic naming series, accounting dimensions, RBAC-as-data, child tables) as plain Django models and migrations. We do <em>not</em> adopt the Frappe metadata DocType runtime &mdash; that meta-engine is the one thing this study most firmly tells us to leave behind.</p>
   </div>
 
   <h3>How to read it</h3>
@@ -343,7 +343,7 @@
       <td><strong>Two GSTINs</strong> (Bihar <code>10</code> / Jharkhand <code>20</code>) = distinct persons; every store&rarr;state GSTIN</td>
       <td>GSTIN on <strong>Company</strong> (<code>company_gstin</code>) + <strong>Address</strong> (<code>gstin</code>, <code>gst_state_number</code>); GL legs tagged <code>company_gstin</code> (<code>india_compliance/.../constants/custom_fields.py</code>, <code>overrides/gl_entry.py</code>, <code>STATE_NUMBERS</code>)</td>
       <td><span class="badge b-next">ADAPT</span></td>
-      <td>Borrow GSTIN-on-Address + state-number prefix and the per-GL-line <code>company_gstin</code> tag. BUT ERPNext's GL leg is otherwise state-blind (scope = Company only) &mdash; KDPS makes state-GSTIN a first-class ledger scope/dimension (plus PostgreSQL row-level security per store/GSTIN) rather than splitting into two Companies just to keep books distinct.</td>
+      <td>Borrow GSTIN-on-Address + state-number prefix and the per-GL-line <code>company_gstin</code> tag. BUT ERPNext's GL leg is otherwise state-blind (scope = Company only) &mdash; KDPS makes state-GSTIN a first-class ledger scope/dimension (scoped at the app layer, schema RLS-ready — ADR-0003) rather than splitting into two Companies just to keep books distinct.</td>
     </tr>
     <tr>
       <td><strong>Deterministic voucher number</strong> (<code>DEO-SAL-20260620-001</code>; idempotency + Tally join key)</td>
@@ -492,7 +492,7 @@
       <td>KDPS keeps GRN (qty) and PT (value) as two events at two moments with two actor sets. The collapse-into-one optimisation contradicts the two-human-gates decision. Note the guardrail pattern as a model for preventing double-posting.</td>
     </tr>
     <tr>
-      <td><strong>Landed ex-GST unit cost</strong> (= P-RATE &minus; INPUT-TAX + value-weighted share of freight/handling/discount; <em>frozen</em> at stock-in)</td>
+      <td><strong>Unit cost = P-RATE directly</strong> (already ex-GST — never strip GST, Q5 — + value-weighted share of freight/handling, less discount; <em>frozen</em> at stock-in)</td>
       <td><code>item.valuation_rate</code> = (net + item_tax + landed_cost + amount_diff) / qty (<code>controllers/buying_controller.py:406-482</code>); GST = "Total" category &rarr; input credit, not capitalized; freight/duty = "Valuation" category &rarr; capitalized</td>
       <td><span class="badge b-locked">BORROW</span> (formula + ex-GST split)</td>
       <td>ERPNext's <code>valuation_rate</code> <em>is</em> KDPS landed cost, and the Total-vs-Valuation tax split is precisely "landed ex-GST". Borrow the decomposition. Diverge on persistence: ERPNext recomputes valuation continuously; KDPS freezes it on the lot forever.</td>
@@ -986,7 +986,7 @@
       <td><strong>State-GSTIN scope on every leg</strong></td>
       <td>GL leg is state-blind; the only entity scope is <code>company</code>. Two-GSTIN handled outside GL via separate Companies + tax templates</td>
       <td><span class="badge b-ai">KDPS-DIFFERENT</span></td>
-      <td>KDPS makes state-GSTIN a first-class dimension/scope on every ledger row (PostgreSQL row-level security per store/GSTIN) so Bihar&harr;Jharkhand cross-state transfers post as taxable supplies natively &mdash; rather than ERPNext's two-Companies workaround. Diverge consciously here.</td>
+      <td>KDPS makes state-GSTIN a first-class dimension/scope on every ledger row (app-layer scoping, schema RLS-ready — ADR-0003) so Bihar&harr;Jharkhand cross-state transfers post as taxable supplies natively &mdash; rather than ERPNext's two-Companies workaround. Diverge consciously here.</td>
     </tr>
     <tr>
       <td><strong>Four currency planes</strong> (account/transaction/reporting currency, exchange rates)</td>
@@ -1126,7 +1126,7 @@
   <div class="callout co-key">
     <strong>The modular monolith is confirmed &mdash; ERPNext is the fifteen-year proof.</strong> ERPNext is a single deployable Python app, modules-as-folders (<code>erpnext/stock/</code>, <code>erpnext/accounts/</code>, <code>erpnext/selling/</code>) over one relational schema &mdash; no microservices, no per-module DB. The ledger <em>requires</em> it: &Sigma;debit=&Sigma;credit inside one DB transaction (<code>general_ledger.py</code> <code>process_debit_credit_difference</code>) needs a single transactional relational DB &mdash; the exact reasoning KDPS used to reject Supabase/BaaS and pick PostgreSQL with hand-built posting. ERPNext independently arrived at the same constraint, in the same language (Python), for the same domain. KDPS's spine is on battle-tested ground.
     <br><br>
-    Two places KDPS is <em>better</em> than the reference, deliberately: (1) PostgreSQL <strong>row-level security</strong> per store/GSTIN is stronger isolation than ERPNext's app-level <code>company</code> filter &mdash; the database itself enforces the Bihar/Jharkhand "distinct persons" boundary instead of trusting every query to remember a <code>WHERE company=</code>; (2) <strong>state-GSTIN as a first-class ledger dimension</strong>, where ERPNext is state-blind. Both are conscious upgrades, not deviations to justify.
+    Two places KDPS is <em>better</em> than the reference, deliberately: (1) <strong>fail-closed app-layer scoping</strong> (<code>django-scopes</code>) per store/GSTIN, scope dimensions carried as declared columns from the kernel and the schema kept <strong>RLS-ready</strong> as a defence-in-depth backstop (ADR-0003 / Q12) &mdash; more deliberate than ERPNext's app-level <code>company</code> filter because an unscoped query <em>errors</em> instead of silently returning every <code>company</code>'s rows, and it still enforces the Bihar/Jharkhand "distinct persons" boundary; (2) <strong>state-GSTIN as a first-class ledger dimension</strong>, where ERPNext is state-blind. Both are conscious upgrades, not deviations to justify.
   </div>
 
   <p><strong>Framework patterns to re-implement in Django</strong> &mdash; copy the <em>contract</em>, write it as plain Django models + migrations + explicit posting functions, golden-file tested per slice. Never inherit a generic base that mutates global behaviour.</p>
@@ -1309,7 +1309,7 @@
 <p>The PT line is a genuine improvement for three fashion-specific reasons:</p>
 <ul class="tight">
 <li><strong>One act, one row — crystallisation.</strong> All product truth for a SKU is decided at once, by one person, internally consistent by construction. You cannot have a SKU whose cost was keyed Tuesday but whose MRP was forgotten until Friday — the row forces them together.</li>
-<li><strong>Margin is first-class, computed, frozen.</strong> ERPNext has no margin field at all. KDPS makes <code>MARGIN = f(MRP, BASIC, P-RATE)</code> a column, and <code>unit cost = landed ex-GST = P-RATE - INPUT-TAX + spread invoice charges</code>, frozen at stock-in so profitability (Rule 6) reads a fixed cost against POS revenue forever.</li>
+<li><strong>Margin is first-class, computed, frozen.</strong> ERPNext has no margin field at all. KDPS makes <code>MARGIN = f(MRP, BASIC, P-RATE)</code> a column, and <code>unit cost = P-RATE directly (already ex-GST; never strip GST, Q5) + spread invoice charges, less discounts</code>, frozen at stock-in so profitability (Rule 6) reads a fixed cost against POS revenue forever.</li>
 <li><strong>Season + barcode is the piece cohort, part of the same row.</strong> ERPNext has no native season/collection/age (confirmed: not on Item). The PT row stamps <code>SEASON = FAMILY(Mon-YY)</code> next to the barcode at birth, so the cohort exists from the first scan.</li>
 </ul>
 
@@ -1349,7 +1349,7 @@
 <p>So the gap is total — by design, matching Rule 8 (AI at the edges only) and the consolidated note that AI "only sees edge data and computed numbers, never raw customer/payment data."</p>
 
 <div class="callout co-warn">
-<strong>Why KDPS needs AI exactly where ERPNext assumes it away.</strong> Inputs are not clean (40+ brands, 25+ formats; non-branded vendors send nothing structured — the transaction <em>is</em> the master-creation event). Owners live on WhatsApp, staff speak Hindi, phones are low-end Android — no analyst pores over reports, the system must narrate itself. One developer, fifty stores — no human watches all the leakage, dead stock, duplicate payments, vendor-bank fraud and markdown timing; AI watches and <em>ranks</em>, humans act on the top five. And the books must stay exact — precisely <em>because</em> AI is fallible, it must be kept off the ledger.
+<strong>Why KDPS needs AI exactly where ERPNext assumes it away.</strong> Inputs are not clean (40+ brands, 25+ formats; non-branded vendors send nothing structured — the transaction <em>is</em> the master-creation event). Owners live on WhatsApp, staff speak Hindi, the system runs in the browser on store devices — no analyst pores over reports, the system must narrate itself. One developer, fifty stores — no human watches all the leakage, dead stock, duplicate payments, vendor-bank fraud and markdown timing; AI watches and <em>ranks</em>, humans act on the top five. And the books must stay exact — precisely <em>because</em> AI is fallible, it must be kept off the ledger.
 </div>
 
 <div class="callout co-ext">
@@ -1371,7 +1371,7 @@
 <li><strong>A. AI reads through a metrics/tools layer, never raw SQL on the books.</strong> Every metric is defined once in a semantic layer, computed by deterministic code, exposed as read-only role-scoped function-calling tools. AI calls a tool ("weeks-of-cover for brand X"); it never queries <code>tabGL Entry</code>/the stock ledger directly and has no write path. This inverts ERPNext's design where logic lives inside DocType controllers — KDPS lifts the <em>numbers</em> into a read API. <strong>Code computes, AI narrates</strong> — the LLM only phrases, explains, translates to Hindi; it never calculates a consequential number.</li>
 <li><strong>B. The append-only ledger contract is the wall, borrowed wholesale.</strong> One engine writes immutable legs (<code>general_ledger.py:make_entry</code> &rarr; row at docstatus 1); rows can never be edited/cancelled (<code>gl_entry.py:on_cancel</code> hard-throws); corrections are swapped-sign reversals; &Sigma;dr=&Sigma;cr enforced at write. <strong>Edge-AI simply never holds a reference to this engine.</strong> The only door into the ledger is "a human submits a document," and AI cannot submit — so the books are structurally unreachable by AI.</li>
 </ul>
-<strong>Guardrails to build:</strong> (1) no write path, enforced architecturally — AI tier gets read-only credentials/tools only, cannot import the posting-engine module, golden-file tested per slice; (2) AI has its own login — Rule 10 extended, a parallel suggestion log records what AI <em>suggested</em> vs what a human <em>decided</em>, so a wrong hint is traceable and never silently becomes "what happened"; (3) confidence calibrated to failure cost (the 8-point playbook: show confidence proportional to consequence, always show the why, shadow&rarr;suggest&rarr;assist never autopilot, learn from corrections, India-localised, degraded mode when the model is down); (4) flag never block (Rule 5) — every AI output raises a flag into a named queue with an owner; (5) AI never sits in an approval path — approvals are role-gated deterministic state-machine steps; AI may brief, never approve; (6) AI sees edges and computed numbers, never raw sensitive data — hosted via Vertex AI (Mumbai), in-region, model swappable behind the same read API.
+<strong>Guardrails to build:</strong> (1) no write path, enforced architecturally — AI tier gets read-only credentials/tools only, cannot import the posting-engine module, golden-file tested per slice; (2) AI has its own login — Rule 10 extended, a parallel suggestion log records what AI <em>suggested</em> vs what a human <em>decided</em>, so a wrong hint is traceable and never silently becomes "what happened"; (3) confidence calibrated to failure cost (the 8-point playbook: show confidence proportional to consequence, always show the why, shadow&rarr;suggest&rarr;assist never autopilot, learn from corrections, India-localised, degraded mode when the model is down); (4) flag never block (Rule 5) — every AI output raises a flag into a named queue with an owner; (5) AI never sits in an approval path — approvals are role-gated deterministic state-machine steps; AI may brief, never approve; (6) AI sees edges and computed numbers, never raw sensitive data — hosted via a top model (AI platform to be decided later), model swappable behind the same read API.
 </div>
 
 <!-- ============================================================ -->
@@ -1445,7 +1445,7 @@
 <table>
 <tr><th>Force</th><th>Why ERPNext's native-POS model fails KDPS</th></tr>
 <tr><td>Two POS sources over time</td><td>Ten Software now (API ingest), KDPS PWA POS later — both must write the <em>same</em> Sale so D3/D4/D6/D7 never branch on "which POS". ERPNext's single subclass can't represent a source-agnostic Sale.</td></tr>
-<tr><td>Flaky network, low-end Android</td><td>ERPNext POS = "offline = no sale". KDPS must capture offline and sync — needs a client-supplied dedup key ERPNext lacks at the doctype layer.</td></tr>
+<tr><td>Flaky network</td><td>ERPNext POS = "offline = no sale". KDPS must capture offline and sync — needs a client-supplied dedup key ERPNext lacks at the doctype layer.</td></tr>
 <tr><td>Manual-bill fallback first-class</td><td>When POS/API is down a human writes a real Sale. ERPNext's "Sales Invoice mode" is the nearest analogue but a global switch, not a per-sale fallback.</td></tr>
 <tr><td>Two GSTINs (Bihar/Jharkhand = distinct persons)</td><td>Consolidation must never merge cross-state sales into one statutory document; routing keys off store&rarr;state-GSTIN.</td></tr>
 <tr><td>Tally is the statutory book</td><td>The Sale's purpose is to feed Tally once, deterministically (<code>DEO-SAL-20260620-001</code>), prevent-duplicates ON. ERPNext's GL has no external-book handoff.</td></tr>

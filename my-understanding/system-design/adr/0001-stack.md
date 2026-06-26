@@ -22,7 +22,8 @@ sub-question: the platform is not adopted; only its *contracts* are borrowed. Th
 ADR-0001 reasoning is salvaged here; the decision is now ratified rather than inherited.
 
 Existing investments steer the choice: the `code/pdf-to-pt` invoice→PT pipeline is Python, and
-the planned analytics/AI/ML layer is Python. Hosting was already settled on Google Cloud Mumbai.
+the planned analytics/AI/ML layer is Python. Hosting (cloud provider and region) is deferred — to
+be decided later.
 
 ## Decision
 
@@ -30,12 +31,11 @@ the planned analytics/AI/ML layer is Python. Hosting was already settled on Goog
   all-or-nothing DB transactions out of the box; same language as `pdf-to-pt` and the
   analytics/AI layer (one toolbox, not three); proven for data-heavy money systems. This is the
   one writer of every ledger and GST posting.
-- **Frontend: React + TypeScript**, delivered as a browser PWA on the store computer (low-end
-  Android, no app install).
+- **Frontend: React + TypeScript**, delivered as a browser PWA on the store computer (browser
+  PWA, no app install).
 - **Database: PostgreSQL.** The single writer of every ledger/GST posting is the server.
-- **Hosting: Google Cloud, asia-south1 (Mumbai)** — Cloud Run (app, min-instances ≥ 1 warm so a
-  cold start never lands mid-sale) + Cloud SQL for PostgreSQL + Cloud Storage + Secret Manager;
-  Vertex AI (Mumbai regional endpoint) for the read-only AI edges. India data residency by choice.
+- **Hosting: deferred — cloud provider and region to be decided later.** The read-only AI edges use
+  a hosted top model (AI platform to be decided later).
 - **Typed at both ends + a generated typed client at the API seam.** "TypeScript end-to-end" is
   dead. The contract is: a typed PWA (TypeScript), a typed Django (mypy + django-stubs, pydantic
   at the boundaries), and a generated typed TS API client at the HTTP seam

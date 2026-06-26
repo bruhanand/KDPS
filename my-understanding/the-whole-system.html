@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Whole System — KDPS, in one page</title>
+<style>
+  :root{
+    --rust:#b5482e; --navy:#1f3a5f; --ink:#1d2330; --muted:#5b6573; --line:#e3e7ee;
+    --paper:#fbfaf8; --card:#ffffff;
+    --blue:#eef4fb; --blue-line:#bcd6f3;
+    --amber:#fdf5e3; --amber-line:#ecd9a6;
+    --green:#eaf6ee; --green-line:#bfe3c9;
+    --purple:#f2f0fb; --purple-line:#d6cdf0;
+    --rusttint:#fbf0ec;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--paper); color:var(--ink);
+    font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px; margin:0 auto; padding:0 22px 90px}
+
+  header.top{padding:40px 0 14px; border-bottom:3px solid var(--rust); margin-bottom:6px}
+  .eyebrow{font-size:12.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--rust)}
+  h1{font-size:34px; line-height:1.15; margin:8px 0 6px; color:var(--navy); letter-spacing:-.01em}
+  .tagline{font-size:18px; color:var(--muted); margin:0}
+  .stamp{margin-top:14px; font-size:13px; color:var(--muted)}
+
+  nav.toc{position:sticky; top:0; z-index:20; background:rgba(251,250,248,.95);
+    backdrop-filter:blur(6px); border-bottom:1px solid var(--line); padding:10px 0; margin-bottom:26px}
+  nav.toc .inner{display:flex; flex-wrap:wrap; gap:6px 14px; font-size:13px}
+  nav.toc a{color:var(--navy); text-decoration:none; font-weight:600; white-space:nowrap}
+  nav.toc a:hover{color:var(--rust); text-decoration:underline}
+
+  h2.sec{font-size:24px; color:var(--navy); margin:46px 0 4px; padding-left:14px;
+    border-left:5px solid var(--rust); line-height:1.2}
+  h2.sec .n{color:var(--rust); font-weight:800; margin-right:8px}
+  .lead{font-size:17px; color:var(--muted); margin:6px 0 18px; padding-left:14px}
+  h3{font-size:18px; color:var(--navy); margin:26px 0 8px}
+  p{margin:9px 0}
+  ul,ol{margin:9px 0; padding-left:22px}
+  li{margin:5px 0}
+  strong{color:var(--ink)}
+  code{background:#eef0f4; padding:1px 6px; border-radius:5px; font-size:13.5px;
+    font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace}
+
+  .callout{border-radius:12px; padding:14px 18px; margin:16px 0; border:1px solid}
+  .c-key{background:var(--blue); border-color:var(--blue-line)}
+  .c-warn{background:var(--amber); border-color:var(--amber-line)}
+  .c-note{background:#f4f5f7; border-color:var(--line)}
+  .callout p:first-child{margin-top:0} .callout p:last-child{margin-bottom:0}
+
+  table{width:100%; border-collapse:collapse; margin:16px 0; font-size:14px;
+    background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:#f3f5f9; text-align:left; padding:9px 11px; font-size:12.5px;
+    text-transform:uppercase; letter-spacing:.03em; color:var(--navy); border-bottom:1px solid var(--line)}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fcfcfd}
+
+  .chip{display:inline-block; font-size:11.5px; font-weight:700; padding:1px 8px;
+    border-radius:999px; white-space:nowrap; border:1px solid}
+  .m-out{background:var(--green); border-color:var(--green-line); color:#1c5b32}
+  .m-cor{background:var(--amber); border-color:var(--amber-line); color:#8a5a12}
+  .m-sor{background:var(--blue); border-color:var(--blue-line); color:#1b4f86}
+  .m-con{background:var(--purple); border-color:var(--purple-line); color:#5a3b9e}
+
+  figure{margin:20px 0; text-align:center}
+  figure svg{max-width:100%; height:auto}
+  figcaption{font-size:13.5px; color:var(--muted); margin-top:8px; text-align:center; padding:0 20px}
+
+  .rules{counter-reset:r; list-style:none; padding:0}
+  .rules li{counter-increment:r; position:relative; padding:10px 12px 10px 52px;
+    border:1px solid var(--line); border-radius:10px; margin:8px 0; background:var(--card)}
+  .rules li::before{content:counter(r); position:absolute; left:12px; top:11px;
+    width:28px; height:28px; border-radius:50%; background:var(--navy); color:#fff;
+    font-weight:700; font-size:14px; display:flex; align-items:center; justify-content:center}
+  .rules b{color:var(--rust)}
+
+  .flow{font-size:14.5px; background:var(--card); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin:10px 0}
+  .flow .arrow{color:var(--rust); font-weight:700; padding:0 4px}
+  .flow .t{font-weight:700; color:var(--navy)}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:14px 0}
+  @media(max-width:680px){ .grid2{grid-template-columns:1fr} h1{font-size:27px} }
+  .mini{border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:var(--card)}
+  .mini h4{margin:0 0 6px; color:var(--navy); font-size:15px}
+  .mini p{margin:4px 0; font-size:14px}
+
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <div class="eyebrow">KDPS Lifestyle · one operating system</div>
+  <h1>The Whole System, in one page</h1>
+  <p class="tagline">What we are building, how it is shaped, and how every part works — in plain words.</p>
+  <div class="stamp">26 June 2026 · The one page to read first. The deeper docs (architecture, data model, posting catalog, lifecycles) sit under this; this is the same truth, said simply.</div>
+</header>
+
+<nav class="toc"><div class="inner">
+  <a href="#what">1 · What we're building</a>
+  <a href="#shape">2 · The shape</a>
+  <a href="#rules">3 · The 12 rules</a>
+  <a href="#words">4 · The words</a>
+  <a href="#models">5 · The 4 brand deals</a>
+  <a href="#data">6 · The data model</a>
+  <a href="#posting">7 · What events do to the books</a>
+  <a href="#life">8 · The life of a document</a>
+  <a href="#next">9 · What's next</a>
+</div></nav>
+
+<!-- ============================================================ 1 -->
+<h2 class="sec" id="what"><span class="n">1</span>What we are building</h2>
+<p class="lead">One system that holds the whole business — buying, stock, selling, money, and accounts — in one honest place.</p>
+
+<p><strong>KDPS today.</strong> A fashion retailer: 50+ stores across Bihar and Jharkhand, 20,000+ products, 40+ brands.</p>
+
+<p>Right now the business runs on three separate things that don't talk to each other:</p>
+<ul>
+  <li>A separate <strong>billing machine (POS)</strong> in each store.</li>
+  <li><strong>Tally</strong> for accounts.</li>
+  <li><strong>Excel</strong> for everything in between.</li>
+</ul>
+<p>So nobody has one true picture. Stock, money owed to brands, and profit are all guesswork pieced together by hand.</p>
+
+<div class="callout c-key">
+  <p><strong>What we build instead:</strong> one system that is the single book of truth. The store till still rings the sale — but our system <em>records</em> the truth, it doesn't depend on each store's machine. Tally stays for tax, fed automatically.</p>
+</div>
+
+<h3>The three ideas that hold everything together</h3>
+<p>If you remember only three things, remember these.</p>
+
+<div class="grid2">
+  <div class="mini">
+    <h4>1 · Every event is a document</h4>
+    <p>A booking, a goods-arrival, a sale, a payment — each is a numbered slip.</p>
+    <p>No slip means it didn't happen in the system. Simple as that.</p>
+  </div>
+  <div class="mini">
+    <h4>2 · Documents update the books; the books are never typed by hand</h4>
+    <p>Stock and money balances are just the sum of the slips.</p>
+    <p>To fix a mistake you add a correcting slip — you never rub out the old one.</p>
+  </div>
+  <div class="mini">
+    <h4>3 · One row carries all product truth — the PT file</h4>
+    <p>The PT row holds what a product is, its price, its cost, and its tax — together.</p>
+    <p>Everything else just points back to it.</p>
+  </div>
+</div>
+
+<!-- ============================================================ 2 -->
+<h2 class="sec" id="shape"><span class="n">2</span>The shape — five layers</h2>
+<p class="lead">Picture the system as five stacked layers. Information flows up. Each layer has one job.</p>
+
+<figure>
+<svg viewBox="0 0 880 330" role="img" aria-label="Five layers of the system, master data at the bottom up to reports and AI at the top">
+  <defs>
+    <marker id="ah1" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#b5482e"/>
+    </marker>
+  </defs>
+  <!-- flow-up arrow -->
+  <line x1="70" y1="300" x2="70" y2="40" stroke="#b5482e" stroke-width="2.5" marker-end="url(#ah1)"/>
+  <text x="46" y="175" fill="#b5482e" font-size="12" font-weight="700" transform="rotate(-90,46,175)" text-anchor="middle">information flows up</text>
+  <!-- bands -->
+  <g font-family="system-ui" font-size="14.5">
+    <rect x="110" y="24"  width="500" height="46" rx="9" fill="#fdf5e3" stroke="#ecd9a6"/>
+    <text x="130" y="46" font-weight="700" fill="#8a5a12">Reports &amp; AI</text>
+    <text x="130" y="62" font-size="12.5" fill="#5b6573">Digests, forecasts, alerts — reads everything, changes nothing</text>
+
+    <rect x="110" y="78" width="500" height="46" rx="9" fill="#f2f0fb" stroke="#d6cdf0"/>
+    <text x="130" y="100" font-weight="700" fill="#5a3b9e">Controls</text>
+    <text x="130" y="116" font-size="12.5" fill="#5b6573">Daily checks that catch mismatches and raise a “please fix” item</text>
+
+    <rect x="110" y="132" width="500" height="46" rx="9" fill="#eaf6ee" stroke="#bfe3c9"/>
+    <text x="130" y="154" font-weight="700" fill="#1c5b32">Ledgers — the books</text>
+    <text x="130" y="170" font-size="12.5" fill="#5b6573">Stock · Vendor (what we owe) · Cash — built by adding up documents</text>
+
+    <rect x="110" y="186" width="500" height="46" rx="9" fill="#fbf0ec" stroke="#e6c3b6"/>
+    <text x="130" y="208" font-weight="700" fill="#b5482e">Documents — the events</text>
+    <text x="130" y="224" font-size="12.5" fill="#5b6573">The only way stock and money ever move</text>
+
+    <rect x="110" y="240" width="500" height="46" rx="9" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="130" y="262" font-weight="700" fill="#1b4f86">Master data — the lists</text>
+    <text x="130" y="278" font-size="12.5" fill="#5b6573">Brands, stores, products, barcodes, offers, users — used again and again</text>
+  </g>
+  <!-- outside systems -->
+  <g font-family="system-ui">
+    <rect x="640" y="78" width="210" height="180" rx="9" fill="#fff" stroke="#cdd4de" stroke-dasharray="5 4"/>
+    <text x="745" y="100" font-size="13" font-weight="700" fill="#5b6573" text-anchor="middle">Outside systems</text>
+    <text x="745" y="124" font-size="12.5" fill="#5b6573" text-anchor="middle">POS (the till)</text>
+    <text x="745" y="146" font-size="12.5" fill="#5b6573" text-anchor="middle">Tally (accounts)</text>
+    <text x="745" y="168" font-size="12.5" fill="#5b6573" text-anchor="middle">Bank</text>
+    <text x="745" y="190" font-size="12.5" fill="#5b6573" text-anchor="middle">WhatsApp</text>
+    <text x="745" y="212" font-size="12.5" fill="#5b6573" text-anchor="middle">Vendor files</text>
+    <text x="745" y="240" font-size="11.5" fill="#9aa3af" text-anchor="middle">connected by written rules</text>
+  </g>
+</svg>
+<figcaption>Master data says what exists. Documents record what happened. Ledgers show today's stock and money. Controls check. Reports read. <strong>Stock and money never enter without a document.</strong></figcaption>
+</figure>
+
+<!-- ============================================================ 3 -->
+<h2 class="sec" id="rules"><span class="n">3</span>The 12 rules — the laws</h2>
+<p class="lead">Every part of the system must obey these. They are the constitution. Breaking one is not allowed unless we change the rule on purpose.</p>
+
+<ol class="rules">
+  <li><b>Every event is a document with a life cycle.</b> Every booking, goods-receipt, sale, transfer, return or payment is a numbered slip. No slip = it didn't happen.</li>
+  <li><b>Documents write the books; the books are never hand-edited.</b> Balances are added up from slips. To fix something, add a correction slip — never edit old history.</li>
+  <li><b>Master data lives in one place; documents copy it.</b> Prices, brand terms, GST rules live in master screens. A slip copies what it needs, so changing a master later never changes old slips.</li>
+  <li><b>Every fact has exactly one owner.</b> Stock → the stock ledger. Sale → the POS. Accounts/GST → Tally. Offer logic → the offer rulebook.</li>
+  <li><b>Flag, never block.</b> A mismatch raises a clear “please fix” item for the right person — it does not stop staff from billing or receiving goods (unless truly dangerous).</li>
+  <li><b>Calculated numbers are not typed by hand.</b> If the system can work it out — profit, stock age, MRP — a human should not type it.</li>
+  <li><b>Outside systems need written rules and daily checks.</b> For POS, Tally, bank and WhatsApp: write down exactly what's sent and received, and check daily that it landed.</li>
+  <li><b>AI only reads and suggests.</b> AI may read messy input and suggest forecasts, alerts and drafts — but never writes stock, money, or Tally entries.</li>
+  <li><b>Every line says exactly what item it is.</b> Stock lines carry brand, style, colour, size, season, barcode. No vague “100 shirts.”</li>
+  <li><b>Every action has an actor.</b> Every slip records who made it, who approved it, and when. Approvals happen inside the system.</li>
+  <li><b>Deadlines are data, not memory.</b> Return windows, offer dates, payment due dates, season dates are stored — and the system reminds people before a deadline is missed.</li>
+  <li><b>Business differences are data, not code.</b> Brand deals, GST slabs, offer rules, roles, seasons, report timings are master-data rows a trained admin can change — without a software release. Code holds only the small posting engine.</li>
+</ol>
+
+<!-- ============================================================ 4 -->
+<h2 class="sec" id="words"><span class="n">4</span>The words we use</h2>
+<p class="lead">Short, plain meanings. Read once; every later section uses these exact words.</p>
+
+<h3>Products &amp; stock</h3>
+<table>
+  <tr><th style="width:24%">Word</th><th>Plain meaning</th></tr>
+  <tr><td><strong>SKU</strong></td><td>The real product: <strong>Brand + Style + Colour + Size</strong>. A red kurta size M is a different SKU from size L. We hold stock at this level — never at “style” alone.</td></tr>
+  <tr><td><strong>Barcode</strong></td><td>The number scanned at the till. It is just a <em>label</em>, not the identity. The same barcode can sit on many identical pieces, and can even repeat in a later season — so a barcode is <strong>non-unique</strong>.</td></tr>
+  <tr><td><strong>Cohort</strong></td><td>What we actually count and price: <strong>barcode + season</strong>. Each season is its own cohort, with its own count, price and age.</td></tr>
+  <tr><td><strong>Count under a barcode</strong></td><td>Stock is a <strong>count of pieces</strong> under a cohort — not one row per piece. Receive 40 identical kurtas → +40 to one cohort. Sell one → −1.</td></tr>
+  <tr><td><strong>P / M / E tier</strong></td><td>Premium / Medium / Economy. Used in place of “colour” when a brand doesn't track exact colour.</td></tr>
+  <tr><td><strong>Season</strong></td><td>The selling period (e.g. Summer 2025). Tags every item; drives age and markdown. Runs <strong>Open → EOSS → Closed</strong>.</td></tr>
+</table>
+
+<h3>Documents &amp; the books</h3>
+<table>
+  <tr><th style="width:24%">Word</th><th>Plain meaning</th></tr>
+  <tr><td><strong>Document</strong></td><td>A numbered slip for one event. Only a document can change the books.</td></tr>
+  <tr><td><strong>Posting</strong></td><td>An entry a document adds to a book. Always balanced; never edited.</td></tr>
+  <tr><td><strong>Ledger</strong></td><td>A book whose balance is just the sum of its postings. Three of them: <strong>Stock</strong>, <strong>Vendor</strong> (what we owe each brand), <strong>Cash</strong>.</td></tr>
+  <tr><td><strong>Snapshot</strong></td><td>The copy a document keeps of the master values it used (price, brand deal, GST). Editing a master later never rewrites old slips.</td></tr>
+  <tr><td><strong>Reversing entry</strong></td><td>The only legal fix for a posted slip: a new, dated correction with a reason — linked to the original. Nothing is ever silently rewritten.</td></tr>
+  <tr><td><strong>GRN</strong></td><td>Goods Receipt Note — records what physically arrived (the <strong>count only</strong>, no price yet).</td></tr>
+  <tr><td><strong>PT</strong></td><td>The priced stock-in file (the spine). It stamps the cost on each piece and records what we owe the brand.</td></tr>
+  <tr><td><strong>Shipment</strong></td><td>The physical arrival. It is the anchor of inbound — it may or may not have a booking behind it.</td></tr>
+  <tr><td><strong>V-flip</strong></td><td>At end of season, unsold <em>brand-owned</em> stock is settled with the brand, becomes <strong>KDPS-owned</strong>, and is cleared. The barcode stays the same.</td></tr>
+</table>
+
+<h3>GST, money &amp; geography</h3>
+<table>
+  <tr><th style="width:24%">Word</th><th>Plain meaning</th></tr>
+  <tr><td><strong>GSTIN</strong></td><td>A state tax identity. KDPS is <strong>one firm (one PAN), one Tally company</strong>, holding <strong>two GSTINs — Bihar and Jharkhand</strong> — and GST treats those two as separate “persons.” (Confirmed 26 Jun 2026.)</td></tr>
+  <tr><td><strong>Cross-state transfer</strong></td><td>Moving stock Bihar ↔ Jharkhand is legally a <strong>taxable supply (IGST)</strong> + an e-way bill. The system <strong>records the move and flags it</strong> as cross-state; KDPS produces the IGST tax invoice and e-way bill <strong>manually, outside the system</strong> (26 Jun 2026). A move <em>within</em> one state is just a stock move, no tax.</td></tr>
+  <tr><td><strong>HSN &amp; slab</strong></td><td>Apparel GST is slab-based and dated: <strong>5% up to ₹2,500/piece, 18% above</strong> (from 22 Sep 2025). Stored as data, never hardcoded.</td></tr>
+  <tr><td><strong>Unit cost (P RATE)</strong></td><td>The cost we freeze is the <strong>P RATE</strong> column on the PT, taken as-is (+ freight share, − discount share). We <strong>never strip GST out of it</strong> — the P RATE is already a without-GST price.</td></tr>
+  <tr><td><strong>Tally</strong></td><td>The official accounts book. We feed it one-way; it stays the legal book of record.</td></tr>
+</table>
+
+<h3>The till &amp; the brain</h3>
+<table>
+  <tr><th style="width:24%">Word</th><th>Plain meaning</th></tr>
+  <tr><td><strong>Sale</strong></td><td>The slip a till raises. It is <strong>source-agnostic</strong> — it doesn't matter if it came from Ten Software, our own POS, or a hand-written bill.</td></tr>
+  <tr><td><strong>Ten Software</strong> / <strong>KDPS POS</strong></td><td>The current outside till, and the one we build later. Both sit behind one <strong>adapter</strong>, so swapping is a one-line change.</td></tr>
+  <tr><td><strong>Idempotency key</strong></td><td>A unique id the till stamps on each sale, so re-sending it after a network drop never creates a duplicate.</td></tr>
+  <tr><td><strong>Offer</strong></td><td>Brand-specific discount rules (slabs, buy-2-get-1, gifts). Applied at the till; it only lowers the price we collect.</td></tr>
+  <tr><td><strong>Flag, don't block</strong> / <strong>Exception queue</strong></td><td>A mismatch raises a “please fix” item to its owner and waits in a queue. The counter keeps selling.</td></tr>
+  <tr><td><strong>AI at the edges</strong></td><td>AI may read messy input and suggest. It never writes the books or approves anything.</td></tr>
+</table>
+
+<!-- ============================================================ 5 -->
+<h2 class="sec" id="models"><span class="n">5</span>The four brand deals</h2>
+<p class="lead">This is the heart of the business: <strong>who owns the goods, and when do we owe the brand money?</strong> Get this right and most of the system follows.</p>
+
+<p>There are four kinds of deal. But we don't store four “types.” We store <strong>two simple dials</strong>, and the familiar name is worked out from them:</p>
+<ul>
+  <li><strong>Dial 1 — Who owns the goods?</strong> KDPS, or the brand.</li>
+  <li><strong>Dial 2 — What returns are allowed?</strong> None / a capped amount / unlimited.</li>
+  <li>Plus one yes/no: <strong>does the brand keep refilling sold stock?</strong></li>
+</ul>
+
+<table>
+  <tr><th>Deal (the nickname)</th><th>Who owns</th><th>Returns</th><th>Refills?</th><th>When we owe the brand</th></tr>
+  <tr>
+    <td><span class="chip m-out">Outright</span> <span style="color:var(--muted);font-size:12px">(BNS)</span></td>
+    <td>KDPS</td><td>None</td><td>—</td>
+    <td><strong>At the PT</strong> (when goods arrive). Full bill incl. GST.</td>
+  </tr>
+  <tr>
+    <td><span class="chip m-cor">Correction</span> <span style="color:var(--muted);font-size:12px">(25-18-10)</span></td>
+    <td>KDPS</td><td>Capped allowance</td><td>—</td>
+    <td><strong>At the PT</strong>, like Outright — but a capped return allowance reduces it later.</td>
+  </tr>
+  <tr>
+    <td><span class="chip m-sor">SOR</span></td>
+    <td>Brand</td><td>Unlimited (unsold)</td><td>No</td>
+    <td><strong>On each sale</strong>, one piece at a time. Never at the PT.</td>
+  </tr>
+  <tr>
+    <td><span class="chip m-con">Consignment</span></td>
+    <td>Brand</td><td>Unlimited (unsold)</td><td>Yes</td>
+    <td><strong>On each sale</strong>, like SOR.</td>
+  </tr>
+</table>
+
+<div class="callout c-key">
+  <p><strong>Why the two-dial trick is clever.</strong> A brand might call a deal “Correction,” or just “buy-and-sell with a small return clause.” Both come out as the <em>same</em> two dials (KDPS owns + capped return). So a new kind of deal is a new <em>combination</em> of dials — never new software. The screens still show the friendly names; the books quietly key off the dials. <strong>Ownership is what decides the GST.</strong></p>
+  <p><strong>The deal is set per brand, but can change per lot (26 Jun 2026).</strong> A brand can run any of the four models. The dials, the margin % and the return window <strong>default</strong> from the brand, but a KDPS steward can <strong>override them on a single booking or stock-received</strong> — so one brand's two consignments can carry two different deals.</p>
+</div>
+
+<!-- ============================================================ 6 -->
+<h2 class="sec" id="data"><span class="n">6</span>The data model</h2>
+<p class="lead">The tables we store, and how they connect. Three small pictures first, then the tables, then the five rules the whole schema obeys.</p>
+
+<h3>Picture 1 — the big flow</h3>
+<figure>
+<svg viewBox="0 0 880 300" role="img" aria-label="Masters feed documents, documents post to ledgers, reports read ledgers">
+  <defs>
+    <marker id="ah2" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 Z" fill="#b5482e"/>
+    </marker>
+  </defs>
+  <g font-family="system-ui" font-size="13">
+    <!-- masters -->
+    <rect x="20" y="40" width="200" height="220" rx="11" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="120" y="64" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1b4f86">MASTER DATA</text>
+    <text x="120" y="86" text-anchor="middle" fill="#34465c">Brands · Vendors</text>
+    <text x="120" y="108" text-anchor="middle" fill="#34465c">Stores · GSTINs</text>
+    <text x="120" y="130" text-anchor="middle" fill="#34465c">SKUs · Cohorts</text>
+    <text x="120" y="152" text-anchor="middle" fill="#34465c">Barcodes · Season</text>
+    <text x="120" y="174" text-anchor="middle" fill="#34465c">Brand deals (terms)</text>
+    <text x="120" y="196" text-anchor="middle" fill="#34465c">GST slabs · Offers</text>
+    <text x="120" y="218" text-anchor="middle" fill="#34465c">Users · Roles</text>
+
+    <!-- documents -->
+    <rect x="330" y="40" width="220" height="220" rx="11" fill="#fbf0ec" stroke="#e6c3b6"/>
+    <text x="440" y="64" text-anchor="middle" font-size="13.5" font-weight="700" fill="#b5482e">DOCUMENTS</text>
+    <g font-size="12.5" fill="#3a2a24">
+      <rect x="352" y="78" width="176" height="24" rx="6" fill="#fff" stroke="#e6c3b6"/><text x="440" y="94" text-anchor="middle">Booking → Shipment</text>
+      <rect x="352" y="108" width="176" height="24" rx="6" fill="#fff" stroke="#e6c3b6"/><text x="440" y="124" text-anchor="middle">GRN  (count)</text>
+      <rect x="352" y="138" width="176" height="24" rx="6" fill="#fff" stroke="#e6c3b6"/><text x="440" y="154" text-anchor="middle">PT  (price + owe)</text>
+      <rect x="352" y="168" width="176" height="24" rx="6" fill="#fff" stroke="#e6c3b6"/><text x="440" y="184" text-anchor="middle">Sale · Transfer · Return</text>
+      <rect x="352" y="198" width="176" height="24" rx="6" fill="#fff" stroke="#e6c3b6"/><text x="440" y="214" text-anchor="middle">Payment</text>
+    </g>
+
+    <!-- ledgers -->
+    <rect x="660" y="40" width="200" height="220" rx="11" fill="#eaf6ee" stroke="#bfe3c9"/>
+    <text x="760" y="64" text-anchor="middle" font-size="13.5" font-weight="700" fill="#1c5b32">LEDGERS (books)</text>
+    <text x="760" y="92" text-anchor="middle" fill="#274c34">Stock ledger</text>
+    <text x="760" y="118" text-anchor="middle" fill="#274c34">Vendor ledger</text>
+    <text x="760" y="144" text-anchor="middle" fill="#274c34">Cash ledger</text>
+    <text x="760" y="170" text-anchor="middle" fill="#274c34">(SOR lots)</text>
+    <text x="760" y="206" text-anchor="middle" font-size="11.5" fill="#5b6573">add-only · never edited</text>
+    <text x="760" y="224" text-anchor="middle" font-size="11.5" fill="#5b6573">balance = sum of slips</text>
+
+    <!-- arrows -->
+    <line x1="222" y1="150" x2="328" y2="150" stroke="#b5482e" stroke-width="2.5" marker-end="url(#ah2)"/>
+    <text x="275" y="138" text-anchor="middle" font-size="11.5" fill="#b5482e" font-weight="700">copies (snapshot)</text>
+    <line x1="552" y1="150" x2="658" y2="150" stroke="#b5482e" stroke-width="2.5" marker-end="url(#ah2)"/>
+    <text x="605" y="138" text-anchor="middle" font-size="11.5" fill="#b5482e" font-weight="700">posts</text>
+  </g>
+</svg>
+<figcaption>Masters feed documents (each slip copies what it needs). Documents post to the books. Reports read the books. Money flows one direction.</figcaption>
+</figure>
+
+<h3>Picture 2 — how a product is identified</h3>
+<figure>
+<svg viewBox="0 0 820 250" role="img" aria-label="SKU, cohort and barcode identity chain">
+  <defs>
+    <marker id="ah3" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 Z" fill="#1f3a5f"/>
+    </marker>
+  </defs>
+  <g font-family="system-ui">
+    <!-- brand + season feeders -->
+    <rect x="60" y="24" width="180" height="38" rx="8" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="150" y="48" text-anchor="middle" font-size="13" fill="#1b4f86">Brand</text>
+    <rect x="430" y="24" width="180" height="38" rx="8" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="520" y="48" text-anchor="middle" font-size="13" fill="#1b4f86">Season</text>
+
+    <!-- SKU -->
+    <rect x="60" y="96" width="240" height="70" rx="10" fill="#fff" stroke="#1f3a5f" stroke-width="1.6"/>
+    <text x="180" y="122" text-anchor="middle" font-size="14" font-weight="700" fill="#1f3a5f">SKU</text>
+    <text x="180" y="142" text-anchor="middle" font-size="12" fill="#5b6573">the real product</text>
+    <text x="180" y="158" text-anchor="middle" font-size="11.5" fill="#5b6573">Brand+Style+Colour+Size</text>
+
+    <!-- Cohort -->
+    <rect x="430" y="96" width="240" height="70" rx="10" fill="#eaf6ee" stroke="#1c5b32" stroke-width="1.6"/>
+    <text x="550" y="122" text-anchor="middle" font-size="14" font-weight="700" fill="#1c5b32">COHORT</text>
+    <text x="550" y="142" text-anchor="middle" font-size="12" fill="#5b6573">what we count &amp; price</text>
+    <text x="550" y="158" text-anchor="middle" font-size="11.5" fill="#5b6573">barcode + season</text>
+
+    <!-- Barcode -->
+    <rect x="430" y="196" width="240" height="44" rx="10" fill="#fdf5e3" stroke="#ecd9a6"/>
+    <text x="550" y="214" text-anchor="middle" font-size="13" font-weight="700" fill="#8a5a12">Barcode (the scan)</text>
+    <text x="550" y="231" text-anchor="middle" font-size="11.5" fill="#5b6573">non-unique label → points to a cohort</text>
+
+    <!-- arrows -->
+    <line x1="150" y1="62" x2="150" y2="94" stroke="#1f3a5f" stroke-width="2" marker-end="url(#ah3)"/>
+    <line x1="520" y1="62" x2="520" y2="94" stroke="#1f3a5f" stroke-width="2" marker-end="url(#ah3)"/>
+    <line x1="300" y1="131" x2="428" y2="131" stroke="#1f3a5f" stroke-width="2.2" marker-end="url(#ah3)"/>
+    <text x="364" y="122" text-anchor="middle" font-size="11" fill="#1f3a5f">has many</text>
+    <line x1="550" y1="196" x2="550" y2="168" stroke="#1f3a5f" stroke-width="2.2" marker-end="url(#ah3)"/>
+    <text x="610" y="186" text-anchor="middle" font-size="11" fill="#1f3a5f">points to</text>
+  </g>
+</svg>
+<figcaption>A scan reads a barcode → the barcode points to a cohort → the cohort knows its product and season. Stock is a <strong>count under the cohort</strong>, never one row per piece. If a barcode is alive in two seasons at once, the system clears the <strong>oldest season first</strong>.</figcaption>
+</figure>
+
+<h3>Picture 3 — the geography (and why GST cares)</h3>
+<figure>
+<svg viewBox="0 0 820 230" role="img" aria-label="Legal entity to GSTIN to store hierarchy">
+  <defs>
+    <marker id="ah4" markerWidth="10" markerHeight="10" refX="7" refY="3.2" orient="auto">
+      <path d="M0,0 L7,3.2 L0,6.4 Z" fill="#1f3a5f"/>
+    </marker>
+  </defs>
+  <g font-family="system-ui">
+    <rect x="310" y="16" width="200" height="40" rx="9" fill="#fbf0ec" stroke="#e6c3b6"/>
+    <text x="410" y="41" text-anchor="middle" font-size="13" font-weight="700" fill="#b5482e">Legal entity (the firm)</text>
+
+    <rect x="150" y="92" width="220" height="44" rx="9" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="260" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1b4f86">Bihar GSTIN</text>
+    <text x="260" y="128" text-anchor="middle" font-size="11.5" fill="#5b6573">state code 10</text>
+    <rect x="450" y="92" width="220" height="44" rx="9" fill="#eef4fb" stroke="#bcd6f3"/>
+    <text x="560" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1b4f86">Jharkhand GSTIN</text>
+    <text x="560" y="128" text-anchor="middle" font-size="11.5" fill="#5b6573">state code 20</text>
+
+    <g font-size="11.5" fill="#274c34">
+      <rect x="150" y="170" width="100" height="34" rx="7" fill="#eaf6ee" stroke="#bfe3c9"/><text x="200" y="191" text-anchor="middle">Store</text>
+      <rect x="270" y="170" width="100" height="34" rx="7" fill="#eaf6ee" stroke="#bfe3c9"/><text x="320" y="191" text-anchor="middle">Warehouse</text>
+      <rect x="450" y="170" width="100" height="34" rx="7" fill="#eaf6ee" stroke="#bfe3c9"/><text x="500" y="191" text-anchor="middle">Store</text>
+      <rect x="570" y="170" width="100" height="34" rx="7" fill="#eaf6ee" stroke="#bfe3c9"/><text x="620" y="191" text-anchor="middle">Store</text>
+    </g>
+
+    <line x1="370" y1="56" x2="270" y2="90" stroke="#1f3a5f" stroke-width="2" marker-end="url(#ah4)"/>
+    <line x1="450" y1="56" x2="550" y2="90" stroke="#1f3a5f" stroke-width="2" marker-end="url(#ah4)"/>
+    <line x1="240" y1="136" x2="210" y2="168" stroke="#1f3a5f" stroke-width="1.8" marker-end="url(#ah4)"/>
+    <line x1="280" y1="136" x2="315" y2="168" stroke="#1f3a5f" stroke-width="1.8" marker-end="url(#ah4)"/>
+    <line x1="540" y1="136" x2="505" y2="168" stroke="#1f3a5f" stroke-width="1.8" marker-end="url(#ah4)"/>
+    <line x1="575" y1="136" x2="615" y2="168" stroke="#1f3a5f" stroke-width="1.8" marker-end="url(#ah4)"/>
+  </g>
+</svg>
+<figcaption>KDPS is one firm (one PAN, one Tally company) holding two state GSTINs — Bihar and Jharkhand; each GSTIN holds its stores and warehouses (confirmed 26 Jun 2026). Because the two GSTINs are separate “persons” to GST, a stock move <strong>between</strong> them is legally a taxable supply (IGST) — even though it's the same company. We keep the legal-entity → GSTIN → store structure as data, so the model still holds if the entity count ever changes.</figcaption>
+</figure>
+
+<h3>The tables (the important fields)</h3>
+
+<p><strong>Masters — the lists.</strong> Current-value records that documents copy from.</p>
+<table>
+  <tr><th style="width:22%">Table</th><th>Holds</th><th>Key fields</th></tr>
+  <tr><td><code>legal_entity</code></td><td>The firm</td><td>pan, legal_name</td></tr>
+  <tr><td><code>gstin</code></td><td>State tax id <em>(dated)</em></td><td>gstin, state_code → legal_entity</td></tr>
+  <tr><td><code>store</code></td><td>A store / warehouse</td><td>store_code, type → gstin</td></tr>
+  <tr><td><code>brand</code></td><td>Brand (under a supplier)</td><td>name → supplier, → parent_brand</td></tr>
+  <tr><td><code>sku</code></td><td>The real product</td><td>brand, style, colour, size <em>(unique)</em></td></tr>
+  <tr><td><code>cohort</code></td><td>What we count &amp; price</td><td>→ sku, barcode, → season, mrp, unit_cost, owned_flag — key = (barcode, season)</td></tr>
+  <tr><td><code>barcode_alias</code></td><td>Scan resolver</td><td>barcode <em>(non-unique)</em> → cohort</td></tr>
+  <tr><td><code>season</code></td><td>Season calendar</td><td>code, state (Open/EOSS/Closed)</td></tr>
+  <tr><td><code>gst_slab</code></td><td>Tax rate by HSN × price × date <em>(dated)</em></td><td>hsn, price band, rate%, valid_from/to</td></tr>
+  <tr><td><code>vendor</code></td><td>Who we book &amp; pay</td><td>name, pan, bank, terms, gstins</td></tr>
+  <tr><td><code>offer_rule</code></td><td>Discount rules</td><td>→ brand, trigger, reward, scope, dates</td></tr>
+  <tr><td><code>user</code> / <code>role</code></td><td>People &amp; permissions</td><td>scope, role → action matrix</td></tr>
+  <tr><td><code>voucher_series</code></td><td>Document numbering</td><td>one counter per (store, type)</td></tr>
+</table>
+
+<p><strong>The brand-deal table</strong> — the two dials live here. The friendly label is <em>worked out</em>, not stored.</p>
+<table>
+  <tr><th style="width:22%">Table</th><th>What it stores</th></tr>
+  <tr>
+    <td><code>brand_terms</code><br><span style="font-size:12px;color:var(--muted)">per brand × season, dated</span></td>
+    <td><strong>ownership</strong> (KDPS / brand) · <strong>return_terms</strong> (none / capped / uncapped) · <strong>rolling_top_up</strong> (yes/no) · return_window_days · <strong>liability_trigger</strong> (at receipt / on sale) · gst_recognition_point · margins · allowance. → The label <span class="chip m-out">Outright</span> <span class="chip m-cor">Correction</span> <span class="chip m-sor">SOR</span> <span class="chip m-con">Consignment</span> is <strong>derived</strong> from these.</td>
+  </tr>
+</table>
+
+<p><strong>Documents</strong> — every event. They all share one skeleton, plus their own lines.</p>
+<table>
+  <tr><th style="width:22%">Part</th><th>Fields</th></tr>
+  <tr><td>Shared skeleton</td><td>doc_number, type, status, who/when, snapshots, dimensions (store · brand · season · gstin), links to source</td></tr>
+  <tr><td><code>pt_line</code> <span style="font-size:12px;color:var(--muted)">(the wide product row — the spine)</span></td><td>season, brand, design, colour, size, barcode, hsn, mrp, basic, <strong>p_rate</strong>, margin, input/output tax, qty</td></tr>
+  <tr><td>Other documents</td><td><code>booking · shipment · grn · sale · transfer · rtv · seasonal_return · payment · allocation · tally_voucher</code> (each with its own lines)</td></tr>
+</table>
+
+<p><strong>Ledgers</strong> — the books. Add-only; never edited.</p>
+<table>
+  <tr><th style="width:22%">Book</th><th>What it records</th></tr>
+  <tr><td><code>stock_ledger</code></td><td>Quantity + value moves, per cohort × location (cohort, qty_delta, unit_cost, location, owned_flag + dimensions)</td></tr>
+  <tr><td><code>vendor_ledger</code></td><td>What we owe each brand (vendor, brand, amount, dr/cr)</td></tr>
+  <tr><td><code>cash_ledger</code></td><td>Store collections vs bank (store, date, mode, amount)</td></tr>
+  <tr><td><code>sor_lot</code></td><td>An SOR/consignment lot, its <strong>two deadline clocks</strong>, and a “GST recognised once” guard (removal_date, commercial_return_due, deemed_supply_due, gst_recognised, qty_remaining)</td></tr>
+</table>
+
+<h3>The five rules the whole schema obeys</h3>
+<ol>
+  <li><strong>Money is whole paise.</strong> ₹1 is stored as <code>100</code>. No decimals, no rounding surprises — so the books always balance to the exact paisa.</li>
+  <li><strong>Ledgers are add-only.</strong> You can insert a row, never edit or delete one. A mistake is undone by a dated reversing entry.</li>
+  <li><strong>Only documents write ledgers</strong> — through one shared “post” step that must balance or the whole thing fails. Every ledger row points back to its document.</li>
+  <li><strong>History-dated masters.</strong> Five masters carry valid-from/valid-to (GST slab, GSTIN, brand cost, price, brand terms). A slip reads the row that was in force <em>on its own date</em> — so an old bill never re-prices under a new rule.</li>
+  <li><strong>Every ledger row carries its dimensions</strong> — store, brand, season, state-GSTIN. The same columns power who-can-see-what, GST routing, and every report.</li>
+</ol>
+
+<!-- ============================================================ 7 -->
+<h2 class="sec" id="posting"><span class="n">7</span>What each event does to the books</h2>
+<p class="lead">The heart of correctness. For each event: what it means, and what it changes. Where the four deals differ, it's called out.</p>
+
+<div class="callout c-key">
+  <p><strong>The one rule that unlocks inbound:</strong> the <strong>GRN posts the count only</strong> (goods are sellable day one). The <strong>PT posts the value and what we owe</strong> later. Quantity and money are two separate events.</p>
+</div>
+
+<table>
+  <tr><th style="width:18%">Event</th><th>What it means</th><th>Stock</th><th>What we owe (vendor)</th><th>Cash / Tally</th></tr>
+  <tr>
+    <td><strong>GRN</strong><br><span style="font-size:12px;color:var(--muted)">goods arrive</span></td>
+    <td>Count what physically came in.</td>
+    <td>+count at (barcode+season). <strong>No price yet.</strong></td>
+    <td>Nothing.</td>
+    <td>Nothing.</td>
+  </tr>
+  <tr>
+    <td><strong>PT</strong><br><span style="font-size:12px;color:var(--muted)">pricing at Patna</span></td>
+    <td>Stamp the frozen cost on the stock; record what we owe.</td>
+    <td>Stamp unit cost (= P RATE). Mark owned/not-owned.</td>
+    <td><span class="chip m-out">Out</span> <span class="chip m-cor">Cor</span>: owe full bill incl. GST <strong>now</strong>. &nbsp; <span class="chip m-sor">SOR</span> <span class="chip m-con">Con</span>: <strong>owe nothing yet</strong>.</td>
+    <td>Tally: purchase voucher (owned brands; SOR/Con is CA-pending).</td>
+  </tr>
+  <tr>
+    <td><strong>Store split</strong></td>
+    <td>Send stock from warehouse to a store.</td>
+    <td>−count at WH, +count at store. Same cost.</td>
+    <td>Nothing.</td>
+    <td>Nothing (same state).</td>
+  </tr>
+  <tr>
+    <td><strong>Sale</strong><br><span style="font-size:12px;color:var(--muted)">at the till</span></td>
+    <td>One piece sells; take the customer's money.</td>
+    <td>−1 at the store.</td>
+    <td><span class="chip m-sor">SOR</span> <span class="chip m-con">Con</span>: <strong>now</strong> we owe the brand for that piece. &nbsp; <span class="chip m-out">Out</span> <span class="chip m-cor">Cor</span>: nothing new (owed at PT).</td>
+    <td>Cash: the tender taken. Tally: daily sales voucher per store (per-bill if customer has a GSTIN).</td>
+  </tr>
+  <tr>
+    <td><strong>Exchange</strong></td>
+    <td>Customer swaps an item; settle the difference.</td>
+    <td>old +1 back, new −1 out.</td>
+    <td>Reverse the old piece's effect, apply the new — per each piece's deal.</td>
+    <td>Cash: only the difference.</td>
+  </tr>
+  <tr>
+    <td><strong>Transfer — same state</strong></td>
+    <td>Move stock within Bihar (or within Jharkhand).</td>
+    <td>−at source, +at destination, via in-transit.</td>
+    <td>Nothing.</td>
+    <td>No tax. (E-way bill only above ₹1,00,000.)</td>
+  </tr>
+  <tr>
+    <td><strong>Transfer — Bihar ↔ Jharkhand</strong></td>
+    <td>Legally a taxable supply to GST.</td>
+    <td>−at sender, +at receiver.</td>
+    <td>Nothing (it's KDPS-to-KDPS).</td>
+    <td>System records the move and <strong>flags it cross-state</strong>; KDPS makes the IGST tax invoice and e-way bill <strong>manually, outside the system</strong> (26 Jun 2026).</td>
+  </tr>
+  <tr>
+    <td><strong>RTV</strong><br><span style="font-size:12px;color:var(--muted)">send defective back</span></td>
+    <td>Return a faulty piece to the brand.</td>
+    <td>−from quarantine.</td>
+    <td><span class="chip m-out">Out</span> <span class="chip m-cor">Cor</span>: reduce what we owe (debit note). &nbsp; <span class="chip m-sor">SOR</span> <span class="chip m-con">Con</span>: just recorded.</td>
+    <td>Tally: debit note (owned brands).</td>
+  </tr>
+  <tr>
+    <td><strong>Seasonal return</strong></td>
+    <td>Send unsold stock back at season end.</td>
+    <td>−count, in bulk.</td>
+    <td><span class="chip m-cor">Cor</span>: draws the capped allowance (over-cap → V-flip). &nbsp; <span class="chip m-sor">SOR</span> <span class="chip m-con">Con</span>: nothing owed. &nbsp; <span class="chip m-out">Out</span>: no seasonal return.</td>
+    <td>Tally: debit note for the allowance draw.</td>
+  </tr>
+  <tr>
+    <td><strong>EOSS / V-flip</strong></td>
+    <td>Markdown sale; or flip unsold brand stock to ours.</td>
+    <td>V-flip: owner brand → KDPS, barcode unchanged.</td>
+    <td>V-flip: a settlement claim with the brand.</td>
+    <td>EOSS: just a lower sale price (we earn less).</td>
+  </tr>
+  <tr>
+    <td><strong>Stocktake</strong></td>
+    <td>Match the books to a physical count.</td>
+    <td>± to reconcile, with a reason.</td>
+    <td>Nothing.</td>
+    <td>Nothing.</td>
+  </tr>
+  <tr>
+    <td><strong>Payment</strong><br><span style="font-size:12px;color:var(--muted)">money out</span></td>
+    <td>Pay a brand against its bills.</td>
+    <td>—</td>
+    <td>Reduce what we owe (bill-wise).</td>
+    <td>Cash: money out of the bank (matched by UTR). Tally: payment voucher.</td>
+  </tr>
+  <tr>
+    <td><strong>Receipt</strong><br><span style="font-size:12px;color:var(--muted)">money in</span></td>
+    <td>Match store collections to the bank.</td>
+    <td>—</td>
+    <td>—</td>
+    <td>Cash: bank credit ↔ the day's cash/card/UPI (card net of fees).</td>
+  </tr>
+</table>
+
+<h3>The one cost number — frozen forever</h3>
+<ul>
+  <li>The cost we stamp is the <strong>P RATE</strong> from the PT, taken directly.</li>
+  <li>Add this piece's share of freight; subtract its share of discount.</li>
+  <li><strong>Never remove GST from it.</strong> The P RATE is already a without-GST figure (it's a flat markup, not a tax). Removing GST would make every profit number wrong.</li>
+  <li>This number is <strong>frozen</strong> at stock-in and never changes. Every profit, every margin, every dead-stock value reads it.</li>
+</ul>
+
+<h3>The two clocks — never mix them up</h3>
+<p>Every brand deal runs two separate clocks. They look the same; they are not.</p>
+<table>
+  <tr><th style="width:16%">Deal</th><th>Tally clock — when the law says we bought it</th><th>Our-money clock — when we may actually pay</th></tr>
+  <tr><td><span class="chip m-out">Outright</span></td><td>At arrival.</td><td>At the PT.</td></tr>
+  <tr><td><span class="chip m-cor">Correction</span></td><td>At arrival.</td><td>At the PT (minus returns).</td></tr>
+  <tr><td><span class="chip m-sor">SOR</span></td><td>CA to confirm (arrival or sale).</td><td><strong>Only after the piece sells.</strong></td></tr>
+  <tr><td><span class="chip m-con">Consignment</span></td><td>CA to confirm.</td><td><strong>Only after the piece sells.</strong></td></tr>
+</table>
+<p>So an SOR shirt can be a “purchase” in Tally while still being <strong>un-payable</strong> to the brand until it actually sells. The two clocks live on two different books on purpose.</p>
+
+<!-- ============================================================ 8 -->
+<h2 class="sec" id="life"><span class="n">8</span>The life of each document</h2>
+<p class="lead">The states things move through. Read the arrows left to right.</p>
+
+<div class="flow"><span class="t">Booking</span> &nbsp; Booked <span class="arrow">→</span> Partly received <span class="arrow">→</span> Fully received <span class="arrow">→</span> <em>(Return-window open — only Correction / SOR / Consignment)</em> <span class="arrow">→</span> Closed &nbsp; <span style="color:var(--muted)">· can be Cancelled any time</span></div>
+
+<div class="flow"><span class="t">Inbound</span> &nbsp; Shipment arrives <span class="arrow">→</span> GRN (count) <span class="arrow">→</span> PT (price + what we owe) &nbsp; <span style="color:var(--muted)">· booking is the normal path (style, size, qty + optional price/MRP) but never required — goods can arrive with no booking, and the booking can be attached or updated later (26 Jun 2026)</span></div>
+
+<div class="flow"><span class="t">A piece of stock</span> &nbsp; Available <span class="arrow">→</span> (Reserved / In-transit · or Pending return · or Quarantine) <span class="arrow">→</span> Gone (sold / returned / moved) &nbsp; <span style="color:var(--muted)">· what we send the till is “free to sell”</span></div>
+
+<div class="flow"><span class="t">Payment</span> &nbsp; Draft <span class="arrow">→</span> Pending approval <span class="arrow">→</span> Approved <span class="arrow">→</span> Executed <span class="arrow">→</span> Confirmed (UTR) <span class="arrow">→</span> Reconciled &nbsp; <span style="color:var(--muted)">· maker ≠ checker ≠ payer, always</span></div>
+
+<div class="flow"><span class="t">POS sale sync</span> &nbsp; Till makes a UUID offline <span class="arrow">→</span> Pending (outbox) <span class="arrow">→</span> In-flight <span class="arrow">→</span> Synced &nbsp; <span style="color:var(--muted)">· a re-send returns the same Sale — never a duplicate</span></div>
+
+<div class="flow"><span class="t">Season</span> &nbsp; Open <span class="arrow">→</span> EOSS (markdown) <span class="arrow">→</span> Closed</div>
+
+<div class="flow"><span class="t">Offer</span> &nbsp; Scheduled <span class="arrow">→</span> Live <span class="arrow">→</span> Lapsed &nbsp; <span style="color:var(--muted)">· a “default” offer fills any gap</span></div>
+
+<div class="flow"><span class="t">SOR deadlines</span> &nbsp; two clocks off the arrival date: <strong>commercial return window</strong> (60–120 days) <span class="arrow">+</span> <strong>GST 6-month clock</strong> &nbsp; <span style="color:var(--muted)">· both warn at 30 / 15 / 7 days</span></div>
+
+<!-- ============================================================ 9 -->
+<h2 class="sec" id="next"><span class="n">9</span>What's left out, and what's next</h2>
+<p class="lead">So you know this page is complete for now — and what it deliberately doesn't cover yet.</p>
+
+<h3>Left out on purpose (for now)</h3>
+<ul>
+  <li><strong>Integration wiring</strong> — the exact push/pull contracts with the POS, Tally, bank and WhatsApp. We're focused on the <strong>foundation and the core service layer</strong> first; the edges come when we build the slices that use them.</li>
+  <li><strong>POS and Tally are deferred (26 Jun 2026)</strong> — not in the current build. <strong>POS is the last module</strong>: Ten Software will sell API access at a cost plus lead time, so we use their API if it's ready by then, else KDPS builds its own — decided at that point. The Tally/accounting sync waits too.</li>
+</ul>
+
+<h3>A few money points still need a CA's word</h3>
+<ul>
+  <li>For SOR / Consignment: does GST fall due at delivery or at sale? (Per brand.)</li>
+  <li>The 6-month “deemed supply” clock, the cross-state transfer value, late freight after the PT, and a sale that happens before the PT is keyed.</li>
+</ul>
+<p>None of these block the build — they're noted so they're never forgotten.</p>
+
+<h3>The tech, in one line</h3>
+<p>One app over one database: <strong>Python/Django</strong> behind a <strong>React (TypeScript) browser app</strong> on the store computer, <strong>PostgreSQL</strong>, hosting to be decided later. Plain and boring on purpose — the kind a small team can keep correct.</p>
+
+<div class="callout c-note">
+  <p><strong>If you want more depth on any part,</strong> the deeper docs are still there and still true — this page just gathers them: the constitution (<code>00-system-architecture.html</code>), the full design (<code>consolidated-system-design.html</code>), and the build specs (<code>glossary</code>, <code>data-model</code>, <code>posting-catalog</code>, <code>lifecycles</code>). Nothing here contradicts them.</p>
+</div>
+
+<footer>
+  KDPS Lifestyle · <strong>The Whole System, in one page</strong> · 26 June 2026.<br>
+  A plain-language consolidation of the architecture, glossary, data model, posting catalog and lifecycles. Integration contracts excluded for now (foundation + service-layer focus). Faithful to the locked decisions — if anything here ever disagrees with the constitution or the design-of-record, those win and this gets fixed.
+</footer>
+
+</div>
+</body>
+</html>

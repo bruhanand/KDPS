@@ -45,6 +45,12 @@ event, never a mutation of the original. (Late-freight forward-only-adjust vs se
 cost-correction event, and sold-before-PT memo handling, are open items to close before the
 inbound slice — but the invariant that they will be *new events* is fixed here.)
 
+A **period-lock / freeze-date** convention sits alongside no-reposting (26 Jun 2026): a
+`freeze_date` (per book / per state-GSTIN) marks the boundary of any already-closed and already-
+reported period; the posting engine (ADR-0006) reads it and refuses a posting dated into a closed
+period, so a back-dated document cannot silently restate a sent month, brand-report or
+SOR-settlement. A late correction is a today-dated event in an open period.
+
 ### Two-step inbound posting (Q1 / Q2)
 At inbound the two postings are separated:
 - **GRN posts the QUANTITY movement** — qty, location, condition, season, owned-flag provisional;
@@ -69,7 +75,7 @@ contract re-implemented as plain Django, ADR-0001) so a document's posting state
 cancellation is a defined, reversing-entry transition — never a delete.
 
 ### Keys & identity — three distinct things
-- **Primary key = `bigint` identity** (single-node Cloud SQL; smallest, fastest).
+- **Primary key = `bigint` identity** (single-node Postgres; smallest, fastest).
 - **Business document number** = a separate human-readable deterministic string
   (e.g. `DEO-SAL-20260620-001`) — the Tally join key and external identity, never the PK.
 - **Idempotency key** = a UUID an offline-captured write carries (unique), used to dedupe on sync

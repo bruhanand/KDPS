@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Document Lifecycle &amp; Controller Pattern — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html" class="cur"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data &amp; the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax &amp; pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions &amp; roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting &amp; printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 2 · Foundations</div>
+  <h1>The Document Lifecycle &amp; Controller Pattern</h1>
+  <p class="sub">Draft → Submitted → Cancelled: the state machine every transaction obeys, the validate / on_submit / on_cancel hook chain, and why a submitted document must become immutable.</p>
+</header>
+
+<section>
+  <h2 class="sec">Why this subsystem is the spine of an ERP</h2>
+  <p>
+    An ERP is only worth building if its books can be trusted. Trust does not come from preventing every
+    mistake at data-entry time — humans always fat-finger a rate or pick the wrong vendor. Trust comes from
+    a guarantee about <em>after the fact</em>: that once a document has been <strong>posted</strong>, it can
+    never be silently changed, and that every correction is itself a new, dated, traceable event. An auditor
+    must be able to ask "what exactly did this invoice post, and when?" and get one unambiguous answer that
+    nobody could have rewritten.
+  </p>
+  <p>
+    The document lifecycle is the mechanism that delivers that guarantee. In ERPNext it is astonishingly
+    small at its core: a single integer column, <code>docstatus</code>, with three legal values —
+    <strong>0 = Draft</strong> (editable), <strong>1 = Submitted</strong> (frozen / "posted"),
+    <strong>2 = Cancelled</strong> (reversed). Around that one column hangs the whole discipline of
+    double-entry accounting and perpetual inventory: the moment a document moves from Draft to Submitted is
+    the moment it writes to the ledgers; the only way back out is to Cancel, which reverses what was written.
+  </p>
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    <p>
+      An ERP is trustworthy not because data can't be wrong, but because <strong>every posting is immutable
+      and every correction is itself a new, traceable posting</strong>. The ledger only ever grows. That one
+      sentence is the design contract this entire chapter implements.
+    </p>
+  </div>
+  <p>
+    This chapter walks the subsystem in the order you need it when building: the three-state machine, the
+    ordered controller hook chain that hangs business logic off it, immutability and the cancel-and-amend
+    correction path, how cancellation reverses postings on append-only ledgers, how human-readable status is
+    derived rather than stored, and the deliberate "flag, don't block" split between hard invariants and soft
+    policy limits. Each is presented as a reusable pattern: the durable idea, exactly how ERPNext implements
+    it with file references, and how to rebuild it on a plain Django/Postgres stack.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">The cast: the doctypes that play in the lifecycle</h2>
+  <p>
+    Before the patterns, meet the documents. The lifecycle is a collaboration between a
+    <strong>submittable transaction</strong> (the thing the user edits and submits), its
+    <strong>child line items</strong> (which have no lifecycle of their own), the <strong>append-only
+    ledgers</strong> it writes, and the <strong>settings singletons</strong> that supply the policy knobs the
+    controllers read as they run.
+  </p>
+  <table>
+    <tr><th>DocType</th><th>Kind</th><th>Role in the lifecycle</th></tr>
+    <tr>
+      <td><strong>Sales Invoice</strong><br><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></td>
+      <td><span class="badge b-erpnext">transaction</span></td>
+      <td>The leaf, submittable accounting + stock document. Its controller orchestrates the full chain and, on submit, posts both the GL and (optionally) the stock ledger. Carries <code>is_submittable: 1</code> and the <code>amended_from</code> self-link.</td>
+    </tr>
+    <tr>
+      <td><strong>Sales Invoice Item</strong><br><span class="fileref">erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json</span></td>
+      <td><span class="badge b-erpnext">child</span></td>
+      <td>Line-item child table (<code>istable: 1</code>). Has no <code>docstatus</code> of its own — it inherits the parent's. Holds qty / rate and back-links (<code>sales_order</code>, <code>delivery_note</code>) used for rollup.</td>
+    </tr>
+    <tr>
+      <td><strong>GL Entry</strong><br><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td>
+      <td><span class="badge b-erpnext">ledger</span></td>
+      <td>Append-only general-ledger row written on submit. <code>in_create: 1</code>, an <code>is_cancelled</code> flag, and <code>voucher_type</code> / <code>voucher_no</code> that point back to the source document.</td>
+    </tr>
+    <tr>
+      <td><strong>Stock Ledger Entry</strong><br><span class="fileref">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span></td>
+      <td><span class="badge b-erpnext">ledger</span></td>
+      <td>Append-only stock-movement row; the quantity / valuation counterpart to GL Entry. Written by the StockController on submit and reversed on cancel. See <a href="04-stock-ledger.html">the stock ledger</a>.</td>
+    </tr>
+    <tr>
+      <td><strong>Accounts Settings</strong><br><span class="fileref">erpnext/accounts/doctype/accounts_settings/accounts_settings.json</span></td>
+      <td><span class="badge b-frappe">Frappe core</span> single</td>
+      <td>One global row of policy toggles the lifecycle reads: over-billing allowance, <code>unlink_payment_on_cancellation</code>, the immutable-ledger switch, <code>delete_linked_ledger_entries</code>.</td>
+    </tr>
+    <tr>
+      <td><strong>Selling Settings</strong><br><span class="fileref">erpnext/selling/doctype/selling_settings/selling_settings.json</span></td>
+      <td><span class="badge b-erpnext">setup single</span></td>
+      <td>Selling-side policy (discount accounting, negative-rate allowance, <code>sales_update_frequency</code>) consulted in validate / on_submit.</td>
+    </tr>
+  </table>
+  <div class="callout co-note">
+    <span class="lbl">Note · single vs setup</span>
+    <p>
+      A <strong>Single</strong> is a doctype with exactly one row — the framework's way of modelling global
+      configuration as data, not as a code constant. Putting tolerance thresholds and override roles in
+      Singles is what lets finance tune policy without a deploy. We lean on this repeatedly below; the
+      meta-model behind it is covered in <a href="01-metamodel-doctype.html">the meta-model chapter</a>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 1 · The three-state submittable lifecycle on one column</h2>
+  <p>
+    Everything starts here. Every business document is a tiny state machine with exactly three states, and
+    that state lives in one place so there is never any ambiguity about whether a document has been posted.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Three-state lifecycle stored in one integer</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          A document is a state machine with three states — <strong>Draft</strong> (mutable),
+          <strong>Submitted</strong> (posted, frozen), <strong>Cancelled</strong> (reversed). "Submit" is the
+          one moment side effects fire (ledger postings); "Cancel" is the only way out and it reverses them.
+        </p>
+        <p>This is the universal accounting concept of <strong>posting / unposting</strong> rendered as a
+          two-bit column. The legal transitions are exactly Draft→Submitted and Submitted→Cancelled — nothing
+          else.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          The Frappe base <code>Document</code> exposes <code>docstatus</code> (0/1/2)
+          <span class="badge b-frappe">Frappe core</span>. A doctype opts in with one line in its JSON:
+        </p>
+        <pre><code><span class="s">"is_submittable"</span>: <span class="t">1</span></code></pre>
+        <p>
+          <span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span> carries it.
+          The framework then refuses ordinary edits once <code>docstatus == 1</code>, and ERPNext branches on
+          the value directly to decide whether to post or reverse.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          On Django/Postgres add a <code>docstatus smallint</code> column with a DB
+          <code>CHECK (docstatus IN (0,1,2))</code> on every transaction table.
+        </p>
+        <ul>
+          <li>Expose <code>submit()</code> / <code>cancel()</code> service methods — never a raw UPDATE path.</li>
+          <li>Gate all writes: a row with <code>docstatus &gt;= 1</code> is read-only except through cancel.</li>
+          <li>Make <code>submit()</code> the single place that writes ledger rows, inside one DB transaction.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The crucial detail is that the lifecycle is <strong>data-driven by <code>docstatus</code></strong>: the
+    same method that posts when the document is submitted is reused, with a branch, to reverse when it is
+    cancelled. The Sales Invoice's GL-posting method is the textbook example — one function, two regimes:
+  </p>
+  <pre><code><span class="k">if</span> self.docstatus == <span class="t">1</span>:
+    make_gl_entries(
+        gl_entries,
+        update_outstanding=update_outstanding,
+        merge_entries=<span class="k">False</span>,
+        from_repost=from_repost,
+    )
+    self.make_exchange_gain_loss_journal()
+<span class="k">elif</span> self.docstatus == <span class="t">2</span>:
+    make_reverse_gl_entries(voucher_type=self.doctype, voucher_no=self.name)</code></pre>
+  <p class="srcline">erpnext/accounts/doctype/sales_invoice/sales_invoice.py:1038</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · docstatus is the source of truth, not <code>status</code></span>
+    <p>
+      <code>docstatus</code> (0/1/2) is the framework's control variable. The human-readable
+      <code>status</code> string ("Draft", "To Bill", "Cancelled"…) is <em>derived</em> from it (Pattern 5)
+      and can drift if anyone sets it by hand. <strong>Never branch control flow on a stored status string</strong> —
+      always recompute it, and key your guards off <code>docstatus</code>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 2 · The ordered controller hook chain</h2>
+  <p>
+    The three-state machine is the skeleton; the business logic hangs off it as a fixed sequence of named
+    hooks. ERPNext decomposes that logic into a deep inheritance chain so that each cross-cutting concern —
+    tax math, stock movement, GL posting, status rollup — lives in exactly one layer, and the leaf document
+    composes them with <code>super()</code>.
+  </p>
+
+  <h3>The controller inheritance chain</h3>
+  <p>For a Sales Invoice the class chain is six deep, each layer adding one concern:</p>
+  <div class="flow col">
+    <div class="node">SalesInvoice<small>leaf doctype — orchestrates, picks selling behaviour</small></div>
+    <div class="arr"></div>
+    <div class="node">SellingController<small>selling-side pricing &amp; party defaults</small></div>
+    <div class="arr"></div>
+    <div class="node">StockController<small>writes &amp; reverses the Stock Ledger</small></div>
+    <div class="arr"></div>
+    <div class="node">AccountsController<small>taxes, totals, GL entries, party validation</small></div>
+    <div class="arr"></div>
+    <div class="node">TransactionBase<small>shared transaction plumbing</small></div>
+    <div class="arr"></div>
+    <div class="node">StatusUpdater<small>status map + cross-doc rollups + limits</small></div>
+    <div class="arr"></div>
+    <div class="node">Document<small>Frappe base — owns docstatus &amp; fires the hooks</small></div>
+  </div>
+  <p>
+    <span class="fileref">erpnext/controllers/accounts_controller.py:78</span> declares
+    <code>class AccountsController(TransactionBase)</code>;
+    <span class="fileref">erpnext/utilities/transaction_base.py:20</span> declares
+    <code>class TransactionBase(StatusUpdater)</code>;
+    <span class="fileref">erpnext/controllers/status_updater.py:181</span> declares
+    <code>class StatusUpdater(Document)</code>. <span class="badge b-frappe">Frappe core</span> supplies the
+    base <code>Document</code> and is what actually invokes the hooks in order around the DB write.
+  </p>
+
+  <h3>The hook order, per operation</h3>
+  <table>
+    <tr><th>Trigger</th><th>Hooks fired, in order</th><th>What it's for</th></tr>
+    <tr><td>Save a draft</td><td><code>validate()</code> → <code>before_save</code></td><td>Compute totals, run invariants. Repeats every save while Draft.</td></tr>
+    <tr><td>Submit</td><td><code>before_submit</code> → <code>on_submit</code></td><td><strong>Write the side effects:</strong> GL entries, stock ledger, prevdoc rollups.</td></tr>
+    <tr><td>Cancel</td><td><code>before_cancel</code> → <code>on_cancel</code></td><td><strong>Reverse every side effect</strong> created on submit.</td></tr>
+    <tr><td>Edit a posted field</td><td><code>on_update_after_submit</code></td><td>The narrow escape hatch — whitelisted fields only, re-posts deltas.</td></tr>
+    <tr><td>Delete</td><td><code>on_trash</code></td><td>Tidy-up / integrity checks before a row is removed (Drafts only, normally).</td></tr>
+  </table>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Lifecycle logic as ordered hooks layered by inheritance</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Decompose lifecycle logic into named hooks that fire in a fixed order, and layer shared behaviour
+          through a class hierarchy so each concern lives in one place. The leaf composes them with
+          <code>super()</code>.
+        </p>
+        <p>This is the <strong>template-method pattern</strong> applied to a transaction: the framework owns
+          the skeleton (when each hook runs); the subclasses fill in the steps.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          <code>SalesInvoice.validate()</code> calls <code>super().validate()</code> up into
+          <code>AccountsController.validate()</code> for taxes, party and return validation
+          (<span class="fileref">sales_invoice.py:289</span>). <code>on_submit()</code> calls
+          <code>update_stock_ledger()</code> then <code>make_gl_entries()</code>
+          (<span class="fileref">sales_invoice.py:421</span>); <code>on_cancel()</code> calls
+          <code>super().on_cancel()</code> first, then its own reversal
+          (<span class="fileref">sales_invoice.py:513</span>).
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Build a base <code>TransactionController</code> with template-method hooks
+          (<code>validate</code> / <code>before_submit</code> / <code>on_submit</code> /
+          <code>before_cancel</code> / <code>on_cancel</code>) and subclass per concern
+          (<code>AccountingMixin</code>, <code>StockMixin</code>).
+        </p>
+        <ul>
+          <li>The service layer calls the hooks in a fixed sequence inside one transaction.</li>
+          <li>On a non-OO stack, use an ordered list of registered handlers per event.</li>
+          <li><strong>Always call the parent hook</strong> so invariants compose.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The two hooks that matter most are <code>on_submit</code> and <code>on_cancel</code>, because they are
+    where the document touches the ledgers. Notice that <code>on_cancel</code> is the exact structural mirror
+    of <code>on_submit</code> — same calls, same order, reversal regime — and that it opens by chaining to
+    <code>super().on_cancel()</code>:
+  </p>
+  <pre><code><span class="k">def</span> <span class="t">on_submit</span>(self):
+    ...
+    self.check_prev_docstatus()
+    self.update_prevdoc_status()
+    <span class="k">if</span> self.update_stock == <span class="t">1</span>:
+        self.update_stock_ledger()
+    self.make_gl_entries()
+
+<span class="k">def</span> <span class="t">on_cancel</span>(self):
+    super().on_cancel()
+    self.update_prevdoc_status()
+    <span class="k">if</span> self.update_stock == <span class="t">1</span>:
+        self.update_stock_ledger()
+    self.make_gl_entries_on_cancel()
+    self.db_set(<span class="s">"status"</span>, <span class="s">"Cancelled"</span>)</code></pre>
+  <p class="srcline">erpnext/accounts/doctype/sales_invoice/sales_invoice.py — on_submit (:421) / on_cancel (:513)</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · on_submit and on_cancel must be exact mirror images</span>
+    <p>
+      Every side effect created in <code>on_submit</code> (GL entries, stock ledger entries, prevdoc rollups,
+      loyalty points, linked-doc updates) must be reversed in <code>on_cancel</code>, or the books leak.
+      ERPNext pairs them line-for-line: <code>make_gl_entries</code> ↔ <code>make_gl_entries_on_cancel</code>,
+      <code>update_stock_ledger</code> called in both, <code>update_prevdoc_status</code> in both.
+      <strong>Forgetting one half is the classic reimplementation bug.</strong>
+    </p>
+  </div>
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · never override a hook without <code>super()</code></span>
+    <p>
+      The inheritance is six layers deep. Overriding <code>validate</code> or <code>on_cancel</code> without
+      calling <code>super()</code> silently drops whole layers of invariants — tax math, party validation,
+      status rollup — and you won't get an error, just wrong books. <strong>Always chain to super.</strong>
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 3 · Immutability + cancel-and-amend</h2>
+  <p>
+    Now the heart of the trust guarantee. A posted financial or stock document must <strong>never be edited
+    in place</strong>. Auditors need a permanent record of exactly what was posted. So to "change" a
+    submitted document you do two things: <strong>cancel</strong> it (which reverses its ledger effects) and
+    then <strong>amend</strong> it (create a new Draft that is a copy linked back to the cancelled original).
+    The original, its reversal, and the amendment all persist forever; history is additive, never destructive.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Cancel-and-amend instead of edit-in-place</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          A posted document is immutable. To correct it, post a reversal (cancel) and create a fresh draft
+          that copies it and links back via an <code>amended_from</code> reference. The new draft re-runs the
+          whole validate → submit chain and posts brand-new ledger entries.
+        </p>
+        <p>Three rows now exist — original, reversal, amendment — and the audit trail is the complete chain,
+          not a mutated record.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          Every submittable doctype carries an <code>amended_from</code> field — a <code>no_copy</code>,
+          <code>read_only</code> Link to <em>itself</em>
+          (<span class="fileref">sales_invoice.json</span>: <code>options: "Sales Invoice"</code>).
+          <code>StatusUpdater.set_status</code> keys off it:
+        </p>
+        <pre><code><span class="k">if</span> self.get(<span class="s">"amended_from"</span>):
+    self.status = <span class="s">"Draft"</span></code></pre>
+        <p>The amendment gets its own naming-series name (e.g. <code>ACC-SINV-2026-00042-1</code>) and is
+          validated from scratch.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Give every document a nullable <code>amended_from</code> self-FK. Block UPDATE on submitted rows at
+          the service/DB layer.
+        </p>
+        <ul>
+          <li>Provide one operation <code>amend(original)</code> that deep-copies the cancelled doc into a new
+            draft with a <strong>new id</strong> and <code>amended_from = original.id</code>.</li>
+          <li>Re-validate and re-submit the copy — it posts fresh ledger rows.</li>
+          <li>The id convention (suffix <code>-1</code>, <code>-2</code>) lets you trace revision history.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The amendment is forced back to <code>Draft</code> the moment it is created, which is what re-arms the
+    full lifecycle. The relevant slice of <code>set_status</code>:
+  </p>
+  <pre><code><span class="k">def</span> <span class="t">set_status</span>(self, update=<span class="k">False</span>, status=<span class="k">None</span>, update_modified=<span class="k">True</span>):
+    <span class="k">if</span> self.is_new():
+        <span class="k">if</span> self.get(<span class="s">"amended_from"</span>):
+            self.status = <span class="s">"Draft"</span>
+        <span class="k">return</span>
+    ...
+    new_status = self.get_status()[<span class="s">"status"</span>]
+    <span class="k">if</span> new_status != _status:
+        self.status = new_status
+        <span class="k">if</span> update:
+            self.db_set(<span class="s">"status"</span>, new_status, update_modified=update_modified)</code></pre>
+  <p class="srcline">erpnext/controllers/status_updater.py:197 (set_status)</p>
+
+  <h3>The narrow exception: <code>on_update_after_submit</code></h3>
+  <p>
+    There is exactly one sanctioned way to touch a submitted document without cancelling it: editing a small
+    whitelist of fields via <code>on_update_after_submit</code>. Even this is not a free UPDATE — it re-posts
+    the affected accounting:
+  </p>
+  <p>
+    <span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py:1149</span> implements
+    <code>on_update_after_submit</code> and routes to <code>repost_accounting_entries</code>; the edit is
+    guarded by the <code>ignore_validate_update_after_submit</code> flag
+    (<span class="fileref">erpnext/controllers/accounts_controller.py:343</span>). Everything outside that
+    whitelist must go through cancel + amend.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · <code>amended_from</code> must be <code>no_copy</code> + <code>read_only</code>, and the amendment needs a NEW name</span>
+    <p>
+      If you copy <code>amended_from</code> as a regular editable field, or reuse the original id, you break
+      both the audit chain and naming uniqueness. The <code>-1</code> / <code>-2</code> suffix convention is
+      what lets you walk the full revision history of a document.
+    </p>
+  </div>
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · you cannot just UPDATE a submitted document</span>
+    <p>
+      The only in-place edit is <code>on_update_after_submit</code> on a small whitelist, guarded by
+      <code>ignore_validate_update_after_submit</code>, and even that re-posts accounting via
+      <code>repost_accounting_entries</code>. If your "quick fix" path is a raw SQL UPDATE on a submitted row,
+      you have abandoned the trust guarantee.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 4 · Cancellation reverses postings on append-only ledgers</h2>
+  <p>
+    Pattern 3 said cancel "reverses its ledger effects." This pattern is the concrete mechanism. Ledgers are
+    <strong>append-only</strong> — you cannot delete a posted entry. So cancelling a document means posting
+    equal-and-opposite entries (debit and credit swapped) so the net effect is zero, while both the original
+    and the reversal survive. The document's <code>on_cancel</code> is the single owner of this reversal.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Reverse by swapping debit/credit; never delete a ledger row</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          A ledger is INSERT-only. To undo a posting you insert its mirror — debit and credit swapped — so
+          the running balance returns to where it was, while the table keeps both rows. The net is zero; the
+          history is complete.
+        </p>
+        <p>Every reversal row carries a back-reference to the source voucher so you can find, reverse and
+          reconcile by document.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          <code>general_ledger.make_reverse_gl_entries()</code> selects the voucher's originals
+          (<code>where is_cancelled == 0 … for_update()</code>), deep-copies each, swaps debit↔credit, stamps
+          a <code>"On cancellation of …"</code> remark and re-posts
+          (<span class="fileref">erpnext/accounts/general_ledger.py:607</span>).
+          <code>StockController.make_gl_entries_on_cancel</code>
+          (<span class="fileref">erpnext/controllers/stock_controller.py:281</span>) routes the stock side.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Make ledger tables strictly INSERT-only — revoke UPDATE/DELETE, or enforce with triggers.
+        </p>
+        <ul>
+          <li><code>cancel()</code>: load the doc's posted rows, insert reversal rows with debit/credit
+            swapped + a voucher back-reference, all in one transaction with the docstatus flip.</li>
+          <li>Keep <code>voucher_type</code> / <code>voucher_no</code> (and an <code>is_cancelled</code> flag)
+            on every ledger row.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>The reversal loop is small and worth reading in full — it is the whole mechanism:</p>
+  <pre><code><span class="k">for</span> entry <span class="k">in</span> gl_entries:
+    new_gle = copy.deepcopy(entry)
+    new_gle[<span class="s">"name"</span>] = <span class="k">None</span>
+    debit  = new_gle.get(<span class="s">"debit"</span>, <span class="t">0</span>)
+    credit = new_gle.get(<span class="s">"credit"</span>, <span class="t">0</span>)
+    new_gle[<span class="s">"debit"</span>]  = credit
+    new_gle[<span class="s">"credit"</span>] = debit
+    new_gle[<span class="s">"remarks"</span>] = <span class="s">"On cancellation of "</span> + new_gle[<span class="s">"voucher_no"</span>]
+    new_gle[<span class="s">"is_cancelled"</span>] = <span class="t">1</span>
+    <span class="k">if</span> new_gle[<span class="s">"debit"</span>] <span class="k">or</span> new_gle[<span class="s">"credit"</span>]:
+        make_entry(new_gle, adv_adj, <span class="s">"Yes"</span>)</code></pre>
+  <p class="srcline">erpnext/accounts/general_ledger.py:695 (deep copy + swap) / :713 (remarks)</p>
+
+  <h3>Two cancellation regimes — know which one you're in</h3>
+  <p>
+    ERPNext supports two ledger regimes, gated by <code>is_immutable_ledger_enabled()</code> (a toggle on
+    Accounts Settings). The reverse-entries code branches on it, and copying the logic without noticing the
+    branch produces wrong period balances.
+  </p>
+  <table>
+    <tr><th>Regime</th><th>What happens to the originals</th><th>What the reversal looks like</th><th>Ledger shape</th></tr>
+    <tr>
+      <td><strong>Classic</strong></td>
+      <td>Originals are flagged <code>is_cancelled = 1</code> (mutated in place).</td>
+      <td>Swapped reversal rows posted, also flagged <code>is_cancelled = 1</code>.</td>
+      <td>Table is mutated; cancelled rows filtered out of reports.</td>
+    </tr>
+    <tr>
+      <td><strong>Immutable ledger</strong></td>
+      <td>Originals left untouched (<code>is_cancelled = 0</code>).</td>
+      <td>A dated reversal entry posted on the cancellation date (also <code>is_cancelled = 0</code>).</td>
+      <td>Strictly append-only; period totals stay reproducible.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · tell the link-checker to ignore the ledgers the doc owns</span>
+    <p>
+      On cancel, ERPNext sets
+      <code>self.ignore_linked_doctypes = ('GL Entry', 'Stock Ledger Entry', …)</code>
+      (<span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py:564</span>). Without it,
+      Frappe's referential-integrity guard <span class="badge b-frappe">Frappe core</span> would refuse to
+      cancel a document that has dependent ledger rows — even though <em>reversing those rows is the whole
+      point of cancelling.</em> If you build your own link-integrity check, you need the same escape hatch.
+    </p>
+  </div>
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · don't copy the reverse logic without the regime branch</span>
+    <p>
+      Classic mode mutates originals; immutable mode never touches them and dates the reversal. Picking the
+      wrong one gives you either a non-append-only ledger or balances that don't reproduce for a closed
+      period. Decide your regime up front and make it explicit in <code>cancel()</code>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 5 · Derived status + cross-document propagation</h2>
+  <p>
+    A document's human-readable status ("Draft", "To Bill", "Completed", "Cancelled") is not stored ad hoc —
+    it is <strong>derived</strong> from <code>docstatus</code> plus rollup fields (<code>per_billed</code>,
+    <code>per_delivered</code>) through a declarative table of rules. And submitting a downstream document
+    <strong>propagates fulfilment percentages back to its source</strong> and enforces over-fulfilment limits.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Declarative status map + back-propagated rollups</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Express status as a priority-ordered list of <code>(status, predicate)</code> rules over
+          <code>docstatus</code> + rollup fields, and recompute it on every save. For document chains, keep
+          <code>per_billed</code> / <code>per_received</code> columns on the source and update them
+          transactionally when a downstream doc submits or cancels.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          <code>StatusUpdater.status_map</code> is a dict of <code>[status, condition]</code> pairs evaluated
+          top-down (<span class="fileref">erpnext/controllers/status_updater.py:21</span>).
+          <code>set_status</code> / <code>get_status</code> compute it (:197 / :218).
+          <code>update_prevdoc_status()</code> → <code>update_qty()</code> + <code>validate_qty()</code> roll
+          child quantities up to the parent and call <code>limits_crossed_error</code> on overage (:193).
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Store a derived <code>status</code> string but compute it from a single declarative rule table
+          ordered by priority; recompute on every save.
+        </p>
+        <ul>
+          <li>Keep rollup columns on the source; update them transactionally on downstream submit/cancel.</li>
+          <li>Validate cumulative fulfilment stays within a configurable tolerance.</li>
+          <li><strong>Refuse to post against a predecessor that isn't itself submitted.</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    That last rule — <em>refuse to post against an unsubmitted predecessor</em> — is enforced by
+    <code>check_prev_docstatus</code> (<span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py:1010</span>),
+    which you saw called first inside <code>on_submit</code>. The rollup chain looks like this on submit:
+  </p>
+  <div class="flow">
+    <div class="node">Sales Invoice<small>submitted (docstatus 1)</small></div>
+    <div class="arr"></div>
+    <div class="node">update_prevdoc_status<small>roll billed qty up</small></div>
+    <div class="arr"></div>
+    <div class="node">Sales Order<small>per_billed += …</small></div>
+    <div class="arr"></div>
+    <div class="node">set_status<small>"To Bill" → "Completed"</small></div>
+  </div>
+  <div class="callout co-note">
+    <span class="lbl">Note · status is recomputed, never trusted</span>
+    <p>
+      Because status is derived, a stale or hand-edited <code>status</code> string is harmless to the books —
+      the next <code>set_status</code> overwrites it from <code>docstatus</code> + rollups. This is exactly
+      why control flow must key off <code>docstatus</code>, not the label.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 6 · Flag-don't-block validation</h2>
+  <p>
+    The last pattern is a discipline that runs through the whole lifecycle: distinguish <strong>hard
+    invariants</strong> (must abort the transaction) from <strong>soft policy limits</strong> (warn, but let
+    an authorised user through). Hard errors throw and roll the transaction back; tolerance breaches warn —
+    and a privileged role can bypass the warning. This keeps real-world data entry unblocked without
+    weakening the books.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Hard invariants throw; soft limits warn with a role bypass</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Two tiers of validation. Invariants that would corrupt the books <strong>raise and roll back</strong>.
+          Policy limits (over-billing, over-receipt) <strong>emit a warning and proceed</strong> — optionally
+          requiring a role to exceed.
+        </p>
+        <p>Thresholds and override roles live in config rows, not code, so finance can tune tolerance without
+          a deploy.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          Hard cases use <code>frappe.throw(...)</code> — 14 occurrences in
+          <span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span>, zero
+          <code>msgprint</code>. Over-limit cases branch on role: <code>limits_crossed_error</code> throws
+          <code>OverAllowanceError</code> for normal users, <code>warn_about_bypassing_with_role</code>
+          <code>msgprint</code>s for override-role holders
+          (<span class="fileref">erpnext/controllers/status_updater.py:462</span>).
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Split validation into two functions: invariants that <code>raise</code> (rolling back the
+          transaction) and policy checks that warn and continue.
+        </p>
+        <ul>
+          <li>Drive thresholds and override-roles from config rows / a settings table.</li>
+          <li>Surface the warning to the UI but don't fail the write.</li>
+          <li>Gate the bypass on a permission the user holds.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>The branch that downgrades a hard throw to a warning for an override role is the canonical example:</p>
+  <pre><code>item[<span class="s">"reduce_by"</span>] = item[args[<span class="s">"target_field"</span>]] - item[<span class="s">"max_allowed"</span>]
+<span class="k">if</span> role <span class="k">not in</span> frappe.get_roles():
+    self.limits_crossed_error(args, item, qty_or_amount)        <span class="c"># frappe.throw(OverAllowanceError)</span>
+<span class="k">else</span>:
+    self.warn_about_bypassing_with_role(item, qty_or_amount, role)  <span class="c"># frappe.msgprint</span></code></pre>
+  <p class="srcline">erpnext/controllers/status_updater.py:462 — limits_crossed_error (:500) throws; warn_about_bypassing_with_role (:521) msgprints. OverAllowanceError defined at :12.</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · <code>throw</code> vs <code>msgprint</code> is a policy decision, not a style choice</span>
+    <p>
+      <code>frappe.throw</code> aborts the DB transaction; <code>frappe.msgprint</code> does not. Throwing on
+      a soft limit blocks legitimate data entry; only warning on a hard invariant corrupts the ledger. Keep
+      tolerance thresholds and override roles in Settings Singles, and be deliberate about which tier each
+      check belongs to.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Putting it together: editing a posted invoice</h2>
+  <p>
+    The patterns above interlock in one everyday operation — correcting a submitted Sales Invoice. Walk it
+    end to end; this is the flow a consultant must be able to reproduce on any stack.
+  </p>
+  <div class="flow col">
+    <div class="node">User opens submitted Sales Invoice<small>docstatus 1 — frozen</small></div>
+    <div class="arr"></div>
+    <div class="node">Click <strong>Cancel</strong><small>before_cancel → on_cancel fire</small></div>
+    <div class="arr"></div>
+    <div class="node">Reverse the postings<small>swapped-debit/credit GL rows, negative stock-ledger rows; update_prevdoc_status rolls back per_billed on the Sales Order</small></div>
+    <div class="arr"></div>
+    <div class="node">db_set status = "Cancelled"<small>docstatus → 2</small></div>
+    <div class="arr"></div>
+    <div class="node">Click <strong>Amend</strong><small>deep-copy into new Draft, amended_from = original, fresh naming-series id</small></div>
+    <div class="arr"></div>
+    <div class="node">set_status forces "Draft"<small>docstatus 0 — re-armed</small></div>
+    <div class="arr"></div>
+    <div class="node">User edits → <strong>Submit</strong><small>validate → on_submit posts brand-new GL / stock entries</small></div>
+  </div>
+  <p>
+    When the dust settles, three documents exist: the original, its reversal, and the amendment — every one
+    of them permanent. That is the audit trail. The same shape covers the two policy-aware variants worth
+    naming:
+  </p>
+  <dl class="gloss">
+    <dt><code>SUBMIT-WITH-ROLLUP-AND-LIMIT</code></dt>
+    <dd>
+      Submitting an invoice against a Sales Order runs <code>check_prev_docstatus</code> (predecessor must be
+      submitted), then <code>update_prevdoc_status</code> → <code>update_qty</code> rolls billed amount up to
+      the SO and <code>validate_qty</code> checks cumulative billing against the over-billing allowance. A
+      normal user over the limit gets <code>frappe.throw(OverAllowanceError)</code> and the whole submit rolls
+      back; a bypass-role holder gets only a warning and the submit proceeds. <code>set_status</code> then
+      recomputes the SO status from the status map.
+    </dd>
+    <dt><code>CANCEL-UNDER-IMMUTABLE-LEDGER</code></dt>
+    <dd>
+      With the immutable ledger enabled, <code>make_reverse_gl_entries</code> leaves the originals untouched
+      (<code>is_cancelled = 0</code>) and inserts a <em>dated</em> reversal on the cancellation date, so the
+      ledger table only ever grows and period totals stay reproducible. <code>on_cancel</code> sets
+      <code>self.ignore_linked_doctypes</code> so the link-integrity guard permits the cancel even though
+      those ledger rows reference the voucher.
+    </dd>
+  </dl>
+</section>
+
+<section>
+  <h2 class="sec">Applying this to KDPS</h2>
+  <p>
+    This subsystem is the literal backbone of two of the twelve architecture rules in
+    <code>00-system-architecture.html</code>: <strong>"documents write ledgers"</strong> and
+    <strong>"flag, don't block."</strong> The mapping is direct.
+  </p>
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    <p>
+      Every KDPS event becomes a <strong>submittable document</strong> with <code>docstatus</code> 0/1/2 —
+      GRN, PT (price-tag / value posting), Sale, Transfer, Return, EOSS markdown. Submit posts the stock
+      ledger (quantity) and/or the value + vendor-liability ledger; cancel reverses them, exactly as above.
+    </p>
+    <p>
+      The <strong>SOR / consignment</strong> rule — "stock counted by quantity, value stays off-book until
+      sale, vendor liability posts only on sale" — is this pattern with the value posting deferred to the
+      <em>Sale</em> document's <code>on_submit</code>. The GRN posts a quantity-only stock-ledger row; no GL /
+      liability entry fires until the Sale submits. Cross-state Bihar↔Jharkhand transfers (taxable IGST) are
+      just two paired submittable documents whose GL + stock postings reverse cleanly on cancel.
+    </p>
+    <p>
+      Because money-critical corrections — a wrong P-RATE, late freight, a sold-before-PT case — must never
+      be edited in place, KDPS adopts <strong>cancel + amend with <code>amended_from</code></strong> as the
+      <em>only</em> way to fix a posted PT or GRN. That gives the CA an immutable audit trail and satisfies
+      "profitability is derived, never hand-entered." Since SKU = style × size × colour, the stock-ledger row
+      the document writes must carry the full SKU so the reversal lands on the exact same line.
+    </p>
+    <p>
+      On the ratified Django/Postgres stack (ADR-0001): a <code>docstatus smallint</code> + CHECK on each
+      transaction table, INSERT-only ledger tables (revoke UPDATE/DELETE), a <code>TransactionController</code>
+      base class with the ordered hooks, an <code>amend()</code> service, and tolerance thresholds in a
+      settings table. All-or-nothing posting and reversal must run inside one DB transaction the app fully
+      controls — which is precisely why a BaaS was rejected.
+    </p>
+  </div>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li>Model every business document as a three-state machine in one column — <strong>Draft (0) / Submitted (1) / Cancelled (2)</strong> — with a DB CHECK and <code>submit()</code> / <code>cancel()</code> service methods. <code>docstatus</code>, not the human <code>status</code> string, is your source of truth for control flow.</li>
+    <li><strong>Submit is the single transactional moment a document writes to the ledgers.</strong> Put GL and stock postings inside <code>on_submit</code>, inside one DB transaction. Nothing else writes the ledgers.</li>
+    <li>Layer cross-cutting logic in a controller base class with <strong>ordered template-method hooks</strong> (validate → before/on_submit → before/on_cancel → on_update_after_submit → on_trash) and always call <code>super()</code> so invariants compose.</li>
+    <li>Make <code>on_cancel</code> the <strong>exact mirror</strong> of <code>on_submit</code> — every side effect created on submit is reversed on cancel, line for line, or the books leak.</li>
+    <li>A submitted document is <strong>immutable forever</strong>: never UPDATE or DELETE it. To change it, cancel (post equal-and-opposite reversals) and <strong>amend</strong> (deep-copy into a new Draft linked by <code>amended_from</code>, re-validate, re-submit). The only in-place edit is a whitelisted <code>on_update_after_submit</code> that re-posts deltas.</li>
+    <li>Keep ledgers <strong>strictly INSERT-only</strong>. Cancel by inserting reversal rows with debit/credit swapped and a voucher back-reference. Decide your regime — classic (mutate originals) vs immutable ledger (date the reversal) — explicitly.</li>
+    <li><strong>Derive</strong> human-readable status and fulfilment percentages from <code>docstatus</code> + rollup fields via a declarative rule table; recompute on every save. Refuse to post against an unsubmitted predecessor.</li>
+    <li>Split validation into <strong>hard invariants that throw</strong> (roll back) and <strong>soft limits that warn</strong> (proceed, with a role-based bypass). Keep thresholds and override roles in settings rows, not code.</li>
+    <li>The headline: <strong>an ERP is trustworthy not because data can't be wrong, but because every posting is immutable and every correction is itself a new, traceable posting — the ledger only ever grows.</strong></li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="01-metamodel-doctype.html"><small>← Previous</small>The meta-model (DocType)</a>
+<a class="next" href="03-accounting-ledger.html"><small>Next →</small>The accounting engine</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 02. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

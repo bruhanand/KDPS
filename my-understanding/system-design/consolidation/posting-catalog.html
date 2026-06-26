@@ -168,6 +168,7 @@
   <div class="card">
     <h4>R3 · Corrections are new events, never edits <span class="badge b-locked">no-reposting</span></h4>
     <p>Nothing posted is ever overwritten or deleted. A mistake is fixed by a <strong>new, today-dated reversing event</strong> with a reason code, linked to the source document. Balances are sums of postings; history always explains the present. (Code-level invariant: <code>REVOKE UPDATE/DELETE</code> on ledger tables + a trigger.)</p>
+    <p><strong>Period lock / freeze-date (26 Jun 2026):</strong> the same engine must also <strong>reject a posting whose date falls in an already-closed/reported period</strong>, so a back-dated document can't silently restate an already-sent month / brand-report / SOR-settlement.</p>
   </div>
 
   <div class="card">
@@ -448,19 +449,20 @@
       <span class="ledger-tag lt-tally">Tally ×2</span>
       <span class="badge b-ca">deemed-supply value · CA</span>
     </div>
-    <p class="what">A transfer <strong>across the two state GSTINs</strong> is a <strong>taxable inter-state supply between distinct persons</strong> (Sec 25 distinct persons; Schedule I) — not an internal move. It needs an IGST tax invoice and an e-way bill, with mirror vouchers at sender and receiver. This corrects the old D3 "internal — none" and matches D6. Treatment is driven off the first two digits (state code) of the two GSTINs. Same mechanics for all four models — the goods' commercial model does not change that a cross-state move between KDPS's own GSTINs is a supply.</p>
+    <p class="what">A transfer <strong>across the two state GSTINs</strong> is legally a <strong>taxable inter-state supply between distinct persons</strong> (Sec 25 distinct persons; Schedule I) — not an internal move. <strong>Scope decision (26 Jun 2026):</strong> the system <strong>records the move (business-unit → business-unit) and flags it</strong> as a cross-state move needing manual paperwork; the <strong>IGST tax invoice and e-way bill are produced manually by KDPS, outside the system</strong>. The taxable-supply fact is kept for awareness/reporting, and <code>state_gstin</code> stays a ledger dimension. Treatment is driven off the first two digits (state code) of the two GSTINs. Same mechanics for all four models — the goods' commercial model does not change that a cross-state move between KDPS's own GSTINs is a supply.</p>
     <table class="leg-tbl">
       <tr><th style="width:16%">Ledger</th><th>All models</th></tr>
       <tr><td><span class="ledger-tag lt-stock">Stock</span></td><td>Stock-OUT at the sending store (its GSTIN), Stock-IN at the receiving store (the other GSTIN), via in-transit — same two-step as intra-state. Frozen cost &amp; owned-flag carried.</td></tr>
       <tr><td><span class="ledger-tag lt-vendor">Vendor</span></td><td class="no-post">Nothing (this is KDPS-to-KDPS, not a brand event).</td></tr>
       <tr><td><span class="ledger-tag lt-cash">Cash</span></td><td class="no-post">Nothing.</td></tr>
       <tr><td><span class="ledger-tag lt-tally">Tally</span></td><td>
-        <strong>At the sender:</strong> <span class="badge b-stat">out-voucher + IGST tax invoice</span> on the consignment value incl. IGST. <span class="dr">Dr</span> inter-branch / receiver · <span class="cr">Cr</span> outward supply + <span class="cr">Cr</span> IGST output.<br>
-        <strong>At the receiver:</strong> <span class="badge b-stat">matching purchase voucher</span>, <span class="dr">Dr</span> stock + <span class="dr">Dr</span> IGST input (ITC) · <span class="cr">Cr</span> inter-branch / sender.<br>
+        <strong>Produced manually by KDPS, outside the system (26 Jun 2026)</strong> — the system records the move and flags it; it does <strong>not</strong> auto-generate these. For awareness, the manual paperwork is:<br>
+        <strong>At the sender:</strong> out-voucher + IGST tax invoice on the consignment value incl. IGST. <span class="dr">Dr</span> inter-branch / receiver · <span class="cr">Cr</span> outward supply + <span class="cr">Cr</span> IGST output.<br>
+        <strong>At the receiver:</strong> matching purchase voucher, <span class="dr">Dr</span> stock + <span class="dr">Dr</span> IGST input (ITC) · <span class="cr">Cr</span> inter-branch / sender.<br>
         <strong>E-way bill</strong> required (cross-state threshold ₹50,000) on consignment value incl. IGST.
       </td></tr>
     </table>
-    <div class="callout co-ca" style="margin-bottom:0;margin-top:8px"><strong>CA / client to confirm:</strong> the <strong>taxable value</strong> — Rule 28 second proviso lets KDPS use cost as the deemed open-market value when the receiver gets full ITC; confirm the slab basis on the transfer invoice and the Jharkhand e-way carve-out. <strong>Contingent on</strong> the client confirming KDPS = one company / one PAN with two state GSTINs (the registration-reality questionnaire). If two firms, the mechanics differ.</div>
+    <div class="callout co-ca" style="margin-bottom:0;margin-top:8px"><strong>CA to confirm (for the manual paperwork):</strong> the <strong>taxable value</strong> — Rule 28 second proviso lets KDPS use cost as the deemed open-market value when the receiver gets full ITC; confirm the slab basis on the transfer invoice and the Jharkhand e-way carve-out. <strong>Entity count is settled (26 Jun 2026):</strong> KDPS = one company / one PAN with two state GSTINs.</div>
   </div>
 
   <div class="event" id="e-rtv">
@@ -684,8 +686,8 @@
     </tr>
     <tr>
       <td><strong>Transfer cross-state</strong></td>
-      <td>store→store (in-transit)</td>
-      <td colspan="4"><span class="badge b-stat">IGST tax invoice (sender) + purchase voucher/ITC (receiver) + e-way bill</span> — taxable supply, all models <span class="badge b-ca">value/slab CA</span></td>
+      <td>store→store (in-transit); <strong>flagged cross-state</strong></td>
+      <td colspan="4">System records + flags the move; IGST tax invoice (sender) + purchase voucher/ITC (receiver) + e-way bill are <strong>produced manually by KDPS (26 Jun 2026)</strong> — taxable supply, all models <span class="badge b-ca">value/slab CA</span></td>
     </tr>
     <tr>
       <td><strong>RTV / defective</strong></td>
@@ -752,8 +754,8 @@
     </tr>
     <tr>
       <td><strong>Q3 · Cross-state transfer value &amp; basis</strong></td>
-      <td>Taxable value on the Bihar↔Jharkhand transfer invoice — Rule 28 second-proviso cost-as-OMV (when receiver gets full ITC)? Slab basis? Jharkhand e-way carve-out? <strong>Contingent</strong> on the client confirming one company / two state GSTINs (not two firms).</td>
-      <td>Posts the IGST tax-invoice + mirror purchase voucher + e-way bill on consignment value incl. IGST; the <em>value rule</em> is a config the CA sets. Routed off the GSTIN state codes.</td>
+      <td>Taxable value on the Bihar↔Jharkhand transfer invoice — Rule 28 second-proviso cost-as-OMV (when receiver gets full ITC)? Slab basis? Jharkhand e-way carve-out? <strong>Entity count settled (26 Jun 2026):</strong> one company / two state GSTINs.</td>
+      <td><strong>Scope (26 Jun 2026):</strong> the system records + flags the cross-state move; the IGST tax-invoice + mirror purchase voucher + e-way bill are <strong>produced manually by KDPS</strong> on consignment value incl. IGST. The <em>value rule</em> the CA sets is for that manual paperwork. Routed off the GSTIN state codes.</td>
     </tr>
     <tr>
       <td><strong>6-month deemed-supply clock</strong></td>

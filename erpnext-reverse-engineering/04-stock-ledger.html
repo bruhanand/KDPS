@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Stock Ledger — a second, parallel ledger — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html" class="cur"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 4 · The two ledgers</div>
+  <h1>The Stock Ledger — a second, parallel ledger</h1>
+  <p class="sub">Perpetual inventory as its own immutable ledger with a balance cache (Bin), valuation (FIFO / moving average), and the rule that every stock movement also posts the GL. The proof that an ERP is a set of sub-ledgers feeding a general ledger.</p>
+</header>
+
+<section>
+  <h2 class="sec">Why this subsystem decides whether your ERP is real</h2>
+  <p>
+    In <a href="03-accounting-ledger.html">the accounting ledger</a> we saw the General Ledger: a single, append-only book where every business event lands as a balanced set of debit/credit rows. The stock subsystem is the moment you discover that <strong>the GL is not enough</strong>. The GL tells you that inventory worth ₹4,80,000 sits on the balance sheet. It cannot tell you that the ₹4,80,000 is <em>118 of SKU&nbsp;ABC-M-Blue in the Patna store and 40 in the Deoghar warehouse</em>, nor what each unit cost, nor what you can promise a customer who walks in tomorrow.
+  </p>
+  <p>
+    So ERPNext builds a <strong>second, parallel immutable ledger</strong> dedicated to stock — the <strong>Stock Ledger Entry (SLE)</strong> — running alongside the GL with the same discipline (append-only, submittable, never edited in place) but a different key and a different job. The SLE is keyed by <code>(item_code, warehouse, posting_datetime, voucher)</code> and records the physical truth: how many units moved, what they were worth, and what the running balance is after the move. Then — and this is the punchline of the whole chapter — <strong>every stock movement also posts a balanced pair into the GL</strong>, with the money figure <em>derived</em> from the stock ledger's own valuation. Operations and books can never drift, because the books are computed off the operational ledger.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    An ERP is not "an accounting system with some inventory bolted on." It is a <strong>federation of sub-ledgers</strong> — stock, accounts receivable, accounts payable, payroll, cash — each an independent per-key event log, all of which <strong>project into the one General Ledger</strong>. Inventory is simply the most demanding sub-ledger, because unlike money it has to track <em>quantity and value separately</em>, and value is path-dependent. Get this one right and the pattern repeats everywhere else.
+  </div>
+
+  <p>The architecture, in bands:</p>
+
+  <div class="band l-doc">
+    <div class="bname">Documents (write side)</div>
+    <div class="boxes">
+      <div class="bx">Purchase Receipt<small>goods in</small></div>
+      <div class="bx">Delivery Note<small>goods out</small></div>
+      <div class="bx">Stock Entry<small>transfer / adjust</small></div>
+      <div class="bx">Sales / Purchase Invoice<small>with update_stock</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-ledg">
+    <div class="bname">Two ledgers (one event, two books)</div>
+    <div class="boxes">
+      <div class="bx">Stock Ledger Entry<small>qty + value + running balance, per (item,warehouse)</small></div>
+      <div class="bx">General Ledger<small>balanced debit / credit, value derived from the SLE</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-master">
+    <div class="bname">Caches &amp; engines (read / compute side)</div>
+    <div class="boxes">
+      <div class="bx">Bin<small>O(1) balance &amp; projected-qty cache</small></div>
+      <div class="bx">Valuation strategy<small>FIFO / LIFO / moving-average / serial-batch</small></div>
+      <div class="bx">Repost Item Valuation<small>resumable back-date repost</small></div>
+    </div>
+  </div>
+
+  <p>
+    The rest of this chapter walks the six reusable patterns that make this work, with the real ERPNext code for each, and a generalization you can lift onto a Django/Postgres stack. The single source file you will return to most is <span class="fileref">erpnext/stock/stock_ledger.py</span> — the valuation brain — and the controller base <span class="fileref">erpnext/controllers/stock_controller.py</span>, which is where "one event, two ledgers" is enforced.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">The key doctypes</h2>
+  <p>Seven doctypes carry the whole subsystem. Two are masters, two are the ledger itself plus its cache, and three are the machinery around valuation, reposting and global policy.</p>
+
+  <table>
+    <tr><th>DocType</th><th>Kind</th><th>What it is / why it exists</th></tr>
+    <tr>
+      <td><strong>Stock Ledger Entry</strong><br><span class="fileref">stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span></td>
+      <td><span class="badge b-erpnext">ledger</span></td>
+      <td>Append-only, <code>is_submittable</code> per-movement row. Stores the delta (<code>actual_qty</code>) <em>and</em> the running balance + valuation snapshot (<code>qty_after_transaction</code>, <code>valuation_rate</code>, <code>stock_value</code>, <code>stock_value_difference</code>, <code>stock_queue</code>). The stock sub-ledger itself.</td>
+    </tr>
+    <tr>
+      <td><strong>Bin</strong><br><span class="fileref">stock/doctype/bin/bin.json</span></td>
+      <td><span class="badge b-erpnext">cache</span></td>
+      <td>Denormalized balance cache: exactly one row per <code>(item_code, warehouse)</code> holding latest <code>actual_qty</code>, <code>valuation_rate</code>, <code>stock_value</code> plus projected quantities (<code>reserved_qty</code>, <code>ordered_qty</code>, <code>indented_qty</code>, <code>planned_qty</code> → <code>projected_qty</code>). For O(1) availability reads. Never the source of truth.</td>
+    </tr>
+    <tr>
+      <td><strong>Warehouse</strong><br><span class="fileref">stock/doctype/warehouse/warehouse.json</span></td>
+      <td><span class="badge b-erpnext">master</span></td>
+      <td>Stock location, modelled as a nested-set tree (<code>lft</code>/<code>rgt</code>/<code>parent_warehouse</code>, <code>is_group</code>). Each leaf links to a GL inventory asset account for perpetual inventory.</td>
+    </tr>
+    <tr>
+      <td><strong>Item</strong><br><span class="fileref">stock/doctype/item/item.json</span></td>
+      <td><span class="badge b-erpnext">master</span></td>
+      <td>Product master: <code>is_stock_item</code>, <code>has_serial_no</code>, <code>has_batch_no</code>, <code>stock_uom</code>, default <code>valuation_method</code>, variants. <strong>Only <code>is_stock_item</code> items touch the stock ledger.</strong></td>
+    </tr>
+    <tr>
+      <td><strong>Repost Item Valuation</strong><br><span class="fileref">stock/doctype/repost_item_valuation/repost_item_valuation.json</span></td>
+      <td><span class="badge b-erpnext">transaction</span></td>
+      <td>Async, resumable job that re-runs valuation forward after a back-dated / edited / cancelled entry, then re-posts the matching GL entries. Checkpoints to <code>current_index</code> + a gzipped data file.</td>
+    </tr>
+    <tr>
+      <td><strong>Serial and Batch Bundle</strong><br><span class="fileref">stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.json</span></td>
+      <td><span class="badge b-erpnext">transaction</span></td>
+      <td>Per-movement bundle of the exact serial numbers / batches consumed or received, enabling serial- and batch-wise valuation instead of warehouse-level average / FIFO.</td>
+    </tr>
+    <tr>
+      <td><strong>Stock Settings</strong><br><span class="fileref">stock/doctype/stock_settings/stock_settings.json</span></td>
+      <td><span class="badge b-frappe">Frappe core</span> single</td>
+      <td>Global controls: <code>stock_frozen_upto</code> (freeze date), the role allowed to back-date, negative-stock policy, default valuation method.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="lbl">Reading orientation</span>
+    The mental model: <strong>Item × Warehouse</strong> is the "account" of the stock ledger (analogous to a GL account), the <strong>SLE</strong> is the ledger row, the <strong>Bin</strong> is a cached balance, and the <strong>voucher</strong> (Purchase Receipt, Delivery Note…) is the source document that writes both ledgers. Everything else is valuation and repost machinery.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 1 · Stock as a second immutable ledger</h2>
+  <p>
+    The first and most foundational decision: inventory is <strong>not a mutable quantity column</strong> on the item or the warehouse. It is an append-only event log. You never run <code>UPDATE item SET qty = qty - 1</code>. You <code>INSERT</code> a movement, and the balance is something the ledger <em>carries</em>, not something you overwrite.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>Event-source the inventory</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Inventory is an append-only log of movements. Each row records the <strong>delta</strong> and the <strong>balance-after</strong>, so the ledger is simultaneously the audit trail and the source of truth.</p>
+        <p>You never UPDATE a balance — you INSERT an event. A correction is a <em>reversing</em> insert, not an edit. Individual rows are immutable; only the source document can be cancelled.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>The SLE is <code>is_submittable</code> + <code>in_create</code> with read-only fields. <code>actual_qty</code> is the delta; <code>qty_after_transaction</code> / <code>valuation_rate</code> / <code>stock_value</code> are the carried balance.</p>
+        <p><code>on_cancel()</code> in <span class="fileref">stock/doctype/stock_ledger_entry/stock_ledger_entry.py</span> <strong>hard-throws</strong> — you cannot cancel one SLE. <code>is_cancelled</code> is a soft flag, never a delete. A composite index on <code>(item_code, warehouse, posting_datetime, creation)</code> is added in <code>on_doctype_update()</code>.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>On Django/Postgres: a <code>StockLedgerEntry</code> table, insert-only, with <code>item_id</code>, <code>warehouse_id</code>, <code>qty_delta</code>, <code>posting_datetime</code>, <code>voucher_type</code>, <code>voucher_id</code>, plus carried <code>qty_after</code> / <code>value_after</code> columns.</p>
+        <p>Never expose UPDATE/DELETE on it. Corrections are reversing inserts. Add the composite index on <code>(item, warehouse, posting_datetime)</code>. <strong>Reuse this exact shape for every sub-ledger</strong> (AR, AP, cash).</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The refusal to cancel an individual row is the load-bearing rule — it forces every correction through the voucher, which keeps the audit trail intact:</p>
+
+<pre><code><span class="k">def</span> on_cancel(self):
+    msg = _(<span class="s">"Individual Stock Ledger Entry cannot be cancelled."</span>)
+    msg += <span class="s">"&lt;br&gt;"</span> + _(<span class="s">"Please cancel related transaction."</span>)
+    frappe.throw(msg)
+
+<span class="k">def</span> on_doctype_update():
+    frappe.db.add_index(<span class="s">"Stock Ledger Entry"</span>, [<span class="s">"voucher_no"</span>, <span class="s">"voucher_type"</span>])
+    frappe.db.add_index(<span class="s">"Stock Ledger Entry"</span>,
+        [<span class="s">"item_code"</span>, <span class="s">"warehouse"</span>, <span class="s">"posting_datetime"</span>, <span class="s">"creation"</span>])
+</code></pre>
+  <p class="srcline">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.py:349 (on_cancel), :355 (on_doctype_update)</p>
+
+  <p>
+    When a voucher is cancelled, <code>make_sl_entries()</code> (in <span class="fileref">erpnext/stock/stock_ledger.py</span>) flips <code>is_cancelled = 1</code> on the original rows and writes <strong>reversing entries with negated <code>actual_qty</code> and swapped incoming/outgoing rates</strong>, then reposts forward. The history is never destroyed — it grows.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — the running balance is on the row</span>
+    The SLE stores <code>qty_after_transaction</code>, <code>valuation_rate</code> and <code>stock_value</code> <strong>on each row</strong>. This is the source of all back-dating pain (Pattern 3): any insert/edit/cancel in the past makes every later row's balance and valuation wrong, forcing a forward repost. If you instead computed the balance on <em>read</em> you'd avoid reposts entirely but pay on every query. ERPNext chose write-time and built a repost engine to compensate. <strong>Know which trade-off you are making — it is the single biggest architectural fork in this subsystem.</strong>
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    This SLE shape is the literal spine of KDPS's "documents-write-ledgers" rule. <code>item_code</code> = the SKU at <strong>style × size × colour</strong> granularity; <code>warehouse</code> = the store or warehouse. An SLE keyed by <code>(item_code, warehouse)</code> <em>is</em> KDPS's per-store, per-SKU stock ledger — and because qty survives at SKU level on every row, "stock at style level only" can never sneak in. Corrections to a PT or GRN become reversing inserts, never edits, so the statutory audit trail Tally expects stays intact.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 2 · Valuation is the hard part — isolate it, store its state</h2>
+  <p>
+    Quantity is trivial: it is just the sum of deltas. Money is not. The cost of what you ship depends on the method you chose (Moving Average vs FIFO vs LIFO vs serial/batch), and it is <strong>path-dependent</strong> — the same three receipts and one issue produce a different COGS under FIFO than under moving average. ERPNext's answer is to push all of this into one file, <span class="fileref">erpnext/stock/stock_ledger.py</span>, behind a small set of methods, and to <strong>serialize the method's full state onto every SLE row</strong> so the next entry can resume without replaying history.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>Encapsulate valuation behind a strategy; persist its state per row</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Cost is method-specific and path-dependent. Hide each method behind one interface (<code>add_stock</code>, <code>remove_stock</code>, <code>total</code>), and persist enough state on each ledger row to resume valuation deterministically without re-reading the whole history.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>update_entries_after.process_sle()</code> dispatches on <code>self.valuation_method</code>: <code>get_moving_average_values()</code> recomputes a weighted-average rate; <code>update_queue_values()</code> delegates to <code>FIFOValuation</code>/<code>LIFOValuation</code> in <span class="fileref">erpnext/stock/valuation.py</span>.</p>
+        <p>FIFO/LIFO model stock as a list of <code>[qty, rate]</code> bins. The <strong>entire queue is serialized into the SLE column <code>stock_queue</code></strong> (Long Text) so the next entry resumes without replay.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Define a <code>Valuation</code> strategy interface with FIFO/LIFO/MovingAverage implementations. Persist the strategy's state (the bin list, as JSON) on each ledger row.</p>
+        <p>On any stack this is a small <strong>pure</strong> module with zero DB dependency — unit-test it in isolation, which is exactly what ERPNext does in <span class="fileref">test_stock_ledger_entry.py</span>.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3>Moving average — a weighted mean, recomputed on each receipt</h3>
+  <p>The whole moving-average method is a few lines of arithmetic with no database in sight:</p>
+
+<pre><code><span class="k">def</span> get_moving_average_values(self, sle):
+    actual_qty = flt(sle.actual_qty)
+    new_stock_qty = flt(self.wh_data.qty_after_transaction) + actual_qty
+    <span class="k">if</span> new_stock_qty &gt;= 0:
+        <span class="k">if</span> actual_qty &gt; 0:
+            <span class="k">if</span> flt(self.wh_data.qty_after_transaction) &lt;= 0:
+                self.wh_data.valuation_rate = sle.incoming_rate
+            <span class="k">else</span>:
+                new_stock_value = (
+                    self.wh_data.qty_after_transaction * self.wh_data.valuation_rate
+                ) + (actual_qty * sle.incoming_rate)
+                self.wh_data.valuation_rate = new_stock_value / new_stock_qty
+</code></pre>
+  <p class="srcline">erpnext/stock/stock_ledger.py:1523 (get_moving_average_values)</p>
+
+  <h3>FIFO — stock is a queue of <code>[qty, rate]</code> bins</h3>
+  <p>FIFO/LIFO live in <span class="fileref">erpnext/stock/valuation.py</span> as a pure data structure. A receipt appends a bin; an issue pops bins first-in-first-out; and — critically — a depleted queue keeps a <em>negative</em> bin rather than erroring:</p>
+
+<pre><code><span class="k">def</span> add_stock(self, qty: float, rate: float) -&gt; <span class="t">None</span>:
+    <span class="k">if not</span> len(self.queue):
+        self.queue.append([0, 0])
+    <span class="k">if</span> self.queue[-1][RATE] == rate:        <span class="c"># merge same-rate bin</span>
+        self.queue[-1][QTY] += qty
+    <span class="k">else</span>:
+        <span class="k">if</span> self.queue[-1][QTY] &gt; 0:
+            self.queue.append([qty, rate])  <span class="c"># positive balance, new bin</span>
+        <span class="k">else</span>:                               <span class="c"># negative balance qty</span>
+            qty = self.queue[-1][QTY] + qty
+            <span class="k">if</span> qty &gt; 0:
+                self.queue[-1] = [qty, rate]
+            <span class="k">else</span>:
+                self.queue[-1][QTY] = qty
+</code></pre>
+  <p class="srcline">erpnext/stock/valuation.py:55 (FIFOValuation.add_stock) · :33 (get_total_stock_and_value)</p>
+
+  <p>
+    <code>BinWiseValuation.get_total_stock_and_value()</code> collapses the bin list back to a single <code>(qty, value)</code> pair when the row needs a flat number. Dispatch between the three methods happens in <code>process_sle()</code>, and the dividing line between "add" and "remove" is just the sign of <code>actual_qty</code>.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — you cannot "just store a cost"</span>
+    Valuation is path-dependent and method-specific. The <code>stock_queue</code> (FIFO/LIFO bins) is serialized as JSON on <em>every</em> SLE so the next entry resumes correctly. Moving Average vs FIFO give <strong>different COGS for identical movements</strong>. And the method is per-item/company (<code>get_valuation_method</code>), so one warehouse can legitimately mix methods across items. A schema that has a single <code>unit_cost</code> column and no per-row strategy state cannot reproduce correct numbers.
+  </div>
+
+  <div class="callout co-note">
+    <span class="lbl">Why the strategy module is the easiest thing to test</span>
+    Because valuation is pure (in → out, no IO), it is the part of the whole ERP you can cover most cheaply and most completely. Feed a sequence of receipts and issues, assert the rate and the queue. ERPNext does exactly this; you should too, <em>before</em> you wire valuation into the controller. A bug here corrupts the GL silently.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 3 · Back-dated entries invalidate the future → a repost engine</h2>
+  <p>
+    This is the pattern naive reimplementations miss, and the one that will bite you in production. Because each SLE carries a running balance <em>and</em> a path-dependent valuation, inserting or editing an entry in the past makes <strong>every later row wrong</strong> — both its quantity-after and its rate. You cannot leave them stale. You must recompute forward. And for a hot SKU with tens of thousands of movements, that recomputation cannot be synchronous, so it becomes a checkpointed, resumable background job.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>A back-dated mutation triggers a resumable forward repost</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Carrying running balances means the past edits the future. Any back-dated insert/edit/cancel must recompute every later row forward. For long chains this must be async and <strong>resumable</strong> — checkpoint progress so it survives timeouts and restarts.</p>
+        <p>And: restrict <em>who</em> may back-date at all, behind a role and a freeze date.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>update_entries_after</code> walks SLEs forward re-deriving balances. <code>update_qty_in_future_sle()</code> does a single bulk SQL <code>UPDATE</code> to shift the qty tail fast.</p>
+        <p>The full valuation repost is offloaded to <strong>Repost Item Valuation</strong>: <code>repost()</code> → <code>repost_future_sle()</code> loops items, persisting <code>current_index</code> + a gzipped data file after each, catching timeouts to resume, then <code>repost_gl_entries()</code> re-posts the GL. <code>validate_with_last_transaction_posting_time()</code> + Stock Settings gate back-dating.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Treat any back-dated mutation as a trigger to <strong>enqueue a repost job scoped to (item, warehouse)</strong>. The job recomputes forward, writes a fast bulk qty-shift, and checkpoints progress so it survives restarts.</p>
+        <p>Gate back-dating by role + freeze date from day one. <strong>This is the single biggest thing naive reimplementations leave out</strong>, then retrofit painfully.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The quantity tail is shifted in one bulk statement — fast, because qty is just additive — while the (expensive, path-dependent) valuation repost is split off into the async job:</p>
+
+<pre><code>frappe.db.sql(f<span class="s">"""
+    update `tabStock Ledger Entry`
+    set qty_after_transaction = qty_after_transaction + {qty_shift}
+    where
+        item_code = %(item_code)s
+        and warehouse = %(warehouse)s
+        and is_cancelled = 0
+        and ( posting_datetime &gt; %(posting_datetime)s )
+        {datetime_limit_condition}
+    """</span>, args)
+validate_negative_qty_in_future_sle(args, allow_negative_stock)
+</code></pre>
+  <p class="srcline">erpnext/stock/stock_ledger.py:2072 (update_qty_in_future_sle)</p>
+
+  <p>The flow for a back-dated correction, end to end:</p>
+
+  <div class="flow col">
+    <div class="node">User inserts / edits a past entry<small>only if role passes validate_with_last_transaction_posting_time + Stock Settings stock_frozen_upto</small></div>
+    <div class="arr"></div>
+    <div class="node">update_qty_in_future_sle<small>one bulk UPDATE shifts qty_after_transaction of all later SLEs</small></div>
+    <div class="arr"></div>
+    <div class="node">enqueue Repost Item Valuation<small>scoped to the affected (item, warehouse) chains</small></div>
+    <div class="arr"></div>
+    <div class="node">repost() → repost_future_sle()<small>re-runs update_entries_after per item; checkpoints current_index + gzipped data file; resumes on timeout</small></div>
+    <div class="arr"></div>
+    <div class="node">repost_gl_entries()<small>re-posts the corrected financial entries from the new stock values</small></div>
+  </div>
+
+  <p>
+    The orchestration lives in <code>repost()</code> in <span class="fileref">erpnext/stock/doctype/repost_item_valuation/repost_item_valuation.py</span> (around line 383), looping <code>items_to_be_repost</code>; the resumable inner loop and its checkpoint are <code>repost_future_sle()</code> in <span class="fileref">erpnext/stock/stock_ledger.py</span> (around line 215). The status flips to <em>In Progress</em> on a caught timeout so the next run picks up at <code>current_index</code> rather than restarting.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — ordering key is posting_datetime + creation, never just the date</span>
+    Multiple movements can share a <code>posting_date</code>. The real ordering key is <code>posting_datetime</code> (date + time combined) <strong>plus <code>creation</code></strong> as a tie-break — <code>get_actual_qty</code> orders by <code>posting_datetime desc, creation desc</code>. This matters for FIFO (which bin pops first) and for "which row is last." <strong>Storing only a date will scramble valuation</strong> the moment two entries land on the same day.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    KDPS will routinely correct a PT or GRN <em>after</em> the fact — a wrong rate, a miscount, a late freight line. The Repost Item Valuation engine is the answer: a back-dated PT correction enqueues a scoped repost, the qty tail shifts in bulk, valuation re-runs forward, and the corrected COGS re-posts to the GL (and from there to Tally). Pair this with the freeze-date + role gate so that once a month is closed and filed, nobody silently rewrites it. This is also where four of the five "CA-ruling" items live — they are all about <em>when</em> the GL leg may legitimately move after the fact.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 4 · The Bin — a derivable balance cache for O(1) availability</h2>
+  <p>
+    Summing the ledger to answer "how much do I have?" is fine once. Doing it on every sales-order line, for every item, while a salesperson waits, is not. So ERPNext keeps a <strong>one-row-per-key cache</strong> of the current balance — the <strong>Bin</strong> — but treats it as a rebuildable projection of the ledger, never the source of truth.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>A denormalized balance cache, always rebuildable from the ledger</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Reading "how much do I have / will I have" by scanning the ledger is too slow for every line. Keep a one-row-per-key cache of the current and <em>projected</em> balance — but treat it as a rebuildable projection, never authoritative. The ledger is truth; the cache is speed.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>Bin holds one row per <code>(item_code, warehouse)</code> (unique index via <code>on_doctype_update</code>'s <code>add_unique</code>). It carries <code>actual_qty</code>, <code>valuation_rate</code>, <code>stock_value</code> <strong>and</strong> a forward-looking <code>projected_qty = actual + ordered + indented + planned − reserved</code>.</p>
+        <p><code>update_bin()</code>/<code>update_qty()</code> write it as a side effect of posting; <code>get_actual_qty()</code> reads the true value from the last SLE; <code>recalculate_qty()</code> fully rebuilds it.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>A materialized <code>stock_balance</code> table keyed <code>(item, warehouse)</code>, updated <strong>in the same transaction</strong> as the ledger insert, holding current and projected quantities.</p>
+        <p>Always provide a rebuild-from-ledger function and use it as the correctness backstop. Add the <strong>unique key</strong> so concurrent posts cannot fork the balance.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The projected quantity is the genuinely useful part — it folds in the supply/demand pipeline, not just on-hand:</p>
+
+  <dl class="gloss">
+    <dt><code>actual_qty</code></dt><dd>What is physically on hand right now — mirrors the last SLE's <code>qty_after_transaction</code>.</dd>
+    <dt><code>ordered_qty</code></dt><dd>On open Purchase Orders, inbound.</dd>
+    <dt><code>indented_qty</code></dt><dd>On Material Requests (internal demand raised).</dd>
+    <dt><code>planned_qty</code></dt><dd>To be produced (Work Orders).</dd>
+    <dt><code>reserved_qty</code></dt><dd>Committed to open Sales Orders / reservations — subtracted, because it is spoken for.</dd>
+    <dt><code>projected_qty</code></dt><dd><code>actual + ordered + indented + planned − reserved</code> — "what I will have when the dust settles" (<code>set_projected_qty</code>, <span class="fileref">erpnext/stock/doctype/bin/bin.py</span>:66).</dd>
+  </dl>
+
+  <p>
+    The unique index that prevents two concurrent posts from forking the balance is declared in <code>on_doctype_update</code> (<span class="fileref">erpnext/stock/doctype/bin/bin.py</span>:229). And the read path that the rest of the system trusts as authoritative is <code>get_actual_qty()</code>, which falls back to the <em>last SLE</em>, ordered correctly, not to the Bin's own number:
+  </p>
+
+<pre><code><span class="c"># get_actual_qty — the authoritative read is the LAST SLE, not the Bin</span>
+last_sle = frappe.get_all(
+    <span class="s">"Stock Ledger Entry"</span>,
+    filters={<span class="s">"item_code"</span>: item_code, <span class="s">"warehouse"</span>: warehouse, <span class="s">"is_cancelled"</span>: 0},
+    fields=[<span class="s">"qty_after_transaction"</span>],
+    order_by=<span class="s">"posting_datetime desc, creation desc"</span>,
+    limit=1,
+)
+</code></pre>
+  <p class="srcline">erpnext/stock/doctype/bin/bin.py:295 (get_actual_qty derives from the last SLE)</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — the Bin can go stale; never blindly <code>balance += delta</code></span>
+    Bin is a cache, not truth. It can drift on back-dated transactions and cancellations. <code>update_qty()</code> explicitly <strong>re-reads from the SLE</strong> when <code>future_sle_exists</code> or <code>is_cancelled</code>, rather than trusting its own increment (<span class="fileref">erpnext/stock/doctype/bin/bin.py</span>:251). A reimplementation that only ever does <code>balance += delta</code> will silently corrupt under back-dating and concurrent posts. <strong>Always keep a rebuild-from-ledger path</strong> (<code>recalculate_qty</code> / <code>get_actual_qty</code>) and treat it as the correctness backstop.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    The Bin's <code>projected_qty</code> is exactly what a KDPS store needs at the counter: "do I have this SKU, and is more on the way?" answered in O(1) without scanning a per-SKU ledger that may run to tens of thousands of rows across 50+ stores. The <code>reserved_qty</code> column is where a hold for an online order or an inter-store request lives, so the floor cannot oversell stock that is already promised.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 5 · Every physical movement also hits the GL</h2>
+  <p>
+    Here is where the two ledgers become one discipline. Inventory is an <strong>asset</strong>; moving it changes the balance sheet. So a single business event must post to <em>two</em> ledgers atomically: the stock sub-ledger (quantity + valuation) and the financial GL (a balanced debit/credit pair). And the GL amount is <strong>not entered by anyone</strong> — it is read straight off the stock ledger's computed value. This is what makes "profitability is derived, never hand-entered" structurally true rather than a policy you hope people follow.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>One shared controller posts both ledgers; the GL value is derived from the SLE</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>A single physical event must post to two ledgers atomically — the stock sub-ledger and the financial GL — inside one DB transaction. The GL figure is <strong>derived</strong> from the sub-ledger's computed value, never typed in.</p>
+        <p>Generalize: stock, receivables, payables, payroll are each sub-ledgers, and each entry projects into the one GL.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>StockController(AccountsController)</code> in <span class="fileref">erpnext/controllers/stock_controller.py</span> is the shared base for Purchase Receipt, Delivery Note, Stock Entry, Sales/Purchase Invoice.</p>
+        <p><code>make_sl_entries()</code> writes the SLEs; <code>make_gl_entries()</code> runs <strong>only if</strong> <code>erpnext.is_perpetual_inventory_enabled(company)</code>, delegating to <code>BaseStockGLComposer.compose()</code>, which debits the warehouse inventory account by <code>flt(sle.stock_value_difference)</code> and credits the expense account by its negative.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Make a shared posting base class for any inventory-affecting document. On submit it (1) appends stock ledger rows, (2) reads back each row's value delta, (3) emits a balanced GL pair (debit inventory asset, credit COGS / clearing) <strong>in one DB transaction</strong>, gated by a company "perpetual inventory" flag.</p>
+        <p>Generalize the principle to every sub-ledger.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The composer is almost startlingly simple — it sources the entire GL movement from one field on the SLE, <code>stock_value_difference</code>:</p>
+
+<pre><code>gl_list.append(self.get_gl_dict({
+    <span class="s">"account"</span>: _inv_dict[<span class="s">"account"</span>],        <span class="c"># warehouse inventory asset</span>
+    <span class="s">"against"</span>: expense_account,
+    <span class="s">"cost_center"</span>: item_row.cost_center,
+    <span class="s">"debit"</span>: flt(sle.stock_value_difference, precision),
+}, _inv_dict[<span class="s">"account_currency"</span>], item=item_row))
+
+gl_list.append(self.get_gl_dict({
+    <span class="s">"account"</span>: expense_account,            <span class="c"># COGS / Stock Rcvd But Not Billed</span>
+    <span class="s">"against"</span>: _inv_dict[<span class="s">"account"</span>],
+    <span class="s">"cost_center"</span>: item_row.cost_center,
+    <span class="s">"debit"</span>: -1 * flt(sle.stock_value_difference, precision),
+}, item=item_row))
+</code></pre>
+  <p class="srcline">erpnext/stock/services/base_stock_gl_composer.py:58 (debit inventory) · :74 (credit expense)</p>
+
+  <p>
+    On a <strong>receipt</strong>, <code>stock_value_difference</code> is positive: debit (increase) the warehouse inventory asset, credit <em>Stock Received But Not Billed</em> (the clearing account that the supplier invoice later squares). On an <strong>issue</strong> (a sale or transfer out), <code>stock_value_difference</code> is negative: the same two lines now credit (decrease) the inventory asset and debit <em>Cost of Goods Sold</em>. The pair is self-balancing by construction because the two amounts are exact negatives of one field. The controller and its perpetual gate:
+  </p>
+
+<pre><code><span class="k">class</span> <span class="t">StockController</span>(AccountsController):
+    ...
+    <span class="k">def</span> make_gl_entries(self, ...):
+        <span class="k">if not</span> erpnext.is_perpetual_inventory_enabled(self.company):
+            <span class="k">return</span>
+        ...  <span class="c"># delegate to BaseStockGLComposer.compose()</span>
+
+    <span class="k">def</span> make_sl_entries(self, sl_entries, ...):
+        ...  <span class="c"># write Stock Ledger Entries</span>
+</code></pre>
+  <p class="srcline">erpnext/controllers/stock_controller.py:40 (class) · :178 (make_gl_entries + perpetual gate) · :274 (make_sl_entries)</p>
+
+  <p>The full receive flow ties Patterns 1–5 together in posting order:</p>
+
+  <div class="flow col">
+    <div class="node">Purchase Receipt submit<small>StockController.make_sl_entries() builds SLE dicts</small></div>
+    <div class="arr"></div>
+    <div class="node">stock_ledger.make_sl_entries()<small>inserts each SLE (actual_qty &gt; 0, incoming_rate from PO/invoice)</small></div>
+    <div class="arr"></div>
+    <div class="node">repost_current_voucher → update_entries_after<small>computes qty_after_transaction + valuation_rate (moving-avg or FIFO)</small></div>
+    <div class="arr"></div>
+    <div class="node">update_qty_in_future_sle<small>shifts any later entries (if back-dated)</small></div>
+    <div class="arr"></div>
+    <div class="node">update_bin_qty<small>refreshes the Bin cache</small></div>
+    <div class="arr"></div>
+    <div class="node">make_gl_entries / BaseStockGLComposer<small>if perpetual: debit inventory, credit Stock Received But Not Billed by stock_value_difference</small></div>
+  </div>
+
+  <p>And the mirror flow for an issue (Delivery Note / Sales Invoice with <code>update_stock</code>): an SLE with <code>actual_qty &lt; 0</code>; the valuation engine determines the outgoing rate (FIFO pops queue bins, moving-average uses the running rate, serial/batch uses the bundle) and writes a negative <code>stock_value_difference</code>; the GL then <strong>credits the inventory asset and debits Cost of Goods Sold</strong> by that same value; <code>validate_negative_stock</code> blocks the post if the balance would go below zero (unless negative stock is allowed).</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — the GL leg is conditional on perpetual inventory</span>
+    The financial pair only fires when <code>is_perpetual_inventory_enabled(company)</code> is true. Under <strong>periodic / non-perpetual</strong> inventory, stock moves but <em>no GL entry is made</em> until a manual period-end adjustment. So "stock always hits the GL" is conditional on company configuration — do not assume the inventory asset account moves in real time everywhere. For most modern builds you want perpetual on, but know which mode you are in.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — inter-company / cross-state transfers need a transfer rate</span>
+    Internal transfers between warehouses of <em>different</em> companies or states need a transfer valuation rate (<code>get_incoming_rate_for_inter_company_transfer</code>) and can produce GL rounding gain/loss entries. This is not an edge case for KDPS — it is the Bihar ↔ Jharkhand reality (see below).
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    Two consequences land directly. (1) <strong>Cross-state transfers are taxable supplies.</strong> Bihar and Jharkhand are two GSTINs / distinct persons, so a stock move between them is not a free internal transfer — it needs a transfer valuation rate and a real IGST GL leg, exactly the inter-company nuance above. (2) <strong>SOR / consignment is about <em>when</em> the GL leg fires.</strong> KDPS counts SOR stock by quantity (the SLE <code>actual_qty</code> / Bin <code>actual_qty</code>) while keeping its value off-book until sale — in ERPNext terms, deferring when <code>stock_value_difference</code> hits the GL and the vendor liability posts. The five CA-ruling items (single-recognition GST, the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT, no-reposting) are precisely decisions about <em>when</em> that GL leg may move.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 6 · Locations as a nested-set tree</h2>
+  <p>
+    Warehouses are not a flat list. They form a hierarchy — region → store → bin — and you need two things from it: fast subtree rollups ("total stock under Bihar") and a hard rule that you cannot post stock against an interior "group" node, only against leaves.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">PATTERN</div><h3>Hierarchical locations with subtree rollup and leaf-only posting</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Locations form a tree (region → store → bin). You want O(subtree) rollups (total stock under a region) and a rule that forbids transactions against non-leaf "group" nodes — you post to a shelf, not to "all of Bihar."</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>Warehouse(NestedSet)</code> in <span class="fileref">erpnext/stock/doctype/warehouse/warehouse.py</span> uses Frappe's nested-set mixin (<code>lft</code>/<code>rgt</code>/<code>parent_warehouse</code>, <code>is_group</code>, <code>nsm_parent_field</code>). SLE validation blocks posting to group warehouses (<code>block_transactions_against_group_warehouse</code> → <code>is_group_warehouse</code>).</p>
+        <p>The nested-set bookkeeping itself lives in <span class="fileref">frappe.utils.nestedset</span> <span class="badge b-frappe">Frappe core</span> — ERPNext only subclasses it.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Model location as an adjacency-list tree with materialized <code>lft</code>/<code>rgt</code> (nested set), or use Postgres <code>ltree</code> / recursive CTEs. Mark interior nodes <code>is_group</code> and <strong>reject leaf-only operations (stock postings) against them.</strong></p>
+        <p>Use <code>lft BETWEEN parent.lft AND parent.rgt</code> for subtree aggregation.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The leaf-only rule is enforced at SLE validation time, not just in the UI:</p>
+
+<pre><code><span class="k">class</span> <span class="t">Warehouse</span>(NestedSet):
+    nsm_parent_field = <span class="s">"parent_warehouse"</span>
+    ...
+<span class="c"># in stock_ledger_entry.py — refuse postings to interior nodes</span>
+<span class="k">def</span> block_transactions_against_group_warehouse(self):
+    <span class="k">if</span> is_group_warehouse(self.warehouse):
+        frappe.throw(_(<span class="s">"Cannot create stock entries against a Group Warehouse..."</span>))
+</code></pre>
+  <p class="srcline">warehouse.py:21 (class) · :53 (nsm_parent_field) · stock_ledger_entry.py:302 (block group-warehouse)</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — the nested-set maintenance is in the framework, not this app</span>
+    The <code>lft</code>/<code>rgt</code> recompute on insert/move lives in <span class="fileref">frappe.utils.nestedset</span> <span class="badge b-frappe">Frappe core</span>, <strong>not</strong> in the ERPNext checkout. ERPNext only subclasses <code>NestedSet</code> and adds the <code>is_group</code> transaction-block rule. If you rebuild this on your own stack you must implement the nested-set bookkeeping yourself, or sidestep it with Postgres <code>ltree</code> / recursive CTEs (often the simpler choice on a greenfield Postgres build).
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    The tree fits KDPS's 50+ stores rolling up by state and region: <em>India → Bihar / Jharkhand → district → store → (optional) bin</em>. "Total stock under Bihar" becomes a single <code>lft BETWEEN … AND …</code> range scan, and the state node naturally anchors the GSTIN that every leaf store maps to — which is exactly what makes the cross-state transfer in Pattern 5 a taxable supply.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The four canonical flows, side by side</h2>
+  <p>Everything above composes into four flows. Keep these as your acceptance checklist when you build the equivalent.</p>
+
+  <table>
+    <tr><th>Flow</th><th>SLE</th><th>Valuation</th><th>GL (perpetual)</th><th>Other effects</th></tr>
+    <tr>
+      <td><strong>Receive</strong><br>(Purchase Receipt)</td>
+      <td><code>actual_qty &gt; 0</code>, <code>incoming_rate</code> from PO/invoice</td>
+      <td>Moving-avg recompute or FIFO bin append</td>
+      <td>Dr inventory asset / Cr <em>Stock Received But Not Billed</em></td>
+      <td>Bin refreshed; future SLEs shifted if back-dated</td>
+    </tr>
+    <tr>
+      <td><strong>Issue / Sell</strong><br>(Delivery Note / Sales Invoice)</td>
+      <td><code>actual_qty &lt; 0</code>, outgoing rate computed</td>
+      <td>FIFO pops bins / moving-avg running rate / serial-batch bundle</td>
+      <td>Cr inventory asset / Dr <em>Cost of Goods Sold</em></td>
+      <td><code>validate_negative_stock</code> may block</td>
+    </tr>
+    <tr>
+      <td><strong>Back-date correct</strong></td>
+      <td>insert/edit a past row (role + freeze gated)</td>
+      <td>Repost re-runs <code>update_entries_after</code> forward</td>
+      <td><code>repost_gl_entries()</code> re-posts corrected values</td>
+      <td>bulk qty-shift; checkpointed resumable job</td>
+    </tr>
+    <tr>
+      <td><strong>Cancel voucher</strong></td>
+      <td>old SLEs flagged <code>is_cancelled=1</code> + reversing entries with negated qty</td>
+      <td>reposts forward from the reversal</td>
+      <td>reversing GL pair</td>
+      <td>audit trail preserved (never deleted)</td>
+    </tr>
+    <tr>
+      <td><strong>Availability check</strong></td>
+      <td>read-only</td>
+      <td>—</td>
+      <td>—</td>
+      <td>read <code>Bin.projected_qty</code> O(1); <code>get_actual_qty</code> falls back to last SLE; <code>recalculate_qty</code> rebuilds if drifted</td>
+    </tr>
+  </table>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha — negative stock is a real, handled state, not an error to swallow</span>
+    <code>FIFOValuation.remove_stock</code> pushes a negative <code>[-qty, rate]</code> bin; <code>get_moving_average_values</code> has explicit branches for <code>new_stock_qty &lt; 0</code>; <code>raise_exceptions</code> throws <code>NegativeStockError</code> <em>only</em> if <code>allow_negative_stock</code> is off. Reservations further constrain what you may consume (<code>reserved_qty</code> reduces the consumable balance). <strong>Decide your negative-stock policy explicitly</strong> — for retail you usually disallow it, but the engine supports it because real warehouses count late.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Building it on Django / Postgres — a concrete shape</h2>
+  <p>If you are reimplementing this (which is the KDPS plan), here is the minimal table set that preserves every property above. Treat it as the contract, not the styling.</p>
+
+  <dl class="gloss">
+    <dt><code>stock_ledger_entry</code> (insert-only)</dt>
+    <dd><code>id, item_id, warehouse_id, posting_datetime, creation, voucher_type, voucher_id, actual_qty, incoming_rate, outgoing_rate, qty_after_transaction, valuation_rate, stock_value, stock_value_difference, stock_queue (jsonb), is_cancelled</code>. Composite index <code>(item_id, warehouse_id, posting_datetime, creation)</code>. No UPDATE/DELETE grants in app code — corrections are reversing inserts.</dd>
+    <dt><code>stock_balance</code> (the Bin)</dt>
+    <dd><code>item_id, warehouse_id</code> <strong>UNIQUE</strong>, plus <code>actual_qty, reserved_qty, ordered_qty, indented_qty, planned_qty, projected_qty, valuation_rate, stock_value</code>. Written in the same transaction as the SLE insert. A <code>recalculate(item, warehouse)</code> function rebuilds it from the ledger — your correctness backstop.</dd>
+    <dt>valuation strategy module</dt>
+    <dd>Pure Python/TS, no DB: <code>FIFO</code> / <code>LIFO</code> / <code>MovingAverage</code> classes with <code>add_stock</code>, <code>remove_stock</code>, <code>total</code>. Serialize the bin list to the SLE's <code>stock_queue</code> jsonb. Unit-tested in isolation.</dd>
+    <dt>repost job</dt>
+    <dd>Celery/RQ task scoped to <code>(item, warehouse)</code>, triggered by any back-dated mutation: bulk <code>UPDATE qty_after_transaction</code> for the tail, then forward valuation recompute with a <code>current_index</code> checkpoint, then re-post GL. Gated by a freeze date + role.</dd>
+    <dt>posting base class</dt>
+    <dd>A <code>StockDocument</code> mixin whose <code>on_submit</code> calls <code>make_sl_entries()</code> then, if <code>company.perpetual_inventory</code>, <code>make_gl_entries()</code> — debit inventory asset = <code>stock_value_difference</code>, credit COGS/clearing = its negative — all inside one DB transaction.</dd>
+    <dt>warehouse tree</dt>
+    <dd>Postgres <code>ltree</code> or recursive CTE; an <code>is_group</code> flag; a check that blocks postings to group nodes. (Simpler than reimplementing nested-set bookkeeping.)</dd>
+  </dl>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    The discipline that keeps an ERP's books and its operations in agreement is one sentence: <strong>every physical movement atomically posts both its sub-ledger row and a balanced GL pair derived from that row, money is always computed from the ledger and never hand-entered, and corrections are reversing inserts that trigger a forward repost.</strong> Build stock this way and the same skeleton — append-only event log + balance cache + projection into the GL — drops straight onto AR, AP, cash and payroll.
+  </div>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li><strong>Stock is its own immutable ledger, not a column.</strong> The Stock Ledger Entry is append-only and submittable; an individual row refuses cancellation (<code>on_cancel</code> throws) — you cancel the source voucher, which writes reversing entries. Reuse this exact event-log shape for every sub-ledger.</li>
+    <li><strong>The SLE carries the running balance and a valuation snapshot on each row</strong> (<code>qty_after_transaction</code>, <code>valuation_rate</code>, <code>stock_value</code>, <code>stock_queue</code>). That choice buys O(1)-ish reads but means the past edits the future — a deliberate write-time vs read-time trade-off you must make consciously.</li>
+    <li><strong>Valuation is the hard, path-dependent part — isolate it.</strong> Moving-average, FIFO/LIFO (a queue of <code>[qty, rate]</code> bins) and serial/batch live behind one interface in pure code with the strategy's state serialized per row. Unit-test it without a database before wiring it in.</li>
+    <li><strong>Back-dated entries demand a resumable repost engine.</strong> Bulk-shift the qty tail in one UPDATE; offload the valuation + GL recompute to a checkpointed (<code>current_index</code> + gzip file) background job; gate back-dating behind a role and a freeze date from day one.</li>
+    <li><strong>The Bin is a derivable cache, never truth.</strong> One unique row per <code>(item, warehouse)</code> with current and projected quantities for O(1) availability — but always re-read from the SLE on back-date/cancel and keep a rebuild-from-ledger path. Never blindly <code>balance += delta</code>.</li>
+    <li><strong>Every movement posts the GL too, with the money derived from the SLE.</strong> A shared <code>StockController</code> debits the warehouse inventory asset by <code>stock_value_difference</code> and credits COGS / Stock-Received-But-Not-Billed by its negative — gated by the perpetual-inventory flag. This is what makes "profitability is derived, never hand-entered" structurally true.</li>
+    <li><strong>For KDPS:</strong> SLE keyed by (SKU, store) at style×size×colour is the per-store stock ledger; the repost engine answers back-dated PT/GRN corrections; the nested-set warehouse tree anchors the two-GSTIN cross-state transfer as a taxable supply; and SOR/consignment is precisely the decision of <em>when</em> the <code>stock_value_difference</code> GL leg fires.</li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="03-accounting-ledger.html"><small>← Previous</small>The accounting engine</a>
+<a class="next" href="05-transaction-flow.html"><small>Next →</small>Transaction flow</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 04. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

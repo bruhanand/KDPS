@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Tax &amp; Pricing Engine — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html" class="cur"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 7 · Documents & data</div>
+  <h1>The Tax &amp; Pricing Engine</h1>
+  <p class="sub">Tax templates, charge types, inclusive vs exclusive, item-level overrides, the calculation controller, pricing rules and promotional schemes, price lists, and how regional tax (GST) plugs in as data, not code.</p>
+</header>
+
+<section>
+<h2 class="sec">Why this subsystem decides whether your ERP survives the real world</h2>
+
+<p>Every ERP eventually meets a tax authority and a sales floor, and both move faster than your deploy pipeline. A government changes a GST slab with three weeks' notice. A regional manager invents a "buy two get the cheapest free, but only in Patna stores, only this weekend, stacked on top of the existing 20% off but not below cost" promotion and expects it live tomorrow. If tax rates and discount logic live in your application code, every one of these is an engineering ticket, a regression risk, and a release. The system that hard-codes <code>tax = amount * 0.18</code> is dead on arrival — not because the arithmetic is wrong, but because the <em>arithmetic is the easy part</em> and putting it in code is the expensive mistake.</p>
+
+<p>ERPNext's tax and pricing engine is the canonical answer to this problem, and it is worth studying closely because it is two cooperating subsystems built on a single idea: <strong>tax and price are configuration rows interpreted by a generic calculation engine, never hand-coded per scenario.</strong> A tax is a row. A discount is a row. A regional levy is a row that references an earlier row. The engine is a small interpreter that walks items against those rows. When the law changes, you insert a dated row; when a promotion launches, you author a scheme that compiles into rows. Code does not move.</p>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>Build tax and pricing as a <strong>small generic calculation engine over declarative data rows</strong>, not as per-scenario code. A tax/charge becomes a typed row whose <code>charge_type</code> is an opcode the engine evaluates; rows compose by referencing earlier rows. Every rate and price is effective-dated, category-scoped data with per-item overrides. Discounts are declarative rules matched by dimension, slab, condition and validity, resolved by an explicit priority. Statutory behaviour layers in through a region-keyed override seam. This single shape expresses GST, VAT, cess-on-tax, tax-on-freight, fixed charges, per-unit levies, value-slab discounts, and buy-X-get-Y — with no new code per case.</p>
+</div>
+
+<p>This chapter walks both halves. We start with the tax side: the template, the charge-type interpreter, inclusive vs exclusive back-solving, per-item rate overrides, and the rounding discipline that keeps the books reconciled. Then the price side: price lists, item prices, the pricing-rule matcher, and the promotional-scheme generator that compiles ergonomic promos into flat runtime rules. We close with the regional-override seam that lets India GST ship as a separate app while core carries zero GST math — and the takeaways a builder returns to.</p>
+</section>
+
+<section>
+<h2 class="sec">The shape of the subsystem</h2>
+
+<p>Before the patterns, hold the whole subsystem in view. Two columns — tax and price — feed one transaction. Each column is master/config data on the left flowing into a calculation step on the document.</p>
+
+<div class="band l-master"><div class="bname">Configuration &amp; master data (effective-dated)</div>
+<div class="boxes">
+  <div class="bx">Sales/Purchase Taxes &amp; Charges Template<small>named bundle of tax rows</small></div>
+  <div class="bx">Item Tax Template<small>{account → rate}, per HSN/slab</small></div>
+  <div class="bx">Tax Category<small>In-State / Out-of-State selector</small></div>
+  <div class="bx">Price List<small>currency, selling/buying</small></div>
+  <div class="bx">Item Price<small>dated base rate</small></div>
+  <div class="bx">Pricing Rule / Promotional Scheme<small>discounts &amp; offers</small></div>
+</div></div>
+
+<div class="gap"></div>
+
+<div class="band l-doc"><div class="bname">On the transaction (per save)</div>
+<div class="boxes">
+  <div class="bx">get_item_details<small>resolves price + item-tax map</small></div>
+  <div class="bx">Pricing Rule engine<small>match → rate / discount / free item</small></div>
+  <div class="bx">calculate_taxes_and_totals<small>the interpreter: net → tax → grand → rounded</small></div>
+</div></div>
+
+<div class="gap"></div>
+
+<div class="band l-ledg"><div class="bname">Output</div>
+<div class="boxes">
+  <div class="bx">net_total, total_taxes, grand_total, rounded_total<small>+ per-item tax breakup that sums exactly</small></div>
+</div></div>
+
+<p>The crucial structural fact: the engine class <span class="fileref">erpnext/controllers/taxes_and_totals.py</span> never branches on a country, a tax name, or a promotion type. It branches only on <code>charge_type</code> (an enum) and on whether a tax row is inclusive. Everything else is data it reads. That is what makes the next seven patterns reusable.</p>
+</section>
+
+<section>
+<h2 class="sec">The key DocTypes of the tax &amp; pricing engine</h2>
+
+<p>Twelve objects do all the work. The <code>kind</code> column reads what role each plays — setup (configuration you author), master (effective-dated reference data), child (rows that only exist inside a parent), or the calculation controller (not a DocType at all).</p>
+
+<table>
+<tr><th>DocType</th><th>Kind</th><th>Role</th></tr>
+<tr>
+  <td><strong>Sales / Purchase Taxes and Charges Template</strong><br><span class="fileref">erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json</span></td>
+  <td>setup</td>
+  <td>Reusable named bundle of tax rows copied onto a transaction. The buying twin is the purchase template.</td>
+</tr>
+<tr>
+  <td><strong>Sales / Purchase Taxes and Charges</strong><br><span class="fileref">erpnext/accounts/doctype/sales_taxes_and_charges/sales_taxes_and_charges.json</span></td>
+  <td>child</td>
+  <td>One tax/charge line: <code>charge_type</code>, <code>rate</code>, <code>account_head</code>, <code>row_id</code>, <code>included_in_print_rate</code>. The unit the engine interprets.</td>
+</tr>
+<tr>
+  <td><strong>Item Tax Template</strong><br><span class="fileref">erpnext/accounts/doctype/item_tax_template/item_tax_template.py</span></td>
+  <td>setup</td>
+  <td>Per-item override map {tax account → rate}; date- and net-rate-effective, <code>tax_category</code>-scoped (e.g. a 5% vs 12% GST HSN slab).</td>
+</tr>
+<tr>
+  <td><strong>Item Tax (Template Detail)</strong><br><span class="fileref">erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json</span></td>
+  <td>child</td>
+  <td>Row of an Item Tax Template: <code>tax_type</code> (Account), <code>tax_rate</code>, <code>not_applicable</code>.</td>
+</tr>
+<tr>
+  <td><strong>Tax Category</strong><br><span class="fileref">erpnext/accounts/doctype/tax_category/tax_category.json</span></td>
+  <td>master</td>
+  <td>A label (e.g. In-State / Out-of-State) used to select which tax template and item-tax template apply.</td>
+</tr>
+<tr>
+  <td><strong>Pricing Rule</strong><br><span class="fileref">erpnext/accounts/doctype/pricing_rule/pricing_rule.py</span></td>
+  <td>setup</td>
+  <td>The runtime price/discount rule: <code>apply_on</code>, qty/amount slabs, validity, applicable-for, condition, priority; yields rate/discount/margin/free-item.</td>
+</tr>
+<tr>
+  <td><strong>Pricing Rule Item Code / Item Group / Brand</strong><br><span class="fileref">erpnext/accounts/doctype/pricing_rule_item_code/pricing_rule_item_code.json</span></td>
+  <td>child</td>
+  <td>Target rows of a Pricing Rule — which items/groups/brands it applies to.</td>
+</tr>
+<tr>
+  <td><strong>Promotional Scheme</strong><br><span class="fileref">erpnext/accounts/doctype/promotional_scheme/promotional_scheme.py</span></td>
+  <td>setup</td>
+  <td>Generator master: slabs of price/product discounts that fan out into many concrete Pricing Rule docs on save.</td>
+</tr>
+<tr>
+  <td><strong>Promotional Scheme Price / Product Discount</strong><br><span class="fileref">erpnext/accounts/doctype/promotional_scheme_price_discount/promotional_scheme_price_discount.json</span></td>
+  <td>child</td>
+  <td>One slab (min/max qty or amount → rate/discount, or buy-X-get-Y) that becomes a Pricing Rule.</td>
+</tr>
+<tr>
+  <td><strong>Price List</strong><br><span class="fileref">erpnext/stock/doctype/price_list/price_list.json</span></td>
+  <td>setup</td>
+  <td>Named, currency-scoped, selling/buying-flagged container for prices.</td>
+</tr>
+<tr>
+  <td><strong>Item Price</strong><br><span class="fileref">erpnext/stock/doctype/item_price/item_price.json</span></td>
+  <td>master</td>
+  <td>Date-effective base rate for one item in one price list/UOM/customer; source of <code>price_list_rate</code>.</td>
+</tr>
+<tr>
+  <td><strong>calculate_taxes_and_totals</strong><br><span class="fileref">erpnext/controllers/taxes_and_totals.py</span></td>
+  <td>controller</td>
+  <td>The calculation engine class — not a DocType. Interprets tax rows + item-tax maps into net/tax/grand/rounded totals.</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">The tax side — a typed-row interpreter</h2>
+
+<p>The tax half of the engine is the more subtle of the two, because it has to compose. A transaction carries a child table of tax/charge rows. Each row is a tuple: <code>(charge_type, rate, account_head, row_id, included_in_print_rate)</code>. The single class <span class="fileref">erpnext/controllers/taxes_and_totals.py</span> walks every item against every tax row and treats <code>charge_type</code> as a small instruction set. This is the heart of the whole subsystem.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Charge-type as a tiny interpreter (composable tax stack)</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>A tax or charge is not a hardcoded formula but a <strong>typed row whose <code>charge_type</code> is an opcode</strong> the engine evaluates. Rows compose by referencing an earlier row, so cess-on-GST, tax-on-freight, surcharges and per-unit levies all <em>emerge from data</em> — no new code per levy.</p>
+      <p>Never branch on country or tax name. Branch only on the opcode.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>get_current_tax_and_net_amount</code> in <span class="fileref">erpnext/controllers/taxes_and_totals.py</span> switches on <code>charge_type</code>:</p>
+      <ul>
+        <li><strong>On Net Total</strong> — <code>rate%</code> of the item's net amount.</li>
+        <li><strong>On Previous Row Amount / Total</strong> — reads <code>taxes[row_id-1]</code>'s running per-item tax or grand total. This is how stacking works.</li>
+        <li><strong>Actual</strong> — a fixed amount distributed proportionally by net.</li>
+        <li><strong>On Item Quantity</strong> — <code>rate × qty</code>.</li>
+      </ul>
+      <p>Each row carries a <code>row_id</code> pointing at the row it composes on.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Model tax lines as rows with an enum <code>kind</code> and an optional <code>depends_on_row</code>. Evaluate them in order, in a single pass per item, keeping a per-item running total so "on previous total" rows can read it.</p>
+      <p>The cardinal rule: <strong>never branch on country or tax-name in code — only on <code>charge_type</code></strong>. GST, VAT, cess, freight tax and fixed fees are then all the same five branches.</p>
+    </div>
+  </div></div>
+
+<p>Here is the interpreter itself. Note how compactly five real-world tax behaviours collapse into five branches of one switch, and how composition (<code>On Previous Row …</code>) just indexes back into the same <code>taxes</code> table by <code>row_id</code>:</p>
+
+<pre><code><span class="k">if</span> tax.charge_type == <span class="s">"Actual"</span>:
+    current_net_amount = item.net_amount
+    actual = flt(tax.tax_amount, tax.precision(<span class="s">"tax_amount"</span>))
+    current_tax_amount = item.net_amount * actual / self.doc.net_total <span class="k">if</span> self.doc.net_total <span class="k">else</span> <span class="s">0.0</span>
+<span class="k">elif</span> tax.charge_type == <span class="s">"On Net Total"</span>:
+    current_tax_amount = (tax_rate / <span class="s">100.0</span>) * item.net_amount
+<span class="k">elif</span> tax.charge_type == <span class="s">"On Previous Row Amount"</span>:
+    current_net_amount = self.doc.get(<span class="s">"taxes"</span>)[cint(tax.row_id) - <span class="s">1</span>].tax_amount_for_current_item
+    current_tax_amount = (tax_rate / <span class="s">100.0</span>) * current_net_amount
+<span class="k">elif</span> tax.charge_type == <span class="s">"On Previous Row Total"</span>:
+    current_net_amount = self.doc.get(<span class="s">"taxes"</span>)[cint(tax.row_id) - <span class="s">1</span>].grand_total_for_current_item
+    current_tax_amount = (tax_rate / <span class="s">100.0</span>) * current_net_amount
+<span class="k">elif</span> tax.charge_type == <span class="s">"On Item Quantity"</span>:
+    current_tax_amount = tax_rate * item.qty</code></pre>
+
+<p class="srcline">erpnext/controllers/taxes_and_totals.py:590 · get_current_tax_and_net_amount &nbsp;|&nbsp; charge_type options at sales_taxes_and_charges.json:46</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — the <code>Actual</code> remainder lands on the last item</span>
+<p><code>Actual</code> distributes a fixed amount proportionally by <code>net_amount</code>, but integer/fraction division leaves a remainder. ERPNext dumps that divisional remainder onto the <strong>last item</strong> (via <code>actual_tax_dict</code>). If you reimplement proportional distribution and forget the last-item correction, you silently lose pennies and the per-item breakup will not sum to the charge total.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>India GST on apparel is exactly this composition: CGST and SGST are each "On Net Total"; a cess (where it applies) is "On Previous Row Total" stacking on the GST row; a fixed handling charge would be "Actual". KDPS never needs GST code — it needs a tax template whose rows carry the right <code>charge_type</code> and <code>account_head</code>, plus the per-item slab override below.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Inclusive vs exclusive — back-solving the net</h2>
+
+<p>Indian retail quotes MRP — the price <em>including</em> tax. So the entered amount is gross, and the engine must recover the tax-exclusive net <em>before</em> it sums anything. Get the order of operations wrong and every downstream total is off.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Inclusive vs exclusive by back-solving a tax fraction</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>When price already includes tax, you recover the tax-exclusive net <strong>before summing</strong> by dividing the gross by <code>(1 + sum of tax fractions)</code>. The sum must respect row composition so stacked inclusive taxes are handled correctly.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>determine_exclusive_rate</code> computes a <code>cumulated_tax_fraction</code> from <code>get_current_tax_fraction</code>, which converts each inclusive row's rate (including "On Previous Row" composition) into a fraction. It then sets <code>item.net_amount = item.amount / (1 + cumulated_tax_fraction)</code>. The <code>included_in_print_rate</code> flag on the tax row is the inclusive switch. <code>adjust_grand_total_for_inclusive_tax</code> later reconciles a tiny residual.</p>
+      <p class="srcline">determine_exclusive_rate:302 · get_current_tax_fraction:347 · adjust:699</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Keep one boolean <code>inclusive</code> per tax row. If any inclusive row exists, run a pre-pass that turns rates into fractions (respecting composition), divide the entered amount by <code>(1+sum)</code> to get net, then run the normal exclusive pass on that net.</p>
+      <p>Store both net and gross; reconcile rounding into <strong>one adjustment field</strong>.</p>
+    </div>
+  </div></div>
+
+<pre><code><span class="k">if</span> (<span class="k">not</span> self.discount_amount_applied <span class="k">and</span> item.qty
+        <span class="k">and</span> (cumulated_tax_fraction <span class="k">or</span> total_inclusive_tax_amount_per_qty)):
+    amount = flt(item.amount) - total_inclusive_tax_amount_per_qty
+    item._unrounded_net_amount = amount / (<span class="s">1</span> + cumulated_tax_fraction)
+    item.net_amount = flt(item._unrounded_net_amount, item.precision(<span class="s">"net_amount"</span>))
+    item.net_rate = flt(item.net_amount / item.qty, item.precision(<span class="s">"net_rate"</span>))</code></pre>
+<p class="srcline">erpnext/controllers/taxes_and_totals.py:302 · determine_exclusive_rate</p>
+
+<div class="flow col">
+  <div class="node">Item entered at gross (MRP)<small>amount includes tax</small></div>
+  <div class="arr"></div>
+  <div class="node">get_current_tax_fraction per inclusive row<small>rate → fraction, respecting On-Previous-Row composition</small></div>
+  <div class="arr"></div>
+  <div class="node">net = gross / (1 + cumulated_tax_fraction)<small>back-solve the tax-exclusive net</small></div>
+  <div class="arr"></div>
+  <div class="node">normal exclusive pass runs on that net<small>charge-type interpreter as usual</small></div>
+  <div class="arr"></div>
+  <div class="node">adjust_grand_total_for_inclusive_tax<small>reconcile residual into grand_total_diff</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — inclusive interacts with discounts, and order is load-bearing</span>
+<p>Net is back-solved from gross <strong>before</strong> a document discount is applied. And <code>adjust_grand_total_for_inclusive_tax</code> only absorbs a residual up to <code>5/10^precision</code> — larger diffs are <em>dropped, not raised</em>. If you compute discount first then back-solve, or expect the reconciliation to swallow any size of error, your inclusive-MRP totals will drift. The sequence — back-solve, then discount, then reconcile a bounded residual — is not optional.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Per-item rate override — slab variation as data</h2>
+
+<p>The same tax account ("Output GST") must charge 5% for one HSN and 12% for another, on the <em>same</em> invoice. You cannot model that on the tax-template row, because the row has one rate. The answer is a per-item override map resolved at calculation time.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Per-item rate override against a shared account (HSN/slab variation as data)</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>The same tax account must charge different rates for different items. Resolve the rate at calc time from a <strong>per-item map</strong>, falling back to the template row's rate when the item has no override for that account.</p>
+      <p>An explicit "not applicable" sentinel — distinct from 0% — lets an item remove itself from a tax account entirely.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>Item Tax Template</code> holds {tax_type(Account) → tax_rate} rows. <code>get_item_tax_map</code> in <span class="fileref">erpnext/stock/get_item_details.py</span> flattens it to a JSON map stored on the item line as <code>item_tax_rate</code>. <code>_load_item_tax_rate</code> parses it; <code>_get_tax_rate</code> returns the item's rate if the account matches, else the row rate. The sentinel <code>NOT_APPLICABLE_TAX = "N/A"</code> exempts the item from that account.</p>
+      <p class="srcline">get_item_tax_map:887 · _load_item_tax_rate:344 · _get_tax_rate:383</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Carry a per-line JSON/map <code>{account_id: rate}</code>. In the engine, when computing a tax line, look up the item's override for that account first; fall back to the line's default rate.</p>
+      <p>Support an explicit <strong>"not applicable" sentinel</strong> distinct from 0% so exemptions and reverse-charge are unambiguous.</p>
+    </div>
+  </div></div>
+
+<pre><code><span class="k">def</span> _get_tax_rate(self, tax, item_tax_map):
+    <span class="k">if</span> tax.account_head <span class="k">in</span> item_tax_map:
+        rate = item_tax_map[tax.account_head]
+        <span class="k">if</span> rate == NOT_APPLICABLE_TAX:
+            <span class="k">return</span> NOT_APPLICABLE_TAX
+        <span class="k">return</span> flt(rate, self.doc.precision(<span class="s">"rate"</span>, tax))
+    <span class="k">return</span> tax.rate</code></pre>
+<p class="srcline">erpnext/controllers/taxes_and_totals.py:383 · _get_tax_rate</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — "not applicable" is not 0%</span>
+<p><code>NOT_APPLICABLE_TAX = "N/A"</code> is a sentinel distinct from rate 0. It removes the item from that tax account entirely — <strong>no row in the breakup</strong>. Treating "not applicable" as 0% produces phantom zero-rated breakup rows and breaks reverse-charge handling, where the difference between "taxed at zero" and "this account does not apply" is legally and arithmetically real.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Date- and value-effective master selection</h2>
+
+<p>Rates and prices change over time. The naive instinct — edit the rate in place — destroys history and silently re-prices last year's invoices when you reopen them. The discipline is to never mutate a rate row; insert a new dated one, and select by effective date at transaction time. This pattern recurs for both Item Tax Templates and Item Prices.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Date-and-value-effective master selection</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Rates and prices change over time and by qualifying conditions, so selection must pick the right <em>version</em> by effective date and value band — never by overwriting history. Old invoices keep the rate that was in force when they were posted.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>_get_item_tax_template</code> in <span class="fileref">erpnext/stock/get_item_details.py</span> keeps only templates with <code>valid_from &lt;= validation_date</code> (bill_date ‖ posting_date ‖ transaction_date), within <code>minimum_net_rate..maximum_net_rate</code> (<code>is_within_valid_range</code>), matching <code>tax_category</code>; then sorts <code>valid_from desc</code> and takes the newest. Item Price selection mirrors this with <code>valid_from</code>/<code>valid_upto</code>.</p>
+      <p class="srcline">valid_from filtering:825 · is_within_valid_range:868 · item price ordering:1132</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Give effective-dated masters <code>valid_from</code>/<code>valid_upto</code>, optional value bands, and a category key. Selection = filter to rows valid on the transaction date and matching category, order by <code>valid_from desc</code>, take the first.</p>
+      <p><strong>Never mutate an old rate row — insert a new dated one.</strong></p>
+    </div>
+  </div></div>
+
+<p>This single selection rule turns a GST slab change into a data entry task. The accountant inserts a new Item Tax Template with <code>valid_from</code> set to the notification date; invoices before that date keep selecting the old one, invoices after select the new — with zero code change and full history intact.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — precedence is date AND value AND category</span>
+<p>Item Tax Template selection is simultaneously date-effective, value-banded (<code>minimum_net_rate..maximum_net_rate</code>) and <code>tax_category</code>-scoped; the newest valid <code>valid_from</code> wins. A template with <em>no</em> validity is a <strong>fallback only</strong>, used when none with validity match. Get the precedence wrong and you silently apply last year's GST slab — the kind of error nobody notices until an audit.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>The CLAUDE.md rule "apparel GST is slab-based and date-effective — model it as data, not code" <em>is</em> this pattern. Each HSN-slab is an Item Tax Template with a <code>valid_from</code>; a slab revision is a new dated row. And the five money-critical CA-ruling items (SOR single-recognition, deemed-supply clock, late freight, sold-before-PT, no-reposting) should sit behind an effective-dated rate/rule table for exactly this reason: a CA ruling changes <strong>data, not code</strong>.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The price side — price lists and dated item prices</h2>
+
+<p>Before any discount, an item needs a base rate. ERPNext keeps prices in two layers. A <code>Price List</code> is a Setup master flagged selling or buying, scoped to a currency. <code>Item Price</code> rows give the base <code>price_list_rate</code> for one item in one price list (optionally per UOM, per customer), and they are date-effective with <code>valid_from</code>/<code>valid_upto</code> — the same effective-dated selection pattern above. The selling-price flow runs price resolution first, then layers discounts on top:</p>
+
+<div class="flow col">
+  <div class="node">get_item_details<small>fetch Item Price (date-effective price_list_rate)</small></div>
+  <div class="arr"></div>
+  <div class="node">Pricing Rule engine<small>match by apply_on / qty / amount / condition / priority → rate_or_discount</small></div>
+  <div class="arr"></div>
+  <div class="node">apply_price_discount_rule<small>writes price_list_rate / discount onto the item line</small></div>
+  <div class="arr"></div>
+  <div class="node">calculate_item_values<small>rate = price_list_rate − discount (+margin); amount = rate × qty</small></div>
+  <div class="arr"></div>
+  <div class="node">calculate_taxes_and_totals<small>net, taxes, grand, rounded</small></div>
+</div>
+
+<p>The separation matters: the <em>base</em> price is a quiet, dated master fact; the <em>discount</em> is a rule that competes with other rules. Conflating them — putting "sale price" directly in the price list — loses the audit trail of <em>why</em> a line was cheaper. ERPNext keeps the list price and records the discount as a derived adjustment, so a printed invoice can show "MRP ₹2,000, less 20% = ₹1,600" rather than just ₹1,600.</p>
+</section>
+
+<section>
+<h2 class="sec">The pricing-rule matcher — declarative discounts</h2>
+
+<p>This is the price-side counterpart to the charge-type interpreter, and the same philosophy drives it: a discount is data, matched and resolved by a generic engine, never a hand-coded promotion. The matcher in <span class="fileref">erpnext/accounts/doctype/pricing_rule/utils.py</span> is where every offer KDPS ever invents will live.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Rule-matching pricing engine with slabs, conditions and priority</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Discounts and prices are <strong>declarative rules</strong> matched against a transaction by dimension (item / group / brand / customer / territory), quantity or amount slab, validity dates and a free-text condition — then resolved <em>deterministically</em> by an explicit priority. Ties are an error, not a coin-flip.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>get_pricing_rules</code>/<code>_get_pricing_rules</code> build SQL across the <code>Pricing Rule {Item Code | Item Group | Brand}</code> child tables, expanding groups via nested-set <code>lft/rgt</code> (<code>_get_tree_conditions</code>). <code>filter_pricing_rule_based_on_condition</code> runs the rule's <code>condition</code> through <code>frappe.safe_eval</code>. <code>filter_pricing_rules_for_qty_amount</code> enforces slabs. <code>filter_pricing_rules</code> keeps the max <code>priority</code>, prefers matching currency/price-list, and throws <code>MultiplePricingRuleConflict</code> on an unresolved tie.</p>
+      <p class="srcline">filter_pricing_rules:272 · condition safe_eval:83 · qty/amount slab:392 · tree:183</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Store rules as rows with: target dimension + ids, qty/amount min/max, validity dates, an optional sandboxed boolean expression, applicable-for filters, and an integer priority. Match = filter by all predicates; resolve = max priority, then a stable tiebreak, else <strong>error</strong>. Keep the <em>action</em> (set rate / % off / amount off / free qty) as data the engine applies — not code.</p>
+    </div>
+  </div></div>
+
+<p>The output of a matched rule is <code>rate_or_discount ∈ {Rate, Discount Percentage, Discount Amount}</code>, plus an optional margin and an optional free product (buy-X-get-Y, including recursive). The two load-bearing details are the sandboxed condition and the priority resolution:</p>
+
+<pre><code><span class="k">for</span> pricing_rule <span class="k">in</span> pricing_rules:
+    <span class="k">if</span> pricing_rule.condition:
+        <span class="k">try</span>:
+            <span class="k">if</span> frappe.safe_eval(pricing_rule.condition, <span class="k">None</span>, doc.as_dict()):
+                filtered_pricing_rules.append(pricing_rule)
+        <span class="k">except</span> Exception:
+            <span class="k">pass</span>
+<span class="c"># ... later, in filter_pricing_rules:</span>
+max_priority = max(cint(p.priority) <span class="k">for</span> p <span class="k">in</span> pricing_rules)
+<span class="k">if</span> max_priority:
+    pricing_rules = list(filter(<span class="k">lambda</span> x: cint(x.priority) == max_priority, pricing_rules))</code></pre>
+<p class="srcline">erpnext/accounts/doctype/pricing_rule/utils.py:83, :272</p>
+
+<div class="callout co-note"><span class="lbl">A note on the sandboxed condition</span>
+<p><code>frappe.safe_eval(cond, None, doc.as_dict())</code> <span class="badge b-frappe">Frappe core</span> evaluates a free-text boolean against the whole document — so a rule can say <code>customer_group == "Wholesale" and grand_total &gt; 50000</code> without any new code. This is enormous expressive power from one field, and it is why ERPNext rarely needs custom discount code. The safety comes from <code>safe_eval</code>'s restricted execution environment, not from the rule author. On your own stack, do <strong>not</strong> reach for raw <code>eval</code> — build or borrow a restricted evaluator first.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — group matching is a tree walk, and ties throw</span>
+<p>Two traps live in this matcher. First, Item Group / Customer Group / Territory matching uses nested-set <code>lft/rgt</code> tree expansion, so a rule on a <em>parent</em> group must match items in <em>child</em> groups. A flat equality match silently fails for hierarchical masters. Second, when priority cannot break a tie, ERPNext <strong>throws <code>MultiplePricingRuleConflict</code></strong> rather than picking arbitrarily (except in shopping-cart context). A custom engine that quietly picks one will diverge from ERPNext and from what your accountant expects — a "wrong but consistent" discount is worse than a loud error.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The promotional-scheme generator — compile, don't interpret promos</h2>
+
+<p>The pricing-rule matcher is powerful but low-level: one rule per item-set per slab per applicable-for value. Authoring a "buy 3 get 1, buy 5 get 2, across these four brands, in these eight stores" promotion as raw pricing rules is dozens of rows by hand. ERPNext solves this with a generator that lets you author the friendly form once and compiles it down to flat rules the matcher already understands.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Generator master that compiles into runtime rules</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Author promotions <strong>ergonomically</strong> as slab tables, but keep the runtime engine simple by compiling the friendly form into many flat, individually-matchable rules. The runtime never special-cases promotions — it just sees more rules.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>Promotional Scheme</code> holds <code>price_discount_slabs</code> and <code>product_discount_slabs</code>. <code>on_update</code> → <code>update_pricing_rules</code> → <code>get_pricing_rules</code> → <code>prepare_pricing_rule</code>/<code>set_args</code> create one <code>Pricing Rule</code> doc per slab × applicable-for value, tagged with <code>promotional_scheme</code> and <code>promotional_scheme_id</code>. <code>on_trash</code>/<code>get_invalid_pricing_rules</code> clean up orphans.</p>
+      <p class="srcline">update_pricing_rules:234 · get_pricing_rules:269 · set_args:363</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Let users author a high-level promo (slabs, BXGY) and on save <strong>expand it into normalized rule rows</strong> the matcher already understands. Tag generated rows with their source id so you can regenerate/delete idempotently. The runtime never special-cases promos.</p>
+    </div>
+  </div></div>
+
+<div class="flow col">
+  <div class="node">User creates Promotional Scheme<small>price/product slabs, BXGY, applicable-for values</small></div>
+  <div class="arr"></div>
+  <div class="node">on_update → update_pricing_rules → get_pricing_rules<small>fan out one rule per slab × applicable-for</small></div>
+  <div class="arr"></div>
+  <div class="node">prepare_pricing_rule / set_args<small>concrete Pricing Rule docs tagged with promotional_scheme_id</small></div>
+  <div class="arr"></div>
+  <div class="node">Runtime matcher treats them like any flat rule<small>no promo-specific code path</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — the generated rules are the runtime source of truth</span>
+<p>A Promotional Scheme is a <strong>code generator</strong>. Editing the scheme regenerates the Pricing Rule docs; changing "Applicable For" is <em>blocked once transactions exist</em> (<code>raise_for_transaction_exists</code>). At runtime the engine reads the <em>generated</em> rules, not the scheme. If you debug a misbehaving offer by staring at the scheme, you are looking at the source, not the artifact — inspect the generated Pricing Rules. And never hand-edit a generated rule; the next scheme save will overwrite it.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>KDPS's brand-specific offers map onto this model exactly. Value slabs and gifts-above-threshold are price/product discount slabs; B2G1-with-lowest-item-free is the recursive free-product rule (ERPNext's <code>get_product_discount_rule</code>); per-store applicability is the applicable-for dimension (warehouse/store); start/end dates with fallback are rule validity + priority. Author one Promotional Scheme per brand offer, let it compile to flat rules matched by store/brand/date/priority — and the POS calc engine stays a single dumb matcher.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Regional statutory logic — GST as a plugin, not a fork</h2>
+
+<p>The final pattern is the one that makes the rest portable. India GST, UAE VAT and Italian e-invoicing are all statutory behaviour that must layer onto a country-agnostic core <em>without editing it</em>, selected at runtime by the company's country. ERPNext does this with a hook table plus a decorator — and ships GST itself as an entirely separate installed app.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Regional statutory logic via override hooks (no core fork)</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Country-specific tax behaviour must <strong>layer onto a country-agnostic core</strong> without editing it, selected at runtime by the entity's region. Each jurisdiction is a plugin that registers overrides and seeds data, not a branch in core.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>@erpnext.allow_regional</code> <span class="badge b-frappe">Frappe core</span> wraps a core function; at call time it looks up its own dotted path in <code>frappe.get_hooks("regional_overrides")[get_region()]</code> and dispatches to the last-installed app's implementation, else runs the default. <span class="fileref">erpnext/hooks.py</span>'s <code>regional_overrides</code> maps e.g. UAE/Italy <code>update_itemised_tax_data</code>. India GST ships as a separate app plugging into these seams plus the generic Item Tax Template / Tax Category data.</p>
+      <p class="srcline">allow_regional: __init__.py:133 · hooks.py:624 · update_itemised_tax_data:1257</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Make tax-touching functions overridable: register override tables keyed by region, resolve the active region from the company/tenant, and dispatch via a decorator. <strong>Ship statutory packs as plugins</strong> that register overrides and seed data (templates, categories) rather than branching core.</p>
+    </div>
+  </div></div>
+
+<pre><code><span class="k">def</span> caller(*args, **kwargs):
+    overrides = frappe.get_hooks(<span class="s">"regional_overrides"</span>, {}).get(get_region())
+    function_path = f<span class="s">"{inspect.getmodule(fn).__name__}.{fn.__name__}"</span>
+    <span class="k">if</span> <span class="k">not</span> overrides <span class="k">or</span> function_path <span class="k">not in</span> overrides:
+        <span class="k">return</span> fn(*args, **kwargs)
+    <span class="c"># Priority given to last installed app</span>
+    <span class="k">return</span> frappe.get_attr(overrides[function_path][-<span class="s">1</span>])(*args, **kwargs)</code></pre>
+<p class="srcline">erpnext/__init__.py:133 · the @allow_regional dispatch</p>
+
+<p>The payoff is stark: the core ERPNext checkout carries <strong>zero GST math</strong>. The generic machinery — Item Tax Template, Tax Category, the charge-type engine — is all that core ships. GST lives in the separate <code>india_compliance</code> app, which plugs into the regional-override seams and <em>seeds</em> Item Tax Templates and Tax Categories as data. UAE VAT is another plugin; Italy another. The same engine serves them all.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — don't grep core for GST math; it isn't there</span>
+<p>GST is <strong>not in the erpnext repo checkout</strong> — it is a separate <code>india_compliance</code> app wired through <code>regional_overrides</code> + hooks. Core ships only the generic machinery (Item Tax Template, Tax Category, the <code>charge_type</code> engine). A reimplementer who greps core for "GST" or "CGST" finds nothing and concludes the engine is incomplete. It is complete — the statutory pack is simply data + overrides loaded from elsewhere. This separation is the feature, not a gap.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>The two-GSTIN / cross-state-IGST requirement maps directly onto <strong>Tax Category</strong>: an "In-State" category selects a CGST+SGST template, an "Out-of-State" category selects an IGST template, and the transaction's place-of-supply picks the category. That is exactly ERPNext's mechanism — no special cross-state code. Because KDPS is on Django/Postgres, you reimplement the calc engine as a single in-memory pass, but you keep this same separation: GST math behind an effective-dated rate table and a region/category selector, so a CA ruling changes <em>data</em>, and Tally (the statutory book of record) is fed from the same posted figures.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Rounding — the part that bleeds money if you get it wrong</h2>
+
+<p>Everything above is the easy 90%. Rounding is the hard 10% where naive reimplementations lose pennies and fail reconciliation. ERPNext treats it as a deliberate, layered concern, and you must too. There are three distinct mechanisms, and skipping any one breaks the books.</p>
+
+<dl class="gloss">
+  <dt><code>set_item_wise_tax</code> — error-diffusion</dt>
+  <dd>Per-item tax is derived as a <strong>delta of a running cumulative total</strong>, not as "round this item's tax in isolation". Each item's tax = (cumulative tax through this item) − (cumulative tax through the previous item). This guarantees the per-item breakup sums <em>exactly</em> to the row total. Naive "round each item then sum" will not reconcile, and <code>adjust_rounding_in_item_wise_tax_details</code> will throw <em>"Item Wise Tax Details do not match"</em>.</dd>
+  <dt><code>round_based_on_smallest_currency_fraction</code></dt>
+  <dd>The final grand total snaps to the currency's smallest fraction (e.g. nearest rupee), and the difference is recorded in a single <code>rounding_adjustment</code> field — so the snap is auditable, not silent.</dd>
+  <dt>The inclusive residual</dt>
+  <dd><code>adjust_grand_total_for_inclusive_tax</code> reconciles the tiny diff left by back-solving inclusive tax into <code>grand_total_diff</code> — but only up to a bounded threshold, as noted earlier.</dd>
+</dl>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — the calc is a stateful, mutating, fixed-point pipeline</span>
+<p>The whole calculation is a single class instantiated per save (<code>calculate_taxes_and_totals.__init__</code> runs <code>.calculate()</code>); it <strong>mutates the document in place</strong> and is re-run when a document-level discount forces recomputation (<code>need_recomputation</code> → <code>calculate(ignore_tax_template_validation=True)</code>). Reimplementers who treat it as a pure function miss that it iterates to a fixed point. Model it as an idempotent pipeline you can re-run, not a one-shot formula — and keep the error-diffusion discipline so breakups always reconcile to totals.</p>
+</div>
+
+<p>The full tax flow, end to end, ties these together: a template is copied into the doc's <code>taxes</code> rows → each item loads its <code>item_tax_rate</code> JSON map from its selected Item Tax Template → <code>calculate_taxes</code> walks items × tax rows, evaluating <code>charge_type</code> and overriding rate per item → <code>set_item_wise_tax</code> builds the per-item breakup via error-diffusion deltas → <code>calculate_totals</code> sums to <code>grand_total</code> → <code>set_rounded_total</code> snaps to the currency fraction and records <code>rounding_adjustment</code>.</p>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4><ol>
+<li><strong>Tax and price are data, not code.</strong> A tax is a row; a discount is a row; a regional levy is a row that references another row. The engine is a small interpreter. When the law or a promotion changes, you insert rows — code does not move.</li>
+<li><strong>Make <code>charge_type</code> an opcode.</strong> Five branches — On Net Total, On Previous Row Amount/Total, Actual, On Item Quantity — express GST, cess-on-tax, tax-on-freight, fixed charges and per-unit levies. Rows compose via <code>row_id</code>. Never branch on country or tax name in code.</li>
+<li><strong>Back-solve inclusive tax before summing.</strong> If a price includes tax, divide gross by <code>(1 + cumulated_tax_fraction)</code> to recover net <em>first</em>, respecting composition; then run the exclusive pass; then reconcile a bounded residual. Order of operations is load-bearing.</li>
+<li><strong>Override rates per item against a shared account</strong> via a <code>{account: rate}</code> map, with a "not applicable" sentinel distinct from 0%. This is how one invoice carries multiple HSN/GST slabs against one Output GST account.</li>
+<li><strong>Effective-date everything.</strong> Rates and prices get <code>valid_from</code>/<code>valid_upto</code> + value bands + a category key. Select by transaction date, order <code>valid_from desc</code>, take the first. Never mutate an old rate row — a slab change or CA ruling is a new dated row.</li>
+<li><strong>Discounts are matched rules resolved by priority.</strong> Filter by dimension (with nested-set tree expansion), qty/amount slab, sandboxed condition and validity; resolve by max priority; <em>throw</em> on an unresolved tie. Keep the action (rate / % / amount / free qty) as data.</li>
+<li><strong>Compile ergonomic promos into flat rules.</strong> A Promotional Scheme generator fans out into individually-matchable Pricing Rules tagged with their source id, so the runtime never special-cases promotions and regeneration stays idempotent.</li>
+<li><strong>Ship statutory packs as region-keyed plugins.</strong> A decorator dispatches tax-touching functions to the active region's override, else the default. Core carries zero GST/VAT math; jurisdictions register overrides and seed template/category data.</li>
+<li><strong>Treat rounding as a first-class concern.</strong> Error-diffusion deltas so per-item breakups reconcile to totals, currency-fraction snapping, and a single auditable <code>rounding_adjustment</code> field. This is where naive reimplementations lose money and fail reconciliation.</li>
+<li><strong>The calc is a stateful, re-runnable pipeline</strong> that mutates the document and iterates to a fixed point after document discounts — not a pure one-shot formula. Build it idempotent.</li>
+</ol></div>
+
+<div class="pager">
+<a class="prev" href="06-master-data-and-party.html"><small>← Previous</small>Master data & the Party</a>
+<a class="next" href="08-permissions-and-roles.html"><small>Next →</small>Permissions & roles</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 07. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

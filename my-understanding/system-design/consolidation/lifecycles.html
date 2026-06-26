@@ -169,7 +169,7 @@
 <!-- ===================== BOOKING-LESS ===================== -->
 <section id="bookingless">
   <h2 class="sec">2 · Booking-less direct receipt <span class="badge b-locked">Q9 locked</span></h2>
-  <p>Branded <em>and</em> non-branded goods routinely land at a store with no booking recorded. This is a <strong>first-class path, not an error</strong> (Q9). The key insight: the <strong>Shipment was always the anchor of inbound</strong>, not the booking — so when there is no booking, the booking status machine above is simply <strong>not involved</strong>.</p>
+  <p>Branded <em>and</em> non-branded goods routinely land at a store with no booking recorded. This is a <strong>first-class path, not an error</strong> (Q9). <strong>Booking is the normal path but never a hard constraint (26 Jun 2026):</strong> a receipt is never blocked for a missing booking, and the booking details can be attached / updated <strong>later (retro-link)</strong>. The key insight: the <strong>Shipment was always the anchor of inbound</strong>, not the booking — so when there is no booking, the booking status machine above is simply <strong>not involved</strong>.</p>
 
   <div class="card">
     <h4>How it differs from the booking path</h4>
@@ -229,7 +229,7 @@
       <tr><td><strong>Consignment</strong></td><td><strong>Never from the PT.</strong> Money exists only at sale; quantity-only at receipt</td><td>Sale (D3)</td></tr>
     </table>
   </div>
-  <p class="mini">A two-axis record (ownership × return-terms + rolling-top-up boolean) stores the deal and <em>derives</em> the friendly label, so this table is robust to how the client describes a brand (Q10). The statutory Tally purchase voucher books at arrival for every brand — a different clock from the operational payable; see <a href="#sorclocks">§11</a>.</p>
+  <p class="mini">A two-axis record (ownership × return-terms + rolling-top-up boolean) stores the deal and <em>derives</em> the friendly label, so this table is robust to how the client describes a brand (Q10). The model, margin % and return-window <strong>default from the brand master but are overridable per booking / per stock-received (26 Jun 2026)</strong> — one brand can run any of the four models, the document snapshots the chosen axes at creation. The statutory Tally purchase voucher books at arrival for Outright/Correction; for SOR/Consignment the recognition point is CA-pending (Q4/F9, once-only) — a different clock from the operational payable; see <a href="#sorclocks">§11</a>.</p>
 </section>
 
 <!-- ============================ PAYABLE ============================ -->
@@ -338,7 +338,7 @@
     <strong>The cross-state overlay (Q3).</strong> Whether a transfer also moves <em>money and tax</em> depends on the two GSTINs, read off the first two digits (state code) of each:
     <ul style="margin:6px 0 0">
       <li><strong>Intra-state move</strong> (same GSTIN / same state) → <strong>stock-ledger only</strong>, no tax event. "Internal move."</li>
-      <li><strong>Cross-state move</strong> (Bihar ↔ Jharkhand, distinct persons) → a <strong>taxable IGST supply</strong>: an out-voucher + IGST tax invoice at the sender, a matching purchase voucher + ITC at the receiver, and an <strong>e-way bill</strong> on consignment value incl. IGST (₹50,000 threshold cross-state; ₹1,00,000 intra-state). The stock machine above is unchanged; this is the money/tax layer on top.</li>
+      <li><strong>Cross-state move</strong> (Bihar ↔ Jharkhand, distinct persons) → legally a <strong>taxable IGST supply</strong>. <strong>Scope decision (26 Jun 2026):</strong> the system <strong>records the move and flags it</strong> as cross-state needing manual paperwork; the <strong>IGST tax invoice and e-way bill are produced manually by KDPS, outside the system</strong> (sender out-voucher + IGST tax invoice, receiver matching purchase voucher + ITC, e-way bill on consignment value incl. IGST — ₹50,000 threshold cross-state; ₹1,00,000 intra-state). The stock machine above is unchanged; the taxable-supply fact is kept for awareness/reporting.</li>
     </ul>
   </div>
 </section>

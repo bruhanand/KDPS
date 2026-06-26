@@ -321,7 +321,7 @@
 
   <table>
     <tr><th>Table</th><th>Key columns</th><th>Notes</th></tr>
-    <tr><td class="tbl-name">LegalEntity</td><td><span class="pk">id</span>, pan, legal_name</td><td>The company. (Client fact CD4: one company with two GSTINs, or two companies — confirms how many LegalEntity rows exist. Pending.)</td></tr>
+    <tr><td class="tbl-name">LegalEntity</td><td><span class="pk">id</span>, pan, legal_name</td><td>The company. <strong>One PAN, confirmed (26 Jun 2026)</strong> — KDPS is one legal entity holding two state GSTINs (Bihar, Jharkhand) and one Tally company. Exactly one LegalEntity row.</td></tr>
     <tr><td class="tbl-name">GSTIN <span class="badge b-scd2">SCD-2</span></td><td><span class="pk">id</span>, <span class="fk">legal_entity_id</span>, gstin (15-char), state_code, <code>valid_from/to</code>, <code>is_current</code></td><td>First two digits = state code, which drives intra- vs inter-state treatment. Effective-dated so an old voucher keeps the GSTIN it was billed under.</td></tr>
     <tr><td class="tbl-name">Store</td><td><span class="pk">id</span>, store_code, name, type (store/warehouse), format (EBO/MBO/own), <span class="fk">state_gstin_id</span>, city, state, is_active</td><td>Each store/warehouse routes its vouchers through its state-GSTIN (Q6/D8). Starts with the 16 software stores; rest in D9 (CD1).</td></tr>
     <tr><td class="tbl-name">StoreGroup</td><td><span class="pk">id</span>, name, kind (cluster/tier/pilot/offer-scope)</td><td>Flexible tags; a store belongs to many. Offers (D5) and reports (D7) target groups; vouchers route by the firm state→GSTIN.</td></tr>
@@ -329,7 +329,10 @@
   </table>
 
   <div class="callout co-key">
-    <strong>Why this matters for every ledger.</strong> Because store → state-GSTIN is firm geography, <code>state_gstin_id</code> can be a declared dimension on every posting (§2 law ⑤). Treatment is driven off the two GSTINs' state codes: same code → intra-state, stock-only; different code → cross-state, taxable IGST supply with a tax invoice + e-way bill on consignment value (₹50,000 cross-state threshold). This closes the D3-vs-D6 contradiction (F3).
+    <strong>Why this matters for every ledger.</strong> Because store → state-GSTIN is firm geography, <code>state_gstin_id</code> can be a declared dimension on every posting (§2 law ⑤). Treatment is driven off the two GSTINs' state codes: same code → intra-state, stock-only; different code → cross-state, legally a taxable IGST supply between distinct persons. <strong>Scope decision (26 Jun 2026):</strong> for a cross-state move the system <strong>records the stock move (business-unit → business-unit) and flags it</strong> as needing manual paperwork — the IGST tax invoice and e-way bill are produced <strong>manually by KDPS, outside the system</strong>. The taxable-supply fact is kept for awareness/reporting. This closes the D3-vs-D6 contradiction (F3).
+  </div>
+  <div class="callout co-warn">
+    <strong>Open question — IRN / e-invoicing (G-4, 26 Jun 2026).</strong> Most invoicing is external/manual (counter B2C bills belong to POS; cross-state paperwork is manual), but <strong>B2B / cross-state IGST invoices need an IRN if KDPS is over the e-invoicing turnover threshold</strong>. Confirm applicability at the CA sitting and assign an owning module before the money slices.
   </div>
 </section>
 
@@ -339,6 +342,9 @@
 
   <div class="callout co-key">
     <strong>Store the axes, derive the label.</strong> Two brands the client describes differently can land on the same record; one client answer can't break the data model. Screens still read "Outright / Correction / SOR / Consignment" — that string is computed from the axes, never typed.
+  </div>
+  <div class="callout co-note">
+    <strong>Defaults from the brand, overridable per booking / per receipt (26 Jun 2026).</strong> The model, margin % and return-window <strong>default from <code>BrandTerms</code></strong> but are <strong>overridable on the individual booking or stock-received</strong> — one brand can run any of the four models across different lots. The document snapshots the effective axes at creation (Rule 3); the override is stored as data on the booking/PT line, never a code branch. Margin and return-window are configurable per brand (not fixed), filled by a KDPS steward.
   </div>
 
   <h3>BrandTerms — per brand, per season <span class="badge b-scd2">SCD-2</span></h3>
@@ -509,6 +515,7 @@
       <li><strong>Late freight after PT</strong> — no reposting; a forward-only rate-adjust or a separate cost-correction <em>event</em>, never an edit of the frozen cost.</li>
       <li><strong>Sold-before-PT</strong> — a memo value vs block-the-sale decision; the schema must let a sale reference a cohort whose PT valuation is still pending.</li>
       <li><strong>No-reposting</strong> — every correction is a new today-dated event + reason code, linked via <code>voucher_detail_no</code>. Append-only is a code-level invariant (REVOKE UPDATE/DELETE + trigger), not a convention.</li>
+      <li><strong>Period lock / freeze-date</strong> (26 Jun 2026) — the same posting engine must <strong>reject a posting whose date falls in an already-closed/reported period</strong>, so a back-dated document can't silently restate an already-sent month / brand-report / SOR-settlement. One invariant alongside no-reposting.</li>
     </ul>
   </div>
 </section>

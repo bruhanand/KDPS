@@ -311,20 +311,20 @@
   <div class="eyebrow" style="color:var(--rust-soft)">For the team · technical overview</div>
   <h2>How it's built</h2>
   <p class="skipnote">— overview only; skip this part in the client walkthrough —</p>
-  <p class="sub">Deliberately boring and proven. One application, one database, everything in India.</p>
+  <p class="sub">Deliberately boring and proven. One application, one database; hosting to be decided later.</p>
 
   <div style="margin:14px 0">
-    <span class="tk">TypeScript · one language, front to back</span>
+    <span class="tk">Python/Django engine + typed React PWA · types front to back</span>
     <span class="tk">PostgreSQL · built for ledgers</span>
-    <span class="tk">Vertex AI · best model for each job</span>
-    <span class="tk">Google Cloud · Mumbai · all in India</span>
+    <span class="tk">A hosted top model · best model for each job (AI platform to be decided later)</span>
+    <span class="tk">Hosting — to be decided later</span>
   </div>
 
   <div class="grid g2" style="margin-top:10px">
     <div class="card"><h4>The stack &amp; why</h4>
-      <p><b>TypeScript end-to-end</b> — one language top to bottom; types flow from the database to the screen, so money bugs get caught before they ship.</p>
+      <p><b>Python/Django engine + a typed React PWA</b> — exact money maths in the engine (Decimal + Postgres NUMERIC) with a typed client at the API seam, so money bugs get caught before they ship.</p>
       <p><b>PostgreSQL</b> — relational, transactional, built for append-only ledgers; can scope each store/GST number so data is safe by design.</p>
-      <p><b>Google Cloud, Mumbai</b> — app, database and files all in India. The AI only ever sees safe, edge data and computed numbers — never raw customer or payment details.</p></div>
+      <p><b>Hosting and region will be decided later.</b> The AI only ever sees safe, edge data and computed numbers — never raw customer or payment details.</p></div>
     <div class="card"><h4>How AI plugs in</h4>
       <p>One <b>read-only "ask the system" layer</b> (an MCP layer) over the agreed numbers. The assistant and the digest fetch through it, in Hindi or English, only within each person's access — and it can never write the books.</p>
       <p><b>Option for later:</b> the same layer can draft an action (a markdown, a reorder) into a human's approval queue — still nothing goes live without a person.</p></div>

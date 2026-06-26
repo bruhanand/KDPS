@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The ERP Engineering Handbook — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html" class="cur"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Reverse-engineered from ERPNext v15</div>
+  <h1>The ERP Engineering Handbook</h1>
+  <p class="sub">A field manual for building any custom ERP — the durable patterns behind ERPNext, abstracted so you can rebuild them on any stack.</p>
+</header>
+
+<section>
+  <h2 class="sec">What this is</h2>
+  <p>
+    This handbook is not a manual for <em>using</em> ERPNext. It is a teardown of <em>how ERPNext is engineered</em>, written
+    for the person who has to build an ERP from scratch — on Django, on Rails, on Spring, on whatever stack the client demands.
+    ERPNext is one of the few mature, open-source, double-entry, multi-company, multi-currency ERPs whose source you can actually
+    read. We read it cover to cover, isolated the patterns that recur across every module, and re-expressed each one as a
+    stack-agnostic blueprint you can implement yourself.
+  </p>
+  <p>
+    The thesis throughout is that a good ERP is <strong>small at the core and infinitely variable at the edge</strong>. Almost
+    everything that looks like a feature — an invoice, a stock transfer, a discount slab, a GST rate, an approval chain, a balance
+    sheet — turns out to be <em>data interpreted by a handful of generic engines</em>. Get those engines right and adding the next
+    business document becomes a schema edit, not an engineering project. Get them wrong and you re-implement accounting in every screen.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    The variety of an ERP is enormous, but it is not <em>structural</em> variety. A purchase receipt and a sales return look nothing
+    alike to a user, yet they are the same machine: a submittable document that, on submit, posts balanced rows into an append-only
+    ledger and rolls a fulfilment percentage back to its source. This handbook teaches you to <strong>see that machine everywhere</strong>.
+  </div>
+
+  <h3>How each chapter is built</h3>
+  <p>Every chapter follows the same arc, and the signature device is a three-panel <em>pattern card</em>:</p>
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>How to read a pattern card</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        The durable, stack-agnostic concept — what to build and <em>why it is true</em> regardless of language or framework.
+        This is the part you carry to a greenfield project.
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        The concrete implementation, with real file paths such as
+        <span class="fileref">erpnext/accounts/general_ledger.py</span> so you can go read the source yourself and check we
+        did not embellish.
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        How to rebuild the same capability on <em>your</em> stack — the Django/Postgres translation, the trade-offs, and the
+        traps that bite people who reimplement it naively.
+      </div>
+    </div>
+  </div>
+  <p>
+    Around the pattern cards you will find short real code excerpts (always escaped, always cited), comparison tables, flow
+    diagrams, and four kinds of margin note: <span class="badge b-core">Key idea</span> for a load-bearing principle,
+    a <em>note</em> aside, a <em>warn</em> gotcha, and an occasional <strong>Applying to KDPS</strong> note that grounds the
+    abstraction in the multi-brand Indian fashion retailer this corpus was written for.
+  </p>
+
+  <h3>How to read it</h3>
+  <ul>
+    <li><strong>Front to back, the first time.</strong> The chapters are ordered so each one stands on the last. The meta-model
+      (Ch&nbsp;01) and lifecycle (Ch&nbsp;02) are load-bearing for everything after them.</li>
+    <li><strong>By layer, when you are building.</strong> The mental model below groups the chapters into five bands. Building the
+      money core? Read the two ledger chapters (03, 04) and the lifecycle (02). Building screens and masters? Read 05–07.</li>
+    <li><strong>As a reference, forever.</strong> Chapter&nbsp;13 is a flat catalog of every DocType and module; Chapter&nbsp;12
+      is the build-it-yourself playbook. Those two are the pages you will come back to.</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="sec">ERPNext in one breath</h2>
+  <p>
+    ERPNext is a business application that runs <strong>on top of the Frappe framework</strong>. The distinction matters enough
+    that this handbook flags it on every page, because <em>most of the cleverness lives in Frappe, not in ERPNext</em> — and when
+    you build your own ERP you will be rebuilding the <em>Frappe</em> half as much as the ERPNext half.
+  </p>
+
+  <table>
+    <tr><th>Layer</th><th>What it provides</th><th>In this checkout?</th></tr>
+    <tr>
+      <td><span class="badge b-frappe">Frappe core</span><br>the framework</td>
+      <td>The <strong>meta-model</strong> (DocType-as-data) and its engine: it reads a <code>.json</code> schema and derives the SQL
+        table, the list view, the form UI, a REST/RPC API, the ORM (<code>frappe.get_doc</code>), the role/permission engine, the
+        <code>docstatus</code> draft→submit→cancel state machine, naming, child-table storage, nested-set trees, the workflow engine,
+        custom fields &amp; property setters, the Jinja print engine, and the standard audit columns on every record.</td>
+      <td><strong>No.</strong> Frappe is a separate repo. ERPNext only <em>authors metadata + Python subclasses</em> on top of it.
+        Where a capability is Frappe's, we say so.</td>
+    </tr>
+    <tr>
+      <td><span class="badge b-erpnext">ERPNext</span><br>the business app</td>
+      <td>The <strong>business DocTypes</strong> and their controllers: Item, Customer, Supplier, Account, Warehouse; Sales/Purchase
+        Invoice, Sales Order, Delivery Note, Purchase Receipt, Payment Entry, Journal Entry; the two ledgers (<code>GL Entry</code>,
+        <code>Stock Ledger Entry</code>); the controller inheritance chain that posts them; the tax/pricing calculation engines; the
+        185 reports; the 21 process-aligned modules.</td>
+      <td><strong>Yes.</strong> ~700 DocTypes across 21 modules, each a JSON schema + optional <code>.py</code> controller +
+        optional <code>.js</code> client script + a test.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="lbl">The b-frappe / b-erpnext convention</span>
+    Throughout the handbook, <span class="badge b-frappe">Frappe core</span> marks a capability that the <em>framework</em> gives you
+    for free (and that you must therefore <em>build</em> in a greenfield project), while <span class="badge b-erpnext">ERPNext</span>
+    marks something the <em>business app</em> authored on top. A third badge, <span class="badge b-core">universal</span>, marks a
+    principle true of <em>any</em> serious ERP, ERPNext or not. When you scope your own build, the Frappe-badged items are your
+    framework backlog; the ERPNext-badged items are your domain backlog.
+  </div>
+
+  <p>
+    The single most important consequence: in ERPNext, <strong>defining a new entity is writing one schema file</strong>, not wiring
+    six subsystems by hand. The table, CRUD UI, list/filter view, REST endpoint at <code>/api/resource/&lt;DocType&gt;</code>, ORM
+    handle, per-role and per-field permissions, and audit columns (<code>owner</code>, <code>creation</code>, <code>modified</code>,
+    <code>docstatus</code>, <code>name</code>) all fall out of the framework reading that one declaration. That leverage is the prize,
+    and reproducing it — even partially — is the first decision you make on a custom ERP.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">The mental model</h2>
+  <p>
+    Hold the whole system in your head as <strong>five horizontal bands</strong>. Data and control flow top to bottom: masters are
+    the nouns you transact with; documents are the verbs that record events; those events post into the two ledgers, which are the
+    only source of financial and physical truth; a control plane decides who may do what and when; and a read side turns the ledgers
+    back into reports. The chapters are grouped to mirror these bands exactly.
+  </p>
+
+  <div class="band l-master">
+    <div class="bname">Masters · the nouns <span class="badge b-erpnext">Ch 06</span></div>
+    <div class="boxes">
+      <div class="bx">Item / Variant<small>style × size × colour</small></div>
+      <div class="bx">Party<small>(party_type, party)</small></div>
+      <div class="bx">Account<small>nested-set tree</small></div>
+      <div class="bx">Warehouse<small>nested-set tree</small></div>
+      <div class="bx">Company<small>multi-company</small></div>
+      <div class="bx">Price / Tax templates<small>effective-dated data</small></div>
+    </div>
+  </div>
+  <div class="gap">snapshotted onto…</div>
+  <div class="band l-doc">
+    <div class="bname">Documents · the verbs <span class="badge b-erpnext">Ch 02 · 05 · 07</span></div>
+    <div class="boxes">
+      <div class="bx">Sales / Purchase Order<small>commitment</small></div>
+      <div class="bx">Delivery / Receipt<small>movement</small></div>
+      <div class="bx">Invoice<small>billing</small></div>
+      <div class="bx">Payment Entry<small>settlement</small></div>
+      <div class="bx">Journal Entry<small>free-form</small></div>
+      <div class="bx">Stock Entry<small>internal move</small></div>
+    </div>
+  </div>
+  <div class="gap">on submit, post into…</div>
+  <div class="band l-ledg">
+    <div class="bname">Ledgers · the truth <span class="badge b-erpnext">Ch 03 · 04</span></div>
+    <div class="boxes">
+      <div class="bx">GL Entry<small>double-entry, append-only</small></div>
+      <div class="bx">Stock Ledger Entry<small>qty + valuation, append-only</small></div>
+      <div class="bx">Payment Ledger Entry<small>AR/AP aging</small></div>
+      <div class="bx">Bin<small>balance cache (derivable)</small></div>
+    </div>
+  </div>
+  <div class="gap">governed by…</div>
+  <div class="band l-ctrl">
+    <div class="bname">Control plane · who, what, when <span class="badge b-erpnext">Ch 08 · 09 · 10</span></div>
+    <div class="boxes">
+      <div class="bx">Permissions matrix<small>role × action × permlevel</small></div>
+      <div class="bx">User Permissions<small>row-level scope</small></div>
+      <div class="bx">Workflow engine<small>configurable approvals</small></div>
+      <div class="bx">Hooks / Custom Fields<small>extend without forking</small></div>
+    </div>
+  </div>
+  <div class="gap">read back by…</div>
+  <div class="band l-intel">
+    <div class="bname">Read side · turning the ledger into answers <span class="badge b-erpnext">Ch 11</span></div>
+    <div class="boxes">
+      <div class="bx">Financial statements<small>live queries, never stored</small></div>
+      <div class="bx">Reports<small>one Report doctype, 3 flavors</small></div>
+      <div class="bx">Dashboards / KPIs<small>metadata → SQL aggregate</small></div>
+      <div class="bx">Print formats<small>Jinja over the document</small></div>
+    </div>
+  </div>
+
+  <p>
+    Underneath all five bands runs the <strong>meta-model</strong> (Ch&nbsp;01): every box above — master, document, ledger row,
+    settings singleton, child line — is the same kind of thing, a DocType. And cutting <em>vertically</em> through the document and
+    ledger bands is the <strong>controller inheritance chain</strong> that factors the shared posting and validation logic so no
+    document re-implements it:
+  </p>
+  <div class="flow col">
+    <div class="node">SellingController / BuyingController<small>sell-side / buy-side specifics</small></div>
+    <div class="arr"></div>
+    <div class="node">StockController<small>writes the stock ledger + perpetual-inventory GL</small></div>
+    <div class="arr"></div>
+    <div class="node">AccountsController<small>party, currency, taxes, payment schedule</small></div>
+    <div class="arr"></div>
+    <div class="node">TransactionBase<small>cross-document consistency (rate/qty vs source)</small></div>
+    <div class="arr"></div>
+    <div class="node">StatusUpdater<small>fulfilment %, status state machine</small></div>
+    <div class="arr"></div>
+    <div class="node">Document <span class="badge b-frappe">Frappe core</span><small>docstatus, hooks, audit columns, persistence</small></div>
+  </div>
+  <p>
+    A concrete document (say Sales Invoice) picks the right leaf controller as its Python class and inherits the entire stack via
+    <code>super()</code>. That is why a new document type is "mostly a small declarative spec plus a thin posting hook" — the
+    cross-cutting machinery is inherited, not copied.
+  </p>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    KDPS's own architecture already mirrors this: master data → documents → ledgers → controls → intelligence, with the rule
+    "documents write ledgers, reports read them." The five bands here <em>are</em> that spine. Where KDPS adds SOR/consignment,
+    two-GSTIN cross-state transfers, and Tally as the statutory book, those slot in as <em>data and edge plugins</em> over the same
+    core — exactly the regional-overlay move ERPNext uses for India GST (Ch&nbsp;07, Ch&nbsp;10), not a fork of the engine.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Ten meta-principles</h2>
+  <p>
+    These are the cross-cutting laws that recur in every chapter. If you remember nothing else from the handbook, remember these —
+    each is a decision you make once, early, that shapes everything downstream. The WHY matters more than the rule.
+  </p>
+
+  <div class="card">
+    <h4>1 · Everything is a DocType <span class="badge b-frappe">Frappe core</span> <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> if masters, transactions, ledgers, settings and child lines all share one metadata shape, then
+      one generic engine gives <em>all</em> of them tables, APIs, forms, permissions and audit columns for free. Model metadata as
+      first-class data and adding an entity is one schema file. See <a href="01-metamodel-doctype.html">Ch&nbsp;01</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>2 · Documents post the ledgers; reports read them <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> no document ever mutates a balance, and no report ever stores one. Business logic decides
+      <em>which</em> accounts to debit/credit; one posting service writes the rows; reports are pure aggregations. This single
+      separation keeps the books from ever drifting. See <a href="03-accounting-ledger.html">Ch&nbsp;03</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>3 · Submitted is immutable — amend, don't edit <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> auditors need a permanent record of exactly what was posted. A submitted document is frozen
+      forever; to "change" it you cancel (posting equal-and-opposite reversals) and amend (a new draft linked by
+      <code>amended_from</code>). History is additive, never destructive. See <a href="02-document-lifecycle.html">Ch&nbsp;02</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>4 · Double-entry is non-negotiable <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> total debit == total credit per voucher, enforced in exactly one place every poster funnels
+      through (with a tiny round-off tolerance), is what makes the ledger self-checking. Balances are always
+      <code>SUM(debit) − SUM(credit)</code>, never stored. See <a href="03-accounting-ledger.html">Ch&nbsp;03</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>5 · An ERP is sub-ledgers feeding one General Ledger <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> stock, AR, AP, payroll are each their own append-only sub-ledger, and each physical event
+      atomically posts <em>both</em> its sub-ledger row <em>and</em> a balanced GL pair derived from it. That discipline is what keeps
+      operations and the books in agreement. See <a href="04-stock-ledger.html">Ch&nbsp;04</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>6 · Snapshot masters into transactions <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> copy the master's name, rate, accounts and tax onto the line <em>at creation</em>, resolved
+      through a per-company defaults cascade. The master is the editable "current truth"; the transaction is the frozen "historical
+      truth." So you can fix a typo next year without corrupting last year's books. See <a href="06-master-data-and-party.html">Ch&nbsp;06</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>7 · Variation is data, not code <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> SKUs (template × attribute × variant), tax rates (effective-dated templates), discounts
+      (priority-resolved rules), approvals (workflow tables) are all <em>rows</em>. A GST slab change or a new size axis is a data
+      edit, never a deploy. See <a href="07-tax-and-pricing.html">Ch&nbsp;07</a> and <a href="06-master-data-and-party.html">Ch&nbsp;06</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>8 · Extend without forking <span class="badge b-frappe">Frappe core</span></h4>
+    <p class="why"><strong>WHY:</strong> a customer can be deeply customized <em>and</em> the vendor can still upgrade them, only if all
+      variation goes through one closed manifest of named hooks, plus custom fields / property setters as data, plus separate
+      installable apps (India GST lives entirely outside core). See <a href="10-extensibility-and-customization.html">Ch&nbsp;10</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>9 · Access is a data matrix <span class="badge b-frappe">Frappe core</span> <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> authorization is a (role × action × permlevel) table plus row-level User Permissions, enforced
+      by one engine that AND/ORs the rules into every query's WHERE clause. A "read-only auditor" is just rows with the write/submit
+      columns left off — never new branching code. See <a href="08-permissions-and-roles.html">Ch&nbsp;08</a>.</p>
+  </div>
+
+  <div class="card">
+    <h4>10 · Statements are live queries, never stored <span class="badge b-core">universal</span></h4>
+    <p class="why"><strong>WHY:</strong> Balance Sheet, P&amp;L, GL and AR/AP aging are recomputed from the immutable ledger on every
+      run, rolled up a nested-set account tree. There is no stored "account balance" to drift. Caches, if any, are reconcilable
+      optimizations with a raw-ledger fallback. See <a href="11-reporting-and-printing.html">Ch&nbsp;11</a>.</p>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">The trap these principles guard against</span>
+    Every one of these laws exists to prevent the same failure: <strong>derived state that drifts from its source</strong>. A stored
+    balance that disagrees with the ledger; an edited invoice that no longer matches what was posted; a permission check buried in a
+    controller that the report query forgets. The cure is always the same shape — <em>one source of truth, derived everywhere else,
+    enforced in one place</em>. When you are tempted to cache, denormalize, or special-case, ask first whether you are about to
+    create a second copy of the truth.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Chapter map</h2>
+  <p>Thirteen chapters, grouped by the five bands of the mental model. Read the foundations first; everything else assumes them.</p>
+
+  <table>
+    <tr><th>#</th><th>Chapter</th><th>Layer</th><th>What it teaches</th></tr>
+
+    <tr>
+      <td>01</td>
+      <td><a href="01-metamodel-doctype.html">The meta-model (DocType)</a></td>
+      <td>Foundations</td>
+      <td>A DocType is data, not code: one declaration (fields, types, links, flags) yields table, UI, API, ORM, permissions and
+        audit columns. Lifecycle hooks + controller inheritance. Typed Link / Table / Dynamic Link relationships.</td>
+    </tr>
+    <tr>
+      <td>02</td>
+      <td><a href="02-document-lifecycle.html">The document lifecycle</a></td>
+      <td>Foundations</td>
+      <td>The three-state machine on one <code>docstatus</code> column (Draft / Submitted / Cancelled). Submit posts side effects;
+        cancel reverses them exactly; amend deep-copies for an immutable audit trail. Flag-don't-block validation.</td>
+    </tr>
+
+    <tr>
+      <td>03</td>
+      <td><a href="03-accounting-ledger.html">The accounting engine</a></td>
+      <td>The two ledgers</td>
+      <td>The General Ledger as one append-only table of one-sided postings. The double-entry invariant enforced once. Chart of
+        accounts as a typed nested-set tree. Party subledgers, multi-currency, multi-company, period closing.</td>
+    </tr>
+    <tr>
+      <td>04</td>
+      <td><a href="04-stock-ledger.html">The stock ledger</a></td>
+      <td>The two ledgers</td>
+      <td>A second parallel immutable ledger for inventory. Valuation isolated behind a strategy module (FIFO/LIFO/moving-average).
+        Back-dated entries → a checkpointed repost engine. The Bin balance cache. Every move also hits the GL.</td>
+    </tr>
+
+    <tr>
+      <td>05</td>
+      <td><a href="05-transaction-flow.html">Transaction flow</a></td>
+      <td>Documents &amp; data</td>
+      <td>The commercial lifecycle as a DAG of independent documents (O2C and P2P) linked by line-level "against" references.
+        Fulfilment as a <em>derived</em> sum. The mapped-document and status engines. Returns as negated mirror documents.</td>
+    </tr>
+    <tr>
+      <td>06</td>
+      <td><a href="06-master-data-and-party.html">Master data &amp; the Party</a></td>
+      <td>Documents &amp; data</td>
+      <td>Template / variant / attribute for SKUs (style × size × colour). The polymorphic <code>(party_type, party)</code>
+        abstraction. Dynamic Links for Address/Contact. The snapshot pattern and immutability guards.</td>
+    </tr>
+    <tr>
+      <td>07</td>
+      <td><a href="07-tax-and-pricing.html">Tax &amp; pricing engine</a></td>
+      <td>Documents &amp; data</td>
+      <td>Tax/charge rows interpreted by one calculation engine (<code>charge_type</code> as opcode; rows compose). Per-item rate
+        overrides; effective-dated templates. The Pricing Rule engine with slabs, conditions, priority. Regional overrides, no fork.</td>
+    </tr>
+
+    <tr>
+      <td>08</td>
+      <td><a href="08-permissions-and-roles.html">Permissions &amp; roles</a></td>
+      <td>Control plane</td>
+      <td>Authorization as a declarative matrix on three orthogonal axes: role × action, <code>permlevel</code> field-level security,
+        and row-level User Permissions. <code>if_owner</code> and sharing as composable narrowing. Lifecycle gated by the same matrix.</td>
+    </tr>
+    <tr>
+      <td>09</td>
+      <td><a href="09-workflow-engine.html">Workflow engine</a></td>
+      <td>Control plane</td>
+      <td>A configurable approval state machine as data (states, transitions, role + condition guards) that <em>drives</em> docstatus
+        rather than replacing it. The rule that all other code must be workflow-aware (suppress auto-submit, re-derive edit rights).</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td><a href="10-extensibility-and-customization.html">Extensibility</a></td>
+      <td>Control plane</td>
+      <td>Never fork the core. The closed hook catalog (<span class="fileref">hooks.py</span>). DocType-as-data + custom fields +
+        property setters. Country/vertical variation as separate apps. Ordered, idempotent, run-once migrations.</td>
+    </tr>
+
+    <tr>
+      <td>11</td>
+      <td><a href="11-reporting-and-printing.html">Reporting &amp; printing</a></td>
+      <td>Read side</td>
+      <td>The whole read layer as metadata + a thin compute function. One Report doctype, three flavors. Statements computed live
+        from the ledger. Metadata-driven dashboards/KPIs. Jinja print formats over the saved document. Views as config.</td>
+    </tr>
+
+    <tr>
+      <td>12</td>
+      <td><a href="12-build-any-erp-playbook.html">Build-any-ERP playbook</a></td>
+      <td>Synthesis</td>
+      <td>The order to build a custom ERP: meta-model first, then the two ledgers, then documents, masters and the control plane,
+        then the read side. The decisions to make on day one, and what to defer. The synthesis of all ten principles into a path.</td>
+    </tr>
+    <tr>
+      <td>13</td>
+      <td><a href="13-doctype-catalog.html">DocType catalog</a></td>
+      <td>Synthesis</td>
+      <td>A flat reference: the 21 modules, ~700 DocTypes, the four structural flags (child / single / submittable / tree) that
+        classify every entity, and the module map as a process decomposition. The page you return to most.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="lbl">Reading order vs. build order</span>
+    The chapter numbers are a <em>reading</em> order (concepts build on each other). The <em>build</em> order is different and lives
+    in <a href="12-build-any-erp-playbook.html">Chapter&nbsp;12</a>: you implement the meta-model and the ledgers before you have a
+    single business document worth posting. Don't confuse "where it appears in the book" with "when you write the code."
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">How to use this to build a new ERP</h2>
+  <p>
+    The two synthesis chapters are where reading turns into doing. <a href="12-build-any-erp-playbook.html">Chapter&nbsp;12</a> is the
+    <strong>playbook</strong> — the sequence and the day-one decisions. <a href="13-doctype-catalog.html">Chapter&nbsp;13</a> is the
+    <strong>catalog</strong> — the entity inventory you copy from and adapt. Use them together: the playbook tells you what to build
+    next; the catalog tells you which entities and flags that step needs.
+  </p>
+
+  <h3>The path, in one sketch</h3>
+  <div class="flow col">
+    <div class="node">1 · Build (or adopt) the meta-model<small>schema-as-data engine: table + UI + API + ORM + permissions + audit columns from one declaration — Ch 01</small></div>
+    <div class="arr"></div>
+    <div class="node">2 · Build the lifecycle<small>docstatus state machine, controller hook chain, cancel-and-amend immutability — Ch 02</small></div>
+    <div class="arr"></div>
+    <div class="node">3 · Build the two ledgers<small>GL (double-entry, append-only) + Stock (qty + valuation + repost engine); one posting service each — Ch 03, 04</small></div>
+    <div class="arr"></div>
+    <div class="node">4 · Add the first documents<small>one O2C and one P2P chain; thin per-document composers that decide which accounts to debit/credit — Ch 05</small></div>
+    <div class="arr"></div>
+    <div class="node">5 · Add masters &amp; the policy engines<small>Item/Party with snapshot; tax + pricing as effective-dated data — Ch 06, 07</small></div>
+    <div class="arr"></div>
+    <div class="node">6 · Lay in the control plane<small>permission matrix, workflow, hooks/custom-fields — built into the meta-model from day one, not bolted on — Ch 08, 09, 10</small></div>
+    <div class="arr"></div>
+    <div class="node">7 · Turn the ledger into answers<small>live financial statements, metadata reports, dashboards, print formats — Ch 11</small></div>
+  </div>
+
+  <h3>The decisions you make on day one (and can't cheaply undo)</h3>
+  <dl class="gloss">
+    <dt><code>How much of the meta-model do I build?</code></dt>
+    <dd>Full schema-as-data engine (maximum leverage, large up-front cost) versus conventional models with a few generic mixins
+      (faster start, less leverage per new entity). On Django this is the choice between a metadata-driven model layer and plain
+      <code>models.py</code> with a permission mixin + an audit mixin. Ch&nbsp;01 and Ch&nbsp;12 frame the trade.</dd>
+
+    <dt><code>Append-only ledgers, from the first commit.</code></dt>
+    <dd>The GL and stock ledgers must be insert-only and immutable <em>before</em> you post anything real. Retrofitting immutability
+      after you have mutable balances is the single most expensive mistake in ERP work. Build the freeze-date + role gate and the
+      repost engine early (Ch&nbsp;03, Ch&nbsp;04).</dd>
+
+    <dt><code>Snapshot, don't reference.</code></dt>
+    <dd>Decide that transaction lines copy master values at creation, and add immutability guards on the master fields the ledger
+      depends on (valuation method, stock-item flag). This is cheap to do early and ruinous to retrofit (Ch&nbsp;06).</dd>
+
+    <dt><code>Variation as data, extension via one manifest.</code></dt>
+    <dd>Tax, pricing, approvals and country rules go in tables and plugins, not <code>if/else</code>. Permissions go in a queryable
+      matrix an admin can render. Settle this before the first regional requirement lands, or you will fork (Ch&nbsp;07, 08, 09, 10).</dd>
+  </dl>
+
+  <div class="callout co-key">
+    <span class="lbl">The shortest possible summary</span>
+    Build a tiny, generic core — a metadata engine, a lifecycle, and two append-only ledgers funnelled through one posting service
+    each — and push <em>all</em> the business variety into data and thin per-document composers. Then the next invoice type, the next
+    tax slab, the next approval chain, the next report is a row or a small spec, not a project. That is the entire lesson of ERPNext,
+    and the entire purpose of this handbook.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    For KDPS specifically: the meta-model and lifecycle map onto the React-PWA + Django + Postgres stack already chosen; the two
+    ledgers carry GST-tagged GL rows and SKU-level (style × size × colour) stock; SOR/consignment becomes a <em>commercial-model
+    dimension</em> on the item plus a posting rule that defers vendor liability until sale; Tally stays the statutory book that the
+    GL syncs into. Walk the playbook one vertical slice at a time (Ch&nbsp;12) — the catalog (Ch&nbsp;13) is your borrow-from list,
+    not a spec to copy whole.
+  </div>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li>This is a teardown of <em>how</em> ERPNext is engineered, abstracted into stack-agnostic patterns you can rebuild anywhere —
+      not a manual for using ERPNext.</li>
+    <li>ERPNext is a business app on the <strong>Frappe framework</strong>; most leverage lives in Frappe's meta-model. The handbook
+      flags <span class="badge b-frappe">Frappe core</span> (framework backlog), <span class="badge b-erpnext">ERPNext</span>
+      (domain backlog), and <span class="badge b-core">universal</span> (true of any ERP) on every page.</li>
+    <li>Hold the system as five bands — <strong>masters → documents → ledgers → control → read side</strong> — with a meta-model
+      underneath and a controller inheritance chain cutting vertically through the document/ledger bands.</li>
+    <li>Ten meta-principles recur everywhere; they all guard one failure mode: <em>derived state drifting from its source</em>. The
+      cure is always one source of truth, derived everywhere, enforced in one place.</li>
+    <li>Build order ≠ reading order. Start with the meta-model and the two append-only ledgers; immutability and snapshotting must be
+      in from day one because they cannot be cheaply retrofitted.</li>
+    <li>Use <a href="12-build-any-erp-playbook.html">Chapter&nbsp;12</a> (playbook) for the sequence and
+      <a href="13-doctype-catalog.html">Chapter&nbsp;13</a> (catalog) for the entity inventory when you sit down to build.</li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev empty" href="#"></a>
+<a class="next" href="01-metamodel-doctype.html"><small>Next →</small>The meta-model (DocType)</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 00. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

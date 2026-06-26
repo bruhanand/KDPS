@@ -50,6 +50,14 @@ the DB grants + trigger are the backstop. There is no API, anywhere, to mutate o
 posting. Late freight after a PT, a retro-linked direct GRN, a voided sale — each is a new
 corrective event through `post_entries`, never a re-post of the original.
 
+### Period lock — reject postings into a closed period (26 Jun 2026)
+`post_entries` also **rejects any posting whose date falls in an already-closed / already-reported
+period** (a hard error, same place as balanced-or-fail and no-reposting). This stops a back-dated
+document silently restating a month, brand-report or SOR-settlement that has already gone out; a
+late correction posts as a today-dated corrective event in an open period, never a back-dated
+re-statement of a sealed one. The freeze-date table is the one authority both the engine and the
+report/close flows read.
+
 ### Liability timing lives on the document, not the engine
 `post_entries` is mechanism; *which* legs a document emits is the document's own logic, driven by
 the commercial model (Q1/Q2): the **GRN** emits the quantity movement (no cost); the **PT** at

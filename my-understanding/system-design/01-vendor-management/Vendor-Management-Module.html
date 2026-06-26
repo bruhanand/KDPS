@@ -105,7 +105,7 @@
     <ul>
       <li>Direct contact. <strong>No agent.</strong></li>
       <li>Data is fixed / standardised and loaded later (e.g. Madura brands).</li>
-      <li>Runs on one of the <strong>four commercial models</strong> (§3) — <strong>set per brand</strong> (two brands under one vendor can run different models), carried per booking.</li>
+      <li>Runs on one of the <strong>four commercial models</strong> (§3) — <strong>defaults per brand</strong> (two brands under one vendor can run different models), <strong>overridable per booking / per stock-received</strong>.</li>
       <li>Two margins: <strong>normal-sale</strong> and <strong>discount-sale</strong>.</li>
       <li>Return window matters.</li>
       <li>Payment-terms field on the record; the actual terms per brand are a named input for D4 (§11).</li>
@@ -129,7 +129,7 @@
   </div>
 
   <h2><span class="num">3.</span>The four commercial models</h2>
-  <p class="lead">Set <strong>per brand</strong> (each brand under a vendor can run a different model), and carried on each booking. Terms are <strong>snapshotted</strong> onto the booking, so later changes don't rewrite history. The models differ on two things: <strong>who owns the goods</strong> and <strong>what return rights exist</strong> (corrected 13 June Q&amp;A).</p>
+  <p class="lead">The model <strong>defaults from the brand master</strong> (each brand under a vendor can run a different model) but is <strong>overridable per booking / per stock-received</strong> — one brand can run any of the four models on a given order. <strong>Margin % and return-window are configurable per brand</strong> (not fixed), filled by a KDPS steward. Terms are <strong>snapshotted</strong> onto the booking, so later changes don't rewrite history. The models differ on two things: <strong>who owns the goods</strong> and <strong>what return rights exist</strong> (corrected 13 June Q&amp;A; per-booking override confirmed 26 Jun 2026).</p>
   <div class="grid3">
     <div class="model">
       <div class="tag">Outright · KDPS owns</div>
@@ -172,9 +172,9 @@
   <div class="card">
     <ul>
       <li><strong>Belongs to</strong>: one vendor + <strong>one brand</strong> + one season. <strong>Never mixes brands.</strong> One vendor can have many bookings — one per brand per season.</li>
-      <li><strong>Lines</strong>: per <strong>style-code → per size: quantity</strong>. No colour at booking — a deliberate choice, see §10.</li>
-      <li><strong>Quantity-only</strong>, plus one optional <strong>estimated order value</strong> for planning. No hard pricing — MRP/cost is set later at inward. No spending cap either — also deliberate, see §10.</li>
-      <li><strong>Commercial model + snapshot of its terms</strong> (margins, return window, return allowance %) carried on the booking.</li>
+      <li><strong>Lines</strong>: per <strong>style-code → per size: quantity</strong>, plus an <strong>optional price / MRP</strong> per line (price is <strong>not mandatory</strong> in the booking — confirmed 26 Jun 2026). No colour at booking — a deliberate choice, see §10.</li>
+      <li><strong>Quantity-led</strong>, plus one optional <strong>estimated order value</strong> for planning. Any price/MRP entered at booking is indicative; the binding MRP/cost is set at inward. No spending cap either — also deliberate, see §10.</li>
+      <li><strong>Commercial model + snapshot of its terms</strong> (margins, return window, return allowance %) carried on the booking — defaulted from the brand but <strong>overridable on this booking</strong>.</li>
       <li><strong>Identity</strong>: auto-generated booking number (e.g. <em>BK-SS26-0012</em>), plus an optional field for the vendor's own receiving/order reference.</li>
       <li><strong>Season</strong>: picked by the handler at booking time <strong>from the system-derived season list</strong> — never free text (inbound Q39).</li>
     </ul>

@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Build-Any-ERP Playbook — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html" class="cur"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 12 · Synthesis</div>
+  <h1>The Build-Any-ERP Playbook</h1>
+  <p class="sub">The capstone: a step-by-step method for standing up a new custom ERP, a copy / adapt / skip decision matrix against ERPNext’s patterns, the non-negotiables, the classic pitfalls, and KDPS as a worked example.</p>
+</header>
+
+<section>
+  <h2 class="sec">What this chapter is</h2>
+  <p>
+    The eleven chapters before this one each took apart one mechanism inside ERPNext: the <a href="01-metamodel-doctype.html">meta-model</a>, the <a href="02-document-lifecycle.html">document lifecycle</a>, the <a href="03-accounting-ledger.html">general ledger</a>, the <a href="04-stock-ledger.html">stock ledger</a>, the <a href="05-transaction-flow.html">transaction graph</a>, <a href="06-master-data-and-party.html">masters &amp; the party</a>, the <a href="07-tax-and-pricing.html">tax/pricing engine</a>, <a href="08-permissions-and-roles.html">permissions</a>, the <a href="09-workflow-engine.html">workflow engine</a>, <a href="10-extensibility-and-customization.html">extensibility</a>, and the <a href="11-reporting-and-printing.html">read side</a>. This chapter does not introduce a new mechanism. It is the <strong>method</strong> — the order you build them in, the patterns you copy verbatim versus the ones you adapt or skip, the handful of things you must never cut, the mistakes that look reasonable and aren’t, and a full worked mapping onto a real engagement (KDPS).
+  </p>
+  <p>
+    The intended reader builds custom ERPs on a conventional stack — most often <strong>React + Django + PostgreSQL</strong> — and wants ERPNext’s twenty years of hard-won structure without inheriting Frappe, its JSON metadata runtime, or its operational surface. The whole handbook’s thesis lands here: <strong>an ERP is small at its core and varied at its edges.</strong> A balanced append-only ledger, an immutable document lifecycle, and a snapshot discipline are tiny and stable; the variety — every brand’s tax slab, every commercial model, every report — lives in <em>data</em> the small core interprets. Get the core right and the rest is configuration. Get it wrong and you will hand-code the same four behaviours per table forever.
+  </p>
+  <div class="callout co-key">
+    <span class="lbl">The one sentence</span>
+    Build the smallest possible <strong>generic engine</strong> — schema-as-data, two append-only ledgers, an immutable document lifecycle — then push every business difference into <strong>data the engine reads</strong>. Documents post the ledgers; reports read the ledgers; masters snapshot onto transactions; corrections are new postings, never edits. Everything else is detail.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">1 · The method — an ordered build sequence</h2>
+  <p>
+    Build an ERP in <strong>dependency order, not wishlist order</strong>. Each step below produces something real and testable, and each depends only on the steps above it. Resist the urge to start with the screens the client is excited about (the POS, the dashboard); those sit at the top of a tall stack and collapse without the foundation. The sequence is the spine of this handbook read top to bottom.
+  </p>
+
+  <div class="flow col">
+    <div class="node">a · Map the domain<small>masters · documents · ledgers — classify every entity (ch 13)</small></div>
+    <div class="arr"></div>
+    <div class="node">b · Build the meta-model / schema discipline<small>one declaration shape; one generic engine over it (ch 01)</small></div>
+    <div class="arr"></div>
+    <div class="node">c · Define the ledgers &amp; posting rules<small>documents post, reports read; double-entry GL + stock ledger (ch 03, 04)</small></div>
+    <div class="arr"></div>
+    <div class="node">d · Build masters with snapshot-into-transaction<small>template/variant, party, snapshot, defaults cascade (ch 06)</small></div>
+    <div class="arr"></div>
+    <div class="node">e · Build the transaction graph<small>order → receipt → invoice → payment, derived status (ch 05, 02)</small></div>
+    <div class="arr"></div>
+    <div class="node">f · Layer tax &amp; pricing as data<small>charge-type interpreter, date-effective rates, rule engine (ch 07)</small></div>
+    <div class="arr"></div>
+    <div class="node">g · Add the control plane<small>permissions matrix · workflow (if needed) · extensibility seams (ch 08, 09, 10)</small></div>
+    <div class="arr"></div>
+    <div class="node">h · Build the read side<small>reports + dashboards + print, all live over the ledger (ch 11)</small></div>
+  </div>
+
+  <h3>a · Map the domain into masters, documents, and ledgers</h3>
+  <p>
+    Before any code, take the business and sort every noun into exactly one of three buckets, using the taxonomy from <a href="13-doctype-catalog.html">chapter 13</a>:
+  </p>
+  <ul>
+    <li><strong>Masters</strong> — the editable "current truth": who you deal with and what you sell (Item, Customer, Supplier, Warehouse, Account, Company). Long-lived, mutated for cosmetic fields, frozen for ledger-bearing fields.</li>
+    <li><strong>Documents</strong> — one per real-world event: a promise, a shipment, a bill, a payment. Immutable once posted. These are the <em>only</em> things that write ledgers.</li>
+    <li><strong>Ledgers</strong> — the append-only "historical truth": the general ledger (money) and the stock ledger (quantity/value). Never edited, only appended.</li>
+  </ul>
+  <p>
+    Then draw the two canonical flows your business runs (procure-to-pay and order-to-cash) and identify which ledger each document touches. Do this on paper first. The map <em>is</em> the architecture; the rest is implementation. KDPS’s own five-layer architecture (master data → documents → ledgers → controls → intelligence) is exactly this bucketing.
+  </p>
+
+  <h3>b · Build the meta-model / schema discipline first</h3>
+  <p>
+    ERPNext’s deepest idea (<a href="01-metamodel-doctype.html">chapter 1</a>) is that <strong>a schema is data, not code</strong>: one uniform declaration per entity — its fields, types, relationships, and a few flags (submittable, single, naming, permissions) — feeds one generic engine that derives the table, the API, the form, the ORM handle, the permission checks, and the audit columns. You don’t have to adopt a JSON runtime to keep the discipline. On Django, the equivalent is: a small base model that every entity inherits (audit columns + lifecycle), a tiny set of structural conventions (a "submittable" mixin, a "child table" convention, a "single/settings" convention), and a generic admin/API layer driven off the model metadata Django already exposes. The non-negotiable is that <strong>every entity shares the same shape</strong> so cross-cutting behaviour is written once.
+  </p>
+  <div class="callout co-note">
+    <span class="lbl">Don’t over-build the meta-layer</span>
+    You are not rebuilding Frappe. You want the <em>discipline</em> (uniform audit columns, one lifecycle, typed links, a naming strategy) — not a runtime that compiles JSON into tables. A Django abstract base model plus a handful of mixins gets you 90% of the leverage at 5% of the cost. Adopt the metadata <em>habit</em>, skip the metadata <em>VM</em>.
+  </div>
+
+  <h3>c · Define the ledgers and the posting rules</h3>
+  <p>
+    This is the spine, and it comes before any document, because every document exists to post here. Build the general ledger (<a href="03-accounting-ledger.html">chapter 3</a>) as one immutable append-only table of one-sided postings (<code>account</code>, <code>debit</code> XOR <code>credit</code>, voucher identity, optional party + against-voucher + dimensions), with <strong>balances always computed by <code>SUM(debit) - SUM(credit)</code> and never stored</strong>. Build the stock ledger (<a href="04-stock-ledger.html">chapter 4</a>) as a parallel append-only event log per <code>(item, location)</code> carrying the running balance and valuation snapshot. Funnel every poster through <strong>one</strong> service that enforces the two laws:
+  </p>
+  <div class="callout co-key">
+    <span class="lbl">The two laws</span>
+    <strong>Documents post the ledger.</strong> No document mutates a balance directly; on submit it composes a balanced set of postings and hands them to one shared posting function that validates total-debit == total-credit (with a round-off tolerance) and inserts rows.<br>
+    <strong>Reports read the ledger.</strong> Trial balance, P&amp;L, balance sheet, AR/AP aging are <em>pure aggregations</em> of ledger rows. There is no stored "account balance" anywhere, so the books can never drift from the report.
+  </div>
+  <p>
+    Set the chart of accounts up as a typed nested-set tree (Asset/Liability/Income/Expense/Equity → Balance Sheet vs P&amp;L) where only leaves are postable. Make analytical slices (cost center, branch, brand) <strong>configurable dimensions copied onto every posting</strong>, not hard-coded columns. This step is the hardest to retrofit and the cheapest to get right early.
+  </p>
+
+  <h3>d · Build masters with snapshot-into-transaction</h3>
+  <p>
+    Now the masters (<a href="06-master-data-and-party.html">chapter 6</a>). Three durable moves: model variation as <strong>data</strong> (a template + an attribute catalog + a variant table — "SKU = style × size × colour" is rows, not columns); abstract "who we transact with" into a polymorphic <code>(party_type, party)</code> pair so new party kinds need no ledger change; and above all, <strong>snapshot</strong> master values onto the transaction line at creation. Copy the name, rate, accounts, and tax onto the document, resolved through a per-company defaults cascade (item → item-group → brand → company). The master is the editable present; the transaction is the frozen past. Add immutability guards (ERPNext’s <code>cant_change()</code>) on the few master fields the ledger depends on (valuation method, is-stock-item). This is what lets you fix a typo in a customer name next year without corrupting last year’s books.
+  </p>
+
+  <h3>e · Build the transaction graph with status tracking</h3>
+  <p>
+    With ledgers and masters in place, build documents as an append-only DAG (<a href="05-transaction-flow.html">chapter 5</a>) linked by line-level "against" references, each its own submittable record (<a href="02-document-lifecycle.html">chapter 2</a>). The decisive design choice: make fulfilment a <strong>derived</strong> quantity — re-<code>SUM</code> linked child rows on every submit <em>and</em> cancel — never a mutable counter. That single decision buys you partial-fulfilment fan-out, self-reversing cancellation, an audit trail, a declarative status state machine, and a structural guard against over-billing/over-delivery, all for free. Put shared behaviour in a layered controller chain (status engine → cross-doc validation → accounting → stock/GL → sell/buy leaves) so each concrete document is mostly a small declarative spec plus a thin posting hook.
+  </p>
+
+  <h3>f · Layer tax and pricing as data</h3>
+  <p>
+    Only now add money rules (<a href="07-tax-and-pricing.html">chapter 7</a>), as a small generic calculation engine over declarative rows — never per-scenario code. Each tax/charge is a typed row whose <code>charge_type</code> is an opcode the engine interprets, and rows compose by referencing earlier rows; that one mechanism expresses GST, cess-on-tax, tax-on-freight, fixed charges, and per-unit levies. Every rate and price is <strong>effective-dated and category-scoped data</strong> with per-item override maps, so a GST slab change is a new row, never a deploy. Discounts/promotions are declarative rules matched by dimension + qty/amount slab + condition + validity, resolved by explicit priority.
+  </p>
+
+  <h3>g · Add the control plane</h3>
+  <p>
+    Permissions (<a href="08-permissions-and-roles.html">chapter 8</a>) come after the data model is real, because they gate it: make authorization a <strong>data matrix</strong> (role × action × permlevel) plus row-level scopes, enforced by one engine that AND-s a <code>WHERE</code> clause into every query — never <code>if</code>-statements scattered across controllers. Add the configurable <a href="09-workflow-engine.html">workflow engine</a> only if the business genuinely needs configurable approvers/conditions; otherwise a hard-coded status suffices. And bake in the extensibility seams (<a href="10-extensibility-and-customization.html">chapter 10</a>) — a custom-field table, named hook points, idempotent ordered migrations — from day one, because retrofitting "never fork the core" is impossible.
+  </p>
+
+  <h3>h · Build the read side last</h3>
+  <p>
+    Reports, dashboards, and print (<a href="11-reporting-and-printing.html">chapter 11</a>) come last because they read everything below. Build them as <strong>metadata plus a thin compute function over the immutable ledger</strong>: one report record with a type discriminator and a fixed <code>execute(filters) → (columns, rows, chart, summary)</code> contract; financial statements computed live from the GL via a chart-of-accounts tree rollup; dashboards as records, not code; print as a sandboxed template over the saved document. Adding a report becomes a data change, not an engineering project.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">2 · Copy / Adapt / Skip</h2>
+  <p>
+    ERPNext is a twenty-year-old generalised product serving every industry in every country. You are building one focused ERP for one business. That difference is the whole decision: some of ERPNext’s structure is <strong>universal accounting truth</strong> you copy verbatim; some is a good idea whose <em>implementation</em> you should rebuild idiomatically on your stack; and some is generality you simply don’t need and should consciously skip to stay small. Below is the matrix, with the reason for each verdict.
+  </p>
+
+  <table>
+    <tr><th>Pattern (chapter)</th><th>Verdict</th><th>Why</th></tr>
+    <tr>
+      <td><strong>Double-entry GL</strong> — balanced one-sided postings, one posting service, balances derived (<a href="03-accounting-ledger.html">ch 3</a>)</td>
+      <td><span class="badge b-core">COPY</span></td>
+      <td>This is 500-year-old accounting truth, not an ERPNext invention. Total-debit == total-credit, append-only, never store a balance. Reimplementing it "simpler" is the single most expensive mistake you can make. Copy the structure exactly.</td>
+    </tr>
+    <tr>
+      <td><strong>Immutable submitted documents</strong> — draft → submitted → cancelled on one column; cancel-and-amend, never edit (<a href="02-document-lifecycle.html">ch 2</a>)</td>
+      <td><span class="badge b-core">COPY</span></td>
+      <td>Trust comes from immutability + traceable corrections, not from data being un-wrong. The three-state machine and "cancel posts reversing entries, amend creates a new linked draft" is universal. Copy it verbatim.</td>
+    </tr>
+    <tr>
+      <td><strong>The controller hook chain</strong> — ordered lifecycle hooks (validate → before/on_submit → on_cancel) with shared behaviour inherited (<a href="01-metamodel-doctype.html">ch 1</a>, <a href="05-transaction-flow.html">ch 5</a>)</td>
+      <td><span class="badge b-core">COPY</span></td>
+      <td>The pattern — cross-cutting posting/validation in base classes, leaf documents compose with <code>super()</code>, <code>on_cancel</code> is the exact mirror of <code>on_submit</code> — is stack-agnostic. On Django, base model + Django signals or an explicit hook dispatcher. Copy the shape; pick your stack’s mechanism.</td>
+    </tr>
+    <tr>
+      <td><strong>Naming series</strong> — human-readable IDs like <code>ACC-SINV-2026-00042</code> as a configured pattern (<a href="01-metamodel-doctype.html">ch 1</a>)</td>
+      <td><span class="badge b-core">COPY</span></td>
+      <td>Auditors, GST returns, and staff all reference documents by these numbers; a UUID is unusable on a printed invoice. A per-series counter with prefix + fiscal year + zero-padded sequence is cheap and you cannot retrofit it onto posted history. Copy it.</td>
+    </tr>
+    <tr>
+      <td><strong>Snapshot masters onto transactions</strong> + per-company defaults cascade (<a href="06-master-data-and-party.html">ch 6</a>)</td>
+      <td><span class="badge b-core">COPY</span></td>
+      <td>Non-negotiable for correct history. The mechanism (copy name/rate/accounts/tax onto the line at creation, guard the structural master fields) is the same on any stack. Copy.</td>
+    </tr>
+    <tr>
+      <td><strong>The DocType meta-model</strong> — schema compiled from JSON at runtime (<a href="01-metamodel-doctype.html">ch 1</a>)</td>
+      <td><span class="badge b-warn">ADAPT</span></td>
+      <td>Keep the <em>discipline</em> (uniform shape, audit columns, typed links, flags) but not Frappe’s runtime VM. On Django, use real <code>models.py</code> + an abstract base + a thin metadata layer (a <code>CustomField</code> table for runtime additions). You get migrations, typing, and tooling your team already knows.</td>
+    </tr>
+    <tr>
+      <td><strong>Stock valuation</strong> — FIFO/LIFO/moving-average behind one strategy interface (<a href="04-stock-ledger.html">ch 4</a>)</td>
+      <td><span class="badge b-warn">ADAPT</span></td>
+      <td>Keep the architecture (valuation isolated in a pure, db-free strategy module; store enough state per row to resume; a checkpointed repost engine for back-dated entries). But implement only the method(s) your business actually uses. KDPS needs cost-from-PT, so most stock is moving-average; you don’t need all four methods on day one.</td>
+    </tr>
+    <tr>
+      <td><strong>Pricing Rule / Promotional Scheme engine</strong> — declarative rule matching by dimension + slab + condition + priority (<a href="07-tax-and-pricing.html">ch 7</a>)</td>
+      <td><span class="badge b-warn">ADAPT</span></td>
+      <td>The model is exactly right for slab/condition discounts. Adapt the storage to your stack and the matching to your real offer shapes (B2G1-lowest-free, value slabs, per-store dates). Keep the "compile a friendly scheme into flat matchable rules" idea; trim conflict-resolution generality to what you need.</td>
+    </tr>
+    <tr>
+      <td><strong>Accounting dimensions</strong> — extensible analytical tags injected onto every posting (<a href="03-accounting-ledger.html">ch 3</a>)</td>
+      <td><span class="badge b-warn">ADAPT</span></td>
+      <td>You want the capability (slice the ledger by store/brand/territory). On Django, a few explicit nullable FK columns on the GL row, populated from the document snapshot, are simpler and faster than ERPNext’s runtime field injection. Adapt to explicit columns; keep them out of the posting math.</td>
+    </tr>
+    <tr>
+      <td><strong>Full multi-company</strong> — every account/ledger row stamped with company, separate charts, inter-company (<a href="03-accounting-ledger.html">ch 3</a>)</td>
+      <td><span class="badge b-warn">ADAPT</span></td>
+      <td>KDPS is one legal entity with two state GSTINs — that is multi-<em>GSTIN</em>, not multi-company. Stamp a <code>company</code>/<code>gstin</code> dimension on rows so you can split returns, but don’t build inter-company eliminations, per-company charts, and consolidation you’ll never use. Adapt down to the dimension you need.</td>
+    </tr>
+    <tr>
+      <td><strong>Subcontracting / manufacturing</strong> — BOM, work orders, the BuyingController subcontract chain (<a href="05-transaction-flow.html">ch 5</a>)</td>
+      <td><span class="badge b-warn">SKIP</span></td>
+      <td>A fashion retailer buys finished goods and sells them. There is no production. Skip the entire subcontracting subsystem; it is dead weight and a maintenance liability for a buy-store-sell business.</td>
+    </tr>
+    <tr>
+      <td><strong>The full permlevel machinery</strong> — numeric field-level security tiers (<a href="08-permissions-and-roles.html">ch 8</a>)</td>
+      <td><span class="badge b-warn">SKIP / TRIM</span></td>
+      <td>Keep role × action and row-level scope (you absolutely need "this user sees only their store"). But the numeric permlevel field-tier machinery is heavy. Most field-hiding needs are met by a serializer field-filter for the handful of sensitive fields (margin, cost). Add tiers only if a real requirement demands them.</td>
+    </tr>
+    <tr>
+      <td><strong>The generic Workflow engine</strong> — admin-configurable approval state machines (<a href="09-workflow-engine.html">ch 9</a>)</td>
+      <td><span class="badge b-warn">SKIP (at first)</span></td>
+      <td>If approvals are fixed, single-actor, and won’t need configurable approvers/conditions, a hard-coded status field is correct and far simpler. Switch to the configurable engine the moment business users need "who approves what, under which condition". For KDPS’s early build, hard-coded status is right.</td>
+    </tr>
+    <tr>
+      <td><strong>The regional-override / app-layering system</strong> — <code>hooks.py</code>, separate <code>india_compliance</code> app (<a href="10-extensibility-and-customization.html">ch 10</a>)</td>
+      <td><span class="badge b-warn">SKIP</span></td>
+      <td>That machinery exists so <em>one product</em> serves every country without forking. You are building <em>one</em> ERP for India. Bake GST in directly (as date-effective data — see non-negotiables), don’t build a plugin runtime to host a tax regime you’ll never swap out.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="lbl">The rule behind the table</span>
+    Copy what is <strong>universal truth</strong> (double-entry, immutability, snapshot, naming). Adapt what is a <strong>good idea with a heavy implementation</strong> (the meta-model, valuation, pricing, dimensions). Skip what is <strong>generality for a product you’re not building</strong> (multi-company consolidation, manufacturing, plugin runtimes, configurable workflow you don’t yet need). When unsure, ask: "is this accounting law, or is this ERPNext serving someone else’s business?"
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">3 · Non-negotiables — what you must NOT cut</h2>
+  <p>
+    Everything in section 2 is a judgement call except these five. Cut any of them and you don’t have a smaller ERP — you have a broken one that will silently corrupt money or history. Each of these has burned a real project; treat them as load-bearing walls.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Non-negotiable · Double-entry balance</span>
+    Every financial posting must balance: <strong>total debit == total credit per voucher</strong>, enforced in exactly <em>one</em> place every poster funnels through, with a small round-off tolerance that auto-inserts a round-off line rather than rejecting the transaction (<a href="03-accounting-ledger.html">ch 3</a>, <span class="fileref">erpnext/accounts/general_ledger.py</span> · <code>process_debit_credit_difference</code>). The moment one code path can write an unbalanced or one-sided entry, your trial balance is wrong and no report can be trusted. There is no "simpler" version of this.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Non-negotiable · Audit columns + immutability</span>
+    Every record carries the same audit columns (<code>owner</code>, <code>creation</code>, <code>modified</code>, <code>modified_by</code>, <code>docstatus</code>) injected by the framework, not hand-added per table (<a href="01-metamodel-doctype.html">ch 1</a>). A submitted accounting or stock document is <strong>immutable forever</strong> — never <code>UPDATE</code>, never <code>DELETE</code>. To change it you cancel (post reversing entries) and amend (a new linked draft). Ledgers only ever grow. An auditor must be able to see exactly what was posted and exactly how it was corrected. Cut this and you have no audit trail, only a mutable database.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Non-negotiable · Idempotent, ordered, logged migrations</span>
+    Schema and data evolution is an ordered list of single-purpose scripts that each run <strong>exactly once</strong> per environment and are written to be safely re-runnable, with a persistent log of what has run (<a href="10-extensibility-and-customization.html">ch 10</a>, <span class="fileref">erpnext/patches.txt</span>). On Django this is the migrations framework plus guarded data migrations (<code>if not exists</code> checks). The day you patch production by hand, you lose reproducibility across environments and you cannot stand a new store up cleanly. Build this from commit one.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Non-negotiable · Snapshotting masters onto transactions</span>
+    A transaction line must <strong>copy</strong> the master’s name, rate, accounts, and tax at creation, never reference the live master for posted values (<a href="06-master-data-and-party.html">ch 6</a>, <span class="fileref">erpnext/stock/get_item_details.py</span> · <code>get_basic_details</code>). If you read the live master at report time, last year’s books rewrite themselves the moment someone edits a customer or a price. The master is the present; the document is the frozen past. This is not an optimisation — it is correctness.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Non-negotiable · GST / tax as date-effective data</span>
+    Tax rates, slabs, and templates must be <strong>effective-dated and value-scoped data</strong> (<code>valid_from</code>, value bands, tax category), selected by the document’s posting date — never constants in code (<a href="07-tax-and-pricing.html">ch 7</a>, <span class="fileref">erpnext/stock/get_item_details.py</span> · <code>_get_item_tax_template</code>). Apparel GST is slab-based and changes by government notification; a hard-coded 5%/12% will silently mis-post every transaction the day a slab moves, and re-running an old period will apply today’s rate to last year’s sales. Effective-dating is the only correct model.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">4 · Classic pitfalls</h2>
+  <p>
+    These are the mistakes that look like reasonable engineering and quietly destroy an ERP. Each one is tempting because it is <em>simpler in the short run</em>. Each has a fix that is the corresponding pattern from an earlier chapter.
+  </p>
+
+  <h3>Pitfall · Storing balances instead of deriving them</h3>
+  <p>
+    The temptation: a <code>balance</code> column on Account (or <code>qty_on_hand</code> on Item) that you increment on each posting — "so reports are fast." The reality: the moment two postings race, or a cancellation is missed, or a back-dated entry lands, the stored balance diverges from the sum of the ledger and you can never tell which is right.
+    <br><strong>The fix:</strong> balances are <em>always</em> <code>SUM(debit) - SUM(credit)</code> (<a href="03-accounting-ledger.html">ch 3</a>). If read performance hurts, add a <em>reconcilable</em> snapshot cache (like ERPNext’s <a href="04-stock-ledger.html">Bin</a>) that is a rebuildable projection of the ledger, never the source of truth — and that you can recompute from scratch at any time.
+  </p>
+
+  <h3>Pitfall · Editing posted documents</h3>
+  <p>
+    The temptation: "the invoice has a typo, just <code>UPDATE</code> the row." The reality: the ledger postings it already made are now inconsistent with the document, the audit trail is a lie, and any report run against the old period silently changes.
+    <br><strong>The fix:</strong> a posted document is immutable (<a href="02-document-lifecycle.html">ch 2</a>). Cancel (which posts reversing entries) and amend (a new draft linked by <code>amended_from</code>). The original, the reversal, and the amendment all survive forever. Corrections are <em>new postings</em>, never mutations.
+  </p>
+
+  <h3>Pitfall · Stock without valuation or a repost engine</h3>
+  <p>
+    The temptation: track quantity as a running integer and "figure out cost later." The reality: quantity is trivial (a sum of deltas) but cost is <em>path-dependent</em> — moving-average and FIFO both depend on the order of receipts — and a single back-dated GRN makes every later valuation wrong, so your COGS and margin are quietly garbage.
+    <br><strong>The fix:</strong> isolate valuation behind a pure strategy module, store the running balance + valuation snapshot on each ledger row, and build a <strong>checkpointed, resumable repost engine</strong> plus a freeze-date gate from day one (<a href="04-stock-ledger.html">ch 4</a>, <span class="fileref">erpnext/stock/stock_ledger.py</span> · <code>update_entries_after</code>). This is the price of carrying running balances, and it is not optional.
+  </p>
+
+  <h3>Pitfall · Hand-entered profitability</h3>
+  <p>
+    The temptation: a <code>margin</code> or <code>profit</code> field someone types in, or a "cost" field on the sale. The reality: it is wrong the moment a price changes, it can’t be audited, and it lets staff (accidentally or otherwise) report whatever number they like.
+    <br><strong>The fix:</strong> profitability is <strong>derived</strong> — cost from the PT/invoice captured at stock-in (snapshotted onto the stock ledger valuation), revenue from POS at sale. Never hand-entered (<a href="06-master-data-and-party.html">ch 6</a>). Margin is a report query over two ledgers, not a column.
+  </p>
+
+  <h3>Pitfall · Coding variants instead of modelling them</h3>
+  <p>
+    The temptation: a <code>size</code> and <code>colour</code> column on Item, or worse, a separate table per attribute, or stock tracked at style level. The reality: stock-at-style-level is wrong (size × colour must survive end-to-end), and adding "sleeve length" next season becomes a migration and a code change.
+    <br><strong>The fix:</strong> model variation as <strong>data</strong> — a template Item + an attribute catalog + a variant table with a <code>(variant, attribute, value)</code> join (<a href="06-master-data-and-party.html">ch 6</a>, <span class="fileref">erpnext/controllers/item_variant.py</span>). Adding an axis is a row, not a migration. This is KDPS’s "SKU = style × size × colour" stated as schema.
+  </p>
+
+  <h3>Pitfall · Permissions as if-statements</h3>
+  <p>
+    The temptation: <code>if user.role == 'manager' and ...</code> scattered through controllers and views. The reality: the rules drift apart, you cannot audit "who can do what" without reading all the code, and "give the auditor read-only access" becomes a sprint.
+    <br><strong>The fix:</strong> authorization is a <strong>data matrix</strong> (role × action × scope) enforced by one engine that AND-s a <code>WHERE</code> clause into every query, with row-level scope (one store/warehouse) decoupled from roles (<a href="08-permissions-and-roles.html">ch 8</a>). A read-only auditor is just rows that grant read and withhold write/submit — no special code. Keep the matrix queryable so an admin screen can render and audit it.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">The common thread</span>
+    Every pitfall above is the same mistake wearing different clothes: <strong>storing a derived fact as if it were a source fact</strong> (a balance, an edit, a margin, a variant column, a permission decision). The cure is always the same: keep one append-only source of truth and <em>derive</em> everything else from it on read.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">5 · Worked example — KDPS</h2>
+  <p>
+    KDPS Lifestyle is a multi-brand Indian fashion retailer: 50+ stores across Bihar &amp; Jharkhand, 20,000+ SKUs, 40+ brands, today running per-store POS + Tally + Excel. It is the perfect stress test for the method because it has every interesting wrinkle — variant SKUs, consignment ownership, two-state GST, a split between quantity-recognition and value-recognition, and a statutory book of record (Tally) that lives <em>outside</em> the new system. Below, every KDPS concept maps onto an ERPNext pattern and the chapter that explains it.
+  </p>
+
+  <table>
+    <tr><th>KDPS concept</th><th>ERPNext pattern to reuse</th><th>Chapter</th></tr>
+    <tr>
+      <td><strong>SKU = style × size × colour</strong> — stock must be tracked at size×colour, not style</td>
+      <td>Template/variant/attribute model: a template Item with <code>has_variants</code>, a variant per concrete SKU pinning one value per axis, attributes as master data</td>
+      <td><a href="06-master-data-and-party.html">06</a></td>
+    </tr>
+    <tr>
+      <td><strong>SOR / Consignment / Outright ownership</strong> — first-class dimension driving return windows, margin, EOSS; stock counted by qty but value off-book until sale</td>
+      <td>Two-axis commercial model (ownership × return-terms) as a snapshotted master attribute; consignment = stock-ledger qty without a GL value posting until the sale recognises vendor liability. A configurable dimension on the posting, not a flag in code</td>
+      <td><a href="06-master-data-and-party.html">06</a>, <a href="03-accounting-ledger.html">03</a></td>
+    </tr>
+    <tr>
+      <td><strong>GRN posts quantity, PT posts value</strong> — goods arrive (count) before the value/liability is recognised</td>
+      <td>Two documents, two postings: the goods-receipt note writes a Stock Ledger Entry (qty + valuation snapshot); the PT/purchase-invoice writes the GL value + vendor liability. Stock ledger and GL are <em>separate</em> ledgers that the same event fans out to — exactly the sub-ledgers-feed-the-GL pattern</td>
+      <td><a href="04-stock-ledger.html">04</a>, <a href="05-transaction-flow.html">05</a></td>
+    </tr>
+    <tr>
+      <td><strong>Two state GSTINs</strong> — Bihar &amp; Jharkhand are "distinct persons"; cross-state transfer is a taxable IGST supply</td>
+      <td>GSTIN as a stamped dimension on every store/warehouse and every posting (the multi-company "stamp the company" idea, adapted to multi-GSTIN); a cross-state stock transfer is a normal taxable document, not a free internal move</td>
+      <td><a href="03-accounting-ledger.html">03</a>, <a href="05-transaction-flow.html">05</a></td>
+    </tr>
+    <tr>
+      <td><strong>Apparel GST slabs</strong> — date-effective, value-banded, HSN-driven</td>
+      <td>Item Tax Template selected by <code>valid_from</code> + value band + tax category; per-item rate override against a shared GST account; <code>charge_type</code> interpreter for CGST/SGST/IGST split. All data, never code</td>
+      <td><a href="07-tax-and-pricing.html">07</a></td>
+    </tr>
+    <tr>
+      <td><strong>Tally stays the statutory book of record</strong> — the new ERP must mirror, not replace, the legal GL</td>
+      <td>Treat Tally as an <strong>external GL mirror</strong>: the internal GL is the operational source of truth; a periodic sync (sales/purchase vouchers) projects postings into Tally. This is the "documents post our ledger, then we export balanced vouchers downstream" discipline — the same composer that builds GL rows builds the Tally voucher</td>
+      <td><a href="03-accounting-ledger.html">03</a>, <a href="10-extensibility-and-customization.html">10</a></td>
+    </tr>
+    <tr>
+      <td><strong>Barcode = non-unique scan-alias</strong> — many physical units scan the same code; stock is a count under it</td>
+      <td>The barcode is a lookup alias onto an Item, not the stock-keeping identity; quantity lives in the stock ledger keyed by (item, warehouse). Don’t conflate the scan code with the SLE key</td>
+      <td><a href="04-stock-ledger.html">04</a>, <a href="06-master-data-and-party.html">06</a></td>
+    </tr>
+    <tr>
+      <td><strong>Brand-specific slab/condition offers</strong> — value slabs, B2G1-lowest-free, gift thresholds, per-store dates</td>
+      <td>Pricing-rule engine: rules matched by brand/item/store + qty/amount slab + validity + condition, resolved by priority; a friendly "scheme" generator compiles into flat matchable rules. Free-product (buy-X-get-Y) is a rule outcome</td>
+      <td><a href="07-tax-and-pricing.html">07</a></td>
+    </tr>
+    <tr>
+      <td><strong>Season / Collection / Age tagging</strong> — drives markdowns &amp; dead-stock handling</td>
+      <td>Item master attributes snapshotted onto stock; aging is a report query over the stock ledger’s posting dates, not a stored "age" field</td>
+      <td><a href="06-master-data-and-party.html">06</a>, <a href="11-reporting-and-printing.html">11</a></td>
+    </tr>
+    <tr>
+      <td><strong>Own POS behind Ten Software</strong> — one store, one POS, idempotent sale capture</td>
+      <td>POS sale is just another submittable document that posts the two ledgers; idempotency keys on the inbound API prevent double-posting on retry. Same lifecycle, same posting discipline as every other document</td>
+      <td><a href="02-document-lifecycle.html">02</a>, <a href="05-transaction-flow.html">05</a></td>
+    </tr>
+    <tr>
+      <td><strong>Per-store data isolation</strong> — a store manager sees only their store</td>
+      <td>Row-level User Permission scoped to the store/warehouse, AND-ed into every query; same role everywhere, different data. No <code>if</code>-statements</td>
+      <td><a href="08-permissions-and-roles.html">08</a></td>
+    </tr>
+  </table>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS · the two recognition points</span>
+    The subtlest KDPS rule is that <strong>physical possession and financial liability are recognised at different moments</strong>. Goods arriving on consignment (SOR) bump the stock ledger by quantity immediately, but <em>no</em> GL value and <em>no</em> vendor liability post until the item sells. This is exactly why stock and GL are <strong>two separate ledgers</strong> (<a href="04-stock-ledger.html">ch 4</a>) rather than one: a single event posts to whichever ledgers its commercial model says it should. An outright purchase posts both ledgers at GRN/PT; a consignment item posts the stock ledger at GRN and the GL only at sale. Model ownership as a snapshotted dimension and let the posting composer decide which ledgers fire — never branch this in document code.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS · Tally as an external mirror, not a competitor</span>
+    Tally remains the legal book. The trap is trying to make the new ERP <em>be</em> Tally or trying to read balances back from Tally. Instead: the new ERP owns the operational GL (so it can power live margin, store P&amp;L, and dead-stock reports the moment a sale posts), and a one-way sync exports balanced vouchers into Tally for statutory filing. Because the new GL already composes balanced postings (<a href="03-accounting-ledger.html">ch 3</a>), the Tally voucher is just a second projection of the same posting list — built by the same composer, gated by a freeze date, idempotent on re-run. The CA-sensitive single-recognition rules (when SOR/consignment GST is recognised, the 6-month deemed-supply clock) are encoded once in that composer.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">6 · A minimal ERP skeleton</h2>
+  <p>
+    Here is the smallest set of entities to start <em>any</em> ERP. If you stand up exactly these — and nothing else — you have a working spine: you can receive goods, sell them, bill, get paid, and produce a trial balance and a stock report, all immutable and auditable. Everything in section 1’s method bolts onto this. Build them in roughly the order listed; each depends mostly on the ones above it.
+  </p>
+
+  <div class="band l-master">
+    <div class="bname">Masters &amp; setup (the editable present)</div>
+    <div class="boxes">
+      <div class="bx">Company<small>the entity + book currency</small></div>
+      <div class="bx">Account<small>nested-set tree, typed by root_type</small></div>
+      <div class="bx">Item<small>+ variant/attribute model</small></div>
+      <div class="bx">Warehouse<small>nested-set location</small></div>
+      <div class="bx">Party<small>(party_type, party) — Customer/Supplier</small></div>
+      <div class="bx">Naming Series<small>human-readable IDs</small></div>
+      <div class="bx">Role + Permission<small>the access matrix</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-doc">
+    <div class="bname">Documents (one Sales, one Purchase — the frozen past)</div>
+    <div class="boxes">
+      <div class="bx">Sales Invoice<small>+ child line table</small></div>
+      <div class="bx">Purchase Invoice / Receipt<small>+ child line table</small></div>
+      <div class="bx">Payment Entry<small>settle AR/AP</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-ledg">
+    <div class="bname">Ledgers (append-only truth)</div>
+    <div class="boxes">
+      <div class="bx">GL Entry<small>the general ledger</small></div>
+      <div class="bx">Stock Ledger Entry<small>qty + valuation</small></div>
+    </div>
+  </div>
+
+  <h3>The skeleton, entity by entity</h3>
+  <dl class="gloss">
+    <dt><code>Company</code> <span class="badge b-core">master</span></dt>
+    <dd>The legal/operating entity. Carries the default currency (the book of record) and the default accounts. Every Account and every ledger row is stamped with it. For KDPS, one Company with a GSTIN dimension for the two states. (<a href="03-accounting-ledger.html">ch 3</a>)</dd>
+
+    <dt><code>Account</code> <span class="badge b-core">master · tree</span></dt>
+    <dd>A nested-set tree (<code>lft</code>/<code>rgt</code>, <code>parent_account</code>, <code>is_group</code>) classified by <code>root_type</code> (Asset/Liability/Income/Expense/Equity). Only leaves are postable; reports roll subtrees up. This <em>is</em> your chart of accounts. (<a href="03-accounting-ledger.html">ch 3</a>)</dd>
+
+    <dt><code>GL Entry</code> <span class="badge b-core">ledger</span></dt>
+    <dd>One immutable append-only table of one-sided postings: <code>account</code>, <code>debit</code> XOR <code>credit</code>, <code>voucher_type</code>/<code>voucher_no</code>, optional <code>party_type</code>/<code>party</code> + <code>against_voucher</code> + dimensions. Balances are <code>SUM(debit) - SUM(credit)</code>, never stored. One posting service enforces balance. (<a href="03-accounting-ledger.html">ch 3</a> · <span class="fileref">erpnext/accounts/general_ledger.py</span>)</dd>
+
+    <dt><code>Item</code> <span class="badge b-core">master</span></dt>
+    <dd>The SKU master, with the template/variant/attribute model so variation is data. Guard structural fields (valuation method, is-stock-item) once transactions exist. (<a href="06-master-data-and-party.html">ch 6</a>)</dd>
+
+    <dt><code>Warehouse</code> <span class="badge b-core">master · tree</span></dt>
+    <dd>A nested-set location tree (region → store → bin); forbid transactions against group nodes; enables subtree rollups ("total stock under a region"). (<a href="04-stock-ledger.html">ch 4</a>)</dd>
+
+    <dt><code>Stock Ledger Entry</code> <span class="badge b-core">ledger</span></dt>
+    <dd>Append-only per <code>(item, warehouse)</code> event log keyed by <code>posting_datetime</code> + voucher, carrying <code>actual_qty</code> <em>and</em> the running balance + valuation snapshot. Cancel the source voucher, never the SLE. (<a href="04-stock-ledger.html">ch 4</a> · <span class="fileref">erpnext/stock/stock_ledger.py</span>)</dd>
+
+    <dt><code>Party</code> <span class="badge b-core">master</span></dt>
+    <dd>The polymorphic <code>(party_type, party)</code> pair so the ledger never links directly to Customer or Supplier. AR/AP are just GL rows tagged with a party + the document being settled. New party kinds need no ledger change. (<a href="06-master-data-and-party.html">ch 6</a> · <span class="fileref">erpnext/accounts/party.py</span>)</dd>
+
+    <dt><code>Sales Invoice</code> + child line table <span class="badge b-core">document</span></dt>
+    <dd>One sell-side submittable document. On submit it snapshots master values onto its lines, composes balanced GL rows (revenue + tax + receivable) and Stock Ledger Entries (issue), and recomputes status. On cancel it mirrors exactly. (<a href="02-document-lifecycle.html">ch 2</a>, <a href="05-transaction-flow.html">ch 5</a>)</dd>
+
+    <dt><code>Purchase Invoice / Receipt</code> + child line table <span class="badge b-core">document</span></dt>
+    <dd>One buy-side submittable document. For KDPS this splits into the GRN (posts the stock ledger by quantity) and the PT (posts the GL value + vendor liability) — the two-recognition-point pattern. (<a href="04-stock-ledger.html">ch 4</a>, <a href="05-transaction-flow.html">ch 5</a>)</dd>
+
+    <dt><code>Payment Entry</code> <span class="badge b-core">document</span></dt>
+    <dd>Settles receivables/payables. Posts GL rows against the party + the invoice being settled (<code>against_voucher</code>); outstanding and aging fall out of summing those tagged rows. (<a href="03-accounting-ledger.html">ch 3</a>)</dd>
+
+    <dt><code>Naming Series</code> <span class="badge b-core">setup</span></dt>
+    <dd>A per-series counter producing human-readable IDs (<code>ACC-SINV-.YYYY.-</code>). Auditors and GST returns reference these; you cannot retrofit them onto posted history. (<a href="01-metamodel-doctype.html">ch 1</a>)</dd>
+
+    <dt><code>Role</code> + <code>Permission</code> <span class="badge b-core">control</span></dt>
+    <dd>The access matrix as data: per-entity rows of (role × action-flags), with row-level scope (one store) AND-ed into every query. Enforced by one engine, never <code>if</code>-statements. The submit/cancel actions also gate the lifecycle. (<a href="08-permissions-and-roles.html">ch 8</a>)</dd>
+  </dl>
+
+  <h3>The shared base every entity inherits</h3>
+  <p>
+    Across all of the above, two things are <em>not</em> per-entity and must be built once: the <strong>audit columns + lifecycle</strong> (<code>owner</code>, <code>creation</code>, <code>modified</code>, <code>modified_by</code>, <code>docstatus</code>, and the draft→submitted→cancelled machine) on a base model every entity inherits; and the <strong>controller hook chain</strong> (<code>validate → before/on_submit → on_cancel</code>, <code>on_cancel</code> mirroring <code>on_submit</code>) so posting and validation are inherited, not repeated. On Django: an abstract base model + a hook dispatcher (or signals) wired in one place.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Why this is enough to start</span>
+    With these entities you can run the full procure-to-pay and order-to-cash loop, every document is immutable and auditable, every balance is derived, and your trial balance and stock report are live queries that can never drift. Tax templates, pricing rules, workflow, dashboards, and the Tally mirror all bolt onto this spine without changing it. <strong>Start here, slice vertically, and grow the data — not the engine.</strong>
+  </div>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li><strong>Build in dependency order, not wishlist order:</strong> map the domain → meta-model discipline → ledgers + posting rules → masters with snapshotting → the transaction graph → tax/pricing as data → control plane → read side. The exciting screens sit at the top of the stack and collapse without the foundation.</li>
+    <li><strong>Obey the two laws without exception:</strong> documents post the ledgers, reports read the ledgers. Balances are always derived (<code>SUM(debit) - SUM(credit)</code>), never stored.</li>
+    <li><strong>Copy universal truth, adapt heavy implementations, skip generality you’re not building:</strong> copy double-entry, immutability, the hook chain, naming, snapshotting; adapt the meta-model, valuation, pricing, dimensions to your stack; skip multi-company consolidation, manufacturing, the plugin runtime, and configurable workflow until a real requirement demands them.</li>
+    <li><strong>The five non-negotiables are load-bearing walls:</strong> double-entry balance, audit columns + immutability, idempotent ordered migrations, snapshotting, and GST/tax as date-effective data. Cut any and you have a broken ERP, not a smaller one.</li>
+    <li><strong>Every classic pitfall is the same mistake:</strong> storing a derived fact (a balance, an edit, a margin, a variant column, a permission decision) as if it were a source fact. The cure is always to keep one append-only source of truth and derive everything else on read.</li>
+    <li><strong>KDPS validates the method:</strong> variant SKUs, SOR/consignment as a dimension that decides which ledgers fire, two-GSTIN tax, GRN-posts-quantity / PT-posts-value as two ledgers, and Tally as an external GL mirror — every wrinkle maps cleanly onto a pattern from chapters 01–11.</li>
+    <li><strong>Start from the minimal skeleton and grow the data, not the engine.</strong> Company, Account, GL Entry, Item, Warehouse, Stock Ledger Entry, the Party, one sales + one purchase document, Payment Entry, Naming Series, Role + Permission — on a shared base of audit columns + lifecycle + hook chain — is a complete, auditable spine.</li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="11-reporting-and-printing.html"><small>← Previous</small>Reporting & printing</a>
+<a class="next" href="13-doctype-catalog.html"><small>Next →</small>DocType catalog</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 12. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>
