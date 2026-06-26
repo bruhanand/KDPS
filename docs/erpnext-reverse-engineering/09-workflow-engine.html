@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Workflow Engine — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data &amp; the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax &amp; pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions &amp; roles</a>
+  <a href="09-workflow-engine.html" class="cur"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting &amp; printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 9 · Control plane</div>
+  <h1>The Workflow Engine</h1>
+  <p class="sub">Configurable approval state machines layered on top of docstatus: states, transitions, role-gated actions, conditions, and self-approval guards — multi-step sign-off without writing a state machine by hand.</p>
+</header>
+
+<section>
+  <h2 class="sec">Why this subsystem matters</h2>
+  <p>
+    Every ERP eventually meets the same demand from the business: <em>"this document cannot post until
+    someone signs off on it."</em> A purchase above ₹50,000 needs the owner's nod. A stock transfer across a
+    state border needs the accounts team to verify the tax treatment. An end-of-season markdown needs the
+    category head to bless the new prices before the tills honour them. These are not data-validation rules —
+    a valid document can still be unauthorised. They are <strong>approval gates</strong>: a human, holding a
+    particular role, must act before the document is allowed to take effect.
+  </p>
+  <p>
+    The naive way to build this is to add a <code>status</code> column to each document
+    (<code>Pending Approval</code>, <code>Approved</code>, <code>Rejected</code>) and scatter
+    <code>if user.role == "Manager"</code> checks through the controller. That approach rots fast. The moment
+    the business says "actually, orders over ₹2,00,000 need a <em>second</em> approval", or "the junior buyer
+    can approve up to ₹20,000 but not above", you are redeploying code to change a number. Worse, the rule
+    lives in five places and they drift. Approval policy is exactly the kind of thing business users want to
+    tune without an engineer — so it should be <strong>data, not code</strong>.
+  </p>
+  <p>
+    ERPNext's answer is a generic, configurable <strong>workflow engine</strong>. It is a small, universal
+    state machine — states, transitions, role guards, conditions — authored entirely as configuration rows
+    and attached to <em>any</em> document type at runtime. One engine serves Sales Order, Purchase Invoice,
+    Expense Claim, Leave Application and everything else. Crucially, it does not invent a parallel lifecycle:
+    it <strong>drives the existing docstatus</strong> (Draft → Submitted → Cancelled) you met in
+    <a href="02-document-lifecycle.html">the document lifecycle</a>, so reaching the "Approved" state is what
+    actually submits the document and fires the ledger postings.
+  </p>
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    <p>
+      A workflow is an <strong>optional, per-doctype, fully-configurable state machine layered on top of
+      docstatus</strong>. It does not replace the Draft/Submitted/Cancelled lifecycle — it
+      <strong>drives</strong> it. Each named state declares which docstatus it maps to, so arriving at a state
+      can submit or cancel the document. Admins author flows as data; the same engine serves every document
+      type; and all other code must be written to <em>cooperate</em> with whatever workflow an administrator
+      has (or has not) configured.
+    </p>
+  </div>
+  <div class="callout co-note">
+    <span class="lbl">Where the code actually lives</span>
+    <p>
+      The workflow engine is <strong>Frappe-framework core</strong>, not ERPNext app code. The
+      <code>Workflow</code>, <code>Workflow Document State</code>, <code>Workflow Transition</code>,
+      <code>Workflow State</code> and <code>Workflow Action</code> doctypes are <em>not</em> in the erpnext
+      checkout — you cannot read their JSON there. Everything in this chapter is reverse-engineered from how
+      ERPNext <em>uses</em> the engine: the helper functions <code>apply_workflow()</code>,
+      <code>get_workflow_name()</code> and <code>doc.meta.get_workflow()</code>, and the child-table field
+      names exercised in ERPNext's own tests and patches. ERPNext ships <strong>no workflow fixture and
+      registers no workflow hook</strong> — workflows are end-user configuration only.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The cast: the doctypes that make up the engine</h2>
+  <p>
+    The engine is five doctypes. A <strong>Workflow</strong> header binds one document type to a state field
+    and holds two child tables: <strong>Workflow Document State</strong> rows (the nodes) and <strong>Workflow
+    Transition</strong> rows (the edges). <strong>Workflow State</strong> is a global catalogue of reusable
+    state names, and <strong>Workflow Action</strong> is the per-user to-do that materialises when a document
+    needs someone's approval. All five live in Frappe core; the table below records where ERPNext
+    <em>references</em> each one.
+  </p>
+  <table>
+    <tr><th>DocType</th><th>Kind</th><th>Role in the engine</th></tr>
+    <tr>
+      <td><strong>Workflow</strong> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/selling/doctype/sales_order/test_sales_order.py:3173</span></td>
+      <td><span class="badge b-core">setup</span></td>
+      <td>The header. Binds a <code>document_type</code> to a <code>workflow_state_field</code> (the column that holds the current state, conventionally named <code>workflow_state</code>). Holds the <code>states</code> and <code>transitions</code> child tables and an <code>is_active</code> toggle. Pure configuration data, not code.</td>
+    </tr>
+    <tr>
+      <td><strong>Workflow Document State</strong> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/patches/v11_0/set_update_field_and_value_in_workflow_state.py:12</span></td>
+      <td><span class="badge b-core">child</span></td>
+      <td>One row per <strong>state</strong> (node): the state name, a <code>doc_status</code> of 0/1/2 that maps the state onto the framework's docstatus, an <code>allow_edit</code> role (who may edit a document sitting in this state), and optional <code>update_field</code>/<code>update_value</code> to mirror the state onto a denormalised status column.</td>
+    </tr>
+    <tr>
+      <td><strong>Workflow Transition</strong> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/selling/doctype/sales_order/test_sales_order.py:706</span></td>
+      <td><span class="badge b-core">child</span></td>
+      <td>One row per <strong>edge</strong>: <code>state</code> → <code>action</code> → <code>next_state</code>, gated by an <code>allowed</code> role, an optional python <code>condition</code> expression over the document, and an <code>allow_self_approval</code> flag.</td>
+    </tr>
+    <tr>
+      <td><strong>Workflow State</strong> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/setup/doctype/transaction_deletion_record/transaction_deletion_record.py:43</span></td>
+      <td><span class="badge b-core">master</span></td>
+      <td>Global catalogue of reusable state names plus their display style/icon, referenced by Workflow Document State. Lets the same "Approved"/"Rejected" vocabulary be reused across many workflows.</td>
+    </tr>
+    <tr>
+      <td><strong>Workflow Action</strong> <span class="badge b-frappe">Frappe core</span><br><span class="fileref">erpnext/patches/v11_0/refactor_autoname_naming.py:80</span></td>
+      <td><span class="badge b-core">transaction</span></td>
+      <td>The per-user actionable to-do generated when a document needs that user's approval (autonamed <code>SYS-WACT-.#####</code>). It is the inbox / notification record that drives the human; completing it applies the transition.</td>
+    </tr>
+    <tr>
+      <td><strong>Sales Order</strong> (host) <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.py</span></td>
+      <td><span class="badge b-erpnext">transaction</span></td>
+      <td>An example <em>host</em> doctype. When a Workflow is active for it, Frappe injects a <code>workflow_state</code> Select field at runtime, and the document's docstatus is driven by the workflow's <code>doc_status</code> mapping.</td>
+    </tr>
+    <tr>
+      <td><strong>Journal Entry</strong> (host) <span class="badge b-erpnext">ERPNext</span><br><span class="fileref">erpnext/assets/doctype/asset/depreciation.py:249</span></td>
+      <td><span class="badge b-erpnext">transaction</span></td>
+      <td>An example host whose <em>programmatic</em> submit is suppressed when <code>meta.get_workflow()</code> is set, deferring submission to the state machine.</td>
+    </tr>
+  </table>
+  <div class="callout co-note">
+    <span class="lbl">The five engine doctypes against the architecture</span>
+    <div class="band l-doc">
+      <div class="bname">Host transaction (Sales Order, Purchase Invoice, Journal Entry…)</div>
+      <div class="boxes">
+        <div class="bx">workflow_state field<small>injected at runtime</small></div>
+        <div class="bx">docstatus 0/1/2<small>the real lifecycle</small></div>
+      </div>
+    </div>
+    <div class="gap"></div>
+    <div class="band l-ctrl">
+      <div class="bname">Workflow engine (Frappe core — config data)</div>
+      <div class="boxes">
+        <div class="bx">Workflow<small>header: doctype → state field</small></div>
+        <div class="bx">Workflow Document State<small>nodes + doc_status map</small></div>
+        <div class="bx">Workflow Transition<small>edges + role/condition</small></div>
+        <div class="bx">Workflow State<small>global state catalogue</small></div>
+        <div class="bx">Workflow Action<small>per-user to-do</small></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 1 — The state machine is configuration data, not code</h2>
+  <p>
+    The foundational move: an approval workflow is not a class hierarchy or a switch statement, it is a row in
+    a table plus child rows for states and transitions, attached to a document type at runtime. Admins author
+    flows without deploying code, and one engine serves every document type.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>State machine as configuration data</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          An approval workflow = one <strong>header row</strong> (which doctype, which state column) +
+          <strong>state rows</strong> + <strong>transition rows</strong>. The machine is <em>interpreted</em>
+          from data at runtime, never compiled into the document's code.
+        </p>
+        <p>
+          Because the flow is data, a business user can add an approval level, change a threshold or re-route
+          a state without an engineer. The same generic executor reads any flow and serves any model.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          ERPNext ships no workflow fixture and registers no workflow hook — a grep of
+          <span class="fileref">erpnext/hooks.py</span> and the JSON finds none. It only consumes the framework
+          engine. Its cleanest example is <code>make_sales_order_workflow()</code> in
+          <span class="fileref">erpnext/selling/doctype/sales_order/test_sales_order.py</span>, which builds a
+          complete "Pending → Approve → Approved" machine purely by <code>frappe.get_doc()</code> plus
+          <code>.append("states", …)</code> and <code>.append("transitions", …)</code>.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>On Postgres/Django, three tables and no state machine in code:</p>
+        <ul>
+          <li><code>workflows</code> — (doctype, state_field, is_active)</li>
+          <li><code>workflow_states</code> — (workflow_id, state, maps_to_status, allow_edit_role)</li>
+          <li><code>workflow_transitions</code> — (workflow_id, from_state, action, to_state, allowed_role, condition, allow_self_approval)</li>
+        </ul>
+        <p>Load the rows and interpret them. One generic <code>apply_action(doc, action, user)</code> service serves all models.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    Here is the full machine ERPNext constructs in its test, expressed as nothing but appended dicts. Note how
+    the entire flow — states, their docstatus mapping, the edges, the role and condition guards — is just
+    data:
+  </p>
+<pre><code><span class="t">workflow</span> = frappe.get_doc(dict(
+    doctype=<span class="s">"Workflow"</span>, workflow_name=<span class="s">"Test SO Workflow"</span>,
+    document_type=<span class="s">"Sales Order"</span>, is_active=<span class="t">1</span>,
+    workflow_state_field=<span class="s">"workflow_state"</span>, send_email_alert=<span class="t">0</span>))
+
+workflow.append(<span class="s">"states"</span>, dict(state=<span class="s">"Pending"</span>, allow_edit=<span class="s">"All"</span>))
+workflow.append(<span class="s">"states"</span>, dict(state=<span class="s">"Approved"</span>, allow_edit=<span class="s">"Test Approver"</span>, doc_status=<span class="t">1</span>))
+workflow.append(<span class="s">"transitions"</span>, dict(
+    state=<span class="s">"Pending"</span>, action=<span class="s">"Approve"</span>, next_state=<span class="s">"Approved"</span>,
+    allowed=<span class="s">"Test Junior Approver"</span>, allow_self_approval=<span class="t">1</span>,
+    condition=<span class="s">"doc.grand_total &lt; 200"</span>))
+workflow.append(<span class="s">"transitions"</span>, dict(
+    state=<span class="s">"Pending"</span>, action=<span class="s">"Approve"</span>, next_state=<span class="s">"Approved"</span>,
+    allowed=<span class="s">"Test Approver"</span>, allow_self_approval=<span class="t">1</span>,
+    condition=<span class="s">"doc.grand_total &gt; 200"</span>))</code></pre>
+  <p class="srcline">erpnext/selling/doctype/sales_order/test_sales_order.py:3173–3211 (assembled)</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the workflow_state field is injected, not declared</span>
+    <p>
+      The <code>workflow_state</code> column is <strong>dynamically injected by Frappe</strong> when a
+      workflow is active — it is deliberately <em>absent</em> from the doctype JSON. A grep of
+      <span class="fileref">erpnext/selling/doctype/sales_order/sales_order.json</span> finds
+      <code>amended_from</code> but <strong>no</strong> <code>workflow_state</code>. Reimplementers who expect
+      a static column will be surprised. The field name itself is configurable — it is whatever
+      <code>workflow_state_field</code> says — so never hard-code the string <code>workflow_state</code>; read
+      it from the header.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 2 — The workflow drives docstatus, it does not replace it</h2>
+  <p>
+    This is the single most important architectural decision in the whole subsystem. A workflow does
+    <em>not</em> invent a parallel lifecycle that competes with the Draft/Submitted/Cancelled docstatus from
+    <a href="02-document-lifecycle.html">Chapter 2</a>. Instead each named state declares which docstatus it
+    corresponds to — so the act of <em>reaching</em> a state is what submits or cancels the document and fires
+    its ledger postings.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Workflow drives the existing lifecycle</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Layer the approval machine <strong>on top of</strong> the universal docstatus rather than inventing
+          a second lifecycle. Each named state carries a <code>doc_status</code> mapping (0 = Draft, 1 =
+          Submitted, 2 = Cancelled).
+        </p>
+        <p>
+          Arriving at a state with <code>doc_status=1</code> <em>submits</em> the document; arriving at one
+          with <code>doc_status=2</code> <em>cancels</em> it. The state machine and the posting machine stay
+          one and the same.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          In <code>make_sales_order_workflow()</code> the <code>Approved</code> state is appended with
+          <code>doc_status=1</code>. So the action <code>Approve</code> that lands on it transitions the Sales
+          Order from Draft(0) to Submitted(1). The <code>Pending</code> state has no <code>doc_status</code>
+          (defaults to 0 = Draft).
+        </p>
+        <p>
+          One call — <code>apply_workflow(so, "Approve")</code> — both changes <code>workflow_state</code> and
+          submits the document, in the same transaction.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Keep your existing docstatus / lifecycle column from Chapter 2. Give each workflow state a
+          <code>doc_status</code> mapping (0/1/2, or draft/active/void).
+        </p>
+        <p>
+          The transition executor sets <code>current_state = next_state</code> <em>and</em> performs the
+          lifecycle side-effect (insert vs submit vs cancel) implied by the destination state's mapping —
+          inside <strong>one DB transaction</strong> so state and postings never diverge.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    Driving the machine is a single function call. Because <code>Approved → doc_status 1</code>, this one line
+    advances the state <em>and</em> submits the Sales Order, which in turn runs its <code>on_submit</code>
+    chain and posts the ledgers:
+  </p>
+<pre><code><span class="k">from</span> frappe.model.workflow <span class="k">import</span> apply_workflow
+
+workflow = make_sales_order_workflow()
+so = make_sales_order(item_code=<span class="s">"_Test Item"</span>, qty=<span class="t">1</span>, rate=<span class="t">150</span>, do_not_submit=<span class="t">1</span>)
+apply_workflow(so, <span class="s">"Approve"</span>)   <span class="c"># sets workflow_state=Approved AND submits (docstatus 0→1)</span></code></pre>
+  <p class="srcline">erpnext/selling/doctype/sales_order/test_sales_order.py (test driver)</p>
+
+  <div class="flow col">
+    <div class="node">Sales Order created<small>docstatus 0 · workflow_state = Pending</small></div>
+    <div class="arr"></div>
+    <div class="node">apply_workflow(so, "Approve")<small>find transitions from "Pending" matching action "Approve"</small></div>
+    <div class="arr"></div>
+    <div class="node">Guards pass<small>actor holds role · condition true · self-approval allowed</small></div>
+    <div class="arr"></div>
+    <div class="node">workflow_state = Approved<small>destination state maps to doc_status 1</small></div>
+    <div class="arr"></div>
+    <div class="node">document submitted<small>docstatus 0→1 · on_submit fires · ledgers posted</small></div>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · doc_status is a mapping, not the docstatus itself</span>
+    <p>
+      <code>doc_status</code> on a state row is the state's <em>mapping</em> onto docstatus — not docstatus
+      directly. A workflow with <strong>no</strong> Submitted state never submits the document, leaving it in
+      Draft forever; a state mapped to <code>doc_status=2</code> cancels it. Getting this mapping wrong fails
+      silently: documents either never post, or post and then unexpectedly reverse. Always check that exactly
+      the states which are <em>meant</em> to post carry <code>doc_status=1</code>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 3 — Per-transition role + condition guards, with self-approval control</h2>
+  <p>
+    A transition is not a free edge — it fires only when two things hold: the actor holds the
+    <strong>allowed role</strong> <em>and</em> a boolean <strong>condition</strong> over the document
+    evaluates true. The same action name can fan out to different next-states by condition, and a
+    per-transition flag decides whether the document's own creator may approve their own document — the
+    segregation-of-duties knob auditors demand.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Role + condition guards on every edge</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          An edge fires only if the actor holds the <code>allowed</code> role <strong>and</strong> a
+          condition over the document is true. The same action name can route to different next-states by
+          condition. A <code>allow_self_approval</code> flag controls whether the creator may approve their
+          own document.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          Two transitions share <code>action="Approve"</code> but split on
+          <code>condition="doc.grand_total &lt; 200"</code> (<code>allowed="Test Junior Approver"</code>) vs
+          <code>"doc.grand_total &gt; 200"</code> (<code>allowed="Test Approver"</code>), each with
+          <code>allow_self_approval=1</code>. The test <code>test_update_child_qty_rate_with_workflow</code>
+          asserts the junior cannot push <code>grand_total</code> over 200 while the senior can.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Per transition row store: <code>allowed_role</code> (FK), <code>condition</code> (an expression string), <code>allow_self_approval</code> (bool). The executor:</p>
+        <ul>
+          <li>filters candidate transitions by <code>current_state</code> + <code>action</code>;</li>
+          <li>drops ones whose role the user lacks;</li>
+          <li>evaluates conditions against the doc;</li>
+          <li>rejects self-approval when <code>owner == actor</code> and the flag is off.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The condition fan-out is the part worth dwelling on. The <em>same</em> action <code>Approve</code>,
+    pressed on the <em>same</em> state <code>Pending</code>, resolves to a <em>different</em> required role
+    depending on the document's own value — encoded purely as data:
+  </p>
+<pre><code>workflow.append(<span class="s">"transitions"</span>, dict(
+    state=<span class="s">"Pending"</span>, action=<span class="s">"Approve"</span>, next_state=<span class="s">"Approved"</span>,
+    allowed=<span class="s">"Test Junior Approver"</span>, allow_self_approval=<span class="t">1</span>,
+    condition=<span class="s">"doc.grand_total &lt; 200"</span>))
+workflow.append(<span class="s">"transitions"</span>, dict(
+    state=<span class="s">"Pending"</span>, action=<span class="s">"Approve"</span>, next_state=<span class="s">"Approved"</span>,
+    allowed=<span class="s">"Test Approver"</span>, allow_self_approval=<span class="t">1</span>,
+    condition=<span class="s">"doc.grand_total &gt; 200"</span>))</code></pre>
+  <p class="srcline">erpnext/selling/doctype/sales_order/test_sales_order.py:706–723</p>
+
+  <div class="flow col">
+    <div class="node">Order grand_total = 150<small>action Approve · state Pending</small></div>
+    <div class="arr"></div>
+    <div class="node">Test Junior Approver allowed<small>condition "&lt; 200" is true → Approved</small></div>
+  </div>
+  <div class="flow col">
+    <div class="node">Order edited to grand_total = 250<small>action Approve · state Pending</small></div>
+    <div class="arr"></div>
+    <div class="node">Junior blocked<small>condition "&lt; 200" false; ValidationError</small></div>
+    <div class="arr"></div>
+    <div class="node">Test Approver required<small>condition "&gt; 200" true → Approved</small></div>
+  </div>
+  <p>
+    This is exactly what <code>test_update_child_qty_rate_with_workflow</code> proves: the junior raising the
+    order above the threshold raises a <code>ValidationError</code>, while the senior succeeds — the routing is
+    entirely a property of the condition rows, not of any branching code.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · never <code>eval()</code> the condition string</span>
+    <p>
+      Conditions are python expressions evaluated against <code>doc</code> (e.g.
+      <code>"doc.grand_total &gt; 200"</code>). On <strong>any other stack do NOT run bare
+      <code>eval()</code></strong> on these strings — an unsandboxed condition field is a remote-code-execution
+      hole, because business users can edit it. Use a restricted / whitelisted evaluator (a safe Python
+      sandbox, or CEL / JSONLogic). Frappe itself runs these through a guarded
+      <code>frappe.safe_eval</code>-style mechanism; replicate that discipline.
+    </p>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · make conditions total and mutually exclusive</span>
+    <p>
+      Multiple transitions can share the same <code>(state, action)</code> pair and are disambiguated
+      <em>only</em> by condition + role. If conditions overlap or leave a gap — note the example uses
+      <code>&lt; 200</code> and <code>&gt; 200</code>, so <code>grand_total == 200</code> matches
+      <em>neither</em> — behaviour is order/first-match dependent or the action silently does nothing. Design
+      condition sets to be <strong>total and mutually exclusive</strong> (use <code>&lt;=</code> on one side),
+      and decide the tie-break rule consciously.
+    </p>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · self-approval defaults matter for audit</span>
+    <p>
+      <code>allow_self_approval</code> left on lets a creator approve their own document. For
+      segregation-of-duties — a real audit requirement in finance — you must explicitly set it
+      <strong>off</strong> per transition. The test leaves it on for convenience; production money-flows
+      generally must not.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 4 — allow_edit vs allowed: two different axes</h2>
+  <p>
+    There are two distinct authority questions a workflow answers, and conflating them is a classic bug. One
+    is <em>"who may <strong>move</strong> the document along this edge?"</em> — that is the transition's
+    <code>allowed</code> role. The other is <em>"who may <strong>edit</strong> the document while it sits in
+    this state?"</em> — that is the state's <code>allow_edit</code> role. They are independent.
+  </p>
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    <p>
+      <strong>Performing a transition does not grant edit rights in the destination state.</strong> The role
+      that <em>moved</em> a document into a state can be deliberately unable to <em>edit</em> it there, because
+      edit rights come from the state's <code>allow_edit</code>, not from having performed the transition.
+      ERPNext's <code>test_update_child_qty_rate_follows_allow_edit</code> exists specifically to pin this
+      down.
+    </p>
+  </div>
+  <p>
+    The <code>allow_edit</code> rule is enforced <em>outside</em> the normal save path, for features that edit
+    a submitted document in-flight. ERPNext's "Update Items" feature re-derives edit permission directly from
+    the active workflow's current state:
+  </p>
+<pre><code><span class="k">def</span> <span class="t">_validate_workflow</span>(self) -&gt; <span class="k">None</span>:
+    workflow = get_workflow_name(self.parent.doctype)
+    <span class="k">if</span> <span class="k">not</span> workflow:
+        <span class="k">return</span>
+    workflow_doc = frappe.get_doc(<span class="s">"Workflow"</span>, workflow)
+    current_state = self.parent.get(workflow_doc.workflow_state_field)
+    roles = frappe.get_roles()
+    allowed = any(
+        state.state == current_state <span class="k">and</span> (<span class="k">not</span> state.allow_edit <span class="k">or</span> state.allow_edit <span class="k">in</span> roles)
+        <span class="k">for</span> state <span class="k">in</span> workflow_doc.states
+    )
+    <span class="k">if</span> <span class="k">not</span> allowed:
+        frappe.throw(_(<span class="s">"You are not allowed to update as per the conditions set in {} Workflow."</span>)
+            .format(get_link_to_form(<span class="s">"Workflow"</span>, workflow)))</code></pre>
+  <p class="srcline">erpnext/accounts/services/child_item_update.py:216–237</p>
+  <p>
+    Read the logic carefully: it fetches the active <code>Workflow</code>, reads the document's current state
+    via the <em>configurable</em> <code>workflow_state_field</code> (not a hard-coded column), and allows the
+    edit only if some state matches the current state <em>and</em> that state's <code>allow_edit</code> role is
+    held by the user. This is the engine's "who may edit a document while it sits in state X" rule, enforced
+    independently of normal table-level CRUD permissions.
+  </p>
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · allow_edit and allowed are different axes</span>
+    <p>
+      <code>allow_edit</code> (state-level) and the transition's <code>allowed</code> role are
+      <strong>different axes</strong>. A user may be allowed to push a document into "Approved" yet not allowed
+      to edit it there. Once a workflow is attached, do <em>not</em> rely solely on table-level CRUD
+      permissions to decide editability — re-derive it from the current state's <code>allow_edit</code>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 5 — Cooperate with the engine: gate programmatic submit/edit</h2>
+  <p>
+    This pattern is the one most likely to bite you later, because it is about code you write
+    <em>elsewhere</em>. Any code that programmatically submits or edits a document must first ask <em>"is a
+    workflow governing this doctype?"</em> and defer to it. If a workflow is active, the code must
+    <strong>not</strong> auto-submit — submission is now the workflow's job — and it must re-derive edit rights
+    from the workflow's <code>allow_edit</code> rule rather than just writing.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Workflow-aware programmatic submit &amp; edit</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Code that auto-advances a document must <strong>cooperate</strong> with the engine. If a workflow is
+          active for that doctype, leave the document in Draft for human approval instead of auto-submitting;
+          the workflow owns submission.
+        </p>
+        <p>
+          For mid-flight edits, compute the <code>allow_edit</code> role of the current state and check
+          membership before permitting writes.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          <span class="fileref">erpnext/assets/doctype/asset/depreciation.py</span> guards every auto-submit
+          with <code>if not je.meta.get_workflow(): je.submit()</code> (lines 249, 445, 559), so depreciation
+          Journal Entries created under a workflow stay in Draft.
+        </p>
+        <p>
+          <code>child_item_update.py::_validate_workflow()</code> (Pattern 4) loads the active workflow via
+          <code>get_workflow_name()</code> and gates the in-flight "Update Items" edit on the current state's
+          <code>allow_edit</code>.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Expose one helper <code>get_active_workflow(doctype)</code>. Anywhere you programmatically submit,
+          wrap it: <em>if an active workflow exists, leave the doc in Draft.</em>
+        </p>
+        <p>
+          For mid-flight edits, compute the <code>allow_edit</code> role of the current state and check
+          membership — don't rely solely on table-level CRUD permissions once a workflow is attached.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The depreciation poster is the canonical example. Code that would normally auto-submit a Journal Entry
+    must <em>not</em> submit when a workflow governs Journal Entry, because submission is now the workflow's
+    job:
+  </p>
+<pre><code>je.flags.ignore_permissions = <span class="k">True</span>
+je.save()
+
+<span class="k">if</span> <span class="k">not</span> je.meta.get_workflow():
+    je.submit()    <span class="c"># only auto-submit when NO workflow governs Journal Entry</span></code></pre>
+  <p class="srcline">erpnext/assets/doctype/asset/depreciation.py:249 (also 445, 559)</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · forgetting this guard silently bypasses approvals</span>
+    <p>
+      Programmatic submits <strong>must</strong> be wrapped in <code>if not doc.meta.get_workflow()</code> —
+      otherwise the code submits a document the workflow was supposed to gate, bypassing approvals entirely.
+      The asset/depreciation module had to add this guard in <strong>three places</strong>, and still needed a
+      later data-fix patch (<span class="fileref">erpnext/patches/.../correct_asset_value_if_je_with_workflow.py</span>)
+      to repair asset values that had drifted because depreciation entries sat unsubmitted under a
+      workflow. The lesson: <strong>design every auto-poster to be workflow-aware from day one</strong> — an
+      approval gate added later will be silently bypassed by any poster that forgot to ask.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 6 — Mirror internal state onto a denormalised status column</h2>
+  <p>
+    The engine tracks a precise internal <code>workflow_state</code>, but reports, list views and other code
+    often read a simpler, human-facing <code>status</code> or <code>approval_status</code> column that
+    predates the workflow. Rather than rewrite every consumer, the engine can <strong>stamp</strong> that
+    legacy column on arrival at a state — keeping the machine's vocabulary and the reporting column in sync.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Stamp a denormalised status on transition</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          Keep an engine-internal <code>workflow_state</code> <em>plus</em> a human/reporting-facing
+          <code>status</code> field, and let arrival at a state <strong>write</strong> the status. This
+          decouples the machine's vocabulary from the column other code and reports already read.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          A Workflow Document State can carry <code>update_field</code>/<code>update_value</code>. The patch
+          <span class="fileref">erpnext/patches/v11_0/set_update_field_and_value_in_workflow_state.py</span>
+          backfills these: for Expense Claim it sets <code>update_field="approval_status"</code>, for Leave
+          Application <code>update_field="status"</code>, with <code>update_value</code> = the state name — so
+          transitioning to a state also stamps the legacy status column.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          Add optional <code>update_field</code>/<code>update_value</code> to each state row. After a
+          transition, in the <strong>same transaction</strong>, set
+          <code>doc[update_field] = update_value</code>.
+        </p>
+        <p>
+          This lets you bolt a workflow onto a model that already has a <code>status</code> enum without
+          rewriting every consumer of that enum.
+        </p>
+      </div>
+    </div>
+  </div>
+
+<pre><code><span class="k">for</span> state <span class="k">in</span> workflow_states:
+    <span class="k">if</span> state.update_field:
+        <span class="k">continue</span>
+    status_field = <span class="s">"approval_status"</span> <span class="k">if</span> doctype == <span class="s">"Expense Claim"</span> <span class="k">else</span> <span class="s">"status"</span>
+    frappe.set_value(<span class="s">"Workflow Document State"</span>, state.name, <span class="s">"update_field"</span>, status_field)
+    frappe.set_value(<span class="s">"Workflow Document State"</span>, state.name, <span class="s">"update_value"</span>, state.state)</code></pre>
+  <p class="srcline">erpnext/patches/v11_0/set_update_field_and_value_in_workflow_state.py:7–20</p>
+
+  <div class="callout co-note">
+    <span class="lbl">Why two columns instead of one</span>
+    <p>
+      The internal <code>workflow_state</code> may use precise engineering vocabulary
+      (<code>Pending Manager Approval</code>, <code>Pending Finance Review</code>) while the legacy
+      <code>status</code> column other reports read only needs <code>Pending</code> / <code>Approved</code>.
+      The <code>update_field</code>/<code>update_value</code> mirror lets the two evolve independently — and is
+      exactly the hook you use to surface a friendly status to non-technical staff while the engine tracks the
+      exact internal state.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 7 — Workflow Action as the per-user actionable to-do</h2>
+  <p>
+    A state machine that only changes a column is half a feature. The other half is <strong>telling the right
+    person there is something to approve</strong>. When a document lands in a state needing sign-off, the
+    engine materialises a per-user task record — the <strong>Workflow Action</strong> — so approvers have a
+    queryable inbox instead of having to hunt for documents.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Materialise a to-do for each approver</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>
+          When a document enters a state needing approval, create a per-user task record so approvers get an
+          inbox / notification, rather than expecting them to find documents. The state machine
+          <strong>produces work items</strong>, and those work items are an audit trail.
+        </p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>
+          The <code>Workflow Action</code> doctype (Frappe core; autonamed <code>SYS-WACT-.#####</code> per
+          <span class="fileref">erpnext/patches/v11_0/refactor_autoname_naming.py:80</span>) is the generated
+          to-do. The Workflow header carries <code>send_email_alert</code> controlling email-on-transition —
+          the test sets it to <code>0</code> to silence emails during testing.
+        </p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>
+          On a transition into a state with pending approvers, insert <code>workflow_action</code> rows (one
+          per eligible approver); optionally fire email / WhatsApp.
+        </p>
+        <p>
+          Completing the action = applying the transition; mark sibling actions resolved. You get an audit
+          trail and a queryable approver inbox for free.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow col">
+    <div class="node">Document enters "Pending"<small>destination state needs approval</small></div>
+    <div class="arr"></div>
+    <div class="node">Resolve eligible approvers<small>users holding the transition's allowed role</small></div>
+    <div class="arr"></div>
+    <div class="node">Insert one Workflow Action per approver<small>SYS-WACT-… · the inbox item</small></div>
+    <div class="arr"></div>
+    <div class="node">Notify<small>if send_email_alert: email / WhatsApp</small></div>
+    <div class="arr"></div>
+    <div class="node">Approver acts → apply transition<small>mark sibling actions resolved · advance state</small></div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">End-to-end: the five flows</h2>
+  <p>
+    Pulling the patterns together, here is the whole subsystem as five sequences a consultant should keep in
+    their head.
+  </p>
+  <dl class="gloss">
+    <dt><code>Configure</code></dt>
+    <dd>An admin creates a Workflow row (<code>document_type=Sales Order</code>,
+      <code>workflow_state_field=workflow_state</code>, <code>is_active=1</code>), appends Workflow Document
+      State rows (<code>Pending</code>=doc_status 0, <code>Approved</code>=doc_status 1, each with an
+      <code>allow_edit</code> role) and Workflow Transition rows
+      (<code>Pending --Approve--&gt; Approved</code>, <code>allowed</code>=role,
+      <code>condition</code>=python expr). Frappe injects a <code>workflow_state</code> Select field onto the
+      document at runtime — it is <em>not</em> in <span class="fileref">sales_order.json</span>.</dd>
+    <dt><code>Advance</code></dt>
+    <dd>A user opens a Draft Sales Order and picks the action <code>Approve</code>.
+      <code>apply_workflow(doc, "Approve")</code> finds transitions from the current state whose action
+      matches, filters by the user's roles, evaluates each condition against the doc, blocks self-approval if
+      disallowed, sets <code>workflow_state = next_state</code>, applies the destination state's
+      <code>doc_status</code> (here submit → docstatus 1), optionally stamps <code>update_field</code>, and
+      fires email / Workflow Action notifications.</dd>
+    <dt><code>Condition fan-out</code></dt>
+    <dd>An order with <code>grand_total 150</code> can be Approved by Test Junior Approver
+      (condition <code>&lt; 200</code>), but the same order edited above 200 fails for the junior and requires
+      Test Approver — proven by <code>test_update_child_qty_rate_with_workflow</code>, which expects a
+      <code>ValidationError</code> for the junior and success for the senior.</dd>
+    <dt><code>Mid-flight edit guard</code></dt>
+    <dd>While a submitted SO sits in a workflow state, the "Update Items" feature calls
+      <code>_validate_workflow()</code>, reads the current state via <code>workflow_state_field</code>, and
+      permits the edit only if the current state's <code>allow_edit</code> role is held — independent of
+      normal CRUD permissions.</dd>
+    <dt><code>Programmatic-submit guard</code></dt>
+    <dd>Asset depreciation creates a Journal Entry and checks <code>je.meta.get_workflow()</code>; if a JE
+      workflow is active it leaves the JE in Draft for human approval instead of auto-submitting (and a later
+      patch fixes asset values that drifted because of manual, workflow-gated depreciation entries).</dd>
+  </dl>
+</section>
+
+<section>
+  <h2 class="sec">When to use a hard-coded status instead</h2>
+  <p>
+    The configurable engine is not free — it adds tables, an evaluator, an approver inbox and a notification
+    path. Do not reach for it when the lifecycle is genuinely fixed. Use a plain status column when, and only
+    when:
+  </p>
+  <table>
+    <tr><th>Use a hard-coded status field when…</th><th>Switch to the configurable engine when…</th></tr>
+    <tr>
+      <td>The lifecycle is <strong>fixed</strong> and will not gain new states.</td>
+      <td>Business users need to add or re-order approval levels themselves.</td>
+    </tr>
+    <tr>
+      <td>It is <strong>single-actor</strong> — one role, no "who approves what".</td>
+      <td>Different roles approve under different conditions (value thresholds, store, brand).</td>
+    </tr>
+    <tr>
+      <td>No conditional routing — every document follows one path.</td>
+      <td>The same action must <strong>fan out</strong> by a condition on the document.</td>
+    </tr>
+    <tr>
+      <td>Segregation of duties / self-approval is not a concern.</td>
+      <td>Audit requires <strong>self-approval to be blocked</strong> and the trail to be queryable.</td>
+    </tr>
+  </table>
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    <p>
+      The moment the business says <em>"who approves what, under which condition, in which order"</em>, a
+      status enum will start sprouting <code>if role ==</code> branches across the controller. That is the
+      signal to switch to the data-driven engine. Until then, a few hard-coded states are fine — but
+      <strong>design the document tables so a transitions table can be bolted on later without reposting
+      ledgers</strong>.
+    </p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Applying this to KDPS</h2>
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    <p>
+      This is the model to copy for any human-approval gate over the documents-write-ledgers spine:
+      <strong>vendor PT approval before it posts liability</strong>, high-value purchase-booking sign-off,
+      <strong>EOSS / markdown approval</strong> before the tills honour new prices, and
+      <strong>inter-state (Bihar ↔ Jharkhand) stock-transfer authorisation</strong> — each of which is a
+      taxable IGST event that accounts must verify. Rather than a status enum per document, build one
+      <code>transitions</code> table plus a <code>current_state</code> column in Postgres/Django, with each
+      state mapped to the document's submit/cancel lifecycle so that "Approved" <em>actually</em> posts the
+      ledger entries.
+    </p>
+    <p>
+      Three KDPS-specific rules fall straight out of the patterns:
+    </p>
+    <ul>
+      <li>
+        <strong>Honour the depreciation lesson (Pattern 5).</strong> Any KDPS code that auto-posts — the
+        PT → liability poster, or an auto-submitting transfer — <em>must</em> check for an active workflow and
+        leave the document in Draft for approval, exactly like
+        <code>if not je.meta.get_workflow(): je.submit()</code>. Otherwise an approval gate added later (and
+        the owners <em>will</em> ask for one on high-value vendor bills) is silently bypassed. Design the
+        posters workflow-aware now.
+      </li>
+      <li>
+        <strong>Keep AI at the edges (Rule: AI-at-edges-only).</strong> The condition expressions stay
+        deterministic data — <code>doc.grand_total &gt; 200000</code>, not a model call. An LLM may
+        <em>suggest</em> who should approve or summarise a document; it never <em>is</em> the gate.
+      </li>
+      <li>
+        <strong>Use the <code>update_field</code>/<code>update_value</code> mirror (Pattern 6)</strong> to
+        surface a Hindi / WhatsApp-friendly status to store staff ("Manzoori baaki" / pending) while the
+        engine tracks the precise internal state. Store staff on low-end Android phones read the friendly
+        column; accounts reads the exact one.
+      </li>
+    </ul>
+    <p>
+      Sequencing: the <strong>full configurable engine is deferred</strong> until the roles/access model (D4
+      left it thin) is built. Until then a few hard-coded states are fine — but design the document tables so
+      a transitions table can be bolted on without reposting ledgers, and never strip a workflow's right to
+      drive docstatus. And remember Tally stays the statutory book of record: a KDPS workflow gates
+      <em>when</em> a document posts, it does not change <em>what</em> posts.
+    </p>
+  </div>
+</section>
+
+<div class="takeaways">
+<h4>Takeaways</h4>
+<ol>
+  <li><strong>Approval is data, not code.</strong> Build it as a generic state machine — three tables (workflow header binding doctype → state field; states with a doc_status mapping, allow_edit role and optional status mirror; transitions as from_state → action → to_state guarded by role + condition + self-approval flag) — authored by admins, serving every transaction type. ERPNext ships no workflow fixture; it only consumes the Frappe-core engine.</li>
+  <li><strong>The workflow drives docstatus, it does not replace it.</strong> Each state declares which docstatus (0/1/2) it maps to, so reaching "Approved" submits the document and fires its ledger postings — inside one transaction. A workflow with no Submitted state never posts; a state mapped to 2 cancels.</li>
+  <li><strong>Guard every edge with role AND condition, and gate self-approval per transition.</strong> The same action can fan out to different roles by a condition over the document. Make conditions total and mutually exclusive, and never <code>eval()</code> them unsandboxed — an open condition field is an RCE hole.</li>
+  <li><strong>allow_edit and allowed are different axes.</strong> Moving a document into a state does not grant the right to edit it there; edit rights come from the state's <code>allow_edit</code>. Re-derive editability from the current state, not from CRUD permissions, once a workflow is attached.</li>
+  <li><strong>All other code must cooperate with the engine.</strong> Anywhere you programmatically submit, first ask <code>if not doc.meta.get_workflow()</code> and defer to it — ERPNext's depreciation poster needed this guard in three places and still needed a data-fix patch when it was missed. An approval gate added later is silently bypassed by any poster that forgot to ask.</li>
+  <li><strong>Mirror internal state onto a friendly status column</strong> via <code>update_field</code>/<code>update_value</code>, and materialise a per-user <strong>Workflow Action</strong> to-do on each transition — giving you an approver inbox and an audit trail for free. Defer the full engine until you genuinely need configurable approvers, conditions and segregation of duties; until then, design tables so a transitions table can be bolted on without reposting ledgers.</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="08-permissions-and-roles.html"><small>← Previous</small>Permissions &amp; roles</a>
+<a class="next" href="10-extensibility-and-customization.html"><small>Next →</small>Extensibility</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 09. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

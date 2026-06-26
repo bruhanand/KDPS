@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocType Catalog &amp; Module Map — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html" class="cur"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 13 · Appendix</div>
+  <h1>DocType Catalog &amp; Module Map</h1>
+  <p class="sub">A reference index of ERPNext’s load-bearing DocTypes grouped by module and classified (master / transaction / child / ledger / single / setup), with the chapter that explains each.</p>
+</header>
+
+<section>
+  <h2 class="sec">Why a catalog is the thing you actually build from</h2>
+  <p>
+    Every chapter before this one explained a <em>mechanism</em>: how the meta-model works, how the two ledgers post, how tax resolves, how permissions gate. This chapter is the <strong>map</strong> — the flat catalog of business objects those mechanisms operate on. It matters for a blunt reason: when you sit down to build a custom ERP, the first irreversible decision is <strong>"what are my entities, and what structural role does each one play?"</strong> Get that classification right and almost everything downstream — storage, lifecycle, list views, the REST API, status propagation, reports — becomes generic machinery you write once. Get it wrong and you hand-code the same four behaviours over and over, badly, per table.
+  </p>
+  <p>
+    ERPNext makes this decision unusually legible. The entire ERP is a flat catalog of roughly <strong>700 DocTypes</strong> folded into <strong>21 modules</strong> (listed in <span class="fileref">erpnext/modules.txt</span>). Every business object — <em>Account</em>, <em>Sales Invoice</em>, the line item inside it, the settings singleton beside it — is a DocType defined by one JSON file at <span class="fileref">erpnext/&lt;module&gt;/doctype/&lt;name&gt;/&lt;name&gt;.json</span>, optionally with a Python controller <code>&lt;name&gt;.py</code> and a client script <code>&lt;name&gt;.js</code>. You can classify <em>any</em> object in the system by reading four boolean flags off its JSON. That is the whole trick of this appendix: a small, finite taxonomy that you reuse verbatim on your own stack.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    An ERP is not a hierarchy of bespoke screens — it is a <strong>flat catalog of metadata-described entities</strong>, each tagged with a structural role, folded into <strong>process-aligned modules</strong>. Four flags (<code>istable</code>, <code>issingle</code>, <code>is_submittable</code>, <code>is_tree</code>) plus the derived role (master / transaction / child / ledger / single / setup) tell you how each entity stores, lives, and behaves. Build behaviour off the role, not off the entity name.
+  </div>
+
+  <p>The five layers below are the shape every module decomposes into — masters and setup are shared at the base, each process owns its documents, and all documents converge on two append-only ledgers (covered in <a href="03-accounting-ledger.html">chapter 3</a> and <a href="04-stock-ledger.html">chapter 4</a>):</p>
+
+  <div class="band l-master">
+    <div class="bname">Masters &amp; setup (shared base)</div>
+    <div class="boxes">
+      <div class="bx">Company<small>is_tree org</small></div>
+      <div class="bx">Item<small>SKU master</small></div>
+      <div class="bx">Customer / Supplier<small>parties</small></div>
+      <div class="bx">Account / Warehouse<small>is_tree dimensions</small></div>
+      <div class="bx">Templates &amp; Settings<small>tax / pricing / singletons</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-doc">
+    <div class="bname">Documents (per-process, submittable)</div>
+    <div class="boxes">
+      <div class="bx">Purchase Order<small>buying</small></div>
+      <div class="bx">Purchase Receipt / Delivery Note / Stock Entry<small>stock</small></div>
+      <div class="bx">Sales Order<small>selling</small></div>
+      <div class="bx">Sales / Purchase Invoice · Payment Entry<small>accounts</small></div>
+    </div>
+  </div>
+  <div class="gap"></div>
+  <div class="band l-ledg">
+    <div class="bname">Ledgers (append-only convergence point)</div>
+    <div class="boxes">
+      <div class="bx">GL Entry<small>the general ledger</small></div>
+      <div class="bx">Stock Ledger Entry<small>the stock truth</small></div>
+      <div class="bx">Payment Ledger Entry · Bin<small>sub-ledger / cache</small></div>
+    </div>
+  </div>
+
+  <p>
+    The rest of this chapter walks the five reusable patterns that organise the catalog, gives you the classification table you will actually keep open while building, then catalogs the load-bearing DocTypes module by module with the chapter that explains each. Read it as the index you return to, not as a narrative.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">The five patterns that organise the catalog</h2>
+
+  <!-- PATTERN 1 -->
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>The metadata-described DocType is the unit of modeling</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Every business entity is defined by <strong>declarative metadata</strong> — fields, types, naming, permissions, layout — not by hand-written tables plus forms plus serializers. One artifact describes the schema; the framework generates the table, the REST API, the list view and the form.</p>
+        <p>This collapses what is normally five files — model, migration, serializer, admin form, template — into <strong>one</strong>. The catalog is therefore just a directory of these manifests.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>Each DocType is <span class="fileref">erpnext/&lt;module&gt;/doctype/&lt;name&gt;/&lt;name&gt;.json</span> with a <code>field_order</code> array and a <code>fields</code> list, plus an optional Python controller and JS client script.</p>
+        <p><span class="fileref">erpnext/stock/doctype/item/item.json</span> declares <code>autoname: field:item_code</code>, <code>track_changes: 1</code>. <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span> declares <code>is_submittable: 1</code> and a date-series name.</p>
+        <p>The JSON-to-table ORM and form renderer live in Frappe, not in this checkout. <span class="badge b-frappe">Frappe core</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>On Django/Postgres, keep a <strong>declarative schema layer</strong> — a model registry, or JSON/YAML manifests — that generates migrations, DRF serializers and CRUD forms, instead of scattering one entity across <code>models.py</code> + migration + serializer + form + template.</p>
+        <p>Turn the naming convention (<code>field:x</code>, series with date tokens like <code>ACC-GLE-.YYYY.-.#####</code>) into a tiny <strong>naming service</strong> every entity calls.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The shape of a DocType JSON, reduced to the parts that classify it (real, from the GL Entry manifest):</p>
+<pre><code><span class="c">// erpnext/accounts/doctype/gl_entry/gl_entry.json</span>
+{
+ <span class="t">"autoname"</span>: <span class="s">"ACC-GLE-.YYYY.-.#####"</span>,
+ <span class="t">"document_type"</span>: <span class="s">"Document"</span>,
+ <span class="t">"is_submittable"</span>: <span class="k">1</span>,
+ <span class="t">"field_order"</span>: [
+  <span class="s">"posting_date"</span>, <span class="s">"fiscal_year"</span>,
+  <span class="s">"account"</span>, <span class="s">"party_type"</span>, <span class="s">"party"</span>,
+  <span class="s">"voucher_type"</span>, <span class="s">"voucher_no"</span>,
+  <span class="s">"against_voucher_type"</span>, <span class="s">"against_voucher"</span>
+ ]
+}</code></pre>
+  <p>
+    Notice there is no SQL, no migration, no form code here — just the schema and the flags. The presence of <code>is_submittable</code>, the date-series <code>autoname</code>, and the <code>voucher_type</code>/<code>voucher_no</code> back-reference are enough to tell you this is a <strong>ledger</strong> row written by some other document. That is the entire classification, read straight off the file. See <a href="01-metamodel-doctype.html">chapter 1</a> for how the JSON becomes a table.
+  </p>
+
+  <!-- PATTERN 2 -->
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Four flags classify every entity</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>A tiny set of boolean flags captures an entity's <strong>structural role</strong>, so behaviour — storage, lifecycle, UI, validation — is driven generically off the flag rather than coded per entity.</p>
+        <p>Four flags, four behaviours: composition, singleton, state-machine, hierarchy. Everything else is a "plain master or transaction."</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <ul>
+          <li><code>istable</code> → child line-item table stored only inside a parent (<span class="fileref">erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json</span>).</li>
+          <li><code>issingle</code> → one-row settings (<span class="fileref">erpnext/accounts/doctype/accounts_settings/accounts_settings.json</span>).</li>
+          <li><code>is_submittable</code> → draft→submitted→cancelled, immutable after submit (<span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span>).</li>
+          <li><code>is_tree</code> → nested-set with <code>nsm_parent_field</code> (<span class="fileref">erpnext/accounts/doctype/account/account.json</span>).</li>
+        </ul>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Bake an <code>entity_kind</code> enum into your metadata and let generic machinery branch on it:</p>
+        <ul>
+          <li><strong>child</strong> = composition with cascade + ordering by <code>idx</code>;</li>
+          <li><strong>single</strong> = one-row config table;</li>
+          <li><strong>submittable</strong> = state machine + post-submit immutability;</li>
+          <li><strong>tree</strong> = adjacency or nested-set with a parent pointer.</li>
+        </ul>
+        <p>Never reimplement these four behaviours per table.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The nested-set master shape, which <em>every</em> hierarchical master in ERPNext reuses (Account, Warehouse, Cost Center, Company, Item Group, Territory, Department, …):</p>
+<pre><code><span class="c">// erpnext/accounts/doctype/account/account.json</span>
+{
+ <span class="t">"is_tree"</span>: <span class="k">1</span>,
+ <span class="t">"nsm_parent_field"</span>: <span class="s">"parent_account"</span>
+ <span class="c">// children point at their parent; lft/rgt give O(1) subtree queries</span>
+}</code></pre>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the flags are independent, classify on the combination</span>
+    <code>is_tree</code> and <code>is_submittable</code> can co-occur conceptually but the JSON flags are independent — classify on the <em>combination</em>, not a single flag. And some masters are unexpectedly submittable: <strong>BOM</strong> and <strong>Product Bundle</strong> are masters that carry a submit lifecycle (a BOM must be submitted to be usable). Read intent, not just one boolean.
+  </div>
+
+  <!-- PATTERN 3 -->
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Process-aligned modules with shared ledgers at the bottom</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Modules mirror the real-world <strong>business process flow</strong> (buy → receive → store → sell → invoice → pay), not technical layers. Masters and setup are shared; each process owns its transactions; <strong>all</strong> transactions converge on two append-only ledgers.</p>
+        <p>This keeps the dependency graph a clean funnel, not a web.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><span class="fileref">erpnext/modules.txt</span> lists 21 modules. Transactions live in their process module: Buying owns Purchase Order; Stock owns Purchase Receipt / Delivery Note / Stock Entry; Selling owns Sales Order; Accounts owns Sales Invoice / Payment Entry.</p>
+        <p>Every financial posting becomes <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span> rows; every inventory move becomes <span class="fileref">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span> rows — each tagged <code>voucher_type</code>/<code>voucher_no</code>. <span class="fileref">erpnext/stock/doctype/bin/bin.json</span> caches the balance.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Lay packages out by <strong>business process</strong>. Put master data plus a generic ledger primitive at the base, and make every document post into the ledger via <strong>one posting interface</strong>: given a document, emit balanced ledger rows tagged with the source voucher.</p>
+        <p>Reports read the ledger; documents never read each other's internal state. This is exactly KDPS's "documents-write-ledgers" rule.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The two ledgers are themselves DocTypes, and the SLE row carries the running balance plus valuation, back-referenced to the voucher that caused it:</p>
+<pre><code><span class="c">// erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span>
+<span class="t">"field_order"</span>: [
+ <span class="s">"item_code"</span>, <span class="s">"warehouse"</span>,
+ <span class="s">"posting_date"</span>, <span class="s">"posting_time"</span>,
+ <span class="s">"voucher_type"</span>, <span class="s">"voucher_no"</span>, <span class="s">"voucher_detail_no"</span>,
+ <span class="s">"serial_and_batch_bundle"</span>,
+ <span class="s">"actual_qty"</span>, <span class="s">"qty_after_transaction"</span>,
+ <span class="s">"incoming_rate"</span>, <span class="s">"outgoing_rate"</span>
+]</code></pre>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · a few names are filed where you don't expect</span>
+    <strong>Purchase Receipt</strong> and <strong>Delivery Note</strong> are <em>Stock</em> transactions, not Buying/Selling. <strong>Sales Invoice</strong> and <strong>Purchase Invoice</strong> live in <em>Accounts</em>, not Selling/Buying. <strong>Quality Inspection</strong> lives under <em>Stock</em>, not Quality Management. The file path follows the process the document belongs to (where it posts), not the party it names.
+  </div>
+
+  <!-- PATTERN 4 -->
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>A controller inheritance chain factors cross-cutting transaction behaviour</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Common transaction concerns — taxes &amp; totals, stock posting, GL posting, status propagation — are implemented <strong>once</strong> in base classes and inherited, so a new document type writes only its specifics.</p>
+        <p>Behaviour composes by walking up the class chain; the catalog stays thin because the heavy logic is shared.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>In <span class="fileref">erpnext/controllers/</span>: <code>SellingController → StockController → AccountsController → TransactionBase → StatusUpdater → Document</code> (and <code>BuyingController → SubcontractingController → StockController</code>).</p>
+        <p>A Sales Invoice controller inherits <span class="fileref">erpnext/controllers/taxes_and_totals.py</span>, stock + GL posting, and <span class="fileref">erpnext/controllers/status_updater.py</span> percent-billed/percent-delivered logic for free.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Provide <strong>services / mixins</strong> for the orthogonal concerns — <code>TaxCalculator</code>, <code>StockPoster</code>, <code>GLPoster</code>, <code>StatusUpdater</code> — and let each transaction type compose them.</p>
+        <p>In Django these are service classes invoked from <code>save()</code>/signals rather than deep inheritance, but the lesson holds: <strong>never re-derive tax totals or ledger posting per document.</strong></p>
+      </div>
+    </div>
+  </div>
+
+<pre><code><span class="c"># selling_controller.py</span>
+<span class="k">class</span> <span class="t">SellingController</span>(StockController): ...
+<span class="c"># stock_controller.py</span>
+<span class="k">class</span> <span class="t">StockController</span>(AccountsController): ...
+<span class="c"># accounts_controller.py</span>
+<span class="k">class</span> <span class="t">AccountsController</span>(TransactionBase): ...
+<span class="c"># utilities/transaction_base.py</span>
+<span class="k">class</span> <span class="t">TransactionBase</span>(StatusUpdater): ...</code></pre>
+  <p>
+    The catalog and the chain are two views of the same fact. The catalog says <em>"Sales Invoice is a submittable transaction in Accounts that posts GL and optionally stock."</em> The chain is <em>how</em> it gets all of that without re-implementing any of it. When you read the catalog, every "submittable transaction" entry is implicitly a promise that a shared controller stack will give it taxes, posting and status. See <a href="05-transaction-flow.html">chapter 5</a> for the chain in motion.
+  </p>
+
+  <!-- PATTERN 5 -->
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Configuration and analytics as data, not code</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Things that vary by <strong>business policy</strong> — tax rates, price/discount rules, payment terms, reporting axes — are stored as <strong>records</strong>, so changing them is data entry, not a code deploy.</p>
+        <p>New analytic slices are <em>declared</em>, then auto-propagated onto ledger rows. The catalog grows a "setup" tier of these policy records.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>Tax stacks: <span class="fileref">erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json</span> + <code>Item Tax Template</code> (slab/HSN overrides). Offers: <code>Pricing Rule</code> + <code>Promotional Scheme</code> (expands into many rules). Terms: <code>Payment Terms Template</code> → Payment Schedule rows.</p>
+        <p>Analytics axes: <span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json</span> declares an extra column pushed onto GL Entry. Even the module navigation is data now — <span class="fileref">erpnext/accounts/workspace/invoicing</span>.</p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Model every business-variable rule (tax, discount, terms, commission) as <strong>queryable rows with scope + date-effectivity</strong>, resolved at transaction time.</p>
+        <p>Make reporting dimensions <strong>registerable</strong> so adding "store" or "brand" as an analytic axis is a config row, not a schema migration. This is KDPS's Rule 12, "variation is data, not code."</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    The whole "data not code" tier maps directly onto KDPS's reality: <strong>40+ brands</strong> become <code>Brand</code> rows, not code; <strong>date-effective apparel GST slabs</strong> become <code>Item Tax Template</code> + <code>Tax Category</code>; <strong>brand-specific slab offers</strong> become <code>Pricing Rule</code> / <code>Promotional Scheme</code>; and adding <em>store</em> or <em>season</em> as a reporting axis becomes an <code>Accounting Dimension</code>-style config row. Nothing in that list should ever require a deploy.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The classification scheme — the table you keep open while building</h2>
+  <p>
+    Six roles cover the entire catalog. The first four are read directly off the flags; <strong>ledger</strong>, <strong>master</strong> and <strong>setup</strong> are derived roles you assign by intent (a ledger is a submittable append-only row written by another document; a setup record is a reference/policy master that no transaction depends on for posting balance). This is the exact taxonomy your own <code>data-model</code> should tag each entity with.
+  </p>
+
+  <table>
+    <tr><th>Role</th><th>Flag(s)</th><th>What it is</th><th>Behaviour you build once</th><th>Canonical examples</th></tr>
+    <tr>
+      <td><strong>master</strong></td>
+      <td>none / <code>is_tree</code></td>
+      <td>Long-lived reference data, edited in place, no submit lifecycle.</td>
+      <td>CRUD + audit trail; nested-set if tree.</td>
+      <td>Item, Customer, Supplier, Warehouse, Account, Brand</td>
+    </tr>
+    <tr>
+      <td><strong>transaction</strong></td>
+      <td><code>is_submittable: 1</code></td>
+      <td>A business event with draft → submitted → cancelled; immutable after submit.</td>
+      <td>State machine; on-submit posting; on-cancel reversal.</td>
+      <td>Sales Invoice, Purchase Receipt, Stock Entry, Payment Entry</td>
+    </tr>
+    <tr>
+      <td><strong>child</strong></td>
+      <td><code>istable: 1</code></td>
+      <td>Line items stored only inside a parent; no standalone existence.</td>
+      <td>Composition + cascade + order by <code>idx</code>.</td>
+      <td>Sales Invoice Item, Journal Entry Account, Item Barcode</td>
+    </tr>
+    <tr>
+      <td><strong>ledger</strong></td>
+      <td><code>is_submittable: 1</code> + voucher back-ref</td>
+      <td>Append-only event row written by another document; the source of truth.</td>
+      <td>Atomic write/cancel with parent; never UPDATE a balance.</td>
+      <td>GL Entry, Stock Ledger Entry, Payment Ledger Entry, Bin*</td>
+    </tr>
+    <tr>
+      <td><strong>single</strong></td>
+      <td><code>issingle: 1</code></td>
+      <td>Exactly one row; system/module configuration.</td>
+      <td>One-row config table; treat as config, not records.</td>
+      <td>Accounts Settings, Stock Settings, Global Defaults</td>
+    </tr>
+    <tr>
+      <td><strong>setup</strong></td>
+      <td>none</td>
+      <td>Policy / reference records resolved at transaction time (tax, pricing, terms).</td>
+      <td>Scoped, date-effective lookup; "variation is data."</td>
+      <td>Item Tax Template, Pricing Rule, Mode of Payment, Incoterm</td>
+    </tr>
+  </table>
+  <p class="srcline">*Bin is a derived cache (one row per item×warehouse) computed off the SLE — a read model, not an independent ledger. The true history is Stock Ledger Entry.</p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · submittable is not "just a status field"</span>
+    After submit a document is <strong>immutable</strong>, and editing requires cancel — which must <strong>reverse all of its ledger postings</strong>. The ledgers (GL Entry, Stock Ledger Entry) are themselves submittable and are written/cancelled atomically with their parent voucher. You cannot just <code>UPDATE</code> a balance row. A naive reimplementation that mutates a single balance silently corrupts valuation on back-dated transactions — which is why ERPNext has <code>Repost Item Valuation</code> to recompute downstream SLE rates after a back-dated change.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Module map — the 21 process areas</h2>
+  <p>
+    The module list (<span class="fileref">erpnext/modules.txt</span>) is a clean process decomposition, not a technical one. Below is the map grouped the way the dependency funnel actually runs: shared foundation → buy side → store → sell side → the ledger floor everything lands on → the satellites (manufacturing, assets, projects, CRM, support, QMS). Each module is a Python sub-package directory under <code>erpnext/</code>.
+  </p>
+
+  <table>
+    <tr><th>Module (dir)</th><th>Layer</th><th>What lives here</th><th>Posts into</th></tr>
+    <tr><td><code>setup</code></td><td>Foundation</td><td>Company, Brand, UOM, the group/territory trees, Employee, Email Digest, Global Defaults.</td><td>—</td></tr>
+    <tr><td><code>stock</code> (masters)</td><td>Foundation</td><td>Item, Item Attribute, Warehouse, Price List, Batch, Serial No.</td><td>—</td></tr>
+    <tr><td><code>buying</code></td><td>Buy side</td><td>Supplier, Purchase Order, RFQ, Supplier Quotation, Scorecard.</td><td>(status only)</td></tr>
+    <tr><td><code>stock</code> (txns)</td><td>Store</td><td>Purchase Receipt, Delivery Note, Stock Entry, Material Request, Stock Reconciliation, Pick List, Landed Cost Voucher.</td><td>Stock Ledger Entry (+GL)</td></tr>
+    <tr><td><code>selling</code></td><td>Sell side</td><td>Customer, Sales Order, Quotation, Product Bundle.</td><td>(status only)</td></tr>
+    <tr><td><code>accounts</code></td><td>Ledger floor</td><td>Account, GL Entry, Sales/Purchase Invoice, Payment Entry, Journal Entry, POS Invoice, all tax/pricing/terms setup, Cost Center, Fiscal Year, Period Closing.</td><td>GL Entry · Payment Ledger Entry</td></tr>
+    <tr><td><code>manufacturing</code></td><td>Satellite</td><td>BOM, Work Order, Job Card, Production Plan, Routing, Operation, Workstation.</td><td>Stock Ledger Entry (via Stock Entry)</td></tr>
+    <tr><td><code>subcontracting</code></td><td>Satellite</td><td>Subcontracting Order / Receipt / BOM (job-worker flow).</td><td>Stock Ledger Entry (+GL)</td></tr>
+    <tr><td><code>assets</code></td><td>Satellite</td><td>Asset, Asset Category, Depreciation Schedule, Movement, Repair, Capitalization, Location.</td><td>GL Entry (via Journal Entry)</td></tr>
+    <tr><td><code>projects</code></td><td>Satellite</td><td>Project, Task, Timesheet, Project Template, Activity Type.</td><td>(billing / costing)</td></tr>
+    <tr><td><code>crm</code></td><td>Satellite</td><td>Lead, Opportunity, Prospect, Campaign, Contract, Appointment.</td><td>—</td></tr>
+    <tr><td><code>support</code></td><td>Satellite</td><td>Issue, Service Level Agreement, Warranty Claim, Support Settings.</td><td>—</td></tr>
+    <tr><td><code>quality_management</code></td><td>Satellite</td><td>Quality Procedure, Goal, Review, Non Conformance, Quality Action.</td><td>—</td></tr>
+    <tr><td><code>maintenance</code></td><td>Satellite</td><td>Maintenance Schedule, Maintenance Visit.</td><td>—</td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <span class="lbl">The module map moved from code to data</span>
+    The user-facing module navigation is now the <strong>Workspace</strong> — each module has <span class="fileref">erpnext/&lt;module&gt;/workspace/*/</span> JSON grouping shortcuts, links and reports. The legacy code-based desktop files (<code>erpnext/config/*.py</code>) are nearly gone — only <span class="fileref">erpnext/config/projects.py</span> remains. Don't look for a single registry of the module map; it's distributed Workspace records plus <span class="fileref">erpnext/modules.txt</span>. <span class="badge b-frappe">Frappe core</span> renders the Workspace.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The load-bearing DocType catalog</h2>
+  <p>
+    The index proper. These are the DocTypes that carry the system — the ones you must have an equivalent for in any serious retail/distribution ERP. Each is tagged with its role, its module path, and the chapter that explains the mechanism behind it. (ERPNext has ~700 DocTypes total; this is the spine, not the census.)
+  </p>
+
+  <h3>Accounts — the ledger floor</h3>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Why it matters</th><th>Chapter</th></tr>
+    <tr><td><strong>Account</strong></td><td>master · tree</td><td><span class="fileref">erpnext/accounts/doctype/account/account.json</span></td><td>Chart-of-Accounts node; the dimension every GL Entry posts against.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>GL Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td><td>The general ledger; append-only debit/credit row with voucher back-ref.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Sales Invoice</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></td><td>Heaviest selling-side transaction; posts GL + optionally stock.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td><strong>Sales Invoice Item</strong></td><td>child</td><td><span class="fileref">erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json</span></td><td>Line items (item, qty, rate, tax); editable grid.</td><td><a href="01-metamodel-doctype.html">01</a></td></tr>
+    <tr><td><strong>Purchase Invoice</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/purchase_invoice/purchase_invoice.json</span></td><td>Supplier bill; posts payables + expense/stock GL.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td><strong>Payment Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/payment_entry/payment_entry.json</span></td><td>Money in/out; reconciles invoices via Payment Entry Reference children.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Journal Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/journal_entry/journal_entry.json</span></td><td>Generic multi-line debit/credit voucher; the manual GL door.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Journal Entry Account</strong></td><td>child</td><td><span class="fileref">erpnext/accounts/doctype/journal_entry_account/journal_entry_account.json</span></td><td>The debit/credit lines of a Journal Entry.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>POS Invoice</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/pos_invoice/pos_invoice.json</span></td><td>Point-of-sale sale; merged into Sales Invoices via POS Invoice Merge Log.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td><strong>Payment Ledger Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/doctype/payment_ledger_entry/payment_ledger_entry.json</span></td><td>Sub-ledger of party outstanding/allocation.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Cost Center</strong></td><td>master · tree</td><td><span class="fileref">erpnext/accounts/doctype/cost_center/cost_center.json</span></td><td>Accounting dimension for departmental P&amp;L attribution.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Fiscal Year</strong></td><td>master</td><td><span class="fileref">erpnext/accounts/doctype/fiscal_year/fiscal_year.json</span></td><td>Period boundary every posting validates against.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Accounting Dimension</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.json</span></td><td>Declares an extra analytic axis propagated onto GL Entry.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td><strong>Accounts Settings</strong></td><td>single</td><td><span class="fileref">erpnext/accounts/doctype/accounts_settings/accounts_settings.json</span></td><td>Global accounting behaviour toggles.</td><td><a href="10-extensibility-and-customization.html">10</a></td></tr>
+    <tr><td>Period Closing Voucher</td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.json</span></td><td>Year-end close moving P&amp;L into retained earnings.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td>POS Closing Entry</td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/pos_closing_entry/pos_closing_entry.json</span></td><td>End-of-day cash reconciliation for a POS shift.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Bank Transaction</td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/bank_transaction/bank_transaction.json</span></td><td>Imported bank line reconciled to payments.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td>Subscription</td><td>master</td><td><span class="fileref">erpnext/accounts/doctype/subscription/subscription.json</span></td><td>Recurring billing definition generating invoices on a schedule.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+  </table>
+
+  <h4>Tax, pricing &amp; terms (the "data not code" tier)</h4>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Why it matters</th><th>Chapter</th></tr>
+    <tr><td><strong>Item Tax Template</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/item_tax_template/item_tax_template.json</span></td><td>Per-item GST/tax override (HSN-style slab) — data-driven rates.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Sales Taxes and Charges Template</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/sales_taxes_and_charges_template/sales_taxes_and_charges_template.json</span></td><td>Reusable named tax stack pulled onto sales transactions.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Tax Category</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/tax_category/tax_category.json</span></td><td>Tax bucket resolving which template applies.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td><strong>Pricing Rule</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/pricing_rule/pricing_rule.json</span></td><td>Conditional price/discount engine (scope, slabs, dates).</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Promotional Scheme</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/promotional_scheme/promotional_scheme.json</span></td><td>Higher-level offer that expands into many Pricing Rules.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Loyalty Program</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/loyalty_program/loyalty_program.json</span></td><td>Points-earning rules; Loyalty Point Entry is the points ledger.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Payment Terms Template</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/payment_terms_template/payment_terms_template.json</span></td><td>Credit terms expanded into Payment Schedule rows on invoices.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Mode of Payment</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/mode_of_payment/mode_of_payment.json</span></td><td>Cash/Card/UPI channels mapped to accounts.</td><td><a href="03-accounting-ledger.html">03</a></td></tr>
+    <tr><td>POS Profile</td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/pos_profile/pos_profile.json</span></td><td>Per-counter POS config (warehouse, payments, print, users).</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+  </table>
+
+  <h3>Stock — masters, the ledger, and the workhorse documents</h3>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Why it matters</th><th>Chapter</th></tr>
+    <tr><td><strong>Item</strong></td><td>master</td><td><span class="fileref">erpnext/stock/doctype/item/item.json</span></td><td>The SKU master; <code>autoname field:item_code</code>; parent of variants/barcodes/UOMs.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Item Variant Attribute</strong></td><td>child</td><td><span class="fileref">erpnext/stock/doctype/item_variant_attribute/item_variant_attribute.json</span></td><td>Attribute values (Size, Color) — the Style×Size×Color mechanism.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Item Barcode</strong></td><td>child</td><td><span class="fileref">erpnext/stock/doctype/item_barcode/item_barcode.json</span></td><td>Non-unique scan aliases attached to an Item.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Item Attribute</td><td>master</td><td><span class="fileref">erpnext/stock/doctype/item_attribute/item_attribute.json</span></td><td>Defines a variant axis (e.g. Size) and its allowed values.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Item Price</td><td>master</td><td><span class="fileref">erpnext/stock/doctype/item_price/item_price.json</span></td><td>Price of an item in a given Price List/currency/UOM.</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td>Price List</td><td>master</td><td><span class="fileref">erpnext/stock/doctype/price_list/price_list.json</span></td><td>Named set of Item Prices (selling/buying).</td><td><a href="07-tax-and-pricing.html">07</a></td></tr>
+    <tr><td><strong>Warehouse</strong></td><td>master · tree</td><td><span class="fileref">erpnext/stock/doctype/warehouse/warehouse.json</span></td><td>Stock location; the dimension SLE posts against.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td><strong>Stock Ledger Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span></td><td>Append-only inventory movement (qty, balance, valuation) — the stock truth.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td><strong>Bin</strong></td><td>ledger (cache)</td><td><span class="fileref">erpnext/stock/doctype/bin/bin.json</span></td><td>Cached per-item-per-warehouse balance derived from SLE — the fast read model.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td><strong>Stock Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/stock_entry/stock_entry.json</span></td><td>Material transfer/issue/receipt/manufacture; the workhorse stock mover.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Stock Entry Detail</td><td>child</td><td><span class="fileref">erpnext/stock/doctype/stock_entry_detail/stock_entry_detail.json</span></td><td>Source/target warehouse + qty lines of a Stock Entry.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td><strong>Purchase Receipt</strong></td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/purchase_receipt/purchase_receipt.json</span></td><td>Goods-inward (GRN); posts quantity into stock.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td><strong>Delivery Note</strong></td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/delivery_note/delivery_note.json</span></td><td>Goods-outward shipment; depletes stock.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Material Request</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/material_request/material_request.json</span></td><td>Internal demand/indent; upstream of PO/Stock Entry.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td><strong>Stock Reconciliation</strong></td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/stock_reconciliation/stock_reconciliation.json</span></td><td>Physical-count adjustment setting absolute qty/valuation.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Pick List</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/pick_list/pick_list.json</span></td><td>Warehouse picking sheet from sales orders.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Landed Cost Voucher</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/landed_cost_voucher/landed_cost_voucher.json</span></td><td>Distributes freight/duty onto received item valuation.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Repost Item Valuation</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/repost_item_valuation/repost_item_valuation.json</span></td><td>Background job recomputing SLE valuation after back-dated changes.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Batch / Serial No</td><td>master</td><td><span class="fileref">erpnext/stock/doctype/batch/batch.json</span></td><td>Lot/expiry grouping and per-unit serialized identity.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Serial and Batch Bundle</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/serial_and_batch_bundle/serial_and_batch_bundle.json</span></td><td>Container linking serial/batch entries to a voucher line.</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>Quality Inspection</td><td>transaction</td><td><span class="fileref">erpnext/stock/doctype/quality_inspection/quality_inspection.json</span></td><td>Incoming/outgoing QC check tied to a stock line. (Lives under Stock!)</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+    <tr><td>UOM Conversion Detail</td><td>child</td><td><span class="fileref">erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json</span></td><td>Per-item unit conversion factors.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Stock Settings</strong></td><td>single</td><td><span class="fileref">erpnext/stock/doctype/stock_settings/stock_settings.json</span></td><td>Global inventory policy (valuation method, negative stock).</td><td><a href="04-stock-ledger.html">04</a></td></tr>
+  </table>
+
+  <h3>Selling &amp; Buying — the parties and the order documents</h3>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Why it matters</th><th>Chapter</th></tr>
+    <tr><td><strong>Customer</strong></td><td>master</td><td><span class="fileref">erpnext/selling/doctype/customer/customer.json</span></td><td>Sales party; credit limits, group, territory.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Sales Order</strong></td><td>transaction</td><td><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.json</span></td><td>Confirmed customer order; drives delivery + billing status.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Sales Order Item</td><td>child</td><td><span class="fileref">erpnext/selling/doctype/sales_order_item/sales_order_item.json</span></td><td>Ordered lines with delivered/billed qty tracking.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Quotation</td><td>transaction</td><td><span class="fileref">erpnext/selling/doctype/quotation/quotation.json</span></td><td>Pre-sales offer to lead/customer.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Product Bundle</td><td>master (submittable)</td><td><span class="fileref">erpnext/selling/doctype/product_bundle/product_bundle.json</span></td><td>Kit/combo sold as one (BOM-lite for selling).</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Sales Team</td><td>child</td><td><span class="fileref">erpnext/selling/doctype/sales_team/sales_team.json</span></td><td>Salesperson commission allocation on a transaction.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Selling Settings</td><td>single</td><td><span class="fileref">erpnext/selling/doctype/selling_settings/selling_settings.json</span></td><td>Selling-side defaults.</td><td><a href="10-extensibility-and-customization.html">10</a></td></tr>
+    <tr><td><strong>Supplier</strong></td><td>master</td><td><span class="fileref">erpnext/buying/doctype/supplier/supplier.json</span></td><td>Vendor party; group, default terms, scorecard.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Purchase Order</strong></td><td>transaction</td><td><span class="fileref">erpnext/buying/doctype/purchase_order/purchase_order.json</span></td><td>Commitment to buy; drives receipt + billing status.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Purchase Order Item</td><td>child</td><td><span class="fileref">erpnext/buying/doctype/purchase_order_item/purchase_order_item.json</span></td><td>Ordered lines with received/billed tracking.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Request for Quotation</td><td>transaction</td><td><span class="fileref">erpnext/buying/doctype/request_for_quotation/request_for_quotation.json</span></td><td>RFQ broadcast to suppliers.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Supplier Quotation</td><td>transaction</td><td><span class="fileref">erpnext/buying/doctype/supplier_quotation/supplier_quotation.json</span></td><td>Supplier's price response.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Supplier Scorecard</td><td>master</td><td><span class="fileref">erpnext/buying/doctype/supplier_scorecard/supplier_scorecard.json</span></td><td>Vendor performance scoring with periodic standings.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Buying Settings</td><td>single</td><td><span class="fileref">erpnext/buying/doctype/buying_settings/buying_settings.json</span></td><td>Buying-side defaults.</td><td><a href="10-extensibility-and-customization.html">10</a></td></tr>
+  </table>
+
+  <h3>Setup — the shared foundation</h3>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Why it matters</th><th>Chapter</th></tr>
+    <tr><td><strong>Company</strong></td><td>master · tree</td><td><span class="fileref">erpnext/setup/doctype/company/company.json</span></td><td>Top-level legal entity owning CoA, defaults, GSTIN-equivalent settings.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Item Group</td><td>master · tree</td><td><span class="fileref">erpnext/setup/doctype/item_group/item_group.json</span></td><td>Product taxonomy used by pricing/tax/reporting.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Customer Group / Supplier Group</td><td>master · tree</td><td><span class="fileref">erpnext/setup/doctype/customer_group/customer_group.json</span></td><td>Party classification trees.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Territory</td><td>master · tree</td><td><span class="fileref">erpnext/setup/doctype/territory/territory.json</span></td><td>Geographic sales hierarchy with targets.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td><strong>Brand</strong></td><td>master</td><td><span class="fileref">erpnext/setup/doctype/brand/brand.json</span></td><td>Brand master attached to items.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>UOM</td><td>master</td><td><span class="fileref">erpnext/setup/doctype/uom/uom.json</span></td><td>Unit of measure master.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Employee / Department / Sales Person</td><td>master · tree</td><td><span class="fileref">erpnext/setup/doctype/employee/employee.json</span></td><td>Org hierarchies; Department doubles as an accounting dimension.</td><td><a href="06-master-data-and-party.html">06</a></td></tr>
+    <tr><td>Terms and Conditions</td><td>setup</td><td><span class="fileref">erpnext/setup/doctype/terms_and_conditions/terms_and_conditions.json</span></td><td>Reusable T&amp;C text injected into transactions.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Email Digest</td><td>setup</td><td><span class="fileref">erpnext/setup/doctype/email_digest/email_digest.json</span></td><td>Configurable periodic summary email (per-recipient).</td><td><a href="11-reporting-and-printing.html">11</a></td></tr>
+    <tr><td>Incoterm</td><td>setup</td><td><span class="fileref">erpnext/setup/doctype/incoterm/incoterm.json</span></td><td>Standard shipping-terms list referenced on transactions.</td><td><a href="05-transaction-flow.html">05</a></td></tr>
+    <tr><td>Global Defaults</td><td>single</td><td><span class="fileref">erpnext/setup/doctype/global_defaults/global_defaults.json</span></td><td>System-wide defaults (currency, company).</td><td><a href="10-extensibility-and-customization.html">10</a></td></tr>
+  </table>
+
+  <h3>Satellites — manufacturing, subcontracting, assets, projects, CRM, support, QMS</h3>
+  <p>You will likely not build most of these for a fashion-retail ERP, but they prove the catalog's generality — every one is the same six roles, the same controller stack, posting into the same two ledgers.</p>
+  <table>
+    <tr><th>DocType</th><th>Role</th><th>Path</th><th>Module</th></tr>
+    <tr><td>BOM</td><td>master (submittable)</td><td><span class="fileref">erpnext/manufacturing/doctype/bom/bom.json</span></td><td>Manufacturing</td></tr>
+    <tr><td>Work Order</td><td>transaction</td><td><span class="fileref">erpnext/manufacturing/doctype/work_order/work_order.json</span></td><td>Manufacturing</td></tr>
+    <tr><td>Job Card</td><td>transaction</td><td><span class="fileref">erpnext/manufacturing/doctype/job_card/job_card.json</span></td><td>Manufacturing</td></tr>
+    <tr><td>Production Plan</td><td>transaction</td><td><span class="fileref">erpnext/manufacturing/doctype/production_plan/production_plan.json</span></td><td>Manufacturing</td></tr>
+    <tr><td>Routing / Operation / Workstation</td><td>master</td><td><span class="fileref">erpnext/manufacturing/doctype/workstation/workstation.json</span></td><td>Manufacturing</td></tr>
+    <tr><td>Subcontracting Order / Receipt</td><td>transaction</td><td><span class="fileref">erpnext/subcontracting/doctype/subcontracting_receipt/subcontracting_receipt.json</span></td><td>Subcontracting</td></tr>
+    <tr><td>Subcontracting BOM</td><td>master</td><td><span class="fileref">erpnext/subcontracting/doctype/subcontracting_bom/subcontracting_bom.json</span></td><td>Subcontracting</td></tr>
+    <tr><td>Asset / Depreciation Schedule</td><td>transaction</td><td><span class="fileref">erpnext/assets/doctype/asset/asset.json</span></td><td>Assets</td></tr>
+    <tr><td>Asset Movement / Repair / Capitalization</td><td>transaction</td><td><span class="fileref">erpnext/assets/doctype/asset_capitalization/asset_capitalization.json</span></td><td>Assets</td></tr>
+    <tr><td>Location</td><td>master · tree</td><td><span class="fileref">erpnext/assets/doctype/location/location.json</span></td><td>Assets</td></tr>
+    <tr><td>Project / Task</td><td>master / transaction · tree</td><td><span class="fileref">erpnext/projects/doctype/project/project.json</span></td><td>Projects</td></tr>
+    <tr><td>Timesheet</td><td>transaction</td><td><span class="fileref">erpnext/projects/doctype/timesheet/timesheet.json</span></td><td>Projects</td></tr>
+    <tr><td>Lead / Opportunity / Prospect</td><td>master / transaction</td><td><span class="fileref">erpnext/crm/doctype/opportunity/opportunity.json</span></td><td>CRM</td></tr>
+    <tr><td>Contract / Appointment / Campaign</td><td>transaction / master</td><td><span class="fileref">erpnext/crm/doctype/contract/contract.json</span></td><td>CRM</td></tr>
+    <tr><td>Issue / Warranty Claim</td><td>transaction</td><td><span class="fileref">erpnext/support/doctype/issue/issue.json</span></td><td>Support</td></tr>
+    <tr><td>Service Level Agreement</td><td>setup</td><td><span class="fileref">erpnext/support/doctype/service_level_agreement/service_level_agreement.json</span></td><td>Support</td></tr>
+    <tr><td>Quality Procedure / Goal / Review / Non Conformance</td><td>master / transaction · tree</td><td><span class="fileref">erpnext/quality_management/doctype/quality_procedure/quality_procedure.json</span></td><td>Quality Mgmt</td></tr>
+    <tr><td>Maintenance Schedule / Visit</td><td>transaction</td><td><span class="fileref">erpnext/maintenance/doctype/maintenance_schedule/maintenance_schedule.json</span></td><td>Maintenance</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">How the catalog moves — the canonical flows</h2>
+  <p>
+    The catalog is static; the system is the documents flowing through it. Four flows tie the entries above together, and a fifth — the posting funnel — is what all of them collapse into. Each downstream document <em>pulls forward</em> from the previous one and updates its percent-received / percent-billed status via the shared <code>StatusUpdater</code>.
+  </p>
+
+  <h3>Procure-to-stock</h3>
+  <div class="flow">
+    <div class="node">Material Request<small>indent</small></div>
+    <div class="arr"></div>
+    <div class="node">RFQ → Supplier Quotation<small>price discovery</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Order<small>buying · commitment</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Receipt / GRN<small>stock · posts qty → SLE</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Invoice<small>accounts · posts payable → GL</small></div>
+  </div>
+
+  <h3>Order-to-cash</h3>
+  <div class="flow">
+    <div class="node">Quotation<small>pre-sales</small></div>
+    <div class="arr"></div>
+    <div class="node">Sales Order<small>selling · confirmed</small></div>
+    <div class="arr"></div>
+    <div class="node">Pick List → Delivery Note<small>stock · depletes SLE</small></div>
+    <div class="arr"></div>
+    <div class="node">Sales Invoice<small>accounts · revenue + AR → GL</small></div>
+    <div class="arr"></div>
+    <div class="node">Payment Entry<small>reconciles → Payment Ledger Entry</small></div>
+  </div>
+
+  <h3>Retail POS day</h3>
+  <div class="flow">
+    <div class="node">POS Opening Entry<small>shift start</small></div>
+    <div class="arr"></div>
+    <div class="node">many POS Invoices<small>each submittable</small></div>
+    <div class="arr"></div>
+    <div class="node">POS Closing Entry<small>cash reconciliation</small></div>
+    <div class="arr"></div>
+    <div class="node">POS Invoice Merge Log<small>consolidates → Sales Invoices → GL + stock</small></div>
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    The POS-day flow is exactly KDPS's "Ten Software behind one POS, idempotent-merge" design: per-store POS invoices accumulate during the shift, reconcile at close, and merge into the proper Sales Invoices that hit the GL and stock once. And the procure-to-stock flow encodes the KDPS rule that <strong>GRN posts quantity</strong> (Purchase Receipt → SLE) while <strong>the PT/bill posts value and liability</strong> (Purchase Invoice → GL) — two separate documents, two separate ledgers, by design.
+  </div>
+
+  <h3>The posting funnel — the one diagram that explains the whole system</h3>
+  <div class="flow col">
+    <div class="node">Any submittable document<small>Sales Invoice, Purchase Receipt, Stock Entry, Payment Entry …</small></div>
+    <div class="arr"></div>
+    <div class="node">Its controller (shared chain)<small>SellingController → … → AccountsController emits balanced rows</small></div>
+    <div class="arr"></div>
+    <div class="node">GL Entry &amp; / or Stock Ledger Entry<small>tagged voucher_type / voucher_no</small></div>
+    <div class="arr"></div>
+    <div class="node">Bin &amp; Payment Ledger Entry caches<small>derived balances for fast reads</small></div>
+    <div class="arr"></div>
+    <div class="node">Reports read the ledgers / caches<small>never the documents directly</small></div>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · child tables and the engine you don't own</span>
+    Two things to keep straight when you implement from this catalog. <strong>Child tables (<code>istable</code>) have no independent life</strong> — no list view, no standalone permission, always loaded/saved through the parent and ordered by <code>idx</code>. Don't model line items as a top-level entity with a back-FK; the framework owns the composition. And <strong>the DocType engine itself is not in this repo</strong> — naming, the submit/cancel state machine, child-table storage (<code>parent</code>/<code>parentfield</code>/<code>parenttype</code>/<code>idx</code> columns), nested-set <code>lft</code>/<code>rgt</code> maintenance, permissions and the REST API all live in Frappe. ERPNext only authors JSON metadata + Python subclasses on top of it. <span class="badge b-frappe">Frappe core</span> Reimplementing "ERPNext" means rebuilding Frappe's engine first.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Mapping the catalog onto a KDPS build</h2>
+  <p>
+    This catalog is not academic for the KDPS work — it de-risks it line by line. KDPS's 5-layer constitution (masters → documents → ledgers → controls → intelligence) and its "documents-write-ledgers" rule <em>are</em> ERPNext's GL&nbsp;Entry / Stock&nbsp;Ledger&nbsp;Entry funnel with voucher back-references. Borrow that shape verbatim on Django/Postgres. The mapping is one-to-one:
+  </p>
+
+  <dl class="gloss">
+    <dt><code>SKU = Style × Size × Colour</code></dt>
+    <dd>ERPNext's Item <em>template</em> + <code>Item Variant Attribute</code> children. Stock survives at the variant grain because the SLE is keyed by the concrete variant item_code, never the style.</dd>
+    <dt><code>non-unique barcode</code></dt>
+    <dd><code>Item Barcode</code> child — a scan alias, with the count living under the Item it points to, exactly as KDPS specifies.</dd>
+    <dt><code>GRN posts quantity · PT posts value/liability</code></dt>
+    <dd>Purchase Receipt → Stock Ledger Entry (qty) and Purchase Invoice → GL Entry (value + payable). Two documents, two ledgers.</dd>
+    <dt><code>date-effective GST slabs</code></dt>
+    <dd><code>Item Tax Template</code> + <code>Tax Category</code> — slab rates as queryable, date-scoped rows.</dd>
+    <dt><code>brand-specific slab offers</code></dt>
+    <dd><code>Pricing Rule</code> / <code>Promotional Scheme</code> — conditional, dated, scoped to item/group/brand.</dd>
+    <dt><code>two GSTINs · cross-state IGST</code></dt>
+    <dd>Separate <code>Company</code> entities and a taxable transfer document between them — Bihar and Jharkhand as "distinct persons."</dd>
+    <dt><code>configurable digest</code></dt>
+    <dd><code>Email Digest</code> — per-recipient periodic summary, no code change to retune.</dd>
+    <dt><code>"variation is data, not code" (Rule 12)</code></dt>
+    <dd><code>Accounting Dimension</code> + the template family — new analytic axes and policies are config rows, not migrations.</dd>
+  </dl>
+
+  <p>
+    Two structural lessons carry straight into the build. First, tag every KDPS entity in your data-model with one of the six roles in the table above — that classification <em>is</em> the data-model's spine. Second, the controller-chain lesson: build <strong>TaxCalculator, StockPoster, GLPoster and StatusUpdater once as services</strong>, invoked from each transaction's save path — not re-derived per vertical slice. If you get the entity-classification metadata and the document-writes-ledger funnel right, the rest — list views, APIs, reports, status propagation — becomes generic machinery you build once.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    The deliverable a consultant returns to is not a screen inventory — it is this <strong>classified catalog</strong>. Name your entities, tag each with a role, draw the process modules, and route every document through one posting interface into two append-only ledgers. Everything else is downstream of those four decisions.
+  </div>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li>An ERP is a <strong>flat catalog of metadata-described entities</strong> folded into process-aligned modules — read the catalog, not the screens.</li>
+    <li><strong>Four flags classify everything</strong>: <code>istable</code> (child), <code>issingle</code> (singleton), <code>is_submittable</code> (transaction/ledger), <code>is_tree</code> (hierarchy) — plus the derived roles master / ledger / setup. Build behaviour off the role, six behaviours total.</li>
+    <li>Modules mirror the <strong>business process</strong> (buy → receive → store → sell → invoice → pay), masters and setup are shared at the base, and <strong>all</strong> transactions converge on two append-only ledgers — <code>GL Entry</code> and <code>Stock Ledger Entry</code> — tagged with <code>voucher_type</code>/<code>voucher_no</code>.</li>
+    <li>Cross-cutting transaction behaviour (taxes, stock posting, GL posting, status) lives in a <strong>shared controller stack</strong>, not per document. Build it once as services.</li>
+    <li>Policy that varies by business — tax, discount, terms, analytic axes — is <strong>data, not code</strong>: queryable, scoped, date-effective rows resolved at transaction time.</li>
+    <li>Watch the traps: file documents by where they <em>post</em> (Purchase Receipt is Stock, Sales Invoice is Accounts); submit is immutability + reversible posting, not a status field; <code>Bin</code> is a cache, the SLE is truth; and the <strong>DocType engine is Frappe, not ERPNext</strong> — rebuilding ERPNext means rebuilding the engine first.</li>
+    <li>For KDPS, the map is one-to-one: tag every entity with one of the six roles, route every document through one posting interface into the two ledgers, and the rest is generic machinery.</li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="12-build-any-erp-playbook.html"><small>← Previous</small>Build-any-ERP playbook</a>
+<a class="next empty" href="#"></a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 13. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS - Build Process &amp; Roadmap</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1300px; margin:0 auto; gap:0;}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:268px; flex:0 0 268px; padding:26px 16px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:20px 0 7px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:4px 10px; border-radius:7px; font-size:13.5px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:38px 46px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){ nav.toc{display:none} main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:29px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:68ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:34px 0; scroll-margin-top:14px}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  h4{margin:0 0 5px; font-size:15px; color:var(--navy)}
+  p{margin:9px 0}
+  .lead{font-size:15px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 8px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-no{background:#fde8e8; color:#a32a2a}
+  .b-ext{background:#e9f6f1; color:#0f7a55; border:1px solid #bfe6d6}
+  .b-money{background:#fdf1ea; color:#8a3f22; border:1px solid #eccbb9}
+  .b-warn{background:var(--amber-bg); color:var(--amber)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .mod{border-left:4px solid var(--navy2)}
+  .mod.base{border-left-color:#7d8aa8} .mod.spine{border-left-color:var(--navy)} .mod.cross{border-left-color:var(--rust)} .mod.brain{border-left-color:var(--purple)}
+  .card .lab{font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--muted)}
+  .card dl{margin:9px 0 0} .card dt{font-weight:700; color:var(--navy2); font-size:13px; letter-spacing:.02em; margin-top:9px} .card dd{margin:2px 0 0 0; font-size:14px}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-ext{background:#e9f6f1; border-color:#bfe6d6}
+  .co-money{background:#fdf1ea; border-color:#eccbb9}
+  .callout strong{color:var(--navy)}
+  .callout p{margin:6px 0}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{background:#eef0f4; padding:1px 5px; border-radius:5px; font-size:12.5px}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  ul.tight li{margin:3px 0}
+  /* figure */
+  figure.fig{margin:14px 0}
+  figure.fig svg{width:100%; height:auto; display:block; border:1px solid var(--line); border-radius:12px; background:#fff; padding:10px}
+  .legend{display:flex; flex-wrap:wrap; gap:8px 18px; margin:10px 2px 0; font-size:12.5px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:7px}
+  .legend i{width:24px; border-top:3px solid; display:inline-block}
+  .lg-navy i{border-color:#2c3e63} .lg-rust i{border-color:#c4623f} .lg-grey i{border-color:#7d8aa8} .lg-purple i{border-color:#9b7bd0; border-top-style:dashed}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Build &amp; Roadmap</h2>
+  <a href="#philosophy">Build philosophy</a>
+  <a href="#toolkit">Your toolkit</a>
+  <a href="#foundation">The foundation build</a>
+  <a href="#slice-loop">The per-slice loop</a>
+  <a href="#roadmap">The slice roadmap</a>
+  <a href="#workflow-issues">Issues &amp; Sandcastle in practice</a>
+  <a href="#risks-checkpoints">Risks &amp; checkpoints</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS - Build Process &amp; Roadmap</div>
+  <h1>How we build this ERP</h1>
+  <p class="sub">The concrete plan for turning the finished design into running software: foundation first, then one verified vertical slice at a time, built by one architect working with AI agents.</p>
+  <div class="stamp">25 June 2026 - foundation-first, then one verified vertical slice at a time - using the gstack skills, the .agents toolkit and the Sandcastle agent.</div>
+</header>
+
+<section id="philosophy">
+  <h2 class="sec">Build philosophy &mdash; what this is &amp; how we build</h2>
+
+  <h3>What this is</h3>
+  <p>This is the <strong>concrete plan for turning the finished design into running software</strong>. The thinking is done: the system is settled as <strong>5 layers and 12 rules</strong> (master data &rarr; documents &rarr; ledgers &rarr; controls &rarr; intelligence), and every module D1&ndash;D8 is designed and locked. What remains is to <em>build</em> &mdash; and the builder is unusual: <strong>one architect (Anand) working with AI agents</strong>, not a team. That single fact shapes every rule below. A solo-plus-AI build cannot afford a big-bang, cannot hold ten half-finished modules in its head, and cannot trust generated code on money without a gate. So the plan is deliberately narrow at any one moment: one thing scaffolded, then one slice proven, then the next.</p>
+
+  <div class="callout co-key">
+    <strong>The agreed shape, in one line:</strong> build the <strong>foundation first</strong> (repo, database, login, roles, deploy), then <strong>one verified vertical slice at a time</strong>, in engineering order along the spine &mdash; <em>never</em> all the PRDs upfront, <em>never</em> one module built to completion before the next is started.</p>
+  </div>
+
+  <h3>The agreed approach (carried straight from the design)</h3>
+
+  <div class="card mod.base">
+    <div class="lab">STEP ZERO &mdash; FOUNDATION FIRST</div>
+    <dl>
+      <dt>What gets built</dt>
+      <dd>The skeleton that holds everything and carries <em>no business logic</em>: the repository, the database, login, the roles/access model, and a working deploy pipeline. This is the &ldquo;walking skeleton&rdquo; floor &mdash; a request can come in, a user can authenticate, the system can write to the database and ship to a server.</dd>
+      <dt>Why first</dt>
+      <dd>Every slice that follows needs a place to live, a way in, and a way out to a server. Scaffold <strong>only what the first slice needs</strong> (core + masters + the first module), then grow per slice &mdash; do not pre-build all the empty rooms.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod.spine">
+    <div class="lab">STEP ONE ONWARDS &mdash; ONE VERIFIED VERTICAL SLICE AT A TIME</div>
+    <dl>
+      <dt>A slice is a tracer bullet</dt>
+      <dd>Each slice cuts <em>top to bottom through all five layers</em> for a single real workflow &mdash; a master record, a document, the ledger postings it produces, the control around it, and a screen to see it. A slice is &ldquo;done&rdquo; only when it is <strong>verified end-to-end</strong>, not when the screen renders.</dd>
+      <dt>Just-in-time per-slice specs</dt>
+      <dd>The detailed spec is written <strong>per slice, not all upfront</strong>. The data model, the double-entry posting catalogue, and the golden files <strong>grow with each slice</strong> &mdash; the inbound slice adds the inbound tables, postings and golden invoices; the payments slice adds the payment ledger entries; and so on. We never freeze the whole data model on day one and we never write a slice's posting code before its golden tests exist.</dd>
+      <dt>Engineering-led order along the spine</dt>
+      <dd>Slices follow the <strong>process order of the system</strong> (a shipment exists before it can be sold; a sale exists before it can be reported), <em>not</em> the client's wishlist order. The sequence (single canonical numbering, matching the slice roadmap below): <span class="badge b-locked">0</span> foundation scaffold &rarr; <span class="badge b-locked">1</span> master data + identity + PT-line model &rarr; <span class="badge b-locked">2</span> inbound thin slice (one outright brand: GRN qty &rarr; PT value &rarr; stock ledger, ending <em>at the ledger</em>, not at POS) &rarr; <span class="badge b-locked">3</span> vendor liability + vendor ledger &rarr; <span class="badge b-ext">4</span> selling thin slice (ingest one POS sale) &rarr; <span class="badge b-locked">5</span> offers on the sale &rarr; <span class="badge b-locked">6</span> payments + collection audit &rarr; <span class="badge b-ext">7</span> Tally voucher export &rarr; <span class="badge b-locked">8</span> SOR / Consignment + GST clock &rarr; <span class="badge b-ai">9</span> the Brain / analytics + WhatsApp digest.</dd>
+      <dt>Why the first inbound slice stops at the ledger</dt>
+      <dd>The first end-to-end proof must not be hostage to the riskiest unknown. POS (Ten Software), Tally import, and the barcode tool are the three external gates with real lead time, so they are <strong>spiked in parallel</strong> &mdash; slices 1&ndash;2 (master data, then inbound ending at the stock ledger) prove the spine on ground we fully control first, before the POS edge arrives at slice 4.</dd>
+    </dl>
+  </div>
+
+  <div class="card mod.cross">
+    <div class="lab">THE BUILD LOOP &mdash; TWO SPEEDS</div>
+    <dl>
+      <dt>Per slice</dt>
+      <dd>Gate&nbsp;1 (freeze the slice spec) &rarr; tests-first (golden files + ledger invariants written before posting code) &rarr; build &rarr; verify (CI green, golden files match) &rarr; design the screen &rarr; Gate&nbsp;2 (review) &rarr; ship. &ldquo;CI green&rdquo; is the definition of done.</dd>
+      <dt>Money code vs everything else</dt>
+      <dd><span class="badge b-money">SUPERVISED</span> Ledgers, payments, Tally vouchers and GST are <strong>read diff-by-diff by a human</strong> even when CI is green. <span class="badge b-next">FREE</span> Screens, reports and scaffolding the agents run freely and are reviewed after. The slow lane is where the rupees are.</dd>
+    </dl>
+  </div>
+
+  <h3>Working norms for this build</h3>
+  <div class="callout co-note">
+    <strong>How the work is recorded and communicated.</strong>
+    <ul class="tight">
+      <li><strong>Deliverables are HTML, never markdown</strong> &mdash; everything Anand reads or shares is an HTML file (PDF via the house generator when a hand-off needs it).</li>
+      <li><strong>Plain, non-technical language</strong> in every client-facing doc and chat; money always in INR Lakh/Crore (e.g. <code>Rs&nbsp;28,50,000</code>), never raw digits.</li>
+      <li><strong>GitHub issues are the source of truth for work</strong> &mdash; the backlog, each slice's frozen scope, and its acceptance live as issues, not in scattered docs. <strong>Project status lives only in <code>CLAUDE.md</code> and <code>PROJECT-MAP.html</code></strong>; build docs do <em>not</em> carry their own status (the one habit that has already produced stale &ldquo;not yet designed&rdquo; claims).</li>
+      <li><strong>The ADR / foundation-sketch set is being replaced, not ratified.</strong> The earlier ADRs (<code>0001-stack.md</code> &hellip; <code>0007-entity-gstin-scoping.md</code>) presented unsettled choices &mdash; most sharply the <em>stack</em> &mdash; as if locked, and even disagreed with each other. They are treated here as <strong>input and ideas only</strong>. This report re-ratifies the foundation as a fresh set: the stack (FD-0, Q11: Python/Django + React-TS-PWA + PostgreSQL) and data-scoping (FD-8, Q12: app-layer <code>django-scopes</code>, schema RLS-ready) calls are now <strong>closed</strong>, alongside the stack-independent decisions (integer-paise money, append-only ledgers, snapshotted state/GSTIN, the relational entity&rarr;GSTIN&rarr;store hedge, one unified RBAC, golden-file + cross-store-isolation CI gate).</li>
+    </ul>
+  </div>
+
+  <div class="callout co-warn">
+    <strong>Two things this plan refuses to do.</strong> It will not write all module PRDs upfront (the design already plays that role; re-specifying it whole would rot before code catches up), and it will not build one module to 100&percnt; before starting the next (that path leaves the spine untested end-to-end until the very end). The discipline is always the same: <em>scaffold the floor, prove one slice through every layer, then the next.</em></p>
+  </div>
+</section>
+
+<section id="toolkit">
+<h2 class="sec">Your build toolkit</h2>
+
+<p>Before deciding <em>how</em> to build, take stock of <em>what is already in the toolbox</em>. Three kits sit on the shelf today: the <strong>gstack skills</strong> (a full software-lifecycle command set), the <strong>.agents/skills</strong> (a DDD, issues-as-source-of-truth pipeline), and <strong>Sandcastle</strong> (an autonomous agent that turns a labelled GitHub issue into a reviewed branch). This section is a categorised inventory mapped to build stages — name, what it does, and when to reach for it.</p>
+
+<div class="callout co-note">
+<strong>How to read this.</strong> These are not aspirations — every entry below is installed and runnable now. The point is to build by <em>reaching for the right tool at the right stage</em>, not by hand-rolling each step. Two caveats to settle before relying on the autonomous parts are flagged at the end.
+</div>
+
+<!-- ============================================================ -->
+<h3>(A) gstack skills, by build stage</h3>
+
+<p>Skill directories live under <code>/Users/anand/.claude/skills/</code>. Each is invoked as a slash command (e.g. <code>/spec</code>). <span class="badge b-open">Interactive</span> drives a question dialog with you; <span class="badge b-ai">Autonomous</span> runs end-to-end; <span class="badge b-no">Hook</span> is a passive guard that gates other tools rather than running a workflow.</p>
+
+<h4>PLAN <span class="badge b-open">mostly interactive</span></h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/spec</code></td><td>Turns vague intent into a precise, executable spec/issue in five phases</td><td>Start of any slice — pin the <em>what</em> before writing tests or code (Gate 1)</td></tr>
+<tr><td><code>/office-hours</code></td><td>YC office-hours forcing questions: "is this worth building"</td><td>Before committing to a feature whose value is unproven</td></tr>
+<tr><td><code>/plan-ceo-review</code></td><td>CEO/founder-mode review — rethink the problem, find the 10-star product</td><td>When the framing may be wrong, not just the execution</td></tr>
+<tr><td><code>/plan-eng-review</code></td><td>Eng-manager review — locks architecture &amp; execution plan</td><td>Before a slice that touches the ledger/posting spine</td></tr>
+<tr><td><code>/plan-design-review</code></td><td>Designer's-eye plan review — rates each design dimension 0&ndash;10</td><td>Before building a store-facing screen</td></tr>
+<tr><td><code>/plan-devex-review</code></td><td>Developer-experience review — personas, onboarding</td><td>When store staff are the users</td></tr>
+<tr><td><code>/autoplan</code></td><td>Runs CEO + design + eng + DX reviews sequentially with auto-decisions, no human gate</td><td>Fast plan pressure-test when you don't want four separate sittings</td></tr>
+</table>
+
+<h4>DESIGN</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/design-consultation</code> <span class="badge b-open">interactive</span></td><td>Researches the landscape, proposes a full design system, writes <code>DESIGN.md</code></td><td>Once, to set the house look for the React PWA</td></tr>
+<tr><td><code>/design-shotgun</code> <span class="badge b-open">interactive</span></td><td>Generates multiple AI design variants on a comparison board for feedback</td><td>When a screen has several plausible layouts and you want to choose</td></tr>
+<tr><td><code>/design-html</code> <span class="badge b-ai">autonomous</span></td><td>Finalises an approved mockup into production Pretext-native HTML/CSS</td><td>After a mockup is approved — turn it into shippable markup</td></tr>
+<tr><td><code>/diagram</code> <span class="badge b-ai">autonomous</span></td><td>English/mermaid &rarr; diagram triplet (source + editable <code>.excalidraw</code> + render)</td><td>Document a workflow or posting flow as an editable diagram</td></tr>
+</table>
+
+<h4>IMPLEMENT</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/investigate</code> <span class="badge b-ai">autonomous</span></td><td>Systematic root-cause debugging in four phases, then fixes</td><td>A bug whose cause is unknown — let it find and fix</td></tr>
+<tr><td><code>/codex</code> <span class="badge b-ai">autonomous</span></td><td>OpenAI Codex CLI wrapper — independent diff review / second opinion (3 modes)</td><td>A second, model-independent read on money code before landing</td></tr>
+</table>
+
+<h4>REVIEW</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/review</code> <span class="badge b-ai">autonomous</span></td><td>Pre-landing PR review — diff vs base for SQL safety, LLM trust, etc.</td><td>Gate 2, before every merge — mandatory for ledger/payment diffs</td></tr>
+<tr><td><code>/design-review</code> <span class="badge b-ai">autonomous</span></td><td>Designer's-eye QA on the running app — finds visual/slop issues, then fixes</td><td>After a screen is built, before it ships to stores</td></tr>
+<tr><td><code>/health</code> <span class="badge b-ai">autonomous</span></td><td>Code-quality dashboard wrapping type-checker / linter / test tools</td><td>Periodic pulse-check on the whole repo</td></tr>
+</table>
+
+<h4>QA</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/qa</code> <span class="badge b-ai">autonomous</span></td><td>Systematically QA-tests a web app <em>and fixes</em> bugs found</td><td>Shake out a slice end-to-end when you want it self-healing</td></tr>
+<tr><td><code>/qa-only</code> <span class="badge b-ai">autonomous</span></td><td>Same QA pass but report-only — tests, never fixes</td><td>When you want the bug list without auto-edits (money paths)</td></tr>
+<tr><td><code>/browse</code> <span class="badge b-ai">autonomous</span></td><td>Fast headless browser — navigate, click, screenshot</td><td>Dogfood the running app; capture proof a slice works</td></tr>
+<tr><td><code>/benchmark</code> <span class="badge b-ai">autonomous</span></td><td>Performance regression detection via the browse daemon</td><td>Guard screen load in-browser over patchy networks</td></tr>
+</table>
+
+<h4>SHIP &middot; DEPLOY &middot; OBSERVE</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/ship</code> <span class="badge b-ai">autonomous</span></td><td>Merge base, run tests, review diff, bump VERSION, CHANGELOG, commit, push, open PR</td><td>End of a slice — turn a green branch into a PR</td></tr>
+<tr><td><code>/land-and-deploy</code> <span class="badge b-ai">autonomous</span></td><td>Merges the PR, waits for CI + deploy to finish</td><td>After review passes — push the slice live</td></tr>
+<tr><td><code>/setup-deploy</code> <span class="badge b-open">interactive</span></td><td>One-time: detects/configures the deploy platform for land-and-deploy</td><td>Once, during foundation setup</td></tr>
+<tr><td><code>/canary</code> <span class="badge b-ai">autonomous</span></td><td>Post-deploy canary — watches the live app for console errors</td><td>Right after a deploy, to catch breakage early</td></tr>
+</table>
+
+<h4>DOCS &middot; MEMORY</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/document-generate</code> <span class="badge b-ai">autonomous</span></td><td>Generates missing docs from scratch (Diataxis: tutorial/how-to/reference/explanation)</td><td>When a module has working code but no docs</td></tr>
+<tr><td><code>/document-release</code> <span class="badge b-ai">autonomous</span></td><td>Post-ship docs update — cross-references what changed</td><td>After a slice ships, to keep docs in step</td></tr>
+<tr><td><code>/make-pdf</code> <span class="badge b-ai">autonomous</span></td><td>Markdown &rarr; publication-quality PDF (proper margins)</td><td>A printable artifact for the client</td></tr>
+<tr><td><code>/context-save</code> &middot; <code>/context-restore</code> <span class="badge b-ai">autonomous</span></td><td>Captures / reloads git state, decisions, remaining work</td><td>Pause and resume a long build cleanly across sessions</td></tr>
+<tr><td><code>/learn</code> <span class="badge b-open">interactive</span></td><td>Review / search / prune / export project learnings</td><td>Curate what the project has learned over time</td></tr>
+<tr><td><code>/retro</code> <span class="badge b-ai">autonomous</span></td><td>Weekly engineering retrospective from commit history + timeline</td><td>End of week — what went well, what to change</td></tr>
+<tr><td><code>/setup-gbrain</code> &middot; <code>/sync-gbrain</code></td><td>Install the gbrain CLI / reindex the repo into searchable memory</td><td>Once at setup, then to keep code search fresh</td></tr>
+</table>
+
+<h4>SAFETY <span class="badge b-no">passive hooks</span></h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td><code>/careful</code></td><td>Warns before destructive commands (<code>rm -rf</code>, <code>DROP TABLE</code>, force-push)</td><td>Always on — cheap insurance against accidents</td></tr>
+<tr><td><code>/freeze</code> &middot; <code>/unfreeze</code></td><td>Restricts Edit/Write to one directory for the session / clears it</td><td>When working a single module and you want edits fenced in</td></tr>
+<tr><td><code>/guard</code></td><td>Full safety: careful + freeze combined</td><td>The maximum-supervision setting for money code</td></tr>
+</table>
+
+<div class="callout co-key">
+<strong>The gstack spine in one line.</strong> <code>/spec</code> (or <code>/autoplan</code>) &rarr; <code>/design-html</code> &rarr; build &rarr; <code>/qa</code> &rarr; <code>/review</code> &rarr; <code>/ship</code> &rarr; <code>/land-and-deploy</code> &rarr; <code>/canary</code> — with <code>/guard</code> on for ledger work and <code>/codex</code> as a second pair of eyes on money diffs.
+</div>
+
+<!-- ============================================================ -->
+<h3>(B) The .agents/skills — the DDD, issues-as-source-of-truth pipeline</h3>
+
+<p>These live at <code>/Users/anand/conductor/workspaces/KDPS/dubai/.agents/skills/</code> and compose into a single pipeline: <strong>domain language &rarr; PRD &rarr; issues &rarr; TDD &rarr; review</strong>, with GitHub Issues as the one source of truth. They are tuned for a DDD codebase that reads from a root <code>CONTEXT.md</code> + <code>docs/adr/</code> and never re-litigates a settled decision.</p>
+
+<h4>DOMAIN — establish language &amp; decisions first</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>ubiquitous-language</td><td>Extracts a DDD glossary from the conversation, flags synonyms/ambiguity, proposes canonical terms &rarr; writes <code>UBIQUITOUS_LANGUAGE.md</code></td><td>First, to fix shared words (SKU = Style&times;Size&times;Color, SOR/Outright/Hybrid, document vs ledger)</td></tr>
+<tr><td>grill-with-docs</td><td>Relentless one-question-at-a-time interview that stress-tests a plan against the domain model and updates <code>CONTEXT.md</code> / ADRs inline as decisions crystallise</td><td>Pin a foundation decision (entity/GSTIN scoping, RBAC) and record it as an ADR</td></tr>
+<tr><td>grill-me</td><td>Same relentless plan interview, without the docs-update / domain-model layer</td><td>Lighter pressure-test when no docs need writing</td></tr>
+</table>
+
+<h4>SPEC — pin the <em>what</em>; explore design where needed</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>to-prd</td><td>Synthesises the current conversation into a PRD (problem, solution, user stories, seams) and publishes it to GitHub Issues with the <code>ready-for-agent</code> intent; does not interview</td><td>When the intent is already agreed and you want it on the tracker</td></tr>
+<tr><td>design-an-interface</td><td>"Design It Twice" — spawns 3+ parallel sub-agents to generate radically different interface designs under different constraints, then compares</td><td>An API/module shape you might get wrong if you only try once</td></tr>
+<tr><td>prototype</td><td>Builds throwaway code to answer one question — a runnable terminal app (logic/state) or several toggleable UI variants; capture the answer, then delete</td><td>De-risk a data model / state machine before committing to it</td></tr>
+</table>
+
+<h4>ISSUES — slice the work</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>to-issues</td><td>Breaks a plan/PRD into independently-grabbable GitHub issues as tracer-bullet vertical slices (each cuts all layers end-to-end), tagged HITL/AFK with blocked-by deps</td><td>Turn a PRD into the actual backlog of slices</td></tr>
+<tr><td>triage</td><td>Moves issues through a state machine (category bug/enhancement; state needs-triage &rarr; needs-info &rarr; ready-for-agent / ready-for-human / wontfix); every triage comment carries an AI disclaimer</td><td>Daily — keep the backlog labelled and pickable</td></tr>
+</table>
+
+<h4>IMPLEMENT (TDD) &amp; debug</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>tdd</td><td>Red&ndash;green&ndash;refactor in vertical slices (one test &rarr; one impl &rarr; repeat); tests verify behaviour through public interfaces, never implementation; bans horizontal "all tests first"</td><td>Building any slice — mandatory for the all-or-nothing posting path</td></tr>
+<tr><td>diagnose</td><td>Disciplined hard-bug loop: build a fast deterministic feedback loop first, then reproduce &rarr; minimise &rarr; hypothesise &rarr; instrument &rarr; fix &rarr; regression-test</td><td>A stubborn bug that resists ordinary debugging</td></tr>
+</table>
+
+<h4>REVIEW</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>review</td><td>Two-axis diff review against a fixed point — <strong>Standards</strong> (repo coding standards) + <strong>Spec</strong> (originating issue/PRD) — run as parallel sub-agents, reported side by side</td><td>Before landing a slice — confirm it both reads right and does what the issue asked</td></tr>
+</table>
+
+<h4>REFACTOR / ARCHITECTURE — loops back into ISSUES</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>improve-codebase-architecture</td><td>Finds "deepening opportunities" (shallow &rarr; deep modules) using a strict glossary (module/interface/depth/seam/adapter) and the deletion test, informed by <code>CONTEXT.md</code> + ADRs</td><td>Periodically, to spot modules worth consolidating</td></tr>
+<tr><td>request-refactor-plan</td><td>Interviews you, then files a GitHub issue with a refactor plan broken into the tiniest possible always-working commits (Fowler)</td><td>Turn an architecture insight into a safe, incremental backlog item</td></tr>
+</table>
+
+<h4>SAFETY &amp; SUPPORT</h4>
+<table>
+<tr><th>Skill</th><th>What it does</th><th>When to reach for it</th></tr>
+<tr><td>setup-pre-commit</td><td>Installs Husky + lint-staged (Prettier) + typecheck + test pre-commit hook</td><td>Once at repo init — every commit is formatted, typed, tested</td></tr>
+<tr><td>git-guardrails-claude-code</td><td>Adds a PreToolUse hook blocking dangerous git (push, reset --hard, clean -f, branch -D)</td><td>Once at repo init — fence off destructive git</td></tr>
+<tr><td>handoff</td><td>Compacts the conversation into a handoff doc (to OS temp, not the repo) with a "suggested skills" section; references artifacts by path</td><td>Hand a long build to another agent/session</td></tr>
+<tr><td>write-a-skill</td><td>Scaffolds a new skill (SKILL.md + optional REFERENCE/EXAMPLES/scripts) with progressive disclosure</td><td>When a repeated task deserves its own tool</td></tr>
+</table>
+
+<div class="callout co-warn">
+<strong>Two facts to settle before driving this pipeline.</strong> (1) There is no local <code>spec</code> skill here — only the gstack <code>/spec</code>; in .agents, <code>to-prd</code> plays the spec-publishing role. (2) The tracker docs name repo <code>bruhanand/KDPS</code> while CLAUDE.md/memory reference the KDPS repo under a different owner — confirm which remote <code>gh</code> targets <em>before</em> filing issues, or the backlog lands in the wrong place.
+</div>
+
+<div class="callout co-key">
+<strong>The .agents spine in one line.</strong> ubiquitous-language (&rarr; <code>CONTEXT.md</code>) &rarr; grill-with-docs (&rarr; ADRs) &rarr; to-prd &rarr; to-issues &rarr; tdd &rarr; review &rarr; ship — with prototype / design-an-interface feeding the spec, diagnose feeding implement, and improve-architecture / request-refactor-plan feeding new issues. Safety (setup-pre-commit, git-guardrails) is wired once and runs continuously.
+</div>
+
+<!-- ============================================================ -->
+<h3>(C) Sandcastle — the autonomous build engine</h3>
+
+<div class="card mod.spine">
+<div class="lab">AUTONOMOUS AGENT &middot; THE WORK QUEUE IS A GITHUB LABEL</div>
+<dl>
+<dt>What it is</dt>
+<dd>An autonomous coding loop ("Sequential Reviewer" variant) that turns labelled GitHub issues into reviewed branches with no human at the keyboard. Driven by <code>@ai-hero/sandcastle</code>, launched with <code>npx tsx .sandcastle/main.mts</code>.</dd>
+
+<dt>The loop</dt>
+<dd>Up to 10 iterations, <strong>one issue per iteration</strong>. Each iteration spins up <strong>one Docker sandbox</strong> shared by two phases:
+<ul class="tight">
+<li><strong>1 &middot; Implement.</strong> A Claude Code agent runs <code>gh issue list --state open --label Sandcastle</code> — <em>that filtered list is the sole source of truth</em>. It picks the highest-priority unblocked issue (<strong>bug &gt; tracer bullet &gt; polish &gt; refactor</strong>), works it red&ndash;green&ndash;refactor, runs <code>npm run typecheck</code> + <code>npm run test</code>, makes <strong>one</strong> <code>RALPH:</code>-prefixed commit on a fresh branch <code>sandcastle/sequential-reviewer/&lt;timestamp&gt;</code>, then closes the issue with "Completed by Sandcastle".</li>
+<li><strong>2 &middot; Review.</strong> A second Claude Code agent diffs the branch against target, checks correctness/clarity/security/tests, applies <code>.sandcastle/CODING_STANDARDS.md</code>, and either fixes &amp; commits on the same branch or does nothing if clean. Refactor only — functionality preserved.</li>
+</ul>
+The implement phase opens <em>commits on a branch</em>, not literally a PR — a human (or <code>/ship</code>) turns the reviewed branch into a merged PR. If Phase 1 produces no commits, the loop stops: empty or blocked backlog. If the agent is blocked it comments and leaves the issue open.</dd>
+
+<dt>How you drive it</dt>
+<dd>Triage an issue to state <code>ready-for-agent</code>, which maps to the GitHub label <strong><code>Sandcastle</code></strong>. There is no separate <code>ready-for-agent</code> label — <strong><code>Sandcastle</code> IS the ready signal</strong>. Run the launcher; the agent picks the top unblocked labelled issue, implements, reviews, closes. You ship the reviewed branch.</dd>
+</dl>
+</div>
+
+<h4>Coding standards it enforces (<code>.sandcastle/CODING_STANDARDS.md</code>)</h4>
+<table>
+<tr><th>Area</th><th>Rule</th></tr>
+<tr><td>Stack</td><td>React (TS) PWA + Python/Django + PostgreSQL</td></tr>
+<tr><td>Style</td><td>TS: camelCase vars/fns, PascalCase components/types, named exports. Python: PEP 8, snake_case fns/vars, PascalCase classes. No commented-out code, no stray TODOs.</td></tr>
+<tr><td>Testing</td><td>Every new behaviour gets a test (pytest / JS runner). <strong>Ledger/posting logic must test the all-or-nothing path</strong> — fully succeeds or fully rolls back. Descriptive test names.</td></tr>
+<tr><td>KDPS domain (never violate)</td><td>SKU = Style&times;Size&times;Color (never collapse to style); documents write ledgers, ledgers append-only (reverse + repost, never mutate); snapshot masters onto documents at write time; GST is data not code (date/slab-effective tables, two GSTINs Bihar/Jharkhand, Tally is book of record); profitability is derived (cost from PT/invoice, revenue from POS); AI at the edges only (reads ledgers, never writes); single-responsibility modules, composition over inheritance; INR with Lakh/Crore formatting.</td></tr>
+<tr><td>Review-only checks</td><td>Reduce nesting/complexity, no nested ternaries, no unsafe casts / <code>any</code>, no injection or credential leaks.</td></tr>
+</table>
+
+<h4>What a GOOD Sandcastle issue looks like</h4>
+<p>The agent reads only an issue's <code>title</code>, <code>body</code>, <code>labels</code>, <code>comments</code> and works it autonomously in one pass (<code>maxIterations: 1</code>), so the issue must carry everything:</p>
+<ul class="tight">
+<li><strong>Has the <code>Sandcastle</code> label</strong> — without it the agent literally cannot see the issue.</li>
+<li><strong>One thin vertical slice / tracer bullet</strong>, small enough for a single commit. Big issues stall the per-issue review model.</li>
+<li><strong>Self-contained body</strong> — states the change, acceptance criteria, and a reference to the parent PRD (the agent pulls it in). No assumed external context.</li>
+<li><strong>Spells out the test expectation</strong> — RGR writes the failing test first; say what "green" looks like, especially the all-or-nothing ledger path for posting work.</li>
+<li><strong>Encodes dependencies</strong> ("blocked by #N") — the agent skips issues blocked by other open issues.</li>
+<li><strong>Sets priority via type</strong> so ordering works: bug &gt; tracer bullet &gt; polish &gt; refactor.</li>
+<li><strong>One concern per issue</strong> — multiple concerns get only one iteration of attention and risk a partial commit.</li>
+</ul>
+
+<div class="callout co-money">
+<strong>The repo precondition.</strong> Sandcastle gates its commit on a green <code>npm run typecheck</code> and <code>npm run test</code>, and copies <code>node_modules</code> in from the host to skip a cold install. So both scripts must exist and pass on main before a run. Inputs needed: <code>CLAUDE_CODE_OAUTH_TOKEN</code> (or <code>ANTHROPIC_API_KEY</code>) for agent auth, and a fine-grained <code>GH_TOKEN</code> (Issues read/write + Metadata read) for the <code>gh issue</code> calls.
+</div>
+
+<div class="callout co-warn">
+<strong>Two caveats to fix before relying on Sandcastle.</strong> (1) The prompts/comments say "sonnet" but the code instantiates <code>claude-opus-4-7</code> for both phases — a stale model ID versus the Opus you run today; update it consciously. (2) <code>triage-labels.md</code> and <code>issue-tracker.md</code> name repo <code>bruhanand/KDPS</code> — confirm the <code>--label Sandcastle</code> queries point at the live repo before a run, or the agent works the wrong backlog.
+</div>
+
+<div class="callout co-note">
+<strong>How the three kits fit together.</strong> The .agents pipeline (B) produces the well-formed, <code>Sandcastle</code>-labelled issues that Sandcastle (C) consumes; gstack (A) wraps the human-supervised stages around both — planning before issues exist, and QA / review / ship / deploy / canary after a branch lands. Money code stays on the supervised gstack path with <code>/guard</code> and <code>/review</code>; screens and scaffolding are the natural fodder for Sandcastle's autonomous loop.
+</div>
+
+</section>
+
+<section id="foundation">
+  <h2 class="sec">The foundation build &mdash; project setup before any slice</h2>
+
+  <p>This is <strong>slice 0</strong>: the scaffold that must exist before a single line of business logic is written. It carries <em>no</em> domain rules &mdash; no booking, no GRN, no sale &mdash; only the rails every later slice rides on. The test of "foundation done" is mechanical: the repo builds, CI is green on an empty walking skeleton, login works with one seeded role, and a throwaway document can post one balanced pair of ledger legs into Postgres and be read back through the app-layer scoped access (<code>django-scopes</code>, FD-8). Nothing here is a business decision; everything here is a <em>correctness</em> decision that would be ruinous to retrofit. The patterns are ported from ERPNext as <strong>plain Django code + migrations</strong> &mdash; never the Frappe meta-runtime (<code>frappe.model.document.Document</code> is a separate engine, not vendored, and copying it violates Rule&nbsp;12).</p>
+
+  <div class="callout co-key">
+    <strong>The stack is ratified (Q11, FD-0), not assumed.</strong> The engine is <strong>Python/Django + React-TS-PWA + PostgreSQL</strong> &mdash; the earlier "TypeScript end-to-end" sketch is dead (hosting to be decided later). ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations; the Frappe DocType meta-runtime is rejected (Rule&nbsp;12). Cards 1&ndash;7 build directly on this answer; the only stack-bound mechanics (auth in card&nbsp;3, the CI shape in card&nbsp;6, deploy in card&nbsp;7) are now settled too. Scaffolding can begin.</p>
+  </div>
+
+  <h3>Foundation decisions to RATIFY <span class="badge b-open">replaces the distrust-set ADRs</span></h3>
+  <p>The seven ADRs (0001&ndash;0007) are treated as <em>input ideas only</em> and are being deleted. Below, each is re-issued as a foundation decision (FD) to ratify fresh. The stack (FD-0, Q11) and data-scoping (FD-8, Q12) calls are now <strong>closed</strong>; the rest are stack-independent and ratify as a block.</p>
+  <table>
+    <tr><th>FD</th><th>Area (old ADR)</th><th>What to ratify</th><th>Status</th></tr>
+    <tr><td><strong>FD-0</strong></td><td>Stack (0001)</td><td><strong>Ratified (Q11):</strong> Python/Django engine + React-TS-PWA + PostgreSQL (hosting to be decided later). "TS everywhere" is dead &mdash; the stack is a <em>typed PWA (TS) + typed Django (mypy/pydantic) + a generated typed client at the API seam</em>, not one language. The Frappe DocType meta-runtime is rejected (Rule&nbsp;12); ERPNext's <em>contracts</em> are re-implemented as plain Django models/migrations.</td><td><span class="badge b-locked">RATIFIED</span></td></tr>
+    <tr><td><strong>FD-1</strong></td><td>Repo layout (0002)</td><td>Monorepo, one Django app per design module + thin <code>core</code> kernel, downward-FK-only, scaffold <em>only</em> the early-slice apps (masters, inbound, vendors).</td><td><span class="badge b-locked">RATIFY</span> (sound; grow per slice)</td></tr>
+    <tr><td><strong>FD-2</strong></td><td>DB conventions (0004)</td><td>Integer paise, append-only ledgers, effective-dated masters, three keys, snapshotted state+GSTIN. <strong>The most stack-independent and load-bearing set.</strong></td><td><span class="badge b-locked">RATIFY</span> (heart of correctness)</td></tr>
+    <tr><td><strong>FD-3</strong></td><td>RBAC (0003)</td><td>One unified RBAC = roles+perms as data + data-scoping + maker-checker in <code>core</code>. Merges D4 payments-roles with D8 edit-grid. <em>Required</em> before login.</td><td><span class="badge b-locked">RATIFY</span> (the needed merge)</td></tr>
+    <tr><td><strong>FD-4</strong></td><td>Entity/GSTIN (0007)</td><td><code>LegalEntity &rarr; GSTIN &rarr; Store</code> relationally, so one-company-vs-two is a data row not a migration. Highest blast radius.</td><td><span class="badge b-locked">RATIFY</span> (hedge the open CA fact)</td></tr>
+    <tr><td><strong>FD-5</strong></td><td>CI gate (0005)</td><td>Green-required-to-merge: typecheck + lint + tests on real Postgres incl. golden-file, ledger-invariant, append-only-as-restricted-role, cross-store-isolation. Money code = mandatory human read.</td><td><span class="badge b-locked">RATIFY</span> (principles stack-independent)</td></tr>
+    <tr><td><strong>FD-6</strong></td><td>Auth + UI + seed (0006)</td><td>Session-cookie auth (httpOnly/Secure/SameSite, CSRF), lockout; light Tailwind+Radix component system for store computers and browsers; idempotent seed.</td><td><span class="badge b-locked">RATIFY</span> (auth mech settled with FD-0)</td></tr>
+    <tr><td><strong>FD-7</strong></td><td>Deploy (0001 tail)</td><td>Deploy / hosting &mdash; to be decided later. The same-origin shape is settled (one service serving the built SPA, no CORS, one cookie domain) + managed Postgres + a secrets store + an AI platform later; the cloud provider and region are not yet chosen.</td><td><span class="badge b-warn">DEFERRED</span> (hosting to be decided)</td></tr>
+    <tr><td><strong>FD-8</strong></td><td>Data scoping</td><td><strong>Ratified (Q12):</strong> store/GSTIN/brand/season isolation via <strong>app-layer scoping (<code>django-scopes</code>)</strong>, fail-closed, with the schema kept <strong>RLS-ready</strong> (carry store/brand/season/state-GSTIN as declared FK dimension columns on every ledger leg from the kernel, so Postgres RLS can be switched on later without a retrofit). Stronger than ERPNext's app-level <code>company=</code> filter &mdash; see card 3.</td><td><span class="badge b-locked">RATIFIED</span></td></tr>
+  </table>
+
+  <h3>The foundation checklist &mdash; seven cards</h3>
+
+  <!-- ============ CARD 1 ============ -->
+  <div class="card mod.base">
+    <div class="lab">1 &mdash; REPO + MODULE LAYOUT (FD-1)</div>
+    <p>Monorepo. One Django app per design module mirroring D1&ndash;D8, over <strong>one Postgres database</strong>. ERPNext is the existence proof: modules are just folders (<code>erpnext/stock/</code>, <code>erpnext/accounts/</code>, <code>erpnext/selling/</code>) over one SQL schema, posting cross-module by an in-process <em>call</em> not a network hop (<code>stock/doctype/stock_entry/stock_entry.py</code> &rarr; <code>accounts/general_ledger.py</code>). Do the same: clean internal boundaries, one deployable app.</p>
+    <dl>
+      <dt>Layout</dt><dd><code>app/{backend,frontend}</code>. Backend Django project + apps: <code>core</code> (kernel), <code>masters</code>, then <code>vendors</code>, <code>inbound</code>, <code>outbound</code>, <code>payments</code>, <code>offers</code>, <code>tally</code>, <code>analytics</code> &mdash; added <em>per slice, not upfront</em>.</dd>
+      <dt>Slice-0 scope</dt><dd>Scaffold only what the first slices (1 master data &rarr; 2 inbound &rarr; 3 vendor liability) need: <code>core</code> + <code>masters</code> + <code>vendors</code> + <code>inbound</code>. Other apps are empty until their slice.</dd>
+      <dt>Dependency rule</dt><dd>Peers never FK each other (use IDs / snapshot); downward FK to <code>core</code> and <code>masters</code> only. Enforce with <code>import-linter</code> contracts in CI.</dd>
+      <dt>One DB</dt><dd>Single Postgres &mdash; all-or-nothing multi-row ledger writes need one transactional relational DB. This is exactly why BaaS/Supabase was rejected; ERPNext's GL independently arrived at the same constraint (<code>general_ledger.py:process_debit_credit_difference</code>).</dd>
+    </dl>
+    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> Run <code>/spec</code> to freeze the slice-0 layout, then scaffold by hand (Bash <code>django-admin startproject</code> + <code>startapp</code> per app; <code>Write</code> the <code>import-linter</code> contract file and <code>pyproject.toml</code> deps). Use <code>/setup-pre-commit</code>-adjacent wiring for the linter in CI (card&nbsp;6).</div>
+  </div>
+
+  <!-- ============ CARD 2 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">2 &mdash; DB CONVENTIONS (FD-2) &middot; the heart of correctness</div>
+    <p>The most stack-independent, most load-bearing card. These conventions are properties of the ledger, not of Django, and align one-for-one with the 12 rules.</p>
+    <dl>
+      <dt>Money = integer paise</dt><dd>All amounts <code>bigint</code> paise (Rs 28,50,000 stored as <code>285000000</code>). Rates and GST% are <code>NUMERIC</code>. GST / discount split computed in <code>Decimal</code>, rounded half-up, with an explicit rounding line so &Sigma;dr=&Sigma;cr holds &mdash; mirrors ERPNext's round-off GLE in <code>general_ledger.py</code>. <em>Never float.</em></dd>
+      <dt>Append-only ledgers</dt><dd>Ledger rows INSERT-only, enforced three ways: app writes only via the posting engine; <code>REVOKE UPDATE, DELETE</code> from the app role; a trigger as backstop. Correction = a new dated reversing row, originals untouched &mdash; ported from ERPNext's immutable-ledger mode (<code>gl_entry.py:325</code> hard-throws on single-leg cancel; <code>general_ledger.py:make_reverse_gl_entries</code> posts sign-swapped legs with today's date).</dd>
+      <dt>Effective-dated masters</dt><dd>SCD-2 on slab/price/rate masters (apparel GST slabs, offer dials): <code>valid_from</code>/<code>valid_to</code>, look up "the row in force on the document date." GST and offers are <em>data, not code</em>. ERPNext has no native season/effective-date on items &mdash; this is a KDPS add.</dd>
+      <dt>Three distinct keys</dt><dd>(1) <code>bigint</code> surrogate PK; (2) a human <strong>naming series</strong> doc-number = idempotency guard + Tally join key &mdash; ported from ERPNext <code>autoname:"naming_series:"</code> + atomic <code>Series</code> table (<code>stock_entry.json:4</code>, <code>gl_entry.json:3</code> = <code>ACC-GLE-.YYYY.-.#####</code>); re-implement as a Postgres sequence-per-prefix or <code>SELECT &hellip; FOR UPDATE</code> counter, prefix = state-GSTIN/store/type, e.g. <code>DEO-SAL-20260620-001</code>; (3) a UUID idempotency key for external-edge retries.</dd>
+      <dt>docstatus lifecycle (ported from ERPNext)</dt><dd>Re-implement <code>draft(0) &rarr; submitted/posted(1) &rarr; cancelled(2)</code> as an explicit Django status FSM + a single <code>post()</code> method per document type that emits balanced legs in one DB transaction. Mirrors <code>stock_entry.py:323</code> <code>on_submit</code> (writes ledgers) and <code>:346</code> <code>on_cancel</code> (reverses). <strong>Do NOT inherit a generic submittable base that mutates global behaviour</strong> &mdash; that is the meta-runtime trap.</dd>
+      <dt>Snapshotted state + GSTIN</dt><dd><code>state</code> and <code>gstin</code> are first-class columns copied onto the document at post time from the entity tree (card&nbsp;4) &mdash; never re-derived later. Plus actor + UTC timestamp on every row; single writer = the server.</dd>
+      <dt>Masters vs ledgers</dt><dd>Masters soft-delete (flag-don't-block); ledgers insert-only. Two different disciplines, never confused.</dd>
+    </dl>
+    <div class="callout co-money"><strong>Tasks &middot; tool.</strong> Hand-write the <code>core</code> abstract base models (<code>MoneyField</code> = bigint paise; <code>LedgerEntry</code> append-only base; <code>EffectiveDated</code> mixin; <code>NamingSeries</code> counter; <code>post_entries()</code> service). Use <code>/tdd</code> to write the ledger-invariant + append-only-as-restricted-role tests <em>before</em> the engine. Migrations via <code>manage.py makemigrations</code>; the <code>REVOKE</code> grants go in a raw-SQL migration.</div>
+  </div>
+
+  <!-- ============ CARD 3 ============ -->
+  <div class="card mod.cross">
+    <div class="lab">3 &mdash; AUTH + UNIFIED RBAC (FD-3, FD-6)</div>
+    <p>One unified authorization model is <em>required</em> before login &mdash; it merges the two roles models the audit flagged (D4 payments maker&ne;checker&ne;payer vs D8 edit-rights grid). ERPNext validates "RBAC-as-data": role-scoped permission rows live in the DocType JSON (<code>gl_entry.json:397-411</code> &mdash; <code>Accounts User</code>/<code>Accounts Manager</code>/<code>Auditor</code>), with field-level <code>permlevel</code> and <code>ignore_user_permissions</code> (<code>item.json:170</code>). Re-implement as model-backed tables + a policy layer &mdash; NOT static <code>@permission_required</code> decorators alone, because amount-tiered approval bands must be configurable data.</p>
+    <dl>
+      <dt>Layer 1 &mdash; roles &amp; perms as data</dt><dd>A role &rarr; screen/action &rarr; allow matrix stored in tables, so a new role = config not code. ~9 seed roles.</dd>
+      <dt>Layer 2 &mdash; data scoping</dt><dd>Each user scoped <code>all / region / store-group / store</code>, resolved against the entity tree (card&nbsp;4). This is where KDPS is <em>stronger than ERPNext</em>, which only filters by <code>company</code> in app code.</dd>
+      <dt>Layer 3 &mdash; maker-checker</dt><dd>Four-eyes / amount-band approval lives in <code>core</code>, shared by every money document. The D4 matrix becomes data rows, not branches.</dd>
+      <dt>Auth mechanism (FD-6)</dt><dd>Django session cookies (httpOnly + Secure + SameSite, CSRF), phone-or-email + password + lockout. Owners get WhatsApp digests, not logins. Step-up OTP deferred. Django auth = identity/session only; the custom matrix is the single authz authority.</dd>
+    </dl>
+    <div class="callout co-key"><strong>RATIFIED (Q12, FD-8) &mdash; app-layer scoping, schema RLS-ready.</strong> Store/GSTIN isolation is enforced at the app layer via <strong><code>django-scopes</code></strong> (a fail-closed scoped manager that filters every read by the user's scope), with the schema kept <strong>RLS-ready</strong>: store/brand/season/state-GSTIN are carried as declared FK dimension columns on every ledger leg <em>from the kernel</em>, so Postgres Row-Level Security can be switched on later as defence-in-depth without retrofitting data. App-layer first because it is simpler to test and override for back-office and avoids a one-way RLS commitment before data exists; the FK dimensions mean RLS is a configuration step, not a migration. A 5-minute infra check (non-owner role + <code>SET LOCAL</code> under PgBouncer transaction pooling) confirms the RLS path stays open. Either way, write the <strong>cross-store-isolation test</strong> as foundation coverage now (card&nbsp;5).</div>
+    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> <code>/spec</code> the unified RBAC (it is the audit-required merge, so spec it carefully). Build the matrix models + policy layer + base scoped manager. Real people and Rs approval bands are an open client fact (CD5) &mdash; seed placeholders, confirm at the one CA sitting.</div>
+  </div>
+
+  <!-- ============ CARD 4 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">4 &mdash; THE ENTITY MODEL (FD-4) &middot; highest blast radius</div>
+    <p>Model <code>LegalEntity (1..n) &rarr; GSTIN (1..n, one per state) &rarr; Store/Warehouse</code> <strong>relationally</strong>, so "one company or two" is a data row, not a schema migration. Borrowed from ERPNext's Company + Cost-Center pattern (<code>cost_center.py:34</code> = store dimension) and the salvaged ADR-0007. ERPNext scopes multi-entity by Company only and is state-blind on the GL leg; KDPS makes <strong>state-GSTIN a first-class dimension</strong> so cross-state Bihar&harr;Jharkhand transfers post as IGST taxable supplies natively &mdash; do not regress to company-only.</p>
+    <dl>
+      <dt>Accounting dimensions</dt><dd>Every ledger leg carries <code>store_id</code>, <code>brand_id</code>, <code>season_id</code>, <code>gstin_id</code> as <strong>declared FK columns</strong> set from the document snapshot at post time. ERPNext gets dimensions by injecting custom fields onto every accounting doctype <em>at runtime</em> (<code>accounting_dimension.py:129 make_dimension_in_accounting_doctypes</code> &rarr; <code>:158 create_custom_field</code>) &mdash; right idea, wrong mechanism. <strong>Keep the dimension; drop the runtime schema-mutation.</strong></dd>
+      <dt>Snapshot down the tree</dt><dd>Documents snapshot <code>store &rarr; gstin &rarr; entity</code> at post time so history always explains itself even if a store later remaps.</dd>
+      <dt>Tally mapping falls out</dt><dd>One Tally company per <code>LegalEntity</code> &mdash; confirmed one PAN / one entity (26 Jun 2026) = one Tally company; the relational model still supports two by counting rows.</dd>
+      <dt>RBAC reuse</dt><dd>The card-3 data-scoping resolves against this exact tree &mdash; one structure, two consumers (postings + permissions).</dd>
+    </dl>
+    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> Hand-write the four models in <code>core</code>/<code>masters</code>; add the dimension FKs to the <code>LedgerEntry</code> base. <code>/grill-with-docs</code> against the remaining open CA fact (e-invoicing applicability); the entity count is confirmed (one PAN / two GSTINs / one Tally company, 26 Jun 2026), recorded in ADR-0007.</div>
+  </div>
+
+  <!-- ============ CARD 5 ============ -->
+  <div class="card mod.brain">
+    <div class="lab">5 &mdash; COMPONENT LIBRARY + SEED DATA (FD-6)</div>
+    <p>Build the design system <em>once</em>, light enough for store computers and browsers (browser/PWA, no installs).</p>
+    <dl>
+      <dt>Component system</dt><dd>Own components on <strong>Tailwind + Radix (shadcn pattern)</strong> + Tremor (charts) + TanStack Table. Built once: a money input/reader that displays Rs Lakh/Crore (<code>&#8377;28,50,000</code>) while reading integer paise; status chips (the docstatus states); data-table; app shell; Hindi/English helper. Light bundle = fast in the browser, and Claude-Design-friendly.</dd>
+      <dt>Idempotent seed</dt><dd>One re-runnable seed: 9 roles + the permission matrix + 16 stores + Ranchi WH + the GSTINs + brands across the 4 commercial models (SOR/Outright/Hybrid +) + the date-effective GST slab table. Idempotent so dev/staging/prod converge.</dd>
+      <dt>Golden seed for tests</dt><dd>Wire the ~150 real invoices in <code>code/pdf-to-pt/document/</code> as the corpus golden files (card&nbsp;6) read by per-slice tests.</dd>
+    </dl>
+    <div class="callout co-note"><strong>Tasks &middot; tool.</strong> Use <code>/design-consultation</code> then <code>/design-html</code> for the component system + tokens. Seed = an idempotent Django management command. Keep status/source-of-truth out of build docs (live only in CLAUDE.md + PROJECT-MAP) &mdash; the audit's drift warning.</div>
+  </div>
+
+  <!-- ============ CARD 6 ============ -->
+  <div class="card mod.cross">
+    <div class="lab">6 &mdash; CI GATE + PRE-COMMIT + GIT GUARDRAILS (FD-5)</div>
+    <p>"CI green" = the definition of done for a slice. GitHub Actions, green-required-to-merge. The polyglot shape is Django-specific but the <em>coverage principles</em> are stack-independent.</p>
+    <dl>
+      <dt>One orchestrated CI</dt><dd>Root <code>package.json</code> runs <code>npm run ci</code> = <strong>typecheck</strong> (tsc + mypy/django-stubs + import-linter + migration-check + API-client-in-sync) + <strong>lint</strong> + <strong>test</strong>.</dd>
+      <dt>Foundation test coverage (write now, before slices)</dt><dd><ul class="tight"><li><strong>Ledger-invariant</strong> &mdash; every posting balances &Sigma;dr=&Sigma;cr (the <code>general_ledger.py</code> contract).</li><li><strong>Append-only-as-restricted-role</strong> &mdash; the app role <em>cannot</em> UPDATE/DELETE a ledger row.</li><li><strong>Cross-store-isolation</strong> &mdash; a store-scoped user cannot read another store's rows (proves the card-3 app-layer <code>django-scopes</code> scoping, FD-8).</li><li><strong>Golden-file</strong> &mdash; posting output for a fixed input matches a checked-in expected file, on <em>real Postgres</em> (vitest + pytest), not SQLite.</li></ul></dd>
+      <dt>Two speeds</dt><dd>Money code (ledgers/payments/Tally/GST) = mandatory human read of every diff even when green; screens/reports/scaffolding run freely, reviewed after.</dd>
+      <dt>Pre-commit + git guardrails</dt><dd>Husky/lint-staged-equivalent: format + typecheck + fast tests on commit. Block dangerous git (push to default, <code>reset --hard</code>, <code>clean</code>, <code>branch -D</code>).</dd>
+    </dl>
+    <div class="callout co-key"><strong>Tasks &middot; tool.</strong> <code>/setup-pre-commit</code> for the commit hooks; <code>/git-guardrails-claude-code</code> for the destructive-git block; <code>/tdd</code> to author the four foundation tests first; <code>/review</code> + <code>/code-review</code> as the money-code human-read gate. Author the GitHub Actions workflow by hand (real-Postgres service container).</div>
+  </div>
+
+  <!-- ============ CARD 7 ============ -->
+  <div class="card mod.cross">
+    <div class="lab">7 &mdash; DEPLOY / HOSTING &mdash; TO BE DECIDED LATER (FD-7)</div>
+    <p>The cloud provider and region are <strong>to be decided later</strong>. No backend-as-a-service. The shape below is provider-agnostic; the specific host gets chosen before the money slices.</p>
+    <dl>
+      <dt>Runtime</dt><dd>One containerized service, <strong>same-origin</strong>: Django serves the built Vite SPA (no CORS, one cookie domain, simplest auth).</dd>
+      <dt>Database</dt><dd>Managed <strong>PostgreSQL</strong>, private networking, automated backups + PITR. Migrations run as a deploy step.</dd>
+      <dt>Secrets / config</dt><dd>A managed secrets store for DB creds, session keys, GSP/LLM API keys. No secrets in the repo.</dd>
+      <dt>Later</dt><dd>A hosted top model (AI platform to be decided later) for the layer-4 read-only intelligence; reserved, not wired in foundation.</dd>
+    </dl>
+    <div class="callout co-ext"><strong>Tasks &middot; tool.</strong> Use <code>/setup-deploy</code> then <code>/land-and-deploy</code> to wire the pipeline; smoke the empty skeleton end-to-end (login + one seeded role) with <code>/canary</code> after the first deploy. The walking-skeleton slices (1&ndash;2: master data, then inbound to the ledger) deploy through this same path &mdash; foundation proves the pipeline before any business logic rides it.</div>
+  </div>
+
+  <h3>Definition of "foundation done"</h3>
+  <div class="callout co-key">
+    <strong>Foundation is complete when the empty skeleton is provably real, not when it is feature-rich.</strong> Concretely: (1) monorepo builds, import-linter contracts pass; (2) a throwaway document posts one balanced paise leg-pair into Postgres inside a transaction and is read back; (3) the four foundation tests are green on real Postgres in CI, green-required-to-merge is on, pre-commit + git guardrails active; (4) one seeded user logs in through the same-origin service and sees only their scoped rows; (5) the seed is idempotent across dev/staging/prod; (6) FD-0 through FD-8 are ratified ADRs replacing the deleted distrust set. <strong>Then &mdash; and only then &mdash; slice 1 (master data + identity + the PT-line model) begins, followed by slice 2 (the GRN&rarr;PT&rarr;ledger inbound walking skeleton).</strong> The three externals (Ten Software POS API, Tally/TaxOne import, barcode tool) spike <em>in parallel</em> through all of this &mdash; they have lead time and gate later slices, not the foundation.</p>
+  </div>
+</section>
+
+<section id="slice-loop">
+  <h2 class="sec">The per-slice build loop &mdash; one repeatable cycle, one named tool per gate</h2>
+
+  <p>The build is <strong>one verified vertical slice at a time</strong> (a tracer bullet: booking &rarr; document &rarr; ledger postings &rarr; screen &mdash; cutting through all 5 layers for one workflow). This section is the <em>repeatable cycle</em> run for every slice, from the slice-0 foundation scaffold through slice-9 analytics. Each <strong>gate</strong> names the exact skill or tool that drives it and the artifact it must hand to the next gate. The spine is the same every time: <code>ubiquitous-language/CONTEXT &rarr; spec &rarr; plan-review &rarr; to-issues &rarr; tdd implement &rarr; review &rarr; qa &rarr; ship &rarr; deploy &rarr; canary &rarr; docs &rarr; retro &rarr; memory</code>. Nothing is built ahead of its slice &mdash; the data model, posting catalog, and golden files <strong>grow per slice</strong>, never all upfront.</p>
+
+  <div class="callout co-key">
+    <strong>The through-line.</strong> The loop is built so a slice cannot reach &ldquo;done&rdquo; until it <em>posts correctly</em>. The <code>spec</code> gate writes the golden files <em>before</em> any posting code exists; <code>tdd</code> turns them red then green; <code>review</code> + <code>ship</code> refuse to land unless they stay green. Golden files (built from the ~150 real invoices) and ledger-invariant tests are the contract that money code is held to &mdash; <strong>&ldquo;CI green&rdquo; <em>is</em> the definition of done</strong>, and money code (ledgers / payments / Tally / GST) gets a mandatory human read of every diff on top of green.</p>
+  </div>
+
+  <h3>The 13 gates &mdash; gate &middot; what happens &middot; skill/tool &middot; output</h3>
+
+  <table>
+    <tr><th>#</th><th>Gate</th><th>What happens</th><th>Skill / tool</th><th>Output handed forward</th></tr>
+
+    <tr>
+      <td>1</td>
+      <td><strong>DOMAIN</strong></td>
+      <td>Pin the language for this slice before any code. Extract a DDD glossary from the conversation, flag synonyms/ambiguity, name canonical terms (e.g. <em>GRN</em> vs <em>inward</em>, <em>SOR</em> vs <em>consignment</em>). New cross-cutting decisions stress-tested against the existing model and recorded as ADRs.</td>
+      <td><code>ubiquitous-language</code> &rarr; root <code>CONTEXT.md</code>; <code>grill-with-docs</code> for decisions &rarr; <code>docs/adr/</code> <span class="badge b-ai">interactive</span></td>
+      <td>Updated <code>CONTEXT.md</code> + any new ADR. Every later gate reads these and must not re-litigate them.</td>
+    </tr>
+
+    <tr>
+      <td>2</td>
+      <td><strong>SPEC</strong></td>
+      <td>Turn the agreed intent into a precise, executable spec for <em>this slice only</em>: the data-model delta, the <strong>posting entries</strong> (which documents emit which balanced ledger legs), and the <strong>golden files</strong> (input invoice/PT &rarr; expected ledger rows). Scope is frozen here. UI/data-shape questions inside the spec get explored with <code>design-an-interface</code> (design-it-twice) and de-risked with <code>prototype</code> (throwaway code answers one question).</td>
+      <td><strong><code>/spec</code></strong> (5-phase) <span class="badge b-ai">interactive</span> &middot; feeders: <code>design-an-interface</code>, <code>prototype</code></td>
+      <td>Slice spec (data model + posting catalog entries + golden files for this slice). The all-or-nothing ledger path is spelled out.</td>
+    </tr>
+
+    <tr>
+      <td>3</td>
+      <td><strong>PLAN REVIEW</strong></td>
+      <td>Pressure-test the spec before issues exist. Run the reviews <em>as warranted</em>: <code>plan-eng-review</code> locks architecture &amp; execution (always for money slices); <code>plan-ceo-review</code> when the slice changes what the product <em>is</em>; <code>plan-design-review</code> when it ships meaningful UI. <code>autoplan</code> runs all four sequentially with auto-decisions when no human gate is wanted.</td>
+      <td><code>plan-eng-review</code> &middot; <code>plan-ceo-review</code> &middot; <code>plan-design-review</code> <span class="badge b-ai">interactive</span> (or <code>autoplan</code>)</td>
+      <td>Ratified plan, or a revised spec sent back to gate 2. Architecture locked for the slice.</td>
+    </tr>
+
+    <tr>
+      <td>4</td>
+      <td><strong>ISSUES</strong></td>
+      <td>Break the ratified spec into independently-grabbable GitHub issues as tracer-bullet vertical slices, one concern per issue, with <code>blocked-by #N</code> deps and HITL/AFK tags. Each issue walked through the triage state machine. <strong>Issues are the single source of truth</strong> &mdash; no scratch files or local TODOs.</td>
+      <td><code>to-issues</code> &rarr; GitHub Issues; <code>triage</code> for state/labels <span class="badge b-ai">interactive</span></td>
+      <td>Labelled issues on the repo. AFK-ready ones carry the <strong><code>Sandcastle</code></strong> label (= the <code>ready-for-agent</code> signal; it <em>is</em> the autonomous work queue).</td>
+    </tr>
+
+    <tr>
+      <td>5</td>
+      <td><strong>IMPLEMENT</strong></td>
+      <td>Build one issue end-to-end with <strong>red-green-refactor</strong>: write the failing test (the golden file / ledger invariant) first, make it pass, refactor, repeat. <strong>Two speeds:</strong> money code &mdash; supervised, interactive (<code>tdd</code>, with <code>codex</code> for an independent second opinion on the diff); scaffolding/screens/reports &mdash; handed to <strong>Sandcastle</strong>, which picks the highest-priority unblocked <code>Sandcastle</code>-labelled issue, runs RGR, gates on <code>npm run typecheck</code> + <code>npm run test</code>, makes one <code>RALPH:</code> commit, and closes the issue. <code>diagnose</code>/<code>investigate</code> handle the hard bugs that surface.</td>
+      <td><code>tdd</code> (interactive, money) &middot; <strong>Sandcastle</strong> <code>npx tsx .sandcastle/main.mts</code> (AFK) &middot; <code>codex</code>, <code>diagnose</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Commits on a slice branch; the originating issue closed (or commented + left open if blocked). Tests green.</td>
+    </tr>
+
+    <tr>
+      <td>6</td>
+      <td><strong>REVIEW</strong></td>
+      <td>Two-axis review of the diff against a fixed point, run as parallel sub-agents: <strong>Standards</strong> (repo <code>CODING_STANDARDS.md</code> &mdash; append-only ledgers, snapshot masters, integer-paise, no <code>any</code>/unsafe casts) and <strong>Spec</strong> (does it match the originating issue?). Then a correctness pass for posting/SQL-safety bugs. Money diffs are read by a human regardless of green.</td>
+      <td><code>review</code> (Standards + Spec) + <code>code-review</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Fixes applied on the branch, or findings sent back to gate 5. Diff cleared for QA.</td>
+    </tr>
+
+    <tr>
+      <td>7</td>
+      <td><strong>QA</strong></td>
+      <td>Exercise the running app for this slice end-to-end (the workflow the tracer bullet cuts): drive it in a headless browser, click through, screenshot, check the screen reflects what the ledger says. <code>qa</code> fixes bugs it finds; <code>qa-only</code> reports without touching code (use when a human will triage).</td>
+      <td><code>qa</code> / <code>qa-only</code> + <code>browse</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Bug fixes (or a QA report) + screenshots proving the slice works in the real app, not just in tests.</td>
+    </tr>
+
+    <tr>
+      <td>8</td>
+      <td><strong>SHIP</strong></td>
+      <td>Detect &amp; merge the base branch, run the full test suite, review the diff one last time, bump <code>VERSION</code>, update <code>CHANGELOG</code>, commit, push, and open the PR. This is where Sandcastle&rsquo;s reviewed branch becomes a real PR.</td>
+      <td><code>ship</code> <span class="badge b-ai">autonomous</span></td>
+      <td>An open PR with green CI, changelog entry, and version bump.</td>
+    </tr>
+
+    <tr>
+      <td>9</td>
+      <td><strong>DEPLOY</strong></td>
+      <td>Merge the PR, wait for CI + the deploy to finish, confirm the release is live in the deploy environment. First time only: <code>setup-deploy</code> detects/configures the deploy platform that <code>land-and-deploy</code> then drives.</td>
+      <td><code>land-and-deploy</code> (one-time: <code>setup-deploy</code>) <span class="badge b-ai">autonomous</span></td>
+      <td>Slice merged to the default branch and deployed.</td>
+    </tr>
+
+    <tr>
+      <td>10</td>
+      <td><strong>CANARY / OBSERVE</strong></td>
+      <td>Watch the live app immediately after deploy for console errors / regressions; sanity-check the slice&rsquo;s screen against fresh data. Code-quality dashboard (<code>health</code>) confirms typecheck/lint/test still clean on the deployed tree.</td>
+      <td><code>canary</code> + <code>health</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Go / no-go signal. Failure &rarr; reverse-and-repost or roll back, loop to gate 5.</td>
+    </tr>
+
+    <tr>
+      <td>11</td>
+      <td><strong>DOCS</strong></td>
+      <td>Post-ship documentation update &mdash; cross-reference what this slice changed (new document type, new posting rule, new screen) into the how-to / reference docs so the next slice&rsquo;s spec gate has accurate ground.</td>
+      <td><code>document-release</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Updated docs reflecting the shipped slice.</td>
+    </tr>
+
+    <tr>
+      <td>12</td>
+      <td><strong>RETRO</strong></td>
+      <td>Engineering retrospective from the slice&rsquo;s commit history + timeline &mdash; what went slow, what nearly broke an invariant, what to change in the next slice&rsquo;s loop.</td>
+      <td><code>retro</code> <span class="badge b-ai">autonomous</span></td>
+      <td>Retro notes; concrete adjustments fed into the next slice&rsquo;s DOMAIN/SPEC gates.</td>
+    </tr>
+
+    <tr>
+      <td>13</td>
+      <td><strong>MEMORY</strong></td>
+      <td>Capture git state, decisions made, and remaining work so the next session resumes cleanly; review/prune project learnings so durable lessons (not noise) persist across slices.</td>
+      <td><code>context-save</code> + <code>learn</code> <span class="badge b-ai">interactive</span></td>
+      <td>Saved context + curated learnings. Loop returns to gate 1 for the next slice.</td>
+    </tr>
+  </table>
+
+  <div class="callout co-money">
+    <strong>Definition of done for a slice.</strong> A slice is done &mdash; and only done &mdash; when all five hold:
+    <ul class="tight">
+      <li><strong>Posts correctly to the ledgers.</strong> Its documents emit balanced legs (&Sigma;debit = &Sigma;credit) into append-only ledgers; correction is reverse-and-repost, never an edit.</li>
+      <li><strong>Golden files pass.</strong> The real-invoice golden files written at the SPEC gate are green in CI &mdash; expected ledger rows match to the paise.</li>
+      <li><strong>Reconciles.</strong> Derived balances (outstanding, on-hand, profitability) computed as a sum over the ledger match the source documents; cross-store / cross-GSTIN isolation tests pass.</li>
+      <li><strong>Flagged-not-blocked.</strong> Edge cases raise flags for human review rather than hard-stopping the workflow (Rule 7).</li>
+      <li><strong>Deployed.</strong> Live in the deploy environment, canary clean, docs updated.</li>
+    </ul>
+  </div>
+
+  <div class="callout co-warn">
+    <strong>Two queue caveats before an AFK run.</strong> (1) The Sandcastle implement/review prompts say &ldquo;sonnet&rdquo; but the code instantiates <code>claude-opus-4-7</code> (<code>.sandcastle/main.mts</code>) &mdash; the model id is stale; confirm before relying on it. (2) The tracker docs name repo <code>bruhanand/KDPS</code> while CLAUDE.md references KDPS broadly &mdash; confirm which remote the <code>--label Sandcastle</code> queries target before filing or grabbing issues, or the AFK agent works the wrong queue.
+  </div>
+
+  <div class="callout co-note">
+    <strong>What feeds in, sideways.</strong> <code>design-an-interface</code> + <code>prototype</code> feed the SPEC gate; <code>diagnose</code>/<code>investigate</code> feed IMPLEMENT; <code>improve-codebase-architecture</code> (find shallow&rarr;deep modules) &rarr; <code>request-refactor-plan</code> (tiny-commit plan as an issue) loops back into the ISSUES gate. Safety is wired once at repo init and runs continuously underneath every gate: <code>git-guardrails-claude-code</code> + <code>setup-pre-commit</code> (and gstack <code>careful</code>/<code>freeze</code>/<code>guard</code> hooks).
+  </div>
+
+</section>
+
+<section id="roadmap">
+  <h2 class="sec">The slice roadmap</h2>
+
+  <p>After the foundation is in place, the system is built <strong>one vertical slice at a time</strong> &mdash; each slice a thin but <em>complete</em> path from a real document to its postings, ledgers and reconciliation, never a half-finished layer. The order follows the spine (master data &rarr; documents &rarr; ledgers &rarr; controls &rarr; intelligence) and the study's <strong>&ldquo;borrow first&rdquo;</strong> rule: where ERPNext / india-compliance already solve a problem, reimplement the <em>pattern</em> in the Django/PostgreSQL kernel rather than invent; where KDPS is genuinely different (season, the four commercial models, frozen lot cost, Tally-as-book), build greenfield and attach it to the borrowed scaffolding.</p>
+
+  <div class="callout co-key">
+    <strong>How to read a slice.</strong> Each card states: what it delivers end-to-end (the thin complete path), the ERPNext artefacts it <em>borrows</em>, the external spike it depends on, and the <em>golden file / reconciliation</em> that proves it. A slice is only &ldquo;done&rdquo; when its golden file ties out. Per-slice specs (data model, posting entries, golden files) grow <strong>just-in-time</strong> &mdash; never all upfront.
+  </div>
+
+  <div class="callout co-ext">
+    <strong>Three external spikes run in PARALLEL from day one</strong> &mdash; they have lead time and must not sit on the critical path. <span class="badge b-ext">SPIKE</span> <strong>Ten Software POS API</strong> (push/pull shape, join key = barcode, EOD batch) feeds slice 4. <span class="badge b-ext">SPIKE</span> <strong>Tally / Vyapar&nbsp;TaxOne import</strong> (voucher XML/TDL, prevent-duplicates semantics) feeds slice 7. <span class="badge b-ext">SPIKE</span> <strong>Barcode tool</strong> (13-digit EAN print/scan, vendor-else-generate) feeds slices 1&ndash;2. Start all three as throwaway spikes <em>now</em>; fold the findings into the slice when its turn comes.</p>
+  </div>
+
+  <h3>The ordered slices</h3>
+
+  <table>
+    <tr><th>#</th><th>Slice</th><th>Spine area</th><th>Status</th></tr>
+    <tr><td>0</td><td>Foundation (project setup)</td><td>&mdash;</td><td><span class="badge b-next">BUILD NOW</span></td></tr>
+    <tr><td>1</td><td>Master data + identity + the PT-line model</td><td>Kernel / D8</td><td><span class="badge b-next">NEXT</span></td></tr>
+    <tr><td>2</td><td>Inbound thin slice (one outright brand)</td><td>D2</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>3</td><td>Vendor liability + vendor ledger</td><td>D1 / D4</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>4</td><td>Selling thin slice (ingest one POS sale)</td><td>D3</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>5</td><td>Offers on the sale</td><td>D5</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>6</td><td>Payments + collection audit</td><td>D4</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>7</td><td>Tally voucher export</td><td>D6</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>8</td><td>SOR / Consignment + GST clock</td><td>D1&ndash;D3 / D6</td><td><span class="badge b-open">QUEUED</span></td></tr>
+    <tr><td>9</td><td>The Brain / analytics</td><td>D7</td><td><span class="badge b-ai">AI</span></td></tr>
+    <tr><td>&mdash;</td><td>Later: own-POS, attendance/payroll, D9 migration</td><td>D9 +</td><td><span class="badge b-open">DEFERRED</span></td></tr>
+  </table>
+
+  <!-- ============ SLICE 0 ============ -->
+  <div class="card mod.base">
+    <div class="lab">SLICE 0 &middot; FOUNDATION</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The project skeleton: repo, PostgreSQL, the <strong>document skeleton</strong> (number / type / status state-machine / actor-audit / snapshots), the <strong>one central posting engine</strong> (balanced-or-fail, append-only, correct-by-reversal), login, user-roles, and deploy. No business document yet &mdash; just the kernel every slice writes through.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>The Frappe <em>lifecycle contract</em>: <code>docstatus</code> draft(0)&rarr;submitted(1)&rarr;cancelled(2), ledgers written only in <code>on_submit</code> / reversed only in <code>on_cancel</code>, free audit fields <code>owner/creation/modified/modified_by</code> + <code>track_changes</code> (<code>stock/doctype/stock_entry/stock_entry.py</code>). The posting engine shape: <code>accounts/general_ledger.py:make_gl_entries</code> + <code>process_debit_credit_difference</code> (&Sigma;debit=&Sigma;credit or the whole write fails, line 460) + immutable cancel via <code>gl_entry.py:GLEntry.on_cancel</code> (hard-throws) &rarr; <code>make_reverse_gl_entries</code> (line 607). Composer-per-document-type pattern (<code>.../services/gl_composer.py:compose</code>).</dd>
+      <dt>External spike</dt>
+      <dd>None on the critical path. (The 3 parallel spikes are kicked off here but do not gate the foundation.)</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>A throwaway test document type that emits one balanced reversing pair through the engine: posting succeeds only when legs balance; a back-dated correction appears as a <em>new dated reversal</em>, never a mutation. Golden file = the exact ledger rows + the failed-on-imbalance case. This is the kernel guarantee that justified rejecting BaaS.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 1 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 1 &middot; MASTER DATA + IDENTITY + THE PT-LINE MODEL</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The <strong>stable kernel</strong> everything attaches to: a SKU (Brand &times; Style &times; Colour &times; Size) with a deterministic human-readable code; barcode-to-SKU-cohort resolution &mdash; the barcode is a <strong>non-unique scan-alias</strong> (Q7), not the identity, that resolves to a SKU cohort (brand + design + colour-or-P/M/E-tier + size + season) and stock is the <em>count under the barcode</em>, never one row per piece; true cross-SKU collisions caught and given an internal barcode at inbound; the Store/Warehouse master mapped to its state GSTIN; Store as a P&amp;L slice; Brand as a ledger slice; and the <strong>PT-line denormalised row</strong> (SEASON / BRAND / DESIGN / COLOR / SIZE / BARCODE / HSN / MRP / BASIC / P-RATE / MARGIN) as the spine data shape that all later masters normalise out of. Plus the GST/HSN slab model as date-effective data.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd><strong>Item template/variant engine</strong> &mdash; <code>has_variants</code>+<code>variant_of</code>, <code>Item Variant Attribute</code> child, deterministic code via <code>make_variant_item_code</code> (<code>controllers/item_variant.py:437</code>); the <code>abbr</code>-based code <em>is</em> the human-readable SKU. <strong>Barcode child table</strong> with <code>unique</code>+<code>no_copy</code> (<code>stock/doctype/item/doctype/item_barcode/item_barcode.json</code>). The <strong>accounting-segment trio</strong> &mdash; Cost Center=Store (<code>accounts/doctype/cost_center/cost_center.py</code>, mandatory-on-P&amp;L guard), Accounting Dimension=Brand (<code>accounting_dimension.py:129</code> injects the column), GSTIN-on-Address + <code>company_gstin</code> GL-tag. <strong>HSN master carries default taxes</strong> + Item-Tax-Template rate rule (intra = rate/2, inter = full IGST) (<code>india_compliance/.../item_tax_template.py:27-65</code>). Atomic naming-series (<code>field:</code> for masters).</dd>
+      <dt>KDPS-is-different (build greenfield, attach to the borrowed scaffolding)</dt>
+      <dd><strong>Season</strong> as a governed master (<code>FAMILY+Mon-YY</code>, lifecycle Open&rarr;EOSS&rarr;Closed) and the piece cohort = barcode + season &mdash; ERPNext has <em>no</em> Season/Collection/Age field. <strong>SCD&nbsp;Type-2 effective-dating</strong> on the slabs that drive history (GST slab, GSTIN, cost, price) so a 2025 bill never re-slabs under the Sep-2025 change &mdash; ERPNext relies on snapshot-onto-document only. <strong>State-GSTIN as a first-class ledger dimension</strong> (carried as a declared FK column on every leg per FD-8, scoped at the app layer via <code>django-scopes</code> and RLS-ready), not the two-Company workaround.</dd>
+      <dt>External spike</dt>
+      <dd><span class="badge b-ext">Barcode tool</span> &mdash; confirm 13-digit EAN print + scan, vendor-barcode-else-generate, resolves to the unique SKU.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>A real vendor PT file (from <code>data-from-kdps/05-reference-data/</code>) loaded &rarr; the exact set of SKU rows, variant codes, barcodes, and the date-effective GST slab resolved per line. Golden file = the normalised masters + the apparel-slab pick at two dates straddling 22&nbsp;Sep&nbsp;2025 (5% &le; Rs&nbsp;2,500/pc vs 18% above) proving the old bill keeps its old rate.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 2 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 2 &middot; INBOUND THIN SLICE &mdash; ONE OUTRIGHT BRAND</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>For exactly <strong>one outright brand</strong>: <code>Shipment &rarr; GRN (qty only) &rarr; PT (value + landed cost) &rarr; store-split &rarr; stock-ledger posting</code>. Goods arrive (count), the PT prices them at landed-ex-GST cost <em>frozen on the lot</em>, and stock goes into the stock ledger with the owned-flag set. No SOR, no consignment, no vendor liability nuance yet &mdash; the cleanest possible inbound path.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>The <strong>PR=qty / PI=value two-document split</strong> as proof the qty-event and value-event are separable (<code>stock/doctype/purchase_receipt/purchase_receipt.py</code> &rarr; <code>update_stock_ledger</code>; <code>accounts/doctype/purchase_invoice/purchase_invoice.py</code>). The <strong>SLE schema</strong> &mdash; append-only, per (item&times;warehouse), signed <code>actual_qty</code> + running <code>qty_after_transaction</code> + <code>stock_value_difference</code> + <code>voucher_type/no/detail_no</code> back-ref (<code>stock/doctype/stock_ledger_entry/stock_ledger_entry.json</code>). The <strong><code>valuation_rate</code> ex-GST decomposition</strong> (capitalise freight/duty, hold creditable GST as input credit) and the <strong>Landed Cost Voucher distribution algorithm</strong> (<code>stock/doctype/landed_cost_voucher/landed_cost_voucher.py:205-233</code>, by amount/qty) &mdash; used <em>once at inbound</em> to spread invoice charges, not as a re-posting voucher. SRBNB clearing-account pattern noted as the bridge <em>if</em> goods can sell before the PT is keyed.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>GRN posts <strong>qty only, no money</strong> (value waits for PT at Patna inward). Cost is <strong>frozen per PT-lot</strong> &mdash; model each lot as a Batch with <code>use_batchwise_valuation</code> for lot-exact cost, but <em>drop</em> moving-avg/FIFO recompute and <code>repost_future_sle</code> entirely. Two-actor stamp (counted-by &ne; entered-by). No perpetual SLE&rarr;GL coupling. <strong>Booking-less direct receipt is first-class for ANY brand</strong> (Q9): a Shipment with <code>booking_ref = NULL</code> anchors inbound, a "Receive without order" simple-receipt GRN posts the quantity (sellable day one), the commercial model is snapshotted from the effective-dated brand master at receipt &mdash; no phantom booking, and a Direct GRN can be retro-linked to a later booking.</dd>
+      <dt>External spike</dt>
+      <dd><span class="badge b-ext">Barcode tool</span> (scan at GRN). No POS / Tally dependency yet.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>One real outright-brand invoice &rarr; GRN qty matches counted qty; PT lands unit cost = P-RATE directly (already ex-GST, never strip GST per Q5) + value-weighted freight share, less discounts; stock ledger shows the exact pieces at the frozen cost across the store-split. Golden file = the per-SKU landed cost + the SLE rows; recon = total invoice value vs sum of landed lines (the inbound tie-out).</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 3 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 3 &middot; VENDOR LIABILITY + THE VENDOR LEDGER</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The PT from slice 2 now also posts the <strong>vendor liability</strong>: a credit to Creditors against the bill, anchored to the vendor legal entity, with a bill-wise outstanding that is the <em>ledger-sum</em> of postings (never a hand-edited column). Plus the Vendor master (GSTIN/bank/payment-terms/hold) and the Brand sub-master with its commercial-model snapshot. This closes inbound's money leg for outright brands and gives a real vendor balance.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd><strong>Party sub-ledger + Agst-Ref</strong>: the supplier GL leg with <code>party_type="Supplier"</code> and <code>against_voucher</code> = the bill (<code>purchase_invoice/services/gl_composer.py:make_supplier_gl_entry</code>); outstanding computed by <code>QueryPaymentLedger.query_for_outstanding</code> (<code>accounts/utils.py:2305</code>), the bill's <code>outstanding_amount</code> a <em>cache</em> refreshed by <code>update_voucher_outstanding</code>. <strong>Supplier field set</strong> wholesale &mdash; payment terms, per-company payable via <code>PartyAccount</code>, and the three-way <code>on_hold</code>/<code>hold_type</code>/<code>release_date</code> (<code>buying/doctype/supplier/supplier.py</code>) as the &ldquo;flag now, hold money later&rdquo; shape. <strong>Snapshot-on-create</strong> (PO copies rate/terms/tax template onto the document) for Rule&nbsp;3.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>Balance formula <code>Opening + Invoices &minus; CD &minus; GR &minus; Payments + Interest = Due</code> as a <em>report-time aggregation</em> of ledger rows, not a stored field; Interest is an explicit voucher (ERPNext has Dunning but no auto-interest). <strong>Brand</strong> as a terms-bearing sub-master (ERPNext's <code>supplier_group</code> is only a tag) carrying the commercial model as <strong>two stored axes</strong> (Q10) &mdash; ownership (KDPS-owns vs brand-owns) &times; return-terms (none/capped/uncapped) + a rolling-top-up boolean &mdash; from which the friendly label (Outright / Correction / SOR / Consignment) is <strong>derived</strong>, never stored; screens still read the label, but the GST/liability trigger keys off the ownership axis, so a deal that is "BNS + a return clause" and a distinct named model collapse to the same record. The <strong>Correction return-allowance budget</strong> (per brand&times;season, fills on receipt, drains on return) &mdash; ERPNext has no returnable pool; reuse only its <code>per_received</code>-style rollup arithmetic.</dd>
+      <dt>External spike</dt>
+      <dd>None new.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>The slice-2 PT now produces the vendor-ledger credit; a sample vendor's <strong>balance ties out</strong> to <code>Opening + Invoices &minus; Payments</code> reconstructed purely from append-only rows. Golden file = the vendor statement vs the real <code>data-from-kdps/05-reference-data/</code> ledger sample for one vendor.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 4 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 4 &middot; SELLING THIN SLICE &mdash; INGEST ONE POS SALE</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>Ingest <strong>one completed POS sale</strong> from Ten Software (SKU, qty, price, store/GSTIN, tender) &rarr; post stock-out at the piece's <em>frozen lot cost</em> (COGS derived, never hand-entered) + the cash/revenue legs + output GST. The first slice that closes the loop: a real sale moves stock and money. No offers yet (sale ingested at the price the POS already applied).</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>The <strong>one-document-posts-stock+revenue+COGS-together shape</strong> &mdash; <code>Sales Invoice update_stock=1</code> (<code>accounts/doctype/sales_invoice/sales_invoice.py:443</code>), assembled by <code>services/gl_composer.py</code> (Dr Cash/Debtor, Cr Income, Cr Output-GST; Dr COGS / Cr Inventory at cost) over <code>base_stock_gl_composer.py:20-89</code>. The <strong>Bin availability cache</strong> for free-to-sell (<code>stock/doctype/bin/bin.py:295</code>) and the declarative <code>status_updater</code> for derived piece-state.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>KDPS <strong>ingests</strong> the finished sale (ingest, don't recreate; one-owner R4) &mdash; the SI <em>UI</em> and customer-credit staging are dropped. COGS reads the <strong>frozen lot cost</strong> (closest ERPNext bridge = batch-wise valuation; <em>no</em> moving-avg recompute). Free-to-sell is derived from <em>open KDPS documents</em> (Reserved / In-transit / Quarantined), not SO/PO reservation. The POS sits behind a <strong>swappable adapter</strong> (push/pull, EOD authoritative batch, manual-bill fallback). The scan carries only the raw barcode, so the <strong>adapter infers season at the edge</strong> (Q6): one matching cohort &rarr; post; many &rarr; oldest-season-first (FIFO); genuinely ambiguous &rarr; a one-tap "which season?" &mdash; never a blocked sale, never re-barcoding at inbound.</dd>
+      <dt>External spike</dt>
+      <dd><span class="badge b-ext">Ten Software POS API</span> &mdash; this slice consumes the spike's output: intraday poll + authoritative EOD batch, barcode join with season inferred at the adapter (Q6), failure queue.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>One real POS EOD batch &rarr; stock ledger drops the exact pieces; margin per line = sale price &minus; frozen landed cost; store&times;day cash total matches the ingested tender. Golden file = the per-SKU margin + the stock-out SLE; recon = POS gross vs posted revenue + GST for that store-day.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 5 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 5 &middot; OFFERS ON THE SALE</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The offer engine as a <strong>pure price-adjustment layer</strong> on the ingested sale: trigger + reward + dials, evaluated per line, picking the customer's <em>best</em> (lowest-net-price) offer, with the funder tag carried for margin attribution. Offers <strong>post nothing</strong> &mdash; a discount only lowers price, so KDPS earns less margin; nothing is reclaimed from the brand. Covers the 8 Phase-1 patterns.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>The whole <strong>Pricing Rule shape</strong> &mdash; one record = <code>apply_on</code> + qty/amount slabs + date window + action (<code>accounts/doctype/pricing_rule/pricing_rule.json</code>), evaluated per line by <code>get_pricing_rule_for_item</code> (<code>pricing_rule.py:391-511</code>); 7 of 8 KDPS patterns ride existing fields (<code>same_item</code>+<code>is_recursive</code> for cheapest-free BXGY, <code>rate_or_discount=Rate</code> for fixed-MRP-band, Product branch for gifts). The <strong>Promotional Scheme</strong> wrapper that explodes rising slabs into atomic rules with <code>promotional_scheme_id</code> link-back. <code>mixed_conditions</code> for spend-over-a-scope/split-reward. Item Price as the MRP base layer. It writes <strong>nothing to the GL</strong> &mdash; exact alignment with Rule&nbsp;8.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>Replace ERPNext's <code>MultiplePricingRuleConflict</code> throw (<code>utils.py:343-349</code>) with a <strong>lowest-net-price selection</strong> per line. Add (all additive, hang off the engine): a first-class <strong>funder tag</strong> (Brand vs KDPS, margin attribution only &mdash; never billback); an explicit <strong>MRP-vs-net stacking base</strong> per offer; <strong>season/age/EOSS mode</strong> dials; <strong>NOD/AMM exclusion lists</strong>; <strong>gift-handover confirmation</strong> with out-of-stock fallback to a preset discount; store-group enrolment as a <em>snapshot of named stores</em> (no auto-enrol of new stores).</dd>
+      <dt>External spike</dt>
+      <dd>None new (rides the slice-4 POS feed).</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>A multi-brand bill with overlapping offers &rarr; each line gets its brand's best offer, add-ons compound on the right base, gift appended only if handed over. Golden file = the resolved net price + funder tag per line, checked against worked examples from the offers rulebook and the discount-audit reports. Margin impact is visible; ledgers unchanged (offers post nothing).</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 6 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 6 &middot; PAYMENTS + COLLECTION AUDIT</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The disbursement path: a <strong>Payment</strong> settling one-or-many vendor payables (bill-wise allocation), through the maker&ne;checker&ne;payer lifecycle, with eligibility gates; plus the <strong>3-rail collection audit</strong> (cash / card net-of-MDR / UPI), each a 3-way match (POS gross &harr; settlement &harr; bank credit) carrying T+1/T+2 lag as in-transit. Closes the money-out side and proves what came in actually landed.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>The <strong>Payment Entry</strong> shape (one money-movement doc, party leg + bank leg) and especially the <strong><code>references</code> child table</strong> = KDPS Allocation verbatim: one payment &rarr; many bills, each <code>allocated_amount</code> &le; outstanding, one party GL leg per row with <code>against_voucher</code> = Tally's <em>Agst&nbsp;Ref</em> (<code>payment_entry/services/gl_composer.py:add_party_gl_entries:45</code>). <strong>Append-only outstanding</strong> via Payment Ledger Entry, advances as <code>unallocated_amount</code>, FIFO oldest-bill-first matching (<code>payment_reconciliation.py:allocate_entries:478</code>). Immutable-ledger discipline reused.</dd>
+      <dt>KDPS-is-different (the whole governance + collection layer is net-new)</dt>
+      <dd>ERPNext collapses authorisation into one <code>submit()</code> with two flat roles &mdash; KDPS builds the <strong>pre-posting state machine</strong> (Draft&rarr;Pending&rarr;Approved&rarr;Executed&rarr;Confirmed-UTR&rarr;Reconciled, with Confirmed distinct from Reconciled), <strong>role-based segregation of duties</strong> (bank-change &ne; approve &ne; release), <strong>eligibility gates</strong> (hard-block: no bank/GSTIN, not tied to inwarded PT, SOR-piece-not-sold; soft-hold: discrepancy &rarr; flag + senior release), the <strong>vendor-bank-change control</strong> (second-eye + AI-reflag), and the <strong>3-rail 3-way audit</strong> with MDR net-off and settlement-lag &mdash; none exist in ERPNext.</dd>
+      <dt>External spike</dt>
+      <dd>Bank-statement + acquirer-settlement feed (uses real <code>data-from-kdps/bank-statement/</code> samples). POS settlement report from the Ten Software spike.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>A payment against several bills &rarr; allocations and vendor balance tie out; a store-day's three rails reconcile POS gross &rarr; settlement (net of MDR) &rarr; bank credit, with the lag carried as expected/in-transit. Golden file = the allocation rows + the per-rail 3-way match with reason-coded exceptions.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 7 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 7 &middot; TALLY VOUCHER EXPORT (DETERMINISTIC NUMBERS)</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The spine events from slices 2&ndash;6 now emit <strong>deterministic, content-derived vouchers</strong> (Purchase / Sales / Payment / Receipt / DN-CN / Journal) pushed <strong>one-way into Tally</strong> (the statutory book) exactly once, joined back on the voucher number, with a <strong>daily tie-out</strong>. GST is computed once at the posting moment and carried &mdash; Tally/TaxOne never recompute. This is where KDPS's operational kernel meets the book of record.</dd>
+      <dt>Borrows from ERPNext / india-compliance</dt>
+      <dd>The <strong>one-composer-per-document-type</strong> catalog (<code>voucher_type</code> as config, mapping as code). The <strong>&ldquo;GST computed once, snapshotted, carried&rdquo;</strong> mechanism &mdash; <code>ItemGSTDetails</code> writing read-only <code>igst/cgst/sgst_rate</code> + amounts back onto every line (<code>india_compliance/.../overrides/transaction.py:1101</code>). The <strong><code>is_inter_state_supply</code> 2-digit state-code test</strong> (<code>transaction.py:572</code>, Bihar 10 vs Jharkhand 20) routing IGST-out / matching-purchase on cross-state, no voucher on intra-state moves. The <strong>per-line GST field set</strong> (HSN, taxable value, CGST/SGST/IGST amounts) as the canonical voucher-line shape, and the indexed <code>(voucher_type, voucher_no)</code> back-reference that makes the join cheap.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>The <strong>deterministic voucher number</strong> <code>DEO-SAL-20260620-001</code> (store&middot;type&middot;date&middot;seq) minted <em>before</em> push so a retry with prevent-duplicates&nbsp;ON bounces &rarr; exactly-once, and the same string is the tie-out join key &mdash; reject ERPNext's after-insert <code>autoname</code>. The <strong>one-way push to an external book</strong> + <strong>daily reconciliation loop + failure queue</strong> (owner = Patna accountant; flags, never blocks) &mdash; ERPNext owns its book and has no concept of feeding one. SCD-2 effective-dated slabs so an old voucher never re-slabs.</dd>
+      <dt>External spike</dt>
+      <dd><span class="badge b-ext">Tally / Vyapar TaxOne import</span> &mdash; this slice consumes the spike: voucher XML/TDL format, prevent-duplicates semantics, accepted-vs-bounced feedback.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>A day of spine events &rarr; the exact voucher set with stable numbers and carried GST breakup; re-running the push produces zero duplicates; the daily tie-out lists sent &harr; accepted on the join key. Golden file = the voucher payloads; recon = KDPS sub-ledger control account vs Tally for the day.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 8 ============ -->
+  <div class="card mod.spine">
+    <div class="lab">SLICE 8 &middot; SOR / CONSIGNMENT + THE GST CLOCK</div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The four commercial models become first-class: <strong>SOR/Consignment goods are counted in qty at receipt but valued off-book</strong>, and the <strong>vendor-liability leg fires only on the sale event</strong> (not at inbound). Adds return-window tracking (60&ndash;120 days) and the ~6-month <strong>GST deemed-supply clock</strong> as deadline data, plus EOSS V-flip (brand-owned &rarr; KDPS-owned, barcode unchanged). This is the single biggest divergence &mdash; deliberately built late, on top of a proven outright path.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>Mechanically little &mdash; ERPNext has <em>no</em> SOR/consignment/deemed-supply model (every &ldquo;consignment&rdquo; hit is e-waybill transport status). Reuse the <strong>two-leg shape</strong> (qty leg at GRN / liability leg) but move the liability trigger from receipt to sale; the ordinary purchase-voucher-at-arrival path for the <em>Tally statutory</em> leg (every model, including SOR, gets a purchase voucher at arrival &mdash; only the <em>money</em> differs in the kernel). Return = sign-flipped original with <code>return_against</code> (<code>controllers/sales_and_purchase_return.py:430</code>), branched by commercial model.</dd>
+      <dt>KDPS-is-different (greenfield)</dt>
+      <dd>Receive SOR into a not-owned location; defer the Creditors posting to the sale per the booking's snapshotted model. The <strong>return-allowance pool</strong>, <strong>return-window deadlines</strong> and <strong>deemed-supply clock</strong> as Rule-11 data (alerts 30/15/7), and the <strong>V-flip</strong> ownership transition posted as a document &mdash; none exist in ERPNext. Seasonal bulk returns (SOR uncapped; Correction draws the 25-18-10 allowance &rarr; V-flip on overflow).</dd>
+      <dt>External spike</dt>
+      <dd>None new &mdash; rides slices 2/4/7. (Deemed-supply timing confirmed against india-compliance: it provides none, so KDPS owns the clock.)</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>An SOR brand: pieces appear in stock-on-hand at receipt with <strong>zero value on the books</strong> and zero vendor liability; a sale fires the liability leg at the snapshotted model's terms; an unsold piece past its window raises the deadline alert; a V-flip moves ownership without changing the barcode. Golden file = the SOR vendor balance (off-book until sold) + the deadline ledger; recon = qty-counted vs value-on-book (must diverge exactly by the unsold SOR stock).</dd>
+    </dl>
+  </div>
+
+  <!-- ============ SLICE 9 ============ -->
+  <div class="card mod.brain">
+    <div class="lab">SLICE 9 &middot; THE BRAIN / ANALYTICS <span class="badge b-ai">AI</span></div>
+    <dl>
+      <dt>Delivers (end-to-end)</dt>
+      <dd>The intelligence layer reading the now-rich ledgers: per-store / per-brand / per-season scorecards, aging &amp; dead-stock markdown signals, margin attribution (using the funder tag), and the monthly brand report &mdash; all <strong>derived</strong> from the dimensioned ledger rows, with <strong>AI strictly at the edges</strong> (drafts/suggests, a human confirms, never posts). Built last because it needs every prior slice's data to be meaningful.</dd>
+      <dt>Borrows from ERPNext</dt>
+      <dd>Nothing structural for the AI itself, but it harvests the borrowed <strong>accounting-segment dimensions</strong> from slice 1 (Cost Center=Store, Accounting Dimension=Brand, season) carried on every leg &mdash; per-store/per-brand/per-season slicing falls out for free, exactly what D7 scorecards and the monthly brand report need.</dd>
+      <dt>KDPS-is-different</dt>
+      <dd>All KDPS-native: season/age-driven aging engine, frozen-cost margin truth, the funder-attribution model, and the AI-at-edges contract (Rule&nbsp;8). The recurring month-start brand-report duty (skills <code>kdps-report</code>, <code>discount-audit-v2</code>, <code>kdps-offer</code>) is the live spec this slice automates.</dd>
+      <dt>External spike</dt>
+      <dd>None &mdash; reads internal ledgers only.</dd>
+      <dt>Golden file / recon that proves it</dt>
+      <dd>Reproduce a known monthly brand report from the ledger and tie it to the worked example (<code>data-from-kdps/.../KDPS-DIRECTION.xlsx</code>). Golden file = the scorecard numbers vs the hand-built month; any AI output is shown as a suggestion that a human confirms before it touches a document.</dd>
+    </dl>
+  </div>
+
+  <!-- ============ DEFERRED ============ -->
+  <div class="card mod.base">
+    <div class="lab">LATER &middot; DEFERRED BY DECISION (revisit before go-live)</div>
+    <dl>
+      <dt>Own POS</dt>
+      <dd>A KDPS-built POS behind the <em>same</em> swappable adapter from slice 4 (joined on barcode), replacing Ten Software when justified. The adapter seam means this is a swap, not a rebuild.</dd>
+      <dt>Attendance &amp; Payroll</dt>
+      <dd>Does not block the foundation or any spine slice; own module when prioritised.</dd>
+      <dt>D9 &middot; Migration &amp; rollout</dt>
+      <dd>Designed before go-live (opening balances, historical stock, vendor balances, cut-over). Plus the deep roles/access model that D4 left thin.</dd>
+    </dl>
+    <div class="callout co-note">
+      <strong>The through-line.</strong> Slices 0&ndash;4 stand up the cleanest possible loop on <em>one outright brand</em> (kernel &rarr; masters &rarr; inbound &rarr; liability &rarr; sale). Slices 5&ndash;7 add the layers that ride on top without reshaping it (offers post nothing, payments allocate, Tally consumes). Only then, in slice 8, does KDPS's hardest divergence &mdash; SOR off-book-until-sale &mdash; land on a proven base, and slice 9 reads the result. Borrow first, diverge late, prove each slice with a golden file before the next begins.
+    </div>
+  </div>
+</section>
+
+<section id="workflow-issues">
+  <h2 class="sec">The day-to-day workflow — issues &amp; Sandcastle in practice</h2>
+
+  <p>This is how work actually flows once the foundation is up: a written slice becomes a set of small GitHub issues, the autonomous loop drains the ones that are safe to drain, and a human keeps the gate on anything that touches money or the books. The rules below are not aspirational — they are wired into the harness and the labels.</p>
+
+  <h3>1 · GitHub issues are the single source of truth</h3>
+
+  <div class="callout co-key">
+    <strong>One tracker, no side-channels.</strong> Every unit of work lives as a GitHub issue on the project repo &mdash; the tracker docs hard-code <code>bruhanand/KDPS</code>, but that remote is <strong>UNCONFIRMED</strong> (do not assume it; verify before any <code>gh</code> run) &mdash; driven through the <code>gh</code> CLI (<code>gh issue create/list/view/close -R &lt;repo&gt;</code>). No scratch files, no local TODOs, no second system. If something needs doing, you open an issue instead. Domain language lives in one root <code>CONTEXT.md</code> and one-decision-per-file ADRs under <code>docs/adr/</code> — issues reference those, they don't re-litigate them.
+  </div>
+
+  <p>Each issue carries exactly one <em>category</em> role (<code>bug</code> or <code>enhancement</code>) and walks one <em>state</em> through a state machine. The state is the label, and the label is what every actor — human or agent — reads.</p>
+
+  <table>
+    <tr><th>Triage state</th><th>GitHub label</th><th>What it means / who acts</th></tr>
+    <tr><td>needs-triage</td><td><span class="badge b-open">needs-triage</span></td><td>Just arrived. Not yet understood or sized. Human reads it.</td></tr>
+    <tr><td>needs-info</td><td><span class="badge b-open">needs-info</span></td><td>Blocked on a question — author/owner must answer before it can move.</td></tr>
+    <tr><td>ready-for-agent</td><td><span class="badge b-ai">Sandcastle</span></td><td><strong>The work queue.</strong> Well-specced, self-contained, safe to do AFK. The autonomous loop picks these up. There is no separate <code>ready-for-agent</code> label — <code>Sandcastle</code> <em>is</em> the ready-for-agent signal.</td></tr>
+    <tr><td>ready-for-human</td><td><span class="badge b-next">ready-for-human</span></td><td>Needs a person — judgement, money-touching code, or a decision the agent must not make.</td></tr>
+    <tr><td>wontfix</td><td><span class="badge b-no">wontfix</span></td><td>Closed by decision. Kept for the record.</td></tr>
+  </table>
+
+  <div class="callout co-warn">
+    <strong>Confirm the remote before any run.</strong> The tracker docs name <code>bruhanand/KDPS</code>; the project's broader notes refer to the KDPS repo generally. Verify which remote <code>gh</code> targets before filing issues or launching a loop, or the <code>--label Sandcastle</code> query will read the wrong queue.
+  </div>
+
+  <h3>2 · How to write a slice as AFK-ready issues</h3>
+
+  <p>A "slice" is one verified vertical — it cuts every layer (UI &rarr; API &rarr; ledger &rarr; test) for one thin behaviour. You don't hand Sandcastle a slice; you hand it the <em>issues that make up the slice</em>. Use <code>to-issues</code> to break the PRD into independently-grabbable tracer bullets, then <code>triage</code> to label them. The loop reads only an issue's <code>title</code>, <code>body</code>, <code>labels</code>, and <code>comments</code> and works it end-to-end alone — so the issue body has to carry everything.</p>
+
+  <div class="card">
+    <div class="lab">SHAPE OF A GOOD SANDCASTLE ISSUE</div>
+    <dl>
+      <dt>Labelled <code>Sandcastle</code></dt><dd>Without this label the agent literally cannot see the issue — <code>implement-prompt.md:5</code> lists only <code>--label Sandcastle</code>.</dd>
+      <dt>Thin vertical slice, one commit</dt><dd>One concern, small enough to land as a single <code>RALPH:</code> commit. The agent gets <code>maxIterations: 1</code> per issue, so a big issue produces a partial commit, not a finished feature.</dd>
+      <dt>Self-contained body + PRD link</dt><dd>State the change, the acceptance criteria, and reference the parent PRD by issue number. The agent pulls the PRD in (<code>implement-prompt.md:30</code>); don't assume any other context.</dd>
+      <dt>Spec + golden files referenced</dt><dd>Point to the spec and the golden files for this slice (posting entries, sample PT/invoice, expected ledger rows). RGR writes a failing test first, so spell out exactly what "green" looks like.</dd>
+      <dt>The all-or-nothing test, named</dt><dd>For any posting work, say it explicitly: the posting either fully succeeds or fully rolls back, and that path must have a test. The standards demand it; the issue should pre-name it.</dd>
+      <dt>Dependencies encoded</dt><dd>Write "blocked by #N". The agent skips issues blocked by other open issues (<code>implement-prompt.md:26</code>).</dd>
+      <dt>Priority set by type</dt><dd>Ordering is bug &gt; tracer bullet &gt; polish &gt; refactor. Frame the issue as the right type so the queue drains in the right order.</dd>
+    </dl>
+  </div>
+
+  <div class="callout co-money">
+    <strong>Golden files are the contract for money.</strong> Because profitability is derived and ledgers are append-only, the spec's golden files (a known PT/invoice in, the exact ledger rows and GST breakup out) are what the test asserts against. An issue that posts to a ledger without a referenced golden file is not AFK-ready — send it back to <code>needs-info</code>.
+  </div>
+
+  <h3>3 · Human-in-the-loop gates</h3>
+
+  <p>The loop is autonomous on a branch, never on the books. Three gates are non-negotiable.</p>
+
+  <div class="card mod cross">
+    <div class="lab">THE THREE GATES</div>
+    <dl>
+      <dt>You review the PR</dt><dd>Sandcastle commits to a branch (<code>sandcastle/sequential-reviewer/&lt;timestamp&gt;</code>) and closes the issue with "Completed by Sandcastle" — it does <em>not</em> open or merge a PR. A human (or a <code>/ship</code> / <code>land-and-deploy</code> step) turns the reviewed branch into a merged PR. Nothing reaches the default branch without that human step.</dd>
+      <dt>You approve money-touching code</dt><dd>Anything that writes a ledger, computes GST, derives margin, or posts to Tally is <code>ready-for-human</code>, not <code>Sandcastle</code> — or, if drafted on a branch, it does not merge until you have read the diff and the golden-file test. Money logic is reviewed by a person, every time.</dd>
+      <dt>AI never posts to the books</dt><dd>A bright line from the architecture: AI is at the edges only. The intelligence layer <em>reads</em> ledgers and never writes them; Tally stays the statutory book of record. The Sandcastle loop writes <em>code</em>, reviewed by a human; the running system's AI writes <em>nothing</em> to any ledger.</dd>
+    </dl>
+  </div>
+
+  <h3>4 · Coding standards enforced by the reviewer</h3>
+
+  <p>Phase 2 of the loop loads <code>.sandcastle/CODING_STANDARDS.md</code> and reviews the branch diff against it (<code>review-prompt.md:41</code>), fixing refactor-only issues directly on the branch — functionality is preserved, never changed. The standards are the same domain rules the whole system obeys:</p>
+
+  <ul class="tight">
+    <li><strong>Stack &amp; style</strong> — React (TS) PWA + Python/Django + PostgreSQL. TS: camelCase vars/fns, PascalCase components/types, named exports. Python: PEP 8, snake_case, PascalCase classes. No commented-out code, no stray TODOs.</li>
+    <li><strong>Testing</strong> — every new behaviour gets a test; ledger/posting logic must test the all-or-nothing path (fully succeeds or fully rolls back); descriptive test names.</li>
+    <li><strong>SKU = Style × Size × Color</strong> — never collapse stock to style level; size×color survives end-to-end.</li>
+    <li><strong>Documents write ledgers; ledgers are append-only</strong> — never mutate a posted row; reverse and repost.</li>
+    <li><strong>Snapshot masters</strong> onto documents at write time (price, tax, vendor terms) — don't read live masters for historical documents.</li>
+    <li><strong>GST is data, not code</strong> — slab/date-effective tables, two GSTINs (Bihar / Jharkhand); Tally is the book of record.</li>
+    <li><strong>Profitability is derived</strong> (cost from PT/invoice, revenue from POS) — never hand-entered.</li>
+    <li><strong>AI at the edges only</strong> — reads ledgers, never writes them.</li>
+    <li><strong>Single-responsibility modules, composition over inheritance; money in INR with Lakh/Crore grouping</strong> (e.g. Rs 28,50,000).</li>
+    <li><strong>Reviewer's non-domain checks</strong> — reduce nesting/complexity, no nested ternaries, no unsafe casts or <code>any</code>, no injection or credential leaks.</li>
+  </ul>
+
+  <div class="callout co-note">
+    <strong>Belt and braces at commit time too.</strong> <code>setup-pre-commit</code> (Husky + lint-staged: Prettier, typecheck, test) and <code>git-guardrails-claude-code</code> (a PreToolUse hook blocking dangerous git — push, reset --hard, clean -f, branch -D) are wired once at repo init and run continuously, under both human and agent commits.
+  </div>
+
+  <h3>5 · When to use Sandcastle vs codex/interactive vs prototype</h3>
+
+  <p>Pick the tool by how well-known the answer is, not by habit.</p>
+
+  <table>
+    <tr><th>Use…</th><th>When the work is…</th><th>Because…</th></tr>
+    <tr><td><span class="badge b-ai">Sandcastle</span></td><td>Autonomous &amp; well-specced — a thin slice with a clear spec, golden files, and an all-or-nothing test named.</td><td>The loop runs unattended (up to 10 iterations, one issue each), RGR + reviewer, one <code>RALPH:</code> commit per issue. It needs the answer pinned down first; it is not for figuring things out.</td></tr>
+    <tr><td><code>codex</code> / interactive</td><td>Exploratory — you don't yet know the shape of the change, the bug is fuzzy, or the design needs back-and-forth.</td><td>A human stays in the loop to steer. Use <code>diagnose</code> for hard bugs (build a fast feedback loop, reproduce, minimise, instrument), <code>grill-me</code>/<code>grill-with-docs</code> to stress-test a plan, <code>design-an-interface</code> to design it twice. Output of this stage is a sharper spec/issue, not merged code.</td></tr>
+    <tr><td><code>prototype</code></td><td>A single open question about a <em>data model or UI</em> that must be de-risked before committing.</td><td>Throwaway code answers one question — a runnable terminal app for logic/state, or toggleable UI variants — then you capture the answer and delete it. De-risk first, then write the spec, then issue it for Sandcastle.</td></tr>
+  </table>
+
+  <div class="callout co-key">
+    <strong>The arrow always points the same way.</strong> Exploratory (codex / prototype / grill) &rarr; a pinned spec + golden files &rarr; AFK-ready issues labelled <code>Sandcastle</code> &rarr; autonomous build &rarr; human PR review. You never hand Sandcastle an open question, and you never hand a human a job a verified slice could have automated.
+  </div>
+
+  <h3>6 · Memory &amp; context hygiene</h3>
+
+  <p>Long-running build work outlives any one conversation, so context is captured deliberately, not left in chat.</p>
+
+  <div class="card mod brain">
+    <div class="lab">KEEP CONTEXT OUT OF THE CHAT</div>
+    <dl>
+      <dt><code>/context-save</code> &amp; <code>/context-restore</code></dt><dd>Snapshot the working context (what you're mid-way through, decisions just made, next step) and restore it in a later session — so a compaction or a new window doesn't lose the thread. <code>handoff</code> compacts a conversation into a handoff doc (in OS temp, not the repo) referencing artifacts by path.</dd>
+      <dt><code>/learn</code></dt><dd>Promote a durable lesson into project learnings, so the same mistake or hard-won fact survives across conversations and informs future runs.</dd>
+      <dt>gbrain (<code>/setup-gbrain</code>, <code>/sync-gbrain</code>)</dt><dd>A searchable brain over the repo, kept current with the code; it refreshes the agent search guidance in <code>CLAUDE.md</code> so agents find the right files fast instead of re-reading the tree.</dd>
+      <dt>Repo-level memory of record</dt><dd>The lasting decisions live in <code>CONTEXT.md</code> (domain language) and <code>docs/adr/</code> (one decision per file). Chat is transient; these are the things every later skill and every Sandcastle run reads and must not re-litigate.</dd>
+    </dl>
+  </div>
+
+  <div class="callout co-ext">
+    <strong>Known harness caveats to settle before a real run.</strong> The Sandcastle prompts/comments say "sonnet" but the code instantiates <code>claude-opus-4-7</code> for both phases (<code>main.mts:82,106</code>) — a stale model id; and the tracker docs hard-code <code>bruhanand/KDPS</code>. Confirm the model and the remote before relying on the loop, so issues are picked from the live queue and built by the intended model.
+  </div>
+</section>
+
+<section id="risks-checkpoints">
+<h2 class="sec">Risks, checkpoints &amp; what to revisit</h2>
+
+<p>Nothing below blocks the foundation scaffold — but each item has lead time or a known unknown, so each gets a named checkpoint and a slice (or date) by which it must be settled. The rule throughout: <strong>flag, don't block</strong> (Rule 5). The floor keeps moving while these resolve in the background.</p>
+
+<table>
+<tr><th>Item</th><th>Risk</th><th>Mitigation / checkpoint</th></tr>
+
+<tr>
+<td><strong>Ten Software POS API</strong> <span class="badge b-ext">EXT</span></td>
+<td>Highest-risk external. The whole outbound + sale path (slice 4) is hostage to whether Ten Software exposes a usable sale/exchange/return feed. If it can't, we fork to build-our-own-POS — a large, late surprise if discovered during slice 4.</td>
+<td><strong>Spike now, in parallel.</strong> Goal: confirm read of sale lines (SKU = Style x Color x Size, MRP, discount, GST split) and whether returns/exchanges come through. <em>Checkpoint:</em> pre-decide the build-own-POS fork <strong>before</strong> slice 4 specs. This is why the inbound walking skeleton (slice 2) ends at the ledger, not at POS — the first proof must not depend on this unknown.</td>
+</tr>
+
+<tr>
+<td><strong>Tally / TaxOne import</strong> <span class="badge b-ext">EXT</span></td>
+<td>Tally stays the statutory book of record (Rule). If the TaxOne / XML import path can't take our deterministic vouchers cleanly, the daily tie-out (slice 7) has no landing zone and GST filing breaks.</td>
+<td><strong>Spike now, in parallel.</strong> Push a sample Sale + Purchase + Journal voucher through TaxOne import; confirm the deterministic voucher number (<code>DEO-SAL-20260620-001</code>, store·type·date·seq) survives as the idempotency join key with prevent-duplicates ON. <em>Checkpoint:</em> import proven before slice 7. Pair with the CA sitting (below) — entity count confirmed (one PAN → one Tally company).</td>
+</tr>
+
+<tr>
+<td><strong>Barcode generator</strong> <span class="badge b-ext">EXT</span></td>
+<td>Lowest risk of the three, but still external — inbound labelling (PT → printed label) can't go live without a working barcode/label tool that the store's label printers accept.</td>
+<td><strong>Spike now, in parallel.</strong> Confirm symbology, label size, and printer compatibility against real store hardware. <em>Checkpoint:</em> proven before the inbound slice (slice 2, where scan-at-GRN lands) and store labelling go live.</td>
+</tr>
+
+<tr>
+<td><strong>Cost: freeze-at-stock-in vs re-post</strong> <span class="badge b-open">OPEN</span></td>
+<td>Profitability is <em>derived</em> (cost from PT/invoice at stock-in, revenue from POS at sale) and must never be hand-entered. But if a later invoice/credit-note changes cost after goods are in, do we freeze the snapshot cost or re-post? An undecided answer means the ledger posting catalog for inbound is ambiguous — and that's the heart of correctness.</td>
+<td><strong>Settle before the inbound slice (slice 2).</strong> Decide the convention (snapshot-and-hold with an adjustment line vs re-post on cost change), write it into the posting catalog and a golden file, and make it a code-level invariant. <em>Checkpoint:</em> Gate-1 spec of the inbound slice (slice 2) cannot pass until this is locked.</td>
+</tr>
+
+<tr>
+<td><strong>F9 · SOR GST double-recognition guard</strong> <span class="badge b-open">OPEN</span> <span class="badge b-money">MONEY</span></td>
+<td>The arrival Purchase voucher (which normally carries input GST) and the SOR/Consignment settlement Journal could each recognise GST for the same pieces — GST recognised <strong>twice</strong>. This cannot be tested away after the fact; it must be designed out in the kernel.</td>
+<td><strong>Gate before slice 8 (SOR/Consignment) — and the convention chosen before slice 2 (inbound).</strong> Pick ONE convention with the CA (arrival-is-memo vs arrival-is-statutory) and enforce <em>recognise-once</em> with a <code>gst_recognised = (date, voucher_no)</code> invariant on the effective-dated SOR Lot, so the second event sees GST already recognised and posts none. Borrow the GST <em>amount</em> math from <code>india_compliance/gst_india/overrides/transaction.py</code>; KDPS owns the once-only guard.</td>
+</tr>
+
+<tr>
+<td><strong>6-month deemed-supply clock</strong> <span class="badge b-open">OPEN</span> <span class="badge b-money">MONEY</span></td>
+<td>A <em>second</em> statutory clock, distinct from the 60–120-day commercial return window: CGST s.31(7) deems a supply at the earlier of sale or <strong>6 months from removal</strong>, even if the piece never sold. Greenfield — ERPNext/india-compliance have no equivalent (their only "6 month" reference is a GSTR-3B filing fallback in <code>india_compliance/.../gst_invoice_management_system.py</code>).</td>
+<td><strong>Get the CA's deemed-supply ruling before slice 8 (SOR/Consignment).</strong> Model the SOR Lot with <strong>two clocks off one <code>removal_date</code></strong> (commercial return window + the +6-calendar-month deemed-supply clock), alarmed at 30/15/7 days into a named exception queue (owner = Patna accountant). Only the genuinely sale-on-approval brands run Clock 2.</td>
+</tr>
+
+<tr>
+<td><strong>Late freight after the PT</strong> <span class="badge b-open">OPEN</span> <span class="badge b-money">MONEY</span></td>
+<td>Freight/landed-cost charges can arrive <em>after</em> the PT has frozen the lot cost. Reposting is forbidden (append-only ledgers), so a freight bill that lands late has no posting path unless the convention is fixed — and lot cost feeds every margin.</td>
+<td><strong>Decide before the inbound slice (slice 2).</strong> Choose <em>forward-only rate adjustment</em> (the next lot absorbs it) vs a <em>separate cost-correction event</em> (a new dated adjustment line against the lot) — never a reposting. Write the chosen convention into the posting catalog and a golden file. <em>Checkpoint:</em> Gate-1 spec of slice 2 cannot pass until this is locked.</td>
+</tr>
+
+<tr>
+<td><strong>Sold-before-PT</strong> <span class="badge b-open">OPEN</span> <span class="badge b-money">MONEY</span></td>
+<td>On booking-less direct receipt (Q9), goods are sellable on day one — a piece can sell <em>before</em> the PT has priced the lot, so COGS has no frozen cost yet. Leaving it undefined either blocks legitimate sales or posts margin against a null cost.</td>
+<td><strong>Decide with Anand + the accountant before the inbound slice (slice 2).</strong> Choose a <em>memo/SRBNB-style provisional value</em> (post the sale at a memo cost, true-up to frozen cost when the PT lands, as a dated correction) vs <em>block-the-sale-until-priced</em>. The chosen path becomes a golden file. Ties to the direct-receipt path generalised in slice 2.</td>
+</tr>
+
+<tr>
+<td><strong>No-reposting / corrections rule</strong> <span class="badge b-open">OPEN</span> <span class="badge b-money">MONEY</span></td>
+<td>The whole ledger discipline rests on append-only with reverse-and-repost, but there is no single one-page rule stating <em>how</em> a correction is made — so an agent could silently mutate or re-run a posting, corrupting the audit trail and the Tally tie-out.</td>
+<td><strong>Make append-only a code-level invariant and write the one-page corrections rule before the inbound slice (slice 2).</strong> Every correction is a <em>new today-dated event + reason code</em>, linked to its source via <code>voucher_detail_no</code>; never a rewrite, never a re-post of the same event. Enforced by the <code>REVOKE UPDATE/DELETE</code> grants + trigger (card 2) and asserted by the append-only-as-restricted-role test (card 6).</td>
+</tr>
+
+<tr>
+<td><strong>Per-brand commercial model / margin / return window — captured FRESH</strong> <span class="badge b-warn">MIGRATION BLOCKER</span></td>
+<td>SOR vs Outright vs Hybrid vs Consignment per brand drives ownership, the 60–120-day return windows (deadlines, not memory), margin model and EOSS rules — a first-class dimension, not a flag. This data lives in nobody's system today (per-store POS + Tally + Excel). If it isn't captured cleanly and fresh, every downstream ledger, profitability and deemed-supply clock is built on sand, and migration cannot proceed.</td>
+<td><strong>Treat as a migration blocker, capture now in parallel with the spikes.</strong> Collect the per-brand commercial model, margin basis, return-window days and applicable GST slab as seed data the foundation reads (the seed already shapes brands across 4 commercial models). <em>Checkpoint:</em> a verified per-brand grid must exist before slice 2 (inbound, where the model drives the posting) and is a hard precondition of D9 migration.</td>
+</tr>
+
+<tr>
+<td><strong>Deferred: deep roles/access model</strong> <span class="badge b-next">REVISIT</span></td>
+<td>D4 left roles thin; D4 (payments roles) and D8 (edit-rights grid) are two unreconciled models. A weak authz model becomes very expensive to retrofit once real ledgers and money screens exist.</td>
+<td><strong>Revisit before go-live.</strong> A unified RBAC (roles+permissions matrix → data-scoping all/region/store-group/store → maker-checker in core) must be ratified before login ships — the question is the specifics, not whether. Real people and ₹ approval bands are an open client fact to fill in (CD5).</td>
+</tr>
+
+<tr>
+<td><strong>Deferred: D9 migration &amp; rollout</strong> <span class="badge b-next">REVISIT</span></td>
+<td>Only design discussion not yet done. Cutting 50+ stores / 20,000+ SKUs / 40+ brands off per-store POS + Tally + Excel is the riskiest single event; designing it late risks a botched cutover.</td>
+<td><strong>Design before go-live, after a pilot cluster.</strong> No big-bang — pilot cluster proven first, then chain-wide. Gated on the fresh per-brand grid (above) being complete. Does not block the foundation.</td>
+</tr>
+
+<tr>
+<td><strong>Deferred: attendance &amp; payroll</strong> <span class="badge b-next">REVISIT</span></td>
+<td>No design folder exists; in-or-out is undecided. Risk is silent scope drift — building it ad hoc, or assuming it's covered when it isn't.</td>
+<td><strong>Decide in/out explicitly before go-live.</strong> Keep it out of the foundation and out of every slice spec until consciously scoped. Does not block the foundation.</td>
+</tr>
+
+</table>
+
+<div class="callout co-warn">
+<strong>Status drift is its own risk.</strong> Keep build status in <code>CLAUDE.md</code> + <code>PROJECT-MAP.html</code> only — build docs carrying their own status is exactly what left <code>how-to-build-this-ERP.html</code> claiming "D6 Tally — not yet designed" when D1–D8 are locked. Do not carry that stale status, nor the D3 "transfers are internal — no tax" claim (Bihar↔Jharkhand are distinct GSTINs → taxable IGST + e-way), forward into any slice.
+</div>
+
+<h3>First concrete actions this week</h3>
+<ol class="tight">
+<li><strong>Ratify the foundation decisions.</strong> The stack (FD-0, Q11: Python/Django + React-TS-PWA + PostgreSQL; hosting to be decided later) and data-scoping (FD-8, Q12: app-layer <code>django-scopes</code>, schema RLS-ready) calls are closed; ratify them with the stack-independent set as a block: integer-paise + append-only + snapshot-state DB conventions, the relational LegalEntity → GSTIN → Store hedge, unified RBAC, the golden-file + ledger-invariant + cross-store-isolation CI gate, and the light Tailwind/Radix component system + seed data.</li>
+<li><strong>Delete the distrust set.</strong> Remove ADRs 0001–0007 — unratified sketches presented as LOCKED. They were input/ideas; the ratified set from action 1 replaces them.</li>
+<li><strong>Scaffold repo + DB + auth.</strong> Slice 0: foundation only, no business logic — monorepo, database with the agreed conventions, login + identity/session. Scaffold only what slice 1 needs (core + masters + vendors + inbound); grow apps per slice.</li>
+<li><strong>Open the foundation issues.</strong> One issue per scaffold piece + the slice-1 (master data) and slice-2 walking-skeleton spec (GRN → PT → ledger postings → store stock screen, ending at the ledger).</li>
+<li><strong>Kick off the 3 spikes in parallel.</strong> Ten Software POS API, Tally/TaxOne import, barcode generator — plus book the CA sitting (e-invoicing applicability, SOR deemed-supply ruling, slab basis — entity count confirmed: one PAN / one Tally company). They have lead time; start them the same day as the scaffold.</li>
+</ol>
+
+</section>
+
+<footer>
+  KDPS · Build Process &amp; Roadmap · 25 June 2026 · Living document.<br>
+  The companion build plan to <a href="system-design/consolidation/consolidated-system-design.html">consolidated-system-design.html</a> (the design-of-record) and <a href="system-design/00-system-architecture.html">00-system-architecture.html</a> (the constitution). Foundation-first, then one verified vertical slice at a time. Project status lives only in CLAUDE.md + PROJECT-MAP.html — not in this doc.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

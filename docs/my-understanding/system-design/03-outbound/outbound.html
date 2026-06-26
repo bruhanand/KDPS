@@ -134,9 +134,9 @@
   <table>
     <thead><tr><th>Document</th><th>Raised by</th><th>What it does to stock</th><th>What it posts</th></tr></thead>
     <tbody>
-      <tr><td><strong>Sale</strong></td><td>POS → we pull</td><td>Available → gone (−1)</td><td>Revenue; SOR/Consignment payable accrues</td></tr>
+      <tr><td><strong>Sale</strong></td><td>POS → we pull</td><td>Available → gone (−1)</td><td>Revenue; the Sale itself <strong>writes the SOR/Consignment sold-liability</strong> to the vendor ledger (the PT only flagged it not-owned)</td></tr>
       <tr><td><strong>Exchange</strong></td><td>POS → we pull</td><td>old +1 (→floor or quarantine), new −1</td><td>Reverse old revenue, book new sale, net cash</td></tr>
-      <tr><td><strong>Transfer order</strong></td><td>Our system</td><td>source hold → in-transit → destination available</td><td>Nothing (internal move)</td></tr>
+      <tr><td><strong>Transfer order</strong></td><td>Our system</td><td>source hold → in-transit → destination available</td><td>Same-state: stock move only. Cross-state (Bihar↔Jharkhand): the system records the move (business-unit→business-unit) and <strong>flags it as a cross-state move needing manual paperwork</strong>; the IGST tax invoice + e-way bill are <strong>produced manually by KDPS</strong>, outside the system</td></tr>
       <tr><td><strong>RTV (defective)</strong></td><td>Our system</td><td>quarantine → gone</td><td>Owned: tracked brand credit; brand-owned: just returns</td></tr>
       <tr><td><strong>Seasonal Return</strong></td><td>Our system</td><td>available → gone (bulk)</td><td>SOR: none owed; Correction: draws GR allowance</td></tr>
       <tr><td><strong>EOSS / V-flip</strong></td><td>POS (discount) · our system (flip)</td><td>flip: brand-owned → KDPS-owned, stays on shelf</td><td>Discount captured; brand EOSS settlement claimed</td></tr>
@@ -159,7 +159,7 @@
 
 <section id="d-pos">
   <h2 class="sec">3 · The POS boundary <span class="badge b-pos">swappable</span></h2>
-  <p>Ten Software's APIs aren't ready, so <strong>every POS touchpoint goes through one adapter</strong>. If their APIs arrive, we wire them; if not, we build a <strong>KDPS-owned POS</strong> behind the same contract and swap it in — nothing else changes. The join key both sides agree on is the <strong>barcode</strong>.</p>
+  <p>Ten Software's APIs aren't ready, so <strong>every POS touchpoint goes through one adapter</strong>. If their APIs arrive, we wire them; if not, we build a <strong>KDPS-owned POS</strong> behind the same contract and swap it in — nothing else changes. The join key both sides agree on is <strong>barcode + season</strong>. Brands reuse a barcode across seasons, so the bare barcode is not enough on its own: the adapter <strong>infers the season at the edge</strong> from the active cohort for that barcode at that store on the sale date — one match posts straight through, several matches take the <strong>oldest cohort first</strong>, and only a genuinely ambiguous scan asks a <strong>one-tap "which season?"</strong>. It never blocks the sale.</p>
   <table>
     <thead><tr><th>We push to POS</th><th>We pull from POS</th></tr></thead>
     <tbody>
@@ -185,6 +185,7 @@
     <p>From <code>SALE REPORT FORMAT.xlsx</code>: Bill Date · Bill No · Customer · Phone · Item · Brand · <strong>Color (=P/M/E)</strong> · Size · Design No · <strong>Barcode</strong> · SalesMan (cashier) · Sub Category · Gender · Fit · <strong>season</strong> · Qty · Rate (MRP) · Gross · <strong>Disc% · Disc Amt</strong> · Net · Bill Amount · <strong>Cash / Card / Credit</strong>.</p>
     <p class="why"><strong>Cadence:</strong> near-real-time poll (POS-agnostic) + an authoritative EOD batch that is the daily close and the negative-SOH catch. Real-time push is the destination once we own the POS. <strong>Not in the report:</strong> funding source, approver, offer-rule id — derived (funding) or target-only (approver/rule).</p>
   </div>
+  <div class="callout co-note"><strong>The KDPS-built POS is in scope now, running alongside Ten Software.</strong> Own-POS is no longer a "someday swap" — we build it in scope while Ten Software stays live, and <strong>both sit behind the same adapter</strong>. Nothing in the architecture changes: there is <strong>one Sale document</strong> with a source tag (Ten Software · KDPS POS · manual), and <strong>all the money and stock posting lives on that Sale document, never in the adapter</strong> — so the source is interchangeable. Two guardrails make this safe: <strong>one store runs exactly one POS</strong> (a hard rule, so bill numbers never collide across sources), and every sale is <strong>idempotent</strong> — the POS stamps a unique id on each sale, and if it is sent twice (a retry after a dropped connection) our system returns the same Sale and never double-counts. We ship the adapter as a <strong>reader first</strong> (pull sales from Ten Software, reconcile clean) before any store goes live on our own POS.</div>
   <div class="callout co-park"><strong>Banked for the KDPS-built POS:</strong> offline-first (queue + sync; cloud-down resilient) · <strong>auto-inward-on-scan</strong> (selling a not-yet-inwarded allocated piece inwards + bills in one scan) · exchange as a first-class transaction · local price/offer cache · per-transaction risk caps · multi-terminal sync.</div>
 </section>
 
@@ -197,7 +198,7 @@
       <tr><td><strong>1 Counter sale</strong></td><td>POS</td><td>Sale (pulled)</td><td>−1 from available</td><td>Revenue; SOR/Consign. payable accrues</td></tr>
       <tr><td><strong>2 Manual-bill fallback</strong></td><td>POS (on recovery)</td><td>Paper → re-entered Sale</td><td>−1 once entered</td><td>As sale; recon flags gaps</td></tr>
       <tr><td><strong>3 Customer exchange</strong></td><td>POS</td><td>Exchange (return+sale legs)</td><td>old +1, new −1</td><td>Reverse old, book new, net cash</td></tr>
-      <tr><td><strong>4 Inter-store transfer</strong></td><td>Our system</td><td>Transfer order (2-step)</td><td>source hold → in-transit → dest.</td><td>Internal — none</td></tr>
+      <tr><td><strong>4 Inter-store transfer</strong></td><td>Our system</td><td>Transfer order (2-step)</td><td>source hold → in-transit → dest.</td><td>Same-state: none. Cross-state: legally a taxable IGST supply — system flags it; IGST invoice + e-way bill done manually</td></tr>
       <tr><td><strong>5 Defective / GR</strong></td><td>Our system</td><td>RTV (Credit/Replacement)</td><td>quarantine → out</td><td>Owned → brand credit; brand-owned → return</td></tr>
       <tr><td><strong>6 SOR seasonal return</strong></td><td>Our system</td><td>Seasonal Return (bulk)</td><td>available → out</td><td>SOR none; Correction draws allowance</td></tr>
       <tr><td><strong>7 EOSS / V-flip</strong></td><td>POS + our system</td><td>discount + V-flip</td><td>flip: → KDPS-owned, stays on shelf</td><td>Discount captured; brand settlement claimed</td></tr>
@@ -211,7 +212,7 @@
       <b>Trigger</b><div>Barcode scanned at POS, bill printed.</div>
       <b>Flow</b><div>We pull the sale-report line (near-real-time poll + EOD batch).</div>
       <b>Stock</b><div>Physical −1; comes off available.</div>
-      <b>Money</b><div>Revenue booked. SOR/Consignment → vendor payable accrues now. Outright/Correction already booked at inbound.</div>
+      <b>Money</b><div>Revenue booked. For SOR/Consignment the <b>Sale document is the writer of the vendor sold-liability</b> — it posts the payable to the vendor ledger now (the PT at inbound only flagged the piece not-owned and never posted liability). Outright/Correction liability was already booked at inbound.</div>
       <b>Accountability</b><div>Cashier (SalesMan) on every line; discount captured from the report.</div>
     </div>
   </div>
@@ -242,6 +243,7 @@
       <b>Document</b><div>Two-step transfer order (industry standard), raised in our system, pushed to POS.</div>
       <b>Dispatch</b><div>Source pieces <b>held (not sellable)</b> + enter <b>in-transit</b>; destination shows <b>pending-receipt</b>. Mandatory transport ref (mode + bus/driver/courier).</div>
       <b>Receive</b><div>Destination scans to receive → becomes available. Dispatched − received gap <b>flagged</b> on the open doc, owned by a named receiver.</div>
+      <b>Money / GST</b><div><b>Same-state move</b> (store → store within one GSTIN) is a stock-ledger move only — no tax. <b>Cross-state move</b> (Bihar↔Jharkhand) crosses two GSTINs, which are separate persons under GST, so it is <b>legally a taxable IGST supply</b> — kept for awareness and reporting. <b>Scope decision (26 Jun 2026):</b> the system <b>records the move</b> (business-unit→business-unit) and <b>flags it as a cross-state move needing manual paperwork</b>; it does <b>not</b> auto-generate the IGST tax invoice or the e-way bill. KDPS produces the <b>IGST tax invoice, the matching purchase voucher / ITC, and the e-way bill manually, outside the system</b>. Treatment is driven by the first two digits (the state code) of the two stores' GSTINs, which stays a ledger dimension.</div>
       <b>Alert</b><div>In-transit aging: not received within N days → flagged (catches transit loss).</div>
     </div>
   </div>
@@ -370,6 +372,7 @@
   <div class="callout co-dep"><strong>POS API requirement doc</strong> — deliverable; the push/pull contract is now complete and ready to assemble.</div>
   <div class="callout co-park"><strong>To D4 (payments):</strong> SOR/Consignment sale payables, RTV brand credits, EOSS/V-flip settlements. <strong>To D5 (offers):</strong> offer rulebook authoring. <strong>Analytics (later):</strong> markdown-vs-return decision view.</div>
   <div class="callout co-note"><strong>Parked (client owns):</strong> Ten Software API access/readiness.</div>
+  <div class="callout co-note"><strong>Conscious omission (26 Jun 2026) — Udhaar (customer credit sale):</strong> selling on customer credit / part-payment is not modelled in outbound this round; the POS "Credit" tender is captured as a payment type only, with no customer-receivable ledger or collection-chase. To be designed with banking/receivables before go-live.</div>
 </section>
 
 <section id="l-log">

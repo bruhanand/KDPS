@@ -296,7 +296,7 @@
   <p class="lead">"The app" is not one screen for everyone. It's one system with three faces, each sized to the person using it. Keep v1 to the working tool + the owner's view.</p>
   <table>
     <tr><th>Who</th><th>What they get</th><th>Why it's shaped this way</th></tr>
-    <tr><td><b>Store staff</b></td><td><b>The PWA</b> — receive goods, manual-bill fallback, transfers, returns, stocktake, "what's my pending inward". Browser, low-end Android, offline-tolerant, Hindi, big buttons.</td><td>This is the working tool. It must survive bad networks and cheap phones.</td></tr>
+    <tr><td><b>Store staff</b></td><td><b>The PWA</b> — receive goods, manual-bill fallback, transfers, returns, stocktake, "what's my pending inward". Browser, offline-tolerant, Hindi, big buttons.</td><td>This is the working tool. It must survive bad networks.</td></tr>
     <tr><td><b>Owners / managers</b></td><td><b>WhatsApp digest + alerts</b> (no login) and a <b>read-only web dashboard</b> for analytics.</td><td>Owners won't log in daily; they live on WhatsApp. The dashboard is for when they want to dig.</td></tr>
     <tr><td><b>Back-office / admin</b></td><td>Master screens, payment approvals, Tally sync, exception queues.</td><td>The few power users who maintain masters and clear exceptions.</td></tr>
   </table>
@@ -345,7 +345,7 @@
     <tr><th>Fact</th><th>Design implication</th></tr>
     <tr><td><b>Two GSTINs</b> — Bihar and Jharkhand are separate "distinct persons"</td><td>Every store/warehouse maps to a state GSTIN; tax is per-GSTIN; likely <b>two Tally companies</b> → sync routes each voucher to the right one</td></tr>
     <tr><td><b>Apparel GST is slab-based &amp; changed 22 Sep 2025</b> (≤₹2,500/piece → 5%; above → 18%)</td><td>Build a <b>date-effective, configurable slab table per HSN</b> — rate is data, not code. <span class="badge b-no">flag</span> per-piece vs per-line-after-discount for the tax advisor</td></tr>
-    <tr><td><b>Cross-state stock transfers are taxable supplies</b></td><td>Bihar↔Jharkhand transfer = IGST tax invoice + e-way bill; same-state move = delivery challan. <b>Two transfer document types.</b></td></tr>
+    <tr><td><b>Cross-state stock transfers are taxable supplies</b></td><td>Bihar↔Jharkhand transfer = legally a taxable IGST supply; same-state move = stock-ledger only. <b>KDPS scope (26 Jun 2026): the system records + flags the cross-state move; the IGST tax invoice + e-way bill are produced manually by KDPS, not auto-generated.</b></td></tr>
     <tr><td><b>e-Invoice (IRN)</b> mandatory ≥₹5cr turnover, for <b>B2B + transfers, NOT B2C</b></td><td>Store sales (B2C) need no IRN; the Bihar↔Jharkhand transfer invoices do. Generate via a <b>GSP</b>, near-real-time</td></tr>
     <tr><td><b>e-Way bill</b> thresholds: inter-state ₹50k; intra-state Bihar &amp; Jharkhand both ₹1,00,000</td><td>Make the threshold <b>per-state configurable</b>; attaches to sales, transfers, returns above threshold</td></tr>
   </table>

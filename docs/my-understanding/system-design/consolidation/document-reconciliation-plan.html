@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Document Reconciliation &amp; Build-Readiness Plan</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --red:#a32a2a; --red-bg:#fde8e8; --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:38px 30px 120px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:28px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:70ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:34px 0}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  p{margin:9px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:999px; white-space:nowrap}
+  .b-keep{background:var(--green-bg); color:var(--green)}
+  .b-rewrite{background:var(--amber-bg); color:var(--amber)}
+  .b-create{background:var(--blue-bg); color:var(--blue)}
+  .b-del{background:var(--red-bg); color:var(--red)}
+  .b-appx{background:var(--grey-bg); color:var(--navy2)}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{background:#eef0f4; padding:1px 5px; border-radius:5px; font-size:12.5px}
+  ol,ul{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  .step{display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:50%; background:var(--navy); color:#fff; font-size:12.5px; font-weight:700; margin-right:6px}
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <div class="eyebrow">KDPS · Reconciliation &amp; Build-Readiness · Plan-of-Record</div>
+  <h1>Getting the documents in order — then starting the build</h1>
+  <p class="sub">The single plan that turns the 16 locked Q&amp;A decisions + the ERPNext engineering study + the build roadmap into <strong>one trustworthy, ordered document set</strong>, and opens the foundation build on solid ground.</p>
+  <div class="stamp">25 June 2026 · This is the approval gate before any canonical doc is rewritten or any file deleted.</div>
+</header>
+
+<section>
+  <div class="callout co-key">
+    <strong>Source of truth for this work.</strong> Every decision driving these edits lives on disk, not in any chat:
+    <ul style="margin:6px 0 0">
+      <li><code>.context/qa-decisions.md</code> — all 16 decisions + the new money-critical open items, with reasoning.</li>
+      <li><code>my-understanding/system-design/consolidation/system-review-2026-06-24.html</code> — the review (drift matrix, findings F1–F19, trust map, doc order).</li>
+      <li>The two 25-Jun inputs — the ERPNext engineering study and this build roadmap.</li>
+    </ul>
+    The edits below are executed by fresh sub-agents reading these artifacts — so the work is reproducible and does not depend on conversation memory.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">1 · The target document set (ordered, canonical)</h2>
+  <p>What a developer reads, in order, to trust and build the system. Status legend: <span class="badge b-keep">keep</span> <span class="badge b-rewrite">rewrite/edit</span> <span class="badge b-create">create</span> <span class="badge b-appx">appendix</span> <span class="badge b-del">delete</span>.</p>
+  <table>
+    <tr><th>#</th><th>Document</th><th>Role</th><th>Status</th></tr>
+    <tr><td>0</td><td><code>00-system-architecture.html</code> + <code>CLAUDE.md</code></td><td>The constitution — 11→<strong>12</strong> rules, 5 layers, invariants</td><td><span class="badge b-rewrite">edit</span></td></tr>
+    <tr><td>1</td><td><code>consolidated-system-design.html</code></td><td>Design-of-record — the whole system on one page</td><td><span class="badge b-rewrite">edit + commit</span></td></tr>
+    <tr><td>2</td><td><code>glossary.html</code> (CONTEXT)</td><td>One controlled vocabulary</td><td><span class="badge b-create">create</span></td></tr>
+    <tr><td>3</td><td><code>data-model.html</code> (ERD)</td><td>Schema: identity, integer-paise, SCD-2 masters, LegalEntity→GSTIN→Store</td><td><span class="badge b-create">create</span></td></tr>
+    <tr><td>4</td><td><code>posting-catalog.html</code></td><td>Every document → ledger legs → per commercial model; the heart of correctness</td><td><span class="badge b-create">create</span></td></tr>
+    <tr><td>5</td><td><code>lifecycles.html</code></td><td>Every document's state machine + the POS sync lifecycle</td><td><span class="badge b-create">create</span></td></tr>
+    <tr><td>6</td><td><code>integration-contracts.html</code></td><td>POS (barcode+season) · Tally (voucher no.) · Bank (UTR) · WhatsApp</td><td><span class="badge b-create">assemble</span></td></tr>
+    <tr><td>7</td><td><code>build-process-and-roadmap.html</code></td><td>Build companion — foundation + slices 0–9</td><td><span class="badge b-rewrite">reconcile</span></td></tr>
+    <tr><td>8</td><td><code>erpnext-engineering-study.html</code></td><td>Build-reference — patterns to borrow / skip</td><td><span class="badge b-keep">keep</span></td></tr>
+    <tr><td>9</td><td><code>docs/adr/0001…</code></td><td>The real, append-only ADR chain (FD-0…FD-7 ratified)</td><td><span class="badge b-create">create</span></td></tr>
+    <tr><td>10</td><td>D1–D8 module docs</td><td>Locked deep-dive appendices (apply per-module fixes)</td><td><span class="badge b-rewrite">edit</span></td></tr>
+    <tr><td>11</td><td>Ground truth (conversations, workflow diagrams, req-understanding)</td><td>How KDPS works today</td><td><span class="badge b-rewrite">1 fix</span></td></tr>
+    <tr><td>12</td><td><code>client-requirements-docs/</code> · <code>04-client-docs/</code></td><td>Requirements input / client-facing — never design</td><td><span class="badge b-keep">keep</span></td></tr>
+    <tr><td>—</td><td>Distrust set (other checkout): <code>CONTEXT.md</code>, <code>docs/adr/0001–0007</code>, <code>docs/agents/*</code>, <code>foundation/foundation.html</code></td><td>Unratified "locked" sketches that contradict the trusted record</td><td><span class="badge b-del">delete (after salvage)</span></td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">2 · Per-document edits (keyed to decisions)</h2>
+  <table>
+    <tr><th>Document</th><th>Edits</th></tr>
+    <tr><td><strong>00-system-architecture</strong></td><td>Reword posting principle: GRN posts quantity, PT posts value + liability per model (Q1/Q2); fix ledger-writer cells (GRN=qty, Sale=SOR/Consignment liability). Add <strong>Rule 12 "Variation is data, not code"</strong> (Q15). Fix "9am"→"per-user, default 9 PM" (Q15). Cross-link the stack ADR (Q11). Cross-state transfer = taxable IGST (Q3).</td></tr>
+    <tr><td><strong>consolidated-system-design</strong></td><td>Fix "TypeScript end-to-end" (line 571) → typed PWA + typed Django + generated typed client at the seam (Q11). Fix RLS line (561) → app-layer scoping, RLS-ready (Q12). Inbound posts card + ledger-writer table for GRN/PT split (Q1/Q2). Commercial model = two-axis stored, label derived (Q10). Booking-less direct receipt for any brand (Q9). <strong>Commit</strong> (currently untracked).</td></tr>
+    <tr><td><strong>D1 vendor</strong></td><td>Booking-less direct-receipt seam (NULL booking; retro-link). Resolve booking-price conflict. Two-axis model snapshot (Q10).</td></tr>
+    <tr><td><strong>D2 inbound</strong></td><td>Cost = P RATE directly; drop "strip GST from P RATE" (Q5). GRN=qty / PT=value split (Q1). Generalise booking-less receipt to branded (Q9). Ingest guards (Q16). Season-at-adapter note (Q6).</td></tr>
+    <tr><td><strong>D3 outbound</strong></td><td>Cross-GSTIN transfer = taxable IGST + e-way bill; intra-state = stock-only (Q3). Add season to POS join key (Q6). Own-POS as a concurrent Sale source (Q8).</td></tr>
+    <tr><td><strong>D4 payments</strong></td><td>Surface the two clocks (statutory at arrival vs operational on sale) into the posting catalog. Merge roles grid with D8 RBAC.</td></tr>
+    <tr><td><strong>D6 Tally</strong></td><td>SOR/Consignment GST recognition by supplier-invoice timing — two paths + <code>gst_recognised</code> guard (Q4, F9). Close D6:161 vs D6:261 (Q3). Deferred-billing direct-receipt voucher case (Q9).</td></tr>
+    <tr><td><strong>D7 analytics</strong></td><td>Per-user configurable digest type + timing (Q15). 9 PM default. Fence target hold-back under Rule 4.</td></tr>
+    <tr><td><strong>D8 master data</strong></td><td>Two-axis commercial model registry (Q10). Fresh per-brand capture + steward (Q16). Barcode = non-unique alias; collision handled at inbound (Q7).</td></tr>
+    <tr><td><strong>req-understanding (ground truth)</strong></td><td>Correct all <strong>5</strong> stale "barcode per piece" phrases → count-under-barcode (Q7/F8).</td></tr>
+    <tr><td><strong>roadmap + study</strong></td><td>Close FD-0 (→ Django, Q11) and the RLS "OPEN CALL" (→ Q12). Reflect Q10/Q6/Q7/Q9 in slice cards. Reconcile the <strong>two divergent slice-numberings</strong>. Add the 5 new money-critical open items.</td></tr>
+    <tr><td><strong>CLAUDE.md + PROJECT-MAP</strong></td><td>Update status: D1–D8 locked, 16 decisions logged, foundation build starting; stack confirmed Django+React/TS; add the new docs to the index.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">3 · The ADR chain (ratified decisions)</h2>
+  <p>One append-only chain in this worktree, replacing the distrusted sketches. Each carries a decided value from the Q&amp;A + study.</p>
+  <table>
+    <tr><th>ADR</th><th>Decision</th></tr>
+    <tr><td>0001 · Stack</td><td>Python/Django engine + React/TS PWA + PostgreSQL, GCP Mumbai. Typed at both ends + generated client at the seam. <em>Not</em> Frappe — re-implement ERPNext contracts as plain Django (Q11).</td></tr>
+    <tr><td>0002 · Repo &amp; module layout</td><td>Modular monolith; one Django app per module; import-linter seams (salvaged).</td></tr>
+    <tr><td>0003 · Data scoping</td><td>App-layer scoping (django-scopes), fail-closed; schema RLS-ready; store/brand/season/state-GSTIN as FK dimensions on every ledger leg (Q12).</td></tr>
+    <tr><td>0004 · DB conventions</td><td>Integer-paise money; append-only ledgers (REVOKE UPDATE/DELETE + trigger); SCD-2 effective-dated masters; docstatus lifecycle (salvaged + Q1).</td></tr>
+    <tr><td>0005 · CI gate</td><td>Real-Postgres tests: Σdr=Σcr, append-only, cross-store isolation, golden-file (the 150 invoices). Money diffs human-read.</td></tr>
+    <tr><td>0006 · Posting engine</td><td>One central <code>post_entries(doc, legs)</code>; balanced-or-fail; correct-by-reversal; no reposting (code-level invariant).</td></tr>
+    <tr><td>0007 · Entity / GSTIN scoping</td><td>LegalEntity→GSTIN→Store relational model (salvaged from ADR-0007); two GSTINs = distinct persons; cross-state = IGST (Q3).</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">4 · Deletions — distrust set (salvage first)</h2>
+  <div class="callout co-warn">
+    <strong>Delete only after salvaging</strong> into the new artifacts above: the glossary (→ <code>glossary.html</code>), ADR-0004's integer-paise + append-only triple, ADR-0007's LegalEntity→GSTIN→Store, the import-linter seams. Preserve the two live contradictions (stack, scoping) — they are now resolved in the new ADRs, not silently lost. <strong>Confirm the live GitHub remote</strong> before deleting <code>docs/agents/*</code> or running any agent tooling (the roadmap hardcodes <code>bruhanand/KDPS</code>, unverified).
+  </div>
+  <p>Targets in <code>/Users/anand/Code/KDPS</code>: <code>CONTEXT.md</code> · <code>docs/adr/0001–0007</code> · <code>docs/agents/*</code> · <code>docs/my-understanding/system-design/foundation/foundation.html</code>.</p>
+</section>
+
+<section>
+  <h2 class="sec">5 · New money-critical items to fold in (before the money slices)</h2>
+  <ol>
+    <li><strong>F9 · SOR GST double-recognition</strong> — <code>gst_recognised=(date,voucher_no)</code> invariant on the SOR lot; one convention; CA confirms. Cannot be tested away later.</li>
+    <li><strong>6-month deemed-supply clock</strong> — second statutory clock (CGST 31(7)), distinct from the 60–120-day commercial window; model two clocks off one <code>removal_date</code>, alarmed 30/15/7.</li>
+    <li><strong>Late freight after PT</strong> — forward-only rate adjust vs separate cost-correction event (reposting forbidden).</li>
+    <li><strong>Sold-before-PT</strong> — SRBNB memo value vs block-the-sale.</li>
+    <li><strong>No-reposting / corrections rule</strong> — every correction is a new today-dated event + reason code, linked via the source document.</li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">6 · The three question sheets (hand-off)</h2>
+  <table>
+    <tr><th>To</th><th>Questions</th></tr>
+    <tr><td><strong>Client</strong></td><td>Registration reality (Q3) — <em>answered 26 Jun 2026: one PAN, two GSTINs (Bihar &amp; Jharkhand), one Tally company; cross-state moves happen, paperwork produced manually.</em> Open: store→state map · B2B invoices. Plus Q10: is 25-18-10 a distinct deal or BNS-with-allowance; any brand running two models in one season.</td></tr>
+    <tr><td><strong>CA</strong></td><td>Q4 SOR/Consignment recognition (agent vs sale-or-return, per brand) · F9 one-convention · 6-month deemed-supply interpretation · Q3 slab basis + Jharkhand e-way carve-out · Q5 cost sign-off (Ind AS 2) · Q9 unknown-brand default posting · Q16 GST 2.0 slab · entity/GSTIN count + one-vs-two Tally companies + e-invoicing applicability.</td></tr>
+    <tr><td><strong>Ten Software (spike)</strong></td><td>Q6: can the sale event carry more than the raw barcode (season/MRP); does it prompt on a multi-variant barcode. Q8: documented API for sales/SOH/returns/collections pull + master/allocation/offers push; join key; auth; rate limits; timeline.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">7 · Execution order</h2>
+  <ol>
+    <li><span class="step">1</span><strong>Non-destructive first.</strong> Create the 4 new artifacts (glossary, ERD, posting catalog, lifecycles) + the ADR chain + integration contracts; commit the consolidated design. Nothing deleted yet.</li>
+    <li><span class="step">2</span><strong>Edit the canonical docs</strong> per §2 (architecture, design-of-record, D-docs, ground-truth fix, roadmap/study reconciliation, CLAUDE.md/PROJECT-MAP).</li>
+    <li><span class="step">3</span><strong>Salvage, then delete</strong> the distrust set — only after the new artifacts hold the salvaged content, and only after the repo remote is confirmed. <em>(Gated on your explicit go.)</em></li>
+    <li><span class="step">4</span><strong>Issue the three question sheets</strong> to client / CA / Ten Software.</li>
+    <li><span class="step">5</span><strong>Foundation build (slice 0)</strong> begins on the now-trustworthy set.</li>
+  </ol>
+  <div class="callout co-note"><strong>How it runs:</strong> a workflow of focused sub-agents, each reading the durable artifacts (decision log + review + this plan) and editing its assigned files, with a verification pass that every locked decision is reflected and no doc still contradicts another. Destructive steps (3) wait for your explicit confirmation.</div>
+</section>
+
+<footer>
+  KDPS · Document Reconciliation &amp; Build-Readiness Plan · 25 June 2026 · Drives the edits; superseded once executed.
+</footer>
+
+</div>
+</body>
+</html>

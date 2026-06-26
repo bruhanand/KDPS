@@ -6,11 +6,11 @@ Guidance for Claude Code when working in this repository.
 
 Anand is the consultant/architect designing and building an operating system for **KDPS Lifestyle Pvt Ltd** — a multi-brand Indian fashion retailer (Bihar & Jharkhand, 50+ stores/warehouses, 20,000+ SKUs, 40+ brands) that currently runs on per-store POS + Tally + Excel.
 
-**Anand designs the system himself.** The client supplied their own plans (PRD, "Definitive Plan" with 10 AI agents, an 8-month phasing) — those are in `docs/client-requirements-docs/` and are **requirements input only, not the design**. Do not treat the client's architecture, agent list, tech stack, or phasing as decisions. The cancelled "Phase-1" plan is in `docs/__archive/` — never build from it.
+**Anand designs the system himself.** The client supplied their own plans (PRD, "Definitive Plan" with 10 AI agents, an 8-month phasing) — those are in `docs/client-requirements-docs/` and are **requirements input only, not the design**. Do not treat the client's architecture, agent list, tech stack, or phasing as decisions. The cancelled "Phase-1" plan is in `__archive/` — never build from it.
 
-## Where things stand (23 June 2026)
+## Where things stand (25 June 2026)
 
-**The master architecture is `docs/my-understanding/system-design/00-system-architecture.html`** — the whole system on one page (5 layers: master data → documents → ledgers → controls → intelligence), the 11 rules every module must obey (documents-write-ledgers, snapshot masters, flag-don't-block, AI at edges only, etc.), and the ordered discussion plan D3–D9. **Read it before any design discussion; designs that break a rule must change the rule consciously on that page first.**
+**The master architecture is `docs/my-understanding/system-design/00-system-architecture.html`** — the whole system on one page (5 layers: master data → documents → ledgers → controls → intelligence), the 12 rules every module must obey (documents-write-ledgers, snapshot masters, flag-don't-block, AI at edges only, variation-is-data-not-code, etc.), and the ordered discussion plan D3–D9. **Read it before any design discussion; designs that break a rule must change the rule consciously on that page first.**
 
 The system design ("the spine") is built in process order, one discussion at a time. Each design lives in its own folder under `docs/my-understanding/system-design/`:
 
@@ -23,7 +23,9 @@ The system design ("the spine") is built in process order, one discussion at a t
 7. **D6 · Tally sync** — designed (locked 20 Jun 2026) → `06-tally-sync/`
 8. **D8 · Master-data & users consolidation** — designed (locked 21 Jun 2026) → `08-master-data/`
 
-**Now building.** All module designs (D1–D8) are done. Decision (23 Jun 2026): start the **foundation build** now (project setup — repo, database, login, user-roles, deployment), not more design. **Deferred to later, by decision (revisit before go-live):** D9 · migration & rollout → `09-migration/`, the deep **roles/access** model (D4 left it thin), and **Attendance & Payroll** — none of these block the foundation. **Stack (researched 23 Jun, pending Anand's confirm):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as `code/pdf-to-pt` and the analytics/AI) + **PostgreSQL**, hosted in an India region. **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `docs/my-understanding/system-design/consolidation/stack-decision.html`.
+**Now building.** All module designs (D1–D8) are done. Decision (23 Jun 2026): start the **foundation build** now (project setup — repo, database, login, user-roles, deployment), not more design. **Deferred to later, by decision (revisit before go-live):** D9 · migration & rollout → `09-migration/`, the deep **roles/access** model (D4 left it thin), and **Attendance & Payroll** — none of these block the foundation. **Stack (ratified 25 Jun 2026 — ADR-0001):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as `code/pdf-to-pt` and the analytics/AI) + **PostgreSQL** (hosting provider/region to be decided later). **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `docs/my-understanding/system-design/consolidation/stack-decision.html`.
+
+**Reviewed, decided & reconciled (25 June 2026).** A full design review (drift audit + India retail-ERP best-practice research) ran across the corpus, then a **16-decision Q&A** locked every open seam — GRN posts quantity / PT posts value + liability; cross-state (Bihar↔Jharkhand) transfer = taxable IGST; unit cost = P RATE directly (never strip GST); barcode = a non-unique scan-alias with stock a **count under it**; own-POS in scope behind Ten Software (one store, one POS, idempotent); booking-less direct receipt for any brand; commercial model stored as **two axes** (ownership × return-terms) with derived labels; **stack ratified (ADR-0001)**; per-user-configurable digest; **Rule 12 "variation is data, not code"**. Decisions are logged in `.context/qa-decisions.md`; the review is `consolidation/system-review-2026-06-24.html`. The **canonical doc set is now in order**: constitution (`00-system-architecture.html`) → design-of-record (`consolidation/consolidated-system-design.html`) → build artifacts (`consolidation/glossary.html`, `data-model.html`, `posting-catalog.html`, `lifecycles.html`, `integration-contracts.html`) → ratified **ADR chain** (`adr/0001`–`0007`) → D1–D8 appendices → build companion (`build-process-and-roadmap.html`, `erpnext-engineering-study.html`). **Five money-critical items await a CA ruling before the money slices**: SOR/Consignment GST single-recognition (F9), the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT, and the no-reposting rule. The distrusted `foundation.html`, old `docs/adr/*`, `docs/agents/*` and `CONTEXT.md` in the `/Users/anand/Code/KDPS` checkout are **slated for deletion (pending Anand's go + repo-remote confirmation)**; their salvage is already folded into the new ADRs + glossary.
 
 **Pace (decided 10 June 2026): no fixed timeline — ASAP with quality.** Working plan (revised 23 Jun): lock the stack → build the **foundation** (project setup) → then **one verified vertical slice at a time** with just-in-time per-slice specs (data model, posting entries and golden files grow per slice, not all upfront). Spike the three externals (Ten Software POS API, Tally import, barcode tool) **in parallel** — they have lead time. D9 migration is designed before go-live. Never all PRDs upfront, never module-by-module to completion. Full process: the **"How we build"** section of the architecture doc.
 
@@ -43,10 +45,10 @@ Separately, there is a recurring live duty: **month-start brand reports** (1st w
 | `docs/04-client-docs/` | Client-facing per-module deliverables (Vendor, Goods-Inward, Outbound, Payments, Offers, POS requirements). Living documents — they change until the architecture is final. |
 | `docs/meetings/` | One folder per meeting, named `YYYY-MM-DD-topic/` (audio + transcript + minutes). |
 | `code/` | `pdf-to-pt/` Invoice→PT pipeline (see its `BLUEPRINT.md`); ~150 real invoices in `document/` for testing. `scripts/generate-pdf.mjs` = HTML→PDF helper. |
-| `docs/__archive/` | Stale material (cancelled Phase-1, old timeline, old direction doc, old drafts/decks). **Never design or build from here.** |
-| root | `CLAUDE.md` (this file) and `code/`. Everything else lives under `docs/`: `docs/PROJECT-MAP.html` (index), `docs/meetings/MOU-KDPS-Anand.pdf` (engagement/scope). |
+| `__archive/` | Stale material (cancelled Phase-1, old timeline, old direction doc, old drafts/decks). **Never design or build from here.** |
+| root | `MOU-KDPS-Anand.pdf` (engagement/scope), `docs/PROJECT-MAP.html` (index), `CLAUDE.md`. |
 
-House rules: new design discussion → its own numbered folder under `docs/my-understanding/system-design/`; new meeting → `docs/meetings/YYYY-MM-DD-topic/`; new month's reports → month folder under `docs/data-from-kdps/monthly-reports-april-may-2026/`; superseded docs → move to `docs/__archive/`, don't delete.
+House rules: new design discussion → its own numbered folder under `docs/my-understanding/system-design/`; new meeting → `docs/meetings/YYYY-MM-DD-topic/`; new month's reports → month folder under `docs/data-from-kdps/monthly-reports-april-may-2026/`; superseded docs → move to `__archive/`, don't delete.
 
 ## Domain facts that must never be violated
 
@@ -57,7 +59,7 @@ These are properties of the business, independent of any design choice:
 - **Season / Collection / Age** tagging on every item; aging drives markdowns and dead-stock handling.
 - **Profitability is derived** (cost from PT/invoice at stock-in, revenue from POS at sale), never hand-entered.
 - **GST is mandatory** (GSTIN, HSN, tax breakup); **Tally stays the statutory book of record**. Two GSTINs — Bihar and Jharkhand are separate "distinct persons"; every store/warehouse maps to a state GSTIN; cross-state transfers are taxable supplies. Apparel GST is slab-based and date-effective — model it as data, not code.
-- India context: INR with Lakh/Crore formatting (`₹28,50,000`), low-end Android phones in stores (browser/PWA, no app installs), owners live on WhatsApp, Hindi for training material.
+- India context: INR with Lakh/Crore formatting (`₹28,50,000`), stores run the system in the browser/PWA (no app installs), owners live on WhatsApp, Hindi for training material.
 - Offer/discount logic is brand-specific and slab/condition based (see `docs/meetings/2026-06-01-offers-and-reporting/`): value slabs, B2G1 with lowest-item-free, gifts above thresholds, per-store applicability, start/end dates with fallback rules.
 
 ## Working norms
@@ -78,9 +80,3 @@ Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-desig
 /setup-browser-cookies, /setup-deploy, /setup-gbrain, /sync-gbrain, /retro, /investigate,
 /document-release, /document-generate, /codex, /cso, /autoplan, /plan-devex-review,
 /devex-review, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, /learn.
-
-## Agent skills
-
-- **Issue tracker** — work lives in GitHub Issues for `bruhanand/KDPS`, managed via the `gh` CLI; it is the single source of truth. See `docs/agents/issue-tracker.md`.
-- **Triage labels** — triage states map to GitHub labels; `ready-for-agent` maps to `Sandcastle` (the label the Sandcastle agent picks up). See `docs/agents/triage-labels.md`.
-- **Domain docs** — single-context layout: one root `CONTEXT.md` plus ADRs under `docs/adr/`. See `docs/agents/domain.md`.
