@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/anand/Code/KDPS/**)",
+      "Bash(find 03-system-design -iname \"*04*\" -o -iname \"*payment*\" -o -iname \"*role*\")"
+    ]
+  }
+}

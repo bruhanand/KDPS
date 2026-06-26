@@ -17,7 +17,6 @@ worktrees/
 *.log
 
 # --- Confidential client data (do NOT push) ---
-docs/data-from-kdps/
 MOU-KDPS-Anand.pdf
 docs/__archive/
 
