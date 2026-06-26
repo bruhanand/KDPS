@@ -401,7 +401,7 @@
       <li><span class="id">FR-9</span><div class="body"><strong>Goods Return (GR) processing.</strong> Three types: Seasonal (10% allowance), Defective, Unauthorised stock (debit note). Track against SOR deadline. <small>Vendor ledger reconciliation.</small></div></li>
       <li><span class="id">FR-10</span><div class="body"><strong>Payment lifecycle (PASCS).</strong> Eligible → Requested → Approved → Executed → Confirmed → Reconciled. Eligibility requires invoice + GRN + PT + TIR aligned. <small>Lump-sum payments attribute across multiple invoices. Pre-tax CD calc. Multi-level WhatsApp approval by amount/vendor threshold.</small></div></li>
       <li><span class="id">FR-11</span><div class="body"><strong>Bank statement reconciliation.</strong> Upload bank PDF, system matches transactions to executed payments by ref/amount. <small>Closes the payment loop. Status → Reconciled.</small></div></li>
-      <li><span class="id">FR-12</span><div class="body"><strong>Attendance (face + GPS + liveness).</strong> Browser-based check-in for store staff, no app install. Tied to incentive eligibility. <small>Agent 5. face-api.js, runs on low-end Android phones.</small></div></li>
+      <li><span class="id">FR-12</span><div class="body"><strong>Attendance (face + GPS + liveness).</strong> Browser-based check-in for store staff, no app install. Tied to incentive eligibility. <small>Agent 5. face-api.js, runs in the browser.</small></div></li>
       <li><span class="id">FR-13</span><div class="body"><strong>Sales incentive auto-calc.</strong> Target-based + per-unit + brand-specific (SPF) + tiered. Tied to attendance (absences reduce eligibility). <small>Per the Definitive Plan §7.</small></div></li>
       <li><span class="id">FR-14</span><div class="body"><strong>EOSS module.</strong> Pre-EOSS markdown suggestions, POS-enforced discount rules, manager approval above floor limit, daily WhatsApp summary, SOR brand-funded portion calc. <small>Drives margin from 25% → 18%.</small></div></li>
       <li><span class="id">FR-15</span><div class="body"><strong>Daily digest at 9 PM.</strong> WhatsApp summary: revenue, stock, attendance, alerts. Per-SBU and consolidated. <small>Agent 6. Primary observability surface for owners.</small></div></li>
@@ -421,7 +421,7 @@
 
   <div class="req-pane" data-pane="nfr">
     <ul class="req-list">
-      <li><span class="id">NFR-1</span><div class="body"><strong>Mobile-first PWA.</strong> Runs on low-end Android in-browser. Camera, barcode, face-recognition all in browser. <small>No app store install — staff turnover is high.</small></div></li>
+      <li><span class="id">NFR-1</span><div class="body"><strong>Mobile-first PWA.</strong> Runs in-browser. Camera, barcode, face-recognition all in browser. <small>No app store install — staff turnover is high.</small></div></li>
       <li><span class="id">NFR-2</span><div class="body"><strong>WhatsApp as the primary interaction surface.</strong> Approvals (payments, transfers, markdowns) happen in WhatsApp, not a web admin panel. Owners read digests in WhatsApp. <small>Web admin is for ops desks; WhatsApp for everyone else.</small></div></li>
       <li><span class="id">NFR-3</span><div class="body"><strong>Indian context.</strong> ₹ INR, Lakh/Crore formatting, GST mandatory (GSTIN/HSN/tax breakup), Hindi training videos, English dashboards. <small>Tally is the book of record.</small></div></li>
       <li><span class="id">NFR-4</span><div class="body"><strong>Volume.</strong> 20K SKUs × 50+ SBUs ≈ millions of stock rows. ~200 invoices/day during peaks. <small>PostgreSQL sized accordingly; partition by SBU/season.</small></div></li>
@@ -665,7 +665,7 @@
     <thead><tr><th>Layer</th><th>Choice</th><th>Why</th></tr></thead>
     <tbody>
       <tr><td>ERP platform</td><td class="tech">Frappe / ERPNext</td><td>Item variants (size×color), batch tracking, stock ledger, role primitives all built in</td></tr>
-      <tr><td>Web / mobile</td><td class="tech">Next.js PWA</td><td>Runs on any store phone; camera + barcode via browser; no app install</td></tr>
+      <tr><td>Web / mobile</td><td class="tech">Next.js PWA</td><td>Runs in any store browser; camera + barcode via browser; no app install</td></tr>
       <tr><td>Invoice / PT AI</td><td class="tech">Claude Vision + Sonnet API</td><td>Reads any vendor format; understands fashion terminology; generalises to ~10 new vendors/month</td></tr>
       <tr><td>Demand forecasting</td><td class="tech">Prophet + scikit-learn</td><td>Seasonality, size curves, store affinity, weather-aware. No GPU needed</td></tr>
       <tr><td>Dashboards</td><td class="tech">Metabase</td><td>Network → region → store → brand → style → size drilldown</td></tr>

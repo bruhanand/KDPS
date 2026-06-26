@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reporting, Dashboards & Printing — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html" class="cur"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 11 · The read side</div>
+  <h1>Reporting, Dashboards & Printing</h1>
+  <p class="sub">The read side of the ERP: Report Builder vs Query vs Script reports, financial statements computed over the GL, dashboards / charts / number cards, and the Jinja print-format engine.</p>
+</header>
+
+<section>
+<h2 class="sec">Why the read side decides whether your ERP survives</h2>
+
+<p>Everything in the previous ten chapters builds the <em>write</em> side: doctypes that capture business events, lifecycles that submit them, ledgers that record them as immutable truth. This chapter is about the <em>read</em> side — turning that truth back into something a human acts on: a balance sheet, a brand-profitability report, a KPI tile on a phone, a printed tax invoice. It looks like the least glamorous part of the system. It is, in practice, the part that determines whether the ERP is still being used in five years.</p>
+
+<p>The reason is leverage. A live ERP grows a long tail of read requirements — every department, every owner, every auditor wants <em>their</em> cut of the data, sliced <em>their</em> way, printed on <em>their</em> letterhead. If each of those is a new screen, a new endpoint, a new SQL file shipped in a release, the read layer becomes a bottomless engineering backlog and the business waits weeks for a column. The durable ERPs solve this once: they make the read layer <strong>metadata plus a thin compute function</strong>, so adding a report, a chart, a KPI, or a print layout is a <em>data change</em>, not a code change. That is the single idea this chapter unpacks across reports, dashboards, and printing.</p>
+
+<div class="callout co-key"><span class="lbl">The governing principle</span>
+<p>The read side is built as <strong>metadata over an immutable ledger</strong>. Reports are records with a type discriminator and a fixed compute contract; financial statements are <strong>computed live from the ledger, never stored</strong>; dashboards are records describing what to aggregate; print formats are templates rendered against the saved document. One generic runtime — filter form, pagination, export, permission check, caching, PDF — serves them all.</p>
+</div>
+
+<p>Two laws inherited from <a href="03-accounting-ledger.html">the accounting engine</a> set the boundary of this chapter. <strong>Documents post the ledger; reports only read it.</strong> Nothing on the read side ever writes a balance, mutates a posting, or stores a derived total it cannot reconstruct from raw rows. The read layer is pure projection. Once you internalize that, the financial-statements engine below stops looking clever and starts looking inevitable.</p>
+
+<h3>Where the read side sits</h3>
+
+<p>In the five-layer vocabulary (master data → documents → ledgers → controls → intelligence), reporting, dashboards and printing are the <em>intelligence</em> band — plus a print sub-pipe hanging off the document layer. Crucially the band is a <strong>read-only consumer</strong> of everything below it; the arrows only point upward.</p>
+
+<div class="band l-ledg"><div class="bname">Ledgers (the truth, read-only here)</div><div class="boxes">
+  <div class="bx">GL Entry<small>every money fact</small></div>
+  <div class="bx">Stock Ledger Entry<small>every stock move</small></div>
+  <div class="bx">Payment Ledger Entry<small>per-party balances</small></div>
+</div></div>
+<div class="gap"></div>
+<div class="band l-intel"><div class="bname">Intelligence (read / project / present)</div><div class="boxes">
+  <div class="bx">Report<small>Builder · Query · Script</small></div>
+  <div class="bx">Dashboard Chart / Number Card<small>aggregate as metadata</small></div>
+  <div class="bx">Workspace<small>module landing page</small></div>
+  <div class="bx">Print Format<small>Jinja over the document</small></div>
+  <div class="bx">List / Calendar / Gantt / Kanban<small>configured views</small></div>
+</div></div>
+</section>
+
+<section>
+<h2 class="sec">The key doctypes at a glance</h2>
+
+<p>The cast is small because the framework does the heavy lifting. Note the kinds: there is one storage doctype behind all three report flavors, the two <em>ledger</em> rows are the ones every financial report reads from, and everything else is metadata or a template.</p>
+
+<table>
+<tr><th>Doctype</th><th>Kind</th><th>Path</th><th>Role</th></tr>
+<tr><td><strong>Report</strong></td><td>report</td><td><span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.json</span></td><td>The single doctype backing <em>all three</em> report flavors. A <code>report_type</code> field selects Report Builder / Query Report / Script Report; carries <code>ref_doctype</code>, <code>roles</code>, <code>prepared_report</code>, <code>default_print_format</code>.</td></tr>
+<tr><td><strong>GL Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/report/financial_statements.py</span></td><td>The immutable accounting ledger every financial statement is computed <em>from</em> at query time — never a stored balance.</td></tr>
+<tr><td><strong>Payment Ledger Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/report/accounts_receivable/accounts_receivable.py</span></td><td>Per-party ledger from which AR/AP aging is computed live — invoiced / paid / outstanding are derived, never stored.</td></tr>
+<tr><td><strong>Dashboard Chart</strong></td><td>setup</td><td><span class="fileref">erpnext/stock/dashboard_chart/purchase_receipt_trends/purchase_receipt_trends.json</span></td><td>Metadata-only chart: <code>document_type</code> + <code>chart_type</code> (Sum/Count) + <code>value_based_on</code> + <code>time_interval</code> + <code>filters_json</code>. The framework computes the time series.</td></tr>
+<tr><td><strong>Number Card</strong></td><td>setup</td><td><span class="fileref">erpnext/stock/number_card/total_warehouses/total_warehouses.json</span></td><td>Metadata-only KPI tile: <code>document_type</code> + <code>function</code> + <code>filters_json</code> + <code>dynamic_filters_json</code>.</td></tr>
+<tr><td><strong>Dashboard Chart Source</strong></td><td>report</td><td><span class="fileref">erpnext/stock/dashboard_chart_source/warehouse_wise_stock_value/warehouse_wise_stock_value.py</span></td><td>The escape hatch: a <code>@frappe.whitelist() @cache_source</code> <code>get()</code> returning <code>labels</code> + <code>datasets</code> for aggregations the metadata charts can't express.</td></tr>
+<tr><td><strong>Workspace</strong></td><td>setup</td><td><span class="fileref">erpnext/selling/workspace/selling/selling.json</span></td><td>Module landing page: declares <code>charts</code>, <code>number_cards</code>, <code>shortcuts</code>, <code>links</code> (doctype navigation) and a <code>content</code> layout.</td></tr>
+<tr><td><strong>Print Format</strong></td><td>setup</td><td><span class="fileref">erpnext/selling/print_format/pos_invoice/pos_invoice.json</span></td><td>Jinja (or builder) print template bound to a <code>doc_type</code>; renders the saved document to HTML / PDF.</td></tr>
+<tr><td><strong>Letter Head</strong></td><td>setup</td><td><span class="fileref">erpnext/setup/doctype/company/company.json</span></td><td>Branded header/footer doctype. Company references <code>default_letter_head</code> (documents) and <code>default_letter_head_report</code> (reports) <em>separately</em>.</td></tr>
+</table>
+
+<p>Reports physically live under <span class="fileref">erpnext/&lt;module&gt;/report/&lt;name&gt;/</span> — there are 185 of them — and the flavor is just a field in the JSON, not a separate subsystem. <span class="badge b-frappe">Frappe core</span> owns the runtime (filter form, pagination, export, role-check, caching, prepared-report queue); ERPNext supplies the records and the occasional <code>execute()</code> function.</p>
+</section>
+
+<section>
+<h2 class="sec">Part A — Reports: one storage doctype, three flavors</h2>
+
+<p>The first and most important architectural move is refusing to build three report subsystems. Report Builder, Query Report, and Script Report are not three products — they are one <code>Report</code> record with a discriminator that says <em>how</em> to run it. The expensive shared machinery — rendering the filter form, paginating, exporting to Excel, checking roles, caching, queuing heavy ones — is written once and serves all three.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>One storage doctype, three report flavors selected by a field</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Build <strong>one</strong> report record type with a discriminator that says how to run it: saved columns (no code), an embedded SQL string, or a code module. The runtime — filter form, pagination, export, role-check, caching — is shared across all three.</p>
+    <p>The flavors are a spectrum of escape hatches: declare it if you can, write SQL if you must, drop to code only when you truly need to.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p>Every report is a <code>Report</code> doctype stored as <code>&lt;name&gt;.json</code> with <code>report_type</code> in {Report Builder, Query Report, Script Report}.</p>
+    <ul>
+      <li><strong>Builder</strong> stores selected <code>fields</code>+<code>order_by</code> in a <code>json</code> blob — <span class="fileref">erpnext/stock/report/item_wise_price_list_rate/item_wise_price_list_rate.json</span>.</li>
+      <li><strong>Query</strong> stores a raw SQL string in <code>query</code> — <span class="fileref">erpnext/selling/report/customers_without_any_sales_transactions/customers_without_any_sales_transactions.json</span>.</li>
+      <li><strong>Script</strong> points to a sibling <code>.py</code> whose <code>execute()</code> returns the data — <span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.json</span> → <code>general_ledger.py</code>.</li>
+    </ul>
+    <p>All carry <code>ref_doctype</code>, <code>roles</code>, <code>is_standard</code>, <code>prepared_report</code>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>On Django/Postgres: a <code>Report</code> model with a <code>type</code> enum.</p>
+    <ul>
+      <li><strong>Builder</strong> = saved JSON of columns+filters fed to your generic list/queryset endpoint.</li>
+      <li><strong>Query</strong> = a stored, <em>parameterized</em> SQL string — whitelist tables, bind params, never f-string user input.</li>
+      <li><strong>Script</strong> = a dotted path to <code>def execute(filters) -&gt; (columns, rows, ...)</code>.</li>
+    </ul>
+    <p>One serializer, one exporter, one permission gate serve all three.</p>
+  </div>
+</div></div>
+
+<h3>The Report-Builder flavor: zero code</h3>
+
+<p>A Report Builder report is the cheapest thing in the system: it stores only the chosen columns and sort order as JSON and runs entirely through the framework's standard list query for its <code>ref_doctype</code>. No SQL, no Python. This is the right default for "show me these fields of this doctype with these filters" — the bulk of everyday operational reports. A user clicks columns into existence in the UI; what gets saved is a few lines of JSON.</p>
+
+<h3>The Query-Report flavor: SQL with the type in the alias</h3>
+
+<p>When a join or a sub-select is needed but no procedural logic is, a Query Report embeds a raw SQL string directly in the <code>Report</code> record. The clever (and slightly dangerous) Frappe convention is that <strong>each column's type is encoded in its SQL alias</strong> as <code>label:fieldtype/options:width</code>. The renderer parses the alias to know that a column is a Link to <code>Customer</code> (so it draws a clickable chip 120px wide) versus a plain string — without any separate column metadata.</p>
+
+<pre><code><span class="k">SELECT</span>
+  `tabCustomer`.name          <span class="k">as</span> <span class="s">"Customer:Link/Customer:120"</span>,
+  `tabCustomer`.customer_name <span class="k">as</span> <span class="s">"Customer Name::120"</span>,
+  `tabCustomer`.territory     <span class="k">as</span> <span class="s">"Territory:Link/Territory:120"</span>
+<span class="k">FROM</span> `tabCustomer`
+<span class="k">WHERE</span> <span class="k">not exists</span>(<span class="k">select</span> name <span class="k">from</span> `tabSales Invoice`
+        <span class="k">where</span> `tabCustomer`.name = `tabSales Invoice`.customer
+          <span class="k">and</span> `tabSales Invoice`.docstatus=<span class="t">1</span> <span class="k">limit</span> <span class="t">1</span>)</code></pre>
+
+<p class="srcline">erpnext/selling/report/customers_without_any_sales_transactions/customers_without_any_sales_transactions.json</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — SQL injection &amp; the alias convention</span>
+<p>Query Reports interpolate the SQL string directly, and the <code>"Field:Link/Doctype:120"</code> alias trick is a Frappe convention your renderer must parse. If you copy this pattern, <strong>parameterize binds and whitelist tables</strong> — a naive port that f-strings user filter values into the SQL is a textbook injection hole. Treat the alias-encoded column type as a <em>presentation</em> convenience layered on top of a parameterized query, never as an excuse to skip binds.</p>
+</div>
+
+<h3>The Script-Report flavor: a pure compute function</h3>
+
+<p>For anything with real logic — period columns, tree rollups, derived summary cards — a Script Report is a Python module whose <code>execute(filters)</code> returns a fixed tuple. Three sibling files make up the report, each owning one concern:</p>
+
+<dl class="gloss">
+<dt><code>&lt;report&gt;.json</code></dt><dd>Metadata: <code>ref_doctype</code>, <code>roles</code>, <code>prepared_report</code>, <code>report_type: "Script Report"</code>.</dd>
+<dt><code>&lt;report&gt;.js</code></dt><dd>The filter form, declared as data: <code>frappe.query_reports[name].filters = [{fieldname, label, fieldtype, options, default, reqd}]</code> — <span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.js</span>.</dd>
+<dt><code>&lt;report&gt;.py</code></dt><dd>The compute: <code>execute(filters)</code> returning the result tuple.</dd>
+<dt><code>&lt;report&gt;.html</code></dt><dd>Optional — a Jinja print template for the report itself (distinct from a document Print Format).</dd>
+</dl>
+</section>
+
+<section>
+<h2 class="sec">The fixed <code>execute()</code> contract</h2>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Script Report fixed <code>execute()</code> contract</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>A coded report is a <strong>pure function</strong>: it takes filters and returns a fixed tuple of column-definitions, row-data, and optional message/chart/summary. Columns are <em>data</em> (label, fieldtype, options, width), not HTML.</p>
+    <p>Because columns carry their type, one generic renderer can draw any report, format each cell correctly, export it to Excel, and print it — without knowing anything about the report's subject.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>execute(filters=None)</code> in each <code>&lt;report&gt;.py</code> returns the 6-tuple <code>columns, data, message, chart, report_summary, primitive_summary</code>.</p>
+    <p><code>columns</code> are dicts like <code>{fieldname, label, fieldtype: 'Currency', options: 'currency', width}</code> built by <code>get_columns()</code> in <span class="fileref">erpnext/accounts/report/financial_statements.py</span>.</p>
+    <p>The <code>.js</code> sibling declares the filter form as data — <span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.js</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Define a typed return contract: <code>Column(fieldname, label, type, options, width)</code> + <code>rows: list[dict]</code> + optional <code>chart</code>/<code>summary</code>.</p>
+    <p>Build <strong>one</strong> front-end table component (React) that reads column <em>types</em> to format cells — Currency, Link, Date — so every report renders, sorts and exports through the same widget.</p>
+    <p>Keep filter definitions declarative JSON so one form widget renders every report's filters.</p>
+  </div>
+</div></div>
+
+<p>Here is the contract made concrete. The profit-and-loss statement is almost insultingly small — it is literally <em>Income minus Expense</em>, both computed from the GL, then packaged into the fixed return tuple:</p>
+
+<pre><code><span class="k">def</span> <span class="t">execute</span>(filters=None):
+    period_list = get_period_list(...)
+    income  = get_data(filters.company, <span class="s">"Income"</span>,  <span class="s">"Credit"</span>, period_list, ...)
+    expense = get_data(filters.company, <span class="s">"Expense"</span>, <span class="s">"Debit"</span>,  period_list, ...)
+    net_profit_loss = get_net_profit_loss(income, expense, period_list, ...)
+    data = []
+    data.extend(income <span class="k">or</span> []); data.extend(expense <span class="k">or</span> [])
+    <span class="k">if</span> net_profit_loss: data.append(net_profit_loss)
+    columns = get_columns(filters.periodicity, period_list, ...)
+    <span class="k">return</span> columns, data, <span class="k">None</span>, chart, report_summary, primitive_summary</code></pre>
+
+<p class="srcline">erpnext/accounts/report/profit_and_loss_statement/profit_and_loss_statement.py</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — variable-length returns</span>
+<p><code>execute()</code> is documented as a 6-tuple, but most reports return only the first two or three elements — <code>columns, data</code> and maybe <code>message</code>. Your runner must tolerate variable-length returns: unpack defensively as <code>columns, data[, message[, chart[, summary[, primitive]]]]</code> rather than insisting on exactly six. A strict six-tuple unpack will crash on the simplest report.</p>
+</div>
+
+<p>The payoff of "columns are data, not HTML" is enormous: a single React table component reads <code>fieldtype: 'Currency'</code> and applies INR locale formatting; reads <code>fieldtype: 'Link'</code> and renders a navigable chip; reads <code>fieldtype: 'Date'</code> and formats per locale. Add a new Script Report and it renders, sorts, filters, and exports for free — you wrote one renderer, not one per report.</p>
+</section>
+
+<section>
+<h2 class="sec">Part B — Financial statements: computed live, never stored</h2>
+
+<p>This is the showcase of the whole read side and the single most important durable principle in the chapter. Every financial statement — Balance Sheet, P&amp;L, Trial Balance, General Ledger, AR/AP aging — is <strong>recomputed from the immutable ledger on every run</strong>. There is no stored "account balance" table to drift. The books and the reports are the same numbers because the reports <em>are</em> the books, aggregated.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Statements are live queries over the ledger, never stored</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Financial reports are recomputed from the immutable ledger every time. There is no stored balance to go stale. Period columns and account-tree rollups are assembled <strong>in memory from raw ledger rows</strong>.</p>
+    <p>The consequence is a guarantee you cannot get any other way: <strong>the report can never disagree with the ledger</strong>, because there is nothing else for it to read.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><span class="fileref">erpnext/accounts/report/financial_statements.py</span> is a shared engine:</p>
+    <ul>
+      <li><code>get_period_list()</code> builds the column periods.</li>
+      <li><code>get_accounting_entries()</code> queries <code>GL Entry</code> via <code>frappe.qb</code> (pypika).</li>
+      <li><code>calculate_values()</code> buckets each entry into its period column as <code>debit − credit</code>.</li>
+      <li><code>accumulate_values_into_parents()</code> rolls children up the CoA nested-set tree (<code>lft</code>/<code>rgt</code>).</li>
+    </ul>
+    <p>Balance Sheet = <code>get_data('Asset','Debit')</code> + Liability + Equity — <span class="fileref">erpnext/accounts/report/balance_sheet/balance_sheet.py</span>. AR aging is built from <code>Payment Ledger Entry</code> rows at request time — <span class="fileref">erpnext/accounts/report/accounts_receivable/accounts_receivable.py</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Keep an append-only journal as the source of truth. Compute statements with SQL: a single <code>GROUP BY</code> over the journal joined to the Chart-of-Accounts tree (Postgres recursive CTE or a nested-set <code>lft/rgt</code> for rollups), bucketed by period via <code>CASE</code>/<code>date_trunc</code>.</p>
+    <p><strong>Never</strong> cache balances unless you add an explicit, reconcilable closing-snapshot mechanism — and even then keep a raw-ledger fallback.</p>
+  </div>
+</div></div>
+
+<h3>The engine in two functions</h3>
+
+<p>The entire financial-statement engine is two short loops. The first buckets every GL entry into the right period column as a signed <code>debit − credit</code>; the second walks the account tree <em>in reverse <code>lft</code> order</em> (so children are visited before parents) and adds each child's period totals into its parent. That second loop is how a leaf account's balance rolls up into "Current Assets" and then into "Total Assets" with no stored subtotals anywhere.</p>
+
+<pre><code><span class="k">def</span> <span class="t">calculate_values</span>(accounts_by_name, gl_entries_by_account, period_list, ...):
+    <span class="k">for</span> entries <span class="k">in</span> gl_entries_by_account.values():
+        <span class="k">for</span> entry <span class="k">in</span> entries:
+            d = accounts_by_name.get(entry.account)
+            <span class="k">for</span> period <span class="k">in</span> period_list:
+                <span class="k">if</span> entry.posting_date &lt;= period.to_date:
+                    <span class="k">if</span> (accumulated_values <span class="k">or</span> entry.posting_date &gt;= period.from_date):
+                        d[period.key] = d.get(period.key, <span class="t">0.0</span>) + flt(entry.debit) - flt(entry.credit)
+
+<span class="k">def</span> <span class="t">accumulate_values_into_parents</span>(accounts, accounts_by_name, period_list):
+    <span class="k">for</span> d <span class="k">in</span> reversed(accounts):  <span class="c"># accounts ordered by lft (nested set)</span>
+        <span class="k">if</span> d.parent_account:
+            <span class="k">for</span> period <span class="k">in</span> period_list:
+                accounts_by_name[d.parent_account][period.key] = \
+                    accounts_by_name[d.parent_account].get(period.key, <span class="t">0.0</span>) + d.get(period.key, <span class="t">0.0</span>)</code></pre>
+
+<p class="srcline">erpnext/accounts/report/financial_statements.py</p>
+
+<p>Balance Sheet then composes three calls to the shared <code>get_data()</code> — Asset (Debit), Liability (Credit), Equity (Credit) — and the P&amp;L composes Income (Credit) minus Expense (Debit). General Ledger and Accounts Receivable re-query <code>GL Entry</code> / <code>Payment Ledger Entry</code> at request time. <strong>There is no stored balance table anywhere in the path.</strong></p>
+
+<h3>The flow of one statement run</h3>
+
+<div class="flow col">
+  <div class="node">Open "Balance Sheet"<small>Report record, report_type = Script Report</small></div>
+  <div class="arr"></div>
+  <div class="node">.js renders filter form<small>company · fiscal year · periodicity</small></div>
+  <div class="arr"></div>
+  <div class="node">execute(filters) → get_period_list()<small>builds the column set</small></div>
+  <div class="arr"></div>
+  <div class="node">get_data() per root type → GL Entry via frappe.qb<small>raw ledger rows, is_cancelled = 0</small></div>
+  <div class="arr"></div>
+  <div class="node">calculate_values()<small>each entry → period column as debit − credit</small></div>
+  <div class="arr"></div>
+  <div class="node">accumulate_values_into_parents()<small>roll children up the lft/rgt tree</small></div>
+  <div class="arr"></div>
+  <div class="node">return columns + data<small>generic table renderer draws it</small></div>
+  <div class="arr"></div>
+  <div class="node">Print → balance_sheet.html Jinja + chosen letter head</div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — the closing-snapshot shortcut that can desync</span>
+<p>"Statements are never stored" is the rule, but ERPNext quietly adds a performance shortcut: a <strong>Period Closing Voucher</strong> writes an <strong>Account Closing Balance</strong> snapshot, and <code>set_gl_entries_by_account()</code> will read from it (gated by the Accounts Settings <code>ignore_account_closing_balance</code> flag) instead of summing all history. If you reimplement only the snapshot and <em>not</em> the fallback to raw GL, your numbers can silently desync. Treat closing balances as an optimization with a reconcilable raw-ledger fallback, <strong>never</strong> the source of truth.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — nested set vs recursive CTE for rollups</span>
+<p>The account rollup depends on a nested-set tree (<code>lft</code>/<code>rgt</code>) kept correct on <em>every</em> insert/move. Nested set is fast to read but fragile to write — a reorder rebuilds a swath of the tree. On Postgres a recursive CTE is simpler and avoids the rebuild-on-reorder cost at some read cost. Pick consciously; do not inherit ERPNext's choice by accident.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — cross-DB query building leaks DB quirks</span>
+<p><code>frappe.qb</code> (pypika) emits DB-specific SQL. <span class="fileref">erpnext/accounts/report/financial_statements.py</span> has explicit branches like a <code>force_index</code> hint (MySQL-only) skipped on Postgres, and <code>Max()</code>/<code>Sum()</code> wrapping of non-grouped columns purely to satisfy Postgres' stricter <code>GROUP BY</code>. A cross-DB query builder is convenient but leaks quirks at the edges — budget for it if you target more than one engine.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is the blueprint for every KDPS money report. Brand profitability, store P&amp;L, dead-stock aging and EOSS margin must be <strong>computed live from the inventory + sales ledgers</strong> — cost from the PT/invoice at stock-in, revenue from POS at sale — exactly as ERPNext computes statements from <code>GL Entry</code>. Nothing is hand-entered or stored, which is precisely the "profitability is derived" rule, and it keeps Tally as the statutory book of record rather than a competing set of numbers. Because the reports aggregate the journals directly, <strong>size × colour survives end-to-end</strong> into the monthly brand reports — the report's grain is whatever the ledger's grain is.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Part C — Dashboards: charts and KPIs as records</h2>
+
+<p>A dashboard tile is the same idea as a report, shrunk to one number or one series. ERPNext models a chart or a KPI as a <em>saved record</em> describing what to aggregate over which doctype with which filter — and the framework compiles that record into a SQL aggregate. You only drop to code for the genuinely awkward cross-table metrics, through a named pluggable data source.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Metadata-driven charts and KPI cards</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>A chart or KPI is a saved record describing WHAT to aggregate over WHICH doctype with WHICH filter — not bespoke code. The framework turns that record into a SQL aggregate.</p>
+    <p>Provide one escape hatch — a named server function — for the aggregations metadata can't express, so 95% of tiles are zero code and the last 5% are still pluggable.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><strong>Dashboard Chart</strong> JSON: <code>document_type</code>, <code>chart_type</code> (Count/Sum/Average/Group By), <code>value_based_on</code>, <code>based_on</code> (date field), <code>time_interval</code>, <code>timespan</code>, <code>filters_json</code> — <span class="fileref">erpnext/stock/dashboard_chart/purchase_receipt_trends/purchase_receipt_trends.json</span>.</p>
+    <p><strong>Number Card</strong> JSON: <code>document_type</code> + <code>function: Count</code> + <code>filters_json</code> + <code>dynamic_filters_json</code> — <span class="fileref">erpnext/stock/number_card/total_warehouses/total_warehouses.json</span>.</p>
+    <p>Escape hatch: a <strong>Dashboard Chart Source</strong> <code>.py</code> with <code>@frappe.whitelist() @cache_source def get(...)</code> returning labels + datapoints — <span class="fileref">erpnext/stock/dashboard_chart_source/warehouse_wise_stock_value/warehouse_wise_stock_value.py</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Model <code>Chart(source_doctype, agg_fn, value_field, group_field, date_field, interval, filters_json)</code> and <code>NumberCard(doctype, fn, filters)</code>. Generate the SQL from these fields.</p>
+    <p>Provide a registry of named server functions as an escape hatch (<code>source='my_custom_fn'</code>) for cross-table or computed metrics, and <strong>cache their output keyed by (name, filters, timespan, user)</strong>.</p>
+  </div>
+</div></div>
+
+<p>The escape hatch is worth seeing because it shows where the metadata stops. Warehouse-wise stock value can't be expressed as "aggregate one field of one doctype" — it sums <code>Bin.stock_value</code> grouped by warehouse — so it becomes a small whitelisted, cached function returning the chart's <code>{labels, datasets}</code> shape:</p>
+
+<div class="flow">
+  <div class="node">Dashboard Chart<small>references a Chart Source</small></div>
+  <div class="arr"></div>
+  <div class="node">Chart Source .py get()<small>@frappe.whitelist @cache_source</small></div>
+  <div class="arr"></div>
+  <div class="node">SUM(Bin.stock_value) GROUP BY warehouse<small>via frappe.get_list</small></div>
+  <div class="arr"></div>
+  <div class="node">{ labels, datasets }<small>framework caches &amp; charts it</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — dynamic filters are user-contextual</span>
+<p>A Number Card's <code>dynamic_filters_json</code> embeds <em>executable</em> expressions like <code>frappe.defaults.get_user_default("Company")</code> that run server-side <strong>per user</strong>. That is powerful — one card shows each user their own company — but it means the card's output is user-contextual. Your cache key must include the user / resolved defaults, <strong>not just the card name</strong>, or you will serve user A's number to user B.</p>
+</div>
+
+<h3>The Workspace: a module landing page, also a record</h3>
+
+<p>The page that ties tiles together is itself metadata. A Workspace JSON lists the module's <code>charts</code>, <code>number_cards</code>, <code>shortcuts</code> and <code>links</code> (the doctype navigation), plus a <code>content</code> layout block. Building the Selling home page is therefore an exercise in <em>declaring</em> which existing chart and card records appear and in what order — not writing a dashboard page.</p>
+
+<div class="flow col">
+  <div class="node">Workspace "Selling" JSON<small>lists number_cards[], charts[], shortcuts[], links[]</small></div>
+  <div class="arr"></div>
+  <div class="node">each Number Card → COUNT/SUM with its filters<small>'Total Sales Amount', …</small></div>
+  <div class="arr"></div>
+  <div class="node">each Dashboard Chart → monthly time series<small>'Sales Order Trends', …</small></div>
+  <div class="arr"></div>
+  <div class="node">rendered as tiles + charts on the module home page</div>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Dashboards-as-metadata is how owners on WhatsApp and low-end Android phones get KPI tiles — today's sale, dead-stock value, top brands — <strong>without new code per metric</strong>. A KPI is a record (<code>{doctype, agg_fn, value_field, filters}</code>); adding "this week's exchanges" is a data insert. The per-user dynamic-filter trick maps to per-store scoping: the same "today's sale" card shows each store manager their own store. Keep the cache key store-aware.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Part D — Printing: a Jinja engine over the saved document</h2>
+
+<p>Printing is the part teams most often get wrong by building a second data pipeline — re-fetching, re-joining, re-formatting data just to put it on paper, then watching the printed invoice slowly diverge from the stored one. ERPNext refuses that. <strong>Printing is template rendering against the document object</strong>. The template reaches into the very same fields, child tables, locale formatters and translations the rest of the system uses, so what you store is exactly what you print.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Jinja print engine over the saved document</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Printing/PDF is template rendering against the document — not a separate data pipeline. The template accesses the same fields, child tables, locale-aware money formatters, translation, and a pluggable letter head.</p>
+    <p>So the printed artifact is provably the saved record, formatted — there is no second source that can drift.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p>A <strong>Print Format</strong> doctype stores <code>print_format_type: "Jinja"</code>, <code>custom_format: 1</code>, and an <code>html</code> Jinja string bound to <code>doc_type</code> — <span class="fileref">erpnext/selling/print_format/pos_invoice/pos_invoice.json</span>.</p>
+    <p>The template uses <code>{{ doc.name }}</code>, loops <code>{% for item in doc.items %}</code> over child tables, formats money via <code>item.get_formatted("rate")</code> (currency/locale aware), translates via <code>_("Invoice")</code>, and injects <code>{% if letter_head %}{{ letter_head }}{% endif %}</code>.</p>
+    <p>Letter Head is a Frappe doctype; Company exposes <code>default_letter_head</code> and <code>default_letter_head_report</code> — <span class="fileref">erpnext/setup/doctype/company/company.json</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Use a sandboxed template engine (Jinja2) with the document as context. Expose helpers: a locale money formatter, a translation function, and a letter-head/footer partial from a Letter Head table.</p>
+    <p>Store templates as <em>records</em> keyed by doc type so non-developers clone/edit them; render to HTML then PDF (wkhtmltopdf / WeasyPrint). Keep a <strong>standard (locked)</strong> vs <strong>custom (editable)</strong> flag.</p>
+  </div>
+</div></div>
+
+<p>The POS-invoice template is the pattern in miniature — letter head, translated labels, locale money, and a child-table loop, all reading the saved <code>doc</code>:</p>
+
+<pre><code>{% <span class="k">if</span> letter_head %}{{ letter_head }}{% <span class="k">endif</span> %}
+&lt;p&gt;&lt;b&gt;{{ _(<span class="s">"Receipt No"</span>) }}:&lt;/b&gt; {{ doc.name }}&lt;br&gt;
+   &lt;b&gt;{{ _(<span class="s">"Date"</span>) }}:&lt;/b&gt; {{ doc.get_formatted(<span class="s">"posting_date"</span>) }}&lt;/p&gt;
+{%- <span class="k">for</span> item <span class="k">in</span> doc.items -%}
+&lt;tr&gt;
+  &lt;td&gt;{{ item.item_code }}&lt;/td&gt;
+  &lt;td class=<span class="s">"text-right"</span>&gt;{{ item.qty }}&lt;br&gt;@ {{ item.get_formatted(<span class="s">"rate"</span>) }}&lt;/td&gt;
+  &lt;td class=<span class="s">"text-right"</span>&gt;{{ item.get_formatted(<span class="s">"amount"</span>) }}&lt;/td&gt;
+&lt;/tr&gt;
+{%- <span class="k">endfor</span> -%}</code></pre>
+
+<p class="srcline">erpnext/selling/print_format/pos_invoice/pos_invoice.json</p>
+
+<h3>The print flow</h3>
+
+<div class="flow col">
+  <div class="node">User hits Print on a POS Invoice</div>
+  <div class="arr"></div>
+  <div class="node">Framework picks the default Print Format for that doc_type<small>print_format_type = Jinja</small></div>
+  <div class="arr"></div>
+  <div class="node">Render html with the saved doc as context<small>doc.items loop · get_formatted · _() translation</small></div>
+  <div class="arr"></div>
+  <div class="node">Prepend Company.default_letter_head</div>
+  <div class="arr"></div>
+  <div class="node">HTML → PDF</div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — three flags decide which renderer runs</span>
+<p>A Print Format carries <code>print_format_type</code> ("Jinja"), a <code>custom_format</code> flag, <em>and</em> a <code>print_format_builder</code> flag. The combination — not any single boolean — decides whether the raw <code>html</code> string is used versus a visual-builder layout. Don't assume one switch controls it; model the full combination explicitly or you'll render the wrong thing.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — letter heads are split, document vs report</span>
+<p>Company exposes <code>default_letter_head</code> (for documents) and <code>default_letter_head_report</code> (for reports) as <em>separate</em> fields. A single global header is a common oversimplification that bites the moment your report header must differ from your invoice header. Model two slots from day one.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — standard vs custom ownership</span>
+<p><code>is_standard: 'Yes'</code> marks framework-shipped reports and print formats as read-only — owned by Administrator, synced from disk, <strong>overwritten on upgrade</strong>. User edits must clone to a custom copy or they vanish at the next release. Separate "standard" (code-managed, on disk) from "custom" (DB-managed, user-editable) records explicitly, the same way ERPNext does.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>The Jinja-over-document engine maps straight onto KDPS GST tax invoices and PT documents: one template per document type, locale-aware INR with Lakh/Crore formatting via <code>get_formatted</code>, the GST/HSN tax breakup looped from child rows, and <strong>per-store / per-state letter heads</strong> for the two GSTINs (Bihar and Jharkhand are distinct persons — the invoice header must carry the right GSTIN). Render HTML, then PDF through the existing <span class="fileref">code/scripts/generate-pdf.mjs</span> helper. Because the template reads the saved document, the printed tax invoice is provably the stored one — exactly what an auditor wants.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Part E — Views and connections are configs, not endpoints</h2>
+
+<p>The last piece of the read side is the least visible: List, Report, Calendar, Gantt and Kanban are not five features — they are five <em>presentations</em> of the same stored records, each driven by a small declarative config. The "Connections" panel that shows a Sales Order's downstream documents is likewise a declaration, not hand-written joins.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Views (List/Report/Calendar/Gantt/Kanban) are config over one doctype</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>The same stored records get many presentations from small declarative configs — not new endpoints. A list config adds status-color indicators and bulk actions; a calendar config maps which fields are start/end/title; the connections panel is a back-reference declaration.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>listview_settings[Doctype] = {add_fields, get_indicator(doc)-&gt;[label,color,filter], onload}</code> — <span class="fileref">erpnext/stock/doctype/repost_item_valuation/repost_item_valuation_list.js</span>.</p>
+    <p><code>frappe.views.calendar[Doctype] = {field_map:{start,end,id,title}, gantt:true, get_events_method}</code> — <span class="fileref">erpnext/selling/doctype/sales_order/sales_order_calendar.js</span>.</p>
+    <p>Connections: <code>&lt;doctype&gt;_dashboard.py get_data()</code> declares <code>fieldname</code>, <code>non_standard_fieldnames</code> and grouped <code>transactions</code> — <span class="fileref">erpnext/selling/doctype/sales_order/sales_order_dashboard.py</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Build generic List, Calendar/Gantt and Kanban components that read a per-entity config: which fields to show, a <code>status → color</code> function, a date-field map, an optional grouping field.</p>
+    <p>Declare inter-entity links centrally (foreign key + label) so a "Connections" panel is <em>generated</em>, not hand-coded per screen.</p>
+  </div>
+</div></div>
+
+<p>The connected-documents panel makes the "declaration not code" point vividly. A doctype ships a tiny <code>get_data()</code> that names the back-reference fieldname linking children to it, any non-standard fieldnames, and how to group the related doctypes into tabs. The framework runs the link queries; you wrote no SQL:</p>
+
+<pre><code><span class="k">def</span> <span class="t">get_data</span>():
+    <span class="k">return</span> {
+        <span class="s">"fieldname"</span>: <span class="s">"sales_order"</span>,
+        <span class="s">"non_standard_fieldnames"</span>: {
+            <span class="s">"Delivery Note"</span>: <span class="s">"against_sales_order"</span>,
+            <span class="s">"Payment Entry"</span>: <span class="s">"reference_name"</span>,
+        },
+        <span class="s">"transactions"</span>: [
+            {<span class="s">"label"</span>: _(<span class="s">"Fulfillment"</span>), <span class="s">"items"</span>: [<span class="s">"Sales Invoice"</span>, <span class="s">"Delivery Note"</span>]},
+            {<span class="s">"label"</span>: _(<span class="s">"Payment"</span>), <span class="s">"items"</span>: [<span class="s">"Payment Entry"</span>, <span class="s">"Journal Entry"</span>]},
+        ],
+    }</code></pre>
+
+<p class="srcline">erpnext/selling/doctype/sales_order/sales_order_dashboard.py</p>
+
+<p>The same <code>get_indicator(doc)</code> idea is how a list paints status colors — green for "Completed", orange for "To Deliver" — by returning <code>[label, color, filter]</code> from a small function rather than templating the row. Build one List component that calls a per-entity indicator function and you get colored statuses everywhere for free.</p>
+</section>
+
+<section>
+<h2 class="sec">Heavy reports: the prepared-report escape valve</h2>
+
+<p>One operational detail rounds out the read side. Some reports — a full stock balance across every warehouse and item — are too heavy to compute inside a web request. Rather than time out, the framework defers them.</p>
+
+<p>A report record flagged <code>prepared_report: 1</code> (for example the Stock Balance report) does not block. <span class="badge b-frappe">Frappe core</span> runs <code>execute()</code> in a background job and stores the result as a <strong>Prepared Report</strong> document the user downloads when it's ready. From the user's side it is "request now, collect later"; from the system's side it keeps long aggregations off the request path.</p>
+
+<div class="flow">
+  <div class="node">Report has prepared_report = 1<small>e.g. Stock Balance</small></div>
+  <div class="arr"></div>
+  <div class="node">execute() runs in a background job<small>not in the web request</small></div>
+  <div class="arr"></div>
+  <div class="node">Result stored as a Prepared Report doc</div>
+  <div class="arr"></div>
+  <div class="node">User downloads when ready</div>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Store bandwidth in Bihar and Jharkhand is thin and devices are low-end. Heavy reports — full dead-stock aging across 50+ stores and 20,000+ SKUs, or a whole-network EOSS margin run — should run as background prepared reports, not as blocking requests on a phone. The owner requests it, gets a notification, downloads the PDF. The same generate-pdf helper that prints invoices renders the prepared report.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The whole read side, on one page</h2>
+
+<p>Step back and the five parts are one architecture: <strong>metadata describing what to read, a thin compute function where logic is unavoidable, and one generic runtime that renders, exports, prints and caches.</strong> The table below is the same idea in five guises.</p>
+
+<table>
+<tr><th>Read concern</th><th>The record (metadata)</th><th>The compute (when needed)</th><th>The generic runtime</th></tr>
+<tr><td>Operational report</td><td><code>Report</code> (Builder/Query/Script) + filter spec</td><td><code>execute(filters)</code> → typed columns + rows</td><td>filter form · table · export · roles · prepared-report queue</td></tr>
+<tr><td>Financial statement</td><td><code>Report</code> + period filters</td><td>aggregate GL Entry → bucket by period → roll up CoA tree</td><td>same table renderer; never a stored balance</td></tr>
+<tr><td>Chart / KPI</td><td><code>Dashboard Chart</code> / <code>Number Card</code> JSON</td><td>optional <code>Dashboard Chart Source</code> for the hard ones</td><td>compile to SQL aggregate · cache per (name, filters, user)</td></tr>
+<tr><td>Print / PDF</td><td><code>Print Format</code> (Jinja html) bound to <code>doc_type</code></td><td>—</td><td>render template over saved doc · letter head · HTML→PDF</td></tr>
+<tr><td>List / Calendar / Connections</td><td><code>listview_settings</code> · <code>calendar</code> map · <code>_dashboard.py</code></td><td><code>get_indicator(doc)</code> for status colors</td><td>one List/Calendar/Connections component reads the config</td></tr>
+</table>
+
+<p>The payoff is the thing a long-lived ERP needs most: <strong>adding a report, a KPI, a chart, or a print layout becomes a data change, not an engineering project.</strong> The backlog of "can I get a column / a tile / a layout" stops being a release-gated queue and starts being self-serve metadata — which is the difference between an ERP that ossifies and one that keeps earning its keep.</p>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4>
+<ol>
+<li><strong>One report storage doctype, three flavors.</strong> A single <code>Report</code> record with a <code>report_type</code> discriminator — saved columns (Builder), embedded SQL (Query), or a code module (Script) — sharing one runtime for filter form, pagination, export, roles and caching. Don't build three subsystems.</li>
+<li><strong>Columns are data, not HTML; <code>execute(filters)</code> is a pure function.</strong> Return typed columns (<code>fieldtype</code>, <code>options</code>, <code>width</code>) + rows so one generic table component renders, formats, exports and prints every report. Tolerate variable-length return tuples.</li>
+<li><strong>Statements are computed live from the ledger, never stored.</strong> Balance Sheet, P&amp;L, GL and AR/AP are SQL aggregates over the immutable journal, bucketed by period and rolled up the Chart-of-Accounts tree at request time — so the report can never drift from the books. Add closing snapshots only as a reconcilable optimization with a raw-ledger fallback.</li>
+<li><strong>Dashboards are records, not code.</strong> A chart/KPI is <code>{doctype, agg_fn, value_field, date_field, interval, filters}</code> compiled to SQL, with a named-function escape hatch for cross-table metrics. Cache user-contextual cards by (name, filters, user).</li>
+<li><strong>Printing is a template over the saved document.</strong> Render the record through sandboxed Jinja with locale money formatting, translation, child-table loops and a pluggable, document-vs-report letter head — so what you store is exactly what you print. Keep standard (locked) vs custom (editable) separate.</li>
+<li><strong>Views and connections are small declarative configs over one entity.</strong> List indicators, calendar field maps, and the connected-documents panel are declarations the framework executes — not bespoke endpoints. Defer heavy reports to background "prepared reports" so phones never block.</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="10-extensibility-and-customization.html"><small>← Previous</small>Extensibility</a>
+<a class="next" href="12-build-any-erp-playbook.html"><small>Next →</small>Build-any-ERP playbook</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 11. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — State Machines &amp; Lifecycles (every document's status flow)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1300px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:274px; flex:0 0 274px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:980px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:66ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:10px}
+  section{margin:40px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-derived{background:var(--purple-bg); color:var(--purple)}
+  .b-manual{background:var(--amber-bg); color:var(--amber)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:16px; color:var(--navy)}
+  .card .why{color:var(--muted); font-size:13.5px; margin-top:6px}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:10px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; background:#f0f2f6; padding:1px 4px; border-radius:4px}
+  ol,ul{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+
+  /* state-machine primitives (matched to D3/D4 house style) */
+  .states{display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; align-items:center}
+  .state{border:1.5px solid var(--navy2); border-radius:10px; padding:8px 12px; font-size:13px; font-weight:600; color:var(--navy); background:#fff; min-width:92px}
+  .state small{display:block; font-weight:500; color:var(--muted); font-size:11.5px; margin-top:2px}
+  .state.start{border-color:#8a93a8; background:#eef1f7}
+  .state.done{border-color:var(--green); background:var(--green-bg); color:var(--green)}
+  .state.warn{border-color:#cfa436; background:var(--amber-bg); color:var(--amber)}
+  .state.bad{border-color:#d99; background:var(--red-bg); color:var(--red)}
+  .state.transit{border-color:var(--rust); background:#fdf1ea; color:#8a3f22}
+  .sarr{color:var(--rust); font-weight:800; font-size:16px; padding:0 1px}
+  .branch{margin-left:8px; color:var(--muted); font-size:12.5px}
+  .actor{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:6px; background:var(--grey-bg); color:#41506b; margin-right:4px}
+  .mini{font-size:13px; color:var(--muted); margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Reference</h2>
+  <a href="#what">What this is</a>
+  <a href="#legend">How to read a lifecycle</a>
+  <h2>The spine</h2>
+  <a href="#booking">1 · Booking</a>
+  <a href="#bookingless">2 · Booking-less direct receipt</a>
+  <a href="#inbound">3 · Shipment → GRN → PT</a>
+  <h2>Money out</h2>
+  <a href="#payable">4 · Payable</a>
+  <a href="#payment">5 · Payment</a>
+  <h2>Stock movement</h2>
+  <a href="#piece">6 · The piece (stock state)</a>
+  <a href="#transfer">7 · Inter-store transfer</a>
+  <a href="#sale">8 · Sale / POS sync</a>
+  <h2>Calendars &amp; clocks</h2>
+  <a href="#season">9 · Season calendar</a>
+  <a href="#offer">10 · Offer window</a>
+  <a href="#sorclocks">11 · The two SOR clocks</a>
+  <h2>Reference</h2>
+  <a href="#summary">All lifecycles at a glance</a>
+</nav>
+
+<main>
+<header class="doc" id="what">
+  <div class="eyebrow">KDPS · Consolidation · Buildable reference (5 of the doc set)</div>
+  <h1>State machines &amp; lifecycles — every status flow in one place</h1>
+  <p class="sub">One reference for every document's life: the states it can be in, what moves it from one to the next, and <strong>who acts</strong>. The same machines a developer codes, the owner reads, and a reviewer checks. Nothing here invents new behaviour — it consolidates what D1, D3, D4 and D8 already locked, with the 16 Q&amp;A decisions folded in.</p>
+  <div class="stamp">25 June 2026 · Consolidation pass · Sources: D1 vendor, D3 outbound, D4 payments, D8 master-data, the Q&amp;A decision log, and the 24-Jun review.</div>
+</header>
+
+<section id="legend">
+  <h2 class="sec">How to read a lifecycle</h2>
+  <p>Every lifecycle on this page is drawn the same way, so a state flow always means the same thing wherever it appears.</p>
+  <div class="states">
+    <div class="state start">A start state</div><span class="sarr">→</span>
+    <div class="state">A middle state<small>what it means</small></div><span class="sarr">→</span>
+    <div class="state done">A final state</div>
+    <span class="branch">+ side branches (exceptions, off the happy path)</span>
+  </div>
+  <table>
+    <tr><th style="width:24%">Convention</th><th>Meaning</th></tr>
+    <tr><td><span class="badge b-derived">Derived</span></td><td>The status is <strong>computed</strong> from the documents underneath it — never set by hand. Change a fact below, the status recalculates. (Rule 2: ledgers and derived statuses are never typed.)</td></tr>
+    <tr><td><span class="badge b-manual">Manual</span></td><td>A named person moves the document — always with an actor and (for close/cancel/hold) a reason. (Rule 10: every action has an actor.)</td></tr>
+    <tr><td><span class="actor">ACTOR</span></td><td>Who is allowed to take a step. Maker ≠ checker ≠ payer on money; a store cannot edit a master.</td></tr>
+    <tr><td><span class="state bad" style="min-width:0;padding:4px 9px">red state</span></td><td>An exception / failure branch — flagged into a named queue, never a dead end (Rule 5: flag, never block).</td></tr>
+  </table>
+  <div class="callout co-key">
+    <strong>One rule sits under all of them.</strong> A state in KDPS is just <em>"which open document is holding this thing, and what those documents add up to"</em> — it is read from the spine, not stored as a loose flag that a human can flip. That is why these machines never drift: the booking's status is a sum of its GRNs, a piece's state is whichever document is holding it, a payable's status is the sum of its allocations.
+  </div>
+</section>
+
+<!-- ============================ BOOKING ============================ -->
+<section id="booking">
+  <h2 class="sec">1 · Booking <span class="badge b-locked">D1 locked</span> <span class="badge b-derived">status derived from GRNs</span></h2>
+  <p>A booking is real from the moment it is placed, so booked-vs-received is always accounted. Its receiving status is <strong>computed from the booking's GRNs</strong> — never set by hand. Only close and cancel are manual, always with a remark; nothing closes automatically.</p>
+
+  <div class="states">
+    <div class="state start">Booked<small>order confirmed, nothing in yet</small></div><span class="sarr">→</span>
+    <div class="state">Partially received<small>some lines GRN'd, rest chased</small></div><span class="sarr">→</span>
+    <div class="state">Fully received<small>GRN qty covers every line</small></div><span class="sarr">→</span>
+    <div class="state warn">Return-window open<small>Correction · SOR · Consignment only</small></div><span class="sarr">→</span>
+    <div class="state done">Closed</div>
+    <span class="branch">side branch (from any state): <strong>Cancelled</strong></span>
+  </div>
+
+  <table>
+    <tr><th style="width:20%">State</th><th style="width:42%">Meaning</th><th style="width:20%">Moved by</th><th style="width:18%">Who acts</th></tr>
+    <tr><td><strong>Booked</strong></td><td>Order confirmed from the uploaded receiving (draft → reviewed → confirmed). Nothing received yet.</td><td><span class="badge b-derived">Derived</span> — no GRN exists</td><td><span class="actor">BUYER</span> confirms the draft</td></tr>
+    <tr><td><strong>Partially received</strong></td><td>Some booked quantity is GRN'd; the rest is pending and chased (call outcomes saved in remarks).</td><td><span class="badge b-derived">Derived</span> — some GRN qty &lt; booked</td><td>computed from inbound</td></tr>
+    <tr><td><strong>Fully received</strong></td><td>GRN'd quantity covers every line. Over-receipts stay flagged on their own lines (variance + required remark), they don't block the status.</td><td><span class="badge b-derived">Derived</span> — GRN qty ≥ booked, all lines</td><td>computed from inbound</td></tr>
+    <tr><td><strong>Return-window open</strong></td><td>For <strong>Correction, SOR &amp; Consignment</strong> only: follows fully-received and keeps the booking alive until the window passes or unsold stock goes back. <strong>Outright (Buy &amp; Sell) skips this</strong> — it closes at fully-received.</td><td><span class="badge b-derived">Derived</span> — model snapshot + window dates</td><td>computed (deadline data, Rule 11)</td></tr>
+    <tr><td><strong>Closed / Cancelled</strong></td><td>Closed = the deal is done (window passed / stock settled). Cancelled = the order is abandoned. Always a human decision with a remark; nothing closes itself.</td><td><span class="badge b-manual">Manual</span></td><td><span class="actor">BUYER / HO</span> + remark</td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <strong>The computation, exactly.</strong> Received quantity per line, summed across this booking's GRNs, against booked quantity: <em>none received → Booked · some → Partially received · all → Fully received.</em> Booking lines are style + size only (a booking posts to no ledger); full SKU grain begins at GRN/PT. <strong>"Arrived · not received" is no longer a booking status</strong> — arrival lives on the Shipment; the booking screen shows it only as live information from inbound.
+  </div>
+</section>
+
+<!-- ===================== BOOKING-LESS ===================== -->
+<section id="bookingless">
+  <h2 class="sec">2 · Booking-less direct receipt <span class="badge b-locked">Q9 locked</span></h2>
+  <p>Branded <em>and</em> non-branded goods routinely land at a store with no booking recorded. This is a <strong>first-class path, not an error</strong> (Q9). <strong>Booking is the normal path but never a hard constraint (26 Jun 2026):</strong> a receipt is never blocked for a missing booking, and the booking details can be attached / updated <strong>later (retro-link)</strong>. The key insight: the <strong>Shipment was always the anchor of inbound</strong>, not the booking — so when there is no booking, the booking status machine above is simply <strong>not involved</strong>.</p>
+
+  <div class="card">
+    <h4>How it differs from the booking path</h4>
+    <ul>
+      <li>A <strong>Shipment with <code>booking_ref = NULL</code></strong> anchors inbound. A "Receive without order" entry creates a simple-receipt GRN that posts the quantity (goods are sellable day one).</li>
+      <li><strong>No phantom booking is created.</strong> A booking-less GRN is in no booking's GRN-set, so the booking machine has nothing to compute — there are no "two states at once", and no new states are needed. (Auto-creating a fake booking would pollute booked-vs-received analytics — forbidden.)</li>
+      <li>The <strong>commercial model is snapshotted at receipt/PT time</strong> from the effective-dated brand master (default Outright if the brand is known but the model is silent).</li>
+      <li>A <strong>Direct GRN can be retro-linked to a later booking</strong>. The retro-link re-runs the invoice ↔ GRN ↔ PT reconciliation as a <em>correction</em> (a new dated event), never a silent rewrite.</li>
+    </ul>
+  </div>
+
+  <div class="callout co-warn">
+    <strong>Two hard gates on this path (Q9 hardenings).</strong>
+    <ul style="margin:6px 0 0">
+      <li>An <strong>unknown / defaulted model</strong> hard-gates D4 payment — the payable sits in an <em>awaiting-invoice / unmatched-payable</em> state until the model is confirmed.</li>
+      <li>A <strong>truly unknown brand</strong> → "Unconfirmed" model: post stock-in quantity + cost, but <strong>withhold the vendor-ledger posting</strong> (behave like SOR) until the brand is confirmed.</li>
+      <li>Capture the <strong>e-way-bill number</strong> on the direct GRN (the recipient must generate one if the vendor ships above the threshold without it).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===================== SHIPMENT -> GRN -> PT ===================== -->
+<section id="inbound">
+  <h2 class="sec">3 · Shipment → GRN → PT — the two-step posting <span class="badge b-locked">Q1 locked</span></h2>
+  <p>Inbound is two postings, not one (Q1, the single rule that unblocks direct receipt and own-POS auto-inward). The <strong>GRN posts the quantity; the PT posts the value</strong>. This is the cross-ERP standard (SAP MIGO/MIRO, ERPNext Stock-Received-But-Not-Billed) and it is what lets goods sell on day one before they are priced.</p>
+
+  <div class="states">
+    <div class="state start">Shipment arrives<small>booking_ref or NULL</small></div><span class="sarr">→</span>
+    <div class="state">GRN posted<small>QUANTITY movement</small></div><span class="sarr">→</span>
+    <div class="state done">PT posted<small>VALUATION + liability</small></div>
+  </div>
+
+  <table>
+    <tr><th style="width:16%">Step</th><th style="width:32%">What it posts to the ledgers</th><th style="width:34%">What it does NOT do</th><th style="width:18%">Who acts</th></tr>
+    <tr>
+      <td><strong>GRN</strong><br>(goods receipt)</td>
+      <td><strong>Stock ledger — quantity movement:</strong> qty, location, condition, season, owned-flag <em>provisional</em>. <strong>No unit cost.</strong> Goods become countable and sellable here.</td>
+      <td>Writes no value and no vendor liability. (Corrects the old "GRN is custody only, not books" line — the GRN <em>does</em> write the stock ledger, quantity only.)</td>
+      <td><span class="actor">WAREHOUSE</span> scans / counts</td>
+    </tr>
+    <tr>
+      <td><strong>PT</strong><br>(at Patna inward)</td>
+      <td><strong>Stock ledger — valuation:</strong> unit cost stamped (= P RATE, Q5), owned-flag finalised. <strong>Vendor ledger — liability per commercial model</strong> (see below).</td>
+      <td>Never re-posts a GRN's quantity. Late freight after the PT is a forward-only adjust or a separate cost-correction event — never a re-post (no-reposting rule).</td>
+      <td><span class="actor">PATNA INWARD</span> (exception-gated)</td>
+    </tr>
+  </table>
+
+  <div class="card">
+    <h4>When the vendor liability lands — by commercial model</h4>
+    <p class="mini">The PT carries the settlement basis for every model, but <strong>liability timing depends on the model</strong> (Q2). The PT is not a universal liability-writer.</p>
+    <table>
+      <tr><th style="width:24%">Model</th><th style="width:40%">Liability posts…</th><th style="width:36%">Written by</th></tr>
+      <tr><td><strong>Outright (Buy &amp; Sell)</strong></td><td>At Patna inward, full invoice incl. GST</td><td>PT</td></tr>
+      <tr><td><strong>Correction (25-18-10)</strong></td><td>At Patna inward, incl. GST; returns later net the payable within the capped allowance</td><td>PT</td></tr>
+      <tr><td><strong>SOR</strong></td><td><strong>On the sale</strong> — accrues per piece sold (settlement rate, ex-GST cost basis)</td><td>Sale (D3) — <em>not</em> the PT</td></tr>
+      <tr><td><strong>Consignment</strong></td><td><strong>Never from the PT.</strong> Money exists only at sale; quantity-only at receipt</td><td>Sale (D3)</td></tr>
+    </table>
+  </div>
+  <p class="mini">A two-axis record (ownership × return-terms + rolling-top-up boolean) stores the deal and <em>derives</em> the friendly label, so this table is robust to how the client describes a brand (Q10). The model, margin % and return-window <strong>default from the brand master but are overridable per booking / per stock-received (26 Jun 2026)</strong> — one brand can run any of the four models, the document snapshots the chosen axes at creation. The statutory Tally purchase voucher books at arrival for Outright/Correction; for SOR/Consignment the recognition point is CA-pending (Q4/F9, once-only) — a different clock from the operational payable; see <a href="#sorclocks">§11</a>.</p>
+</section>
+
+<!-- ============================ PAYABLE ============================ -->
+<section id="payable">
+  <h2 class="sec">4 · Payable — the debt <span class="badge b-locked">D4 locked</span> <span class="badge b-derived">status derived from allocations</span></h2>
+  <p>One debt KDPS owes a brand, born from a spine document (a PT invoice, a per-sale SOR/Consignment accrual, a return debit, a brand credit). It lives on the vendor ledger; its status is <strong>derived from the payments allocated against it</strong>, never typed.</p>
+
+  <div class="states">
+    <div class="state start">Open</div><span class="sarr">→</span>
+    <div class="state">Partly paid</div><span class="sarr">→</span>
+    <div class="state done">Paid</div>
+    <span class="branch">side branches: <strong>On-hold</strong> (disputed) · <strong>Cancelled</strong> (credit-noted)</span>
+  </div>
+
+  <table>
+    <tr><th style="width:20%">State</th><th style="width:50%">Meaning</th><th style="width:30%">Moved by</th></tr>
+    <tr><td><strong>Open</strong></td><td>The debt is live and unsettled. May still be <em>ineligible to pay</em> — "eligible" is a separate gate on the payable, not a state (see callout).</td><td><span class="badge b-derived">Derived</span> — no allocation yet</td></tr>
+    <tr><td><strong>Partly paid</strong></td><td>One or more payments have been allocated, but the running balance is not yet zero. (One bank transfer can clear a month of SOR accruals; one Outright invoice can be paid on its own.)</td><td><span class="badge b-derived">Derived</span> — Σ allocations &lt; due</td></tr>
+    <tr><td><strong>Paid</strong></td><td>Allocations cover the due amount. Auto-closes when the UTR is matched on the payment roundtrip.</td><td><span class="badge b-derived">Derived</span> — Σ allocations = due</td></tr>
+    <tr><td><strong>On-hold</strong></td><td>Disputed — held out of the pay run until resolved.</td><td><span class="badge b-manual">Manual</span> + reason</td></tr>
+    <tr><td><strong>Cancelled</strong></td><td>Killed by a credit note (the debt no longer exists).</td><td><span class="badge b-manual">Manual</span> — credit-noted</td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <strong>"Eligible to pay" is a gate, not a state.</strong> A payable only becomes payable after it clears a tiered gate (e.g. <em>tied to an inwarded PT/TIR</em>; SOR/Consignment <em>actually sold</em>; vendor bank details verified). The checks run on the payable and are <strong>re-checked at execution</strong> — the world can change between approve and pay. A piece that hasn't sold cannot be paid for under SOR/Consignment: that is a hard block, and it is also where the booking-less <em>unknown-model</em> payable waits (Q9).
+  </div>
+  <p class="mini">Vendor ledger (KDPS's party ledger) is itself derived: <code>Opening + Invoices − CD − GR (goods return) − Payments + Interest = Due</code>, at brand + vendor grain.</p>
+</section>
+
+<!-- ============================ PAYMENT ============================ -->
+<section id="payment">
+  <h2 class="sec">5 · Payment — the money leaving the bank <span class="badge b-locked">D4 locked</span></h2>
+  <p>A separate document that settles one or many open payables, carrying the approval + execution lifecycle. <strong>Maker ≠ checker ≠ payer, always</strong> — the raiser can't approve, the approver isn't the executor (Rule 10). This is the most-watched machine in the system: a wrong forecast wastes attention, a wrong payment moves a real rupee.</p>
+
+  <div class="states">
+    <div class="state start">Draft</div><span class="sarr">→</span>
+    <div class="state">Pending approval</div><span class="sarr">→</span>
+    <div class="state">Approved</div><span class="sarr">→</span>
+    <div class="state">Executed</div><span class="sarr">→</span>
+    <div class="state">Confirmed<small>UTR / bank ref captured = matched</small></div><span class="sarr">→</span>
+    <div class="state done">Reconciled<small>statement cleared</small></div>
+  </div>
+  <p class="mini" style="margin-top:0">Branches off the happy path:</p>
+  <div class="states">
+    <div class="state bad">Rejected<small>approver declines</small></div>
+    <div class="state bad">On-hold</div>
+    <div class="state bad">Failed / Returned<small>bank bounce → back to retry</small></div>
+    <div class="state bad">Cancelled / Void</div>
+  </div>
+
+  <table>
+    <tr><th style="width:18%">State</th><th style="width:46%">Meaning</th><th style="width:36%">Who acts</th></tr>
+    <tr><td><strong>Draft</strong></td><td>A proposal is raised and allocated across the payables it will settle (beneficiary, amount, the debts it clears).</td><td><span class="actor">REQUESTOR</span> (account manager)</td></tr>
+    <tr><td><strong>Pending approval</strong></td><td>Submitted into the four-eyes approval queue; awaiting sign-off at the right ₹ tier.</td><td>system → queue</td></tr>
+    <tr><td><strong>Approved</strong></td><td>The tiered approval passed. Eligibility is re-checked here.</td><td><span class="actor">APPROVER</span> (≠ requestor)</td></tr>
+    <tr><td><strong>Executed</strong></td><td>Money released — the transfer is fired (or the bank file prepared).</td><td><span class="actor">EXECUTOR</span> (≠ approver)</td></tr>
+    <tr><td><strong>Confirmed</strong></td><td>The <strong>UTR / bank reference is captured</strong> — typed at pay-time and/or auto-matched from the daily read-only statement pull. This auto-closes the payable (the roundtrip).</td><td>executor / narration parser</td></tr>
+    <tr><td><strong>Reconciled</strong></td><td>The credit is matched on the bank statement; the loop is closed and the payable is Paid.</td><td><span class="badge b-derived">Derived</span> — bank recon</td></tr>
+    <tr><td colspan="3" style="background:#fbe9e7"><strong>Side branches.</strong> <strong>Rejected</strong> — approver declines (back to requestor). <strong>On-hold</strong> — parked. <strong>Failed / Returned</strong> — bank bounce; returns for retry, never lost. <strong>Cancelled / Void</strong> — withdrawn before execution. Each is a flagged exception with a named owner, not a dead end.</td></tr>
+  </table>
+
+  <div class="callout co-dep">
+    <strong>The handshake between the two machines.</strong> The link between a Payment and the Payables it clears is the <strong>allocation</strong> (exactly Tally's <em>Agst Ref</em>). A Payment reaching <em>Confirmed</em> is what drives its allocated Payables to <em>Partly paid</em> / <em>Paid</em>. Goods-return DNs net the payable now; commercial claims (EOSS / V-flip, Correction over-allowance) pend and net only at the agreed amount.
+  </div>
+</section>
+
+<!-- ============================ PIECE STATE ============================ -->
+<section id="piece">
+  <h2 class="sec">6 · The piece — stock state <span class="badge b-locked">D3 locked</span> <span class="badge b-derived">derived from open documents</span></h2>
+  <p>Before the movement machines (transfer, sale), one foundation: a piece's state is just <strong>"which open document is holding it"</strong> — so it can never drift the way a hand-flipped flag does. Stock is held per <strong>barcode + season + location</strong>.</p>
+
+  <div class="states">
+    <div class="state start">Available<small>free to sell</small></div>
+    <div class="state warn">Reserved → In-transit<small>held by a transfer</small></div>
+    <div class="state warn">Pending seasonal return<small>held by a return doc</small></div>
+    <div class="state bad">Quarantine<small>held by a defect ticket</small></div>
+    <div class="state done">Gone<small>sold · returned to brand · received elsewhere</small></div>
+  </div>
+
+  <div class="callout co-key">
+    <strong>Free-to-sell = Physical on-hand − everything locked by an open document.</strong> Physical is the honest count; "locked" is whatever a transfer-in-flight, a defect ticket or a pending return is holding. <strong>The number pushed to POS is free-to-sell</strong>, so POS can never sell a piece that is already promised. Aging, dead-stock, the SOR window and the V-flip all run <strong>per cohort (barcode + season)</strong> — SS-25 never mixes with SS-26.
+  </div>
+  <p class="mini">The <strong>V-flip</strong> is a state change in disguise: dead stock the brand won't take back is reported sold under EOSS, the brand settlement is claimed, and ownership flips brand-owned → KDPS-owned (real brand kept, owner=KDPS, status=liquidation, barcode unchanged) so it drops out of brand reports and sells off as ordinary KDPS stock.</p>
+</section>
+
+<!-- ============================ TRANSFER ============================ -->
+<section id="transfer">
+  <h2 class="sec">7 · Inter-store transfer <span class="badge b-locked">D3 locked · two-step</span></h2>
+  <p>A two-step transfer order (the industry standard — SAP / NetSuite / ERPLY) with an explicit <strong>in-transit</strong> state, so a piece is never both "gone from here" and "not yet there" without a document holding it.</p>
+
+  <div class="states">
+    <div class="state start">Available<small>at source</small></div><span class="sarr">→</span>
+    <div class="state warn">Held at source<small>not sellable</small></div><span class="sarr">→</span>
+    <div class="state transit">In-transit<small>dispatched, not received</small></div><span class="sarr">→</span>
+    <div class="state done">Available at destination</div>
+    <span class="branch">alert: in-transit aging — not received within N days → flagged</span>
+  </div>
+
+  <table>
+    <tr><th style="width:16%">Step</th><th style="width:50%">What happens</th><th style="width:34%">Who acts</th></tr>
+    <tr><td><strong>Dispatch</strong></td><td>Source pieces are <strong>held (not sellable)</strong> and enter <strong>in-transit</strong>; destination shows <strong>pending-receipt</strong>. Mandatory transport reference (mode + bus / driver / courier).</td><td><span class="actor">SOURCE STORE / WH</span></td></tr>
+    <tr><td><strong>Receive</strong></td><td>Destination <strong>scans to receive</strong> → pieces become available. The dispatched − received gap is <strong>flagged on the open doc</strong>, owned by a named receiver (catches transit loss).</td><td><span class="actor">DESTINATION STORE</span></td></tr>
+  </table>
+
+  <div class="callout co-warn">
+    <strong>The cross-state overlay (Q3).</strong> Whether a transfer also moves <em>money and tax</em> depends on the two GSTINs, read off the first two digits (state code) of each:
+    <ul style="margin:6px 0 0">
+      <li><strong>Intra-state move</strong> (same GSTIN / same state) → <strong>stock-ledger only</strong>, no tax event. "Internal move."</li>
+      <li><strong>Cross-state move</strong> (Bihar ↔ Jharkhand, distinct persons) → legally a <strong>taxable IGST supply</strong>. <strong>Scope decision (26 Jun 2026):</strong> the system <strong>records the move and flags it</strong> as cross-state needing manual paperwork; the <strong>IGST tax invoice and e-way bill are produced manually by KDPS, outside the system</strong> (sender out-voucher + IGST tax invoice, receiver matching purchase voucher + ITC, e-way bill on consignment value incl. IGST — ₹50,000 threshold cross-state; ₹1,00,000 intra-state). The stock machine above is unchanged; the taxable-supply fact is kept for awareness/reporting.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================ SALE / POS SYNC ============================ -->
+<section id="sale">
+  <h2 class="sec">8 · Sale / POS sync <span class="badge b-locked">Q8 locked</span></h2>
+  <p>The sale itself is simple — scan, bill, post (stock out, cash in, SOR sold-liability). The hard part is getting an <strong>offline-first till's sale to the server exactly once</strong>, even over a bad network. Both Ten Software and the KDPS-built POS write the same <strong>source-agnostic Sale document</strong>; only the sync machine differs. One store runs exactly one POS (a hard config invariant), so bill numbers never collide.</p>
+
+  <div class="states">
+    <div class="state start">client-UUID<small>minted at the till, offline</small></div><span class="sarr">→</span>
+    <div class="state">Pending<small>queued in the durable outbox</small></div><span class="sarr">→</span>
+    <div class="state transit">In-flight<small>sent, awaiting server ack</small></div><span class="sarr">→</span>
+    <div class="state done">Synced<small>server returns the Sale-ID</small></div>
+  </div>
+  <p class="mini" style="margin-top:0">When delivery fails, the outbox classifies it:</p>
+  <div class="states">
+    <div class="state warn">Retryable<small>network / timeout → back to Pending, backoff</small></div>
+    <div class="state bad">Fatal<small>rejected payload → exception queue</small></div>
+    <div class="state bad">Dead-letter<small>retries exhausted → named owner</small></div>
+  </div>
+
+  <table>
+    <tr><th style="width:18%">State</th><th style="width:52%">Meaning</th><th style="width:30%">Who / what acts</th></tr>
+    <tr><td><strong>client-UUID</strong></td><td>The till mints a unique id <em>per sale, locally, before any network call</em>. This UUID is the idempotency key for the whole journey.</td><td>till (PWA, offline)</td></tr>
+    <tr><td><strong>Pending</strong></td><td>The sale sits in a durable on-device outbox. Survives a crash or reboot; offline bill numbering keeps the counter working with no internet.</td><td>outbox</td></tr>
+    <tr><td><strong>In-flight</strong></td><td>Sent to the server's <strong>idempotent upsert</strong> endpoint; awaiting acknowledgement.</td><td>adapter → server</td></tr>
+    <tr><td><strong>Synced</strong></td><td>The server returns <strong>the same Sale-ID on every retry of the same UUID</strong> — so a duplicate send can never create a duplicate sale. Only now is the Sale authoritative and posted.</td><td>server (idempotent)</td></tr>
+    <tr><td colspan="3" style="background:#fbe9e7"><strong>Failure branches.</strong> <strong>Retryable</strong> — transient (network / timeout): re-queued to Pending with backoff. <strong>Fatal</strong> — a payload the server refuses: dropped into the exception queue for a human. <strong>Dead-letter</strong> — retries exhausted: handed to a named owner, never silently lost. The EOD batch reconciles, it does not re-post.</td></tr>
+  </table>
+
+  <div class="callout co-key">
+    <strong>Idempotency is non-negotiable (Q8).</strong> Exactly-once is the entire game: <code>client-UUID per sale → server returns the same Sale-ID on retry → idempotent upsert</code>. The dedup key is <strong>store + bill-no</strong> (disjoint because one store = one POS). The adapter ships as a <strong>reader first</strong> (Ten ingest + daily POS recon green) before any own-POS store goes live. Season is re-attached at the edge from the effective-dated master for that barcode/store/sale-date; if a barcode lives under two seasons, oldest-season-first, else a one-tap "which season?" — never a blocked sale (Q6). The counter bill is a normal B2C GST tax invoice — no IRP/IRN.
+  </div>
+</section>
+
+<!-- ============================ SEASON CALENDAR ============================ -->
+<section id="season">
+  <h2 class="sec">9 · Season calendar <span class="badge b-locked">D8 Q3 locked</span></h2>
+  <p>One KDPS <strong>house season calendar</strong>. Each season is a record in a fixed format (<code>FAMILY(Mon-YY)</code>, system-derived, never free text) with a lifecycle. A brand-season mapping table translates every incoming spelling ("SS26", "Spring Summer 2020", a raw date, or blank) into the house season. Season is the most load-bearing master — booking, PT and stock identity itself (<code>barcode + season</code>) all hang on it.</p>
+
+  <div class="states">
+    <div class="state start">Open<small>pickable on bookings/PTs, sellable</small></div><span class="sarr">→</span>
+    <div class="state warn">EOSS / markdown<small>clearance pricing; checks fire</small></div><span class="sarr">→</span>
+    <div class="state done">Closed<small>no new stock-in; reporting only</small></div>
+  </div>
+
+  <table>
+    <tr><th style="width:20%">State</th><th style="width:50%">Meaning</th><th style="width:30%">Who acts</th></tr>
+    <tr><td><strong>Open</strong></td><td>Pickable on bookings / PTs and sellable. The <strong>warehouse picks only among Open seasons</strong> at PT — it cannot open or invent one.</td><td><span class="actor">HO DATA-OWNER</span> opens; <span class="actor">WH</span> picks</td></tr>
+    <tr><td><strong>EOSS / markdown</strong></td><td>Clearance pricing. Entering it fires EOSS / markdown eligibility, the return-window &amp; V-flip checks, and dead-stock surfacing — all per cohort.</td><td><span class="actor">HO DATA-OWNER</span></td></tr>
+    <tr><td><strong>Closed</strong></td><td>No new stock-in under the season; it flips to reporting-only. Closing first shows a <strong>"what this affects" summary</strong> (how many pieces become EOSS / return / dead-stock candidates) and lets the buyer set a <strong>carryover</strong> flag on core (never-out-of-stock) items so they roll into the next season.</td><td><span class="actor">HO DATA-OWNER</span> (logged; no second eye — reversible)</td></tr>
+  </table>
+
+  <div class="callout co-note">
+    <strong>Corrections, not silent edits.</strong> Because identity = barcode + season, a wrong season on a PT/piece is a <strong>controlled, logged, reversing correction</strong> by the HO role — never a quiet overwrite. Open / close / carryover / correct are all logged.
+  </div>
+</section>
+
+<!-- ============================ OFFER WINDOW ============================ -->
+<section id="offer">
+  <h2 class="sec">10 · Offer applicability window <span class="badge b-locked">D5 Q5 locked</span></h2>
+  <p>An offer is a dated record on a per-brand timeline. Whoever's window covers <em>today</em> is live; a named <strong>default / fallback offer</strong> fills any gap so the counter is never left with nothing. Deadlines are data, not memory (Rule 11) — expiry reminders fire before an offer lapses.</p>
+
+  <div class="states">
+    <div class="state">Scheduled<small>start date in the future</small></div><span class="sarr">→</span>
+    <div class="state start">Live<small>start ≤ today ≤ end (or no end)</small></div><span class="sarr">→</span>
+    <div class="state done">Lapsed<small>end date passed</small></div>
+    <span class="branch">gap with nothing scheduled → the <strong>default offer</strong> runs</span>
+  </div>
+
+  <table>
+    <tr><th style="width:20%">State</th><th style="width:50%">Meaning</th><th style="width:30%">Driven by</th></tr>
+    <tr><td><strong>Scheduled</strong></td><td>Authored with a start date still in the future; queued on the brand's timeline.</td><td>start date</td></tr>
+    <tr><td><strong>Live</strong></td><td><code>start ≤ today ≤ end</code>. <strong>Start is required; end is optional</strong> — no end = rolls until stopped or until the next window opens.</td><td><span class="badge b-derived">Derived</span> from dates</td></tr>
+    <tr><td><strong>Lapsed</strong></td><td>The end date has passed and a later window (or the default) has taken over.</td><td>end date</td></tr>
+    <tr><td><strong>Default / fallback</strong></td><td>A named offer that runs <em>whenever nothing else is scheduled</em> — fills any gap on the timeline (e.g. "slab till 27 May → B2G1 from 28 May, continues as default unless the brand updates").</td><td>config (the gap-filler)</td></tr>
+  </table>
+  <p class="mini">Each offer also carries store scope (all / specific / store-groups; a new store is never auto-enrolled into a running offer) and a "can stack?" switch. The window above is only the <em>time</em> dial; scope and stacking are separate dials on the same record.</p>
+</section>
+
+<!-- ============================ SOR CLOCKS ============================ -->
+<section id="sorclocks">
+  <h2 class="sec">11 · The two SOR clocks <span class="badge b-locked">Q4 / F9 — CA to confirm convention</span></h2>
+  <p>An SOR lot runs <strong>two independent countdowns off one <code>removal_date</code></strong> (the date the goods left the vendor / were received). They answer different questions and must never be collapsed into one. Both are alarmed at <strong>30 / 15 / 7 days</strong> before they expire (Rule 11). This is greenfield — no ERPNext equivalent — so it is modelled explicitly.</p>
+
+  <div class="card">
+    <h4>Clock A — commercial return window (60–120 days)</h4>
+    <p>The <strong>deal clock</strong>: how long KDPS may send unsold SOR / Correction / Consignment stock back to the brand. Per-brand (60–120 days, stretchable). When it runs out, unsold stock must go back or be dealt with (Correction draws its capped allowance; over-cap → V-flip). This is what keeps the <em>booking</em> in "Return-window open" (§1).</p>
+    <p class="why">Owner: the booking / brand terms. Drives the seasonal-return picking and the booking's close.</p>
+  </div>
+
+  <div class="card">
+    <h4>Clock B — the ~6-month GST deemed-supply clock</h4>
+    <p>The <strong>statutory clock</strong> (CGST §31(7)): for goods genuinely sent on sale-or-approval, if not sold or returned within <strong>~6 calendar months</strong> of removal, the law deems a supply — a tax event independent of any commercial deadline. Computed as <em>+6 calendar months</em> from <code>removal_date</code>, not a literal +181 days.</p>
+    <p class="why">Owner: the SOR lot's GST state. Distinct from Clock A — a brand could allow 120 commercial days while the statute deems supply at ~180; the two can fire in either order.</p>
+  </div>
+
+  <div class="callout co-warn">
+    <strong>The money trap this guards against (F9).</strong> GST must be recognised <strong>once</strong>, where the tax invoice legally sits — never twice. A <code>gst_recognised = (date, voucher_no)</code> invariant on the SOR lot enforces one convention so the arrival voucher and the settlement journal can't both book it. Which path applies is keyed to the supplier's invoice timing (Q4): <em>consignment-as-agent</em> (Schedule I, invoice at dispatch) → purchase + ITC at arrival; <em>true sale-or-return</em> (Rule 55 challan, §31(7), invoice at sale / 6 months) → no purchase / ITC until sale. The per-brand characterisation is a CA call — this is not testable-away later.
+  </div>
+</section>
+
+<!-- ============================ SUMMARY ============================ -->
+<section id="summary">
+  <h2 class="sec">All lifecycles at a glance</h2>
+  <table>
+    <tr><th style="width:20%">Lifecycle</th><th style="width:44%">States (happy path → branches)</th><th style="width:18%">Status set by</th><th style="width:18%">Source</th></tr>
+    <tr><td><strong>Booking</strong></td><td>Booked → Partially received → Fully received → Return-window-open → Closed · <em>Cancelled</em></td><td><span class="badge b-derived">Derived</span> from GRNs (close/cancel manual)</td><td>D1 §7</td></tr>
+    <tr><td><strong>Booking-less receipt</strong></td><td>Shipment (booking_ref=NULL) → "Receive without order" GRN → PT · <em>retro-link to a later booking</em></td><td>no booking machine involved</td><td>Q9</td></tr>
+    <tr><td><strong>Inbound posting</strong></td><td>Shipment → GRN (quantity) → PT (valuation + liability per model)</td><td>two-step, document-driven</td><td>Q1 / Q2</td></tr>
+    <tr><td><strong>Payable</strong></td><td>Open → Partly paid → Paid · <em>On-hold · Cancelled</em></td><td><span class="badge b-derived">Derived</span> from allocations</td><td>D4</td></tr>
+    <tr><td><strong>Payment</strong></td><td>Draft → Pending approval → Approved → Executed → Confirmed (UTR) → Reconciled · <em>Rejected · On-hold · Failed · Cancelled</em></td><td>maker ≠ checker ≠ payer</td><td>D4</td></tr>
+    <tr><td><strong>Piece (stock)</strong></td><td>Available · Reserved→In-transit · Pending-return · Quarantine · Gone</td><td><span class="badge b-derived">Derived</span> from open documents</td><td>D3</td></tr>
+    <tr><td><strong>Inter-store transfer</strong></td><td>Available → Held at source → In-transit → Available at destination (+ IGST overlay cross-state)</td><td>two-step + aging alert</td><td>D3 Q9 / Q3</td></tr>
+    <tr><td><strong>Sale / POS sync</strong></td><td>client-UUID → Pending → In-flight → Synced · <em>Retryable · Fatal · Dead-letter</em></td><td>idempotent upsert (UUID)</td><td>Q8</td></tr>
+    <tr><td><strong>Season calendar</strong></td><td>Open → EOSS / markdown → Closed</td><td><span class="actor">HO DATA-OWNER</span></td><td>D8 Q3</td></tr>
+    <tr><td><strong>Offer window</strong></td><td>Scheduled → Live → Lapsed · <em>default offer fills any gap</em></td><td><span class="badge b-derived">Derived</span> from dates</td><td>D5 Q5</td></tr>
+    <tr><td><strong>SOR clocks</strong></td><td>Two countdowns off one removal_date: commercial window (60–120d) + GST deemed-supply (~6mo); alarmed 30/15/7</td><td>deadline data (Rule 11)</td><td>Q4 / F9</td></tr>
+  </table>
+
+  <div class="callout co-key">
+    <strong>The through-line.</strong> Nearly every status here is <em>derived</em>, not typed — a booking is the sum of its GRNs, a payable the sum of its allocations, a piece is whichever document holds it. The only manual moves are deliberate human acts (close, cancel, hold, approve, open/close a season) — each with a named actor and a reason. That is what makes these machines trustworthy enough to put money and statute on top of them.
+  </div>
+</section>
+
+<footer>
+  KDPS · State machines &amp; lifecycles · 25 June 2026 · Consolidation pass (doc 5 of the target set).<br>
+  Consolidates: <code>01-vendor-management/Vendor-Management-Module.html</code> (§7), <code>03-outbound/outbound.html</code>, <code>04-payments/payments.html</code>, <code>08-master-data/master-data.html</code>, <code>05-offers/offers.html</code> (Q5), the Q&amp;A decision log (Q1–Q16 + F9), and the 24-Jun system review. Statuses derived from documents, never hand-edited (Rule 2); every action has an actor (Rule 10); deadlines are data (Rule 11).
+</footer>
+
+</main>
+</div>
+</body>
+</html>

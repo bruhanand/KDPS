@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Transaction Flow — Order → Receipt → Invoice → Payment — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html" class="cur"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 5 · Documents & data</div>
+  <h1>The Transaction Flow — Order → Receipt → Invoice → Payment</h1>
+  <p class="sub">The universal order-to-cash and procure-to-pay graph, the mapped-document pattern, line-level "against" linking, fulfilment-percentage tracking, and the controller inheritance that each layer extends.</p>
+</header>
+
+<section>
+  <h2 class="sec">Why this subsystem is the spine of the whole ERP</h2>
+  <p>
+    Everything an ERP does commercially is a sequence of promises that gradually get kept. A customer is <em>promised</em> goods (an order); some of them <em>ship</em> (a delivery); some of what shipped gets <em>billed</em> (an invoice); some of what is billed gets <em>paid</em> (a receipt). The same shape runs in reverse on the buy side — you promise a supplier to buy, they ship, they bill, you pay. The single hardest thing in this whole domain is that <strong>these steps do not happen all at once and they do not happen in lockstep</strong>. An order of 100 units ships in three deliveries; two of those deliveries are invoiced together; the invoice is paid in two instalments; then 12 units come back as a return. A naïve "status flag on the order" model collapses the moment reality refuses to be tidy.
+  </p>
+  <p>
+    ERPNext's answer is to model the commercial lifecycle as an <strong>append-only directed graph of independent documents</strong> — one document per real-world event — linked by line-level "against" references, where <strong>fulfilment is a derived quantity recomputed by re-summing linked rows</strong> rather than a counter you increment. That one design decision buys you, for free: partial-fulfilment fan-out, idempotent and self-reversing cancellation, a complete audit trail, a declarative status state machine, and a structural guarantee against over-billing and over-delivery. This chapter is the reference you return to while building it.
+  </p>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    Do not store "shipped" and "billed" as booleans on an order row. Model each event — promise, ship, bill, pay — as its own immutable, separately-submittable <strong>document</strong>, and make the order's <code>per_delivered</code> / <code>per_billed</code> a number you <strong>re-derive by SUMMING the linked downstream rows</strong> on every submit <em>and</em> every cancel. Status becomes a pure function of those percentages. Partial fulfilment, cancellation reversal, and the audit trail then fall out of the data model instead of being features you have to code.
+  </div>
+
+  <p>The two mirror-image flows, in one band each:</p>
+
+  <div class="band l-doc">
+    <div class="bname">O2C — Order to Cash (sell side)</div>
+    <div class="boxes">
+      <div class="bx">Quotation<small>offer</small></div>
+      <div class="bx">Sales Order<small>commitment</small></div>
+      <div class="bx">Delivery Note<small>goods out · stock ledger</small></div>
+      <div class="bx">Sales Invoice<small>revenue + receivable · GL</small></div>
+      <div class="bx">Payment Entry<small>settles outstanding</small></div>
+    </div>
+  </div>
+  <div class="band l-doc">
+    <div class="bname">P2P — Procure to Pay (buy side · mirror image)</div>
+    <div class="boxes">
+      <div class="bx">Material Request<small>indent</small></div>
+      <div class="bx">Purchase Order<small>commitment</small></div>
+      <div class="bx">Purchase Receipt<small>goods in · stock ledger</small></div>
+      <div class="bx">Purchase Invoice<small>payable · GL</small></div>
+      <div class="bx">Payment Entry<small>settles outstanding</small></div>
+    </div>
+  </div>
+
+  <p>
+    The two flows are not two pieces of code. They are the <em>same</em> machinery with mirrored field names (<code>delivered_qty</code> ↔ <code>received_qty</code>, <code>per_delivered</code> ↔ <code>per_received</code>). The shared behaviour lives in a layered controller base-class chain; each concrete document type is mostly a small declarative spec plus a thin posting hook. The single files you will return to most are <span class="fileref">erpnext/controllers/status_updater.py</span> (the fulfilment + status engine), the per-doctype <span class="fileref">erpnext/selling/doctype/sales_order/mapper.py</span> (the document-generation spec), and <span class="fileref">erpnext/controllers/sales_and_purchase_return.py</span> (returns as negated mirror documents).
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">The key doctypes</h2>
+  <p>
+    Eleven transaction doctypes carry the two flows; six base classes carry the behaviour; one Single-doctype pair carries the global policy. Concrete documents are thin — they pick a leaf controller as their Python class and inherit the whole stack.
+  </p>
+
+  <table>
+    <tr><th>DocType / class</th><th>Kind</th><th>Role in the graph</th></tr>
+    <tr><td><strong>Quotation</strong><br><span class="fileref">erpnext/selling/doctype/quotation/</span></td><td><span class="badge b-erpnext">transaction</span></td><td>O2C entry document — an offer to a customer; source of the Sales Order.</td></tr>
+    <tr><td><strong>Sales Order</strong><br><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.py</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Confirmed customer commitment. Carries <code>per_delivered</code> / <code>per_billed</code>; source of both Delivery Note and Sales Invoice.</td></tr>
+    <tr><td><strong>Sales Order Item</strong><br><span class="fileref">erpnext/selling/doctype/sales_order/</span></td><td><span class="badge b-erpnext">child</span></td><td>The order line. Accumulates <code>delivered_qty</code> / <code>billed_amt</code> written back by downstream documents.</td></tr>
+    <tr><td><strong>Delivery Note</strong><br><span class="fileref">erpnext/stock/doctype/delivery_note/delivery_note.py</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Goods-out. Posts the stock ledger; updates the Sales Order's <code>per_delivered</code>.</td></tr>
+    <tr><td><strong>Delivery Note Item</strong><br><span class="fileref">erpnext/stock/doctype/delivery_note_item/</span></td><td><span class="badge b-erpnext">child</span></td><td>Holds the back-links: <code>against_sales_order</code> (Link) + <code>so_detail</code> (the source row id).</td></tr>
+    <tr><td><strong>Sales Invoice</strong><br><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Revenue + receivable. Updates the Sales Order's <code>per_billed</code> via its own <code>status_updater</code> spec.</td></tr>
+    <tr><td><strong>Payment Entry</strong><br><span class="fileref">erpnext/accounts/doctype/payment_entry/</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Settles invoice <code>outstanding_amount</code>; closes the flow.</td></tr>
+    <tr><td><strong>Material Request</strong><br><span class="fileref">erpnext/stock/doctype/material_request/</span></td><td><span class="badge b-erpnext">transaction</span></td><td>P2P entry — the indent. Carries <code>per_ordered</code> / <code>per_received</code>.</td></tr>
+    <tr><td><strong>Purchase Order</strong><br><span class="fileref">erpnext/buying/doctype/purchase_order/purchase_order.py</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Supplier commitment. Carries <code>per_received</code> / <code>per_billed</code>; source of PR + PI.</td></tr>
+    <tr><td><strong>Purchase Receipt</strong><br><span class="fileref">erpnext/stock/doctype/purchase_receipt/purchase_receipt.py</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Goods-in. Posts stock + GL; updates the Purchase Order's <code>per_received</code>.</td></tr>
+    <tr><td><strong>Purchase Invoice</strong><br><span class="fileref">erpnext/accounts/doctype/purchase_invoice/</span></td><td><span class="badge b-erpnext">transaction</span></td><td>Vendor bill + payable. Updates PO/PR <code>per_billed</code>.</td></tr>
+    <tr><td><strong>StatusUpdater</strong><br><span class="fileref">erpnext/controllers/status_updater.py</span></td><td><span class="badge b-core">base class</span></td><td>The fulfilment-percentage engine + the declarative status state machine (<code>status_map</code>).</td></tr>
+    <tr><td><strong>TransactionBase</strong><br><span class="fileref">erpnext/utilities/transaction_base.py</span></td><td><span class="badge b-core">base class</span></td><td>Cross-document rate / qty / value consistency validation.</td></tr>
+    <tr><td><strong>AccountsController</strong><br><span class="fileref">erpnext/controllers/accounts_controller.py</span></td><td><span class="badge b-core">base class</span></td><td>Party, currency, taxes, payment schedule, outstanding.</td></tr>
+    <tr><td><strong>StockController</strong><br><span class="fileref">erpnext/controllers/stock_controller.py</span></td><td><span class="badge b-core">base class</span></td><td>Stock-ledger (<code>make_sl_entries</code>) + GL (<code>make_gl_entries</code>) posting.</td></tr>
+    <tr><td><strong>Selling / Buying Controller</strong><br><span class="fileref">erpnext/controllers/selling_controller.py</span></td><td><span class="badge b-core">leaf class</span></td><td>Sell-side / buy-side specifics inherited by the concrete doctypes.</td></tr>
+    <tr><td><strong>Stock Settings / Accounts Settings</strong><br><span class="fileref">erpnext/stock/doctype/stock_settings/</span></td><td><span class="badge b-erpnext">single</span></td><td>Global over-delivery / over-receipt / over-billing tolerance + the override role.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">The controller inheritance chain — where each layer adds one job</h2>
+  <p>
+    Rather than duplicate cross-document logic in every doctype, ERPNext composes it through a strict single-inheritance chain. Each layer adds exactly one responsibility, and a concrete document picks the right leaf as its Python class, inheriting the whole stack. This is the structural reason the two flows can share one set of mechanics.
+  </p>
+
+  <div class="flow col">
+    <div class="node">Document <small><span class="badge b-frappe">Frappe core</span> · frappe.model.document — save / submit / cancel lifecycle, docstatus</small></div>
+    <div class="arr"></div>
+    <div class="node">StatusUpdater <small>fulfilment-percentage engine + status state machine</small></div>
+    <div class="arr"></div>
+    <div class="node">TransactionBase <small>cross-document rate / qty / value validation</small></div>
+    <div class="arr"></div>
+    <div class="node">AccountsController <small>party · currency · taxes · payment schedule · outstanding</small></div>
+    <div class="arr"></div>
+    <div class="node">StockController <small>stock-ledger (make_sl_entries) + GL (make_gl_entries) posting</small></div>
+    <div class="arr"></div>
+    <div class="node">SellingController / BuyingController <small>sell-side / buy-side leaf — Delivery Note, Sales Invoice, Purchase Receipt…</small></div>
+  </div>
+
+  <p>
+    Read this bottom-up to understand a concrete document: a <strong>Delivery Note</strong> <em>is a</em> SellingController, which <em>is a</em> StockController, which <em>is an</em> AccountsController, … all the way up to the Frappe <code>Document</code>. When it submits, it runs <code>update_prevdoc_status()</code> (from StatusUpdater), then <code>validate_with_previous_doc()</code> (from TransactionBase), then posts stock and GL (from StockController). The doctype's own <code>.py</code> file is small — it supplies a <code>status_updater</code> list and a thin <code>on_submit</code> hook, and the chain does the rest.
+  </p>
+
+  <div class="callout co-note">
+    <span class="lbl">Note · Frappe vs ERPNext</span>
+    The very top of the chain — <code>save</code>, <code>submit</code>, <code>cancel</code>, the <code>docstatus</code> field (0&nbsp;draft / 1&nbsp;submitted / 2&nbsp;cancelled), and the <code>get_mapped_doc</code> mapper itself — are <span class="badge b-frappe">Frappe core</span> framework features (see <a href="02-document-lifecycle.html">the document lifecycle</a>). Everything from <code>StatusUpdater</code> down is ERPNext app code. When you rebuild this, the lifecycle + mapper are your framework layer; the controllers are your domain layer.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 1 — The universal transaction graph</h2>
+  <p>The foundational decision. Everything else in the chapter is a consequence of getting this one right.</p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>One document per real-world event</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Each distinct business event — promise, ship, bill, pay — is its own immutable, separately-submittable document, <strong>not</strong> a status flag on a single record.</p>
+        <p>The flow is a directed acyclic graph of documents, and <strong>fan-out is allowed</strong>: one order can spawn many partial deliveries. Posting to the ledgers happens only at submit.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>Separate DocTypes for Quotation / Sales Order / Delivery Note / Sales Invoice / Payment Entry (O2C) and Material Request / Purchase Order / Purchase Receipt / Purchase Invoice / Payment (P2P), each under its own directory.</p>
+        <p>Each is <em>submittable</em> — <code>docstatus</code> 0 draft, 1 submitted, 2 cancelled. Ledger posting happens in <code>on_submit</code> only.</p>
+        <p><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.py</span> <span class="fileref">erpnext/stock/doctype/delivery_note/delivery_note.py</span> <span class="fileref">erpnext/buying/doctype/purchase_order/purchase_order.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>One table per event-type, each with a header (parent) row and item (child) rows, an explicit lifecycle column (draft / submitted / cancelled), and an immutability rule after submit.</p>
+        <p>Never overload a single "order" row with <code>shipped</code> / <code>billed</code> booleans. Model each event as an append-only document so partial fulfilment and audit fall out naturally.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The "append-only graph" framing is worth dwelling on. A document is <em>never edited in place across the flow</em>. You do not open the Sales Order and tick "delivered". You <strong>create a new Delivery Note from the order</strong>, copying the remaining quantities and recording a back-pointer. The order itself stays exactly as it was promised; what changed is a derived number on it. That immutability is what makes the audit trail trustworthy and what makes cancellation safe — there is nothing to "un-tick".
+  </p>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    This is the backbone of D1 (vendor booking → Purchase Order), D2 (inbound: PO → GRN → PT/Purchase Invoice) and D3 (outbound: sale / transfer / return). Adopt the document-graph wholesale. The decided KDPS rule <strong>"GRN posts quantity / PT posts value + liability"</strong> is <em>exactly</em> ERPNext's split: the Purchase Receipt (a StockController) posts quantity to the stock ledger; the Purchase Invoice posts value + payable to the GL — two documents, two ledgers, one "against" link. That is the documents-write-ledgers rule, already proven in the source.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 2 — Line-level "against" back-links</h2>
+  <p>
+    Header-to-header links are not enough. If you only record "this delivery is against that order", you cannot answer "how much of the <em>blue medium</em> line is still owed" when an order has the same SKU on two lines or ships in pieces. Fulfilment must be tracked at <strong>row granularity</strong>.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Two back-links per downstream line: parent Link + child-row id</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>A downstream line records both <em>which upstream document</em> and <em>which upstream line</em> it fulfils. Fulfilment is then summed by source-line, surviving size/colour/SKU splits and partial shipments.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>Delivery Note Item carries <code>against_sales_order</code> (a real <em>Link</em> to Sales Order) <strong>and</strong> <code>so_detail</code> (the Sales Order Item row <em>name</em>, stored as a Data field, <code>no_copy=1</code>). Sales Invoice Item carries <code>sales_order</code> / <code>so_detail</code> and the DN's <code>dn_detail</code>.</p>
+        <p>These are populated by the mapper's <code>field_map</code>: <code>{"name":"so_detail","parent":"against_sales_order"}</code>.</p>
+        <p><span class="fileref">erpnext/stock/doctype/delivery_note_item/delivery_note_item.json</span> <span class="fileref">erpnext/selling/doctype/sales_order/mapper.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Give every downstream line two FKs: <code>source_document_id</code> and <code>source_line_id</code>. Sum fulfilment <strong>by source_line_id, not by item code</strong> — that is what lets two partial deliveries of the same SKU reconcile correctly.</p>
+        <p>The header link is for navigation and joins; the line pointer is for the math.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · soft pointers, not foreign keys</span>
+    <code>so_detail</code> / <code>si_detail</code> / <code>dn_detail</code> are <strong>Data</strong> fields holding a child-row name — they are <em>not</em> real DB foreign keys. Only the header link (<code>against_sales_order</code>) is a Link. ERPNext relies on application-level joins, not referential integrity, for line linking. Note the <code>no_copy=1</code> flag: if you reimplement with hard FKs, you must replicate this, or amendments and document duplications will carry stale links across copies.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    <strong>SKU = Style × Size × Colour must be the line granularity that the "against" links sum over.</strong> Put each size×colour on its own line with its own <code>source_line_id</code>, so a partial GRN that receives 8 of 10 blue-mediums and 0 reds reconciles per variant, not per style. Stock at style level only — the classic mistake — makes this pattern impossible.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 3 — The declarative mapped-document engine</h2>
+  <p>
+    The "Create&nbsp;&gt;&nbsp;Delivery Note" / "Create&nbsp;&gt;&nbsp;Invoice" buttons are not hand-written copy loops. They are a declarative spec interpreted by one engine: <code>get_mapped_doc</code>. You declare which tables map to which, which fields carry over, which rows to skip (already done), and a hook that computes the remaining quantity.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Pre-fill the next document from the previous one, declaratively</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Generating the next document is a <strong>configuration</strong>, not code: a map of {source table → target table, field renames, a row filter, a per-row transform}. The transform always emits the <strong>remaining</strong> quantity (ordered minus already-fulfilled).</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><span class="badge b-frappe">Frappe core</span> <code>get_mapped_doc(source, {Doctype:{doctype, field_map, condition, postprocess}}, postprocess)</code>.</p>
+        <p>In <code>make_delivery_note</code>: <code>condition = lambda d: abs(d.delivered_qty) &lt; abs(d.qty)</code> skips fully-delivered lines; <code>update_item</code> sets <code>target.qty = source.qty − source.delivered_qty</code> — only the pending balance.</p>
+        <p>Same shape in <code>make_purchase_receipt</code> and the Sales Invoice mapper.</p>
+        <p><span class="fileref">erpnext/selling/doctype/sales_order/mapper.py</span> <span class="fileref">erpnext/buying/doctype/purchase_order/mapper.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Build one small mapping interpreter: a config of {source_table, target_table, field renames, row filter, per-row transform}. The transform always emits REMAINING quantity.</p>
+        <p>This one engine powers every "Create&nbsp;&gt;&nbsp;X" button and guarantees you can <strong>never re-pull a line you already fulfilled</strong>.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The mapper for a Sales Order → Delivery Note line is small enough to read whole — and the whole percentage engine reads <em>only</em> the dict it produces:</p>
+
+<pre><code><span class="k">def</span> <span class="t">update_item</span>(source, target, source_parent):
+    target.qty = flt(source.qty) - flt(source.delivered_qty)
+    target.amount = (flt(source.qty) - flt(source.delivered_qty)) * flt(source.rate)
+
+mapper[<span class="s">"Sales Order Item"</span>] = {
+    <span class="s">"doctype"</span>: <span class="s">"Delivery Note Item"</span>,
+    <span class="s">"field_map"</span>: {<span class="s">"name"</span>: <span class="s">"so_detail"</span>, <span class="s">"parent"</span>: <span class="s">"against_sales_order"</span>},
+    <span class="s">"condition"</span>: <span class="k">lambda</span> d: (abs(d.delivered_qty) &lt; abs(d.qty)),   <span class="c"># skip done lines</span>
+    <span class="s">"postprocess"</span>: update_item,                              <span class="c"># emit pending balance</span>
+}
+target_doc = get_mapped_doc(<span class="s">"Sales Order"</span>, so.name, mapper, target_doc)</code></pre>
+
+  <p>
+    Read the three moving parts: <code>field_map</code> wires the back-links (Pattern&nbsp;2); <code>condition</code> drops lines that are already fully delivered (so a second delivery never re-offers them); <code>postprocess</code> writes only the pending quantity. Those three together are the entire reason partial fulfilment "just works" — the next document can only ever be about what is still owed.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the mapper is not a pure function</span>
+    Business code passes extra kwargs (<code>filtered_children</code>, <code>for_reserved_stock</code>) and the <code>condition</code> sometimes reads <code>frappe.flags.args</code> — UI-supplied context leaks into the mapping. So the output is <em>not</em> purely a function of the source document. Keep this in mind when porting to a stateless API: make the equivalent context an explicit argument, not ambient state.
+  </div>
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the mappers moved</span>
+    In recent ERPNext the mappers were refactored out of the doctype <code>.py</code> files into sibling <code>mapper.py</code> modules (e.g. <span class="fileref">erpnext/selling/doctype/sales_order/mapper.py</span>). Grepping the doctype file for <code>make_delivery_note</code> / <code>get_mapped_doc</code> now returns nothing — the logic moved, the pattern did not go away.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 4 — Derived fulfilment percentages (SUM, never increment)</h2>
+  <p>
+    This is the load-bearing idea of the whole subsystem. Fulfilment is <strong>computed, never stored incrementally</strong>. On every submit and every cancel, the engine re-sums all submitted child rows pointing at a source line, writes that total back to the source line, then rolls the line totals up into a parent percentage. Because it is a re-sum, it is idempotent and self-healing.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Re-SUM linked rows on submit and cancel — do not keep a counter</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Status is derived. On every state change, re-sum all submitted rows linked to a source line, write it back, then compute <code>per_x = SUM(min(fulfilled, ordered)) / SUM(ordered) × 100</code> and map it to a label.</p>
+        <p>Because it is a re-sum, <strong>cancelling a document auto-reverses fulfilment</strong> — the cancelled rows simply drop out of the next sum. No compensating logic.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>StatusUpdater.update_qty</code> runs a SQL <code>SUM(source_field)</code> over all <code>docstatus=1</code> rows where <code>join_field = detail_id</code>, writes it to <code>target_field</code> (e.g. <code>delivered_qty</code>), then <code>_update_percent_field</code> computes <code>per_delivered</code> and <code>_determine_status</code> maps it to Not&nbsp;/&nbsp;Partly&nbsp;/&nbsp;Fully.</p>
+        <p>Each doctype supplies the spec as <code>self.status_updater</code>. Hooked in <code>on_submit</code> AND <code>on_cancel</code> via <code>update_prevdoc_status()</code>.</p>
+        <p><span class="fileref">erpnext/controllers/status_updater.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Compute <code>per_x</code> as a re-sum over linked rows in a service that runs on submit and cancel. The <code>min()</code> clamp stops one over-shipped line from masking another unshipped line.</p>
+        <p>Resist the urge to increment a counter — counters drift, need compensating reversals, and cannot self-heal.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>The per-doctype spec is pure data. A Delivery Note declares how its rows roll up to the Sales Order — the engine reads nothing else:</p>
+
+<pre><code>self.status_updater = [
+    {
+        <span class="s">"source_dt"</span>: <span class="s">"Delivery Note Item"</span>,
+        <span class="s">"target_dt"</span>: <span class="s">"Sales Order Item"</span>,
+        <span class="s">"join_field"</span>: <span class="s">"so_detail"</span>,
+        <span class="s">"target_field"</span>: <span class="s">"delivered_qty"</span>,
+        <span class="s">"target_parent_dt"</span>: <span class="s">"Sales Order"</span>,
+        <span class="s">"target_parent_field"</span>: <span class="s">"per_delivered"</span>,
+        <span class="s">"target_ref_field"</span>: <span class="s">"qty"</span>,
+        <span class="s">"source_field"</span>: <span class="s">"qty"</span>,
+        <span class="s">"percent_join_field"</span>: <span class="s">"against_sales_order"</span>,
+        <span class="s">"status_field"</span>: <span class="s">"delivery_status"</span>,
+        <span class="s">"keyword"</span>: <span class="s">"Delivered"</span>,
+    },
+]</code></pre>
+
+  <p>The engine turns that spec into a write-back. The qty is re-summed and stored — never added to:</p>
+
+<pre><code>args[<span class="s">"source_dt_value"</span>] = (frappe.db.sql(<span class="s">"""
+    (select coalesce(sum({source_field}), 0)
+     from `tab{source_dt}` where `{join_field}`=%(detail_id)s
+     and (docstatus=1 {cond}) {extra_cond})
+"""</span>.format(**args), {<span class="s">"detail_id"</span>: args[<span class="s">"detail_id"</span>]})[0][0] or 0.0)
+
+frappe.db.sql(<span class="s">"""update `tab{target_dt}`
+    set {target_field} = {source_dt_value} {update_modified}
+    where name=%(detail_id)s"""</span>.format(**args),
+    {<span class="s">"detail_id"</span>: args[<span class="s">"detail_id"</span>]})</code></pre>
+
+  <p>The parent percentage clamps each line with <code>min()</code> before averaging — the small detail that prevents a serious bug:</p>
+
+<pre><code>sum_ref = sum(abs(record[ref_key]) <span class="k">for</span> record <span class="k">in</span> child_records)
+<span class="k">if</span> sum_ref &gt; 0:
+    percentage = round(
+        sum(min(abs(record[target_field]), abs(record[ref_key]))
+            <span class="k">for</span> record <span class="k">in</span> child_records) / sum_ref * 100, 6)
+<span class="k">else</span>:
+    percentage = 0
+<span class="c"># _determine_status: &lt;0.001 -&gt; 'Not X', &gt;=99.999999 -&gt; 'Fully X', else 'Partly X'</span></code></pre>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the min() clamp is not optional</span>
+    The parent percentage is <code>sum(min(fulfilled, ordered)) / sum(ordered)</code>. Without the <code>min()</code>, an over-delivered line would push the average above 100 and <strong>hide a sibling line still at 0%</strong>, so an incomplete order would wrongly show "Completed". The clamp caps each line at its own ordered quantity before they are averaged. If you build this yourself and skip the clamp, you ship that bug.
+  </div>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · you MUST call the engine on cancel too</span>
+    Because percentages are a raw SUM over <code>docstatus=1</code> rows, correctness depends on running <code>update_prevdoc_status()</code> in <strong>both</strong> <code>on_submit</code> and <code>on_cancel</code>. Miss the <code>on_cancel</code> call and fulfilment never reverses. Order matters too: Delivery Note calls <code>update_prevdoc_status()</code> <em>before</em> <code>update_stock_ledger()</code>, because the reserved-qty in Bin depends on the freshly-updated <code>delivered_qty</code> (see the comment at <span class="fileref">erpnext/stock/doctype/delivery_note/delivery_note.py</span>).
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 5 — The declarative status state machine</h2>
+  <p>
+    Human-readable status ("To Deliver", "To Bill", "Completed") is not set imperatively in business code. It is a lookup table of (label, predicate) over the document's <em>own derived fields</em>, evaluated top-down — the first (or last) match wins. This keeps status logic in one declarative place per doctype and makes it impossible for the status to drift from the percentages it is supposed to summarise.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Status as an ordered list of (label, predicate) over derived fields</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>Express status as an ordered list of <code>(label, condition)</code> evaluated against the document's own derived fields (percentages + docstatus). Pick the first/last matching label.</p>
+        <p>Status is then a <em>pure function</em> of the numbers — it can never disagree with them.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p>The <code>status_map</code> dict, e.g. Sales Order "To Bill" = <code>eval:(self.per_delivered&gt;=100 or self.skip_delivery_note) and self.per_billed&lt;100 and self.docstatus==1</code>; "Completed" = both percentages ≥ 100.</p>
+        <p><code>get_status()</code> reverses the list and returns the first match via <code>frappe.safe_eval</code> against <code>self.as_dict()</code>.</p>
+        <p><span class="fileref">erpnext/controllers/status_updater.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>One ordered predicate list per document type, over its derived fields. Evaluate top-down, take the first match.</p>
+        <p>Keep it data, not scattered <code>if</code> branches across the codebase — that is what stops status and fulfilment from drifting apart.</p>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    The conditions are stringly-typed Python (<code>"eval:..."</code>) run through <code>frappe.safe_eval</code>. Powerful, but a footgun — see the warning below. The pattern itself is sound; on your own stack you can express the same idea as a list of <code>(label, lambda doc: ...)</code> pairs, getting the declarativeness without the runtime-string risk.
+  </p>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · stringly-typed eval, and an asymmetry to watch</span>
+    Conditions are runtime-evaluated strings — easy to get subtly wrong and a maintenance/security surface. Note the real asymmetry in the source: Sales Order's branches use <code>per_billed &lt; 100</code> while Purchase Order uses <code>per_billed == 100</code> in several places. The two flows are mirrors but not byte-identical; do not assume you can copy one spec verbatim to the other.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 6 — The over-fulfilment guard (tolerance + role override)</h2>
+  <p>
+    You should not be able to deliver or bill <em>more</em> than was ordered — that is the classic over-delivery / over-billing error (and fraud) vector. ERPNext makes it structurally hard by default: after computing fulfilled-vs-ordered, it rejects anything beyond a configurable tolerance, unless the caller holds an authorised override role (in which case it warns instead of blocking).
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Reject beyond ordered × (1 + tolerance) unless an override role is held</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>After computing fulfilled vs ordered, reject if <code>fulfilled &gt; ordered × (1 + tolerance%)</code> — unless the caller holds an override role, in which case warn and proceed.</p>
+        <p>This single check makes both over-delivery and over-billing impossible by default.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>StatusUpdater.validate_qty → check_overflow_with_allowance</code>: <code>overflow_percent = (target − target_ref)/target_ref × 100</code>; if it exceeds the allowance and the user lacks <code>role_allowed_to_over_deliver_receive</code> / <code>over_bill</code> → throw <code>OverAllowanceError</code>.</p>
+        <p><code>get_allowance_for</code> reads item-level tolerance first, then global Stock&nbsp;/&nbsp;Accounts Settings.</p>
+        <p><span class="fileref">erpnext/controllers/status_updater.py</span> <span class="fileref">erpnext/stock/doctype/stock_settings/</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>One reusable guard on the base controller: compute overflow %, compare to a tolerance resolved item-level-then-global, throw unless an override role is present.</p>
+        <p>Configurable globally and per-item. Inherited by every document type for free.</p>
+      </div>
+    </div>
+  </div>
+
+<pre><code>overflow_percent = ((item[args[<span class="s">"target_field"</span>]] - item[args[<span class="s">"target_ref_field"</span>]])
+                    / item[args[<span class="s">"target_ref_field"</span>]]) * 100
+<span class="k">if</span> overflow_percent - allowance &gt; 0.01:
+    item[<span class="s">"max_allowed"</span>] = flt(item[args[<span class="s">"target_ref_field"</span>]] * (100 + allowance) / 100)
+    item[<span class="s">"reduce_by"</span>] = item[args[<span class="s">"target_field"</span>]] - item[<span class="s">"max_allowed"</span>]
+    <span class="k">if</span> role <span class="k">not in</span> frappe.get_roles():
+        self.limits_crossed_error(args, item, qty_or_amount)
+    <span class="k">else</span>:
+        self.warn_about_bypassing_with_role(item, qty_or_amount, role)</code></pre>
+
+  <div class="callout co-warn">
+    <span class="lbl">Gotcha · the cap is soft for some callers</span>
+    Tolerance resolves item-level first, then global, and is <strong>silently bypassed</strong> for users holding the override role and for internal customers/suppliers (<code>limits_crossed_error</code> returns early). A reviewer expecting a hard cap will be surprised that a role can exceed it with only a warning. If your business needs a true hard cap, do not wire an override role at all.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 7 — Cross-document consistency validation</h2>
+  <p>
+    A downstream line must stay consistent with its source line: the same rate within tolerance, no orphaned references, and no two lines secretly consuming the same source row. This is a separate concern from fulfilment totals, and it lives one layer up the chain, in <code>TransactionBase</code>.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>On save, assert each downstream line matches its source line</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>A downstream line must be consistent with its source: same rate (within tolerance), the reference must exist, and no two lines may point at the same source row.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>TransactionBase.validate_with_previous_doc / compare_values</code> reads the referenced source rows by <code>ref_dn_field</code> and asserts <code>compare_fields</code> — throwing "Invalid reference" on orphans and "Duplicate row" if two lines share a source row.</p>
+        <p><code>validate_rate_with_reference_doc</code> enforces same rate (Stop vs Warn, via Buying/Selling Settings).</p>
+        <p><span class="fileref">erpnext/utilities/transaction_base.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>On save of a downstream doc, fetch each referenced source row and assert the invariants (rate equality, reference exists, no double-link).</p>
+        <p>Centralise it in the base controller so every doctype inherits it — one place, every document.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">Pattern 8 — Returns as negated mirror documents</h2>
+  <p>
+    The elegant payoff of everything above: a return / credit note is <strong>not a special table</strong>. It is the same document type, with <code>is_return=1</code>, a <code>return_against</code> pointer to what it reverses, and <strong>negative quantities</strong> — validated so cumulative returns can never exceed the original. Because the quantities are negative, the stock ledger, the GL, and the fulfilment percentages all reverse <em>for free</em>: they are the same sums, now with negative terms.
+  </p>
+
+  <div class="pattern">
+    <div class="ph"><div class="tag">Pattern</div><h3>Returns are ordinary documents with negative lines + a return_against link</h3></div>
+    <div class="body">
+      <div class="pane p-idea">
+        <div class="pl">The idea</div>
+        <p>A return is an ordinary document with an <code>is_return</code> flag, a <code>return_against</code> FK, negative lines, and a guard: <code>SUM(prior returns) + this ≤ original</code>.</p>
+        <p>One returns engine for every direction. The negative qty makes ledgers and percentages reverse for free.</p>
+      </div>
+      <div class="pane p-erp">
+        <div class="pl">How ERPNext does it</div>
+        <p><code>make_return_doc()</code> sets <code>is_return=1</code>, <code>return_against=source.name</code>, negates qty / tax / payment amounts. <code>validate_returned_items</code> sums <code>get_already_returned_items</code> and throws <code>StockOverReturnError</code> if the total would exceed what was received/delivered.</p>
+        <p>The same code serves Sales Invoice (credit note), Delivery Note, Purchase Receipt and Purchase Invoice (debit note).</p>
+        <p><span class="fileref">erpnext/controllers/sales_and_purchase_return.py</span></p>
+      </div>
+      <div class="pane p-gen">
+        <div class="pl">Apply to any ERP</div>
+        <p>Implement returns as normal documents with <code>is_return</code> + <code>return_against</code> + negative lines + the cumulative-return guard.</p>
+        <p>Do not build a parallel "returns" subsystem. Reuse the document graph; the sign does the work.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout co-key">
+    <span class="lbl">Key idea</span>
+    Notice that returns required <strong>almost no new machinery</strong>. The same mapper builds the document, the same status engine sums the (now negative) rows into a <code>per_returned</code>, the same stock/GL posting runs. That is the dividend of "fulfilment is a SUM, not a counter": anything that adds rows — partial deliveries, returns, cancellations — reconciles through one re-sum, in one place.
+  </div>
+
+  <div class="callout co-kdps">
+    <span class="lbl">Applying to KDPS</span>
+    Use the negated <code>return_against</code> document for returns-out <em>and</em> exchanges (an exchange is a return + a fresh sale). For SOR/consignment, model the same graph but create the <strong>value/liability document (the PT) later</strong> — stock comes in on the GRN (qty), but the vendor liability posts only on sale, tracked with the same <code>per_billed</code>-style number so you always know what is still off-book. A cross-state (Bihar↔Jharkhand) transfer is <strong>two mirror documents linked by line</strong> — exactly ERPNext's internal-customer/supplier delivery+invoice pair — which is precisely how the taxable IGST supply falls out.
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The flows, end to end</h2>
+  <p>Now that every pattern is on the table, here are the four sequences a consultant needs to be able to trace by hand.</p>
+
+  <h3>O2C — order to cash</h3>
+  <div class="flow">
+    <div class="node">Quotation<small>make_sales_order</small></div>
+    <div class="arr"></div>
+    <div class="node">Sales Order<small>per_delivered / per_billed</small></div>
+    <div class="arr"></div>
+    <div class="node">Delivery Note<small>name→so_detail · qty=ordered−delivered</small></div>
+    <div class="arr"></div>
+    <div class="node">Sales Invoice<small>rolls billed_amt → per_billed</small></div>
+    <div class="arr"></div>
+    <div class="node">Payment Entry<small>settles outstanding_amount</small></div>
+  </div>
+  <p>
+    On Delivery Note submit, <code>update_prevdoc_status()</code> sums <code>delivered_qty</code> back to each Sales Order Item, recomputes the Sales Order's <code>per_delivered</code> + <code>delivery_status</code>, <strong>then</strong> runs <code>update_stock_ledger()</code> + <code>make_gl_entries()</code> (the order matters — Pattern&nbsp;4's cancel-order gotcha). The Sales Invoice's <code>status_updater</code> spec rolls <code>billed_amt</code> up to <code>per_billed</code> / <code>billing_status</code>. The Payment Entry settles the invoice's <code>outstanding_amount</code> and the flow closes.
+  </p>
+
+  <h3>P2P — procure to pay (the mirror)</h3>
+  <div class="flow">
+    <div class="node">Material Request<small>per_ordered</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Order<small>per_received / per_billed</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Receipt<small>name→purchase_order_item · qty=ordered−received</small></div>
+    <div class="arr"></div>
+    <div class="node">Purchase Invoice<small>rolls up per_billed</small></div>
+    <div class="arr"></div>
+    <div class="node">Payment Entry<small>settles outstanding</small></div>
+  </div>
+  <p>
+    Symmetric to O2C, same base controllers, mirrored field names (<code>received</code> vs <code>delivered</code>). <code>make_purchase_receipt</code>'s mapper sets <code>name→purchase_order_item</code>, <code>parent→purchase_order</code>, <code>qty=ordered−received</code>; on PR submit, <code>update_prevdoc_status()</code> rolls <code>received_qty</code> up to <code>PO.per_received</code>.
+  </p>
+
+  <h3>Partial fulfilment fan-out</h3>
+  <p>
+    One Sales Order spawns <em>N</em> Delivery Notes. Each DN's <code>condition</code> (<code>delivered_qty &lt; qty</code>) pulls only the unshipped balance, and <code>update_qty</code> re-sums <strong>all</strong> submitted DN rows by <code>so_detail</code> — so <code>per_delivered</code> climbs monotonically to 100 across the <em>N</em> documents <strong>without any document knowing about the others</strong>. That independence is the whole point: each delivery is a self-contained fact; the order's progress is a query over those facts.
+  </p>
+
+  <h3>Cancellation reversal</h3>
+  <p>
+    Cancelling a Delivery Note re-runs <code>update_prevdoc_status()</code> in <code>on_cancel</code>. Because <code>per_delivered</code> is a fresh SUM over <code>docstatus=1</code> rows, the cancelled DN's rows simply drop out of the sum, and the Sales Order's <code>per_delivered</code> / status fall back automatically — <strong>no compensating entry is written</strong>. This is the cleanest illustration of why "derive, don't increment" matters: there is no reversal logic to get wrong, because there was never an addition to undo.
+  </p>
+
+  <h3>Returns</h3>
+  <p>
+    <code>make_return_doc("Delivery Note", source)</code> builds a DN with <code>is_return=1</code>, <code>return_against=source</code>, and negative qty. <code>validate_returned_items</code> sums <code>get_already_returned_items</code> and blocks over-return. The negative rows then flow through the <em>same</em> status engine (producing <code>per_returned</code>) and the same stock/GL posting, reversing inventory and value.
+  </p>
+</section>
+
+<section>
+  <h2 class="sec">Gotchas — the things that bite reimplementers</h2>
+  <p>Consolidated, because these are exactly where a from-scratch build goes wrong. Each is drawn from the real source behaviour.</p>
+
+  <dl class="gloss">
+    <dt><code>so_detail</code> is a soft pointer, not a foreign key</dt>
+    <dd><code>so_detail</code> / <code>si_detail</code> / <code>dn_detail</code> are Data fields holding a child-row name; only the header link is a real Link. ERPNext relies on application-level joins. If you use hard FKs, you must replicate <code>no_copy=1</code> so amendments/duplications don't carry stale links.</dd>
+
+    <dt>The engine must run on cancel, in the right order</dt>
+    <dd>Percentages are a raw SUM over <code>docstatus=1</code> rows, so <code>update_prevdoc_status()</code> must run in <em>both</em> <code>on_submit</code> and <code>on_cancel</code>. And it must run <em>before</em> the stock-ledger post, because reserved-qty in Bin depends on the freshly-updated <code>delivered_qty</code>.</dd>
+
+    <dt>Never drop the <code>min()</code> clamp</dt>
+    <dd>The parent percentage is <code>sum(min(fulfilled, ordered)) / sum(ordered)</code>. Without <code>min()</code>, an over-delivered line pushes the average over 100 and hides a sibling still at 0%, so the order wrongly shows "Completed".</dd>
+
+    <dt>The over-fulfilment cap is soft for override roles</dt>
+    <dd>Tolerance is item-level then global, and is silently bypassed for users holding <code>role_allowed_to_over_deliver_receive</code> / <code>over_bill</code> and for internal customers/suppliers. Don't assume a hard cap.</dd>
+
+    <dt>Status conditions are runtime <code>eval:</code> strings</dt>
+    <dd>Run through <code>frappe.safe_eval</code> against <code>self.as_dict()</code>. Powerful but stringly-typed and easy to get subtly wrong — note the asymmetry (Sales Order <code>per_billed &lt; 100</code> vs Purchase Order <code>per_billed == 100</code>). Don't copy a spec across the two flows verbatim.</dd>
+
+    <dt>Invoices can post stock directly — the flow has two shapes</dt>
+    <dd>A Sales Invoice with <code>update_stock=1</code> (POS / own-store) posts the stock ledger itself, <em>without</em> a prior Delivery Note. Return invoices add their own zero-qty rules. Reimplementers who model "invoice always follows delivery" break POS and own-store flows.</dd>
+
+    <dt>The mapper is not a pure function of the source doc</dt>
+    <dd><code>get_mapped_doc</code>'s <code>condition</code> reads <code>frappe.flags.args</code> and business code passes <code>filtered_children</code> / <code>for_reserved_stock</code> kwargs — UI context leaks in. Make that context an explicit argument when porting to a stateless API.</dd>
+
+    <dt>The mappers moved out of the doctype files</dt>
+    <dd>Refactored into sibling <code>mapper.py</code> modules. Grepping the doctype <code>.py</code> for <code>make_delivery_note</code> now returns nothing — the logic moved, the pattern did not disappear.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2 class="sec">Rebuilding it on Django / Postgres — the minimal kit</h2>
+  <p>
+    Stripped to essentials, you need three things, and the patterns above tell you exactly what each one does. Build these and the two flows, partial fulfilment, cancellation reversal, the audit trail and the over-fulfilment guard all fall out.
+  </p>
+  <ol>
+    <li><strong>An abstract <code>Document</code> base</strong> — a lifecycle column (<code>draft</code> / <code>submitted</code> / <code>cancelled</code>), <code>submit()</code> / <code>cancel()</code> methods, an immutability rule after submit, and header+lines tables. This is your Frappe-<code>Document</code> equivalent (see <a href="02-document-lifecycle.html">the document lifecycle</a>).</li>
+    <li><strong>A small <code>get_mapped_doc</code>-equivalent mapping interpreter</strong> — config of {source_table → target_table, field renames, row filter, per-row transform}, where the transform always emits the remaining quantity. One interpreter powers every "Create&nbsp;&gt;&nbsp;X" action.</li>
+    <li><strong>A fulfilment service</strong> that, on submit <em>and</em> cancel, re-sums linked lines by <code>source_line_id</code>, writes the total back, recomputes <code>per_x = sum(min(fulfilled, ordered))/sum(ordered)</code>, derives the status from an ordered predicate list, and runs the over-fulfilment guard. <strong>Do not increment counters.</strong></li>
+  </ol>
+  <p>
+    Layer shared behaviour into a base-class chain mirroring ERPNext's — status engine → cross-doc validation → accounting → stock/GL → sell/buy leaves — so each concrete document type is a small declarative spec (its <code>status_updater</code> mapping, its mapper config) plus a thin posting hook, not bespoke code. The <a href="03-accounting-ledger.html">accounting ledger</a> and <a href="04-stock-ledger.html">stock ledger</a> chapters cover the two posting hooks this chapter's documents call on submit.
+  </p>
+</section>
+
+<div class="takeaways">
+  <h4>Takeaways</h4>
+  <ol>
+    <li><strong>Model the commercial lifecycle as an append-only DAG of documents — one per real-world event</strong> (promise, ship, bill, pay), never as status flags on a single order row. Immutability after submit is what makes the audit trail and cancellation trustworthy.</li>
+    <li><strong>Link downstream lines to source lines with two back-links</strong> — a header Link for navigation and a source-line id for the math. Sum fulfilment by source-line, not by item code; that is what survives SKU / size / colour splits and partial shipments.</li>
+    <li><strong>Make fulfilment a DERIVED quantity: re-SUM linked rows on submit AND cancel.</strong> Never increment a counter. This single decision buys partial-fulfilment fan-out, idempotent self-reversing cancellation, and the audit trail for free.</li>
+    <li><strong>Clamp each line with <code>min(fulfilled, ordered)</code> before averaging into the parent percentage</strong> — otherwise an over-shipped line hides an unshipped sibling and the order wrongly reads "Completed".</li>
+    <li><strong>Generate the next document from a declarative mapper</strong> that filters out done lines and emits only the remaining quantity — so you can never re-pull what you already fulfilled.</li>
+    <li><strong>Derive status from an ordered list of (label, predicate) over the percentages</strong>, so status can never drift from the numbers it summarises.</li>
+    <li><strong>Put a tolerance + role-override over-fulfilment guard on the base controller.</strong> It makes over-delivery and over-billing structurally impossible by default, and every document type inherits it.</li>
+    <li><strong>Implement returns as ordinary documents with <code>is_return</code> + <code>return_against</code> + negative lines</strong> and a cumulative-return cap. The negative sign reverses stock, GL and percentages through the existing engine — no parallel subsystem.</li>
+    <li><strong>Push shared behaviour into a layered controller chain</strong> (status → cross-doc validation → accounting → stock/GL → sell/buy leaves) so each concrete document is a thin declarative spec plus a posting hook — not bespoke code.</li>
+  </ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="04-stock-ledger.html"><small>← Previous</small>The stock ledger</a>
+<a class="next" href="06-master-data-and-party.html"><small>Next →</small>Master data & the Party</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 05. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>
