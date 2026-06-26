@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Permissions, Roles & Users — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html" class="cur"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 8 · Control plane</div>
+  <h1>Permissions, Roles & Users</h1>
+  <p class="sub">Role-based access as a data matrix: permission levels for field groups, User Permissions for row-level scoping, if-owner, document sharing — access control you configure, not code.</p>
+</header>
+
+<section>
+<h2 class="sec">Why this subsystem decides whether an ERP survives</h2>
+
+<p>Every ERP is a multi-user system over money and stock. The moment a second person logs in, you owe answers to three different questions, and they are <em>orthogonal</em>:</p>
+
+<dl class="gloss">
+  <dt><code>WHAT may they do?</code></dt>
+  <dd>Can this person create a Sales Invoice? Submit it? Cancel one that is already posted? Delete it entirely? Export the list to a spreadsheet? These are <strong>actions</strong>, and they attach to a <strong>role</strong> (Cashier, Accounts User, Auditor).</dd>
+  <dt><code>WHICH records may they touch?</code></dt>
+  <dd>The cashier in the Patna store has the same role as the cashier in the Ranchi store — but each may only see <em>their own store's</em> documents, and only <em>their own GSTIN's</em> data. This is a <strong>row-level</strong> question, and it has nothing to do with the role.</dd>
+  <dt><code>WHICH fields inside a record may they see?</code></dt>
+  <dd>A cashier transacts on an order all day, but must never see the <em>cost price</em>, the <em>margin</em>, or override the <em>discount cap</em>. Same document, same action — but some fields are more sensitive than the body around them. This is a <strong>field-level</strong> question.</dd>
+</dl>
+
+<p>The tempting mistake — the one that kills maintainability — is to answer these with <code>if</code> statements scattered through the controllers: <em>"if the user isn't a manager, hide this button; if the store doesn't match, return 403; if it's the cost field, blank it out."</em> Do that and your access rules live in fifty endpoints, drift apart over time, can never be audited as a whole, and cannot be tuned per customer without a code change and a redeploy.</p>
+
+<p>ERPNext's answer is the durable one: <strong>authorization is data, enforced by one engine.</strong> Every entity <em>declares</em> a matrix of who-can-do-what; a single generic permission engine reads that matrix and enforces it on <em>every</em> read, write, and state transition. Adding a role, tightening an action, or locking a field is a <em>row edit</em>, never new branching code. This chapter reverse-engineers that matrix along its three orthogonal axes, plus the two escape hatches (if-owner, sharing) that the matrix alone cannot express.</p>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>Access control is a <strong>(role × entity × action × permlevel)</strong> matrix declared as data, plus <strong>row-level scopes</strong> tied to link fields, all composed by <strong>one</strong> enforcement engine into the SQL <code>WHERE</code> clause of every query. Never scatter <code>if</code>-checks across controllers — declare the rules, enforce them once.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · the engine is not in this checkout</span>
+<p>ERPNext only <strong>declares</strong> the matrix (in each DocType's JSON) and occasionally mutates it. The actual <strong>enforcement engine</strong> — <span class="fileref">frappe.permissions</span> and <span class="fileref">frappe.core.doctype.user_permission</span> <span class="badge b-frappe">Frappe core</span> — lives in the framework, not the ERPNext app. If you reimplement this, you must build <em>both</em>: the declarative data model <em>and</em> the engine that AND/OR-composes role grants, User Permissions, sharing, and if-owner into every query. The data without the engine grants nothing; the engine without the data has nothing to enforce.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The shape of the matrix</h2>
+
+<p>The whole subsystem is best read off one real file. Every DocType <code>.json</code> carries a <code>permissions</code> array. Each row is a tuple: a <strong>role</strong>, a set of <strong>action booleans</strong>, a <strong>permlevel</strong>, and an <strong>if_owner</strong> flag. Here is the canonical example — the Sales Invoice — which shows all three layers at once.</p>
+
+<pre><code><span class="s">"permissions"</span>: [
+ {<span class="s">"amend"</span>:1,<span class="s">"cancel"</span>:1,<span class="s">"create"</span>:1,<span class="s">"delete"</span>:1,<span class="s">"email"</span>:1,<span class="s">"print"</span>:1,<span class="s">"read"</span>:1,<span class="s">"report"</span>:1,<span class="s">"role"</span>:<span class="s">"Accounts Manager"</span>,<span class="s">"share"</span>:1,<span class="s">"submit"</span>:1,<span class="s">"write"</span>:1},
+ {<span class="s">"amend"</span>:1,<span class="s">"create"</span>:1,<span class="s">"email"</span>:1,<span class="s">"print"</span>:1,<span class="s">"read"</span>:1,<span class="s">"report"</span>:1,<span class="s">"role"</span>:<span class="s">"Accounts User"</span>,<span class="s">"share"</span>:1,<span class="s">"submit"</span>:1,<span class="s">"write"</span>:1},
+ {<span class="s">"permlevel"</span>:1,<span class="s">"read"</span>:1,<span class="s">"role"</span>:<span class="s">"Accounts Manager"</span>,<span class="s">"write"</span>:1},
+ {<span class="s">"permlevel"</span>:1,<span class="s">"read"</span>:1,<span class="s">"role"</span>:<span class="s">"All"</span>}
+]</code></pre>
+<p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></p>
+
+<p>Read it carefully — four rows encode a surprising amount of policy:</p>
+<ul>
+  <li><strong>Row 1 (Accounts Manager)</strong>: every action bit is set — including <code>submit</code>, <code>cancel</code>, <code>amend</code>, and <code>delete</code>. A manager owns the full lifecycle.</li>
+  <li><strong>Row 2 (Accounts User)</strong>: everything <em>except</em> <code>cancel</code> and <code>delete</code>. A clerk can create, submit, and even <code>amend</code> (create a corrected version), but cannot cancel a posted invoice or delete it. The difference between the two roles is not a hierarchy — it is just which bits are present.</li>
+  <li><strong>Rows 3 &amp; 4 (permlevel:1)</strong>: these do not grant access to the document at all — they gate <em>fields tagged as level 1</em>. Accounts Manager may read <em>and write</em> those sensitive fields; <code>All</code> (everyone) may only read them. This is the field-level axis, sitting in the same array.</li>
+</ul>
+
+<p>The full vocabulary of action columns is fixed and small:</p>
+
+<table>
+<tr><th>Action</th><th>Meaning</th><th>Notes</th></tr>
+<tr><td><code>read</code></td><td>May open / view the document</td><td>The baseline. Without it, the record is invisible in lists and reports.</td></tr>
+<tr><td><code>write</code></td><td>May edit field values (while in draft)</td><td>Edits are still blocked once a doc is submitted, regardless.</td></tr>
+<tr><td><code>create</code></td><td>May make a new document of this type</td><td>—</td></tr>
+<tr><td><code>submit</code></td><td>May move docstatus 0 → 1 (post to ledgers)</td><td>The <a href="02-document-lifecycle.html">lifecycle</a> transition, gated as an action.</td></tr>
+<tr><td><code>cancel</code></td><td>May move docstatus 1 → 2 (reverse the ledgers)</td><td>Deliberately withheld from clerks.</td></tr>
+<tr><td><code>amend</code></td><td>May clone a cancelled doc into a new draft</td><td>The "correction" path.</td></tr>
+<tr><td><code>delete</code></td><td>May remove a draft entirely</td><td>Only ever applies to docstatus 0.</td></tr>
+<tr><td><code>report</code> / <code>export</code></td><td>May see in report views / download data</td><td>The read-only auditor's bread and butter.</td></tr>
+<tr><td><code>print</code> / <code>email</code></td><td>May print / email the document</td><td>—</td></tr>
+<tr><td><code>share</code></td><td>May grant another user ad-hoc access to this record</td><td>Enables the Document Share feature.</td></tr>
+<tr><td><code>import</code></td><td>May bulk-import rows of this type</td><td>—</td></tr>
+<tr><td><code>select</code></td><td>May <em>choose this record in a link field</em> — without full read</td><td>A weak, distinct action; do not conflate with <code>read</code>.</td></tr>
+</table>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · omitted means zero, and there is NO hierarchy</span>
+<p>A row that lists only <code>{read:1, role:"Auditor"}</code> grants read and <strong>denies everything else</strong> — omitted action keys are <code>0</code>, not inherited. And there is no role inheritance: <code>Accounts Manager</code> does <strong>not</strong> automatically include <code>Accounts User</code> rights. Every right a role has is an explicit row. If you assume a "Manager ⊇ User" hierarchy that the data does not encode, you will both over-grant (by inventing it) and be confused (when the matrix doesn't behave that way).</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · <code>select</code> is not <code>read</code></span>
+<p><code>select</code> means "may be chosen in a link-field picker" <em>without</em> full read access — Item grants it to <code>Desk User</code> so any logged-in user can pick an item in a dropdown without being able to browse the item master. Conflate <code>select</code> with <code>read</code> and you silently over-expose master data through pickers. Model it as its own action.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 1 · Permissions as a declarative data matrix</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Authorization as configuration, not branching code</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Every entity declares a flat <strong>table</strong> of <code>(role, action-flags, scope)</code> rows. One generic engine enforces it everywhere. Adding a role, or tightening an action, is a <strong>data edit</strong> — never a code change. A "read-only auditor" needs no special feature: it is simply rows that grant <code>read/report/export</code> and omit <code>write/submit/cancel</code>.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Each DocType JSON has a <code>permissions</code> array; each row is <code>{role, read, write, create, submit, cancel, amend, delete, report, export, import, print, email, share, select, permlevel, if_owner}</code>. The engine in <span class="fileref">frappe.permissions</span> <span class="badge b-frappe">Frappe core</span> reads it on every operation. Roles are pure strings, auto-created the moment a JSON names them. The matrix can also be mutated at runtime via <code>add_permission</code> / <code>update_permission_property</code>.</p>
+      <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>On Django/Postgres: a <code>doctype_permission</code> table <code>(entity_type, role, action, permlevel, if_owner)</code> plus a single <code>has_permission(user, entity, action)</code> checked in a base ViewSet / manager. Or map each action to a Django permission assigned via Groups — but keep it in a <em>queryable table</em> so an admin UI can render and edit the matrix. The non-negotiable: <strong>one</strong> enforcement path, <strong>many</strong> declarative rows.</p>
+    </div>
+  </div>
+</div>
+
+<p>The proof that the matrix is genuinely <em>data</em> — constructible without touching any JSON — is ERPNext's regional install code. The Italian e-invoicing module builds its permission rows entirely in Python at install time:</p>
+
+<pre><code><span class="k">def</span> <span class="t">add_permissions</span>():
+    doctype = <span class="s">"Import Supplier Invoice"</span>
+    add_permission(doctype, <span class="s">"All"</span>, 0)
+    <span class="k">for</span> role <span class="k">in</span> (<span class="s">"Accounts Manager"</span>, <span class="s">"Accounts User"</span>, <span class="s">"Purchase User"</span>, <span class="s">"Auditor"</span>):
+        add_permission(doctype, role, 0)
+        update_permission_property(doctype, role, 0, <span class="s">"print"</span>, 1)
+        update_permission_property(doctype, role, 0, <span class="s">"report"</span>, 1)
+        <span class="k">if</span> role <span class="k">in</span> (<span class="s">"Accounts Manager"</span>, <span class="s">"Accounts User"</span>):
+            update_permission_property(doctype, role, 0, <span class="s">"write"</span>, 1)
+    add_permission(doctype, <span class="s">"Accounts Manager"</span>, 1)  <span class="c"># permlevel-1 grant</span></code></pre>
+<p><span class="fileref">erpnext/regional/italy/setup.py</span> · the <code>0</code> / <code>1</code> third argument is the permlevel</p>
+
+<p>Note the structure: <code>add_permission(doctype, role, permlevel)</code> creates a row; <code>update_permission_property(doctype, role, permlevel, action, value)</code> flips one action bit on that row. A read-only role (<code>Auditor</code> here gets a bare row plus <code>print</code>+<code>report</code>) and a read-write role (<code>Accounts User</code>, same plus <code>write</code>) differ only in which properties get flipped. This is the same API the framework calls when you edit the matrix through the UI — there is no separate "code path" for permissions.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · the matrix is scattered across ~1300 rows in hundreds of files</span>
+<p>There is no single permissions table to eyeball — the matrix lives in one JSON per DocType. Across the corpus <code>System Manager</code> appears in <strong>175</strong> permission rows and <code>Auditor</code> in <strong>49</strong> (all read-only). Without tooling, over-grants and drift hide everywhere. If you build this model, also build a <em>flattening report</em> — an admin view that renders the entire matrix as one queryable table — or you will never be able to audit "who can cancel an invoice?" across the whole system.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 2 · permlevel — field-level security as a numeric tier</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Tag sensitive fields with a level; grant roles per level</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Some fields are more sensitive than the document around them — cost, margin, a discount-override flag. Give each field a numeric <strong>security level</strong>; grant roles access per level. A role can read/write the whole document body (level 0) yet be <strong>completely blind</strong> to flagged fields (level 1+) — with no per-field <code>if</code>-checks anywhere.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>A DocField carries a <code>permlevel</code> (default 0); permission rows also carry one. A role only touches fields whose level it has a row for. Sales Order's <code>ignore_pricing_rule</code> is <code>permlevel:1</code> and the only level-1 row belongs to <code>Sales Manager</code> — so an ordinary Sales User can edit the order but cannot see or change that field. <strong>27 transaction doctypes</strong> use a level-1 tier.</p>
+      <p><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.json</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Add an integer <code>perm_level</code> column to field metadata and a <code>(role, perm_level)</code> grant table. In serializers/forms, <strong>strip or read-only</strong> any field whose level the user lacks — on <em>read</em> (hide the value) <em>and</em> on <em>write</em> (refuse the change). Without an engine, this is a serializer mixin that filters fields by the user's max granted level per action.</p>
+    </div>
+  </div>
+</div>
+
+<p>The mechanism is two halves that must agree. First, a field is tagged with a level; second, a permission row "unlocks" that level for a role. Here both halves for Sales Order:</p>
+
+<pre><code><span class="c">// the field — tagged level 1:</span>
+{<span class="s">"fieldname"</span>: <span class="s">"ignore_pricing_rule"</span>, <span class="s">"permlevel"</span>: 1, <span class="s">"label"</span>: <span class="s">"Ignore Pricing Rule"</span>}
+
+<span class="c">// the permission row that unlocks level 1:</span>
+{<span class="s">"permlevel"</span>: 1, <span class="s">"read"</span>: 1, <span class="s">"role"</span>: <span class="s">"Sales Manager"</span>, <span class="s">"write"</span>: 1}</code></pre>
+<p><span class="fileref">erpnext/selling/doctype/sales_order/sales_order.json</span></p>
+
+<p>Because Sales User has only level-0 rows, every level-1 field on that form is invisible and immutable to them. Crucially, this is <em>declared once</em> and produces <em>two visibilities of the same document</em> with <strong>zero conditional code</strong>:</p>
+
+<div class="flow col">
+  <div class="node">Sales Order JSON<small>ignore_pricing_rule = permlevel 1 · level-1 row = Sales Manager only</small></div>
+  <div class="arr"></div>
+  <div class="node">Sales Manager opens it<small>has a level-1 row → field is visible &amp; editable</small></div>
+  <div class="arr"></div>
+  <div class="node">Sales User opens the SAME order<small>level-0 only → field hidden / read-only · all other fields normal</small></div>
+</div>
+
+<p>ERPNext reserves higher tiers for the most sensitive surfaces: most transactions use levels <code>0</code> and <code>1</code>; <code>Monthly Distribution</code> goes to level <code>2</code>; <code>Voice Call Settings</code> uses levels <code>0, 1, 2</code>. The pattern is the same at every tier — a field's level must be matched by a role's level-row, or the field is dark.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · enforce the level on WRITE, not just read</span>
+<p>permlevel is enforced in the UI/serializer layer — it is <strong>not</strong> a database-column grant. A naive reimplementation that filters fields on <em>read</em> (hides the value) but forgets to <strong>reject writes</strong> to those fields leaves a hole: a crafted request can still set <code>ignore_pricing_rule</code> or <code>cost_price</code> even though the field never rendered. Strip on read <em>and</em> refuse on write.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · a level-1 grant can look like dead code</span>
+<p>Customer and Sales Invoice ship level-1 <em>permission</em> rows even though their level-1 <em>fields</em> may be assigned later via Property Setter / customization — the field's <code>permlevel</code> can be <code>0</code> in the base JSON. Don't delete the grant as unused: it exists so a customizer can raise a field to level 1 and have an owner already authorized. (See <a href="10-extensibility-and-customization.html">extensibility</a> for Property Setters.)</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is exactly how KDPS keeps cashiers transacting without ever seeing margin. Tag <strong>cost / P-RATE, landed cost, margin %, and discount-override</strong> fields as <code>permlevel:1</code>; grant the level-1 row only to Store Manager / Buying Manager / Owner. A cashier rings up a sale on the full document at level 0 but is blind to cost and cannot lift the discount cap — mirroring how ERPNext locks <code>ignore_pricing_rule</code>. No per-field <code>if</code> on the POS screen; the serializer strips the fields for cashier sessions.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 3 · User Permissions — row-level restriction decoupled from roles</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Roles say WHAT; User Permissions say WHICH records</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>A user keeps the <strong>same role everywhere</strong> but is confined to specific master values — one Company, one Warehouse, their own Employee record. This is enforced by automatically <strong>AND-ing a <code>WHERE</code> filter</strong> into every query for that user. Roles and row-scope are independent axes: change neither when you confine someone to a store.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Frappe-core <strong>User Permission</strong> records <span class="badge b-frappe">Frappe core</span> are <code>(allow=doctype, for_value=record, user)</code>. ERPNext writes them when an Employee is linked to a User: <code>add_user_permission("Company", company, user)</code> confines that user to one company's documents. The effective set is read back via <code>get_permitted_documents("Price List")</code> to auto-select a default when exactly one is allowed.</p>
+      <p><span class="fileref">erpnext/setup/doctype/employee/employee.py</span> · <span class="fileref">erpnext/accounts/party.py</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Django: <code>django-guardian</code> object-level perms, or a <code>user_object_scope(user, scope_type, object_id)</code> table queried by a manager that injects <code>.filter(company__in=allowed)</code> into every queryset. The key insight ERPNext encodes: <strong>link-field values are the scope axes</strong>. Restrict on the FK (Company, Warehouse) and every transaction that references that master is transitively restricted.</p>
+    </div>
+  </div>
+</div>
+
+<p>The clearest live example is Employee onboarding. When HR links an Employee record to a login User and ticks the <code>create_user_permission</code> checkbox, ERPNext writes two row-level scopes — confining that user to their own Employee record <em>and</em> their Company — and removes them if the box is later unticked:</p>
+
+<pre><code><span class="k">if</span> employee_user_permission_exists <span class="k">and</span> <span class="k">not</span> self.create_user_permission:
+    remove_user_permission(<span class="s">"Employee"</span>, self.name, self.user_id)
+    remove_user_permission(<span class="s">"Company"</span>, self.company, self.user_id)
+<span class="k">elif</span> <span class="k">not</span> employee_user_permission_exists <span class="k">and</span> self.create_user_permission:
+    add_user_permission(<span class="s">"Employee"</span>, self.name, self.user_id)
+    add_user_permission(<span class="s">"Company"</span>, self.company, self.user_id)</code></pre>
+<p><span class="fileref">erpnext/setup/doctype/employee/employee.py</span></p>
+
+<p>From that point on, every list and report query <em>for that user</em> is silently AND-ed with "Company in {their company}" and "Employee in {their own record}". They cannot widen their view — the filter is composed below them, in the engine. No role changed; the same Accounts User in two different companies sees two different datasets.</p>
+
+<p>The same scope set doubles as a <strong>smart default</strong>. When ERPNext sets a party's price list it reads back the permitted documents and, if exactly one Price List is allowed, picks it automatically:</p>
+
+<pre><code><span class="c"># erpnext/accounts/party.py — set_price_list()</span>
+get_permitted_documents(<span class="s">"Price List"</span>)   <span class="c"># row-level scope reused as a default</span></code></pre>
+<p><span class="fileref">erpnext/accounts/party.py</span></p>
+
+<div class="callout co-note"><span class="lbl">Where the filter is built</span>
+<p>The composition of all of this into the SQL <code>WHERE</code> clause is documented in <span class="fileref">erpnext/utilities/query.py</span>: role permissions, User Permission match-conditions, document sharing, the if-owner constraint, and any <code>permission_query_conditions</code> hooks all get AND/OR-composed into the filter that limits list and report views. A restricted user does not get a "403" on a forbidden row — the row <strong>never appears</strong> in their results.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · restriction is on the LINK FIELD, not the transaction</span>
+<p>A User Permission on <code>Company</code> restricts a transaction <em>only if that transaction actually references Company via a link field</em>. Miss the link and the restriction <strong>silently does nothing</strong>. Worse: if a user has a User Permission for a doctype that a given form does <em>not</em> link to, behaviour depends on the "apply only if linked" / strict-user-permissions toggle — get it wrong and users are unexpectedly locked out of unrelated forms. Reimplement that toggle deliberately, and make sure every entity you want scoped carries the FK you scope on.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is the data-layer enforcement of the <strong>Bihar ↔ Jharkhand "distinct persons" boundary</strong>. Put a User Permission on the <strong>Store / Warehouse</strong> link field (and through it, the GSTIN): each store's staff are confined to their own store's documents and their own GSTIN's data, with the <em>same</em> "Store Cashier" role everywhere. Cross-state transfers become visible only to roles whose scope spans both states (Owner, head-office Accounts). One role definition, fifty stores, zero leakage between GSTINs — and the scope doubles as the default store on every new document.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 4 · if_owner and Document Sharing — the two escape hatches</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Own-records-only, and per-record ad-hoc grants</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Two things the role matrix cannot express: <strong>(a)</strong> a role that may only touch records <em>it created</em> (ownership), and <strong>(b)</strong> granting <em>one</em> user access to <em>one</em> specific record on demand (sharing). Both narrow or widen access <strong>without minting new roles</strong>.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>if_owner</code> is a boolean on a permission row: Video gives role <code>All</code> full CRUD but with <code>if_owner:1</code>, so a user only manages their own videos. Sharing is the <code>share</code> action flag, which lets Frappe's <strong>Document Share</strong> <span class="badge b-frappe">Frappe core</span> grant per-record access. Both are composed into the same query filter.</p>
+      <p><span class="fileref">erpnext/utilities/doctype/video/video.json</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p><code>if_owner</code> → a flag on the permission row; AND <code>owner_id = current_user</code> into the query when set. Sharing → a <code>document_share(entity_type, entity_id, user, can_read/write)</code> table OR'd into the visibility filter. <strong>Get the AND/OR precedence right</strong>: the rule is <code>role-grant OR shared OR (role-grant AND owner)</code> — or you over- or under-expose.</p>
+    </div>
+  </div>
+</div>
+
+<p>The only DocType in ERPNext using <code>if_owner:1</code> is Video — a deliberately small example of the pattern:</p>
+
+<pre><code><span class="s">"permissions"</span>: [
+ {<span class="s">"role"</span>:<span class="s">"System Manager"</span>, <span class="s">"read"</span>:1, <span class="s">"write"</span>:1, <span class="s">"create"</span>:1, <span class="s">"delete"</span>:1},
+ {<span class="s">"role"</span>:<span class="s">"All"</span>, <span class="s">"read"</span>:1, <span class="s">"write"</span>:1, <span class="s">"create"</span>:1, <span class="s">"delete"</span>:1, <span class="s">"if_owner"</span>:1}
+]</code></pre>
+<p><span class="fileref">erpnext/utilities/doctype/video/video.json</span> · role <code>All</code> may CRUD <em>only its own</em> videos; System Manager is unscoped</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · a broad row silently defeats if_owner</span>
+<p><code>if_owner</code> is per-permission-<em>row</em>, and a user may match <em>multiple</em> rows — one scoped by owner, one not. The engine takes the <strong>OR</strong> of matching rows. So adding a broad, non-owner row anywhere <strong>silently defeats</strong> the if-owner restriction for any user who also holds that role. In the Video example, System Manager's unscoped row overrides any if-owner narrowing for that user. Audit composition carefully: a single over-broad row can unlock everything the owner-scope was meant to fence off.</p>
+</div>
+
+<p>The composition rule is the part teams get wrong. All five sources — role grants, User Permission match-conditions, sharing, the if-owner constraint, and query-condition hooks — collapse into one <code>WHERE</code> clause in <span class="fileref">erpnext/utilities/query.py</span>. Sharing and an unscoped role row <em>widen</em> (OR); User Permissions and if-owner <em>narrow</em> (AND). Mis-order the precedence and you either hide rows a user should see or expose rows they should not.</p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 5 · Roles bundled into Role Profiles; read-only roles as data</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Assign a job-function bundle, not ten atomic roles</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Don't hand-assign ten atomic roles to a user one at a time. Define named <strong>bundles</strong> (job functions) once and assign the bundle. And a "read-only" principal is <strong>not special code</strong> — it is simply a set of rows that grant <code>read/report/export</code> and withhold <code>write/submit</code>.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>DEFAULT_ROLE_PROFILES</code> declares bundles (Inventory, Accounts, Sales, Purchase, Manufacturing) as data; <code>create_default_role_profiles()</code> inserts/reconciles Role Profile records at install. The <code>Auditor</code> role is read-only <em>purely by data</em>: across 49 doctypes its rows carry <code>read+report+export</code> but never <code>write/create/submit</code>.</p>
+      <p><span class="fileref">erpnext/setup/install.py</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Model <code>Role</code> and <code>RoleProfile</code> (a Role↔RoleProfile m2m); assign profiles to users; expand to effective roles at login. A read-only role needs no feature — just omit the mutating action columns. Seed default profiles as fixtures so a fresh install ships sane job-function bundles.</p>
+    </div>
+  </div>
+</div>
+
+<p>The bundles are plain data — a dictionary of profile name → list of role strings:</p>
+
+<pre><code>DEFAULT_ROLE_PROFILES = {
+    _(<span class="s">"Inventory"</span>): [<span class="s">"Stock User"</span>, <span class="s">"Stock Manager"</span>, <span class="s">"Item Manager"</span>],
+    _(<span class="s">"Accounts"</span>):  [<span class="s">"Accounts User"</span>, <span class="s">"Accounts Manager"</span>],
+    _(<span class="s">"Sales"</span>):     [<span class="s">"Sales User"</span>, <span class="s">"Stock User"</span>, <span class="s">"Sales Manager"</span>],
+    _(<span class="s">"Purchase"</span>):  [<span class="s">"Item Manager"</span>, <span class="s">"Stock User"</span>, <span class="s">"Purchase User"</span>, <span class="s">"Purchase Manager"</span>],
+}</code></pre>
+<p><span class="fileref">erpnext/setup/install.py</span> · materialized by <code>create_default_role_profiles()</code></p>
+
+<p>Two details worth internalizing. First, the bundles <em>overlap</em> deliberately — a Sales profile includes <code>Stock User</code> because a salesperson must read stock levels; a Purchase profile includes <code>Item Manager</code>. Job functions are not disjoint, and the bundle captures that. Second, <strong>roles themselves are auto-created strings</strong>: the moment any DocType JSON names <code>"Stock Manager"</code>, the framework creates that Role record. You never declare a role separately from using it — naming it in a permission row <em>is</em> declaring it.</p>
+
+<p>And the read-only auditor needs no engine support whatsoever. It is purely the <em>absence</em> of mutating columns, repeated across the doctypes it should see:</p>
+
+<table>
+<tr><th>Role</th><th>Typical row shape</th><th>Effect</th></tr>
+<tr><td><code>Auditor</code></td><td><code>read:1, report:1, export:1</code> (sometimes <code>print/share</code>) — never <code>write/create/submit</code></td><td>Read-only across ~49 doctypes (GL Entry, Cost Center, Account Closing Balance…). No special code; just omitted columns.</td></tr>
+<tr><td><code>Accounts User</code></td><td>all actions <em>except</em> <code>cancel</code> and <code>delete</code></td><td>Transacts fully but cannot reverse posted documents.</td></tr>
+<tr><td><code>Accounts Manager</code></td><td>all actions including <code>cancel/amend/delete</code></td><td>Owns the full lifecycle.</td></tr>
+<tr><td><code>System Manager</code></td><td>full actions on ~175 doctypes</td><td>The administrative super-role.</td></tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">Pattern 6 · The document lifecycle is gated by the SAME matrix</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>State transitions are just action bits — not a separate ACL</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>The document lifecycle — <strong>draft → submitted → cancelled</strong> — is governed by the same permission matrix, not a parallel access list. Whether a user may advance a document's state is just whether their role holds the corresponding action bit. <strong>Lifecycle and authorization never diverge</strong> because they are one table.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>submit</code>, <code>cancel</code>, <code>amend</code> are action columns. In Sales Invoice, Accounts Manager has all three; Accounts User has <code>submit+amend</code> but <code>cancel:0</code> — so a clerk can post and correct, but only a manager can cancel. The engine refuses the docstatus <code>0→1</code> / <code>1→2</code> transition if the bit is absent.</p>
+      <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Tie each state-machine edge to a named action (<code>submit/cancel/amend</code>) and check the <em>same</em> permission table before allowing the transition. Reserve imperative role checks for cross-cutting actions that aren't a single document's CRUD/state edge.</p>
+    </div>
+  </div>
+</div>
+
+<p>Because the lifecycle and the auth matrix are the same table, the difference between "clerk" and "manager" on a Sales Invoice is purely which state-transition bits are present:</p>
+
+<div class="flow">
+  <div class="node">Draft<small>docstatus 0</small></div>
+  <div class="arr"></div>
+  <div class="node">Submitted<small>docstatus 1 · posts ledgers</small></div>
+  <div class="arr"></div>
+  <div class="node">Cancelled<small>docstatus 2 · reverses ledgers</small></div>
+</div>
+
+<table>
+<tr><th>Transition</th><th>Action bit</th><th>Accounts User</th><th>Accounts Manager</th></tr>
+<tr><td>0 → 1 (post to ledgers)</td><td><code>submit</code></td><td>✓ allowed</td><td>✓ allowed</td></tr>
+<tr><td>1 → 2 (reverse the ledgers)</td><td><code>cancel</code></td><td>✗ <code>cancel:0</code> — blocked</td><td>✓ allowed</td></tr>
+<tr><td>2 → new draft (corrected copy)</td><td><code>amend</code></td><td>✓ allowed</td><td>✓ allowed</td></tr>
+</table>
+
+<p>A clerk can post a sale and create a corrected amendment, but cannot make the system reverse the <a href="03-accounting-ledger.html">GL entries</a> and <a href="04-stock-ledger.html">stock ledger</a> of a posted invoice — that destructive move is a manager's bit. See <a href="02-document-lifecycle.html">the document lifecycle</a> for the full docstatus machine.</p>
+
+<h3>The imperative fallback — only where the matrix can't reach</h3>
+
+<p>The matrix expresses CRUD and state edges on a single document. For cross-cutting actions it cannot express, ERPNext drops to sharp imperative guards in the controllers — and <em>only</em> there:</p>
+
+<pre><code><span class="c"># a hard role gate — for a cross-cutting bulk operation</span>
+frappe.only_for(<span class="s">"Accounts Manager"</span>)
+
+<span class="c"># an explicit per-doc permission check that raises if denied</span>
+frappe.has_permission(dt, <span class="s">"write"</span>, doc, throw=True)</code></pre>
+<p><span class="fileref">erpnext/controllers/accounts_controller.py</span> · <span class="fileref">erpnext/setup/doctype/transaction_deletion_record/transaction_deletion_record.py</span> <span class="badge b-frappe">Frappe core</span> API</p>
+
+<p>The discipline here is what keeps the system maintainable: <code>only_for</code> and explicit <code>has_permission(..., throw=True)</code> appear for things like a bulk transaction-deletion utility or a closing operation — actions that are <em>not</em> one document's CRUD or state edge. They are the exception, not the rule. Everything that <em>can</em> be a row in the matrix <em>is</em> a row in the matrix.</p>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Gate the KDPS document state machine the same way. A <strong>POS sale</strong>, a <strong>GRN / stock-in</strong>, and a <strong>store transfer</strong> all move through draft → submitted → cancelled. Give Store Cashier <code>submit</code> on a sale but <strong>not</strong> <code>cancel</code> — so a cashier rings up sales all day, but cancelling a posted sale (which must reverse stock and the ledger) requires a Store Manager's <code>cancel</code> bit. This is the data-layer expression of "documents write ledgers" and "flag, don't block": the cashier can flag a mistake, but only a manager can unwind a posted document.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Key doctypes for this subsystem</h2>
+
+<table>
+<tr><th>DocType / file</th><th>Kind</th><th>What it teaches</th></tr>
+<tr>
+  <td><strong>Sales Invoice</strong><br><span class="fileref">accounts/doctype/sales_invoice/sales_invoice.json</span></td>
+  <td>transaction</td>
+  <td>The canonical permissions array: full role×action matrix + two permlevel-1 rows gating sensitive fields. Accounts Manager full incl. cancel/delete; Accounts User everything except cancel/delete.</td>
+</tr>
+<tr>
+  <td><strong>Sales Order</strong><br><span class="fileref">selling/doctype/sales_order/sales_order.json</span></td>
+  <td>transaction</td>
+  <td>Field-level security in the flesh: <code>ignore_pricing_rule</code> is permlevel 1, and only Sales Manager holds the level-1 row.</td>
+</tr>
+<tr>
+  <td><strong>Item</strong><br><span class="fileref">stock/doctype/item/item.json</span></td>
+  <td>master</td>
+  <td>Restricted master: Item Manager full rights, most roles read-only, <code>Desk User</code> gets <code>select</code>-only (pick in a link field without full read).</td>
+</tr>
+<tr>
+  <td><strong>Company</strong><br><span class="fileref">setup/doctype/company/company.json</span></td>
+  <td>master</td>
+  <td>The row-level anchor: a User Permission on Company confines a user to one company's documents across every transaction that links Company.</td>
+</tr>
+<tr>
+  <td><strong>Employee</strong><br><span class="fileref">setup/doctype/employee/employee.py</span></td>
+  <td>master</td>
+  <td>Writes User Permissions programmatically (<code>add_user_permission</code> Employee + Company) and appends the <code>Employee</code> role to the linked User.</td>
+</tr>
+<tr>
+  <td><strong>Video</strong><br><span class="fileref">utilities/doctype/video/video.json</span></td>
+  <td>master</td>
+  <td>The lone <code>if_owner:1</code> example — role <code>All</code> may only touch documents it created; System Manager is unscoped alongside.</td>
+</tr>
+<tr>
+  <td><strong>POS Profile</strong><br><span class="fileref">accounts/doctype/pos_profile/pos_profile.py</span></td>
+  <td>setup</td>
+  <td>An <code>applicable_for_users</code> child table scopes a POS profile to named users; reads the effective set via <code>get_permitted_documents</code>. A doctype-local row-scope.</td>
+</tr>
+<tr>
+  <td><strong>POS Profile User</strong><br><span class="fileref">accounts/doctype/pos_profile_user/pos_profile_user.json</span></td>
+  <td>child</td>
+  <td>Child rows <code>(default, user)</code> implementing the user-scoping list on POS Profile.</td>
+</tr>
+<tr>
+  <td><strong>Import Supplier Invoice</strong><br><span class="fileref">regional/italy/setup.py</span></td>
+  <td>setup</td>
+  <td>Programmatic matrix mutation: <code>add_permission</code> + <code>update_permission_property</code> build the permission rows at install time, proving the matrix is fully constructable from code-as-data.</td>
+</tr>
+<tr>
+  <td><strong>DEFAULT_ROLE_PROFILES</strong><br><span class="fileref">setup/install.py</span></td>
+  <td>setup</td>
+  <td>Role Profiles (bundles of roles) declared as data and materialized by <code>create_default_role_profiles()</code>.</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">How the layers compose — the whole picture</h2>
+
+<p>The four axes stack from coarsest to finest. A request must clear every band that applies before a row is visible or a field is editable:</p>
+
+<div class="band l-ctrl">
+  <div class="bname">1 · Role × Action (does the role hold this bit?)</div>
+  <div class="boxes">
+    <div class="bx">read / write / create<small>baseline CRUD</small></div>
+    <div class="bx">submit / cancel / amend<small>lifecycle edges</small></div>
+    <div class="bx">report / export / print<small>read-side</small></div>
+    <div class="bx">share / select / import<small>ancillary</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-doc">
+  <div class="bname">2 · Row-level scope (which records?)</div>
+  <div class="boxes">
+    <div class="bx">User Permission on Company<small>one GSTIN's data</small></div>
+    <div class="bx">User Permission on Store/Warehouse<small>one store's docs</small></div>
+    <div class="bx">if_owner<small>only my own records</small></div>
+    <div class="bx">Document Share<small>this one record, ad-hoc</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-ledg">
+  <div class="bname">3 · Field-level (which fields inside the record?)</div>
+  <div class="boxes">
+    <div class="bx">permlevel 0<small>the document body</small></div>
+    <div class="bx">permlevel 1<small>cost / margin / overrides</small></div>
+    <div class="bx">permlevel 2+<small>most sensitive surfaces</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-intel">
+  <div class="bname">4 · Imperative fallback (only where the matrix can't reach)</div>
+  <div class="boxes">
+    <div class="bx">frappe.only_for(role)<small>cross-cutting bulk ops</small></div>
+    <div class="bx">has_permission(..., throw=True)<small>explicit per-doc gate</small></div>
+  </div>
+</div>
+
+<div class="callout co-key"><span class="lbl">Key idea — the composition</span>
+<p>For visibility, the engine builds <strong>one <code>WHERE</code> clause</strong> per user per doctype: <code>role-grant</code> <em>AND</em> <code>(User-Permission match)</code> <em>AND</em> <code>(owner-id = me, when if_owner)</code> — with <code>Document Share</code> and any unscoped role row <em>OR'd</em> in to widen it. Field access is then resolved per field by comparing the field's <code>permlevel</code> to the user's granted levels. Build this composition in <strong>one</strong> place (a base manager + a serializer mixin) and authorization is uniform across every endpoint. Build it per endpoint and it will drift.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Reimplementing on Django / Postgres</h2>
+
+<p>The research target — KDPS — is a React PWA over Django/Postgres. Here is the concrete mapping from ERPNext's four axes to that stack, with the pitfalls baked in:</p>
+
+<dl class="gloss">
+  <dt><code>Role × Action matrix</code></dt>
+  <dd>A queryable <code>entity_permission(entity_type, role, action, permlevel, if_owner)</code> table — <em>not</em> only Django's <code>auth_permission</code>, because you want an admin UI to render and edit the matrix as one grid. Enforce in a single <code>has_permission(user, entity, action)</code> called from a base DRF <code>ViewSet</code>. One enforcement path.</dd>
+  <dt><code>permlevel field security</code></dt>
+  <dd>An integer <code>perm_level</code> on field metadata + a <code>(role, perm_level)</code> grant table. Implement as a <strong>serializer mixin</strong> that, per request, computes the user's max granted level per action and (a) strips higher-level fields on read and (b) <strong>rejects writes</strong> to them. Both halves — or you have a hole.</dd>
+  <dt><code>Row-level scope</code></dt>
+  <dd>A <code>user_object_scope(user, scope_type, object_id)</code> table (or <code>django-guardian</code>), read by a base <strong>model manager</strong> that injects <code>.filter(store__in=allowed)</code> / <code>.filter(company__in=allowed)</code> into every queryset. Scope on the <strong>link field</strong> — and make sure every entity you want confined actually carries that FK.</dd>
+  <dt><code>if_owner + sharing</code></dt>
+  <dd>An <code>if_owner</code> flag (AND <code>owner = request.user</code> into the queryset when set) and a <code>document_share(entity_type, entity_id, user, can_read/write)</code> table OR'd into the visibility filter. Mind the precedence: a broad non-owner grant defeats an owner-scope.</dd>
+  <dt><code>Role Profiles</code></dt>
+  <dd><code>Role</code> and <code>RoleProfile</code> models with a Role↔RoleProfile m2m; assign profiles to users; expand to effective roles at login. Seed KDPS job-functions (Store Cashier, Store Manager, Stock/Warehouse User, Accounts/Tally Operator, Buying Manager, Owner/Admin, read-only Auditor) as fixtures.</dd>
+  <dt><code>Lifecycle gating</code></dt>
+  <dd>Each state-machine edge (sale/GRN/transfer: draft→submitted→cancelled) checks the <em>same</em> permission table for its <code>submit/cancel/amend</code> action before transitioning. Don't write a parallel ACL for the state machine.</dd>
+</dl>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · build the audit view from day one</span>
+<p>ERPNext's matrix is invisible because it is scattered across hundreds of JSONs (System Manager appears 175×, Auditor 49×). If you store yours in one queryable table, you can — and should — ship an <strong>admin "flatten the matrix" report</strong> from the start: "show me every role that can <code>cancel</code> a Sales Invoice", "show me every level-1 field and who can write it". Without it, over-grants accumulate unseen. This is the one advantage you have over ERPNext — don't waste it.</p>
+</div>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4>
+<ol>
+  <li><strong>Authorization is data, enforced by one engine.</strong> Every entity declares a <code>(role × action × permlevel × if_owner)</code> matrix; a single generic engine enforces it on every read, write, and state transition. Adding a role or tightening a right is a row edit, never new branching code.</li>
+  <li><strong>Three orthogonal axes answer three different questions.</strong> Role×action = <em>what</em> may they do; User Permissions = <em>which records</em> (row-level, decoupled from roles, scoped on link fields); permlevel = <em>which fields</em> inside the record. Keep them independent.</li>
+  <li><strong>permlevel locks fields without per-field <code>if</code>s</strong> — but enforce it on <em>read and write</em>. Tag cost/margin/override fields at level 1; a clerk edits the document yet is blind to its sensitive fields. A read-only filter leaves a write hole.</li>
+  <li><strong>Row-level scope rides the link field.</strong> Restrict a user to one Company / Store / GSTIN by AND-ing a filter on the FK into every query — same role everywhere, different data. Miss the link and the restriction silently does nothing.</li>
+  <li><strong>The lifecycle is the same matrix.</strong> <code>submit/cancel/amend</code> are action bits, so "a cashier may post but not cancel" is encoded once. Lifecycle and authorization never diverge because they are one table. Imperative <code>only_for</code> / <code>has_permission</code> guards are the rare exception, for cross-cutting actions only.</li>
+  <li><strong>Compose carefully, and audit relentlessly.</strong> Role-grant OR shared OR (grant AND owner) for visibility; omitted actions mean zero; there is no role hierarchy; a broad row defeats if_owner. Store the matrix queryably and ship a flatten-and-audit admin view — the one thing ERPNext's scattered JSON cannot give you.</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="07-tax-and-pricing.html"><small>← Previous</small>Tax & pricing engine</a>
+<a class="next" href="09-workflow-engine.html"><small>Next →</small>Workflow engine</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 08. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Domain Glossary (Controlled Vocabulary)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:264px; flex:0 0 264px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:64ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-ca{background:var(--red-bg); color:var(--red)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--red-bg); border-color:#f0c4bd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 12px; font-size:13px; letter-spacing:.02em}
+  td{padding:10px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; background:#f0f2f6; padding:1px 5px; border-radius:4px}
+  ol,ul{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  /* glossary entries */
+  dl.gloss{margin:0}
+  dl.gloss dt{font-weight:700; color:var(--navy); margin-top:20px; font-size:16px; scroll-margin-top:18px}
+  dl.gloss dt .alias{font-weight:500; font-size:13px; color:var(--muted); margin-left:8px}
+  dl.gloss dd{margin:4px 0 0; color:#33415c; font-size:14.5px}
+  dl.gloss dd + dd{margin-top:6px}
+  .pill{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:6px; margin-right:6px; vertical-align:middle}
+  .p-rule{background:var(--blue-bg); color:var(--blue)}
+  .p-key{background:var(--rust-soft); color:#8a3f22}
+  .p-money{background:var(--green-bg); color:var(--green)}
+  .seealso{font-size:12.5px; color:var(--muted); margin-top:5px}
+  .seealso b{color:var(--navy2); font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>About</h2>
+  <a href="#what">What this is</a>
+  <a href="#how">How to read an entry</a>
+  <h2>Vocabulary</h2>
+  <a href="#identity">A · Identity &amp; stock</a>
+  <a href="#docs">B · Documents &amp; ledgers</a>
+  <a href="#commercial">C · Commercial models</a>
+  <a href="#gst">D · GST &amp; geography</a>
+  <a href="#pos">E · POS &amp; the edges</a>
+  <a href="#ai">F · Controls &amp; AI</a>
+  <h2>Reference</h2>
+  <a href="#oneline">One-line index</a>
+</nav>
+
+<main>
+<header class="doc" id="what">
+  <div class="eyebrow">KDPS · Consolidation · Controlled Vocabulary</div>
+  <h1>Domain Glossary — the words the whole build shares</h1>
+  <p class="sub">One agreed meaning for every load-bearing term, so the screens, the database, the postings, the documents and every conversation use the same word for the same thing. If a term is defined here, no other document gets to mean something different by it.</p>
+  <div class="stamp" style="font-size:12.5px; color:var(--muted); margin-top:8px">25 June 2026 · Reflects all 16 locked Q&amp;A decisions. Money in INR with Lakh/Crore formatting (₹28,50,000).</div>
+</header>
+
+<section id="how">
+  <div class="callout co-key">
+    <strong>How to read an entry.</strong> Each term carries a short plain-language meaning first, then the precise rule the build must obey. Pills mark the kind of term:
+    <span class="pill p-key">identity</span> the keys that must survive end-to-end ·
+    <span class="pill p-rule">posting rule</span> touches the books, get it exactly right ·
+    <span class="pill p-money">money</span> a number that becomes profit or tax.
+    Where a meaning is still pending an outside answer it carries
+    <span class="badge b-ca">CA / client</span>. Nothing here re-opens a locked decision — it records it.
+  </div>
+  <div class="callout co-note">
+    <strong>The one sentence the whole system hangs on.</strong> <em>Master data feeds documents; documents are the only things that write ledgers; ledgers are append-only and derived, never hand-edited; controls reconcile the ledgers; AI reads everything and writes nothing but messages.</em> Most terms below are a noun in that sentence.
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="identity">
+  <h2 class="sec">A · Identity &amp; stock</h2>
+  <p>The keys that decide <em>what a thing is</em> and <em>how much of it we have</em>. These must survive unchanged from the vendor's invoice all the way to a sale and a Tally voucher — getting identity wrong corrupts stock, price and profit at once.</p>
+
+  <dl class="gloss">
+    <dt id="sku">SKU <span class="alias">Stock Keeping Unit · the sellable identity</span> <span class="pill p-key">identity</span></dt>
+    <dd>The smallest thing the business sells as one priced item. <strong>SKU = Brand + Style (design) + Colour + Size.</strong> A red kurta size M of a given design is a different SKU from the same kurta in size L or in blue.</dd>
+    <dd>Stock is held at SKU level only — never at style level alone. <em>Size × Colour must survive end-to-end</em> (a domain fact, not a design choice). Stock is a <strong>count of pieces</strong> under an SKU at a location; individual pieces are <strong>not</strong> serialised.</dd>
+    <dd>"Colour" means either a real colour <strong>or</strong> a <a href="#pme">P/M/E tier</a> when the brand does not track exact colour. The SKU is identified in the system by its <a href="#barcode">barcode</a> within a <a href="#season">season</a> — see <a href="#cohort">piece cohort</a>.</dd>
+
+    <dt id="barcode">Barcode <span class="alias">scan-alias · vendor EAN</span> <span class="pill p-key">identity</span></dt>
+    <dd>The number that gets scanned at the till or at inbound. <strong>A barcode is a non-unique scan-alias that points to an SKU cohort — it is not the identity itself.</strong> Treat it like a label on a shelf, not the shelf.</dd>
+    <dd>One barcode can legitimately cover <strong>many identical pieces</strong> (see <a href="#count-under-barcode">count-under-barcode</a>) and even pieces that differ only by a colour we don't track (collapsed to a <a href="#pme">P/M/E tier</a>). A barcode resolves to an SKU cohort; a scan reduces that cohort's count by one.</dd>
+    <dd>Two kinds of repeat exist. <strong>Intentional</strong> — different physical colours of one item share a barcode because exact colour isn't tracked; everything under it has the same price, brand, design, size and tier, so it is genuinely interchangeable and the sale just decrements the count (no ambiguity, by design; applies to non-branded <em>and</em> branded). <strong>Accidental true collision</strong> — two different-price/SKU items share a vendor barcode; this is caught <em>at inbound</em> (flagged, an internal barcode assigned via the existing generator) — never a blanket re-barcode. 68% of brand rows arrive with no vendor barcode anyway, so generation is the majority path.</dd>
+    <dd class="seealso"><b>See also</b> <a href="#cohort">piece cohort</a>, <a href="#count-under-barcode">count-under-barcode</a>, <a href="#season">season</a>, <a href="#pme">P/M/E tier</a>.</dd>
+
+    <dt id="cohort">Piece cohort <span class="alias">stock identity key = barcode + season</span> <span class="pill p-key">identity</span></dt>
+    <dd>The real key that stock counts hang on: <strong>barcode + season</strong>. A brand may reuse the same barcode value in a later season, so the barcode alone is not enough — each season is its own cohort with its own count, price and age.</dd>
+    <dd>Full resolution: a cohort = brand + design + (colour or <a href="#pme">P/M/E tier</a>) + size + season. A scan resolves to the active cohort at that store; if two seasons live under one barcode, the rule is <strong>oldest-season-first</strong> (FIFO); genuine ambiguity becomes a one-tap "which season?", never a blocked sale.</dd>
+
+    <dt id="count-under-barcode">Count-under-barcode <span class="pill p-key">identity</span></dt>
+    <dd>How stock is held: <strong>stock = a count of pieces under a cohort, not one row (or one barcode) per physical piece.</strong> Receiving 40 identical kurtas adds 40 to one cohort's count; selling one subtracts one. Pieces are interchangeable and not individually tracked.</dd>
+    <dd>This is load-bearing for the stock-ledger schema. Any document still saying "a barcode per piece" is stale wording and is being corrected.</dd>
+
+    <dt id="pme">P/M/E colour tier <span class="alias">Premium / Medium / Economy</span></dt>
+    <dd>A coarse stand-in for colour used when a brand does not track exact colour. The colour dimension of the SKU then collapses to one of three tiers — <strong>P</strong>remium, <strong>M</strong>edium, <strong>E</strong>conomy — chosen by price band. Everything under one barcode shares the same tier, which is why they are interchangeable.</dd>
+    <dd>Colour = real colour <em>or</em> P/M/E tier is already in the design and stays. The tier is part of the <a href="#cohort">cohort</a> identity, so two tiers are two SKUs even if they look similar.</dd>
+
+    <dt id="season">Season <span class="alias">collection · the season calendar</span> <span class="pill p-key">identity</span></dt>
+    <dd>The selling period a piece belongs to (e.g. a Spring–Summer or Autumn–Winter collection). Season tags every item and is half of the <a href="#cohort">cohort</a> key. <em>Age</em> is derived from the season and drives markdowns and dead-stock handling.</dd>
+    <dd><strong>The season calendar runs Open → EOSS → Closed.</strong> <em>Open</em>: the season sells at full terms. <em>EOSS</em> (End-of-Season Sale): the markdown window; unsold dead stock is settled with the brand (see <a href="#vflip">V-flip</a>). <em>Closed</em>: the season is shut for new selling. Season must be canonical (a season name, never a date) — a guard rejects a date in the season field at inbound.</dd>
+    <dd class="seealso"><b>See also</b> <a href="#vflip">V-flip</a>, <a href="#eoss">EOSS</a>.</dd>
+
+    <dt id="eoss">EOSS <span class="alias">End-of-Season Sale</span></dt>
+    <dd>The markdown phase of a season's calendar, when remaining stock is cleared at reduced price and unsold brand-owned stock is settled. The trigger point for the <a href="#vflip">V-flip</a> on SOR/Consignment lines.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="docs">
+  <h2 class="sec">B · Documents &amp; ledgers</h2>
+  <p>The machinery of the books. The whole system is "documents write ledgers" — so these are the most precise definitions in the glossary. The inbound posting split (<a href="#grn">GRN</a> vs <a href="#pt">PT</a>) is the single rule that everything downstream depends on.</p>
+
+  <dl class="gloss">
+    <dt id="document">Document <span class="pill p-rule">posting rule</span></dt>
+    <dd>A numbered record of one business event, with line items and a status life cycle (booking, shipment, GRN, PT, sale, transfer, payment…). <strong>A document is the only thing that writes a ledger.</strong> Nothing posts to the books except by raising a document.</dd>
+
+    <dt id="posting">Posting <span class="pill p-rule">posting rule</span></dt>
+    <dd>An append-only entry that a document writes into a ledger. Postings are balanced (every set sums to zero across legs) or the whole document fails. <strong>You never edit or delete a posting</strong> — a mistake is fixed with a <a href="#reversing">reversing entry</a>, not an overwrite (no-reposting is a code-level invariant).</dd>
+
+    <dt id="ledger">Ledger <span class="alias">book of truth</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>A derived book whose balance is simply the sum of its postings. There are <strong>three ledgers</strong>: the <strong>stock ledger</strong> (what we hold, by cohort and location), the <strong>vendor ledger</strong> (what we owe each brand), and the <strong>cash ledger</strong> (money in and out). Ledgers are append-only and never hand-edited; every report is read off them.</dd>
+
+    <dt id="snapshot">Snapshot <span class="pill p-rule">posting rule</span></dt>
+    <dd>The copy a document takes of the master values it used at the moment it was created (the commercial model, the price, the GST slab, the store→GSTIN map…). Later edits to a master <strong>never rewrite history</strong> — the document keeps the values it was raised with. Masters are effective-dated (SCD-2) so the right snapshot is always available.</dd>
+
+    <dt id="reversing">Reversing entry <span class="alias">correction posting</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The only legal way to fix a posted document. A correction is a <strong>new, today-dated event with a reason code</strong> that reverses the original legs and re-posts the right ones, linked back to the source. Nothing is silently rewritten; the trail of "wrong then fixed" is preserved (a GST-record requirement, not just good manners).</dd>
+
+    <dt id="pt">PT <span class="alias">Product Transfer file · the priced stock-in document</span> <span class="pill p-rule">posting rule</span> <span class="pill p-money">money</span></dt>
+    <dd>The priced stock-in document, one per consignment/shipment, supplied in the brand's PT format. <strong>At Patna inward the PT posts the valuation</strong> — it stamps the frozen unit cost on each cohort and posts vendor liability <em>per commercial model</em>. The PT creates priced stock truth for <em>all</em> models and carries the settlement basis; only the <em>timing</em> of liability differs by model (see <a href="#commercial">commercial models</a>).</dd>
+    <dd class="seealso"><b>See also</b> <a href="#prate">P RATE / landed cost</a>, <a href="#srbnb">SRBNB</a>, <a href="#tir">TIR</a>.</dd>
+
+    <dt id="grn">GRN <span class="alias">Goods Receipt Note</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The record of what physically arrived, against the order list. <strong>The GRN posts the quantity movement only</strong> — quantity, location, condition, season, and a provisional owned-flag, with <em>no unit cost</em>. Goods become sellable on day one off the GRN; the <a href="#pt">PT</a> adds value and liability later at Patna inward. This two-step split (qty at GRN, value at PT) is the locked inbound posting rule.</dd>
+    <dd>A GRN can exist with <strong>no parent booking</strong> (a "Receive without order" simple-receipt GRN) — see <a href="#bookingless">booking-less receipt</a>.</dd>
+
+    <dt id="shipment">Shipment <span class="pill p-key">identity</span></dt>
+    <dd>The physical consignment that arrives. <strong>The Shipment — not the booking — is the anchor of inbound.</strong> A Shipment may or may not point back to a booking; when it has none (<code>booking_ref = NULL</code>) it still anchors a valid inbound. The booking only feeds the GRN an order list and receives a close-out.</dd>
+
+    <dt id="tir">TIR <span class="alias">the purchase-side export to Tally</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The purchase-side export that feeds Tally at Patna inward, carrying the statutory purchase voucher (with the GST breakup carried, never recomputed). Part of the one-way sync that keeps <a href="#tally">Tally</a> as the statutory book of record.</dd>
+
+    <dt id="srbnb">SRBNB <span class="alias">Stock-Received-But-Not-Billed</span> <span class="pill p-rule">posting rule</span> <span class="pill p-money">money</span></dt>
+    <dd>The accrual that holds the gap between <em>goods are here</em> and <em>the bill is matched</em>. For an owned brand, the PT posts stock value against an SRBNB accrual; the vendor payable + input-tax leg lands later when the vendor invoice is matched. It is how goods can be received, valued and sold before the invoice arrives without breaking the books.</dd>
+    <dd>Open item (<span class="badge b-ca">CA / Anand</span>): <strong>sold-before-PT</strong> — whether a piece sold before its PT exists carries an SRBNB-style memo value or the sale is blocked.</dd>
+
+    <dt id="bookingless">Booking-less direct receipt <span class="alias">Receive without order</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>Goods that land directly at a store with <strong>no booking recorded</strong> — for <em>any</em> brand, branded or not. A Shipment with <code>booking_ref = NULL</code> anchors inbound; a "Receive without order" GRN posts quantity; the commercial model is snapshotted from the effective-dated brand master (default Outright if unknown). <strong>No phantom booking is created</strong> (it would pollute booked-vs-received analytics); a Direct GRN can be retro-linked to a later booking, which re-runs reconciliation as a correction.</dd>
+    <dd>Guardrails: an unknown/defaulted model <strong>hard-gates payment</strong> (awaiting-invoice/unmatched-payable); a truly unknown brand posts stock-in qty+cost but <strong>withholds vendor-ledger posting</strong> until confirmed (behaves like SOR). Capture the e-way-bill number on the direct GRN.</dd>
+
+    <dt id="vflip">V-flip <span class="alias">end-of-season ownership flip</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The end-of-season move on brand-owned stock: settle unsold dead stock with the brand as "sold under EOSS", <strong>flip ownership to KDPS</strong>, then sell it off as KDPS stock. It converts an SOR/Consignment line that didn't sell into owned clearance stock, with the matching vendor settlement posted.</dd>
+
+    <dt id="exception">Exception queue <span class="pill p-rule">posting rule</span></dt>
+    <dd>Where a flagged mismatch waits for its named owner. The principle is <strong>flag, never block</strong> — the flow keeps moving and the exception is resolved by its owner, rather than stopping a sale or a receipt at the counter.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="commercial">
+  <h2 class="sec">C · Commercial models</h2>
+  <p>How a brand's deal works — <em>who owns the stock</em> and <em>what can be returned</em> — drives ownership, GST timing, when the vendor gets paid, return windows and EOSS rules. It is a <strong>first-class dimension, not a flag</strong>. The four familiar names are stored as <strong>two axes</strong> and the friendly label is derived from them.</p>
+
+  <div class="callout co-key">
+    <strong>The two-axis model (locked).</strong> Every brand-deal is stored as two axes plus one boolean, and the friendly label is <em>derived</em> — screens still read Outright / Correction / SOR / Consignment.
+    <ul style="margin:8px 0 0">
+      <li><strong>Axis 1 — Ownership:</strong> KDPS-owns vs brand-owns. (This is what the GST trigger keys off.)</li>
+      <li><strong>Axis 2 — Return terms:</strong> none · capped · uncapped.</li>
+      <li><strong>Plus rolling-top-up</strong> (a boolean): present = Consignment, absent = SOR (for brand-owned, uncapped deals).</li>
+    </ul>
+    Storing the axes (not the label) means the record is robust to how a brand actually describes its deal, and one brand can run two models in a season without a schema change. <em>Variation is data, not code</em> (Rule 12).
+  </div>
+
+  <table>
+    <tr><th>Friendly label (derived)</th><th>Ownership</th><th>Return terms</th><th>Top-up</th><th>When vendor liability posts</th></tr>
+    <tr><td><strong>Outright</strong> (BNS)</td><td>KDPS owns</td><td>none</td><td>—</td><td>At Patna inward (on the PT)</td></tr>
+    <tr><td><strong>Correction</strong> (25-18-10)</td><td>KDPS owns</td><td>capped</td><td>—</td><td>At Patna inward (on the PT)</td></tr>
+    <tr><td><strong>SOR</strong></td><td>brand owns</td><td>uncapped</td><td>no</td><td>On the Sale (D3) — accrues as it sells</td></tr>
+    <tr><td><strong>Consignment</strong></td><td>brand owns</td><td>uncapped</td><td>yes (rolling)</td><td>On the Sale — never from the PT</td></tr>
+  </table>
+
+  <dl class="gloss">
+    <dt id="outright">Outright <span class="alias">BNS · Buy &amp; Sell</span> <span class="pill p-money">money</span></dt>
+    <dd>KDPS buys the stock outright and owns it; no returns. The vendor liability (incl. GST) posts at Patna inward on the PT. The primary term is "Outright"; "Buy &amp; Sell" / "BNS" is the alias.</dd>
+
+    <dt id="correction">Correction <span class="alias">25-18-10</span> <span class="pill p-money">money</span></dt>
+    <dd>KDPS owns the stock, but with a <strong>capped</strong> return allowance (the 25-18-10 schedule). It posts liability at inward like Outright, but tracks the capped return entitlement. <span class="badge b-ca">client</span> Whether 25-18-10 is a distinct deal or "Outright with a return clause" is a vocabulary/training question — the two-axis record holds either answer with no change.</dd>
+
+    <dt id="sor">SOR <span class="alias">Stock-on-Return · sale-or-return · consignment (qty-counted)</span> <span class="pill p-money">money</span></dt>
+    <dd>The brand owns the stock; KDPS holds it and may return all unsold pieces (<strong>uncapped</strong>). <em>Stock is counted by quantity but its value stays off KDPS's book until sale</em>; the vendor liability posts <strong>on the Sale</strong>, not the PT. Return windows of 60–120 days apply and their deadlines must be tracked.</dd>
+
+    <dt id="consignment">Consignment <span class="pill p-money">money</span></dt>
+    <dd>SOR <strong>plus rolling top-up</strong> — the brand keeps replenishing sold stock. Brand owns; uncapped returns; liability posts on the Sale, <strong>never from the PT</strong>.</dd>
+
+    <dt id="gst-recognition-point">GST recognition point <span class="pill p-rule">posting rule</span> <span class="badge b-ca">CA</span></dt>
+    <dd>A per-brand-per-season attribute carried <em>next to</em> the model flag, deciding <strong>when input GST is recognised once</strong> for brand-owned stock — keyed to the supplier's tax-invoice timing, so GST is never double-counted. Two paths: <em>consignment-as-agent</em> (Schedule I, invoice at dispatch) → purchase + ITC at arrival; <em>true sale-or-return</em> (Rule 55 challan, invoice at sale or the 6-month limit) → no purchase/ITC until sale. Per-brand tax characterisation is a CA call.</dd>
+
+    <dt id="gst-recognised">gst_recognised guard <span class="pill p-rule">posting rule</span> <span class="badge b-ca">CA</span></dt>
+    <dd>A money-critical invariant on each SOR/Consignment lot — <code>gst_recognised = (date, voucher_no)</code> — that ensures GST is booked <strong>exactly once</strong>, never twice (once at the arrival purchase voucher and again at the settlement journal). One convention is picked and the CA confirms it. This cannot be tested away later, so it is designed in now.</dd>
+
+    <dt id="deemed-supply">6-month deemed-supply clock <span class="pill p-rule">posting rule</span> <span class="badge b-ca">CA</span></dt>
+    <dd>A statutory clock (CGST §31(7)) on true sale-or-return lots: if the goods are not sold or returned within <strong>six months</strong> of removal, a supply is deemed to have happened and GST falls due. It is a <em>second, separate clock</em> from the 60–120-day commercial return window. Both run off one <code>removal_date</code> and are alarmed at 30 / 15 / 7 days. (Greenfield — no off-the-shelf ERP models it.)</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="gst">
+  <h2 class="sec">D · GST &amp; geography</h2>
+  <p>Tax is mandatory and statutory; Tally stays the book of record. The load-bearing fact is that KDPS's two states are <em>separate taxpayers</em>, so moving stock between them is a real taxable supply, not an internal shuffle.</p>
+
+  <dl class="gloss">
+    <dt id="gstin">GSTIN <span class="alias">distinct persons · Bihar &amp; Jharkhand</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>A state-level tax identity. KDPS has <strong>two GSTINs — Bihar and Jharkhand — and they are separate "distinct persons"</strong> under GST. Every store/warehouse maps to a state GSTIN; documents snapshot store → GSTIN → entity. Treatment is driven off the first two digits (state code) of the two GSTINs.</dd>
+    <dd class="seealso"><b>See also</b> <a href="#deemed-transfer">cross-state transfer</a>, <a href="#entity">LegalEntity → GSTIN → Store</a>. <span class="badge b-ca">client</span> Confirmed 26 Jun 2026: one PAN (one firm) holding two GSTINs (Bihar &amp; Jharkhand), one Tally company.</dd>
+
+    <dt id="deemed-transfer">Cross-state transfer <span class="alias">Bihar ↔ Jharkhand stock move</span> <span class="pill p-rule">posting rule</span> <span class="pill p-money">money</span></dt>
+    <dd>A stock move between the two GSTINs is a <strong>taxable IGST supply</strong> — a tax invoice with IGST out at the sender, a matching purchase voucher with ITC at the receiver, plus an e-way bill on the consignment value. It is <em>not</em> "internal — none". An <strong>intra-state</strong> move (within one GSTIN) stays stock-ledger-only. E-way bill thresholds are state/direction data: ₹50,000 cross-state; ₹1,00,000 intra-state in both Bihar and Jharkhand. <span class="badge b-ca">CA</span> slab basis on the transfer invoice + the Jharkhand e-way carve-out.</dd>
+
+    <dt id="hsn">HSN &amp; the apparel slab <span class="pill p-money">money</span> <span class="badge b-ca">CA</span></dt>
+    <dd>Apparel GST is <strong>slab-based and date-effective</strong> — modelled as data, never code. Current (GST 2.0, eff. 22 Sep 2025): <strong>5% up to ₹2,500 per piece, 18% above ₹2,500</strong>, GST-exclusive, decided on the <em>post-discount per-piece price</em> (so an offer can move a line across the boundary). KDPS (turnover &gt; ₹5 cr) needs 6-digit HSN on invoices. Hold rate, breakpoint and thresholds as date-effective, state- and direction-aware data; re-verify before go-live.</dd>
+
+    <dt id="prate">P RATE / landed ex-GST cost <span class="pill p-money">money</span> <span class="badge b-ca">CA</span></dt>
+    <dd>The canonical unit cost frozen at stock-in. <strong>Cost = P RATE directly</strong> — the per-piece vendor payable — plus value-weighted freight, minus value-weighted line discount. <strong>Never</strong> derive an ex-GST cost by dividing P RATE by (1 + slab): the raw PT data shows P RATE = BASIC × 1.20 (a flat markup convention, not a GST rate), so dividing would give a wrong cost. Profitability is derived from this cost (at stock-in) against POS revenue (at sale) — never hand-entered. If Tally needs an ex-GST figure, compute it from the actual HSN slab. <span class="badge b-ca">CA</span> statutory cost sign-off; confirm no brand embeds GST in P RATE.</dd>
+
+    <dt id="late-freight">Late freight after PT <span class="pill p-money">money</span> <span class="badge b-ca">Anand</span></dt>
+    <dd>Freight that arrives after the PT is posted. Reposting is forbidden (no-reposting invariant), so the choice is a forward-only rate adjustment vs a separate cost-correction event. To be settled before the inbound slice.</dd>
+
+    <dt id="tally">Tally <span class="alias">the statutory book of record</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The accounting system that remains the <strong>statutory book of record</strong>. KDPS's ledgers feed Tally one-way, with a KDPS-owned <strong>deterministic voucher number</strong> as the join key and the GST breakup carried (never recomputed). A Tally tie-out + failure queue is a first-class build slice — KDPS does not inherit any external tool's free stock↔GL reconciliation.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="pos">
+  <h2 class="sec">E · POS &amp; the edges</h2>
+  <p>The bought and built points where KDPS meets the outside world — the till, Tally, the bank, WhatsApp. Each edge is wrapped so its data model never reaches the ledger directly.</p>
+
+  <dl class="gloss">
+    <dt id="sale">Sale <span class="alias">the source-agnostic sale document</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The document a till raises when something sells. It is <strong>source-agnostic</strong> — <code>source ∈ {Ten Software, KDPS POS, manual bill}</code> — and the posting logic lives on the Sale document, not on the adapter. The Sale is the writer of SOR/Consignment sold-liability (the PT only flags not-owned). Each store runs <strong>exactly one POS</strong> (a hard config invariant), so the dedup key store + bill-no is uniform.</dd>
+
+    <dt id="ten">Ten Software <span class="alias">the external POS</span></dt>
+    <dd>The existing third-party POS, wrapped behind a swappable adapter (an anti-corruption layer) so its data model never reaches the ledger. The adapter ships as a <strong>reader first</strong> (ingest + daily reconciliation green before any own-POS store goes live). <span class="badge b-next">spike</span> Can the sale event carry more than the raw barcode (season / MRP), and does it prompt on a multi-variant barcode.</dd>
+
+    <dt id="kdpspos">KDPS POS <span class="alias">own POS</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The POS KDPS builds itself, a parallel writer of the same source-agnostic <a href="#sale">Sale</a> document, phased in behind Ten Software. Built offline-first (PWA + durable outbox + a client-UUID per sale → the server returns the same Sale-ID on retry, so syncing is idempotent). The counter bill is a normal B2C GST tax invoice — <strong>no IRP/IRN</strong> (e-invoicing is B2B-only).</dd>
+
+    <dt id="adapter">Swappable adapter <span class="alias">anti-corruption layer · the POS contract</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The locked POS boundary: a facade of push/pull operations (item/price master, pending-inward, EOSS/offer rules out; line-item sales, stock-on-hand, daily collection in) defined in KDPS domain terms. Both Ten Software and KDPS POS sit behind it; a per-store cutover is a one-field master flip with zero spine change. The join is <strong>barcode + season</strong> with a barcode-only fallback that re-attaches season at the edge via the effective-dated master.</dd>
+
+    <dt id="idempotency">Idempotency key <span class="alias">client-UUID per sale</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>A UUID the till stamps on each sale before it ever leaves the device. On retry the server recognises the UUID and returns the <strong>same Sale-ID</strong> instead of posting a duplicate — non-negotiable for offline sync where a sale may be sent more than once. The Tally voucher number follows the same deterministic-key pattern.</dd>
+
+    <dt id="offer">Offer <span class="alias">the offer rulebook</span> <span class="pill p-money">money</span></dt>
+    <dd>Brand-specific, slab/condition-based discount logic (value slabs; B2G1 with lowest-item-free; gifts above thresholds; per-store applicability; start/end dates with fallback rules). Offers are applied on-invoice at the till, lowering the price actually collected — never a separate gift or deducted-discount liability line — so GST is charged on the net price collected with input tax available on all items.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="ai">
+  <h2 class="sec">F · Controls &amp; AI</h2>
+  <p>The reconciling and the intelligence layers. The hard rule here is that AI never touches the books — it reads everything and writes only messages and suggestions.</p>
+
+  <dl class="gloss">
+    <dt id="ai-edges">AI at the edges <span class="pill p-ai">AI</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The boundary AI is allowed to operate at: <strong>reading messy input, drafting, and narrating</strong> — never inside a posting or an approval path. AI <em>suggests, never sets</em>; it is read-only over the ledgers and writes nothing but messages. The sharpest edge to fence is the analytics target/hold-back logic, kept under the AI-at-edges rule.</dd>
+
+    <dt id="digest">WhatsApp digest <span class="pill p-ai">AI</span></dt>
+    <dd>The close-of-day exception feed the owner reads on WhatsApp. Its <strong>type and timing are per-user configurable</strong> (config data, default 9 PM) — not a fixed time. A worked example of "variation is data, not code".</dd>
+
+    <dt id="variation-rule">Variation is data, not code <span class="alias">Rule 12 · built to grow</span> <span class="pill p-rule">posting rule</span></dt>
+    <dd>The governing principle that anything expected to vary — GST slabs, offer rules, commercial-model labels, digest timing, e-way thresholds, brand terms — is held as <strong>configuration rows over a frozen kernel</strong>, not as code that has to be changed. Config rows are customised; the kernel is not. This is why the four commercial models are two stored axes and a derived label, and why GST is date-effective data.</dd>
+
+    <dt id="entity">LegalEntity → GSTIN → Store <span class="pill p-key">identity</span></dt>
+    <dd>The relational backbone of geography and scoping: a legal entity owns one or more GSTINs, each GSTIN owns stores/warehouses. Modelling it relationally means "one company with two GSTINs" vs "two companies" is a <strong>data row, not a schema change</strong>. The Tally company mapping and the data-scoping (store / brand / season / state-GSTIN carried as FK dimensions on every ledger leg) both resolve against this hierarchy.</dd>
+
+    <dt id="flag-dont-block">Flag, don't block <span class="pill p-rule">posting rule</span></dt>
+    <dd>The operating stance for every mismatch: raise a flag into the <a href="#exception">exception queue</a> for its named owner, and let the flow continue. A sale or a receipt is never stopped at the counter by a data problem; the problem is owned and resolved off the critical path.</dd>
+  </dl>
+</section>
+
+<!-- ============================================================ -->
+<section id="oneline">
+  <h2 class="sec">One-line index</h2>
+  <p>Every term, one sentence, for a quick scan.</p>
+  <table>
+    <tr><th style="width:26%">Term</th><th>In one line</th></tr>
+    <tr><td><a href="#sku">SKU</a></td><td>Brand + Style + Colour + Size — the sellable identity; stock is a count under it.</td></tr>
+    <tr><td><a href="#barcode">Barcode</a></td><td>A non-unique scan-alias pointing to an SKU cohort — not the identity itself.</td></tr>
+    <tr><td><a href="#cohort">Piece cohort</a></td><td>The stock key = barcode + season; each season is its own cohort.</td></tr>
+    <tr><td><a href="#count-under-barcode">Count-under-barcode</a></td><td>Stock = a count of pieces under a cohort, not one row per piece.</td></tr>
+    <tr><td><a href="#pme">P/M/E tier</a></td><td>Premium/Medium/Economy colour stand-in when exact colour isn't tracked.</td></tr>
+    <tr><td><a href="#season">Season</a></td><td>The selling period; calendar runs Open → EOSS → Closed; drives age &amp; markdown.</td></tr>
+    <tr><td><a href="#document">Document</a></td><td>A numbered business event — the only thing that writes a ledger.</td></tr>
+    <tr><td><a href="#posting">Posting</a></td><td>An append-only, balanced entry a document writes to a ledger.</td></tr>
+    <tr><td><a href="#ledger">Ledger</a></td><td>A derived book (stock / vendor / cash); balance = sum of postings.</td></tr>
+    <tr><td><a href="#snapshot">Snapshot</a></td><td>The master values a document froze at creation, so edits don't rewrite history.</td></tr>
+    <tr><td><a href="#reversing">Reversing entry</a></td><td>A new dated correction posting — the only way to fix the books.</td></tr>
+    <tr><td><a href="#pt">PT</a></td><td>The priced stock-in file; posts valuation + liability at Patna inward.</td></tr>
+    <tr><td><a href="#grn">GRN</a></td><td>What physically arrived; posts quantity only (no cost).</td></tr>
+    <tr><td><a href="#shipment">Shipment</a></td><td>The physical consignment — the real anchor of inbound, booking or not.</td></tr>
+    <tr><td><a href="#tir">TIR</a></td><td>The purchase-side export that feeds Tally at inward.</td></tr>
+    <tr><td><a href="#srbnb">SRBNB</a></td><td>Stock-Received-But-Not-Billed — the accrual between goods-here and bill-matched.</td></tr>
+    <tr><td><a href="#bookingless">Booking-less receipt</a></td><td>Goods landing with no booking; Shipment anchors, no phantom booking.</td></tr>
+    <tr><td><a href="#vflip">V-flip</a></td><td>End-of-season: settle unsold stock with the brand, flip ownership to KDPS.</td></tr>
+    <tr><td><a href="#outright">Outright (BNS)</a></td><td>KDPS owns, no returns; liability at inward.</td></tr>
+    <tr><td><a href="#correction">Correction (25-18-10)</a></td><td>KDPS owns, capped returns; liability at inward.</td></tr>
+    <tr><td><a href="#sor">SOR</a></td><td>Brand owns, uncapped returns; value off-book until sale; liability on the Sale.</td></tr>
+    <tr><td><a href="#consignment">Consignment</a></td><td>SOR + rolling top-up; liability on the Sale, never from the PT.</td></tr>
+    <tr><td><a href="#gst-recognised">gst_recognised guard</a></td><td>Invariant booking GST exactly once on an SOR/Consignment lot.</td></tr>
+    <tr><td><a href="#deemed-supply">6-month clock</a></td><td>Statutory deemed-supply clock (§31(7)), separate from the commercial return window.</td></tr>
+    <tr><td><a href="#gstin">GSTIN</a></td><td>State tax identity; Bihar &amp; Jharkhand are distinct persons.</td></tr>
+    <tr><td><a href="#deemed-transfer">Cross-state transfer</a></td><td>Bihar ↔ Jharkhand move is a taxable IGST supply, not internal.</td></tr>
+    <tr><td><a href="#prate">P RATE / landed cost</a></td><td>Cost = P RATE directly; never divide by (1 + slab).</td></tr>
+    <tr><td><a href="#tally">Tally</a></td><td>The statutory book of record, fed one-way with a deterministic voucher number.</td></tr>
+    <tr><td><a href="#sale">Sale</a></td><td>Source-agnostic sale document; posting logic lives on it, not the adapter.</td></tr>
+    <tr><td><a href="#adapter">Swappable adapter</a></td><td>The POS contract; both Ten Software and KDPS POS sit behind it.</td></tr>
+    <tr><td><a href="#idempotency">Idempotency key</a></td><td>Client-UUID per sale; retry returns the same Sale-ID.</td></tr>
+    <tr><td><a href="#offer">Offer</a></td><td>Brand-specific slab/condition discounts, applied on-invoice at the till.</td></tr>
+    <tr><td><a href="#ai-edges">AI at the edges</a></td><td>AI reads &amp; suggests, never posts or approves.</td></tr>
+    <tr><td><a href="#variation-rule">Variation is data</a></td><td>Rule 12 — anything that varies is config rows over a frozen kernel.</td></tr>
+    <tr><td><a href="#entity">LegalEntity → GSTIN → Store</a></td><td>Relational geography; one PAN / one entity confirmed (the two-company shape stays a data row).</td></tr>
+    <tr><td><a href="#flag-dont-block">Flag, don't block</a></td><td>Mismatches go to the exception queue; the flow never stops.</td></tr>
+  </table>
+</section>
+
+<footer>
+  KDPS · Domain Glossary · 25 June 2026 · The single controlled vocabulary for the build. Salvaged from the prior CONTEXT glossary, stripped of locked-stack content (the stack lives in its own ADR), and reconciled to all 16 locked Q&amp;A decisions. Terms tagged <span class="badge b-ca">CA / client</span> carry an open external answer recorded, not invented.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

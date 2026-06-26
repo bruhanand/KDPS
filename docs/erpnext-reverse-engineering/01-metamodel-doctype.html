@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Meta-Model — everything is a DocType — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html" class="cur"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 1 · Foundations</div>
+  <h1>The Meta-Model — everything is a DocType</h1>
+  <p class="sub">The single most important idea: model your domain as schema-defined documents, not hand-written tables. How a DocType is just data, and why that buys you the entire admin UI, ORM, REST API and audit trail for free.</p>
+</header>
+
+<section>
+<h2 class="sec">Why this is the chapter that decides everything</h2>
+
+<p>Before you write a line of an ERP, you make one architectural choice that you cannot cheaply reverse: <strong>do business objects live in code, or in data?</strong> The instinctive answer is code — a <code>Customer</code> class, a <code>customers</code> table, a customer controller, a customer form, a customer API. Repeat fifty times for fifty entities. Every entity is a small subsystem you hand-wire, and every cross-cutting concern — audit columns, permissions, a draft/submit state machine — has to be remembered and re-implemented on each one. The cost is not the first ten entities; it is the next five hundred, and the day someone asks for a new field and you have to touch six layers to add it.</p>
+
+<p>ERPNext makes the opposite choice, and it is the choice this whole handbook builds on. Its foundational idea is that <strong>a DocType is itself data, not code.</strong> Every business object — masters, transactions, ledgers, settings, even the child rows inside a grid — is declared as a <code>.json</code> file: a list of fields, each with a type and a handful of flags, plus a few document-level switches. A framework (Frappe, which is <em>not</em> in the ERPNext checkout but underneath it) reads that schema and <em>derives</em> the SQL table, the list view, the form UI, a REST/RPC API, an ORM, the role-based permission engine, and a uniform set of audit columns — none of it hand-written. ERPNext ships roughly <strong>528 DocTypes</strong> this way.</p>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>Model your metadata as a first-class citizen and build (or adopt) <strong>one generic engine</strong> over it. Then adding an entity is writing one declaration — not wiring six subsystems by hand. Every record shares the same shape, so observability, the state machine, typed links, and polymorphic associations come for free and behave <em>identically</em> everywhere. That uniformity is the entire payoff.</p>
+</div>
+
+<p>The rest of this chapter walks the meta-model concretely: the file triplet that makes up a DocType, the lifecycle hooks where logic hangs, how relationships and behaviour are themselves encoded as data, and the document-level flags (naming, single, submittable) that turn one schema into a table, a config object, or a ledger. We finish with the standard audit columns the framework injects, the pitfalls of porting this to a plain SQL stack, and the takeaways a builder returns to.</p>
+</section>
+
+<section>
+<h2 class="sec">The whole picture: one declaration, six capabilities</h2>
+
+<p>Here is the leverage, stated as a flow. You write <em>one</em> schema file. The engine hands you six subsystems back, before you have written any behaviour at all.</p>
+
+<div class="flow col">
+  <div class="node">Write <code>item.json</code><small>field_order + fields[] + flags — pure data</small></div>
+  <div class="arr"></div>
+  <div class="node">SQL table<small>columns derived from fieldtypes; created/migrated by the engine</small></div>
+  <div class="arr"></div>
+  <div class="node">List view + Form UI<small>filterable list, editable form, grids for child tables — no front-end code</small></div>
+  <div class="arr"></div>
+  <div class="node">REST endpoint<small><code>/api/resource/Item</code> — CRUD over HTTP for free</small></div>
+  <div class="arr"></div>
+  <div class="node">ORM handle<small><code>frappe.get_doc("Item", code)</code>, <code>frappe.db.get_value(...)</code></small></div>
+  <div class="arr"></div>
+  <div class="node">Permissions + audit columns<small>per-role/per-field checks; owner/creation/modified injected on every row</small></div>
+</div>
+
+<p>Only <em>after</em> that do <span class="fileref">erpnext/stock/doctype/item/item.py</span> and <span class="fileref">erpnext/stock/doctype/item/item.js</span> exist, and they exist only to <em>add</em> behaviour on top of the free baseline. The schema is mandatory; the controller and client script are optional. That asymmetry is the signature of a metadata-driven system.</p>
+
+<div class="callout co-note"><span class="lbl">A note on where the line is</span>
+<p>Throughout this handbook, <span class="badge b-frappe">Frappe core</span> marks a feature provided by the underlying framework (the generic engine), and <span class="badge b-erpnext">ERPNext</span> marks app-level code that <em>uses</em> that feature. The split matters when you port: the DocType <code>.json</code> files are ERPNext's, but the machinery that turns them into tables, APIs and permissions is Frappe's. Copy only the JSON and you copy the data without the engine.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The key DocTypes we will keep returning to</h2>
+
+<p>These seven entities recur across the whole handbook; meet them once here. Note the <code>kind</code> column — it is not a label ERPNext stores, but a useful way to read what role a DocType plays from its flags.</p>
+
+<table>
+<tr><th>DocType</th><th>Kind</th><th>Defining flags</th><th>Why it matters</th></tr>
+<tr>
+  <td><strong>Sales Invoice</strong><br><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span></td>
+  <td>transaction</td>
+  <td><code>is_submittable:1</code>, <code>autoname:naming_series:</code></td>
+  <td>The canonical submittable selling document; embeds child Tables (items, taxes, payments) and posts to ledgers on submit.</td>
+</tr>
+<tr>
+  <td><strong>Sales Invoice Item</strong><br><span class="fileref">erpnext/accounts/doctype/sales_invoice_item/sales_invoice_item.json</span></td>
+  <td>child</td>
+  <td><code>istable:1</code>, <code>autoname:hash</code></td>
+  <td>The line-item grid for the invoice. Exists only inside the parent's <code>items</code> Table field — no standalone list view.</td>
+</tr>
+<tr>
+  <td><strong>Item</strong><br><span class="fileref">erpnext/stock/doctype/item/item.json</span></td>
+  <td>master</td>
+  <td><code>autoname:field:item_code</code>, <code>has_variants</code></td>
+  <td>The rich product master. <code>has_variants</code> + an attributes Table drive Style×Size×Colour variants — the direct template for an SKU model.</td>
+</tr>
+<tr>
+  <td><strong>Item Variant Attribute</strong><br><span class="fileref">erpnext/stock/doctype/item_variant_attribute/item_variant_attribute.json</span></td>
+  <td>child</td>
+  <td><code>istable:1</code></td>
+  <td>Holds the <code>attribute</code>/<code>attribute_value</code> rows that define each variant axis on an Item. Variation as data, not code.</td>
+</tr>
+<tr>
+  <td><strong>GL Entry</strong><br><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td>
+  <td>ledger</td>
+  <td><code>is_submittable:1</code>, <code>in_create:1</code></td>
+  <td>One ledger row. Its <code>party_type</code> + <code>party</code> pair is the canonical polymorphic-party pattern. Written by code, never by a form.</td>
+</tr>
+<tr>
+  <td><strong>Stock Settings</strong><br><span class="fileref">erpnext/stock/doctype/stock_settings/stock_settings.json</span></td>
+  <td>single</td>
+  <td><code>issingle:1</code></td>
+  <td>Global configuration — one row, no name. One of 31 Settings singles in ERPNext.</td>
+</tr>
+<tr>
+  <td><strong>Item Default</strong><br><span class="fileref">erpnext/stock/doctype/item/item.json</span></td>
+  <td>setup (child)</td>
+  <td>attached via an <code>item_defaults</code> Table</td>
+  <td>Per-company default warehouse/accounts hung off the Item through a Table field — config that varies by company without changing the schema.</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">Pattern 1 — Schema-as-data: the DocType <em>is</em> metadata</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Schema-as-data (DocType = metadata, not code)</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Describe each business object <em>declaratively</em> as data: its fields, their types, and a few flags. A single generic engine then derives the table, the UI, the API, the ORM, the permissions and the audit columns from that one declaration.</p>
+      <p>You stop writing entities and start <em>declaring</em> them. The marginal cost of the 100th entity is the same as the 1st.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Each DocType is a JSON file with three parts: document-level flags, a <code>field_order</code> list, and a <code>fields</code> array of dicts like <code>{fieldname, fieldtype, options, reqd, read_only, ...}</code>.</p>
+      <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span> declares <code>is_submittable:1</code>, a <code>naming_rule</code>, a <code>permissions</code> array and roughly <strong>200 field dicts</strong>. The Frappe framework <span class="badge b-frappe">Frappe core</span> consumes it to build everything. ERPNext ships ~528 such files.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Two viable shapes on Django/Postgres:</p>
+      <ul>
+        <li>Store entity definitions in <strong>metadata tables / a JSON registry</strong> and write one generic admin + serializer + migration layer; or</li>
+        <li>Lean on <strong>Django model classes + ModelAdmin + DRF ViewSets</strong> as your "engine".</li>
+      </ul>
+      <p>The durable move either way: pick <strong>one</strong> declaration format and generate CRUD, list, API and perms from it — never hand-code per entity.</p>
+    </div>
+  </div>
+</div>
+
+<p>A field declaration carries everything the engine needs. Below, three real lines from the Sales Invoice schema: a typed foreign key, a denormalized fetched value, and an embedded child grid. No SQL, no form code, no serializer — the engine reads these and produces all three.</p>
+
+<pre><code>{<span class="t">"fieldname"</span>: <span class="s">"customer"</span>, <span class="t">"fieldtype"</span>: <span class="s">"Link"</span>, <span class="t">"label"</span>: <span class="s">"Customer"</span>, <span class="t">"options"</span>: <span class="s">"Customer"</span>, <span class="t">"reqd"</span>: 1}
+{<span class="t">"fetch_from"</span>: <span class="s">"customer.customer_name"</span>, <span class="t">"fieldname"</span>: <span class="s">"customer_name"</span>, <span class="t">"fieldtype"</span>: <span class="s">"Small Text"</span>, <span class="t">"read_only"</span>: 1}
+{<span class="t">"fieldname"</span>: <span class="s">"items"</span>, <span class="t">"fieldtype"</span>: <span class="s">"Table"</span>, <span class="t">"label"</span>: <span class="s">"Items"</span>, <span class="t">"options"</span>: <span class="s">"Sales Invoice Item"</span>, <span class="t">"reqd"</span>: 1}</code></pre>
+
+<p>Read those three lines as instructions to a compiler: line one is "make a required FK column to the Customer table and render a picker"; line two is "add a read-only text column and copy <code>customer.customer_name</code> into it on save"; line three is "embed an editable grid of Sales Invoice Item rows". The schema is the source of truth and the build instructions at once.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — the standard fields are invisible</span>
+<p><code>owner</code>, <code>creation</code>, <code>modified</code>, <code>modified_by</code>, <code>docstatus</code>, <code>idx</code> and <code>name</code> do <strong>not</strong> appear in any ERPNext DocType JSON — the framework injects them on every table. A re-implementer who copies only the JSON will silently lose the audit columns, the submit state machine and child ordering. Budget for them in your base layer from day one.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 2 — The file triplet: schema, controller, client, test</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>.json / .py / .js / test — separate shape, server behaviour, client behaviour</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Separate the <em>shape</em> of a thing (schema) from its <em>server-side behaviour</em> (controller) and its <em>client behaviour</em> (script). Co-locate all of them per entity, plus a colocated test.</p>
+      <p>Each entity becomes self-contained and discoverable: one folder tells you everything about it.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>ls erpnext/stock/doctype/item/</code> shows the quartet:</p>
+      <ul>
+        <li><span class="fileref">item.json</span> — schema</li>
+        <li><span class="fileref">item.py</span> — <code>class Item(Document)</code> with <code>validate</code>/<code>autoname</code>/<code>on_update</code></li>
+        <li><span class="fileref">item.js</span> — <code>frappe.ui.form.on("Item", {...})</code> form events</li>
+        <li><span class="fileref">test_item.py</span> — <code>class TestItem(ERPNextTestSuite)</code></li>
+      </ul>
+      <p>Controllers subclass the framework <code>Document</code>; client scripts bind to named form events.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Mirror the layout per entity: a schema/model file, a server service/controller exposing lifecycle hooks, a thin client module bound to form/UI events, and a colocated test.</p>
+      <p>On Django: a model module, a controller/service with hooks, a small front-end module, and a test file in the same package. The point is one folder = one entity, fully.</p>
+    </div>
+  </div>
+</div>
+
+<p>The controller is a plain class over the framework's <code>Document</code>, with business logic attached to named lifecycle methods. This is the entire shape of a controller — there is no router, no dispatch table, no decorator soup. The framework knows to call <code>validate</code>, <code>before_submit</code>, <code>on_submit</code> at the right moments because they are named conventions, not registrations.</p>
+
+<pre><code><span class="k">class</span> <span class="t">SalesInvoice</span>(SellingController):
+    <span class="k">def</span> <span class="t">validate</span>(self): ...
+    <span class="k">def</span> <span class="t">before_save</span>(self):
+        POSService(self).update_paid_amount()
+    <span class="k">def</span> <span class="t">before_submit</span>(self):
+        self.add_remarks()
+    <span class="k">def</span> <span class="t">on_submit</span>(self):
+        POSService(self).validate_pos_paid_amount()
+    <span class="k">def</span> <span class="t">on_cancel</span>(self): ...</code></pre>
+<p class="srcline">erpnext/accounts/doctype/sales_invoice/sales_invoice.py:62</p>
+
+<p>The client script is the mirror image on the browser: it registers handlers against the same vocabulary of form events. <span class="fileref">erpnext/stock/doctype/item/item.js:27</span> opens with <code>frappe.ui.form.on("Item", { ... })</code>, where keys are field names or event names (<code>refresh</code>, <code>onload</code>, <code>item_code</code>) and values are functions. The framework wires them to the form it already generated from the schema — you never build the form, you only react to it.</p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 3 — Lifecycle hooks &amp; controller inheritance</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Business rules attach to lifecycle events; shared behaviour is inherited</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Business rules attach to well-known document lifecycle events — <code>validate</code>, <code>before</code>/<code>on submit</code>, <code>on cancel</code> — instead of ad-hoc call sites scattered through the codebase.</p>
+      <p>Cross-cutting behaviour (posting, validation) is <strong>inherited</strong> through a controller class hierarchy, so it is written once and reused, not copy-pasted per entity.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>class SalesInvoice(SellingController)</code> defines <code>validate()</code>, <code>before_save()</code>, <code>before_submit()</code>, <code>on_submit()</code>, <code>on_cancel()</code>. The inheritance chain is deep:</p>
+      <p><code>SellingController → StockController → AccountsController → TransactionBase → StatusUpdater → Document</code> (<span class="fileref">erpnext/controllers/selling_controller.py:19</span>, <span class="fileref">erpnext/utilities/transaction_base.py:20</span>, <span class="fileref">erpnext/controllers/status_updater.py:181</span>).</p>
+      <p>The framework <span class="badge b-frappe">Frappe core</span> invokes each hook at the right moment inside the save/submit transaction.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Define a base <code>Document</code>/aggregate with overridable hooks (<code>validate</code>, <code>beforeSave</code>, <code>onSubmit</code>, <code>onCancel</code>) and a dispatcher that calls them <strong>inside one DB transaction</strong>.</p>
+      <p>Put cross-cutting posting/validation in base controllers; let entities override. On Django you can override <code>save()</code>/<code>clean()</code> + signals, but a centralized hook dispatcher is cleaner and far easier to reason about.</p>
+    </div>
+  </div>
+</div>
+
+<p>The inheritance chain is worth internalizing, because it is where the "documents write ledgers" rule lives. A Sales Invoice is a <code>SellingController</code>, but stock posting comes from <code>StockController</code>, accounting posting from <code>AccountsController</code>, status roll-ups (e.g. "Order is now Completed") from <code>StatusUpdater</code>. None of that is in the Sales Invoice class — it is inherited.</p>
+
+<div class="flow col">
+  <div class="node">SalesInvoice<small>entity-specific selling rules</small></div>
+  <div class="arr"></div>
+  <div class="node">SellingController<small>selling-side validation, pricing</small></div>
+  <div class="arr"></div>
+  <div class="node">StockController<small>posts the Stock Ledger</small></div>
+  <div class="arr"></div>
+  <div class="node">AccountsController<small>posts GL Entries</small></div>
+  <div class="arr"></div>
+  <div class="node">TransactionBase<small>shared transaction plumbing</small></div>
+  <div class="arr"></div>
+  <div class="node">StatusUpdater<small>rolls up document status</small></div>
+  <div class="arr"></div>
+  <div class="node">Document<small>framework base — runs the hooks</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — don't skip <code>super()</code></span>
+<p>The chain is deep and a hook you override may be relied on by a base class. Blindly overriding <code>validate()</code> or <code>on_submit()</code> without calling <code>super()</code> can silently skip stock or GL posting — the document submits "successfully" and the ledgers never move. When you override a lifecycle hook on an inherited controller, call the parent unless you are <em>certain</em> you mean to replace its behaviour.</p>
+</div>
+
+<p>We unpack the submit/cancel transaction itself — what runs in what order, and how reversal works — in <a href="02-document-lifecycle.html">the document lifecycle chapter</a>. For now the takeaway is structural: <em>logic lives on named hooks, shared logic lives in base classes.</em></p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 4 — Typed relationships in the schema</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Link, Table, Dynamic Link — relationships are field metadata</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Foreign keys, one-to-many composition, and polymorphic associations are all expressed as <strong>field metadata</strong>. Because the relationship is data, the engine can validate referential integrity, render pickers and grids, and join generically — without bespoke code per relationship.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <ul>
+        <li><strong>Link</strong>: <code>{fieldtype:"Link", options:"Customer"}</code> — a typed FK.</li>
+        <li><strong>Table</strong>: <code>{fieldtype:"Table", options:"Sales Invoice Item"}</code> — an embedded child grid (child has <code>istable:1</code>).</li>
+        <li><strong>Dynamic Link</strong>: in <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span>, <code>party_type</code> (Link → DocType) + <code>party</code> (Dynamic Link → <code>party_type</code>) gives a polymorphic party (Customer/Supplier/Employee).</li>
+      </ul>
+      <p>Across the codebase: <strong>2159 Link</strong>, <strong>298 Table</strong>, <strong>78 Dynamic Link</strong> fields.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>On SQL/Django:</p>
+      <ul>
+        <li>Link → <code>ForeignKey</code></li>
+        <li>Table → a related model with a parent FK + an ordering column (<code>idx</code>)</li>
+        <li>Dynamic Link → <code>GenericForeignKey</code> (<code>content_type</code> + <code>object_id</code>) or a <code>(party_type, party_id)</code> pair</li>
+      </ul>
+      <p>Keep the relationship <strong>in metadata</strong> so one generic loader can resolve and validate it.</p>
+    </div>
+  </div>
+</div>
+
+<p>The polymorphic case is the most powerful and the most dangerous, so look at it directly. A single <code>GL Entry</code> schema must be able to point at a Customer on one row, a Supplier on another, an Employee on a third — without three different ledger tables. The Dynamic Link does this by reading the target table name <em>at runtime</em> from a sibling field:</p>
+
+<pre><code>{<span class="t">"fieldname"</span>: <span class="s">"party_type"</span>, <span class="t">"fieldtype"</span>: <span class="s">"Link"</span>,         <span class="t">"label"</span>: <span class="s">"Party Type"</span>, <span class="t">"options"</span>: <span class="s">"DocType"</span>}
+{<span class="t">"fieldname"</span>: <span class="s">"party"</span>,      <span class="t">"fieldtype"</span>: <span class="s">"Dynamic Link"</span>, <span class="t">"label"</span>: <span class="s">"Party"</span>,      <span class="t">"options"</span>: <span class="s">"party_type"</span>}</code></pre>
+
+<p>Read it carefully: <code>party_type</code> is itself a Link whose <code>options</code> is the literal DocType named <code>"DocType"</code> — i.e. it stores the <em>name of a table</em> ("Customer"). <code>party</code> is a Dynamic Link whose <code>options</code> is not a DocType name but the <em>field name</em> <code>party_type</code>. So to resolve <code>party</code>, the engine first reads <code>party_type</code>, learns the row points at "Customer", and treats <code>party</code> as a FK into Customer. One schema, three possible targets.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — Dynamic Link has no DB-level integrity</span>
+<p>Because the target is decided at runtime, the database <strong>cannot</strong> enforce the reference. There is no Postgres foreign key that says "<code>party</code> must exist in whatever <code>party_type</code> says". That validation lives entirely in framework/controller code. A naive port using a plain <code>(type, id)</code> pair must add the existence check by hand — and must add it on <em>every</em> write path, or you will accumulate dangling party references that no constraint catches.</p>
+</div>
+
+<p>The child-Table relationship has its own subtlety. A child DocType (<code>istable:1</code>) is not a standalone entity: it only exists inside a parent's Table field and carries <code>parent</code>, <code>parentfield</code>, <code>parenttype</code> and <code>idx</code> columns the framework adds. It has no list view by design, and querying or creating one independently breaks assumptions. The parent and its children are saved atomically as one document — header and lines in a single transaction — which is exactly what you want for an invoice.</p>
+
+<p>We use the Link/Table/Dynamic-Link triad heavily later: see <a href="06-master-data-and-party.html">master data &amp; the Party</a> for the party model in full, and <a href="03-accounting-ledger.html">the accounting ledger</a> for how GL Entry rows are produced.</p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 5 — Naming, Single and Submittable as flags</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Primary keys, singletons, and the state machine are configuration, not code</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Three things that are usually re-coded per entity — how the primary key is generated, whether the entity is a single global config row, and whether it has a draft/submitted/cancelled state machine — are instead selected by <strong>flags</strong> on the schema.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <ul>
+        <li><strong>autoname</strong>: a naming series (<code>ACC-SINV-.YYYY.-</code>), <code>field:item_code</code> (use a field value as PK), or <code>hash</code> (random, for children).</li>
+        <li><strong>issingle:1</strong> (<span class="fileref">erpnext/stock/doctype/stock_settings/stock_settings.json</span>) — one row, no name. 31 Settings singles.</li>
+        <li><strong>is_submittable:1</strong> adds the <code>docstatus</code> machine (0 draft / 1 submitted / 2 cancelled) that GL Entry and Sales Invoice depend on; ledgers also set <code>in_create:1</code>.</li>
+      </ul>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Provide pluggable ID strategies (sequence/series, natural key, UUID) chosen by config. Model singletons as a one-row table or a settings store. Implement submit/cancel as a <code>status</code> column + guarded transitions in the base controller.</p>
+      <p>Don't reinvent any of these per entity — they are framework concerns.</p>
+    </div>
+  </div>
+</div>
+
+<p>Naming deserves a close look, because in this model <strong><code>name</code> is the real primary key</strong> — not an auto-increment <code>id</code>. The <code>autoname</code>/<code>naming_rule</code> flag decides what <code>name</code> contains. When a flag isn't enough, an entity can override the <code>autoname</code> hook in code. Item does exactly this: it can use a naming series for templates, but for ordinary items it sets <code>name</code> equal to <code>item_code</code> itself.</p>
+
+<pre><code><span class="k">def</span> <span class="t">autoname</span>(self):
+    <span class="k">if</span> frappe.db.get_default(<span class="s">"item_naming_by"</span>) == <span class="s">"Naming Series"</span>:
+        <span class="k">if</span> self.variant_of:
+            ...  <span class="c"># build variant code from template</span>
+        <span class="k">else</span>:
+            <span class="k">from</span> frappe.model.naming <span class="k">import</span> set_name_by_naming_series
+            set_name_by_naming_series(self)
+            self.item_code = self.name
+    self.item_code = strip(self.item_code)
+    self.name = self.item_code</code></pre>
+<p class="srcline">erpnext/stock/doctype/item/item.py:161</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — naming is a primary-key decision, with cascade</span>
+<p>Because <code>name</code> is the PK and other tables Link to it by value, the naming strategy is a structural commitment. Renaming (when <code>allow_rename</code> is set) has cascading FK implications the framework handles for you — and that a hand-rolled stack must handle itself. Mixing strategies carelessly (a natural key that later collides, a series that resets) is expensive to unwind once data exists. Decide naming per entity <em>before</em> you ship it.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — <code>is_submittable</code> changes the semantics, not just adds a column</span>
+<p>Once an entity is submittable, <code>docstatus</code> gates editing: a submitted document is immutable except via amend or cancel. Ledger doctypes additionally set <code>in_create:1</code>, meaning rows are written by code, never hand-entered in a form. <strong>Do not model a ledger as an ordinary editable master.</strong> If your stock or accounting ledger can be edited through the admin UI, your books are not trustworthy. Make ledgers append-only and machine-written from the start.</p>
+</div>
+
+<p>The document-level flags also drive the whole submit machine declaratively. Here is the header block of the Sales Invoice schema — naming, submittability, module, and per-role permissions, all as data:</p>
+
+<pre><code><span class="t">"autoname"</span>: <span class="s">"naming_series:"</span>,
+<span class="t">"is_submittable"</span>: 1,
+<span class="t">"naming_rule"</span>: <span class="s">"By \"Naming Series\" field"</span>,
+<span class="t">"module"</span>: <span class="s">"Accounts"</span>,
+<span class="t">"permissions"</span>: [
+ {<span class="t">"role"</span>: <span class="s">"Accounts Manager"</span>, <span class="t">"read"</span>: 1, <span class="t">"write"</span>: 1, <span class="t">"create"</span>: 1,
+  <span class="t">"submit"</span>: 1, <span class="t">"cancel"</span>: 1, <span class="t">"amend"</span>: 1, <span class="t">"delete"</span>: 1, <span class="t">"report"</span>: 1}
+]</code></pre>
+<p class="srcline">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</p>
+
+<p>Notice that <code>submit</code>, <code>cancel</code> and <code>amend</code> are themselves permission verbs — the state machine and the permission model are wired together in the same data. We dig into the permission engine in <a href="08-permissions-and-roles.html">permissions &amp; roles</a>.</p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 6 — Modules &amp; the free audit columns</h2>
+
+<div class="pattern">
+  <div class="ph"><div class="tag">Pattern</div><h3>Every entity names its module; the engine injects identical audit columns everywhere</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Every entity declares the <strong>module</strong> it belongs to (for organisation, navigation and access grouping), and the engine injects the <em>same</em> audit/metadata columns on every record — so provenance and change-tracking are universal and uniform, never per-entity afterthoughts.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Every DocType JSON has a <code>module</code> (e.g. "Accounts", "Stock"); <span class="fileref">erpnext/modules.txt</span> lists all 22 module names.</p>
+      <p>The standard fields <code>owner</code>, <code>creation</code>, <code>modified</code>, <code>modified_by</code>, <code>docstatus</code>, <code>idx</code>, <code>name</code> are <strong>not</strong> in any DocType JSON — the framework <span class="badge b-frappe">Frappe core</span> adds them to every table. <code>track_changes:1</code> (on Item, Sales Invoice) records a full versioned audit trail.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Bake <code>created_by</code>/<code>created_at</code>/<code>updated_by</code>/<code>updated_at</code>/<code>version</code>/<code>status</code> into a <strong>base model/mixin</strong> every table inherits. Add an abstract module/app label for navigation and access grouping.</p>
+      <p>Make audit columns <strong>non-optional and engine-supplied</strong> — never something an entity author can forget.</p>
+    </div>
+  </div>
+</div>
+
+<p>This is the cheapest, highest-leverage thing in the whole meta-model and the easiest to under-build. The reason ERPNext can show you "who created this, who last touched it, and a diff of every change" on <em>any</em> record is that the framework adds the same seven columns to every table and an optional version trail on top. There is no per-entity audit code anywhere. On your own stack this is one abstract base model:</p>
+
+<dl class="gloss">
+  <dt><code>owner</code> / <code>created_by</code></dt><dd>Who inserted the row. Set once, never changes.</dd>
+  <dt><code>creation</code> / <code>created_at</code></dt><dd>Insert timestamp. Set once.</dd>
+  <dt><code>modified_by</code> / <code>updated_by</code></dt><dd>Who last wrote the row.</dd>
+  <dt><code>modified</code> / <code>updated_at</code></dt><dd>Last-write timestamp — also used for optimistic concurrency.</dd>
+  <dt><code>docstatus</code> / <code>status</code></dt><dd>0 draft / 1 submitted / 2 cancelled — the state machine, present even on non-submittable types (where it stays 0).</dd>
+  <dt><code>idx</code></dt><dd>Ordering of child rows within their parent. Without it, grid order is undefined.</dd>
+  <dt><code>name</code></dt><dd>The primary key — its value set by the naming strategy (Pattern 5).</dd>
+</dl>
+
+<div class="callout co-note"><span class="lbl">Note — modules are an access-grouping seam too</span>
+<p>The <code>module</code> field is not only navigation. Grouping entities into modules gives you a natural axis for bundling permissions, packaging features, and deciding what ships together. When you design your own module list, treat it as part of the access model, not just the menu.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The variant master in one picture (Style × Size × Colour)</h2>
+
+<p>One flow ties Patterns 1, 4 and 5 together and is worth seeing whole, because it is the single most useful template for a retail SKU model. An <code>Item</code> with <code>has_variants=1</code> is a <em>template</em>; it carries an <code>attributes</code> Table of <code>Item Variant Attribute</code> rows that define the axes (Colour, Size). Each concrete variant is its own <code>Item</code> whose <code>variant_of</code> Links back to the template, and whose <code>name</code>/<code>item_code</code> the <code>autoname</code> hook builds from the template name plus the attribute values.</p>
+
+<div class="flow col">
+  <div class="node">Item template<small><code>has_variants=1</code> + attributes Table (Colour, Size)</small></div>
+  <div class="arr"></div>
+  <div class="node">Item Variant Attribute rows<small><code>istable:1</code> — one row per axis: {attribute, attribute_value}</small></div>
+  <div class="arr"></div>
+  <div class="node">Variant Items<small>each Links <code>variant_of</code> → template; <code>autoname</code> = template + attrs</small></div>
+  <div class="arr"></div>
+  <div class="node">Stock &amp; sales reference the variant Item<small>quantity and value tracked at the concrete SKU level</small></div>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is the direct template for the KDPS rule <strong>SKU = Style × Size × Colour</strong> and for Rule 12 "variation is data, not code". Model the variant axes as <em>child rows</em> — a <code>ProductVariantAttribute</code> table hanging off the style master — rather than as columns or code branches, so a new brand's sizing scheme is data entry, not a deployment. The concrete variant is the unit stock and the POS line reference, so size×colour survives end-to-end. Two other ERPNext patterns map straight onto KDPS: the <code>party_type</code>/<code>party</code> Dynamic Link is exactly how to carry the polymorphic vendor / customer / store party on a ledger posting (a <code>(party_type, party_id)</code> pair or a Django <code>GenericForeignKey</code>); and <code>is_submittable</code> + <code>in_create:1</code> is the "documents write ledgers" rule — make GRN, PT and POS documents submittable and immutable once submitted, and let posting <em>code</em> (never a form) append rows to the stock and value ledgers, mirroring GL Entry. Tally stays the statutory book; these ledgers are the operational truth that feeds it.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Porting checklist — what the framework was doing for you</h2>
+
+<p>Because so much is injected by the engine, the danger when rebuilding on Django/Postgres is reproducing the <em>visible</em> JSON and missing the <em>invisible</em> machinery. Treat this as a punch-list before you ship any entity.</p>
+
+<table>
+<tr><th>Frappe gives you free</th><th>If you don't rebuild it…</th><th>Django/Postgres equivalent</th></tr>
+<tr>
+  <td>Standard audit columns on every table</td>
+  <td>No provenance, no change history, silent data loss</td>
+  <td>Abstract base model mixin: <code>created_by/at</code>, <code>updated_by/at</code>, <code>version</code>, <code>status</code></td>
+</tr>
+<tr>
+  <td><code>docstatus</code> submit/cancel state machine</td>
+  <td>Documents stay editable forever; ledgers untrustworthy</td>
+  <td>A <code>status</code> column + guarded transitions in a base controller</td>
+</tr>
+<tr>
+  <td><code>idx</code> ordering on child rows</td>
+  <td>Grid/line order is undefined and jumps around</td>
+  <td>An explicit ordering column on related models</td>
+</tr>
+<tr>
+  <td>Dynamic Link integrity check</td>
+  <td>Dangling party references no constraint catches</td>
+  <td>Validate <code>(party_type, party_id)</code> existence on every write, or <code>GenericForeignKey</code></td>
+</tr>
+<tr>
+  <td><code>name</code> as natural/series PK + rename cascade</td>
+  <td>Renames break FKs; PK collisions surface late</td>
+  <td>Pluggable ID strategy per entity; handle rename cascades deliberately</td>
+</tr>
+<tr>
+  <td>Generic CRUD UI / list / REST / ORM</td>
+  <td>50 hand-built screens you maintain forever</td>
+  <td>DRF ViewSets + ModelAdmin driven from one declaration/registry</td>
+</tr>
+</table>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — <code>fetch_from</code> freezes a value, it is not a live join</span>
+<p><code>customer_name</code> is copied from Customer <em>at save time</em> and will not refresh if the source later changes. This is correct for invoice snapshots — you <em>want</em> the printed name frozen to what it was when the document was issued — and wrong if you assume it behaves like a live join/view. Decide per field whether you want a snapshot (denormalize on write) or current truth (resolve on read). Don't let the convenience of <code>fetch_from</code> hide that choice.</p>
+</div>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4>
+<ol>
+  <li><strong>A DocType is data, not code.</strong> Declare each business object once — fields, types, flags — and let one generic engine derive the table, list view, form, REST API, ORM and permissions. ERPNext does this ~528 times with no per-entity plumbing.</li>
+  <li><strong>The schema is mandatory; the controller and client are optional.</strong> Co-locate the quartet (<code>.json</code> / <code>.py</code> / <code>.js</code> / test) per entity, but remember the JSON alone already yields six subsystems before any behaviour is written.</li>
+  <li><strong>Hang logic on named lifecycle hooks, and inherit the cross-cutting parts.</strong> <code>validate</code> / <code>before_submit</code> / <code>on_submit</code> / <code>on_cancel</code> on a controller chain (SellingController → … → Document) keep posting and validation written once. Call <code>super()</code> or you skip ledger posting.</li>
+  <li><strong>Relationships are metadata.</strong> Link = typed FK, Table = embedded child grid, Dynamic Link = polymorphic party (<code>party_type</code> + <code>party</code>). The DB can't enforce the polymorphic case — validate it in code on every write.</li>
+  <li><strong>Naming, single and submittable are flags, not bespoke code.</strong> <code>name</code> is the real primary key; <code>issingle</code> is a one-row config object; <code>is_submittable</code> + <code>in_create</code> makes a ledger that code writes and forms cannot edit.</li>
+  <li><strong>The audit columns are invisible and non-negotiable.</strong> <code>owner</code>/<code>creation</code>/<code>modified</code>/<code>modified_by</code>/<code>docstatus</code>/<code>idx</code>/<code>name</code> are engine-supplied on every record. On your own stack, bake them into a base mixin so no entity can omit them.</li>
+  <li><strong>The decisive win is leverage.</strong> Adding an entity becomes writing one declaration, not wiring six subsystems — and observability, the state machine, typed links and polymorphism behave identically everywhere because every record shares one shape. Model metadata as first-class data and build one engine over it.</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="index.html"><small>← Previous</small>Overview &amp; reading guide</a>
+<a class="next" href="02-document-lifecycle.html"><small>Next →</small>The document lifecycle</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 01. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

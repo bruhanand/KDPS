@@ -260,7 +260,7 @@
     <p class="secsub">Grade = design quality (from the audit). Readiness = distance to code (1 concept → 5 ready). Click any to open it.</p>
     <table>
       <tr><th style="width:30%">Module</th><th>Grade</th><th>Design</th><th>Ready</th><th>Watch / blocker</th></tr>
-      <tr><td class="mod"><a href="docs/my-understanding/system-design/00-system-architecture.html">00 · Architecture</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>The spine — 5 layers, 11 rules. Your strongest asset.</td></tr>
+      <tr><td class="mod"><a href="docs/my-understanding/system-design/00-system-architecture.html">00 · Architecture</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>The spine — 5 layers, 12 rules. Your strongest asset.</td></tr>
       <tr><td class="mod"><a href="docs/my-understanding/system-design/01-vendor-management/Vendor-Management-Module.html">D1 · Vendor &amp; booking</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Booking-price conflict still open (see Sync §4).</td></tr>
       <tr><td class="mod"><a href="docs/my-understanding/system-design/02-inbound/inbound-ingestion-design.html">D2 · Inbound</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td>Cost-vs-payable posting = standout. Gated on POS answers.</td></tr>
       <tr><td class="mod"><a href="docs/my-understanding/system-design/03-outbound/outbound.html">D3 · Outbound</a></td><td><span class="grade">A</span></td><td><span class="chip c-done">Locked</span></td><td><span class="meter"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></td><td><span class="chip c-stop">bug</span> Cross-state transfer GST (see Sync §4).</td></tr>
@@ -301,14 +301,14 @@
 
         <div class="item"><input type="checkbox" data-trk="x5"><label><span class="ttl">Dual master drift</span> — D7 builds its own brand/supplier crosswalk meant to "seed" D8, but the owner/handoff is undefined (the two-owners trap, Rule 4). <span class="where">D7 vs D8</span></label><span class="sev s-med">MED</span></div>
 
-        <div class="item"><input type="checkbox" data-trk="x6"><label><span class="ttl">Stack: locked or deferred?</span> — consolidation + AI docs say it's locked (TS + Postgres + GCP); architecture + CLAUDE.md say deferred until after spikes. Reconcile the wording. <span class="where">consolidation vs architecture</span></label><span class="sev s-low">LOW</span></div>
+        <div class="item"><input type="checkbox" data-trk="x6"><label><span class="ttl">Stack: locked or deferred?</span> — consolidation + AI docs say it's locked (TS + Postgres); architecture + CLAUDE.md say deferred until after spikes. Reconcile the wording. <span class="where">consolidation vs architecture</span></label><span class="sev s-low">LOW</span></div>
       </div>
 
       <div class="grp">
         <h4>B · Tidy the desk</h4>
         <p class="gsub">Cheap moves that keep the AI (and you) from acting on stale facts.</p>
 
-        <div class="item"><input type="checkbox" data-trk="t1"><label><span class="ttl">Refresh <code>docs/PROJECT-MAP.html</code></span> — stamp says 19 Jun, missing the newest docs (build-playbook, consolidation, audit), still carries the lost-FM-April warning. <span class="where">root</span></label><span class="sev s-med">MED</span></div>
+        <div class="item"><input type="checkbox" data-trk="t1"><label><span class="ttl">Refresh <code>PROJECT-MAP.html</code></span> — stamp says 19 Jun, missing the newest docs (build-playbook, consolidation, audit), still carries the lost-FM-April warning. <span class="where">root</span></label><span class="sev s-med">MED</span></div>
 
         <div class="item"><input type="checkbox" data-trk="t2"><label><span class="ttl">Keep PROJECT-MAP + CLAUDE.md as the <em>only</em> status sources</span> — update both in the same commit when status changes; no other doc carries status independently. <span class="where">working norm</span></label><span class="sev s-low">LOW</span></div>
 
@@ -323,7 +323,7 @@
 
         <div class="item"><input type="checkbox" data-trk="g1"><label><span class="ttl">Design D9 — migration &amp; rollout</span> — deferred (23 Jun): designed later, before go-live. The next move is the foundation, not D9. <span class="where">later</span></label><span class="sev s-low">LATER</span></div>
 
-        <div class="item"><input type="checkbox" data-trk="g2"><label><span class="ttl">Attendance &amp; Payroll — decide in or out</span> — named PRD must-have, no folder, hardware contradiction (Android+face vs browser+GPS). If in, it needs its own discussion. <span class="where">vs client PRD</span></label><span class="sev s-med">MED</span></div>
+        <div class="item"><input type="checkbox" data-trk="g2"><label><span class="ttl">Attendance &amp; Payroll — decide in or out</span> — named PRD must-have, no folder, hardware contradiction (device camera+face vs browser+GPS). If in, it needs its own discussion. <span class="where">vs client PRD</span></label><span class="sev s-med">MED</span></div>
 
         <div class="item"><input type="checkbox" data-trk="g3"><label><span class="ttl">POS fallback go/no-go</span> — if Ten Software has no usable API, "build our own minimal POS" is a big scope jump. Make it a conscious decision with an August deadline. <span class="where">gated on Spike #1</span></label><span class="sev s-high">HIGH</span></div>
 
@@ -446,7 +446,7 @@
   </section>
 
   <footer>
-    KDPS ERP · Project Command Center · 23 June 2026. Living document — update the metric strip, the module board and the sync tracker as facts change. Status truth still lives in <a href="CLAUDE.md">CLAUDE.md</a> + <a href="docs/PROJECT-MAP.html">docs/PROJECT-MAP.html</a>; this page points to them. Ticked sync items are saved in your browser only.
+    KDPS ERP · Project Command Center · 23 June 2026. Living document — update the metric strip, the module board and the sync tracker as facts change. Status truth still lives in <a href="CLAUDE.md">CLAUDE.md</a> + <a href="docs/PROJECT-MAP.html">PROJECT-MAP.html</a>; this page points to them. Ticked sync items are saved in your browser only.
   </footer>
 
 </div>

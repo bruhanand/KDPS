@@ -167,6 +167,7 @@
       <li><strong>In v1 (core):</strong> the non-branded inbound flow — AI invoice reading, the PT chat assistant, P/M/E tiers, Free Size, the MRP formula, barcode generation. This <em>is</em> the deal's PT Mapper Type 2.</li>
       <li><strong>Waits for its own discussion:</strong> non-branded <em>vendor management</em> — vendor records with terms, agents, bookings (parked in the D1 doc §13).</li>
       <li><strong>So one consequence:</strong> a v1 non-branded shipment may arrive <strong>without a booking</strong>. Its Shipment + GRN stand alone, with a minimal vendor record (name + city) made on the fly — and no ordered-vs-received check until non-branded booking lands.</li>
+      <li><strong>Branded goods can arrive booking-less too</strong> (not just non-branded — branded stock routinely lands at a store with no booking recorded). The same booking-less path applies: a stand-alone Shipment + simple-receipt GRN, the commercial model snapshotted from the brand's effective-dated terms at receipt. See <a href="#grn">Direct receipt</a> below.</li>
     </ul>
   </div>
   <div class="card">
@@ -193,7 +194,7 @@
       <li>Does the API accept a <strong>pending-inward / incoming-transfer</strong> quantity?</li>
       <li>Can it <strong>export line-item sales</strong> back to us?</li>
     </ul>
-    Join key both sides agree on: the <strong>barcode</strong>.
+    Join key both sides agree on: the <strong>barcode</strong> — but the barcode is a <strong>non-unique scan-alias</strong>, not the identity itself; the adapter re-attaches season at the POS edge (see <a href="#pos">POS Integration</a>).
   </div>
   <div class="callout co-dep"><strong>Dependency on the Booking chat:</strong> GRN is generated <em>against the order list</em>. This chat assumes a structured order list is available to pre-fill the GRN; booking itself is designed elsewhere.</div>
 </section>
@@ -261,7 +262,7 @@
   </div>
   <div class="card">
     <h4>One barcode → many items <span class="qref">Q41 · changed</span></h4>
-    <p><strong>New client truth:</strong> across the whole database <strong>one barcode can carry many physical pieces</strong> — the barcode is the <em>identity</em> (a product), not a serial number for one piece. A product's identity = <strong>brand + style-code + colour + size</strong>; stock is a <strong>count of pieces under that barcode</strong> per location. This reverses the earlier "one barcode per piece." <em>Happens mostly for non-branded — where colour collapses to a P/M/E tier and size to "Free Size," so many pieces share one identity — but for branded too.</em></p>
+    <p><strong>New client truth:</strong> across the whole database <strong>one barcode can carry many physical pieces</strong> — the barcode is a non-unique scan-alias for a product identity, not a serial number for one piece. A product's identity = <strong>brand + style-code + colour + size</strong>; stock is a <strong>count of pieces under that barcode</strong> per location. This reverses the earlier "one barcode per piece." <em>Happens mostly for non-branded — where colour collapses to a P/M/E tier and size to "Free Size," so many pieces share one identity — but for branded too.</em></p>
   </div>
 </section>
 
@@ -309,7 +310,7 @@
 
 <section id="nonbranded">
   <h2 class="sec">Non-Branded PT <span class="badge b-locked">Locked · core v1</span></h2>
-  <p><strong>Build status: v1 — core scope</strong> (the deal's PT Mapper Type 2) <span class="qref">Q35</span>. In v1 these shipments may arrive <strong>without a booking</strong> (non-branded vendor management is parked — D1 §13): the vendor is a minimal record (name + city) created on the fly, and the GRN stands alone with no order list to compare against.</p>
+  <p><strong>Build status: v1 — core scope</strong> (the deal's PT Mapper Type 2) <span class="qref">Q35</span>. In v1 these shipments may arrive <strong>without a booking</strong> (non-branded vendor management is parked — D1 §13): the vendor is a minimal record (name + city) created on the fly, and the GRN stands alone with no order list to compare against. <em>Booking-less receipt is not unique to non-branded — branded goods land directly too; the general Direct-receipt path is in <a href="#grn">GRN &amp; Discrepancy</a>.</em></p>
   <div class="card">
     <h4>Chat / agent UX, output-driven <span class="badge b-ai">AI</span> <span class="qref">Q26·Q27</span></h4>
     <p>1) Upload invoice PDF/image → AI reads it. 2) AI replies in chat with a <strong>structured report — what it filled vs what's missing</strong>. 3) User supplies missing data <strong>through type-and-select boxes, not free text</strong> — every field with a master list (size / unit, colour P/M/E, category, season, GST%…) opens a <strong>pick-or-type control</strong> drawn from the Master Sheet, so entries stay standard (anything not on hand is asked of the vendor by call). 4) Output = an <strong>editable Excel PT</strong> the user can download, view, and hand-edit for anything still missing.</p>
@@ -370,6 +371,16 @@
     <p>When there is <strong>no order to check against</strong> (non-branded, often booking-less — Q35), the GRN just <strong>counts what physically arrived</strong> from the invoice + goods — no ordered-vs-received comparison. It still exists as a record (you need it for the PT step and the audit trail), and the over-receipt / damage handling below still applies.</p>
   </div>
   <div class="card">
+    <h4>Direct receipt — booking-less, any brand <span class="qref">Q35 · generalised 25 Jun</span></h4>
+    <p>Booking-less receipt is <strong>not non-branded-only</strong>: <strong>branded goods also land with no booking recorded</strong>. The path is the same for any brand — a "<strong>Receive without order</strong>" simple-receipt GRN against a stand-alone Shipment (booking_ref = NULL). The <strong>Shipment, not the booking, is the anchor</strong> of inbound, so nothing breaks when there is no parent.</p>
+    <ul>
+      <li><strong>Sellable day one:</strong> the GRN posts quantity immediately (the two-step posting above), so goods sell before any PT or invoice is matched.</li>
+      <li><strong>Model at receipt:</strong> <strong>defaults</strong> from the brand's effective-dated terms at the moment of receipt (default Outright if the brand isn't yet known, flagged for HO) but is <strong>overridable on this receipt</strong> — the model is configurable per brand <em>and</em> per booking / per stock-received (confirmed 26 Jun 2026); the chosen model is then snapshotted onto the GRN. Never a phantom booking, which would pollute booked-vs-received analytics.</li>
+      <li><strong>Retro-link:</strong> if a booking turns up later, the Direct GRN can be attached to it; the link re-runs the invoice ↔ GRN ↔ PT match as a tracked correction, never a silent rewrite. (Booking-side detail in D1 §6.)</li>
+      <li>Capture the <strong>delivery-challan + e-way-bill</strong> reference on the direct GRN — the recipient must generate one if the vendor ships above the e-way threshold without it.</li>
+    </ul>
+  </div>
+  <div class="card">
     <h4>Provenance: counted-by ≠ entered-by <span class="qref">Q38</span></h4>
     <p>The GRN carries <strong>two separate actors</strong>, both auto-stamped from logins — never typed. <strong>Store delivery:</strong> the store operator logs in, sees the order in their own queue, records received-vs-ordered and presses Done — they are <em>counted by</em>. The WH person who reviews, finalises the GRN and converts the PT is <em>entered / approved by</em>. <strong>Warehouse delivery:</strong> the WH receiver is both. No GRN exists without both names on it (Rule 10) — when a discrepancy surfaces weeks later, accountability lands on a person, not a building.</p>
   </div>
@@ -403,25 +414,38 @@
     <h4>Patna inward (GST + margin check) <span class="qref">Q19</span></h4>
     <p>System auto-validates GST (vs HSN) and margin (vs expected band), flags only exceptions; Patna bulk-approves the clean ones, reviews only flags. The <strong>inward action stays with Patna</strong> so accountability is human.</p>
   </div>
+  <div class="card">
+    <h4>Ingest guards — two hard blocks, one auto-merge <span class="badge b-locked">Locked</span> <span class="qref">Q16</span></h4>
+    <p>The flag-don't-block rule has <strong>two deliberate exceptions</strong> at ingest — data that would silently corrupt the ledgers from day one. These <strong>hard-block</strong> the PT until fixed (the live data violates all three today):</p>
+    <ul>
+      <li><strong>Cost ≤ MRP — hard block.</strong> A piece whose canonical cost (Q36) is above its MRP can never be inwarded; a negative margin is always a data error, not a real deal.</li>
+      <li><strong>Season must be canonical — hard block.</strong> The SEASON value must be a real season from the system pattern (Q39), <strong>never a date</strong> and never free text. A line carrying a date instead of a season is blocked, because season is load-bearing for stock identity (barcode + season).</li>
+      <li><strong>Brand-alias merge — auto, with review.</strong> Heavy aliasing (the same brand spelt many ways) is canonicalised: an <strong>exact / deterministic alias auto-merges</strong> to the one brand; a <strong>fuzzy near-match is held for human review</strong>, never merged silently (D8 brand canonicalisation).</li>
+    </ul>
+  </div>
 </section>
 
 <section id="posting">
   <h2 class="sec">Cost &amp; Posting Spec <span class="badge b-locked">Locked</span></h2>
   <p>The biggest gap in the first version of this design: the PT priced items but never said <strong>what a piece costs us</strong> or <strong>what it writes into the books</strong>. Fixed here. This section is the wire into the D4 payments module.</p>
   <div class="card">
-    <h4>Unit cost at stock-in — the canonical COST <span class="qref">Q36</span></h4>
-    <p><strong>Cost of a piece = landed cost, ex-GST.</strong> Built in three steps:</p>
+    <h4>Unit cost at stock-in — the canonical COST <span class="qref">Q36 · corrected 25 Jun</span></h4>
+    <p><strong>Cost of a piece = P RATE directly</strong> — the per-piece payable to the vendor. Built in two steps:</p>
     <ul>
-      <li><strong>Start with the per-piece payable to the vendor</strong> after all line-level discounts. In the real sample PT this is <strong>P RATE</strong> (exactly MRP − margin%; Status Quo: ₹1,649 × 0.78 = ₹1,286.22). The per-brand mapping declares which column carries it — and whether GST is inside it and must be stripped.</li>
-      <li><strong>Remove GST.</strong> Input GST comes back as credit, so it is never cost.</li>
+      <li><strong>Take P RATE as the cost.</strong> In the real sample PT this is <strong>P RATE</strong> (exactly MRP − margin%; Status Quo: ₹1,649 × 0.78 = ₹1,286.22). <strong>P RATE is already the ex-GST per-piece payable</strong> — GST is added on top of it at invoice, never baked inside it, so <strong>nothing is stripped</strong>. The per-brand mapping declares which column carries it; we use that figure as-is.</li>
       <li><strong>Spread invoice-level amounts:</strong> add this piece's share of invoice-level charges (freight, handling), subtract its share of invoice-level trade discount — both spread across lines <strong>in proportion to line value</strong>, never by piece count.</li>
     </ul>
-    <p>The result is stamped on the stock-in posting and <strong>frozen</strong> (Rule 3 snapshot) — later master or rate changes never rewrite it. <strong>Profitability reads it</strong> (POS revenue − this cost); aging and dead-stock value with it. One definition for all four commercial models — for SOR and Consignment it is simply the settlement rate (MRP − margin%), ex-GST.</p>
-    <div class="why">Why ex-GST: counting recoverable GST overstates cost and makes every margin report read worse than reality. Why value-weighted spreading: freight follows value, and the rule never needs re-arguing per shipment.</div>
+    <p>The result is stamped on the stock-in posting and <strong>frozen</strong> (Rule 3 snapshot) — later master or rate changes never rewrite it. <strong>Profitability reads it</strong> (POS revenue − this cost); aging and dead-stock value with it. One definition for all four commercial models — for SOR and Consignment it is simply the settlement rate (MRP − margin%).</p>
+    <div class="why">Why P RATE directly: it <em>is</em> the ex-GST payable, so dividing it by (1 + GST rate) would wrongly shave the cost — GST sits on top at invoice, not inside P RATE. Recoverable input GST is never cost, but it was never in P RATE to begin with. Why value-weighted spreading: freight follows value, and the rule never needs re-arguing per shipment. <em>(Per-brand check: confirm no brand embeds GST inside its P RATE column.)</em></div>
   </div>
   <div class="card">
-    <h4>What the PT posts, per commercial model <span class="qref">Q37</span></h4>
-    <p>Every posting fires at <strong>Patna inward</strong> — the one moment the data becomes official (TIR already fires there, Q20). Before that, a GRN is physical custody only, not books. The commercial model is read from the <strong>snapshot on the booking</strong> (Rule 3), never from the live brand master.</p>
+    <h4>Two-step posting: GRN = quantity, PT = value + liability <span class="qref">Q37 · split 25 Jun</span></h4>
+    <p>Inbound writes the books in <strong>two distinct steps</strong>, not one:</p>
+    <ul>
+      <li><strong>GRN posts the quantity movement</strong> — qty in, at the location, with condition and season, and a provisional owned-flag. <strong>No unit cost yet.</strong> This is what makes goods sellable on day one, even before any pricing exists (essential for direct-to-store receipt). A GRN now <strong>does write the stock ledger</strong> (quantity only) — it is no longer "physical custody, not books".</li>
+      <li><strong>PT at Patna inward posts the valuation</strong> — the frozen unit cost per piece (Q36) is stamped, the owned-flag is finalised, and <strong>vendor liability is posted per the commercial model</strong> (table below). This is still the moment the priced data becomes official (TIR fires here, Q20).</li>
+    </ul>
+    <p>The commercial model is read from the <strong>snapshot</strong> (Rule 3) — from the booking where one exists, else from the brand's effective-dated terms at receipt for a direct/booking-less GRN — never from the live brand master. The <strong>vendor-ledger column below describes the PT step.</strong></p>
     <table>
       <thead><tr><th>Model</th><th>Stock ledger</th><th>Vendor ledger</th></tr></thead>
       <tbody>
@@ -479,6 +503,7 @@
 <section id="pos">
   <h2 class="sec">POS Integration — push &amp; pull <span class="badge b-open">Confirm endpoints</span> <span class="qref">Q34</span></h2>
   <p>POS is <strong><a href="https://tensoftware.in/">tensoftware.in</a></strong> (online-first, so a REST API is likely). We don't rebuild POS — we feed it and read from it. The shared <strong>join key is the barcode</strong>.</p>
+  <div class="callout co-note"><strong>Barcode is a non-unique alias; season is re-attached at the adapter <span class="qref">Q6 · Q7</span>.</strong> The barcode is a <strong>scan-alias that points to a SKU cohort</strong>, not the inventory identity itself — brands reuse a barcode across seasons, and several genuinely-interchangeable pieces share one (count under the barcode). So <strong>no re-barcoding at inbound</strong>. The full unit key is <strong>barcode + season</strong>, and <strong>season is inferred at the POS adapter</strong>, not carried by the scan: the adapter resolves the barcode to the active cohort at that store on that sale date via the effective-dated master — one match posts; many matches take the <strong>oldest season first</strong>; a genuinely ambiguous scan is a one-tap "which season?", <strong>never a blocked sale</strong>. A true cross-SKU collision (two different items sharing a vendor barcode) is caught <strong>at inbound</strong> — flagged and given an internal barcode via the generator (Q8) — not by a blanket re-barcode.</div>
   <h3>KDPS → POS (push)</h3>
   <table>
     <thead><tr><th>What</th><th>Why</th></tr></thead>
@@ -554,13 +579,13 @@
       <tr><td>Q28</td><td>Non-branded colour</td><td>Use the invoice's colour if it states one; else P/M/E tier picked by operator in chat (no fixed bands). Real colour also from a brand PDF</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q29</td><td>Non-branded size</td><td>Use if given; else "Free Size" — size never dropped</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q30</td><td>Branded definition &amp; delivery</td><td>All items barcoded + invoice + retrievable PT; store-delivery: store operator receives in-app, WH person finalises GRN (see Q38); warehouse-delivery GRN at WH</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>Q31</td><td>SKU vs barcode</td><td><strong>Changed →</strong> SKU (type) = Brand+Style+Colour+Size, and the <strong>barcode is that identity</strong> (not a per-piece serial). One barcode → many pieces; stock = count per barcode. Barcode unique to the identity within a season; barcode+season is the cross-season key</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q31</td><td>SKU vs barcode</td><td><strong>Changed →</strong> SKU (type) = Brand+Style+Colour+Size, and the <strong>barcode is a non-unique scan-alias</strong> pointing to that identity (not a per-piece serial). One barcode → many pieces; stock = count per barcode. the same barcode can recur across <em>and within</em> a season (Q7), so it is never unique; identity is the SKU cohort and stock is a count under it. A genuine two-SKU collision is caught at inbound (internal alias minted), never at the till</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q32</td><td>GRN over-receipt &amp; damaged</td><td>Over-receipt adds line+remark; damaged = received-flagged → defective (quarantined)</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q33</td><td>Anchor object name</td><td>Renamed Consignment → Shipment</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q34</td><td>POS push/pull contract</td><td>Push: item master + pending-inward. Pull: sales + SOH + collection. Confirm endpoints w/ Ten Software</td><td><span class="badge b-open">Open</span></td></tr>
-      <tr><td>Q35</td><td>v1 build scope</td><td><strong>Corrected 10 Jun:</strong> both inbound paths are v1. Parked = non-branded <em>vendor management</em> only (records, agents, bookings — D1 §13, pending the data-input discussion). v1 non-branded shipments may arrive booking-less: minimal vendor record on the fly, GRN stands alone</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>Q36</td><td>Canonical unit cost</td><td>Landed, ex-GST: vendor payable per piece after discounts (per-brand mapping pins the column, e.g. P RATE) − GST + value-weighted share of invoice-level charges/discounts; frozen on the stock-in posting</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>Q37</td><td>PT posting spec</td><td>All postings at Patna inward. Stock-in at unit cost for every model; vendor payable: <strong>Outright &amp; Correction</strong> = invoice total incl. GST at inward (both KDPS-owned; Correction nets the return allowance back on D3 return), <strong>SOR</strong> = accrues per piece on sale (D3), <strong>Consignment</strong> = never from the PT. <em>Updated 13 Jun: 4 models — Correction split out from SOR</em></td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q35</td><td>v1 build scope</td><td><strong>Corrected 10 Jun:</strong> both inbound paths are v1. Parked = non-branded <em>vendor management</em> only (records, agents, bookings — D1 §13, pending the data-input discussion). v1 non-branded shipments may arrive booking-less: minimal vendor record on the fly, GRN stands alone. <strong>Generalised 25 Jun:</strong> booking-less direct receipt applies to <strong>any brand, branded included</strong> — Shipment (booking_ref = NULL) is the anchor, simple-receipt GRN, model snapshotted at receipt, retro-link to a later booking allowed</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q36</td><td>Canonical unit cost</td><td><strong>Corrected 25 Jun:</strong> cost = <strong>P RATE directly</strong> — the ex-GST per-piece payable (GST is added on top at invoice, never stripped) + value-weighted share of invoice-level charges − discounts; frozen on the stock-in posting. (Replaces the earlier "P RATE − GST" step.)</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q37</td><td>PT posting spec</td><td><strong>Two-step (split 25 Jun):</strong> the <strong>GRN posts quantity</strong> (qty + location + condition + season, provisional owned-flag, no cost — sellable day one); the <strong>PT at Patna inward posts value + liability</strong> (frozen unit cost stamped, owned-flag finalised). Vendor payable: <strong>Outright &amp; Correction</strong> = invoice total incl. GST at inward (both KDPS-owned; Correction nets the return allowance back on D3 return), <strong>SOR</strong> = accrues per piece on sale (D3), <strong>Consignment</strong> = never from the PT. <em>Updated 13 Jun: 4 models — Correction split out from SOR</em></td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q38</td><td>GRN provenance</td><td>Store delivery: store operator receives against the order in their own login (counted-by, auto-stamped) → Done → WH person finalises GRN + converts PT (entered/approved-by). Two actors on every GRN</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q39</td><td>Season (interim, until D8)</td><td>Never free text. System derives the next season code in the fixed format and presents it at PT-creation; WH person (PT maker — not Patna) selects. Season master ownership = D8 critical path</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q40</td><td>Negative SOH</td><td>Inbound detects (daily SOH pull); policy is an explicit D3 outbound agenda item — recorded here and on the architecture page's D3 row</td><td><span class="badge b-locked">Locked</span></td></tr>
@@ -595,7 +620,7 @@
     <dt>GRN (Goods Receipt Note)</dt><dd>Record of what was physically received, generated against the order list.</dd>
     <dt>Shipment</dt><dd>The anchor record for one vendor arrival — invoice, GRN, PT, split, and TIR all link to it. (Renamed from "Consignment" to avoid clashing with the Consignment commercial model.)</dd>
     <dt>SKU</dt><dd>The sellable identity (the "type"): Brand + Style-code + Colour + Size — carried by one barcode. Stock is counted per SKU / barcode per location.</dd>
-    <dt>Barcode</dt><dd>The ID of a product <em>identity</em>, shared by all its pieces — 5 identical kurtis share one barcode (quantity 5), not five barcodes (changed; was per-piece). Unique to the identity within a season; some brands reuse a barcode in a later season, so the unit key is barcode + season. Branded keeps the vendor barcode; non-branded gets one KDPS barcode per identity.</dd>
+    <dt>Barcode</dt><dd>The ID of a product <em>identity</em>, shared by all its pieces — 5 identical kurtis share one barcode (quantity 5), not five barcodes (changed; was per-piece). Not unique — a barcode can recur across <em>and within</em> a season (Q7), so the unit key is the SKU cohort (barcode + season), and a true two-SKU collision is resolved by minting an internal alias at inbound. Branded keeps the vendor barcode; non-branded gets one KDPS barcode per identity.</dd>
     <dt>P / M / E</dt><dd>Premium / Medium / Economy — a price tier the operator puts in the COLOR column for non-branded items that have no real colour.</dd>
     <dt>Free Size</dt><dd>The size value used for a non-branded line when the invoice gives no size.</dd>
     <dt>TIR</dt><dd>The strict, accounting-ready dataset/format the accounting system ingests. Generated by software after Patna inward.</dd>

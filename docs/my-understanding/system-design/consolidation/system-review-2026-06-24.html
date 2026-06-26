@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — System Design Review &amp; Document Sync Audit (24 June 2026)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1280px; margin:0 auto; gap:0;}
+  nav.toc{
+    position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:264px; flex:0 0 264px; padding:28px 18px; background:var(--navy); color:#dfe4ee;
+  }
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:14px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){
+    nav.toc{display:none}
+    main{padding:24px 18px 80px}
+  }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:64ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-locked{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ai{background:var(--purple-bg); color:var(--purple)}
+  .b-high{background:var(--red-bg); color:var(--red)}
+  .b-med{background:var(--amber-bg); color:var(--amber)}
+  .b-low{background:var(--grey-bg); color:#41506b}
+  .b-del{background:var(--red-bg); color:var(--red)}
+  .b-canon{background:var(--green-bg); color:var(--green)}
+  .b-app{background:var(--blue-bg); color:var(--blue)}
+  .b-merge{background:var(--amber-bg); color:var(--amber)}
+  .b-raw{background:var(--grey-bg); color:#41506b}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .card h4{margin:0 0 6px; font-size:15.5px; color:var(--navy)}
+  .card .lbl{font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--rust); margin-top:12px; display:block}
+  .card .body{font-size:14.5px; margin-top:3px}
+  .card .cite{font-size:12.5px; color:var(--muted); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; word-break:break-word}
+  .card.high{border-left:4px solid var(--red)}
+  .card.med{border-left:4px solid var(--amber)}
+  .card.low{border-left:4px solid #b8bfce}
+  .callout{border-radius:12px; padding:14px 16px; margin:14px 0; border:1px solid}
+  .co-open{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--red-bg); border-color:#f0c4bd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:10px 12px; font-size:12.5px; letter-spacing:.02em}
+  td{padding:10px 12px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  td code, .cite code{font-size:12px}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px; background:#f0f2f6; padding:1px 4px; border-radius:4px}
+  .num{font-weight:700; color:var(--rust); white-space:nowrap}
+  ol.qa{margin:0; padding:0; list-style:none; counter-reset:qa}
+  ol.qa>li{counter-increment:qa; position:relative; padding:14px 16px 14px 52px; margin:10px 0; background:#fff; border:1px solid var(--line); border-radius:12px}
+  ol.qa>li::before{content:counter(qa); position:absolute; left:14px; top:14px; width:26px; height:26px; border-radius:50%; background:var(--navy); color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center}
+  ol.qa .q{font-weight:600; color:var(--navy)}
+  ol.qa .why{color:var(--muted); font-size:13.5px; margin-top:6px}
+  ol.qa .qid{font-size:11.5px; font-weight:700; letter-spacing:.04em; color:var(--rust); margin-right:8px}
+  .area-head{font-size:13px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--navy2); margin:22px 0 4px; border-bottom:1px solid var(--line); padding-bottom:4px}
+  ul.seam{margin:8px 0; padding-left:20px}
+  ul.seam li{margin:8px 0}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .delrow td{background:#fbe9e7 !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Review</h2>
+  <a href="#summary">1 · Executive summary &amp; verdict</a>
+  <a href="#drift">2 · Document sync / drift matrix</a>
+  <a href="#findings">3 · Findings (F1–F19)</a>
+  <h2>Scope</h2>
+  <a href="#scope">4 · The three scope deep-dives</a>
+  <h2>Reconcile</h2>
+  <a href="#trust">5 · Trust map</a>
+  <a href="#order">6 · Canonical document order</a>
+  <a href="#seams">7 · Open seams</a>
+  <h2>Hand-off</h2>
+  <a href="#qa">8 · Q&amp;A agenda — next session</a>
+</nav>
+
+<main>
+<header class="doc" id="summary">
+  <div class="eyebrow">KDPS · System Design Review &amp; Document Sync Audit</div>
+  <h1>System Design Review &amp; Document Sync Audit</h1>
+  <p class="sub">24 June 2026 · A reconciliation pass over the whole design record — what is sound, where the documents have drifted from each other, the three new scope items, and the questions to settle before any code is scaffolded.</p>
+</header>
+
+<section id="summary">
+  <h2 class="sec">1 · Executive summary &amp; system verdict</h2>
+  <p>The KDPS ERP design is well-conceived and largely build-ready: a small stable kernel (documents write ledgers; ledgers are derived and never hand-edited; corrections are reversing entries) wrapped around bought edges (Ten Software POS, Tally), with SKU = Brand × Style × Colour × Size keyed on barcode+season, four first-class commercial models (Outright, Correction, SOR, Consignment), GST modelled as date-effective data, and Tally kept as the statutory book of record. The module designs D1–D8 are locked and internally coherent, and the PT-file column set, the 8-pattern offer engine, the DN/CN flow, and the two-GSTIN geography all match the real client data. The build is blocked not by missing design but by a few load-bearing contradictions that corrupt the books if shipped as-is and by four buildable artifacts that do not yet exist (a glossary/CONTEXT, an ERD, a posting catalog, and a consolidated state-machine reference). The single newest doc — the consolidated design-of-record (untracked) — is also the largest source of drift: it still says TypeScript end-to-end and PostgreSQL row-level security, both contradicting later/other decisions. Verified India retail-ERP research confirms the design's instincts are right (two-step receipt, ITC is a property of the matched invoice not the GRN, cross-state transfer is a taxable IGST supply, B2C apparel till needs no per-sale IRN) while correcting several stale GST facts (apparel is now 5% up to ₹2,500 and 18% above, effective 22 Sep 2025; intra-state e-way bill threshold is ₹1,00,000 in both Bihar and Jharkhand). The documentation needs a deliberate reconciliation pass and a single source-of-truth hierarchy before any code is scaffolded.</p>
+
+  <div class="callout co-key">
+    <strong>System verdict — designed in the right direction.</strong> The solid core is genuine and should not be re-litigated: documents-write-ledgers with reversing-entry corrections, SKU identity = barcode+season carried end-to-end, the four commercial models as a first-class dimension, vendor-liability timing by model, profitability derived (PT cost × POS revenue) never typed, snapshot masters, flag-don't-block, AI at the edges (read-only, suggests-never-sets), Tally as statutory book fed one-way with a KDPS-owned deterministic voucher number, and a modular monolith over one Postgres. Verified external research validates these as standard India retail-ERP best practice.
+  </div>
+
+  <p>The real risks are four contradictions that touch money or statute and must be settled before coding:</p>
+  <ol>
+    <li><strong>GRN-vs-PT stock-ledger writer</strong> — answered three different ways across ARCH, CONS and D2;</li>
+    <li>the over-claimed one-line principle that <strong>"PT computes vendor liability"</strong> — true only for Outright/Correction; SOR accrues on sale, Consignment never from the PT;</li>
+    <li><strong>cross-state inter-store transfer</strong> booked as "internal — none" in D3 while D6 correctly calls it a taxable IGST supply (a real statutory bug, and D6 itself is internally split on it);</li>
+    <li>the <strong>design-of-record carrying a stale engine-language and data-scoping decision</strong>.</li>
+  </ol>
+  <p>None of these is a redesign — each is a wording/posting decision plus a doc edit. The build should proceed once the four buildable artifacts exist (glossary, ERD, posting catalog, state-machine reference) and the two un-ratified stack decisions (engine language, RLS-vs-queryset) are consciously made rather than silently inherited from the distrusted foundation artifacts in the other checkout.</p>
+</section>
+
+<section id="drift">
+  <h2 class="sec">2 · Document sync / drift matrix</h2>
+  <p>Every topic where two or more documents speak to the same point. <strong>High-severity rows lead.</strong> "In sync?" marks whether the documents agree today; a row can be <em>in sync</em> yet still need a note (e.g. two correct clocks never shown together).</p>
+
+  <h3>High severity</h3>
+  <table>
+    <tr><th style="width:20%">Topic</th><th style="width:7%">In sync?</th><th style="width:36%">The conflict (with cites)</th><th style="width:37%">Recommendation</th></tr>
+    <tr>
+      <td>GRN vs PT — who writes the stock ledger at inbound</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>00-system-architecture.html:284</code> says "Shipment + GRN → Stock ledger (receipt, condition flag)" and <code>:303</code> lists GRN among stock-ledger writers; <code>D2 inbound-ingestion-design.html:424</code> says "Every posting fires at Patna inward… Before that, a GRN is physical custody only, not books"; <code>consolidated-system-design.html:380</code> says stock posts "At Patna inward (via TIR)" yet <code>:448</code> still lists GRN as a stock-ledger writer. Three different answers.</td>
+      <td>Adopt the two-step posting that the verified grn-posting/direct-receipt research and the booking-less path both require: GRN posts the QUANTITY movement (qty, location, condition, season, owned-flag provisional, no unit cost); PT at Patna inward posts the VALUATION movement (unit cost stamped, owned-flag finalised) plus vendor liability per model. This makes both ledger-writer tables literally correct (GRN writes qty, PT writes value) and is essential for direct-to-store receipt where goods sell on day one before pricing. State it once on ARCH (the constitution) before any build.</td>
+    </tr>
+    <tr>
+      <td>"PT computes vendor liability" — universal vs model-specific</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>00-system-architecture.html:285</code> reads "PT → Vendor ledger (liability per model)" as if the PT always posts liability; <code>D2:430-431</code> and <code>consolidated-system-design.html</code> show SOR posts "Nothing at inward" (accrues on sale) and Consignment posts "Nothing from the PT, ever". The substance agrees but the one-line ARCH principle over-claims.</td>
+      <td>Reword the ARCH principle: "PT creates stock truth (priced stock-in, all models) and carries the settlement basis; vendor-liability TIMING depends on the commercial model — Outright/Correction post incl-GST liability at inward, SOR accrues on sale, Consignment never from the PT."</td>
+    </tr>
+    <tr>
+      <td>Cross-state inter-store transfer — taxable IGST vs "internal — none"</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>03-outbound/outbound.html:139</code> and <code>:200</code> post a transfer as "Nothing (internal move)" / "Internal — none"; <code>06-tally-sync/tally-sync.html:261</code> locks that stock between the two states is a taxable supply needing an IGST tax invoice (out-voucher at sender, purchase voucher at receiver); <code>audit-and-build-readiness.html:237</code> calls D3 "a real statutory bug". Note D6 is itself internally split: <code>:161</code> still shows the cross-GSTIN transfer row as "TBD (taxable supply?) / to design" even though <code>:261</code> locks it.</td>
+      <td>Fix D3: an inter-store transfer ACROSS GSTINs (Bihar↔Jharkhand) is a taxable IGST supply (tax invoice + e-way bill on consignment value incl. IGST; threshold ₹50,000 cross-state); an INTRA-state move stays stock-ledger-only. Also close <code>D6:161</code> to match <code>D6:261</code>. Scheduled for build slice 5 (<code>audit:322</code>).</td>
+    </tr>
+    <tr>
+      <td>Two clocks — statutory purchase (Tally, at arrival) vs operational payable (D4, at sale)</td>
+      <td><span class="badge b-canon">Yes*</span></td>
+      <td><code>06-tally-sync/tally-sync.html:268</code> books a Tally purchase voucher at arrival from the invoice for EVERY brand incl. SOR ("the SOR difference is money only, not timing"); <code>04-payments/payments.html:121,216</code> accrues the operational payable only on sale and HARD-BLOCKS paying an SOR/Consignment piece "that hasn't actually sold". Deliberate and correct, but the two clocks are never shown together in one place.</td>
+      <td>Add a two-column "books-when" table per model to the posting catalog: statutory purchase clock (Tally, at arrival) and operational payable clock (D4, at sale/return/settlement), so no reader collapses them.</td>
+    </tr>
+    <tr>
+      <td>GST timing on SOR/Consignment — arrival vs settlement (latent double-count)</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>D6:268</code> books a purchase voucher (which normally carries input GST) at arrival for every brand; <code>D6:160</code> also lists an SOR/Consignment settlement Journal where GST "crystallises only at settlement"; <code>D6:212</code> parks C5 ("does the SOR invoice charge GST at delivery?"). <code>D2:579</code> flags SOR statutory timing unresolved. Risk of recognising GST twice.</td>
+      <td>Resolve C5 with the CA before slice 7. Encode: GST is recognised ONCE, where the tax invoice legally sits. Verified research: KDPS's dominant SOR/consignment regime is principal-agent under Schedule I + Circular 57/31/2018, not Section 31(7) sale-on-approval; if a tax invoice accompanies delivery (Schedule I dispatch), the arrival voucher carries GST and settlement carries none; pure Consignment with no PT value must not book input GST at arrival.</td>
+    </tr>
+    <tr>
+      <td>Barcode vs barcode+season at the POS join key</td>
+      <td><span class="badge b-high">No</span></td>
+      <td>Internal identity is barcode+season (<code>consolidated-system-design.html:326</code>, <code>08-master-data/master-data.html:157,252,279</code>, <code>D2:277</code>) and brands reuse barcodes across seasons; but the POS-edge join key is stated as "barcode" alone (<code>03-outbound/outbound.html:162</code>, <code>D2:196,481</code>). The internal key is richer than the stated edge key.</td>
+      <td>The POS contract must carry or safely infer season. Encode the <code>D8:252</code> rule ("reuse → oldest cohort first") and <code>D8:278-282</code>: a scan resolves to the active cohort at the store; ambiguity is a one-tap "which season?", never a blocked sale. Add "season" as a required/inferred field in the POS push and pull spec. The adapter re-attaches season at the edge via the effective-dated (SCD-2) master for that barcode at that store on that sale date.</td>
+    </tr>
+    <tr>
+      <td>Barcode-per-piece vs count-under-barcode (ground-truth contradiction)</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>req-understanding-docs/KDPS-booking-inbound-client.html:205,265</code> says "a barcode per piece"; <code>KDPS-booking-inbound-summary.html:160</code> says "one barcode covers many identical pieces… stock is a count, not one barcode per piece". Two current ground-truth docs flatly disagree. The design (<code>D2:277</code>, <code>master-data.html:157</code>, <code>consolidated-system-design.html</code>) correctly locks count-per-barcode.</td>
+      <td>Correct the stale "barcode per piece" wording in <code>KDPS-booking-inbound-client.html</code> so ground-truth stops contradicting the locked model. This is load-bearing for the stock-ledger schema (stock = count keyed on barcode+season, not one row per physical piece).</td>
+    </tr>
+    <tr>
+      <td>Engine language — Python/Django vs TypeScript end-to-end</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>stack-decision.html:79-104</code> (23 Jun) recommends "Python (Django) engine… TypeScript for the glass only"; <code>consolidated-system-design.html:571</code> (24 Jun, design-of-record) still says "TypeScript end-to-end"; <code>cloud-hosting-decision.html:80</code> calls the app "a TypeScript app". The two newest docs disagree on the engine.</td>
+      <td>Once Anand confirms the stack (it is explicitly a recommendation pending confirmation, <code>stack-decision.html:69</code>), edit <code>consolidated-system-design.html:571</code> to "Python engine, React/TypeScript screens". Nothing should be scaffolded until confirmed.</td>
+    </tr>
+    <tr>
+      <td>Unit-cost formula — "strip GST from P RATE"</td>
+      <td><span class="badge b-high">No</span></td>
+      <td><code>D2:415</code> says P RATE is the per-piece payable, "whether GST is inside it and must be stripped" (Q36: "P RATE − GST"); the raw PT extraction found P RATE = BASIC × 1.20 on every row including 5%-GST brands, i.e. the 1.20 is a flat markup convention, not the GST rate, and BASIC is not ex-GST. Stripping the GST RATE from P RATE yields a wrong cost. (Raw data is not in this worktree; this is carried from the prior raw-data extraction pass.)</td>
+      <td>Pin canonical cost to P RATE directly (the vendor payable). Do NOT derive ex-GST cost by dividing P RATE by (1+slab) assuming BASIC is ex-GST. If an ex-GST figure is needed for Tally, compute it via the ACTUAL HSN slab; treat BASIC as the brand's own convention column. Also handle INPUT TAX ≠ OUTPUT TAX (inverted-duty rows exist). Confirm against a live PT sample before coding the cost step.</td>
+    </tr>
+    <tr>
+      <td>Per-brand model/margin/return-window seed data missing</td>
+      <td><span class="badge b-high">No</span></td>
+      <td>The design assumes a per-brand master carrying commercial model + margin + return window (D8, D1); the raw SUPPLIER DATA BASE has model/margin/return columns blank ("−"), with only Credit Days + CD% populated and no SOR/Outright/Consignment flag anywhere. There is no source to migrate from. (Carried from prior raw-data extraction.)</td>
+      <td>Plan to capture model/margin/return-window FRESH (a data-entry exercise), not migrate. Flag it as a migration blocker (it gates SOR/Consignment posting), parked with the client as CD2–CD3.</td>
+    </tr>
+  </table>
+
+  <h3>Medium severity</h3>
+  <table>
+    <tr><th style="width:20%">Topic</th><th style="width:7%">In sync?</th><th style="width:36%">The conflict (with cites)</th><th style="width:37%">Recommendation</th></tr>
+    <tr>
+      <td>DB scoping — row-level security vs queryset filtering</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>consolidated-system-design.html:561</code> says "PostgreSQL, row-level security scoping each store/GSTIN"; the distrusted ADRs in the other checkout (<code>/Users/anand/Code/KDPS/docs/adr/0003,0007</code>) reject RLS in favour of queryset filtering. Both states are live.</td>
+      <td>Re-decide consciously rather than silently inherit. Keep CONS's RLS statement as the trusted position until a deliberate scoping ADR is written; do not import the ADR choice by default. Salvage ADR-0007's LegalEntity→GSTIN→Store relational model (it is genuinely good) into the real decision.</td>
+    </tr>
+    <tr>
+      <td>Cloud Run — scale-to-zero vs one warm instance</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>cloud-hosting-decision.html:230</code> sets the money rule "for a money app we keep 1 warm instance"; <code>KDPS-ai-approach-and-cost.html:154</code> shows "App server — Cloud Run (scales to zero)" at ₹0 in the lean column. The cost model violates the hosting rule.</td>
+      <td>Fix the AI-cost lean line to min-instances=1 (~₹800–1,200/mo, not ₹0). A cold-start mid-sale invites double-submits; the lean scenario must not assume scale-to-zero in production.</td>
+    </tr>
+    <tr>
+      <td>WhatsApp digest timing — 9am vs 9PM</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>00-system-architecture.html</code> (D7 row, "what the owner sees at 9am"); <code>consolidated-system-design.html:433</code>, <code>07-analytics-ai/analytics-ai.html:160</code> and the walkthrough say a 9 PM close-of-day digest.</td>
+      <td>Adopt 9 PM (day-close exception feed, client ask, locked in D7). Correct the ARCH line.</td>
+    </tr>
+    <tr>
+      <td>Rule count — 11 rules vs an added 12th principle</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>00-system-architecture.html</code> lists "The 11 rules" with no extensibility rule; <code>consolidated-system-design.html:306-312</code> adds a "twelfth principle — Built to grow". CONS adds a governing rule the constitution lacks.</td>
+      <td>By the project's own meta-rule, rules live on ARCH. If extensibility is to govern, add it to ARCH as rule 12; otherwise demote CONS's "12th principle" to a stated design property, not a numbered rule.</td>
+    </tr>
+    <tr>
+      <td>Stale design-status doc (how-to-build-this-ERP.html)</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>how-to-build-this-ERP.html:130</code> says "D6 Tally sync — next, not yet designed", <code>:135</code> "11 of 14 rows", <code>:377</code> "the six module designs" — all false now (D1–D8 locked, D6 20 Jun, D8 21 Jun). <code>audit:243</code> warns Claude Code "acts on a false belief" if it loads this.</td>
+      <td>It is the single most stale doc. Salvage its double-entry postings table into the new posting catalog, then archive or restamp its status section.</td>
+    </tr>
+    <tr>
+      <td>Spike timing — first vs during integration</td>
+      <td><span class="badge b-med">No</span></td>
+      <td><code>audit-and-build-readiness.html:153</code> says spike the three externals (Ten Software API, Tally/TaxOne, barcode) FIRST, before slice 1; <code>build-playbook.html</code> says PoCs are done in the integration phase, not now. CLAUDE.md sides with spike-in-parallel-now.</td>
+      <td>Kick off the three spikes in parallel NOW (they have lead time); their RESULTS gate the slices that need them (Selling on the POS spike). Reconcile build-playbook to "start early, gate later".</td>
+    </tr>
+    <tr>
+      <td>"Correction" model has no named ground-truth source</td>
+      <td><span class="badge b-med">No</span></td>
+      <td>The design treats Correction (25-18-10) as a first-class 4th model (split from SOR 13 Jun); the raw staff interviews (<code>conversations.md</code>) name only three MBO models (25-18-10/SOR, Buy&amp;Sell, Consignment) and "Correction" appears only as a GR write-off term. The design's 4th model is not named as such in the raw interviews.</td>
+      <td>Confirm with the client that Correction (KDPS-owns, capped 25-18-10 return allowance) is a real distinct model vs a sub-mode of the 25-18-10 commission model. The design's split is internally coherent; it needs one client confirmation so it isn't a fabricated dimension.</td>
+    </tr>
+    <tr>
+      <td>Ingest validation guards the live data demands</td>
+      <td><span class="badge b-med">No</span></td>
+      <td>The design states cost frozen at stock-in and profitability derived but specifies no ingest guards; the raw Vaishnavi data-quality pass found cost &gt; MRP on 24 items, 34% of season values malformed (1,010 hold a date not a season), and heavy brand aliasing. (Carried from prior raw-data extraction.)</td>
+      <td>Add explicit ingest guards: cost ≤ MRP, season canonical-not-a-date, brand-alias merge (D8 canonicalisation). The live data violates all three today; without guards they will corrupt the new ledgers on day one.</td>
+    </tr>
+  </table>
+
+  <h3>Low severity</h3>
+  <table>
+    <tr><th style="width:20%">Topic</th><th style="width:7%">In sync?</th><th style="width:36%">The conflict (with cites)</th><th style="width:37%">Recommendation</th></tr>
+    <tr>
+      <td>Named fallback host — Azure vs E2E Networks</td>
+      <td><span class="badge b-low">No</span></td>
+      <td><code>cloud-hosting-decision.html:198</code> and <code>audit-and-build-readiness.html</code> name the fallback as Azure + Azure OpenAI; <code>consolidation-source-of-truth.html:166</code> names E2E Networks.</td>
+      <td>Use Azure + Azure OpenAI (the dedicated hosting doc governs); correct the source-of-truth note.</td>
+    </tr>
+    <tr>
+      <td>Module count to client — 7 vs 8</td>
+      <td><span class="badge b-low">No</span></td>
+      <td><code>KDPS-system-design-presentation.html:200</code> says "Seven parts of one system"; the walkthrough and CLAUDE.md describe the eight locked designs D1–D8. <code>audit:283</code> already flags this.</td>
+      <td>Pick one count for the client deck (8 if Money/D4 is shown as its own part; 7 if folded). Regenerate the deck from the design-of-record.</td>
+    </tr>
+    <tr>
+      <td>Commercial-model label — Outright vs Buy&amp;Sell</td>
+      <td><span class="badge b-low">No</span></td>
+      <td>CLAUDE.md domain fact and most docs use "Outright (BNS)"; <code>KDPS-walkthrough-interactive.html:277</code> says "Buy&amp;Sell, Correction (25-18-10), SOR, Consignment".</td>
+      <td>Standardise on "Outright (Buy &amp; Sell / BNS)" with the alias in the glossary; use "Outright" as the primary term everywhere.</td>
+    </tr>
+  </table>
+</section>
+
+<section id="findings">
+  <h2 class="sec">3 · Findings (F1–F19)</h2>
+  <p>One card per finding. Each carries a severity badge, what is wrong, the evidence with file cites, the verified India best-practice, and the recommended fix.</p>
+
+  <div class="card high"><h4>F1 · GRN-vs-PT stock-ledger writer answered three ways <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Posting / ledger semantics</div>
+    <span class="lbl">What is wrong</span><div class="body">The constitution (<code>00-system-architecture.html:284,303</code>) lists the GRN as a stock-ledger writer of a "receipt"; D2 (<code>inbound-ingestion-design.html:424</code>) says a GRN is "physical custody only, not books" and all postings fire at Patna inward off the PT; the design-of-record (<code>consolidated-system-design.html:380</code>) attributes all stock posting to PT/TIR yet <code>:448</code> still lists GRN as a writer. A developer cannot build the stock ledger without one rule.</div>
+    <span class="lbl">Evidence</span><div class="cite">00-system-architecture.html:284,303 · 02-inbound/inbound-ingestion-design.html:424 · consolidation/consolidated-system-design.html:380,448</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified research: the two-step receipt is the correct, cross-ERP-consensus design (SAP MIGO/MIRO, ERPNext Stock-Received-But-Not-Billed, Odoo, NetSuite, D365). GR/receipt writes the stock ledger (qty + valuation by SKU/location) for owned brands; the invoice booking clears it into the payable and records GST/ITC. For consignment, receipt is quantity-only with no clearing accrual and no payable until sale.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Adopt: GRN posts the QUANTITY movement (qty, location, condition, season, owned-flag provisional, no unit cost); PT at Patna inward posts the VALUATION movement (unit cost stamped, owned-flag finalised) plus vendor liability per model. Edit <code>ARCH:284</code> and the writer rows at <code>ARCH:303</code> / <code>CONS:448</code> to say so. This also unblocks the booking-less direct-receipt path (goods sell on day one before pricing).</div>
+  </div>
+
+  <div class="card high"><h4>F2 · "PT computes vendor liability" over-claims for SOR/Consignment <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Posting / ledger semantics</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>ARCH:285</code> states "PT → Vendor ledger (liability per model)" as if the PT always posts liability. <code>D2:430-431</code> correctly shows SOR posts nothing at inward (accrues on sale) and Consignment posts "Nothing from the PT, ever". The one-line principle is wrong even though the module detail is right.</div>
+    <span class="lbl">Evidence</span><div class="cite">00-system-architecture.html:285 · 02-inbound/inbound-ingestion-design.html:428-431 · 04-payments/payments.html:202</div>
+    <span class="lbl">India best-practice</span><div class="body">Matches SAP consignment special-stock: receiving consignment goods posts no GR/IR and no inventory value; both inventory value and vendor liability post on consumption/sale. KDPS's own "SOR vs Outright as a first-class dimension" rule already demands two distinct posting profiles.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Reword the ARCH principle to: "PT creates stock truth and carries the settlement basis; vendor-liability timing depends on the commercial model — Outright/Correction post incl-GST liability at inward, SOR accrues on sale, Consignment never from the PT." Also fix the ARCH/CONS writer cell to name the Sale (D3) document as the writer of the SOR/Consignment sold-liability (PT only flags not-owned).</div>
+  </div>
+
+  <div class="card high"><h4>F3 · Cross-state transfer booked as "internal — none" is a statutory bug <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">GST / inter-store transfer</div>
+    <span class="lbl">What is wrong</span><div class="body">D3 (<code>outbound.html:139,200</code>) posts an inter-store transfer as "Nothing (internal move)" / "Internal — none". Bihar and Jharkhand are distinct GSTINs, so a cross-state transfer is a taxable IGST supply. D6 (<code>tally-sync.html:261</code>) models this correctly; D3 contradicts it; and D6 is itself internally split (<code>D6:161</code> still shows the cross-GSTIN transfer row as "TBD / to design").</div>
+    <span class="lbl">Evidence</span><div class="cite">03-outbound/outbound.html:139,200 · 06-tally-sync/tally-sync.html:161,261 · audit-and-build-readiness.html:237</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified: Bihar↔Jharkhand movement is a taxable inter-state supply (Sec 7(1)(c) + Schedule I + Sec 25(4)/(5) distinct persons), needs a tax invoice with IGST (out-supply at sender, ITC at receiver), value at cost as deemed OMV under Rule 28 second proviso (full-ITC condition). E-way bill on consignment value incl. IGST: ₹50,000 cross-state; intra-state ₹1,00,000 in both Bihar and Jharkhand. Intra-state transfer is stock-ledger-only.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Fix D3: cross-GSTIN transfer = out-voucher + IGST tax invoice at sender, matching purchase voucher at receiver, e-way bill on consignment value; intra-state move stays stock-ledger-only. Close <code>D6:161</code> to match <code>D6:261</code>. Drive treatment off the first two digits (state code) of the two GSTINs. Build slice 5.</div>
+  </div>
+
+  <div class="card high"><h4>F4 · Design-of-record carries stale engine-language and data-scoping <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Stack / hosting</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>consolidated-system-design.html</code> (newest, the design-of-record) says "TypeScript end-to-end" (<code>:571</code>) and "PostgreSQL row-level security" (<code>:561</code>). The dedicated, later stack brief recommends Python/Django + React glass; the distrusted ADRs in the other checkout reject RLS for queryset filtering. The doc a developer reads first is the most drifted.</div>
+    <span class="lbl">Evidence</span><div class="cite">consolidation/consolidated-system-design.html:561,571 · consolidation/stack-decision.html:79-104 · /Users/anand/Code/KDPS/docs/adr/0003,0007 (distrusted)</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified pos-architecture research endorses React-PWA + Django + Postgres for offline-first/outbox/idempotent-upsert; the stack choice is sound. The issue is documentation drift and an un-ratified decision, not a bad stack.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Treat <code>stack-decision.html</code> as a recommendation pending Anand's confirmation; do not scaffold until confirmed. Once confirmed, edit <code>CONS:571</code> to "Python engine, React/TS screens" and write a real ADR-0001. Re-decide RLS-vs-queryset consciously in a real ADR-0003; keep CONS's RLS statement as the trusted position until then.</div>
+  </div>
+
+  <div class="card high"><h4>F5 · Unit-cost formula assumes BASIC is ex-GST and strips the GST rate from P RATE <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Cost / profitability</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>D2:415</code> / Q36 say P RATE "whether GST is inside it must be stripped" and compute ex-GST cost as "P RATE − GST". The raw PT extraction found P RATE = BASIC × 1.20 on every row including 5%-GST brands, so the 1.20 is a flat markup convention and BASIC is not ex-GST. Dividing P RATE by (1+slab) yields a wrong canonical cost, and cost is frozen at stock-in and read by all profitability.</div>
+    <span class="lbl">Evidence</span><div class="cite">02-inbound/inbound-ingestion-design.html:415,562 (Q36) · raw KDPS PT FILE SHEET.xlsx (prior extraction; raw data not in this worktree)</div>
+    <span class="lbl">India best-practice</span><div class="body">Apparel cost must be the actual vendor payable; recoverable input GST is never cost. But the slab to strip must come from the actual HSN, not a brand's BASIC convention. Note INPUT TAX ≠ OUTPUT TAX rows exist (inverted duty).</div>
+    <span class="lbl">Recommended fix</span><div class="body">Pin canonical cost to P RATE directly (the per-piece vendor payable after line discounts). If an ex-GST figure is needed for Tally, compute it from the actual HSN slab, not from BASIC. Validate against a live PT sample before coding the cost step. Treat BASIC as an informational convention column.</div>
+  </div>
+
+  <div class="card high"><h4>F6 · No source data to migrate per-brand model, margin or return window <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Master data / migration</div>
+    <span class="lbl">What is wrong</span><div class="body">The design assumes a per-brand master carrying commercial model + margin% + return window (D8, D1). The raw SUPPLIER DATA BASE leaves those columns blank with only Credit Days + CD% populated and no SOR/Outright/Consignment flag anywhere. The commercial model drives every posting; there is nothing to migrate from.</div>
+    <span class="lbl">Evidence</span><div class="cite">08-master-data/master-data.html · raw SUPPLIER DATA BASE (prior extraction) · CLAUDE.md CD2–CD3 parked items</div>
+    <span class="lbl">India best-practice</span><div class="body">The commercial model is the first-class dimension that decides ownership, GST timing, payable timing and return rules. It must be captured before any SOR/Consignment posting can be trusted.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Plan a fresh per-brand data-capture exercise (model, margin, return window per brand per season), not a migration. Flag as a migration blocker, parked with the client. The design is fine; the seed data does not exist.</div>
+  </div>
+
+  <div class="card high"><h4>F7 · POS edge join key is "barcode" but internal identity is "barcode+season" <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Identity / POS edge</div>
+    <span class="lbl">What is wrong</span><div class="body">Internal identity is barcode+season (<code>D8:157,252,279</code>; <code>CONS:326</code>; <code>D2:277</code>) and brands reuse barcodes across seasons, but the POS edge join is stated as "barcode" alone (<code>outbound.html:162</code>; <code>D2:196,481</code>). A reused barcode could resolve to the wrong season cohort, mispricing or miscounting a sale.</div>
+    <span class="lbl">Evidence</span><div class="cite">03-outbound/outbound.html:162 · 02-inbound/inbound-ingestion-design.html:196,481 · 08-master-data/master-data.html:157,252,279</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified sku-barcode-season research: treat the supplier EAN as a non-unique alias, never the inventory key; resolve the season cohort at inbound (relabel/own-barcode) so one barcode resolves to exactly one active sellable lot per store at a time; flag-don't-block on a stale-EAN reappearance.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Add "season" as a required-or-inferred field in the POS push/pull spec. The adapter re-attaches season at the edge via the effective-dated (SCD-2) master for that barcode at that store on that sale date (<code>D8:252</code> "reuse → oldest cohort first"); residual ambiguity is a one-tap "which season?" or a flagged exception, never a blocked sale.</div>
+  </div>
+
+  <div class="card high"><h4>F8 · Two ground-truth docs disagree on barcode-per-piece vs count-under-barcode <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Identity / ground truth</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>KDPS-booking-inbound-client.html:205,265</code> says "a barcode per piece"; <code>KDPS-booking-inbound-summary.html:160</code> says one barcode covers many identical pieces, "stock is a count, not one barcode per piece". The design correctly locks count-per-barcode (<code>D2:277</code>, <code>master-data.html:157</code>), so a current ground-truth doc contradicts the locked schema.</div>
+    <span class="lbl">Evidence</span><div class="cite">req-understanding-docs/KDPS-booking-inbound-client.html:205,265 · KDPS-booking-inbound-summary.html:160 · 08-master-data/master-data.html:157</div>
+    <span class="lbl">India best-practice</span><div class="body">Apparel ERP keeps stock as a count under one SKU/GTIN per variant, not one barcode per physical unit. The locked design is correct.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Correct the stale "barcode per piece" wording in <code>KDPS-booking-inbound-client.html</code>. This is load-bearing for the stock-ledger schema (count keyed on barcode+season) and the inward scan flow.</div>
+  </div>
+
+  <div class="card high"><h4>F9 · SOR/Consignment GST may be recognised twice (arrival voucher + settlement journal) <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">GST / SOR-consignment</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>D6:268</code> books a purchase voucher (normally carrying input GST) at arrival for every brand incl. SOR; <code>D6:160</code> also lists an SOR/Consignment settlement Journal where GST "crystallises only at settlement"; <code>D6:212</code> parks C5 ("does the SOR invoice charge GST at delivery?"). Without resolution, GST could be recognised at both points.</div>
+    <span class="lbl">Evidence</span><div class="cite">06-tally-sync/tally-sync.html:160,212,268 · 02-inbound/inbound-ingestion-design.html:579</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified: KDPS's dominant SOR/consignment regime is principal-agent under Schedule I + Circular 57/31/2018, not Section 31(7) sale-on-approval. GST is recognised once, where the tax invoice legally sits. Under Schedule I, output GST may be due at dispatch even though accounting revenue/COGS defers to the end-customer sale — the ERP must post the GST liability on the Schedule I event while keeping margin/COGS deferred.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Resolve C5 with the CA before slice 7. If a tax invoice accompanies SOR delivery, the arrival voucher carries GST and the settlement journal carries none; pure Consignment with no PT value must not book input GST at arrival. Track the Section 31(7) six-month deemed-supply clock (computed as +6 calendar months, not literal +181 days) only for brands genuinely on sale-on-approval terms.</div>
+  </div>
+
+  <div class="card med"><h4>F10 · Cost model assumes Cloud Run scales to zero, violating the money-app warm-instance rule <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Hosting / cost</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>cloud-hosting-decision.html:230</code> sets the rule "for a money app we keep 1 warm instance", but <code>KDPS-ai-approach-and-cost.html:154</code> shows the app server at ₹0 in the lean column because it "scales to zero". A cold start mid-sale risks double-submits.</div>
+    <span class="lbl">Evidence</span><div class="cite">consolidation/cloud-hosting-decision.html:230 · consolidation/KDPS-ai-approach-and-cost.html:154</div>
+    <span class="lbl">India best-practice</span><div class="body">Money-touching request paths should not cold-start; verified pos-architecture research depends on an always-available idempotent upsert endpoint for offline sale sync.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Fix the AI-cost lean line to min-instances=1 (~₹800–1,200/mo). The lean scenario must not assume scale-to-zero in production.</div>
+  </div>
+
+  <div class="card med"><h4>F11 · WhatsApp digest timing inconsistent (9am on ARCH vs 9PM in D7/CONS) <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Analytics / status</div>
+    <span class="lbl">What is wrong</span><div class="body">The ARCH D7 row reads "what the owner sees at 9am"; D7 (<code>analytics-ai.html:160</code>), <code>CONS:433</code> and the walkthrough say a 9 PM close-of-day digest. Morning vs evening is a real product difference.</div>
+    <span class="lbl">Evidence</span><div class="cite">00-system-architecture.html (D7 row) · 07-analytics-ai/analytics-ai.html:160 · consolidation/consolidated-system-design.html:433</div>
+    <span class="lbl">India best-practice</span><div class="body">A day-close exception feed (9 PM) matches owners-live-on-WhatsApp and the close-of-day reconciliation cadence.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Adopt 9 PM (locked in D7); correct the ARCH line.</div>
+  </div>
+
+  <div class="card med"><h4>F12 · how-to-build-this-ERP.html is wholesale stale and would mislead a build agent <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Build docs / status</div>
+    <span class="lbl">What is wrong</span><div class="body"><code>how-to-build-this-ERP.html:130</code> says "D6 Tally sync — next, not yet designed", <code>:135</code> "11 of 14 rows", <code>:377</code> "the six module designs" — all false (D1–D8 locked). <code>audit:243</code> warns it would make a build agent "act on a false belief".</div>
+    <span class="lbl">Evidence</span><div class="cite">my-understanding/how-to-build-this-ERP.html:130,135,377 · audit-and-build-readiness.html:243</div>
+    <span class="lbl">India best-practice</span><div class="body">A coding agent loads the most authoritative-looking build doc first; a stale status section silently corrupts the plan.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Salvage its double-entry postings table (Dr/Cr per event, SOR-no-journal-at-receipt) into the new posting catalog, then archive or restamp its status section.</div>
+  </div>
+
+  <div class="card med"><h4>F13 · Own-POS treated as a future seam, but is now in-scope and must coexist with Ten Software <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Scope / POS</div>
+    <span class="lbl">What is wrong</span><div class="body">All current docs treat Ten Software as the external POS with own-POS only a future seam (<code>outbound.html:162,188</code>; <code>consolidated-system-design.html:509-516</code>). The new requirement is to build our own POS in scope now AND keep Ten Software live in parallel, both behind the swappable adapter.</div>
+    <span class="lbl">Evidence</span><div class="cite">03-outbound/outbound.html:162,188 · 05-offers/offers.html:254 · consolidation/consolidated-system-design.html:509-516</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified pos-architecture research: build the POS in-house as system-of-record-feeder, offline-first (PWA + durable outbox + client-UUID per sale + Django idempotent upsert); integrate Ten Software only behind an Anti-Corruption Layer; run both behind a unified facade with the in-house ledger authoritative so Ten can be swapped without ledger change.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Promote own-POS from "later" to in-scope, co-existing. No architecture rule changes: one source-agnostic Sale document with source in {Ten Software, KDPS POS, manual}; each store runs exactly one POS (disjoint key spaces, dedup key = store + bill-no); posting logic lives on the Sale document, not the adapter; phase it behind Ten integration. Close the deferred deep-roles model before own-POS go-live (counter approval enforcement depends on it).</div>
+  </div>
+
+  <div class="card high"><h4>F14 · Booking-less direct-to-store receipt is designed only for non-branded; branded direct receipt is undocumented <span class="badge b-high">High</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Scope / inbound</div>
+    <span class="lbl">What is wrong</span><div class="body">D2 (<code>inbound-ingestion-design.html</code>, Q35/Q43) allows a non-branded shipment to arrive without a booking (stand-alone Shipment + simple-receipt GRN + on-the-fly minimal vendor). But branded goods also land directly at a store with no booking, and the booking-first happy path is narrated as the only path: the GRN pre-fills from the booking, booking status is computed from its GRNs (D1 sec.7), and the PT reads the model from the booking snapshot (D2 Q37).</div>
+    <span class="lbl">Evidence</span><div class="cite">02-inbound/inbound-ingestion-design.html (Q35,Q37,Q43) · 01-vendor-management/Vendor-Management-Module.html (sec.6,7,13)</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified direct-receipt research: build booking-less receipt as a first-class document (SAP 501-style unplanned goods receipt), not an error path. Post quantity immediately at style × size × color so goods are sellable day one; keep value + GST pending until the vendor invoice is matched (ITC gated on GSTR-2B, plus the 180-day reverse-then-reclaim and 30-Nov-following-FY outer limit).</div>
+    <span class="lbl">Recommended fix</span><div class="body">Generalise the booking-less path to any brand: a Shipment with booking_ref = NULL anchors inbound (the Shipment, not the booking, was always the anchor); a "Receive without order" entry creates a simple-receipt GRN; the commercial model is snapshotted at receipt/PT time from the effective-dated brand master (default Outright if unknown); the booking status machine is robust to a NULL parent by construction (a booking-less GRN is in no booking's GRN-set) so no new states are needed; add a retro-link operation to attach a Direct GRN to a later booking. Update the ~13 docs that narrate booking-first as the only path.</div>
+  </div>
+
+  <div class="card med"><h4>F15 · "Correction" as a 4th commercial model is not named in the raw staff interviews <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Domain / commercial models</div>
+    <span class="lbl">What is wrong</span><div class="body">The design treats Correction (25-18-10, KDPS-owns, capped return allowance) as a first-class 4th model; the raw interviews (<code>conversations.md</code>) name only three MBO models and use "Correction" only as a GR write-off term.</div>
+    <span class="lbl">Evidence</span><div class="cite">consolidation/consolidated-system-design.html · KDPS-walkthrough-interactive.html:277 · my-understanding/workflow/conversations.md (per CLAUDE.md ground truth)</div>
+    <span class="lbl">India best-practice</span><div class="body">The model split is internally coherent (it cleanly separates owned-but-return-capped from pure SOR), but a first-class dimension should trace to ground truth.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Confirm with the client that Correction is a real distinct model vs a sub-mode of the 25-18-10 commission model, so it is not a fabricated dimension.</div>
+  </div>
+
+  <div class="card med"><h4>F16 · Apparel GST rate and e-way bill thresholds in the docs predate GST 2.0 <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">GST / data tables</div>
+    <span class="lbl">What is wrong</span><div class="body">The docs model apparel GST as "slab-based and date-effective" but do not surface the current numbers, and the e-way bill threshold appears as a flat ₹50,000 in inbound discussion.</div>
+    <span class="lbl">Evidence</span><div class="cite">CLAUDE.md domain note · 02-inbound/inbound-ingestion-design.html (e-way reference) · direct-receipt and promo-engine verified research</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified: from 22 Sep 2025 (GST 2.0) apparel is 5% up to ₹2,500/piece and 18% above ₹2,500/piece (the 12% slab and ₹1,000 breakpoint are dead); the slab is decided on the post-discount per-piece price, so an offer can move a line across the boundary. Intra-state e-way bill threshold is ₹1,00,000 in both Bihar and Jharkhand; ₹50,000 only cross-state, on consignment value incl. tax. KDPS (AATO &gt; ₹5 cr) needs 6-digit HSN on invoices; B2C till needs no per-sale IRN (but the B2C exemption is no longer absolute since 1 Oct 2025 for jewellery/luxury — out of scope for mid-market apparel).</div>
+    <span class="lbl">Recommended fix</span><div class="body">Hold GST rate, slab breakpoint and e-way thresholds as date-effective, state- and direction-aware data (already the design intent). Seed the current GST 2.0 values. Have the offer engine apply the discount, then resolve the rate from the post-discount per-piece taxable value. Re-verify thresholds before go-live (e-invoicing AATO is trending down to ₹2 cr).</div>
+  </div>
+
+  <div class="card med"><h4>F17 · BOGO/B2G1 GST treatment, if framed as a deducted discount, is legally wrong <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Offers / GST</div>
+    <span class="lbl">What is wrong</span><div class="body">A "free item deducted as a discount" framing for BOGO would be legally incorrect under Indian GST.</div>
+    <span class="lbl">Evidence</span><div class="cite">05-offers/offers.html (offer engine) · promo-engine verified research · CBIC Circular 92/11/2019-GST</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified: BOGO is "two or more goods supplied for the price of one" (composite/mixed supply per Sec 8) — GST is charged on the single price collected and ITC is available on BOTH items; it is not a free/gratuitous supply and not a deducted-discount line. On-invoice discounts under Sec 15(3)(a) are excluded from taxable value (GST on the net). Post-supply discount conditions were amended Sep 2025 (Sec 15(3)(b)(i) omitted) — but KDPS avoids that machinery by keeping every promo on-invoice at the till.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Ensure the offer engine charges GST on the price actually collected for the qualifying group (B2G1 = pay for 2 of 3), with ITC on all items including the free one — not a separate discount-liability line or a taxable gift. Keep all promos on-invoice at point of sale. (The locked D5 model already lowers net price; this is a posting-precision note for the build, not a redesign.)</div>
+  </div>
+
+  <div class="card med"><h4>F18 · Four buildable artifacts the build needs do not exist yet <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Build readiness / docs</div>
+    <span class="lbl">What is wrong</span><div class="body">The trusted spine (architecture + design-of-record + D1–D8 + ground truth + requirements + raw data) is complete and largely consistent, but the build is blocked by four missing buildable artifacts: a glossary/CONTEXT, an ERD, a posting catalog, and a consolidated state-machine reference. The audit already flags that no buildable ERD exists.</div>
+    <span class="lbl">Evidence</span><div class="cite">audit-and-build-readiness.html · consolidation/consolidated-system-design.html · how-to-build-this-ERP.html (postings table to salvage)</div>
+    <span class="lbl">India best-practice</span><div class="body">Verified erp-doc-set research: the highest-leverage missing artifact is a first-class posting/journal catalog (one row per business event → Dr/Cr pair → golden file, grown per vertical slice), given documents-write-ledgers and profitability-is-derived. arc42 + ADR conventions support a constitution → design-of-record → glossary → data model → posting catalog → lifecycles → contracts → ADRs ordering.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Create the four artifacts: (1) glossary/CONTEXT (salvage the good glossary from the distrusted MAIN CONTEXT.md, strip the locked-stack content); (2) ERD (identity = barcode+season, money as integer paise, SCD-2 masters, LegalEntity→GSTIN→Store from ADR-0007); (3) posting catalog (salvage the how-to-build Dr/Cr table + per-model D2/D3/D4 postings; resolve F1 and F2 here definitively); (4) state-machine reference (consolidate D1/D3/D4/D8 lifecycles). Encode the GST Rule 56 trio (56(7) no-overwrite, 56(8) edit/delete log, 56(15) DSC) and Sec 36 retention (72 months from annual-return due date) as a crosscutting concern; an append-only ledger gives two of the four limbs for free, DSC and retention need explicit work.</div>
+  </div>
+
+  <div class="card med"><h4>F19 · Distrusted foundation artifacts in the other checkout present an unratified stack as locked <span class="badge b-med">Medium</span></h4>
+    <div class="body" style="color:var(--muted); font-size:13px">Docs / governance</div>
+    <span class="lbl">What is wrong</span><div class="body">In <code>/Users/anand/Code/KDPS</code> (the scattered checkout), <code>foundation.html</code> declares F1–F7 "LOCKED" incl. Django + queryset-scoping, <code>CONTEXT.md</code> hard-codes "Stack (locked — ADR-0001)", and <code>docs/adr/0001-0007</code> carry "Accepted" status — all presenting a stack the trusted record marks pending, and in two places the opposite (TypeScript). <code>docs/agents/</code> names a live external repo and gh commands. A build agent could act on a false "locked" status or touch a real remote.</div>
+    <span class="lbl">Evidence</span><div class="cite">/Users/anand/Code/KDPS/CONTEXT.md · /Users/anand/Code/KDPS/docs/adr/0001-0007 · /Users/anand/Code/KDPS/docs/my-understanding/system-design/foundation/foundation.html · /Users/anand/Code/KDPS/docs/agents/</div>
+    <span class="lbl">India best-practice</span><div class="body">Accepted ADRs are immutable and the trustworthy collection is the full append-only chain; an ADR must not claim "Accepted" for a decision the principal has not made.</div>
+    <span class="lbl">Recommended fix</span><div class="body">Delete the MAIN <code>foundation.html</code>, <code>CONTEXT.md</code>, <code>docs/adr/*</code> and <code>docs/agents/*</code> after salvaging: the glossary (into the new CONTEXT), ADR-0004's integer-paise + rounding-line + append-only triple, ADR-0007's LegalEntity→GSTIN→Store model, and the import-linter seams. Preserve the two live contradictions consciously (stack: Django vs pending/TS; scoping: queryset vs RLS) so they are re-decided in real ADRs, not silently lost. Confirm the GitHub remote name before any agent tooling runs.</div>
+  </div>
+</section>
+
+<section id="scope">
+  <h2 class="sec">4 · The three scope deep-dives</h2>
+  <p>Three new scope items fit the existing architecture with zero rule changes, but they force one long-deferred question (GRN-vs-PT) to be settled now. Each is set out as current state → the gap → the recommendation.</p>
+
+  <h3>4.1 · Build our own POS as an in-scope track, coexisting with Ten Software</h3>
+  <div class="card">
+    <span class="lbl">Current state</span><div class="body">All current docs treat Ten Software as the external POS with own-POS only a future seam (<code>outbound.html:188</code> "Banked for the KDPS-built POS"; <code>consolidated-system-design.html:509-516</code> "Building our own POS later"). The Sale is already source-agnostic (source in {Ten Software, manual bill, KDPS POS}) and sits behind one swappable adapter.</div>
+    <span class="lbl">The gap</span><div class="body">Own-POS is framed as "later"; the till PWA, the idempotent sale-ingestion endpoint, the outbox/sync lifecycle, auto-inward-on-scan, counter-side approval enforcement and the GST receipt generator are not yet built or fully specified; the deep-roles model that gates counter approvals is deferred.</div>
+    <span class="lbl">Recommendation</span><div class="body">Promote own-POS to an in-scope build track with ZERO architecture rule changes. Keep the seam exactly as designed: own-POS is a parallel writer of the existing source-agnostic Sale document (add source='KDPS POS'); each store runs exactly one POS so key spaces are disjoint and the dedup key (store + bill-no) is uniform; the posting logic lives on the Sale document, not the adapter, so postings/offers/Tally vouchers are unchanged. Build it offline-first (PWA + durable outbox + client-UUID per sale + Django idempotent upsert as supervised money-code). Phase it BEHIND Ten Software integration: spike Ten's API now, build the spine + Ten adapter (interim mode), then stand up own-POS in one pilot store running alongside Ten, then roll store-by-store with Ten/manual-bill as the per-store degraded mode. Close the deferred deep-roles model before own-POS go-live (counter approval enforcement depends on it). Resolve the barcode/EAN season ambiguity at inbound relabelling, never at the till. The till needs no per-sale IRN (B2C apparel).</div>
+  </div>
+
+  <h3>4.2 · Keep Ten Software live in parallel behind the swappable adapter (the contract)</h3>
+  <div class="card">
+    <span class="lbl">Current state</span><div class="body">The swappable adapter is the locked POS boundary (<code>outbound.html sec.3</code>); Ten Software is wrapped by an Anti-Corruption Layer so its data model never reaches the ledger. The full push/pull contract is written (item/price master, pending-inward, EOSS push; sales/SOH/collection pull) and "ready to assemble" as the POS API requirement doc. <code>ten-software-questions.html</code> holds 16 questions + 2 load-bearing answers (B-9 pending-inward, C-11 line-item sales).</div>
+    <span class="lbl">The gap</span><div class="body">The join key is stated as "barcode" but the internal identity is barcode+season, and Ten may key on barcode only; the dedup key, void/edit handling, and incremental-pull mechanics are not yet pinned with the vendor.</div>
+    <span class="lbl">Recommendation</span><div class="body">Define the contract in KDPS domain terms as six facade operations (3 push: item/price master, pending-inward per store, EOSS/offer rules; 3 pull: line-item sales, SOH per store, daily collection) plus two later for own-POS (real-time lock; first-class exchange). Join on barcode+season with a documented barcode-only fallback (the adapter re-attaches season via the effective-dated master for that barcode/store/date; residual ambiguity is a flagged exception, never a blocked sale). Make sales exactly-once with a deterministic store+bill-no Sale id (mirroring the locked Tally voucher-number pattern); the EOD batch reconciles, it does not re-post. Append three highest-risk Ten Software questions: D-16a (can a master carry season, or is barcode the sole key, and does the sale export echo enough — e.g. MRP — to re-attach season), D-15a (is bill number unique-per-store and stable), E-18 (can a bill be voided/edited later, and does the void appear in a later export so we can post a reversing Sale). Both POSes write the same Sale document; a per-store cutover is a one-field master flip (pos_install) with zero spine change.</div>
+  </div>
+
+  <h3>4.3 · Booking-less direct-to-store receipt (stock arrives with no booking recorded)</h3>
+  <div class="card">
+    <span class="lbl">Current state</span><div class="body">The spine is booking → inbound → store, and three things lean on the booking existing: the GRN pre-fills from the booking's order list; booking status is computed from its GRNs (D1 sec.7); the PT reads the commercial model from the booking snapshot (D2 Q37). The design already half-admits the case: D2 Q35/Q43 allow a NON-BRANDED shipment to arrive without a booking (stand-alone Shipment + simple-receipt GRN + on-the-fly minimal vendor).</div>
+    <span class="lbl">The gap</span><div class="body">Branded goods also land directly at a store with no booking (<code>client.html:258</code> confirms branded goods routinely land at the store), but this is treated as a non-branded-only edge case parked to v2, and the GRN-vs-PT posting contradiction (F1) is unresolved — which the direct-receipt case forces you to settle, because goods sell on day one before any PT or invoice.</div>
+    <span class="lbl">Recommendation</span><div class="body">Generalise the booking-less path to ANY brand. The Shipment (booking_ref=NULL), not the booking, anchors inbound — it always was the anchor; the booking only feeds the GRN an order list and receives a close-out. Add a "Receive without order" entry that creates a simple-receipt GRN (the non-branded GRN already designed). Resolve the GRN-vs-PT split globally: GRN posts the QUANTITY movement (sellable day one); PT at Patna inward posts VALUE + liability. Snapshot the commercial model at receipt/PT time from the effective-dated brand master (default Outright if unknown, flagged for HO). For owned brands, post a Stock-Received-Not-Billed accrual at PT time and defer the vendor payable + ITC leg to invoice-match (ITC gated on GSTR-2B); for SOR/Consignment, quantity-only with no accrual, liability on sale, and the Section 31(7) six-month clock started at the Direct GRN date. The booking status machine is robust to a NULL parent by construction (a booking-less GRN is in no booking's GRN-set, so no "two states at once"); add only a retro-link operation to attach a Direct GRN to a later booking — no new states. Capture delivery-challan + e-way-bill refs at receipt (threshold is state/direction-specific data: ₹1,00,000 intra-Bihar/Jharkhand, ₹50,000 cross-state). Do NOT auto-create a phantom booking (it would pollute booked-vs-received analytics). Update the ~13 docs that narrate booking-first as the only path.</div>
+  </div>
+
+  <div class="callout co-key">
+    <strong>The single rule that unblocks all three.</strong> <span class="lbl" style="margin-top:6px">Current state</span><span class="body">The GRN-vs-PT stock-ledger writer is answered three ways (F1, drift A1). The own-POS, the direct-receipt path, and the analytics all need one definitive answer.</span>
+    <span class="lbl">The gap</span><span class="body">Without one rule, the stock ledger cannot be built and the direct-receipt case (goods sellable before pricing) has no posting model.</span>
+    <span class="lbl">Recommendation</span><span class="body">Adopt the two-step posting as a global rule on the constitution: GRN writes the quantity movement (qty, location, condition, season, owned-flag provisional, no unit cost); PT at Patna inward writes the valuation movement (unit cost stamped, owned-flag finalised) plus vendor liability per commercial model. This is the verified cross-ERP best practice, it makes both anchor docs' ledger-writer tables literally correct, it changes nothing observable for booking-anchored receipts (both fire at the same shipment), and it is essential for direct receipt and own-POS auto-inward-on-scan. Settle it once, in the posting catalog, before slice 1.</span>
+  </div>
+</section>
+
+<section id="trust">
+  <h2 class="sec">5 · Trust map</h2>
+  <p>Every document in the record, its role, a verdict, and the action. The <span class="badge b-del">DELETE</span> rows (the distrusted foundation artifacts in the other checkout) are flagged in red — salvage first, then remove.</p>
+  <table>
+    <tr><th style="width:22%">Document</th><th style="width:12%">Location</th><th style="width:14%">Role</th><th style="width:14%">Verdict</th><th style="width:38%">Action</th></tr>
+    <tr>
+      <td><code>my-understanding/system-design/00-system-architecture.html</code></td>
+      <td>top of order</td><td>law / 11 rules / 5 layers / domain invariants</td>
+      <td><span class="badge b-canon">CANONICAL — the constitution</span></td>
+      <td>Keep at the top of the order. Reconcile three drifts before it is trusted blind: GRN-vs-PT stock-posting wording (F1), 9am→9PM digest (F11), and cross-link the pending stack decision (keep the "open by design" posture but point to stack-decision.html). Add rule 12 if extensibility is to govern (else demote CONS's 12th principle).</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/consolidated-system-design.html</code></td>
+      <td>directly under the architecture</td><td>the one doc a developer reads end-to-end</td>
+      <td><span class="badge b-canon">CANONICAL — design-of-record (untracked)</span></td>
+      <td>COMMIT it (currently untracked). Rewrite three points before build: engine language (:571 says TypeScript end-to-end — contradicts the Python/Django recommendation), data scoping (:561 says row-level security — re-decide vs queryset), and the 12th-principle question. Fix the inbound "Posts" card (:380) and ledger-writer table (:448) for the GRN-vs-PT split.</td>
+    </tr>
+    <tr>
+      <td><code>01-vendor-management/Vendor-Management-Module.html</code> (D1)</td>
+      <td>per-module appendix</td><td>vendor + booking detail</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Resolve the booking-price conflict (D1 locks "no price at booking"; the 21-Jun client ask wants MRP/value captured). Add the booking-less direct-receipt seam: a GRN can exist with no parent booking; the status machine is robust to a NULL parent; add the retro-link operation. Confirm the Correction return-allowance anchor date.</td>
+    </tr>
+    <tr>
+      <td><code>02-inbound/inbound-ingestion-design.html</code> (D2)</td>
+      <td>per-module appendix</td><td>PT spine + inbound postings</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Fix the cost formula (F5: P RATE is the cost; drop the "strip GST from P RATE" step that assumes BASIC is ex-GST). Add ingest guards (cost≤MRP, season-not-a-date, brand-alias merge). Split the Q37 posting table into GRN-quantity / PT-value-and-liability (F1). Generalise the booking-less Direct Receipt path to branded goods (F14).</td>
+    </tr>
+    <tr>
+      <td><code>03-outbound/outbound.html</code> (D3)</td>
+      <td>per-module appendix</td><td>outbound + POS edge</td>
+      <td><span class="badge b-app">APPENDIX — locked (carries a HIGH bug)</span></td>
+      <td>Fix the cross-state transfer (F3): currently "internal — none"; Bihar↔Jharkhand is a taxable IGST supply (+ e-way bill). Add "season" to the POS join key (F7). Keep the swappable-adapter contract; formalise own-POS as a concurrent source (F13).</td>
+    </tr>
+    <tr>
+      <td><code>04-payments/payments.html</code> (D4)</td>
+      <td>per-module appendix</td><td>payable lifecycle + payment gate</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Keep. Merge its roles grid with D8's edit-rights grid into one RBAC matrix. Surface the two-clock split (statutory purchase at arrival vs operational payable on sale) into the posting catalog. The deferred deep-roles model must close before own-POS go-live.</td>
+    </tr>
+    <tr>
+      <td><code>05-offers/offers.html</code> (D5)</td>
+      <td>per-module appendix</td><td>offer rulebook</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Keep (Q1–Q13 locked; best-for-customer precedence settled). Add the BOGO GST-posting note (F17: charge on the price collected, ITC on all items, never a deducted-discount line). Seed current GST 2.0 slabs as date-effective data.</td>
+    </tr>
+    <tr>
+      <td><code>06-tally-sync/tally-sync.html</code> (D6)</td>
+      <td>per-module appendix</td><td>statutory sync to Tally</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Resolve the SOR/Consignment GST arrival-vs-settlement double-count (F9, C5 parked) with the CA. Close the internal split at D6:161 (cross-GSTIN transfer "TBD") against D6:261 (locked IGST). Add the deferred-billing direct-receipt voucher case (SRNB accrual at receipt, purchase/ITC voucher on invoice-match).</td>
+    </tr>
+    <tr>
+      <td><code>07-analytics-ai/analytics-ai.html</code> (D7)</td>
+      <td>per-module appendix</td><td>intelligence layer</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Keep. Fence the target hold-back (re-dating bills) explicitly under Rule 4 — the sharpest AI-in-core edge. 9 PM digest is canonical (propagate to ARCH).</td>
+    </tr>
+    <tr>
+      <td><code>08-master-data/master-data.html</code> (D8)</td>
+      <td>per-module appendix</td><td>master data + RBAC shape</td>
+      <td><span class="badge b-app">APPENDIX — locked deep-dive</span></td>
+      <td>Keep — authoritative master inventory + edit-rights grid; identity = barcode+season with "reuse → oldest cohort first" (the source for the POS season-resolution rule). CD1–CD9 client facts still owed.</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/stack-decision.html</code></td>
+      <td>decisions cluster</td><td>the stack recommendation</td>
+      <td><span class="badge b-open">CANONICAL anchor — PENDING confirmation</span></td>
+      <td>Keep as the stack ADR-precursor. Status is "recommendation pending Anand's confirmation" (:69) — do NOT treat as locked, do not scaffold until confirmed. On confirmation it becomes the real ADR-0001 (Python/Django engine + React/Postgres/GCP, no Supabase, GST model borrowed from ERPNext).</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/cloud-hosting-decision.html</code></td>
+      <td>decisions cluster</td><td>hosting decision</td>
+      <td><span class="badge b-canon">CANONICAL anchor (hosting)</span></td>
+      <td>Keep (GCP Mumbai asia-south1). Internally stale on language (calls the app "a TypeScript app / Next.js-Node" — predates the Python flip); note that. Its 1-warm-instance money rule (:230) governs over the AI-cost doc's ₹0 lean. Fallback host is Azure + Azure OpenAI (governs over the source-of-truth note).</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/KDPS-ai-approach-and-cost.html</code></td>
+      <td>decisions cluster</td><td>AI cost model</td>
+      <td><span class="badge b-merge">SUPERSEDE/MERGE</span></td>
+      <td>Keep the cost tables + per-job model picks; fix the one conflict (:154 "scales to zero / ₹0" violates the hosting min-instances=1 rule, F10). Fold the cost numbers into the design-of-record's tech section.</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/consolidation-source-of-truth.html</code></td>
+      <td>decisions cluster</td><td>session log</td>
+      <td><span class="badge b-merge">SUPERSEDE/MERGE</span></td>
+      <td>21-Jun session log. Stale stack ("TypeScript end-to-end, locked"), wrong fallback (E2E Networks vs Azure), ERPNext "discarded" vs "borrow GST model". Mine its good sharpenings (SCD-2 effective dating, SOR second clock, idempotent Tally outbox) into CONS, then retire.</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/KDPS-system-design-presentation.html</code></td>
+      <td>client-facing</td><td>client deck</td>
+      <td><span class="badge b-merge">SUPERSEDE/MERGE (client deck)</span></td>
+      <td>Stale stack (TS end-to-end), "Seven parts" (:200) vs eight. Regenerate from the design-of-record before any client showing.</td>
+    </tr>
+    <tr>
+      <td><code>consolidation/KDPS-walkthrough-interactive.html</code></td>
+      <td>client-facing</td><td>interactive walkthrough</td>
+      <td><span class="badge b-app">APPENDIX (client walkthrough)</span></td>
+      <td>Keep — richest single source of postings/join-keys/lifecycles, carries no stack section so it does not drift. One fix: "Buy&amp;Sell" (:277) → "Outright" to match domain vocabulary.</td>
+    </tr>
+    <tr>
+      <td><code>audit-and-build-readiness.html</code></td>
+      <td>build sequence</td><td>slice plan + readiness</td>
+      <td><span class="badge b-canon">CANONICAL (build plan)</span></td>
+      <td>Keep as the build-readiness + slice-sequence authority (slices 0–8). It already catalogues most drift (cross-state IGST bug :237, spike-first :153). Self-correction: update its own stack table if it still says TypeScript backend.</td>
+    </tr>
+    <tr>
+      <td><code>build-playbook.html</code></td>
+      <td>process</td><td>build loop</td>
+      <td><span class="badge b-canon">CANONICAL (process)</span></td>
+      <td>Keep. Reconcile the spike-timing conflict with the audit: build-playbook says spike externals later/in-integration; audit + CLAUDE.md say spike the three in parallel now. Adopt "start early, gate later".</td>
+    </tr>
+    <tr>
+      <td><code>my-understanding/how-to-build-this-ERP.html</code></td>
+      <td>orientation</td><td>stale orientation</td>
+      <td><span class="badge b-merge">SUPERSEDE/MERGE → then ARCHIVE</span></td>
+      <td>Most stale doc (19 Jun): "D6 not yet designed", "six module designs", "11 of 14 rows" — all false. Salvage its double-entry postings table into the new posting catalog, then archive or restamp.</td>
+    </tr>
+    <tr>
+      <td><code>my-understanding/workflow/conversations.md</code> + <code>workflow-diagrams/stock-workflows.html</code>, <code>store-workflow.html</code></td>
+      <td>ground truth</td><td>how KDPS works today</td>
+      <td><span class="badge b-canon">CANONICAL — ground truth</span></td>
+      <td>Never edit. The source the design derives from; authoritative current-flow diagrams.</td>
+    </tr>
+    <tr>
+      <td><code>req-understanding-docs/KDPS-booking-inbound-client.html</code> + <code>-summary.html</code></td>
+      <td>ground truth</td><td>current requirement understanding</td>
+      <td><span class="badge b-canon">CANONICAL — current ground truth</span></td>
+      <td>Keep. Fix the barcode↔piece contradiction: client.html:205,265 says "barcode per piece"; correct it to count-per-barcode to match the locked model and summary.html:160 (F8).</td>
+    </tr>
+    <tr>
+      <td><code>client-requirements-docs/*</code> and <code>04-client-docs/*</code></td>
+      <td>requirements</td><td>client asks + deliverables</td>
+      <td><span class="badge b-raw">REQUIREMENTS-INPUT</span></td>
+      <td>Keep as the backlog/what-list and client-facing deliverables; regenerate from the design-of-record as it firms. Never treat as design.</td>
+    </tr>
+    <tr>
+      <td><code>data-from-kdps/**</code> (PT formats, SUPPLIER/BRAND/OFFERS/DN-CN xlsx, store list, store-analysis)</td>
+      <td>raw data</td><td>seed masters + golden files</td>
+      <td><span class="badge b-raw">RAW-DATA</span></td>
+      <td>Source of truth for facts, not design. Note: not present in this worktree (the E-section findings are carried from a prior extraction pass — re-verify P RATE=BASIC*1.20, the blank model/margin columns, and the data-quality violations against the live files before coding the cost and ingest steps).</td>
+    </tr>
+    <tr class="delrow">
+      <td><code>/Users/anand/Code/KDPS/{CONTEXT.md, docs/adr/*, docs/agents/*, docs/.../foundation/foundation.html}</code></td>
+      <td>other checkout</td><td>distrusted build artifacts</td>
+      <td><span class="badge b-del">DELETE (distrusted, MAIN-only)</span></td>
+      <td>Present an unratified Django stack + queryset-scoping as "LOCKED/Accepted", contradicting the trusted record (F19). Salvage the glossary, ADR-0004 (integer-paise + append-only triple), ADR-0007 (LegalEntity→GSTIN→Store), and the import-linter seams FIRST; preserve the stack and scoping contradictions consciously; confirm the GitHub remote before any agent tooling runs; then delete.</td>
+    </tr>
+  </table>
+</section>
+
+<section id="order">
+  <h2 class="sec">6 · Proposed canonical document order for the ERP build</h2>
+  <p>The single source-of-truth hierarchy a build agent should read top-to-bottom. Each row marks whether the doc <strong>exists</strong>, must be <strong>created</strong>, or needs a <strong>rewrite</strong>.</p>
+  <table>
+    <tr><th style="width:5%">#</th><th style="width:26%">Document</th><th style="width:40%">Purpose</th><th style="width:29%">Exists / Create / Rewrite</th></tr>
+    <tr><td class="num">0</td><td>CLAUDE.md + 00-system-architecture.html (the constitution)</td><td>The 11 (or 12) rules, 5 layers and domain invariants every module must obey; the law you change consciously before breaking it.</td><td>exists — minor edits (cross-link pending stack; resolve GRN-vs-PT wording; 9am→9PM; decide rule 12)</td></tr>
+    <tr><td class="num">1</td><td>consolidated-system-design.html (design-of-record)</td><td>The whole system on one page — what a developer reads end-to-end before touching code.</td><td>exists, needs rewrite + commit (engine language, data scoping, 12th-principle; commit the untracked file)</td></tr>
+    <tr><td class="num">2</td><td>Domain glossary / CONTEXT.md</td><td>One controlled vocabulary: SKU=barcode+season, the 4 commercial models, Document/Posting/Ledger/Snapshot, PT/GRN/TIR, V-flip, GSTIN distinct-persons.</td><td>create — salvage the good glossary from the distrusted MAIN CONTEXT.md, strip all locked-stack content</td></tr>
+    <tr><td class="num">3</td><td>Data model / ERD</td><td>Relational schema: identity = barcode+season, money as integer paise, SCD-2 effective-dated masters, LegalEntity→GSTIN→Store.</td><td>create — seed from D8 + ADR-0007 entity model + ADR-0004 conventions (salvaged before deletion)</td></tr>
+    <tr><td class="num">4</td><td>Posting catalog</td><td>Every document → which ledgers it posts → Dr/Cr legs → per commercial model; the heart of correctness, append-only with reversing entries.</td><td>create — salvage the how-to-build Dr/Cr table + D2/D3/D4 per-model postings; resolve F1 (GRN qty / PT value) and F2 (Sale writes SOR liability) here definitively; show both clocks per model</td></tr>
+    <tr><td class="num">5</td><td>State machines / lifecycles</td><td>Every document's status flow: Booking, Shipment, Payable, Payment, Transfer, Season calendar, Offer; plus the POS sync lifecycle (pending→in-flight→synced, retryable/fatal/dead-letter).</td><td>create — consolidate from D1/D3/D4/D8 + the own-POS outbox/sync design</td></tr>
+    <tr><td class="num">6</td><td>Integration contracts (one per edge, with join key)</td><td>POS (join=barcode+season, behind a swappable adapter; Ten Software + KDPS POS as concurrent sources), Tally (join=voucher number), Bank (UTR), WhatsApp (phone) — each push/pull/recon/failure-queue.</td><td>exists, scattered — assemble from the architecture edges table + D6 + 04-client-docs/POS-*; the 2 load-bearing POS questions are open pending the spike</td></tr>
+    <tr><td class="num">7</td><td>Requirements / feature inventory (ERP-requirements-register.html + client-demands.html)</td><td>The WHAT list mapped to modules, with open questions and deliberate client divergences (POS scope, stack, timeline).</td><td>exists — REQUIREMENTS-INPUT, backlog source, never design</td></tr>
+    <tr><td class="num">8</td><td>Build plan + readiness (audit-and-build-readiness.html + build-playbook.html)</td><td>Slice sequence 0–8, the technical-design-package checklist, the build loop, the 3 external spikes.</td><td>exists, minor rewrite — fix the audit's stale stack table; reconcile spike-timing to start-early-gate-later</td></tr>
+    <tr><td class="num">9</td><td>The real ADRs (docs/adr/0001…)</td><td>Accepted, dated decisions: stack, repo layout, RBAC, DB conventions, CI gate, auth/seed, entity/GSTIN scoping.</td><td>create (re-decide) — write only after Anand confirms (a) stack Python-vs-TS, (b) RLS-vs-queryset; salvage reasoning from MAIN ADR-0004 + 0007</td></tr>
+    <tr><td class="num">10</td><td>Per-module appendices D1–D8</td><td>The locked deep-dives behind the design-of-record — authoritative detail per module.</td><td>exists — APPENDIX; apply the per-module corrections (cost formula, cross-state IGST, season-in-key, booking-less receipt, SOR GST timing)</td></tr>
+    <tr><td class="num">11</td><td>Ground-truth references (conversations.md, stock/store workflow diagrams, booking-inbound client/summary)</td><td>How KDPS works today — the floor the design must keep matching.</td><td>exists — CANONICAL ground truth; fix the barcode↔piece contradiction in the client doc</td></tr>
+    <tr><td class="num">12</td><td>Migration &amp; rollout (D9)</td><td>Data migration (clean 2-yr move), parallel-run/cutover, training — the top ERP failure causes; acceptance gate = trial balance + inventory valuation match Tally exactly.</td><td>create — deferred by decision (revisit before go-live); must exist before cutover. Note the per-brand model/margin/return capture is a fresh data-entry exercise, not a migration</td></tr>
+  </table>
+</section>
+
+<section id="seams">
+  <h2 class="sec">7 · Open seams</h2>
+  <p>The loose ends that cross module boundaries — each needs an external answer, a deferred design, or a spike result before it can close.</p>
+  <ul class="seam">
+    <li><strong>Ten Software POS API:</strong> can a master carry a season tag or is the barcode the sole key, and does the sales export echo enough (e.g. the bill MRP) to re-attach season at our edge? Is the bill number unique-per-store and stable (our exactly-once key = store+bill-no)? Can a bill be voided/edited later, and does the void appear in a later export so we can post a reversing Sale? (D-16a, D-15a, E-18 — the three highest-risk vendor answers, plus the two load-bearing B-9 pending-inward and C-11 line-item sales.)</li>
+    <li><strong>Tally/TaxOne import:</strong> does the chosen route (Vyapar TaxOne now, direct-XML fallback) accept the KDPS-owned deterministic voucher number and the carried (never recomputed) GST breakup? Spike before slice with Tally posting.</li>
+    <li><strong>Barcode tool:</strong> who generates the barcode for non-branded items today (POS-generated) and can we integrate that generator, given 68% of brand rows have no vendor barcode (generation is the majority path, not the fallback)?</li>
+    <li><strong>One CA sitting to settle:</strong> (a) SOR/Consignment GST timing — tax invoice at delivery (Schedule I dispatch) vs approval-basis (resolves D6 C5); (b) one Tally company with two GSTINs vs two companies (D6 C3); (c) e-invoicing applicability and the AATO threshold trend (₹5cr trending to ₹2cr) before go-live.</li>
+    <li><strong>Deep roles/access model</strong> (D4 left it thin, deferred): the role grid and per-transaction approval caps that own-POS counter-side discount/override enforcement depends on — must close before own-POS go-live.</li>
+    <li><strong>D9 migration &amp; rollout</strong> (deferred): the clean 2-year data move, parallel-run/cutover, training; acceptance gate = trial balance + inventory valuation match Tally exactly. Includes the fresh per-brand model/margin/return capture (not a migration) and the per-store pos_install cutover flip.</li>
+    <li><strong>Attendance &amp; Payroll</strong> (deferred by decision): not yet designed; revisit before go-live.</li>
+    <li><strong>Booking-price conflict (D1):</strong> D1 locks "no price at booking" but the 21-Jun client ask wants MRP/value captured at booking — resolve before the vendor/booking slice.</li>
+    <li><strong>GST-as-data seeding:</strong> current GST 2.0 apparel slabs (5% up to ₹2,500, 18% above, eff. 22 Sep 2025; slab decided on post-discount per-piece price) and state/direction-specific e-way thresholds (₹1,00,000 intra-Bihar/Jharkhand, ₹50,000 cross-state on consignment value incl. tax) must be loaded as date-effective data and re-verified before go-live.</li>
+  </ul>
+</section>
+
+<section id="qa">
+  <h2 class="sec">8 · Q&amp;A agenda for the next session</h2>
+  <p>The hand-off to the follow-up discussion. Numbered, grouped by area. Each carries the decision to confirm and why it matters now.</p>
+
+  <div class="area-head">Posting / ledger (the unblocker)</div>
+  <ol class="qa">
+    <li><span class="q"><span class="qid">Q1</span>At inbound, does the GRN write the stock ledger or does the PT at Patna inward? Decision to confirm: GRN posts the QUANTITY movement (no cost), PT posts the VALUATION + vendor liability. Adopt globally?</span><div class="why">Answered three ways across ARCH (GRN posts receipt), D2 (GRN is custody only, PT posts), and CONS (PT posts, but GRN still listed as a writer). The stock ledger cannot be built without one rule, and the direct-receipt and own-POS auto-inward paths both depend on it. Highest-priority decision.</div></li>
+    <li><span class="q"><span class="qid">Q2</span>Confirm the ARCH principle is reworded so "PT computes vendor liability" becomes "PT creates stock truth and carries the settlement basis; liability TIMING depends on the model" (Outright/Correction at inward, SOR on sale, Consignment never from the PT). And confirm the Sale (D3) document is named as the writer of the SOR/Consignment sold-liability, not the PT.</span><div class="why">The one-line ARCH principle over-claims; the writer tables credit the PT while the document tables credit the Sale. A developer reading only ARCH would post SOR liability at the wrong moment.</div></li>
+  </ol>
+
+  <div class="area-head">GST</div>
+  <ol class="qa" start="3">
+    <li><span class="q"><span class="qid">Q3</span>Confirm a cross-GSTIN (Bihar↔Jharkhand) transfer is booked as a taxable IGST supply (out-voucher + tax invoice at sender, purchase voucher + ITC at receiver, e-way bill), and an intra-state move stays stock-ledger-only. Fix D3 ("internal — none") and close D6:161 ("TBD") to match D6:261.</span><div class="why">D3 contradicts D6 and the audit calls it "a real statutory bug". Mis-booking a taxable supply as internal corrupts both GSTINs' returns. D6 is even internally split on it.</div></li>
+    <li><span class="q"><span class="qid">Q4</span>For SOR/Consignment brands, where is GST recognised once — at arrival (the purchase voucher D6 books for every brand) or at settlement (the journal D6:160 also lists)? Specifically: does the invoice accompanying SOR delivery charge GST at delivery (Schedule I dispatch), or is it approval-basis? (Parked as C5.)</span><div class="why">Booking a purchase voucher with input GST at arrival AND a settlement journal risks recognising GST twice. Verified research says KDPS's regime is principal-agent consignment under Schedule I, not Section 31(7) sale-on-approval — this needs a CA confirmation before slice 7.</div></li>
+  </ol>
+
+  <div class="area-head">Cost / profitability</div>
+  <ol class="qa" start="5">
+    <li><span class="q"><span class="qid">Q5</span>Confirm the canonical unit cost is P RATE directly (the per-piece vendor payable), and that we do NOT derive ex-GST cost by dividing P RATE by (1+slab) assuming BASIC is ex-GST. (Raw data shows P RATE = BASIC × 1.20 flat on every row, including 5%-GST brands.) If Tally needs an ex-GST figure, compute it from the actual HSN slab.</span><div class="why">D2 Q36 says "strip GST from P RATE" assuming BASIC is ex-GST; the real PT convention is a flat 1.20 markup, not a GST rate. Cost is frozen at stock-in and read by all profitability, so a wrong formula silently corrupts every margin report.</div></li>
+  </ol>
+
+  <div class="area-head">Identity / ground truth</div>
+  <ol class="qa" start="6">
+    <li><span class="q"><span class="qid">Q6</span>Does the POS contract carry season, or must the adapter infer it? Confirm the rule: a scan resolves to the active cohort at the store; if both seasons live under one barcode, oldest-season-first; ambiguous → one-tap "which season?". Add "season" as a required/inferred field in the POS push/pull spec.</span><div class="why">Internal identity is barcode+season and brands reuse barcodes across seasons, but the POS join is stated as barcode alone. A reused barcode resolving to the wrong cohort misprices or miscounts the sale.</div></li>
+    <li><span class="q"><span class="qid">Q7</span>Confirm the locked model is one barcode → many identical pieces (stock is a count under barcode+season), NOT one barcode per piece — and authorise correcting the stale "barcode per piece" wording in KDPS-booking-inbound-client.html.</span><div class="why">Two current ground-truth docs flatly disagree (client says per-piece, summary says count). The stock-ledger schema is built on count-per-barcode; the contradicting ground-truth doc must be fixed so it stops contradicting the locked schema.</div></li>
+  </ol>
+
+  <div class="area-head">Scope</div>
+  <ol class="qa" start="8">
+    <li><span class="q"><span class="qid">Q8</span>Confirm own-POS is now an in-scope build track that COEXISTS with Ten Software (both behind the swappable adapter), built as a parallel writer of the same source-agnostic Sale document and phased BEHIND Ten integration (Ten first, own-POS pilot store, then store-by-store). No architecture rule changes — agreed?</span><div class="why">All current docs call own-POS "later". Confirming it as in-scope and concurrent (one Sale contract, source in {Ten, KDPS POS, manual}, each store runs one POS) sets the build plan and the integration-contract spec; the deep-roles model must close before own-POS go-live.</div></li>
+    <li><span class="q"><span class="qid">Q9</span>Confirm the booking-less direct-receipt path is generalised to ANY brand (not just non-branded): a Shipment with no booking anchors inbound, a "Receive without order" simple-receipt GRN posts quantity, the commercial model is snapshotted from the effective-dated brand master at receipt, and the booking status machine simply is not involved (no phantom booking). A Direct GRN can be retro-linked to a later booking.</span><div class="why">Branded goods routinely land at a store with no booking, but the design designs this only for non-branded and narrates booking-first as the only path across ~13 doc locations. The architecture already supports it; the decision is to make it explicit and first-class.</div></li>
+  </ol>
+
+  <div class="area-head">Domain / commercial models</div>
+  <ol class="qa" start="10">
+    <li><span class="q"><span class="qid">Q10</span>Is "Correction" (25-18-10, KDPS-owns, capped return allowance) a genuinely distinct fourth commercial model, or a sub-mode of the 25-18-10 commission model? (The raw staff interviews name only three models and use "Correction" only as a GR write-off term.)</span><div class="why">The design treats Correction as a first-class dimension that drives ownership, GST timing and return rules, but it is not named as a model in ground truth. One client confirmation prevents it being a fabricated dimension.</div></li>
+  </ol>
+
+  <div class="area-head">Stack / governance</div>
+  <ol class="qa" start="11">
+    <li><span class="q"><span class="qid">Q11</span>Confirm the engine language: Python/Django engine + React/TypeScript screens (per stack-decision.html), and authorise editing the design-of-record (CONS:571) which still says "TypeScript end-to-end". Until confirmed, nothing is scaffolded.</span><div class="why">The two newest docs disagree on the engine, and the distrusted foundation artifacts in the other checkout present Django as "locked" while CONS says TypeScript. The whole build sits on this one decision; it is explicitly pending your confirmation.</div></li>
+    <li><span class="q"><span class="qid">Q12</span>Decide data scoping: PostgreSQL row-level security (per CONS:561) or queryset filtering (per the distrusted ADRs). This must be re-decided consciously, not inherited by default.</span><div class="why">CONS and the other-checkout ADRs flatly disagree. It shapes the security model for store/GSTIN isolation and must be a deliberate ADR, with ADR-0007's LegalEntity→GSTIN→Store model salvaged into the decision.</div></li>
+  </ol>
+
+  <div class="area-head">Docs / which copy wins</div>
+  <ol class="qa" start="13">
+    <li><span class="q"><span class="qid">Q13</span>Confirm WT is the canonical copy; commit the untracked consolidated-system-design.html as the design-of-record; and authorise deleting the distrusted MAIN foundation.html, CONTEXT.md, docs/adr/* and docs/agents/* (after salvaging the glossary, ADR-0004 integer-paise/append-only, ADR-0007 entity model, and import-linter seams). Confirm the GitHub remote name before any agent tooling runs.</span><div class="why">Two live document trees with contradictory "locked" states; the MAIN artifacts present an unratified stack as Accepted and reference a live remote an agent could touch. One source-of-truth hierarchy must be set before coding.</div></li>
+  </ol>
+
+  <div class="area-head">Build sequence</div>
+  <ol class="qa" start="14">
+    <li><span class="q"><span class="qid">Q14</span>Confirm the three external spikes (Ten Software POS API, Tally/TaxOne import, barcode tool) kick off in parallel NOW, with their results gating the slices that need them (Selling gated on the POS spike) — overriding build-playbook's "spike later in integration".</span><div class="why">The audit says spike-first, build-playbook says spike-later; the externals have lead time. The sequencing decision determines whether the build stalls waiting on a vendor answer.</div></li>
+  </ol>
+
+  <div class="area-head">Analytics / cleanup</div>
+  <ol class="qa" start="15">
+    <li><span class="q"><span class="qid">Q15</span>Confirm the WhatsApp digest is 9 PM (close-of-day), not 9am, and authorise correcting the ARCH line; and confirm the extensibility/"Built to grow" principle is either added to ARCH as rule 12 or demoted to a design property (not a numbered rule).</span><div class="why">ARCH says 9am while D7/CONS say 9 PM; and CONS adds a 12th principle the constitution lacks. Both are small but the project's own meta-rule says rules live on ARCH, so the inconsistency should be resolved deliberately.</div></li>
+  </ol>
+
+  <div class="area-head">Master data / migration</div>
+  <ol class="qa" start="16">
+    <li><span class="q"><span class="qid">Q16</span>Confirm that per-brand commercial model, margin% and return-window will be captured FRESH as a data-entry exercise (the raw SUPPLIER DATA BASE has these blank), and authorise the ingest guards the live data demands: cost ≤ MRP, season-canonical-not-a-date, brand-alias merge.</span><div class="why">There is no source to migrate the commercial model from, yet it drives every posting — a migration blocker. And the live data already violates cost≤MRP (24 items), season-not-a-date (1,010 rows) and has heavy brand aliasing, which will corrupt the new ledgers on day one without guards.</div></li>
+  </ol>
+</section>
+
+<footer>
+  KDPS · System Design Review &amp; Document Sync Audit · 24 June 2026 · A reconciliation pass over the design record (ARCH, the consolidated design-of-record, D1–D8, the decisions cluster, ground truth, requirements, and the distrusted other-checkout artifacts). Verdict: designed in the right direction — settle the four money/statute contradictions and build the four buildable artifacts before scaffolding.
+</footer>
+
+</main>
+</div>
+</body>
+</html>

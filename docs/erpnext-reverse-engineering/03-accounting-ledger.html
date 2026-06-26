@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Accounting Engine — the General Ledger — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html" class="cur"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 3 · The two ledgers</div>
+  <h1>The Accounting Engine — the General Ledger</h1>
+  <p class="sub">Double-entry as the spine of money. The GL Entry, the chart-of-accounts tree, fiscal years, party ledgers, dimensions, and the law that documents post the ledger — reports only ever read it.</p>
+</header>
+
+<section>
+<h2 class="sec">Why this subsystem is the heart of any ERP</h2>
+
+<p>Strip an ERP of its screens, its inventory, its payroll, its CRM, and what remains — the thing that makes it an <em>ERP</em> and not a database of forms — is a general ledger. Every business event that matters financially, no matter how different it looks on the surface, eventually reduces to the same act: moving money between accounts in balanced pairs. A sale, a vendor bill, a salary run, a stock write-off, a year-end close — all of them are just different opinions about <strong>which</strong> accounts to debit and credit. The accounting engine is where those opinions become permanent, reconcilable truth.</p>
+
+<p>This is why getting the ledger right is the single highest-leverage decision in an ERP build. If the ledger is a clean, immutable, append-only stream of postings, then auditability, reproducibility, statutory reporting, multi-currency, multi-company and per-brand profitability all fall out of it almost for free. If the ledger is muddy — if balances are cached on account rows, if documents mutate totals directly, if cancellation deletes history — then every report becomes a negotiation with reality, the books drift, and you spend the rest of the project chasing reconciliation bugs that should never have been possible.</p>
+
+<p>ERPNext gets this right by obeying two laws without exception, and the whole of this chapter is an unpacking of them:</p>
+
+<div class="callout co-key"><span class="lbl">The two laws</span>
+<p><strong>Documents post the ledger.</strong> No business document ever writes a balance. Each one, on submit, composes a balanced set of one-sided postings and hands them to a single shared posting engine. <strong>Reports read the ledger.</strong> The trial balance, P&amp;L, balance sheet and general-ledger report are pure aggregations of ledger rows — no derived balance is ever stored on an account.</p>
+</div>
+
+<p>Hold those two sentences in your head. Everything below — the immutable <code>GL Entry</code> row, the nested-set chart of accounts, the central balance check, party subledgers, accounting dimensions, period closing — is machinery in service of keeping those two laws true under real-world pressure: rounding, foreign currency, multiple legal entities, cancellations, and analytical slicing.</p>
+
+<h3>The five-layer place of the ledger</h3>
+
+<p>In the KDPS architecture vocabulary (master data → documents → ledgers → controls → intelligence), the accounting engine is the <em>ledger</em> band. Documents write into it; reports and intelligence read out of it. It is deliberately thin and generic — the variety lives entirely above it, in the per-document composers.</p>
+
+<div class="band l-doc"><div class="bname">Documents (post)</div><div class="boxes">
+  <div class="bx">Sales Invoice<small>debtor + income + tax + COGS</small></div>
+  <div class="bx">Purchase Invoice<small>creditor + expense/asset + tax</small></div>
+  <div class="bx">Payment Entry<small>party + bank/cash</small></div>
+  <div class="bx">Journal Entry<small>manual debits/credits</small></div>
+  <div class="bx">Period Closing Voucher<small>zero the P&amp;L</small></div>
+</div></div>
+<div class="gap"></div>
+<div class="band l-ledg"><div class="bname">The ledger (the one truth)</div><div class="boxes">
+  <div class="bx">GL Entry<small>append-only, one-sided rows</small></div>
+  <div class="bx">Account tree<small>typed nested-set chart</small></div>
+  <div class="bx">Payment Ledger Entry<small>AR/AP projection</small></div>
+</div></div>
+<div class="gap"></div>
+<div class="band l-intel"><div class="bname">Reports &amp; intelligence (read)</div><div class="boxes">
+  <div class="bx">Trial Balance / P&amp;L / Balance Sheet<small>SUM(debit − credit) over subtrees</small></div>
+  <div class="bx">General Ledger<small>line-level + running balance</small></div>
+  <div class="bx">AR / AP aging<small>party + against_voucher</small></div>
+</div></div>
+</section>
+
+<section>
+<h2 class="sec">The key doctypes at a glance</h2>
+
+<p>Before the patterns, here is the cast. Note the strict separation of kinds: there is exactly <strong>one</strong> ledger table that holds financial truth; everything else is either a master that classifies accounts, a transaction that posts, or a report that reads.</p>
+
+<table>
+<tr><th>Doctype</th><th>Kind</th><th>Path</th><th>Role</th></tr>
+<tr><td><strong>GL Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td><td>The atomic append-only ledger row: one account, a debit <em>or</em> credit, voucher / against-voucher / party tags, three currency amounts. The single source of financial truth.</td></tr>
+<tr><td><strong>Account</strong></td><td>master</td><td><span class="fileref">erpnext/accounts/doctype/account/account.json</span></td><td>Chart-of-accounts node: a nested-set tree (<code>lft</code>/<code>rgt</code>, <code>parent_account</code>, <code>is_group</code>) classified by <code>root_type</code> and <code>account_type</code>. Only leaf accounts are postable.</td></tr>
+<tr><td><strong>Fiscal Year</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/fiscal_year/fiscal_year.json</span></td><td>Defines accounting period boundaries (<code>year_start_date</code>/<code>year_end_date</code>, <code>is_short_year</code>); every GL Entry is stamped with its <code>fiscal_year</code> for period reporting and closing.</td></tr>
+<tr><td><strong>Journal Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/journal_entry/journal_entry.py</span></td><td>Manual multi-line voucher; its child rows are the only place a human directly types debits/credits. Validates <code>total_debit == total_credit</code> before posting.</td></tr>
+<tr><td><strong>Payment Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/payment_entry/payment_entry.py</span></td><td>Settlement voucher (receipts/payments) that posts party + bank/cash GL entries and links to the invoices it clears via <code>against_voucher</code>.</td></tr>
+<tr><td><strong>Sales Invoice</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span></td><td>Concrete poster: on submit, builds customer (debtor) + income + tax + COGS GL entries via <code>SalesInvoiceGLComposer</code> and calls <code>make_gl_entries</code>.</td></tr>
+<tr><td><strong>Period Closing Voucher</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.py</span></td><td>Year-end voucher that reverses every P&amp;L account balance into one equity closing account, so the balance sheet carries forward and P&amp;L resets.</td></tr>
+<tr><td><strong>Cost Center</strong></td><td>master</td><td><span class="fileref">erpnext/accounts/doctype/cost_center</span></td><td>Nested-set dimension tagged on each P&amp;L GL entry; supports allocation splits in <code>process_gl_map</code> for departmental/branch profitability.</td></tr>
+<tr><td><strong>Accounting Dimension</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.py</span></td><td>Metadata that injects an extra analytical column (Project, Branch, Territory…) onto GL Entry and every voucher, without schema changes per report.</td></tr>
+<tr><td><strong>Company</strong></td><td>master</td><td><span class="fileref">erpnext/setup/doctype/company/company.json</span></td><td>Multi-company root: owns its own chart of accounts, <code>default_currency</code>, <code>reporting_currency</code>, and the named default accounts (round-off, receivable, payable, stock) the posting engine resolves.</td></tr>
+<tr><td><strong>Payment Ledger Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/report/accounts_receivable/accounts_receivable.py</span></td><td>A specialized AR/AP subledger derived alongside GL Entry; the receivable/payable aging reports read it rather than re-deriving from GL.</td></tr>
+<tr><td><strong>Financial Statements</strong></td><td>report</td><td><span class="fileref">erpnext/accounts/report/financial_statements.py</span></td><td>Shared engine for Balance Sheet / P&amp;L / Trial Balance: queries GL Entry by account subtree (<code>lft/rgt</code>) and <code>is_cancelled=0</code>, sums debit−credit per period, rolls children into parents.</td></tr>
+<tr><td><strong>General Ledger</strong></td><td>report</td><td><span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.py</span></td><td>Line-level GL viewer: lists/aggregates GL Entry with running balance, grouped by account/party/voucher; the canonical read-the-ledger view.</td></tr>
+</table>
+</section>
+
+<section>
+<h2 class="sec">Pattern 1 — The ledger row as the only financial truth</h2>
+
+<p>This is the foundation everything else rests on. Get this one wrong and no amount of clever reporting can save you.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Append-only, one-sided postings; balances are always a SUM</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Model money as an <strong>immutable stream of single-sided postings</strong>. Each row debits <em>or</em> credits exactly one account and is never updated or deleted. Balances are never stored; a balance is always <code>SUM(debit) − SUM(credit)</code>.</p>
+    <p>This buys you three things at once: the books are <strong>auditable</strong> (history is permanent), <strong>reproducible</strong> (any balance can be re-derived from rows), and <strong>concurrency-safe</strong> (inserts don't contend on a shared counter the way an updated running total would).</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span> is a submittable doctype with <code>debit</code>, <code>credit</code>, <code>account</code>, <code>voucher_type</code>, <code>voucher_no</code>, <code>party_type</code>, <code>party</code>, <code>cost_center</code>, <code>fiscal_year</code>, <code>is_cancelled</code>.</p>
+    <p>Its <code>on_cancel</code> <strong>throws</strong> — you can never cancel a single row, only its parent voucher. Reversal is <code>make_reverse_gl_entries</code> in <span class="fileref">erpnext/accounts/general_ledger.py</span>, which re-posts mirror rows with debit/credit swapped.</p>
+    <p>Balances come only from queries like <code>Sum(gle.debit) − Sum(gle.credit)</code> — see <code>validate_balance_type</code> in <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.py</span>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>On Postgres/Django: a <code>gl_entry</code> table, insert-only, with a DB-level rule or app-level guard preventing <code>UPDATE</code>/<code>DELETE</code>.</p>
+    <p>Store debit and credit as separate non-null-defaulted numeric columns (or a single signed amount). Compute every balance with <code>SUM</code> aggregation, <strong>never</strong> a stored running total.</p>
+    <p>Implement cancellation as a compensating insert, not a delete. Index <code>(voucher_type, voucher_no)</code>, <code>(account, posting_date)</code>, and <code>(party_type, party)</code>.</p>
+  </div>
+</div></div>
+
+<p>The clearest expression of "you cannot cancel a single row" is the guard on the row itself. The audit trail is structurally protected — there is no code path that quietly erases a posting:</p>
+
+<pre><code><span class="c"># erpnext/accounts/doctype/gl_entry/gl_entry.py:325</span>
+<span class="k">def</span> <span class="t">on_cancel</span>(self):
+    msg = _(<span class="s">"Individual GL Entry cannot be cancelled."</span>)
+    msg += <span class="s">"&lt;br&gt;"</span> + _(<span class="s">"Please cancel related transaction."</span>)
+    frappe.throw(msg)</code></pre>
+
+<p>Because a row can never be cancelled in place, "undoing" a voucher means posting its mirror image. <code>make_reverse_gl_entries</code> deep-copies each original row, swaps the two sides, marks it cancelled, and re-inserts it. The original survives forever; the reversal sits beside it; the net of the two is zero:</p>
+
+<pre><code><span class="c"># erpnext/accounts/general_ledger.py — make_reverse_gl_entries (line 607)</span>
+<span class="k">for</span> entry <span class="k">in</span> gl_entries:
+    new_gle = copy.deepcopy(entry)
+    debit  = new_gle.get(<span class="s">"debit"</span>, 0)
+    credit = new_gle.get(<span class="s">"credit"</span>, 0)
+    new_gle[<span class="s">"debit"</span>]  = credit
+    new_gle[<span class="s">"credit"</span>] = debit
+    new_gle[<span class="s">"remarks"</span>] = <span class="s">"On cancellation of "</span> + new_gle[<span class="s">"voucher_no"</span>]
+    new_gle[<span class="s">"is_cancelled"</span>] = 1
+    <span class="k">if</span> new_gle[<span class="s">"debit"</span>] <span class="k">or</span> new_gle[<span class="s">"credit"</span>]:
+        make_entry(new_gle, adv_adj, <span class="s">"Yes"</span>)</code></pre>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · never store a balance</span>
+<p>Every account balance and outstanding amount in ERPNext is a <code>SUM</code> over GL Entry computed <em>at read time</em> (<code>validate_balance_type</code>, <code>update_outstanding_amt</code>, <code>financial_statements.calculate_values</code>). Re-implementers who cache a running balance on the account row will eventually <strong>drift</strong> from the ledger and corrupt the books. If you must cache for performance, treat it as a <em>derived projection</em> that can be rebuilt from the ledger at any time — never as the source of truth.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · cancellation is not deletion</span>
+<p><code>on_cancel</code> throws by design; reversal posts new mirror rows and/or sets <code>is_cancelled=1</code>. Every balance query <strong>must</strong> filter <code>is_cancelled=0</code> (see <code>get_accounting_entries</code>, <code>validate_balance_type</code>) — forgetting it double-counts cancelled vouchers. ERPNext also has an <em>immutable-ledger</em> mode where reversals are <em>dated</em> and originals keep <code>is_cancelled=0</code>; your filter logic must match whichever mode you run.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This append-only discipline is exactly what lets the internal KDPS ledger stay reconcilable with Tally (the statutory book of record). Build one <code>gl_entry</code> table and let every document funnel through it; never let a POS sale or a transfer "update a balance." A cancelled sale at the till becomes a reversal row, not a deleted one — so the day's audit trail survives even when staff void a transaction.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 2 — Documents post, reports read</h2>
+
+<p>The first pattern says <em>what</em> a ledger row is. This one says <em>who is allowed to make one</em>, and the answer is: only the central posting engine, only on document submit.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>One posting engine; documents compose, never mutate</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>No business document mutates ledger balances directly. Each document, on submit, <strong>composes a balanced set of postings</strong> and hands them to <em>one</em> shared posting function that validates and writes the rows.</p>
+    <p>This cleanly separates two concerns: <strong>business logic</strong> (which accounts to debit/credit — the part that differs wildly per document) from <strong>accounting machinery</strong> (balance check, round-off, fiscal-year stamping, freeze checks — the part that is identical for every document).</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p>Documents build a <code>gl_map</code> (a list of plain dicts) via <code>get_gl_dict</code> in <span class="fileref">erpnext/accounts/services/base_gl_composer.py</span> (line 27 — stamps company/posting_date/fiscal_year/voucher_no) and call <code>make_gl_entries(gl_map)</code> in <span class="fileref">erpnext/accounts/general_ledger.py</span> (line 34).</p>
+    <p>A concrete poster: Sales Invoice <code>on_submit</code> (<span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span>:421) → <code>make_gl_entries</code> (line 1024) → <code>SalesInvoiceGLComposer.compose()</code> in <span class="fileref">erpnext/accounts/doctype/sales_invoice/services/gl_composer.py</span> (line 22), which calls <code>make_customer_gl_entry</code> / <code>make_tax_gl_entries</code> / <code>make_item_gl_entries</code>.</p>
+    <p>Reports never touch documents: <span class="fileref">erpnext/accounts/report/financial_statements.py</span> and <span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.py</span> query GL Entry only.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Define <em>one</em> <code>post_ledger(entries, voucher_type, voucher_no)</code> service. Every document type implements a <code>build_gl_entries()</code> that returns dicts and calls the service from an <code>on_submit</code> hook.</p>
+    <p>Forbid any other code path from writing to the ledger table — make that a reviewable architectural rule, not a convention.</p>
+    <p>Build all financial reports as SQL/ORM aggregations over the ledger with <strong>zero</strong> dependency on the source documents.</p>
+  </div>
+</div></div>
+
+<p>The composer for a sale shows the shape of "business logic decides which account." Here is the customer (debtor) side of a Sales Invoice — it debits the receivable control account, tags the <em>party</em> and the <em>document being settled</em>, and lets the central engine handle everything else:</p>
+
+<pre><code><span class="c"># erpnext/accounts/doctype/sales_invoice/services/gl_composer.py</span>
+gl_entries.append(self.get_gl_dict({
+    <span class="s">"account"</span>: doc.debit_to,
+    <span class="s">"party_type"</span>: <span class="s">"Customer"</span>,
+    <span class="s">"party"</span>: doc.customer,
+    <span class="s">"against"</span>: doc.against_income_account,
+    <span class="s">"debit"</span>: base_grand_total,
+    <span class="s">"debit_in_account_currency"</span>: self._get_amount_in_account_currency(...),
+    <span class="s">"against_voucher"</span>: self._resolve_against_voucher(),
+    <span class="s">"against_voucher_type"</span>: doc.doctype,
+    <span class="s">"cost_center"</span>: doc.cost_center,
+}, doc.party_account_currency, item=doc))</code></pre>
+
+<h3>The end-to-end posting flow for a sale</h3>
+
+<p>Trace a single sale from button-press to stored rows. Notice that every step after the composer is generic — the same pipeline serves a purchase invoice, a journal, a payment:</p>
+
+<div class="flow col">
+  <div class="node">Sales Invoice.on_submit<small>sales_invoice.py:421</small></div>
+  <div class="arr"></div>
+  <div class="node">make_gl_entries<small>sales_invoice.py:1024 — the document's hook</small></div>
+  <div class="arr"></div>
+  <div class="node">SalesInvoiceGLComposer.compose<small>gl_composer.py:22 — builds customer/income/tax/COGS dicts via get_gl_dict</small></div>
+  <div class="arr"></div>
+  <div class="node">general_ledger.make_gl_entries<small>general_ledger.py:34 — the one shared engine</small></div>
+  <div class="arr"></div>
+  <div class="node">process_gl_map<small>split cost centers → merge_similar_entries → toggle signs</small></div>
+  <div class="arr"></div>
+  <div class="node">save_entries<small>freeze-date / period guard / closing guard</small></div>
+  <div class="arr"></div>
+  <div class="node">process_debit_credit_difference<small>balance check + round-off line</small></div>
+  <div class="arr"></div>
+  <div class="node">make_entry<small>inserts each submitted GL Entry row</small></div>
+</div>
+
+<p>Net effect of those rows for a perpetual-inventory sale: <strong>Debit Debtors</strong>, <strong>Credit Sales Income</strong>, <strong>Credit GST Output</strong>, and <strong>Debit COGS / Credit Stock</strong>. Four lines, two balanced pairs, one voucher — and the engine that wrote them knows nothing about "sales."</p>
+
+<div class="callout co-note"><span class="lbl">Why the seam matters</span>
+<p>Because the posting engine is document-agnostic, you can add a wholly new transaction type — a consignment settlement, a markdown adjustment, a stock-transfer note — without touching the engine. You write one new composer. This is the deepest payoff of the pattern: <strong>the accounting core is small, generic and stable while all the variety lives in per-document composers.</strong></p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 3 — The balance invariant, enforced once, with round-off tolerance</h2>
+
+<p>Double-entry has exactly one defining rule: per voucher, total debits equal total credits. The engineering subtlety is <em>where</em> you check it (in exactly one place every poster funnels through) and <em>how forgiving</em> you are (tolerant enough to absorb sub-currency rounding, strict enough to catch real bugs).</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Total-debit == total-credit, checked centrally, balanced by a round-off line</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>The rule must be checked in <strong>one</strong> place every poster passes through, and it must <strong>tolerate</strong> sub-currency rounding by auto-inserting a tiny round-off line rather than rejecting the transaction.</p>
+    <p>Tax computed per line accumulates fractions of a paisa/cent; a strict "must be exactly zero" check would reject perfectly legitimate invoices. The fix is not looser arithmetic — it is a deliberate, posted round-off line to a named account.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>process_debit_credit_difference</code> (<span class="fileref">erpnext/accounts/general_ledger.py</span>:397) sums all rows and computes <code>debit_credit_diff</code>.</p>
+    <p>If it exceeds the allowance from <code>get_debit_credit_allowance</code> (line 451 — <code>0.5</code> for documents, <code>5·10^−precision</code> for JE/PE) it raises <code>raise_debit_credit_not_equal_error</code>; if it is within a sub-unit it calls <code>make_round_off_gle</code> (line 475) to append a balancing line to the company's <code>round_off_account</code>.</p>
+    <p>Journal Entry additionally pre-validates in <code>validate_total_debit_and_credit</code> (<span class="fileref">erpnext/accounts/doctype/journal_entry/journal_entry.py</span>:662) using its stored <code>total_debit</code>/<code>total_credit</code>/<code>difference</code> fields.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>In the <code>post_ledger</code> service, before insert: <code>assert round(sum(debits) − sum(credits), prec)</code> is within tolerance.</p>
+    <p>If a tiny residual exists, append an auto-generated round-off line to a configured account so the voucher always balances <em>exactly</em> at company-currency precision.</p>
+    <p>Give manual journals a stricter (zero) tolerance and a pre-save balance check; give tax-bearing documents a small tolerance. Make the tolerance a function of voucher type, not a global constant.</p>
+  </div>
+</div></div>
+
+<pre><code><span class="c"># erpnext/accounts/general_ledger.py — process_debit_credit_difference (line 397)</span>
+<span class="k">def</span> <span class="t">process_debit_credit_difference</span>(gl_map):
+    voucher_type = gl_map[0].voucher_type
+    voucher_no   = gl_map[0].voucher_no
+    allowance = get_debit_credit_allowance(voucher_type, precision)
+    debit_credit_diff, trx_cur_debit_credit_diff = get_debit_credit_difference(gl_map, precision)
+    <span class="k">if</span> abs(debit_credit_diff) &gt; allowance:
+        raise_debit_credit_not_equal_error(debit_credit_diff, voucher_type, voucher_no)
+    <span class="k">elif</span> abs(debit_credit_diff) &gt;= (1.0 / (10**precision)):
+        make_round_off_gle(gl_map, debit_credit_diff, trx_cur_debit_credit_diff, precision)</code></pre>
+
+<p>Read the three branches carefully, because they encode the whole policy: a <strong>large</strong> imbalance is a bug and throws; a <strong>tiny</strong> imbalance (at least one sub-unit) is rounding and gets a posted round-off line; an <strong>exact</strong> zero needs nothing. The tolerance itself differs by voucher type — documents get the generous <code>0.5</code> because they carry many tax lines, while a hand-typed Journal or Payment Entry is held to near-exact precision because a human is responsible for those numbers.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · tolerance by voucher type</span>
+<p><code>get_debit_credit_allowance</code> returns <code>0.5</code> for documents but <code>5·10^−precision</code> for Journal/Payment Entry. Tax-bearing documents <em>rely</em> on the engine to insert a round-off line; a naïve global "must be exactly zero" rejects legitimate invoices. But too loose a tolerance hides real posting bugs. Tune this dial consciously — it is a correctness/permissiveness trade-off, not a magic number.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · mutually exclusive, non-negative sides</span>
+<p>On a <em>stored</em> row, <code>debit</code> and <code>credit</code> must be mutually exclusive and non-negative. <code>toggle_debit_credit_if_negative</code> converts a negative debit into a positive credit before saving, and Journal Entry forbids a row carrying both. If you let a row hold a negative amount or both sides, your <code>SUM(debit) − SUM(credit)</code> math silently breaks even though each individual voucher "looks" balanced.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>GST in India is slab-based and computed per line, so a multi-item fashion invoice almost always produces a sub-rupee residual. KDPS needs the tolerance + round-off mechanism, <strong>not</strong> a strict zero check, or the till will reject ordinary baskets. Configure a dedicated "Round Off" account per state GSTIN and let the engine post the paisa difference automatically — that single line is what keeps the POS books tying out to Tally.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 4 — The chart of accounts as a typed nested-set tree</h2>
+
+<p>Accounts are not a flat list. They are a hierarchy where only leaves are postable and parents exist to roll up. The two engineering decisions are how you <em>classify</em> each account (a tiny fixed enum) and how you <em>roll up</em> subtree balances (a single range query).</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Only leaves post; root_type drives the statement; lft/rgt rolls up the subtree</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Accounts form a tree where <strong>only leaves are postable</strong> and parents are roll-up groups. Classify each account by a small fixed enum — <strong>Asset / Liability / Income / Expense / Equity</strong> — that determines which financial statement it lands on and its natural balance side.</p>
+    <p>Use a nested-set (<code>lft</code>/<code>rgt</code>) so a single range query rolls an entire subtree's balance into its parent, instead of N per-account queries.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><span class="fileref">erpnext/accounts/doctype/account/account.json</span> has <code>is_group</code>, <code>parent_account</code>, <code>root_type</code>, a derived <code>report_type</code> (Balance Sheet vs Profit and Loss, set in <code>set_root_and_report_type</code>, <span class="fileref">erpnext/accounts/doctype/account/account.py</span>:164), an <code>account_type</code>, and nested-set <code>lft</code>/<code>rgt</code>.</p>
+    <p>The class extends <code>NestedSet</code> (account.py:25). Posting blocks group accounts (<code>validate_account_details</code>, <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.py</span>:238).</p>
+    <p>Reports walk the tree by range: <code>get_account_filter_query</code> (<span class="fileref">erpnext/accounts/report/financial_statements.py</span>:605) uses <code>acc.lft &gt;= root_lft and acc.rgt &lt;= root_rgt</code>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>On Django/Postgres: an <code>account</code> table with a self-FK <code>parent_id</code>, an <code>is_group</code> flag, a <code>root_type</code> enum, and either nested-set columns or a recursive-CTE / <code>ltree</code> / closure-table for subtree rollups.</p>
+    <p>Derive <code>report_type</code> from <code>root_type</code>. Enforce "only leaf accounts postable" at posting time, in the ledger service.</p>
+    <p>Roll up balances with a <em>single</em> subtree query, not a per-account loop.</p>
+  </div>
+</div></div>
+
+<p>The <code>account_type</code> field is the quiet workhorse here. Beyond classification, it <em>drives posting logic</em>: a Bank/Cash account behaves differently from a Receivable, Payable, Stock, Tax or Round Off account. The engine reads these types to decide whether a party is mandatory, whether a cost center is required, and which account to reach for when it needs a default.</p>
+
+<dl class="gloss">
+<dt><code>root_type</code></dt><dd>One of Asset, Liability, Income, Expense, Equity. Determines the natural balance side and which statement the account appears on.</dd>
+<dt><code>report_type</code></dt><dd>Derived from <code>root_type</code>: <em>Balance Sheet</em> (Asset/Liability/Equity — permanent) or <em>Profit and Loss</em> (Income/Expense — temporary, reset at year-end).</dd>
+<dt><code>account_type</code></dt><dd>Behavioural classification — Bank, Cash, Receivable, Payable, Stock, Tax, Round Off… — that the posting engine reads to apply cross-field rules and resolve defaults.</dd>
+<dt><code>is_group</code></dt><dd>If true, a roll-up node only; postings to it are rejected. If false, a postable leaf.</dd>
+<dt><code>lft</code> / <code>rgt</code></dt><dd>Nested-set bounds. Every descendant of a node has <code>lft</code>/<code>rgt</code> strictly inside the node's, so one range predicate selects an entire subtree.</dd>
+</dl>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · cross-field posting rules live on GL Entry, not the document</span>
+<p>Only leaf (<code>is_group=0</code>) accounts are postable; group accounts are roll-up nodes only (<code>validate_account_details</code> throws). P&amp;L accounts require a <code>cost_center</code> (<code>pl_must_have_cost_center</code>); Receivable/Payable accounts require a <code>party</code>. These rules live in <code>GL Entry.validate</code>/<code>on_update</code>, not in the document — re-implementers who only validate at the form level produce un-reportable entries that slip straight into the ledger.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · nested-set edits are lock-heavy</span>
+<p>The <code>lft</code>/<code>rgt</code> scheme makes subtree rollups one cheap query but makes tree <em>edits</em> expensive and lock-heavy — account rename/merge calls <code>_ensure_idle_system</code> and blocks if GL was touched in the last 5 minutes. On other stacks a recursive CTE or closure table avoids the nested-set maintenance cost at the price of slightly heavier read queries. Pick based on read/write ratio: charts of accounts are read constantly and edited rarely, which actually favours nested-set — but know the trade.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 5 — Party subledgers and document-to-document settlement</h2>
+
+<p>Accounts receivable and payable are the place most homegrown ERPs invent a separate "invoices" table with a status column that drifts. ERPNext refuses to: AR/AP are <em>just GL rows</em> with two extra tags. Outstanding and aging fall out of the same SUM.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>AR/AP are GL rows tagged with party + the document being settled</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Receivable/payable are <strong>not separate tables</strong>. They are GL rows on a Receivable/Payable account that additionally carry the <strong>party</strong> (Customer/Supplier) and a pointer to the <strong>document being settled</strong> (<code>against_voucher</code>).</p>
+    <p>Outstanding balances and aging then fall out of summing those tagged rows; a payment "clears" an invoice simply by pointing its party row at the same <code>against_voucher</code>.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p>GL Entry has <code>party_type</code>/<code>party</code> (a Dynamic Link) and <code>against_voucher_type</code>/<code>against_voucher</code>. <code>check_mandatory</code> (<span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.py</span>:133) forces a party on Receivable/Payable accounts.</p>
+    <p><code>update_outstanding_amt</code> (gl_entry.py:351) recomputes a document's outstanding by summing <code>Sum(debit_in_account_currency) − Sum(credit_in_account_currency)</code> for matching <code>against_voucher</code> + party, then writes it onto the source doc.</p>
+    <p>A parallel <code>Payment Ledger Entry</code> feeds the AR aging report (<span class="fileref">erpnext/accounts/report/accounts_receivable/accounts_receivable.py</span>:53).</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Add nullable <code>party_type</code>/<code>party_id</code> and <code>against_voucher_type</code>/<code>against_voucher_id</code> columns to the ledger.</p>
+    <p>Require a party on control accounts (receivable/payable). Compute outstanding per invoice as the signed sum of all ledger rows pointing at it. Build aging by bucketing those rows by <code>posting_date</code>.</p>
+    <p>Optionally materialize a payment-ledger projection for fast aging at scale — but keep the GL as the truth it is derived from.</p>
+  </div>
+</div></div>
+
+<h3>How a payment clears an invoice</h3>
+
+<div class="flow col">
+  <div class="node">Payment Entry.on_submit<small>posts a settlement voucher</small></div>
+  <div class="arr"></div>
+  <div class="node">make_gl_entries<small>payment_entry.py:1290</small></div>
+  <div class="arr"></div>
+  <div class="node">party row + bank/cash row<small>credit Debtors (against_voucher = the invoice) · debit Bank</small></div>
+  <div class="arr"></div>
+  <div class="node">update_outstanding_amt<small>gl_entry.py:351 — re-sums the invoice's rows</small></div>
+  <div class="arr"></div>
+  <div class="node">writes outstanding_amount + status<small>onto the Sales Invoice (a derived projection)</small></div>
+</div>
+
+<p>The crucial point: the invoice's <code>outstanding_amount</code> and <code>status</code> fields are <strong>caches</strong>, recomputed from the ledger by <code>update_outstanding_amt</code> every time a related row is posted or reversed. They are never the source of truth. If they ever disagreed with the ledger, the ledger wins and a rebuild fixes the cache.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · aging is read from a projection, not re-derived</span>
+<p>ERPNext's AR/AP aging does <strong>not</strong> re-derive from GL Entry at report time. It maintains a parallel <code>Payment Ledger Entry</code> subledger (<code>create_payment_ledger_entry</code> is called <em>inside</em> <code>make_gl_entries</code>) that the receivable/payable reports read. If you keep a single ledger, your aging report must reconstruct allocations from <code>against_voucher</code> links — correct, but slower. The two-ledger approach is purely a scale optimization; choose it only when single-ledger aging actually gets slow.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Vendor SOR/consignment liabilities carry 60–120 day return windows that must be tracked as deadlines. Model the vendor liability as a Payable-account GL row tagged with the supplier (<code>party</code>) and the originating receipt/PT (<code>against_voucher</code>); aging those rows by posting date gives you the return-window clock for free. At KDPS scale a single-ledger reconstruction is likely fine — reach for a payment-ledger projection only if vendor aging reports get slow.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 6 — Multi-currency by triple-amount, multi-company by stamp</h2>
+
+<p>Two orthogonal real-world complications — foreign currency and multiple legal entities — are handled by two small, almost boring, mechanisms. Their virtue is exactly that they are boring: no special tables, no parallel ledger.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>One book currency that always balances; company on every row</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Keep <strong>one book-of-record currency</strong> (the company default) but store every amount <em>also</em> in the account's own currency and the transaction's currency, with the exchange rates.</p>
+    <p>The home-currency columns guarantee the whole ledger balances and are the only ones safe to aggregate across accounts; the others let you reconcile a foreign bank account or a foreign-currency invoice exactly. <strong>Multi-company</strong> is achieved simply by tagging every account and ledger row with the company.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p>GL Entry stores <code>debit</code>/<code>credit</code> (company currency — <code>options: Company:company:default_currency</code> in <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span>), <code>*_in_account_currency</code>, and <code>*_in_transaction_currency</code>, plus <code>transaction_exchange_rate</code> and <code>reporting_currency_exchange_rate</code>.</p>
+    <p><code>set_amount_in_reporting_currency</code> (gl_entry.py:302) converts at posting date; <code>validate_currency</code> (gl_entry.py:281) forbids posting an account in the wrong currency.</p>
+    <p>Every Account and GL Entry carries <code>company</code>; each Company has its own <code>default_currency</code>/<code>reporting_currency</code> (<span class="fileref">erpnext/setup/doctype/company/company.json</span>:250).</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Store amounts in at least two currency columns: home/company currency (always balanced, used for statements) and account/transaction currency (for foreign reconciliation). Persist the FX rate used.</p>
+    <p>Validate that a posting's account-currency matches the account.</p>
+    <p>For multi-company, put a <code>company_id</code> on accounts and ledger rows and scope <em>every</em> query and report by it; never let a single posting mix companies.</p>
+  </div>
+</div></div>
+
+<p>The three-amount layout is worth memorising because the columns answer three different questions:</p>
+
+<table>
+<tr><th>Column pair</th><th>Currency</th><th>What it answers</th></tr>
+<tr><td><code>debit</code> / <code>credit</code></td><td>Company (home)</td><td>The book of record. The <strong>only</strong> columns that balance and the only ones safe to aggregate across accounts of different currencies.</td></tr>
+<tr><td><code>debit_in_account_currency</code> / <code>credit_in_account_currency</code></td><td>The account's own</td><td>Reconciles a foreign-denominated account (e.g. a USD bank balance) against its statement.</td></tr>
+<tr><td><code>debit_in_transaction_currency</code> / <code>credit_in_transaction_currency</code></td><td>The document's</td><td>Lets a foreign-currency invoice round-trip exactly back to the figure the customer saw.</td></tr>
+</table>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · only the home-currency columns are aggregable</span>
+<p>The home-currency <code>debit</code>/<code>credit</code> is the book of record and is what must balance. <code>*_in_account_currency</code> and <code>*_in_transaction_currency</code> are parallel views with their own exchange rates. Mixing them up — e.g. summing account-currency across accounts of different currencies — produces a meaningless total. When in doubt, aggregate the home-currency columns; touch the others only when scoped to a single account or single document.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>KDPS is single-currency (INR) but genuinely multi-<em>company</em>: Bihar and Jharkhand are two distinct GSTINs, two "distinct persons" under GST, each its own legal entity. Map the two GSTINs to two companies, each with its own chart of accounts and state context. A Bihar→Jharkhand stock transfer then becomes, naturally, an <strong>inter-company taxable supply</strong> — IGST out of one company, IGST in to the other — using the very same company-stamp pattern, with no special "transfer" plumbing in the ledger.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 7 — Merge, normalize, and cost-center-split before persisting</h2>
+
+<p>A composer's raw output is honest but messy: the same income account might appear on five item lines, a tax line might be negative, a branch expense might need splitting across cost centers. The engine cleans this up in one deterministic, pure pipeline before anything touches the ledger.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>process_gl_map — a pure transform that cleans the posting list</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>A raw posting list from a document is messy: the same account may appear on several lines, amounts may be negative, one expense may need splitting across cost centers.</p>
+    <p>Normalize the list in one <strong>deterministic, pure</strong> pipeline before it hits the ledger, so the stored rows are clean and minimal — and so the place where most posting bugs hide is small, isolated, and unit-testable.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>process_gl_map</code> (<span class="fileref">erpnext/accounts/general_ledger.py</span>:141) runs three stages in order:</p>
+    <ul>
+      <li><code>distribute_gl_based_on_cost_center_allocation</code> — splits a line across child cost centers by configured percentage.</li>
+      <li><code>merge_similar_entries</code> (line 226) — collapses rows sharing a merge key of account + cost_center + party + against_voucher + dimensions, summing sides and dropping net-zero rows.</li>
+      <li><code>toggle_debit_credit_if_negative</code> (line 316) — converts a negative debit into a positive credit so each row is one-sided and non-negative.</li>
+    </ul>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Before insert, run the entry list through a pure transform: (1) optionally fan out lines per allocation rule, (2) group-by a canonical key and sum to merge duplicate account lines, dropping zero rows, (3) normalize signs so each row is a non-negative debit XOR credit.</p>
+    <p>Keep this transform pure and unit-tested — it is where most posting bugs hide, and purity means you can test it without a database.</p>
+  </div>
+</div></div>
+
+<div class="flow">
+  <div class="node">raw gl_map<small>from composer</small></div>
+  <div class="arr"></div>
+  <div class="node">cost-center split<small>fan out by %</small></div>
+  <div class="arr"></div>
+  <div class="node">merge_similar_entries<small>group + sum, drop zeros</small></div>
+  <div class="arr"></div>
+  <div class="node">toggle signs<small>one-sided, non-negative</small></div>
+  <div class="arr"></div>
+  <div class="node">clean rows<small>ready to insert</small></div>
+</div>
+
+<p>The merge key is the subtle part. Two rows are "the same" — and so may be collapsed — only if they agree on account, cost center, party, against_voucher, <em>and</em> every accounting dimension (<code>get_merge_properties</code>, general_ledger.py:282). Include too little in the key and you wrongly merge a Brand-A income line with a Brand-B one; include the right things and the merged rows stay analytically faithful. This is why dimensions (next pattern) must extend the merge key.</p>
+</section>
+
+<section>
+<h2 class="sec">Pattern 8 — Accounting Dimensions: analytical tagging without schema churn</h2>
+
+<p>Cost center is built in. But businesses always want more axes — Project, Branch, Territory, Brand, Store — and you cannot ship a code change every time a controller invents a new way to slice the P&amp;L. The answer is to make "dimension" a configurable thing that injects a column rather than a hard-coded field.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Dimensions as registered metadata copied onto every posting</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Beyond cost center, businesses want to slice the ledger by Project, Branch, Brand, Territory… Rather than hard-coding each, treat "dimension" as <strong>configurable metadata</strong> that injects a column onto the ledger and every voucher.</p>
+    <p>New analytical axes then need <em>no code change</em> in the posting engine or in reports — a non-developer can add a "Brand" or "Store" axis and have it appear in financial reporting.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>Accounting Dimension</code> (<span class="fileref">erpnext/accounts/doctype/accounting_dimension/accounting_dimension.py</span>) points at a <code>document_type</code>; on creation (<code>before_insert</code>, line 40) it creates a custom field of that name on GL Entry and on transactional doctypes.</p>
+    <p><code>get_gl_dict</code> (<span class="fileref">erpnext/accounts/services/base_gl_composer.py</span>:67) copies each registered dimension from the document (or item row) onto the GL dict.</p>
+    <p><code>get_merge_properties</code> (general_ledger.py:282) extends the merge key with dimensions so they survive merging; reports read them generically via <code>get_accounting_dimensions()</code>.</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Provide a registry of dimension definitions. For each, ensure a nullable column exists on the ledger and on source documents (custom field, JSONB, or a generic EAV side-table).</p>
+    <p>Copy dimension values from document to ledger at posting time, and include them in the merge key and in report group-bys.</p>
+    <p>This lets non-developers add a 'Brand' or 'Store' axis to financial reporting without migrations to the posting code.</p>
+  </div>
+</div></div>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>A dimension is only useful if it travels <em>all the way</em>: document → <code>get_gl_dict</code> → merge key → stored row → report group-by. Break the chain at any link and the axis becomes invisible exactly where you wanted it. ERPNext's discipline is that the same dimension list (<code>get_accounting_dimensions()</code>) is consulted at every link, so adding one entry lights up the whole path.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>The recurring month-start brand-report duty wants per-brand and per-store profitability. Model <strong>Brand</strong>, <strong>Store</strong> and <strong>Season</strong> as accounting dimensions copied onto every posting. Then brand profitability is a pure ledger aggregation — <code>GROUP BY brand</code> over GL Entry — with no bespoke reporting tables, and it stays correct as new brands are onboarded without a code change. This is the engineering backing for the domain rule "profitability is derived, never hand-entered."</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 9 — Period closing: zero the P&amp;L into equity</h2>
+
+<p>Income and expense accounts are <em>temporary</em>: they accumulate within a fiscal year and must reset to zero at year-end, with the net profit/loss rolled into permanent equity. The elegant part is that this, too, is just a balanced voucher — not a special table or a special arithmetic.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Year-end close as a generated balanced voucher</h3></div>
+<div class="body">
+  <div class="pane p-idea"><div class="pl">The idea</div>
+    <p>Income and expense accounts are temporary — they accumulate within a fiscal year and must reset to zero at year-end, with their net (profit/loss) rolled into a permanent equity account.</p>
+    <p>This is itself just a balanced voucher of GL entries, <strong>not a special table</strong>. Balance-sheet accounts are never closed; their balances carry forward as opening balances into the next year.</p>
+  </div>
+  <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+    <p><code>Period Closing Voucher</code> (<span class="fileref">erpnext/accounts/doctype/period_closing_voucher/period_closing_voucher.py</span>) computes each P&amp;L account's net balance (<code>get_pcv_gl_entries</code> / <code>get_gle_for_pl_account</code>) and posts a reversing entry to flatten it, plus one offsetting entry to the <code>closing_account_head</code> (an equity account) via <code>get_gle_for_closing_account</code>.</p>
+    <p>The posting engine special-cases this <code>voucher_type</code> throughout <span class="fileref">erpnext/accounts/general_ledger.py</span> (line 57 onward — skips cost-center distribution, payment-ledger, budget validation).</p>
+  </div>
+  <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+    <p>Implement year-end close as a generated balanced voucher: for each income/expense (P&amp;L) account, post the inverse of its net balance for the year, and post the aggregate to a retained-earnings/closing equity account.</p>
+    <p>Tag these rows so reports can show pre-close or post-close P&amp;L. Never close balance-sheet accounts; their balances carry forward as opening balances.</p>
+  </div>
+</div></div>
+
+<div class="flow col">
+  <div class="node">Period Closing Voucher.make_gl_entries<small>year-end</small></div>
+  <div class="arr"></div>
+  <div class="node">get_pcv_gl_entries<small>net (debit − credit) per P&amp;L account</small></div>
+  <div class="arr"></div>
+  <div class="node">post the inverse per P&amp;L account<small>flattens income/expense to zero</small></div>
+  <div class="arr"></div>
+  <div class="node">post aggregate to closing_account_head<small>profit/loss lands in equity</small></div>
+  <div class="arr"></div>
+  <div class="node">balance-sheet accounts untouched<small>carry forward as opening balances</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · the closing voucher is special-cased everywhere</span>
+<p>Period Closing Voucher is special-cased all over <code>general_ledger.py</code> — it skips cost-center distribution, payment-ledger entries, budget validation, and the &gt;1-row count check. Closing legitimately produces single-account-per-dimension entries that the normal pipeline would reject. If you copy the posting engine you <strong>must</strong> replicate these exemptions or year-end close will fail validation that was written for ordinary documents.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The read side — reports are pure aggregation</h2>
+
+<p>Having insisted that documents post and nothing else writes, the payoff arrives on the read side: every financial statement is a <code>SUM</code> over GL Entry. There is no separate "balances" store to keep in sync, no nightly rollup job whose failure silently corrupts a report. The numbers are, by construction, the ledger.</p>
+
+<pre><code><span class="c"># erpnext/accounts/report/financial_statements.py</span>
+<span class="k">for</span> period <span class="k">in</span> period_list:
+    <span class="k">if</span> entry.posting_date &lt;= period.to_date:
+        <span class="k">if</span> (accumulated_values <span class="k">or</span> entry.posting_date &gt;= period.from_date) <span class="k">and</span> (...):
+            d[period.key] = d.get(period.key, 0.0) + flt(entry.debit) - flt(entry.credit)
+    <span class="k">if</span> entry.posting_date &lt; period_list[0].year_start_date:
+        d[<span class="s">"opening_balance"</span>] = d.get(<span class="s">"opening_balance"</span>, 0.0) + flt(entry.debit) - flt(entry.credit)</code></pre>
+
+<p>That loop is the entire engine behind the Balance Sheet, P&amp;L and Trial Balance. It buckets each row's <code>debit − credit</code> into the period it falls in, and folds anything before the year's start into an opening balance. The reporting flow wraps it with subtree selection and parent rollup:</p>
+
+<div class="flow col">
+  <div class="node">financial_statements.get_data(root_type)<small>per Asset/Liability/Income/Expense/Equity</small></div>
+  <div class="arr"></div>
+  <div class="node">set_gl_entries_by_account → get_accounting_entries<small>query GL Entry by subtree (lft/rgt) and is_cancelled=0</small></div>
+  <div class="arr"></div>
+  <div class="node">calculate_values<small>sum debit − credit into period buckets</small></div>
+  <div class="arr"></div>
+  <div class="node">accumulate_values_into_parents<small>roll children up the tree</small></div>
+</div>
+
+<p>The <strong>General Ledger</strong> report (<span class="fileref">erpnext/accounts/report/general_ledger/general_ledger.py</span>) does the same at line level, adding a running balance and grouping by account/party/voucher — the canonical "show me the rows" view that auditors live in. Both reports share the same two non-negotiables: filter <code>is_cancelled=0</code>, and aggregate only the home-currency columns.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha · the human-readable name arrives late</span>
+<p>GL Entry uses a temporary hash name on insert for speed, then a background job renames it to <code>ACC-GLE-YYYY-#####</code> (<code>autoname</code> / <code>to_rename</code> / <code>rename_temporarily_named_docs</code>). <span class="badge b-frappe">Frappe core</span> Don't assume the human-readable name exists immediately after posting; reference rows by <code>(voucher_type, voucher_no)</code> instead. Any integration that grabs the row name synchronously after submit will sometimes catch the hash.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The full transaction lifecycle, end to end</h2>
+
+<p>Pulling the patterns together, here are the four canonical flows every accounting engine must support, expressed as the same machinery seen from four angles.</p>
+
+<h3>1 · Sale → ledger</h3>
+<p>Sales Invoice <code>on_submit</code> → its <code>make_gl_entries</code> → <code>SalesInvoiceGLComposer.compose</code> builds customer/income/tax/COGS dicts via <code>get_gl_dict</code> → <code>general_ledger.make_gl_entries</code> → <code>process_gl_map</code> (split / merge / toggle) → <code>save_entries</code> → <code>process_debit_credit_difference</code> (balance + round-off) → <code>make_entry</code> inserts each submitted row. <strong>Net:</strong> Dr Debtors, Cr Sales Income, Cr GST Output, and (perpetual inventory) Dr COGS / Cr Stock.</p>
+
+<h3>2 · Cancellation → reversal</h3>
+<p>Cancel the Sales Invoice → <code>on_cancel</code> → <code>make_gl_entries_on_cancel</code> → <code>make_reverse_gl_entries</code> (general_ledger.py:607) fetches the original rows, sets <code>is_cancelled=1</code> (or, in immutable-ledger mode, leaves them and posts dated reversals), and inserts mirror rows with sides swapped. <code>update_outstanding_amt</code> recomputes outstanding. <strong>Nothing is ever physically deleted.</strong></p>
+
+<h3>3 · Payment settlement</h3>
+<p>Payment Entry <code>on_submit</code> → <code>make_gl_entries</code> (payment_entry.py:1290) posts a party row (Cr Debtors, clearing the invoice via <code>against_voucher</code>) and a bank/cash row (Dr Bank). <code>update_outstanding_amt</code> (gl_entry.py:351) re-sums the invoice's GL rows and writes the new <code>outstanding_amount</code> + status onto the Sales Invoice.</p>
+
+<h3>4 · Manual adjustment</h3>
+<p>A human creates a Journal Entry, typing debit/credit on child rows. <code>set_total_debit_credit</code> (journal_entry.py:671) tallies <code>total_debit</code>/<code>total_credit</code>/<code>difference</code>; <code>validate_total_debit_and_credit</code> throws if <code>difference != 0</code>; on submit <code>make_gl_entries</code> (journal_entry.py:866) funnels the same rows through <code>general_ledger.make_gl_entries</code> — the identical engine, reached by a different door.</p>
+
+<div class="callout co-note"><span class="lbl">The unifying observation</span>
+<p>Four very different business events — a sale, an undo, a receipt, a hand correction — all reduce to the same balanced postings through the same engine. <strong>Business documents differ wildly, but they all collapse to identical balanced ledger postings.</strong> That is why the accounting engine can be small, generic and stable while the variety lives entirely in the per-document composers that decide which accounts to debit and credit.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Generalization — building this on your own stack</h2>
+
+<p>If you are building a new ERP, make the General Ledger the spine and obey the two laws without exception. Concretely, on a Django/Postgres stack:</p>
+
+<dl class="gloss">
+<dt><code>gl_entry</code> table</dt><dd>One append-only table of one-sided postings: <code>account</code>, <code>debit</code> XOR <code>credit</code> (non-negative), voucher identity, optional <code>party</code> + <code>against_voucher</code> + dimensions, amounts in home/account/transaction currency. Insert-only — block <code>UPDATE</code>/<code>DELETE</code> at the DB or app layer.</dd>
+<dt><code>post_ledger()</code> service</dt><dd>The one funnel every poster passes through. It (1) normalizes/merges/cost-center-splits the lines, (2) enforces total-debit == total-credit with a small round-off tolerance, (3) inserts rows that are never updated or deleted. Cancellation is a compensating reversal, never a delete.</dd>
+<dt><code>account</code> tree</dt><dd>A typed tree (Asset/Liability/Income/Expense/Equity → Balance Sheet vs P&amp;L) where only leaves are postable and subtree rollups drive the statements. Nested-set, recursive CTE, <code>ltree</code>, or closure table — pick by your read/write ratio.</dd>
+<dt>party + against_voucher</dt><dd>Treat receivables/payables as ledger rows tagged with the party and the document being settled, so outstanding and aging fall out of the same table.</dd>
+<dt>dimensions</dt><dd>Make analytical slicing (cost center, project, branch, brand, store) configurable dimensions copied onto every posting, included in the merge key and report group-bys — not hard-coded columns.</dd>
+</dl>
+
+<p>The deepest lesson, worth pinning above your desk: <strong>business documents differ wildly, but they all reduce to the same balanced ledger postings — so the accounting engine is small, generic, and stable, while the variety lives entirely in the per-document composers.</strong> Invest your design effort in the composers and the chart of accounts; keep the engine boring.</p>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS — the whole picture</span>
+<p>This subsystem is the blueprint for keeping <strong>Tally as the statutory book</strong> while running an internal ledger. Build one append-only <code>gl_entry</code> table and one <code>post_ledger()</code> service that every document funnels through:</p>
+<ul>
+<li><strong>GRN</strong> posts quantity only (stock count under a barcode) — <em>no value</em> to the ledger.</li>
+<li><strong>PT</strong> posts value + vendor liability.</li>
+<li><strong>POS sale</strong> posts Dr Debtors/Cash, Cr Sales Income, Cr GST Output, Dr COGS / Cr Stock.</li>
+<li><strong>Bihar↔Jharkhand transfer</strong> posts as a taxable IGST inter-company supply — the multi-company-stamp pattern.</li>
+<li><strong>SOR/Consignment</strong>: the GRN moves stock count but posts <em>no</em> value; only the POS sale triggers the vendor-liability posting (the deferred F9 single-recognition CA ruling decides the exact entry).</li>
+</ul>
+<p>Use accounting dimensions for Brand / Store / Season so brand-level profitability reports are pure ledger aggregations. Follow the no-stored-balance and cancellation-is-reversal rules so the internal ledger stays reconcilable with Tally and auditable — that is the engineering backbone of "profitability is derived, never hand-entered." Three KDPS-specific cautions: GST per-line rounding needs the tolerance + round-off mechanism, not a strict zero check; every balance query must filter <code>is_cancelled</code>; and vendor SOR-liability aging (60–120 day return windows) is best served by an <code>against_voucher</code> link or a payment-ledger projection.</p>
+</div>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4><ol>
+<li><strong>One append-only ledger is the only financial truth.</strong> The <code>GL Entry</code> is a single one-sided row (debit XOR credit), never updated or deleted. Balances are always <code>SUM(debit) − SUM(credit)</code> — never stored. Cancelling a row throws by design; you cancel the parent voucher, which posts mirror reversals.</li>
+<li><strong>Documents post, reports read — no exceptions.</strong> Every document composes a balanced <code>gl_map</code> and hands it to one shared <code>make_gl_entries</code>; nothing else writes the ledger, and every report is a pure aggregation over it. The engine is document-agnostic, so new transaction types mean new composers, not engine changes.</li>
+<li><strong>Enforce the balance invariant in exactly one place, with tolerance.</strong> <code>process_debit_credit_difference</code> throws on a large imbalance and auto-inserts a round-off line for sub-currency rounding. Tolerance varies by voucher type (0.5 for documents, near-zero for manual journals). Stored rows must be one-sided and non-negative.</li>
+<li><strong>The chart of accounts is a typed nested-set tree.</strong> <code>root_type</code> decides the statement; <code>account_type</code> drives posting rules; only leaves post; <code>lft</code>/<code>rgt</code> rolls a whole subtree into its parent in one query. Cross-field rules (party on AR/AP, cost center on P&amp;L) live on the GL Entry, not the document.</li>
+<li><strong>AR/AP, multi-currency, multi-company and analytics are all the same table, tagged.</strong> Party + <code>against_voucher</code> give you subledgers and aging; three currency amounts give you a balanced home book plus foreign reconciliation; a <code>company</code> stamp gives you separate legal entities (and makes cross-state transfers natural inter-company supplies); accounting dimensions give you brand/store/season slicing — all without new tables or engine changes.</li>
+<li><strong>Period closing is just another balanced voucher.</strong> Zero each P&amp;L account into an equity closing account; carry balance-sheet accounts forward. Remember the special-casing the closing voucher needs in the posting engine. And always: filter <code>is_cancelled=0</code>, aggregate only home-currency columns, and treat any cached balance (outstanding amount, status) as a rebuildable projection of the ledger.</li>
+</ol></div>
+
+<div class="pager">
+<a class="prev" href="02-document-lifecycle.html"><small>← Previous</small>The document lifecycle</a>
+<a class="next" href="04-stock-ledger.html"><small>Next →</small>The stock ledger</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 03. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>

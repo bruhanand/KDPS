@@ -202,7 +202,7 @@
   <span class="step">Chat: what's filled vs missing</span><span class="arrow">→</span>
   <span class="step">Operator fills (colour, size, call vendor)</span><span class="arrow">→</span>
   <span class="step">Editable Excel PT</span><span class="arrow">→</span>
-  <span class="step">Barcode per piece</span><span class="arrow">→</span>
+  <span class="step">Barcode per SKU (count under it)</span><span class="arrow">→</span>
   <span class="step done">Inwarded → sellable</span>
 </div>
 <div class="card">
@@ -210,7 +210,7 @@
     <li><strong>Colour:</strong> a real colour if a brand file gives one; otherwise the operator tags it <strong>Premium / Medium / Economy</strong> by price, in the chat, by their own judgment (no fixed price bands).</li>
     <li><strong>Size:</strong> used if the invoice states it; if missing, the line is <strong>"Free Size"</strong> — we don't guess sizes item-by-item.</li>
     <li><strong>Price (untagged):</strong> MRP = base + 1.1% transport + GST + per-category margin (30–35%, overridable).</li>
-    <li><strong>No duplicates:</strong> the same product (vendor + style + size) <strong>rolls up to one SKU</strong>; each new piece still gets its own barcode. A central registry enforces this.</li>
+    <li><strong>No duplicates:</strong> the same product (vendor + style + size) <strong>rolls up to one SKU</strong>; one barcode covers all identical pieces, and each new piece just raises the count under that barcode. A central registry enforces this.</li>
   </ul>
 </div>
 
@@ -218,7 +218,7 @@
 <div class="card">
   <ul>
     <li><strong>SKU</strong> = the sellable <em>type</em>: Brand + Style-code + Colour + Size. Used for stock, reorder and dead-stock. One product type = one SKU.</li>
-    <li><strong>Barcode</strong> = the unique ID of a <em>single piece</em>. Five identical kurtis get five barcodes, so <strong>one SKU → many barcodes</strong>.</li>
+    <li><strong>Barcode</strong> = a <em>scan-alias</em> shared by all identical pieces, not the ID of a single piece. Five identical kurtis sit under <strong>one barcode as a count of five</strong>; stock is the count under each barcode (+ season).</li>
     <li><strong>Season matters:</strong> within a season a barcode is unique; some brands reuse a barcode in a later season, so a unit is identified by <strong>barcode + season</strong>.</li>
     <li>Each piece carries a <strong>condition</strong> — good, or damaged-quarantined.</li>
   </ul>
@@ -262,8 +262,8 @@
   <tr><td>Non-branded item has <strong>no size</strong> on the invoice</td><td>Recorded as "Free Size" — no item-by-item guessing.</td></tr>
   <tr><td>Non-branded item has <strong>no colour</strong></td><td>Operator tags it Premium / Medium / Economy by price.</td></tr>
   <tr><td>Non-branded invoice <strong>names a colour but no brand file</strong></td><td>Currently still uses P/M/E — <span class="pill amber">a question for you</span>.</td></tr>
-  <tr><td>Non-branded item has <strong>no barcode / no MRP</strong></td><td>KDPS sets MRP (base + 1.1% transport + GST + 30–35% margin) and prints a barcode per piece.</td></tr>
-  <tr><td>The <strong>same product arrives again</strong> (vendor + style + size)</td><td>Rolls up to the same SKU; each new piece still gets its own barcode — no duplicate "products."</td></tr>
+  <tr><td>Non-branded item has <strong>no barcode / no MRP</strong></td><td>KDPS sets MRP (base + 1.1% transport + GST + 30–35% margin) and prints one barcode for the SKU; identical pieces share it as a count.</td></tr>
+  <tr><td>The <strong>same product arrives again</strong> (vendor + style + size)</td><td>Rolls up to the same SKU; identical pieces share one barcode and just raise the count under it — no duplicate "products."</td></tr>
   <tr><td>The same style-code returns <strong>next season</strong></td><td>A brand may reuse the same barcode in a new season, so a unit is identified by barcode + season.</td></tr>
   <tr><td><strong>More received than ordered</strong> (extra item or size)</td><td>Added on the same screen with a required note; the original order line stays, flagged.</td></tr>
   <tr><td>Item <strong>damaged on arrival</strong></td><td>Counted as received but quarantined (not sellable), routed to the defective-return flow.</td></tr>

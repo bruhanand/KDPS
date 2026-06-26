@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Data &amp; the Party Model — ERP Engineering Handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="brand">ERP Engineering Handbook<small>Reverse-engineered from ERPNext</small></div>
+  <h2>Start</h2>
+  <a href="index.html"><span class="n">·</span>Overview &amp; reading guide</a>
+  <h2>Foundations</h2>
+  <a href="01-metamodel-doctype.html"><span class="n">01</span>The meta-model (DocType)</a>
+  <a href="02-document-lifecycle.html"><span class="n">02</span>The document lifecycle</a>
+  <h2>The two ledgers</h2>
+  <a href="03-accounting-ledger.html"><span class="n">03</span>The accounting engine</a>
+  <a href="04-stock-ledger.html"><span class="n">04</span>The stock ledger</a>
+  <h2>Documents &amp; data</h2>
+  <a href="05-transaction-flow.html"><span class="n">05</span>Transaction flow</a>
+  <a href="06-master-data-and-party.html" class="cur"><span class="n">06</span>Master data & the Party</a>
+  <a href="07-tax-and-pricing.html"><span class="n">07</span>Tax & pricing engine</a>
+  <h2>Control plane</h2>
+  <a href="08-permissions-and-roles.html"><span class="n">08</span>Permissions & roles</a>
+  <a href="09-workflow-engine.html"><span class="n">09</span>Workflow engine</a>
+  <a href="10-extensibility-and-customization.html"><span class="n">10</span>Extensibility</a>
+  <h2>The read side</h2>
+  <a href="11-reporting-and-printing.html"><span class="n">11</span>Reporting & printing</a>
+  <h2>Synthesis</h2>
+  <a href="12-build-any-erp-playbook.html"><span class="n">12</span>Build-any-ERP playbook</a>
+  <a href="13-doctype-catalog.html"><span class="n">13</span>DocType catalog</a>
+</nav>
+
+<main>
+<header class="doc">
+  <div class="eyebrow">Chapter 6 · Documents & data</div>
+  <h1>Master Data & the Party Model</h1>
+  <p class="sub">The nouns: Item (with template/variant/attribute — the SKU = style × size × colour model), the Customer/Supplier "Party" abstraction, Address/Contact via dynamic links, multi-company, and the snapshot-the-master rule.</p>
+</header>
+
+<section>
+<h2 class="sec">Why master data is where an ERP is won or lost</h2>
+
+<p>The previous chapters built the <a href="01-metamodel-doctype.html">meta-model</a> and the two ledgers — the <a href="03-accounting-ledger.html">accounting engine</a> and the <a href="04-stock-ledger.html">stock ledger</a> — and chapter 5 showed how a <a href="05-transaction-flow.html">transaction flows</a> into them. Those are the verbs. This chapter is about the <strong>nouns</strong>: the Item you sell, the Customer who buys it, the Supplier you buy from, the Company whose books you keep. Master data sounds like the boring part of an ERP — the reference tables you set up once and forget. It is the opposite. It is where the hardest modelling decisions live, and where a careless choice quietly poisons every report you will ever run.</p>
+
+<p>Two questions decide the fate of the whole system, and both are answered in master data:</p>
+
+<ol>
+<li><strong>How granular is a "thing you sell"?</strong> If you store stock at the wrong level — by style instead of by style×size×colour — no downstream report can ever recover the detail, because the detail was never captured. Granularity is a one-way door.</li>
+<li><strong>What happens to posted history when a master changes?</strong> A customer renames their firm; you correct a typo in an item description; you switch a default account next year. If your transactions <em>reference</em> the live master, every one of those edits silently rewrites the past. If they <em>copied</em> the master at the time of the deal, the past stays true.</li>
+</ol>
+
+<p>ERPNext answers both with a small set of patterns that are worth learning verbatim, because they are durable across any stack: the <strong>template / variant / attribute</strong> model for SKUs, the <strong>Party abstraction</strong> that unifies Customer and Supplier behind one ledger handle, <strong>dynamic links</strong> that attach an Address or Contact to any owner, the <strong>per-company defaults cascade</strong> for multi-company master data, and — the rule that ties them together — <strong>snapshotting the master onto the transaction</strong> at creation time.</p>
+
+<div class="callout co-key"><span class="lbl">Key idea</span>
+<p>Keep masters <strong>metadata-light and transaction-heavy</strong>. The master is the editable <em>"current truth"</em>; the transaction is the frozen <em>"historical truth"</em>. Almost every pattern in this chapter exists to keep those two separate — so you can fix a name or change a default this year without corrupting last year's books.</p>
+</div>
+
+<p>Stated as the architecture band this handbook keeps returning to, the master layer sits beneath documents, which write the ledgers:</p>
+
+<div class="band l-master"><div class="bname">Master layer (this chapter)</div>
+  <div class="boxes">
+    <div class="bx">Item<small>template / variant</small></div>
+    <div class="bx">Item Attribute<small>axis of variation</small></div>
+    <div class="bx">Customer / Supplier<small>= Party</small></div>
+    <div class="bx">Address / Contact<small>via Dynamic Link</small></div>
+    <div class="bx">Company<small>multi-company anchor</small></div>
+    <div class="bx">Item Group / Brand<small>defaults cascade</small></div>
+  </div>
+</div>
+<div class="gap"></div>
+<div class="band l-doc"><div class="bname">Document layer (snapshots masters in)</div>
+  <div class="boxes"><div class="bx">Sales / Purchase docs<small>copy item_name, rate, accounts, party details</small></div></div>
+</div>
+<div class="gap"></div>
+<div class="band l-ledg"><div class="bname">Ledger layer</div>
+  <div class="boxes"><div class="bx">GL Entry<small>(party_type, party)</small></div><div class="bx">Stock Ledger Entry</div></div>
+</div>
+</section>
+
+<section>
+<h2 class="sec">The cast: key master &amp; supporting DocTypes</h2>
+
+<p>Every object in this chapter is a Frappe DocType — a <code>.json</code> field schema plus an optional <code>.py</code> controller, exactly as chapter 1 described. The <code>kind</code> column is not something ERPNext stores; it is a reading aid for the role each DocType plays.</p>
+
+<table>
+<tr><th>DocType</th><th>Kind</th><th>Role</th></tr>
+<tr>
+  <td><strong>Item</strong><br><span class="fileref">erpnext/stock/doctype/item/item.json</span></td>
+  <td>master</td>
+  <td>The SKU master. Doubles as a <em>variant template</em> (<code>has_variants=1</code>) and a concrete <em>variant</em> (<code>variant_of</code> set). <code>autoname=field:item_code</code>.</td>
+</tr>
+<tr>
+  <td><strong>Item Attribute</strong><br><span class="fileref">erpnext/stock/doctype/item_attribute/item_attribute.json</span></td>
+  <td>master</td>
+  <td>Defines one axis of variation (Colour, Size) with allowed values <em>or</em> a numeric range. Propagates renames/disable to existing variants.</td>
+</tr>
+<tr>
+  <td><strong>Item Attribute Value</strong><br><span class="fileref">erpnext/stock/doctype/item_attribute_value</span></td>
+  <td>child</td>
+  <td>Child rows of Item Attribute: one allowed value plus its abbreviation (<code>abbr</code>), used to build variant item codes.</td>
+</tr>
+<tr>
+  <td><strong>Item Variant Attribute</strong><br><span class="fileref">erpnext/stock/doctype/item_variant_attribute/item_variant_attribute.json</span></td>
+  <td>child</td>
+  <td>Child table on Item. On a template it <em>lists</em> applicable attributes; on a variant it <em>pins</em> attribute=value (Colour=Red).</td>
+</tr>
+<tr>
+  <td><strong>Item Default</strong><br><span class="fileref">erpnext/stock/doctype/item_default/item_default.json</span></td>
+  <td>child</td>
+  <td>Per-company defaults for an Item: warehouse, price list, income/expense/COGS accounts, cost center, default supplier.</td>
+</tr>
+<tr>
+  <td><strong>UOM Conversion Detail</strong><br><span class="fileref">erpnext/stock/doctype/uom_conversion_detail/uom_conversion_detail.json</span></td>
+  <td>child</td>
+  <td>Child on Item: an alternate UOM + <code>conversion_factor</code> to the stock UOM (e.g. Box = 12 Nos).</td>
+</tr>
+<tr>
+  <td><strong>Item Group</strong><br><span class="fileref">erpnext/setup/doctype/item_group</span></td>
+  <td>master</td>
+  <td>A tree (NestedSet) grouping Items; carries <code>item_group_defaults</code> that seed and cascade into Item defaults and taxes.</td>
+</tr>
+<tr>
+  <td><strong>Item Variant Settings</strong><br><span class="fileref">erpnext/stock/doctype/item_variant_settings</span></td>
+  <td>single</td>
+  <td>Singleton config: which template fields propagate to variants, <code>allow_rename_attribute_value</code>, <code>do_not_update_variants</code>.</td>
+</tr>
+<tr>
+  <td><strong>Customer</strong><br><span class="fileref">erpnext/selling/doctype/customer/customer.py</span></td>
+  <td>master</td>
+  <td>A receivable party; subclasses <code>TransactionBase</code>; participates as <code>party_type='Customer'</code>.</td>
+</tr>
+<tr>
+  <td><strong>Supplier</strong><br><span class="fileref">erpnext/buying/doctype/supplier/supplier.py</span></td>
+  <td>master</td>
+  <td>A payable party; subclasses <code>TransactionBase</code>; participates as <code>party_type='Supplier'</code>.</td>
+</tr>
+<tr>
+  <td><strong>Party Account</strong><br><span class="fileref">erpnext/accounts/doctype/party_account</span></td>
+  <td>child</td>
+  <td>Child on Customer/Supplier (and their Groups) mapping <code>company → control account</code>; used by <code>get_party_account</code>'s fallback.</td>
+</tr>
+<tr>
+  <td><strong>Company</strong><br><span class="fileref">erpnext/setup/doctype/company/company.json</span></td>
+  <td>master</td>
+  <td>The multi-company anchor; holds <code>default_*</code> accounts/warehouses. The <code>company</code> field appears on nearly every doctype and scopes defaults.</td>
+</tr>
+<tr>
+  <td><strong>GL Entry</strong><br><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td>
+  <td>ledger</td>
+  <td>The ledger row. References a party <em>generically</em> via <code>party_type</code> (Link to DocType) + <code>party</code> (Dynamic Link) — never a hard Customer/Supplier link.</td>
+</tr>
+</table>
+
+<div class="callout co-note"><span class="lbl">Where Frappe ends and ERPNext begins</span>
+<p>Address, Contact and Dynamic Link are <span class="badge b-frappe">Frappe core</span> doctypes — ERPNext <em>uses</em> them but does not define them. Item, Customer, Supplier, Company, GL Entry are <span class="badge b-erpnext">ERPNext</span> app doctypes. When you port, the JSON schemas are ERPNext's; the machinery that turns <code>party_type</code>/<code>party</code> into a working polymorphic link is Frappe's.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 1 — Template / Variant / Attribute (the SKU = style × size × colour model)</h2>
+
+<p>This is the single most important master-data pattern for any retailer, and it maps <em>exactly</em> onto "a product family that comes in several sizes and colours". ERPNext models it once and reuses it everywhere; learn it as the canonical answer to "how do I represent a SKU?".</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Template / Variant / Attribute model for SKUs</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Model a product <em>family</em> once (the <strong>template</strong>) and let each sellable SKU be a concrete child (the <strong>variant</strong>) that pins exactly one value per axis of variation.</p>
+      <p>The axes themselves — Colour, Size — are <strong>data</strong> (master records), not columns and not code. Adding a new axis like "Sleeve Length" is inserting rows, never a schema migration. Stock and price live on the variant only.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>An <strong>Item</strong> carries either <code>has_variants=1</code> (it is a template) or <code>variant_of</code> (it is a variant of that template). The child table <code>attributes</code> (Item Variant Attribute) <em>lists</em> the axes on the template and <em>pins</em> the values on the variant.</p>
+      <p><strong>Item Attribute</strong> holds the allowed values (Item Attribute Value rows, each with an <code>abbr</code>). The engine is <span class="fileref">erpnext/controllers/item_variant.py</span>: <code>create_variant()</code> + <code>copy_attributes_to_variant()</code> clone template fields, <code>make_variant_item_code()</code> builds the code, <code>get_variant()</code>/<code>find_variant()</code> dedupe, <code>generate_keyed_value_combinations()</code> expands the cartesian product for bulk creation.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>On Django/Postgres: a <code>product_template</code> table, an <code>attribute</code> table, an <code>attribute_value</code> table, a <code>product_variant</code> table with an FK to template, and a <code>variant_attribute_value</code> join (variant_id, attribute_id, value).</p>
+      <ul>
+        <li>Generate the SKU code from value abbreviations.</li>
+        <li>Enforce uniqueness of the (template, full attribute-set) tuple.</li>
+        <li>Offer a cartesian-product helper for bulk create.</li>
+        <li>Keep <strong>stock and price at the variant level, never the template</strong>.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h3>The shape, made concrete</h3>
+
+<p>A T-shirt that comes in three colours and three sizes is <strong>one template Item</strong> and up to <strong>nine variant Items</strong>. The template carries the family identity (name, item group, brand, HSN, tax) and a list of axes; each variant carries one value per axis plus its own code, stock and cost.</p>
+
+<div class="flow">
+  <div class="node">Item Attribute: Colour<small>values Red(R), Blue(BL), Black(BK)</small></div>
+  <div class="arr"></div>
+  <div class="node">Template Item: TSHIRT<small>has_variants=1; attributes = [Colour, Size]</small></div>
+  <div class="arr"></div>
+  <div class="node">Variant Item: TSHIRT-RED-M<small>variant_of=TSHIRT; Colour=Red, Size=M</small></div>
+</div>
+
+<p>The variant's item code is assembled from each attribute's abbreviation. This is the literal code that produces <code>TSHIRT-RED-M</code>:</p>
+
+<pre><code><span class="c"># erpnext/controllers/item_variant.py — make_variant_item_code()</span>
+abbr_or_value = (
+    cstr(attr.attribute_value) <span class="k">if</span> item_attribute[<span class="t">0</span>].numeric_values <span class="k">else</span> item_attribute[<span class="t">0</span>].abbr
+)
+abbreviations.append(abbr_or_value)
+
+<span class="k">if</span> abbreviations:
+    variant.item_code = <span class="s">"{}-{}"</span>.format(template_item_code, <span class="s">"-"</span>.join(abbreviations))
+    variant.item_name = <span class="s">"{}-{}"</span>.format(template_item_name, <span class="s">"-"</span>.join(abbreviations))</code></pre>
+
+<p>Notice the branch on <code>numeric_values</code>: a <em>numeric</em> attribute (a size ladder defined by from/to range + increment) contributes its raw value, while a <em>list</em> attribute contributes its abbreviation. That branch is the seam where the two attribute code-paths meet.</p>
+
+<h3>Creating a variant — the sequence</h3>
+
+<p>When the UI or API asks for "the Red / M variant of TSHIRT", the controller runs this sequence:</p>
+
+<div class="flow col">
+  <div class="node"><code>get_variant(template, {Colour:Red, Size:M})</code><small>entry point</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>find_variant()</code><small>search existing variants for an exact attribute-set match</small></div>
+  <div class="arr"></div>
+  <div class="node">match found?<small>return it — never create a duplicate SKU</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>create_variant()</code><small>new Item; set variant_of</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>copy_attributes_to_variant()</code><small>clone template fields, skipping no-copy fields</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>make_variant_item_code()</code><small>derive item_code/item_name from abbreviations</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>validate_variant()</code><small>each attribute valid &amp; enabled for the template</small></div>
+</div>
+
+<p>For bulk creation, <code>enqueue_multiple_variant_creation(item, {Colour:[Red,Blue], Size:[S,M,L]})</code> computes the total number of combinations (and <strong>rejects ≥ 600</strong> to avoid a runaway job), then <code>create_multiple_variants()</code> uses <code>generate_keyed_value_combinations()</code> to expand the cartesian product and create each variant that does not yet exist.</p>
+
+<h3>Numeric attributes — the second code path</h3>
+
+<p>Size ladders are not an enum. Item Attribute supports a <em>numeric</em> mode with <code>from_range</code>, <code>to_range</code> and <code>increment</code>, validated by <code>validate_is_incremental()</code> with floating-point precision handling. A waist size from 28 to 44 in steps of 2 is sixteen valid values without sixteen Item Attribute Value rows. If you model every attribute as an enum, you miss this — and your size handling will be clumsy.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — variant uniqueness is application-enforced</span>
+<p>There is <strong>no DB constraint</strong> guaranteeing one variant per attribute-set. <code>find_variant()</code> dedupes by comparing the <em>number</em> of attributes <em>and</em> each row. A naive reimplementation that forgets to check "same number of attributes" will happily create duplicate SKUs for the same Colour/Size. If you rebuild this, add a real unique index on the normalised (template, sorted attribute-value set) — do not trust application code alone.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — what must NOT be copied to a variant</span>
+<p><code>copy_attributes_to_variant()</code> carries an explicit exclude list: <code>item_code, item_name, opening_stock, variant_of, valuation_rate, naming_series</code>. Forgetting to exclude <code>valuation_rate</code> or <code>opening_stock</code> would copy the template's cost and stock onto <em>every</em> variant — a silent inventory corruption. Worse, <em>which</em> other fields propagate is itself configurable via the Variant Field table and Item Variant Settings, so propagation is data-driven and easy to get subtly wrong.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — a template holds no stock</span>
+<p>A template Item must not hold stock (<code>ItemTemplateCannotHaveStock</code>), and you cannot un-set <code>has_variants</code> once variants exist (<code>validate_has_variants</code> throws "Item has variants"). Stock and price live <strong>only</strong> on concrete variants. Any design that tracks stock at the style level violates this rule at the schema level.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — renaming a value is a propagate, not a snapshot</span>
+<p>Renaming "Maroon" → "Burgundy" runs <code>Item Attribute.on_update → update_variant_attribute_values()</code>, which bulk-updates every variant's Item Variant Attribute rows so existing variants stay consistent. Attribute spellings are <em>reference data</em>, so they propagate. This is the deliberate opposite of the snapshot rule in Pattern 4 — and conflating the two breaks both (see the "snapshot vs propagate" warning later).</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This is the model verbatim. A <strong>Style is the template Item</strong> (<code>has_variants=1</code>); <strong>Size and Colour are Item Attributes</strong>; every sellable SKU is a variant with <code>variant_of</code> + its size/colour pinned. Stock and cost live on the variant only — so "stock at style level" is impossible by construction, which is exactly the domain rule that size×colour must survive end-to-end. The 40+ brand structure rides on top as a brand field + the defaults cascade in Pattern 5, not as a second variant axis.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 2 — The Party abstraction (one ledger handle for Customer and Supplier)</h2>
+
+<p>The naive ledger has a <code>customer</code> column and a <code>supplier</code> column, both nullable, exactly one filled per row. It works until you need a third kind of party — an Employee you owe an advance, a Shareholder, a Student — and then every nullable-FK report and every posting routine has to learn the new kind. ERPNext never lets that happen.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>The Party abstraction</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Don't bake Customer/Supplier into the ledger. Treat "a party we owe, or who owes us" as a generic pair: <code>(party_type, party)</code>.</p>
+      <p>New party kinds (Employee, Shareholder, Student) then slot in <strong>without touching the ledger schema or the posting code</strong> — they are just new values of <code>party_type</code>.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>GL Entry carries <code>party_type</code> (a Link → DocType) and <code>party</code> (a Dynamic Link keyed by <code>party_type</code>). All party behaviour is centralised in <span class="fileref">erpnext/accounts/party.py</span>.</p>
+      <p><code>get_party_account()</code> resolves the control account with a 3-level fallback (party record → group → company default), choosing receivable vs payable from the Party Type's <code>account_type</code>. <code>get_party_details()</code> snapshots address, contact, currency, price list, taxes and payment terms uniformly for any <code>party_type</code>. Customer and Supplier both subclass <code>TransactionBase</code> and reuse this code.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Add a <code>party_type</code> (enum/text) column and a <code>party_id</code> column to ledger and transaction tables — a polymorphic reference.</p>
+      <ul>
+        <li>Put <em>all</em> party resolution (control account, currency, price list) in <strong>one module parameterised by <code>party_type</code></strong>.</li>
+        <li>Keep a config table mapping <code>party_type → account_type</code>.</li>
+        <li>Avoid one nullable FK per party kind — that explodes as kinds grow.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h3>The ledger never links a Customer directly</h3>
+
+<p>The whole abstraction rests on two field declarations in <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span>. <code>party_type</code> is an ordinary Link whose target is the DocType registry itself; <code>party</code> is a <em>Dynamic</em> Link whose target doctype is read at runtime from the value in <code>party_type</code>:</p>
+
+<pre><code><span class="c">// gl_entry.json — the two fields that make the ledger polymorphic</span>
+{ <span class="s">"fieldname"</span>: <span class="s">"party_type"</span>, <span class="s">"fieldtype"</span>: <span class="s">"Link"</span>,         <span class="s">"options"</span>: <span class="s">"DocType"</span> }
+{ <span class="s">"fieldname"</span>: <span class="s">"party"</span>,      <span class="s">"fieldtype"</span>: <span class="s">"Dynamic Link"</span>, <span class="s">"options"</span>: <span class="s">"party_type"</span> }</code></pre>
+
+<p>So a receivable row reads <code>(party_type="Customer", party="CUST-0001")</code> and a payable row reads <code>(party_type="Supplier", party="SUPP-0042")</code> — same two columns, same posting code, same report. The <a href="03-accounting-ledger.html">accounting ledger</a> aggregates receivables and payables across all party kinds uniformly because it never had to know which kind it was looking at.</p>
+
+<h3>Resolving a party to its control account — the 3-level fallback</h3>
+
+<p>The most-used function in <code>party.py</code> is <code>get_party_account()</code>. Given a generic party and a company, it finds the right control account by walking three levels and stopping at the first hit:</p>
+
+<pre><code><span class="c"># erpnext/accounts/party.py — get_party_account() (condensed)</span>
+account = frappe.db.get_value(
+    <span class="s">"Party Account"</span>, {<span class="s">"parenttype"</span>: party_type, <span class="s">"parent"</span>: party, <span class="s">"company"</span>: company}, <span class="s">"account"</span>)
+
+<span class="k">if not</span> account <span class="k">and</span> party_type <span class="k">in</span> [<span class="s">"Customer"</span>, <span class="s">"Supplier"</span>]:
+    party_group_doctype = <span class="s">"Customer Group"</span> <span class="k">if</span> party_type == <span class="s">"Customer"</span> <span class="k">else</span> <span class="s">"Supplier Group"</span>
+    group = frappe.get_cached_value(party_type, party, scrub(party_group_doctype))
+    account = frappe.db.get_value(<span class="s">"Party Account"</span>,
+        {<span class="s">"parenttype"</span>: party_group_doctype, <span class="s">"parent"</span>: group, <span class="s">"company"</span>: company}, <span class="s">"account"</span>)
+
+<span class="k">if not</span> account:
+    account_type = frappe.get_cached_value(<span class="s">"Party Type"</span>, party_type, <span class="s">"account_type"</span>)
+    account = frappe.get_cached_value(<span class="s">"Company"</span>, company, <span class="s">"default_"</span> + account_type.lower() + <span class="s">"_account"</span>)</code></pre>
+
+<p>Read it top to bottom as a precedence chain:</p>
+
+<div class="flow col">
+  <div class="node">1 · Party Account on the party record<small>this specific Customer/Supplier, this company</small></div>
+  <div class="arr"></div>
+  <div class="node">2 · Party Account on the party's Group<small>Customer Group / Supplier Group, this company</small></div>
+  <div class="arr"></div>
+  <div class="node">3 · Company default by account_type<small>default_receivable_account / default_payable_account</small></div>
+</div>
+
+<p>The third level is the elegant bit: it does not hard-code "receivable" or "payable". It reads the <code>account_type</code> from the Party Type record (Customer → "Receivable", Supplier → "Payable") and builds the company-default field name as <code>default_&lt;account_type&gt;_account</code>. Register a brand-new party type with <code>account_type="Receivable"</code> and this code resolves it correctly without a single edit.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — you cannot JOIN a Dynamic Link in SQL</span>
+<p><code>party</code>'s target table is decided at runtime by <code>party_type</code>, so there is no single table to JOIN against. Aggregating across parties requires <code>party_type</code>-aware queries or a resolver, and every index that touches the party must cover <strong>(party_type, party)</strong> together — never <code>party</code> alone. On Postgres this is the standard cost of a polymorphic reference; budget for it.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Vendors and customers should share <strong>one Party abstraction</strong> so payments and ledgers reference <code>(party_type, party)</code> uniformly. This is what lets a single receivables/payables view span the whole business, and it means the SOR/consignment vendor liability that posts only on sale lands on the same generic party plumbing as an outright purchase. Map each Party Type to its <code>account_type</code> once; the control-account fallback then does the rest per company (Bihar / Jharkhand).</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 3 — Dynamic Links (one Address for any owner)</h2>
+
+<p>A Customer has addresses. So does a Supplier, and a Company, and a warehouse. The wrong fix is an <code>address</code> table with one nullable FK column per possible owner — it grows a column every time a new owner type appears, and most columns are null. The right fix is to let the <em>address</em> point at its owner, polymorphically.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Dynamic Link — polymorphic attachment</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Let a satellite record (Address, Contact) belong to <em>any</em> kind of owner without one FK column per owner type. The link stores the target's <strong>doctype and name</strong>, so one Address row can be shared by a Customer, a Supplier and a Company at once.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p>Frappe provides the <code>Dynamic Link</code> child doctype (<code>link_doctype</code> + <code>link_name</code>); <span class="badge b-frappe">Frappe core</span> — ERPNext uses but does not define it. <code>Customer.onload</code> calls <code>load_address_and_contact()</code>.</p>
+      <p><span class="fileref">erpnext/selling/doctype/customer/mapper.py</span> creates the link rows — appending <code>{link_doctype, link_name}</code> to the Address/Contact's <code>links</code> table — and queries Dynamic Link by <code>{link_doctype, link_name, parenttype:'Address'}</code> to find a party's address.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>An <code>address</code> table plus a <code>party_link</code> join (address_id, owner_type, owner_id) — a generic many-to-many. Or store <code>(owner_type, owner_id)</code> columns on the address directly.</p>
+      <ul>
+        <li>Index on <strong>(owner_type, owner_id)</strong>.</li>
+        <li>This is the standard polymorphic-association pattern: it trades FK integrity for flexibility, so enforce existence in app code or with check constraints.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p>The lookup is a single query against the Dynamic Link table, parameterised by the owner's doctype and name — no per-owner-type branch:</p>
+
+<pre><code><span class="c"># erpnext/selling/doctype/customer/mapper.py — find a party's address</span>
+address = frappe.get_all(
+    <span class="s">"Dynamic Link"</span>,
+    {<span class="s">"link_doctype"</span>: source.doctype, <span class="s">"link_name"</span>: source.name, <span class="s">"parenttype"</span>: <span class="s">"Address"</span>},
+    [<span class="s">"parent"</span>], limit=<span class="t">1</span>,
+)
+<span class="k">if</span> address:
+    target.customer_address = address[<span class="t">0</span>].parent</code></pre>
+
+<p>Because <code>source.doctype</code> and <code>source.name</code> are just passed through, the <em>same</em> code finds a Supplier's address (<code>source</code> is a Supplier) or a Company's. The address is the parent of the Dynamic Link row; the <code>links</code> child table on the address holds one row per owner it belongs to.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — Dynamic Links have no referential integrity</span>
+<p><code>link_doctype</code>/<code>link_name</code> are plain strings — there is no foreign key. Deleting a Customer does <strong>not</strong> cascade to its Address links; ERPNext has to call <code>delete_contact_and_address()</code> explicitly. If you rebuild this with a polymorphic join table, you own orphan cleanup yourself: a deletion hook, a periodic sweep, or check constraints. The flexibility is real, but so is the housekeeping debt.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>Addresses carry the <strong>state GSTIN</strong> that decides whether a transfer is intra-state (CGST+SGST) or inter-state (IGST). Attaching them via dynamic links means a store's billing address — and its Bihar-or-Jharkhand GSTIN — lives in one place and is reused by every document for that store, vendor or company, without duplicating the address per relationship.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 4 — Snapshot masters onto transactions (history immutability)</h2>
+
+<p>This is the rule that quietly underwrites everything: <strong>when a transaction line is created, copy the master's values onto the line</strong> rather than referencing the live master. If the master changes tomorrow, posted history stays exactly as it was at the moment of the deal. It is the difference between an ERP whose reports you can trust years later and one whose history mutates under you.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Snapshot the master onto the transaction</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>At line creation, <strong>copy</strong> the master's values — name, description, rate, accounts, tax, currency — onto the transaction line. Do not just reference the master.</p>
+      <p>The master is the editable "current truth"; the line is the frozen "historical truth". Editing the master later can never rewrite posted documents, because the document already owns its own copy.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><code>get_basic_details()</code> in <span class="fileref">erpnext/stock/get_item_details.py</span> assembles an <code>ItemDetails</code> dict copying <code>item_name, description, stock_uom, income_account, expense_account, cost_center</code>, etc. onto the line.</p>
+      <p>Defaults resolve per-company via the <code>item_defaults</code> child and cascade item → item-group → brand → company. <code>get_party_details()</code> snapshots party fields the same way. <code>Item.cant_change()</code> then freezes structural fields once submitted transactions reference the item.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>Transaction-line tables carry their own copies of the snapshotted columns (item_name, rate, tax_rate, account_id…), filled by a "get details" service at line creation.</p>
+      <ul>
+        <li>Keep a soft FK to the master for drill-through, but treat the copied values as the source of truth <em>for that document</em>.</li>
+        <li>Add immutability guards that block edits to cost/valuation-defining master fields once any posted document references the master.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<h3>What gets copied, and when</h3>
+
+<p>Two services do almost all the snapshotting. Adding an item to a sales or purchase line calls <code>get_item_details → get_basic_details()</code>, which resolves the per-company defaults and copies the result onto the line:</p>
+
+<div class="flow col">
+  <div class="node">User adds Item to a Sales/Purchase line<small>or an API does</small></div>
+  <div class="arr"></div>
+  <div class="node"><code>get_item_details()</code> → <code>get_basic_details()</code><small>resolve per-company item_defaults</small></div>
+  <div class="arr"></div>
+  <div class="node">cascade: item → item-group → brand → company<small>first hit wins (Pattern 5)</small></div>
+  <div class="arr"></div>
+  <div class="node">snapshot onto the line<small>item_name, description, stock_uom, income/expense/COGS account, cost_center, conversion_factor</small></div>
+</div>
+
+<p>Adding a <em>party</em> to a transaction calls <code>get_party_details(party_type, party, company) → _get_party_details()</code>, which snapshots the party's default currency, billing/shipping address (looked up through the Dynamic Link of Pattern 3), primary contact, price list, tax template and payment terms onto the document. Both services share the same philosophy: resolve once, copy, freeze.</p>
+
+<h3>The per-company snapshot, in code</h3>
+
+<p>Here is the exact mechanism that copies the matching company's defaults onto the item dict. It iterates the <code>item_defaults</code> child rows, finds the one for this company, and overlays it:</p>
+
+<pre><code><span class="c"># erpnext/stock/doctype/item/item.py — get_item_defaults()</span>
+<span class="k">def</span> <span class="t">get_item_defaults</span>(item_code, company):
+    item = frappe.get_cached_doc(<span class="s">"Item"</span>, item_code)
+    out = item.as_dict()
+    <span class="k">for</span> d <span class="k">in</span> item.item_defaults:
+        <span class="k">if</span> d.company == company:
+            row = d.as_dict(no_private_properties=<span class="k">True</span>)
+            row.pop(<span class="s">"name"</span>)
+            out.update(row)
+    <span class="k">return</span> out</code></pre>
+
+<p>The returned dict is what the line copies. Because the copy happens at creation, re-pricing the Item or correcting its description next month does not touch a single posted invoice.</p>
+
+<h3>The other half: immutability guards</h3>
+
+<p>Snapshotting frees you to keep most master fields editable — but a few fields the ledger structurally depends on must <em>not</em> change once a posted document relies on them. ERPNext's <code>Item.cant_change()</code> freezes exactly those: <code>is_stock_item</code>, <code>valuation_method</code>, <code>has_serial_no</code>, <code>has_batch_no</code> — once submitted transactions reference the item. (It even allows a one-way FIFO → Moving Average switch.) Everything else stays editable, which is <em>safe precisely because</em> the transactions already snapshotted what they needed.</p>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — <code>cant_change()</code> is NOT "masters are immutable after use"</span>
+<p>It freezes only a handful of structural fields. Most master fields remain editable forever. People misread this as a blanket immutability rule and either over-lock masters (frustrating users) or assume nothing is locked (corrupting valuation). The correct model is narrow: snapshot freezes the <em>document</em>; the guard freezes only the few master fields the ledger derives from.</p>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — snapshot vs propagate is a deliberate split</span>
+<p>Deal terms (rate, accounts, tax) are <strong>snapshotted and frozen</strong> onto documents. Reference data (attribute value spellings, an attribute's disabled flag) is <strong>propagated</strong> to existing variants. Treat an attribute rename as a snapshot and your variants drift out of sync; treat a rate as a live reference and your old invoices silently re-price. Decide, per field, which category it is — and never mix them.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>This rule <em>is</em> "profitability is derived, never hand-entered" and "documents write ledgers". When a PT/GRN or POS sale posts, it must copy the <strong>unit cost (P RATE), the GST breakup, the brand and the commercial terms</strong> onto the document line. Then re-pricing a master, or correcting it later, never rewrites posted GST or margin history — and Tally, the statutory book, stays reconcilable. The structural fields a posted document depends on (is it a stock item, its valuation method) must be frozen once referenced, exactly as <code>cant_change()</code> does.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">Pattern 5 — Per-company defaults &amp; the cascade (multi-company master data)</h2>
+
+<p>One master, many companies. You do not want to duplicate an Item per company, nor hard-code accounts per company on the Item. ERPNext stores company-specific defaults as child rows keyed by company and resolves them at runtime with a precedence cascade. This is the engine that <em>feeds</em> the snapshot of Pattern 4.</p>
+
+<div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Per-company defaults child + resolution cascade</h3></div>
+  <div class="body">
+    <div class="pane p-idea"><div class="pl">The idea</div>
+      <p>Store company-specific defaults (accounts, warehouse, price list, supplier) as <strong>child rows keyed by company</strong>, and resolve them at runtime with a precedence cascade — so you never duplicate the master per company, and a blank field still resolves to a sensible value.</p>
+    </div>
+    <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
+      <p><strong>Item Default</strong> is a child table on Item — one row per company; <code>validate_item_defaults()</code> forbids two rows for the same company. <strong>Company</strong> holds <code>default_receivable_account</code>, <code>default_payable_account</code>, <code>default_expense_account</code>, <code>default_inventory_account</code>, <code>stock_adjustment_account</code>, etc.</p>
+      <p>The cascade in <span class="fileref">erpnext/stock/get_item_details.py</span> tries <code>get_item_defaults → get_item_group_defaults → get_brand_defaults</code> in turn, falling back to Company defaults; <code>get_party_account</code> uses the same party → group → company chain.</p>
+    </div>
+    <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
+      <p>A <code>*_company_default</code> child/satellite table keyed by <code>(master_id, company_id)</code>, plus a defaults table on the company.</p>
+      <ul>
+        <li>Write one resolver function per default that walks the chain (record → group → company) and returns the first hit.</li>
+        <li>Scope every transaction by a <code>company</code> column so defaults <em>and</em> ledgers stay partitioned.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<p>The cascade, for an Item's expense account, reads: try the Item's own per-company default; if blank, the Item Group's default; if blank, the Brand's default; if blank, the Company default. The first non-empty value wins.</p>
+
+<div class="flow col">
+  <div class="node">Item Default (this item, this company)<small>get_item_defaults</small></div>
+  <div class="arr"></div>
+  <div class="node">Item Group default<small>get_item_group_defaults</small></div>
+  <div class="arr"></div>
+  <div class="node">Brand default<small>get_brand_defaults</small></div>
+  <div class="arr"></div>
+  <div class="node">Company default<small>default_expense_account, default_inventory_account, …</small></div>
+</div>
+
+<div class="callout co-warn"><span class="lbl">Gotcha — a blank field still resolves; trace the whole chain</span>
+<p>Because of the cascade, an Item can have <em>no</em> expense account set yet still post to one at transaction time. When you debug "where did this account come from?", you must trace item → item-group → brand → company — not just stare at the Item. Document the chain somewhere visible, or your support tickets will be a maze.</p>
+</div>
+
+<div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
+<p>The two-GSTIN <strong>Bihar / Jharkhand</strong> structure maps onto the Company multi-company anchor: each is a Company with its own default accounts and warehouses, and every store/warehouse and transaction is scoped by <code>company</code>. The <strong>brand-as-first-class dimension</strong> and the SOR / Outright / Hybrid commercial terms ride the cascade — set them once at the Brand or Item-Group level and let individual Items inherit, overriding only where a specific style differs.</p>
+</div>
+</section>
+
+<section>
+<h2 class="sec">How the patterns compose — one item, one party, one ledger row</h2>
+
+<p>Put the five patterns end to end and a single sale tells the whole story. The Item resolves through the variant model and the defaults cascade; the party resolves through the abstraction; both are snapshotted onto the document; the document writes a GL Entry that names the party generically.</p>
+
+<div class="flow col">
+  <div class="node">Pick variant TSHIRT-RED-M<small>Pattern 1 — variant, not template; stock/cost live here</small></div>
+  <div class="arr"></div>
+  <div class="node">Resolve item defaults: item → group → brand → company<small>Pattern 5 — first hit wins, scoped by company</small></div>
+  <div class="arr"></div>
+  <div class="node">Snapshot item_name, rate, accounts, tax onto the line<small>Pattern 4 — frozen historical truth</small></div>
+  <div class="arr"></div>
+  <div class="node">Resolve party (Customer / Supplier) + its address<small>Pattern 2 + 3 — generic party, dynamic-linked address</small></div>
+  <div class="arr"></div>
+  <div class="node">Post GL Entry (party_type, party, account)<small>Pattern 2 — control account via 3-level fallback</small></div>
+</div>
+
+<p>Edit any master tomorrow — rename the customer, re-price the style, switch a default account — and this posted row does not move. That immovability is the product. Everything in this chapter exists to deliver it.</p>
+</section>
+
+<section>
+<h2 class="sec">Vocabulary — terms used across this chapter</h2>
+
+<dl class="gloss">
+  <dt><code>template (Item)</code></dt>
+  <dd>An Item with <code>has_variants=1</code>. Carries family identity and the list of variation axes; holds no stock and no price.</dd>
+  <dt><code>variant (Item)</code></dt>
+  <dd>An Item with <code>variant_of</code> set, pinning one value per axis. The concrete sellable SKU; stock and cost live only here.</dd>
+  <dt><code>Item Attribute</code></dt>
+  <dd>One axis of variation (Colour, Size). Either a list of allowed values (each with an <code>abbr</code>) or a numeric range (from/to/increment).</dd>
+  <dt><code>party</code></dt>
+  <dd>The generic pair <code>(party_type, party)</code> on a ledger row. <code>party_type</code> names a DocType; <code>party</code> is a Dynamic Link keyed by it.</dd>
+  <dt><code>Dynamic Link</code></dt>
+  <dd><span class="badge b-frappe">Frappe core</span> A polymorphic reference storing <code>link_doctype</code> + <code>link_name</code> — lets one Address/Contact belong to any owner type.</dd>
+  <dt><code>snapshot</code></dt>
+  <dd>Copying a master's values onto a transaction line at creation, so later master edits never rewrite posted history.</dd>
+  <dt><code>defaults cascade</code></dt>
+  <dd>The runtime precedence chain item → item-group → brand → company (and party → group → company) that resolves a blank field to a value.</dd>
+  <dt><code>cant_change()</code></dt>
+  <dd>The Item guard that freezes a few structural fields (is_stock_item, valuation_method, has_serial_no, has_batch_no) once posted documents reference the item.</dd>
+</dl>
+</section>
+
+<div class="takeaways"><h4>Takeaways</h4>
+<ol>
+  <li><strong>Model variation as data, not columns or code.</strong> Template + attribute catalogue + a (variant, attribute, value) join. Adding "Sleeve Length" is a row, not a migration. SKU = style × size × colour falls out for free — and stock/price live on the variant, never the template.</li>
+  <li><strong>Abstract "who we transact with" into one polymorphic <code>(party_type, party)</code> pair.</strong> Centralise all party logic — control account, currency, tax — in one module parameterised by party_type. New party kinds need zero ledger changes. Index on (party_type, party); you cannot JOIN a dynamic link.</li>
+  <li><strong>Attach addresses and contacts with polymorphic links</strong>, not one FK per owner type — and accept that you own orphan cleanup, because there is no FK integrity.</li>
+  <li><strong>Snapshot masters onto transactions at creation</strong> — copy name, rate, accounts and tax onto the line, resolved through a per-company defaults cascade. The master is editable "current truth"; the transaction is frozen "historical truth". This is what lets you fix a typo or change a default next year without corrupting last year's books.</li>
+  <li><strong>Guard only the few master fields the ledger structurally depends on</strong> (is_stock_item, valuation_method). Everything else stays editable — safely, because the documents already kept their own copy.</li>
+  <li><strong>Snapshot vs propagate is a per-field decision.</strong> Deal terms freeze onto documents; reference data (spellings, disabled flags) propagates to existing records. Mixing them breaks both directions.</li>
+  <li><strong>Enforce variant uniqueness in the database</strong>, not only in application code — ERPNext checks it in code, and a naive port duplicates SKUs. Add a unique index on the normalised attribute-set.</li>
+</ol>
+</div>
+
+<div class="pager">
+<a class="prev" href="05-transaction-flow.html"><small>← Previous</small>Transaction flow</a>
+<a class="next" href="07-tax-and-pricing.html"><small>Next →</small>Tax & pricing engine</a>
+</div>
+<footer>ERP Engineering Handbook · reverse-engineered from ERPNext v15 · Chapter 06. Built as a reusable blueprint for custom ERP work.</footer>
+</main>
+</div>
+</body>
+</html>
