@@ -2,6 +2,8 @@
 
 Guidance for Claude Code when working in this repository.
 
+> **Before building any slice, read [`CONTEXT.md`](CONTEXT.md) (repo root)** — the single machine-read briefing: the domain language, the 12 rules, the kernel contracts, and the money-critical locked + CA-gated decisions. **It is the one build-context file** — skills (`/spec`, `/tdd`, `/review`, `/grill-with-docs`) read it; don't fork it. This `CLAUDE.md` is *workflow/project* guidance; `CONTEXT.md` is the *domain/kernel* context; `README.md` is how to run it.
+
 ## What this project is
 
 Anand is the consultant/architect designing and building an operating system for **KDPS Lifestyle Pvt Ltd** — a multi-brand Indian fashion retailer (Bihar & Jharkhand, 50+ stores/warehouses, 20,000+ SKUs, 40+ brands) that currently runs on per-store POS + Tally + Excel.
