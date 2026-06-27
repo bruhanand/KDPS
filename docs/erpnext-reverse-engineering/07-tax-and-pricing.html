@@ -52,7 +52,7 @@
 <p>Build tax and pricing as a <strong>small generic calculation engine over declarative data rows</strong>, not as per-scenario code. A tax/charge becomes a typed row whose <code>charge_type</code> is an opcode the engine evaluates; rows compose by referencing earlier rows. Every rate and price is effective-dated, category-scoped data with per-item overrides. Discounts are declarative rules matched by dimension, slab, condition and validity, resolved by an explicit priority. Statutory behaviour layers in through a region-keyed override seam. This single shape expresses GST, VAT, cess-on-tax, tax-on-freight, fixed charges, per-unit levies, value-slab discounts, and buy-X-get-Y — with no new code per case.</p>
 </div>
 
-<p>This chapter walks both halves. We start with the tax side: the template, the charge-type interpreter, inclusive vs exclusive back-solving, per-item rate overrides, and the rounding discipline that keeps the books reconciled. Then the price side: price lists, item prices, the pricing-rule matcher, and the promotional-scheme generator that compiles ergonomic promos into flat runtime rules. We close with the regional-override seam that lets India GST ship as a separate app while core carries zero GST math — and the takeaways a builder returns to.</p>
+<p>This chapter walks both halves. We start with the tax side: the template, the charge-type interpreter, inclusive vs exclusive back-solving, per-item rate overrides, and the rounding discipline that keeps the books reconciled. Then the price side: price lists, item prices, the pricing-rule matcher, and the promotional-scheme generator that compiles ergonomic promos into flat runtime rules. We close with the regional-override seam that lets statutory packs live outside the transaction controllers while core carries generic tax machinery — and the takeaways a builder returns to.</p>
 </section>
 
 <section>
@@ -109,7 +109,7 @@
 <tr>
   <td><strong>Item Tax Template</strong><br><span class="fileref">erpnext/accounts/doctype/item_tax_template/item_tax_template.py</span></td>
   <td>setup</td>
-  <td>Per-item override map {tax account → rate}; date- and net-rate-effective, <code>tax_category</code>-scoped (e.g. a 5% vs 12% GST HSN slab).</td>
+  <td>Per-item override map {tax account → rate}. The template header stores the rates; the date/net-rate/<code>tax_category</code> selection fields live on the Item's <code>Item Tax</code> assignment rows that point to a template.</td>
 </tr>
 <tr>
   <td><strong>Item Tax (Template Detail)</strong><br><span class="fileref">erpnext/accounts/doctype/item_tax_template_detail/item_tax_template_detail.json</span></td>
@@ -305,7 +305,7 @@
       <p>Rates and prices change over time and by qualifying conditions, so selection must pick the right <em>version</em> by effective date and value band — never by overwriting history. Old invoices keep the rate that was in force when they were posted.</p>
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
-      <p><code>_get_item_tax_template</code> in <span class="fileref">erpnext/stock/get_item_details.py</span> keeps only templates with <code>valid_from &lt;= validation_date</code> (bill_date ‖ posting_date ‖ transaction_date), within <code>minimum_net_rate..maximum_net_rate</code> (<code>is_within_valid_range</code>), matching <code>tax_category</code>; then sorts <code>valid_from desc</code> and takes the newest. Item Price selection mirrors this with <code>valid_from</code>/<code>valid_upto</code>.</p>
+      <p><code>_get_item_tax_template</code> in <span class="fileref">erpnext/stock/get_item_details.py</span> selects from the Item's <code>Item Tax</code> assignment rows: it keeps rows with <code>valid_from &lt;= validation_date</code> (bill_date ‖ posting_date ‖ transaction_date), within <code>minimum_net_rate..maximum_net_rate</code> (<code>is_within_valid_range</code>), matching <code>tax_category</code>; then sorts <code>valid_from desc</code> and returns the referenced <code>item_tax_template</code>. Item Price selection mirrors this with <code>valid_from</code>/<code>valid_upto</code>.</p>
       <p class="srcline">valid_from filtering:825 · is_within_valid_range:868 · item price ordering:1132</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
@@ -314,14 +314,14 @@
     </div>
   </div></div>
 
-<p>This single selection rule turns a GST slab change into a data entry task. The accountant inserts a new Item Tax Template with <code>valid_from</code> set to the notification date; invoices before that date keep selecting the old one, invoices after select the new — with zero code change and full history intact.</p>
+<p>This single selection rule turns a tax slab change into a data entry task. The accountant creates or reuses an Item Tax Template for the rate map, then adds a new dated Item Tax assignment row on the Item pointing to that template. Invoices before that date keep selecting the old assignment, invoices after select the new one — with zero code change and full history intact.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha — precedence is date AND value AND category</span>
-<p>Item Tax Template selection is simultaneously date-effective, value-banded (<code>minimum_net_rate..maximum_net_rate</code>) and <code>tax_category</code>-scoped; the newest valid <code>valid_from</code> wins. A template with <em>no</em> validity is a <strong>fallback only</strong>, used when none with validity match. Get the precedence wrong and you silently apply last year's GST slab — the kind of error nobody notices until an audit.</p>
+<p>Item Tax Template selection is simultaneously date-effective, value-banded (<code>minimum_net_rate..maximum_net_rate</code>) and <code>tax_category</code>-scoped through the Item's Item Tax assignment rows; the newest valid <code>valid_from</code> wins. An assignment with <em>no</em> validity is a <strong>fallback only</strong>, used when none with validity match. Get the precedence wrong and you silently apply last year's tax slab — the kind of error nobody notices until an audit.</p>
 </div>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
-<p>The CLAUDE.md rule "apparel GST is slab-based and date-effective — model it as data, not code" <em>is</em> this pattern. Each HSN-slab is an Item Tax Template with a <code>valid_from</code>; a slab revision is a new dated row. And the five money-critical CA-ruling items (SOR single-recognition, deemed-supply clock, late freight, sold-before-PT, no-reposting) should sit behind an effective-dated rate/rule table for exactly this reason: a CA ruling changes <strong>data, not code</strong>.</p>
+<p>The CLAUDE.md rule "apparel GST is slab-based and date-effective — model it as data, not code" <em>is</em> this pattern. Each HSN-slab should be a tax-rate template selected by dated Item Tax assignment rows; a slab revision is a new dated assignment. And the five money-critical CA-ruling items (SOR single-recognition, deemed-supply clock, late freight, sold-before-PT, no-reposting) should sit behind an effective-dated rate/rule table for exactly this reason: a CA ruling changes <strong>data, not code</strong>.</p>
 </div>
 </section>
 
@@ -353,14 +353,14 @@
 <div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Rule-matching pricing engine with slabs, conditions and priority</h3></div>
   <div class="body">
     <div class="pane p-idea"><div class="pl">The idea</div>
-      <p>Discounts and prices are <strong>declarative rules</strong> matched against a transaction by dimension (item / group / brand / customer / territory), quantity or amount slab, validity dates and a free-text condition — then resolved <em>deterministically</em> by an explicit priority. Ties are an error, not a coin-flip.</p>
+      <p>Discounts and prices are <strong>declarative rules</strong> matched against a transaction by dimension (item / group / brand / customer / territory), quantity or amount slab, validity dates and a free-text condition — then resolved <em>deterministically</em> by an explicit priority. Unresolved ties generally throw instead of becoming a coin-flip, with specific ERPNext exceptions for shopping-cart context and some price-list/currency tiebreaks.</p>
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
       <p><code>get_pricing_rules</code>/<code>_get_pricing_rules</code> build SQL across the <code>Pricing Rule {Item Code | Item Group | Brand}</code> child tables, expanding groups via nested-set <code>lft/rgt</code> (<code>_get_tree_conditions</code>). <code>filter_pricing_rule_based_on_condition</code> runs the rule's <code>condition</code> through <code>frappe.safe_eval</code>. <code>filter_pricing_rules_for_qty_amount</code> enforces slabs. <code>filter_pricing_rules</code> keeps the max <code>priority</code>, prefers matching currency/price-list, and throws <code>MultiplePricingRuleConflict</code> on an unresolved tie.</p>
       <p class="srcline">filter_pricing_rules:272 · condition safe_eval:83 · qty/amount slab:392 · tree:183</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
-      <p>Store rules as rows with: target dimension + ids, qty/amount min/max, validity dates, an optional sandboxed boolean expression, applicable-for filters, and an integer priority. Match = filter by all predicates; resolve = max priority, then a stable tiebreak, else <strong>error</strong>. Keep the <em>action</em> (set rate / % off / amount off / free qty) as data the engine applies — not code.</p>
+      <p>Store rules as rows with: target dimension + ids, qty/amount min/max, validity dates, an optional sandboxed boolean expression, applicable-for filters, and an integer priority. Match = filter by all predicates; resolve = max priority, then explicit stable tiebreaks such as price list/currency, else <strong>error</strong>. Keep the <em>action</em> (set rate / % off / amount off / free qty) as data the engine applies — not code.</p>
     </div>
   </div></div>
 
@@ -384,7 +384,7 @@ max_priority = max(cint(p.priority) <span class="k">for</span> p <span class="k"
 </div>
 
 <div class="callout co-warn"><span class="lbl">Gotcha — group matching is a tree walk, and ties throw</span>
-<p>Two traps live in this matcher. First, Item Group / Customer Group / Territory matching uses nested-set <code>lft/rgt</code> tree expansion, so a rule on a <em>parent</em> group must match items in <em>child</em> groups. A flat equality match silently fails for hierarchical masters. Second, when priority cannot break a tie, ERPNext <strong>throws <code>MultiplePricingRuleConflict</code></strong> rather than picking arbitrarily (except in shopping-cart context). A custom engine that quietly picks one will diverge from ERPNext and from what your accountant expects — a "wrong but consistent" discount is worse than a loud error.</p>
+<p>Two traps live in this matcher. First, Item Group / Customer Group / Territory matching uses nested-set <code>lft/rgt</code> tree expansion, so a rule on a <em>parent</em> group must match items in <em>child</em> groups. A flat equality match silently fails for hierarchical masters. Second, when priority and ERPNext's explicit tiebreaks cannot resolve a tie, ERPNext <strong>throws <code>MultiplePricingRuleConflict</code></strong> rather than picking arbitrarily (except in shopping-cart context). A custom engine that quietly picks one will diverge from ERPNext and from what your accountant expects — a "wrong but consistent" discount is worse than a loud error.</p>
 </div>
 </section>
 
@@ -429,7 +429,7 @@ max_priority = max(cint(p.priority) <span class="k">for</span> p <span class="k"
 <section>
 <h2 class="sec">Regional statutory logic — GST as a plugin, not a fork</h2>
 
-<p>The final pattern is the one that makes the rest portable. India GST, UAE VAT and Italian e-invoicing are all statutory behaviour that must layer onto a country-agnostic core <em>without editing it</em>, selected at runtime by the company's country. ERPNext does this with a hook table plus a decorator — and ships GST itself as an entirely separate installed app.</p>
+<p>The final pattern is the one that makes the rest portable. India GST, UAE VAT and Italian e-invoicing are all statutory behaviour that should layer onto a country-agnostic core <em>without editing it</em>, selected at runtime by the company's country. ERPNext's source-backed examples use a hook table plus a decorator for regional behavior; India-specific implementation is external context, not code in this checkout.</p>
 
 <div class="pattern"><div class="ph"><div class="tag">PATTERN</div><h3>Regional statutory logic via override hooks (no core fork)</h3></div>
   <div class="body">
@@ -437,7 +437,7 @@ max_priority = max(cint(p.priority) <span class="k">for</span> p <span class="k"
       <p>Country-specific tax behaviour must <strong>layer onto a country-agnostic core</strong> without editing it, selected at runtime by the entity's region. Each jurisdiction is a plugin that registers overrides and seeds data, not a branch in core.</p>
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
-      <p><code>@erpnext.allow_regional</code> <span class="badge b-frappe">Frappe core</span> wraps a core function; at call time it looks up its own dotted path in <code>frappe.get_hooks("regional_overrides")[get_region()]</code> and dispatches to the last-installed app's implementation, else runs the default. <span class="fileref">erpnext/hooks.py</span>'s <code>regional_overrides</code> maps e.g. UAE/Italy <code>update_itemised_tax_data</code>. India GST ships as a separate app plugging into these seams plus the generic Item Tax Template / Tax Category data.</p>
+      <p><code>@erpnext.allow_regional</code> wraps a core function; at call time it looks up its own dotted path in <code>frappe.get_hooks("regional_overrides")[get_region()]</code> and dispatches to the last-installed app's implementation, else runs the default. <span class="fileref">erpnext/hooks.py</span>'s <code>regional_overrides</code> maps e.g. UAE/Italy <code>update_itemised_tax_data</code>. India GST / <code>india_compliance</code> is external ecosystem context, not source contained in this ERPNext checkout.</p>
       <p class="srcline">allow_regional: __init__.py:133 · hooks.py:624 · update_itemised_tax_data:1257</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
@@ -454,10 +454,10 @@ max_priority = max(cint(p.priority) <span class="k">for</span> p <span class="k"
     <span class="k">return</span> frappe.get_attr(overrides[function_path][-<span class="s">1</span>])(*args, **kwargs)</code></pre>
 <p class="srcline">erpnext/__init__.py:133 · the @allow_regional dispatch</p>
 
-<p>The payoff is stark: the core ERPNext checkout carries <strong>zero GST math</strong>. The generic machinery — Item Tax Template, Tax Category, the charge-type engine — is all that core ships. GST lives in the separate <code>india_compliance</code> app, which plugs into the regional-override seams and <em>seeds</em> Item Tax Templates and Tax Categories as data. UAE VAT is another plugin; Italy another. The same engine serves them all.</p>
+<p>The payoff is stark: the core ERPNext checkout carries the generic machinery — Item Tax Template, Tax Category, the charge-type engine and regional override seams — while statutory packs can live outside the base app or in regional hook modules. This checkout does not include an India GST implementation; the source-backed in-tree examples are regional hooks such as UAE and Italy. The architectural lesson still holds: the same engine serves many statutory layers.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha — don't grep core for GST math; it isn't there</span>
-<p>GST is <strong>not in the erpnext repo checkout</strong> — it is a separate <code>india_compliance</code> app wired through <code>regional_overrides</code> + hooks. Core ships only the generic machinery (Item Tax Template, Tax Category, the <code>charge_type</code> engine). A reimplementer who greps core for "GST" or "CGST" finds nothing and concludes the engine is incomplete. It is complete — the statutory pack is simply data + overrides loaded from elsewhere. This separation is the feature, not a gap.</p>
+<p>India GST is <strong>not in this erpnext repo checkout</strong>. A reimplementer who greps this source tree for "CGST" should not conclude the generic engine is incomplete; the checked-in evidence is the generic tax machinery plus regional override seams. Treat India-specific packs as external/regional layers and keep the base calculation engine country-agnostic.</p>
 </div>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>

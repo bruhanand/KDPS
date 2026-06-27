@@ -47,7 +47,7 @@
     Every chapter before this one explained a <em>mechanism</em>: how the meta-model works, how the two ledgers post, how tax resolves, how permissions gate. This chapter is the <strong>map</strong> — the flat catalog of business objects those mechanisms operate on. It matters for a blunt reason: when you sit down to build a custom ERP, the first irreversible decision is <strong>"what are my entities, and what structural role does each one play?"</strong> Get that classification right and almost everything downstream — storage, lifecycle, list views, the REST API, status propagation, reports — becomes generic machinery you write once. Get it wrong and you hand-code the same four behaviours over and over, badly, per table.
   </p>
   <p>
-    ERPNext makes this decision unusually legible. The entire ERP is a flat catalog of roughly <strong>700 DocTypes</strong> folded into <strong>21 modules</strong> (listed in <span class="fileref">erpnext/modules.txt</span>). Every business object — <em>Account</em>, <em>Sales Invoice</em>, the line item inside it, the settings singleton beside it — is a DocType defined by one JSON file at <span class="fileref">erpnext/&lt;module&gt;/doctype/&lt;name&gt;/&lt;name&gt;.json</span>, optionally with a Python controller <code>&lt;name&gt;.py</code> and a client script <code>&lt;name&gt;.js</code>. You can classify <em>any</em> object in the system by reading four boolean flags off its JSON. That is the whole trick of this appendix: a small, finite taxonomy that you reuse verbatim on your own stack.
+    ERPNext makes this decision unusually legible. In this clone the ERPNext app has roughly <strong>528 actual DocType manifests</strong> folded into <strong>20 modules</strong> (listed in <span class="fileref">erpnext/modules.txt</span>). Every business object — <em>Account</em>, <em>Sales Invoice</em>, the line item inside it, the settings singleton beside it — is a DocType defined by one JSON file at <span class="fileref">erpnext/&lt;module&gt;/doctype/&lt;name&gt;/&lt;name&gt;.json</span>, optionally with a Python controller <code>&lt;name&gt;.py</code> and a client script <code>&lt;name&gt;.js</code>. You can classify <em>any</em> object in the system by reading four boolean flags off its JSON. That is the whole trick of this appendix: a small, finite taxonomy that you reuse verbatim on your own stack.
   </p>
 
   <div class="callout co-key">
@@ -191,7 +191,7 @@
       </div>
       <div class="pane p-erp">
         <div class="pl">How ERPNext does it</div>
-        <p><span class="fileref">erpnext/modules.txt</span> lists 21 modules. Transactions live in their process module: Buying owns Purchase Order; Stock owns Purchase Receipt / Delivery Note / Stock Entry; Selling owns Sales Order; Accounts owns Sales Invoice / Payment Entry.</p>
+        <p><span class="fileref">erpnext/modules.txt</span> lists 20 modules in this clone. Transactions live in their process module: Buying owns Purchase Order; Stock owns Purchase Receipt / Delivery Note / Stock Entry; Selling owns Sales Order; Accounts owns Sales Invoice / Payment Entry.</p>
         <p>Every financial posting becomes <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span> rows; every inventory move becomes <span class="fileref">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span> rows — each tagged <code>voucher_type</code>/<code>voucher_no</code>. <span class="fileref">erpnext/stock/doctype/bin/bin.json</span> caches the balance.</p>
       </div>
       <div class="pane p-gen">
@@ -372,7 +372,7 @@
 <section>
   <h2 class="sec">The load-bearing DocType catalog</h2>
   <p>
-    The index proper. These are the DocTypes that carry the system — the ones you must have an equivalent for in any serious retail/distribution ERP. Each is tagged with its role, its module path, and the chapter that explains the mechanism behind it. (ERPNext has ~700 DocTypes total; this is the spine, not the census.)
+    The index proper. These are the DocTypes that carry the system — the ones you must have an equivalent for in any serious retail/distribution ERP. Each is tagged with its role, its module path, and the chapter that explains the mechanism behind it. (This clone has ~528 actual DocType manifests; this page is the spine, not the census.)
   </p>
 
   <h3>Accounts — the ledger floor</h3>

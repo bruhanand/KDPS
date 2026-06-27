@@ -46,7 +46,7 @@
 
 <p>Before you write a line of an ERP, you make one architectural choice that you cannot cheaply reverse: <strong>do business objects live in code, or in data?</strong> The instinctive answer is code — a <code>Customer</code> class, a <code>customers</code> table, a customer controller, a customer form, a customer API. Repeat fifty times for fifty entities. Every entity is a small subsystem you hand-wire, and every cross-cutting concern — audit columns, permissions, a draft/submit state machine — has to be remembered and re-implemented on each one. The cost is not the first ten entities; it is the next five hundred, and the day someone asks for a new field and you have to touch six layers to add it.</p>
 
-<p>ERPNext makes the opposite choice, and it is the choice this whole handbook builds on. Its foundational idea is that <strong>a DocType is itself data, not code.</strong> Every business object — masters, transactions, ledgers, settings, even the child rows inside a grid — is declared as a <code>.json</code> file: a list of fields, each with a type and a handful of flags, plus a few document-level switches. A framework (Frappe, which is <em>not</em> in the ERPNext checkout but underneath it) reads that schema and <em>derives</em> the SQL table, the list view, the form UI, a REST/RPC API, an ORM, the role-based permission engine, and a uniform set of audit columns — none of it hand-written. ERPNext ships roughly <strong>528 DocTypes</strong> this way.</p>
+<p>ERPNext makes the opposite choice, and it is the choice this whole handbook builds on. Its foundational idea is that <strong>a DocType is itself data, not code.</strong> Every business object — masters, transactions, ledgers, settings, even the child rows inside a grid — is declared as a <code>.json</code> file: a list of fields, each with a type and a handful of flags, plus a few document-level switches. A framework (Frappe, which is <em>not</em> in the ERPNext checkout but underneath it) reads that schema and <em>derives</em> the SQL table, the list view, the form UI, a REST/RPC API, an ORM, the role-based permission engine, and a uniform set of audit columns — none of it hand-written. This clone ships roughly <strong>528 actual DocType manifests</strong> this way; there are more JSON files under <code>doctype/</code> directories when you count supporting files and non-DocType JSON.</p>
 
 <div class="callout co-key"><span class="lbl">Key idea</span>
 <p>Model your metadata as a first-class citizen and build (or adopt) <strong>one generic engine</strong> over it. Then adding an entity is writing one declaration — not wiring six subsystems by hand. Every record shares the same shape, so observability, the state machine, typed links, and polymorphic associations come for free and behave <em>identically</em> everywhere. That uniformity is the entire payoff.</p>
@@ -145,7 +145,7 @@
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
       <p>Each DocType is a JSON file with three parts: document-level flags, a <code>field_order</code> list, and a <code>fields</code> array of dicts like <code>{fieldname, fieldtype, options, reqd, read_only, ...}</code>.</p>
-      <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span> declares <code>is_submittable:1</code>, a <code>naming_rule</code>, a <code>permissions</code> array and roughly <strong>200 field dicts</strong>. The Frappe framework <span class="badge b-frappe">Frappe core</span> consumes it to build everything. ERPNext ships ~528 such files.</p>
+      <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.json</span> declares <code>is_submittable:1</code>, a <code>naming_rule</code>, a <code>permissions</code> array and roughly <strong>200 field dicts</strong>. The Frappe framework <span class="badge b-frappe">Frappe core</span> consumes it to build everything. This clone ships ~528 actual DocType manifests.</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
       <p>Two viable shapes on Django/Postgres:</p>
@@ -276,7 +276,7 @@
         <li><strong>Table</strong>: <code>{fieldtype:"Table", options:"Sales Invoice Item"}</code> — an embedded child grid (child has <code>istable:1</code>).</li>
         <li><strong>Dynamic Link</strong>: in <span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span>, <code>party_type</code> (Link → DocType) + <code>party</code> (Dynamic Link → <code>party_type</code>) gives a polymorphic party (Customer/Supplier/Employee).</li>
       </ul>
-      <p>Across the codebase: <strong>2159 Link</strong>, <strong>298 Table</strong>, <strong>78 Dynamic Link</strong> fields.</p>
+      <p>Across the codebase: <strong>2155 Link</strong>, <strong>298 Table</strong>, <strong>78 Dynamic Link</strong> fields.</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
       <p>On SQL/Django:</p>

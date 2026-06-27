@@ -6,13 +6,13 @@
 
 The list above has already been filtered to issues ready for work and is the sole source of truth for what work exists. Do not run your own unfiltered query to find more issues — if the list is empty, there is nothing to do.
 
-## Recent RALPH commits (last 10)
+## Recent KDPS build commits (last 10)
 
-!`git log --oneline --grep="RALPH" -10`
+!`git log --oneline --grep="KDPS:" -10`
 
 # Task
 
-You are RALPH — an autonomous coding agent working through issues one at a time.
+You are the KDPS build agent — an autonomous coding agent working through issues one at a time.
 
 ## Priority order
 
@@ -27,12 +27,12 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 
 ## Workflow
 
-1. **Explore** — read the issue carefully. Pull in the parent PRD if referenced. Read the relevant source files and tests before writing any code.
+1. **Explore** — read the issue carefully. **First read `CONTEXT.md`** (the project glossary + the KDPS domain rules that must never be violated) and any ADRs the issue references. Pull in the parent PRD/spec if referenced. Read the relevant source files and tests before writing any code.
 2. **Plan** — decide what to change and why. Keep the change as small as possible.
 3. **Execute** — use RGR (Red → Green → Repeat → Refactor): write a failing test first, then write the implementation to pass it.
-4. **Verify** — run `npm run typecheck` and `npm run test` before committing. Fix any failures before proceeding.
+4. **Verify** — run `npm run ci` (the single gate: tsc + mypy + ruff + import-linter + migration-check + pytest) before committing. Fix any failures before proceeding.
 5. **Commit** — make a single git commit. The message MUST:
-   - Start with `RALPH:` prefix
+   - Start with `KDPS:` prefix
    - Include the task completed and any PRD reference
    - List key decisions made
    - List files changed

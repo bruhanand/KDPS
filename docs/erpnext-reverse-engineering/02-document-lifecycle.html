@@ -62,15 +62,16 @@
   <div class="callout co-key">
     <span class="lbl">Key idea</span>
     <p>
-      An ERP is trustworthy not because data can't be wrong, but because <strong>every posting is immutable
-      and every correction is itself a new, traceable posting</strong>. The ledger only ever grows. That one
-      sentence is the design contract this entire chapter implements.
+      An ERP is trustworthy not because data can't be wrong, but because <strong>every posting is controlled
+      and every correction is traceable</strong>. In the strict immutable-ledger regime the ledger only grows;
+      in ERPNext classic mode originals are marked cancelled while mirror rows preserve the correction trail.
+      That distinction is the design contract this entire chapter implements.
     </p>
   </div>
   <p>
     This chapter walks the subsystem in the order you need it when building: the three-state machine, the
     ordered controller hook chain that hangs business logic off it, immutability and the cancel-and-amend
-    correction path, how cancellation reverses postings on append-only ledgers, how human-readable status is
+    correction path, how cancellation reverses postings on controlled ledgers, how human-readable status is
     derived rather than stored, and the deliberate "flag, don't block" split between hard invariants and soft
     policy limits. Each is presented as a reusable pattern: the durable idea, exactly how ERPNext implements
     it with file references, and how to rebuild it on a plain Django/Postgres stack.
@@ -82,7 +83,7 @@
   <p>
     Before the patterns, meet the documents. The lifecycle is a collaboration between a
     <strong>submittable transaction</strong> (the thing the user edits and submits), its
-    <strong>child line items</strong> (which have no lifecycle of their own), the <strong>append-only
+    <strong>child line items</strong> (which have no lifecycle of their own), the <strong>controlled
     ledgers</strong> it writes, and the <strong>settings singletons</strong> that supply the policy knobs the
     controllers read as they run.
   </p>
@@ -106,11 +107,11 @@
     <tr>
       <td><strong>Stock Ledger Entry</strong><br><span class="fileref">erpnext/stock/doctype/stock_ledger_entry/stock_ledger_entry.json</span></td>
       <td><span class="badge b-erpnext">ledger</span></td>
-      <td>Append-only stock-movement row; the quantity / valuation counterpart to GL Entry. Written by the StockController on submit and reversed on cancel. See <a href="04-stock-ledger.html">the stock ledger</a>.</td>
+      <td>Voucher-driven stock-movement row; the quantity / valuation counterpart to GL Entry. Written by the StockController on submit, marked/reversed on cancel, and reposted forward when carried valuation changes. See <a href="04-stock-ledger.html">the stock ledger</a>.</td>
     </tr>
     <tr>
       <td><strong>Accounts Settings</strong><br><span class="fileref">erpnext/accounts/doctype/accounts_settings/accounts_settings.json</span></td>
-      <td><span class="badge b-frappe">Frappe core</span> single</td>
+      <td><span class="badge b-erpnext">ERPNext</span> single</td>
       <td>One global row of policy toggles the lifecycle reads: over-billing allowance, <code>unlink_payment_on_cancellation</code>, the immutable-ledger switch, <code>delete_linked_ledger_entries</code>.</td>
     </tr>
     <tr>
@@ -441,23 +442,24 @@
 </section>
 
 <section>
-  <h2 class="sec">Pattern 4 · Cancellation reverses postings on append-only ledgers</h2>
+  <h2 class="sec">Pattern 4 · Cancellation reverses postings on controlled ledgers</h2>
   <p>
-    Pattern 3 said cancel "reverses its ledger effects." This pattern is the concrete mechanism. Ledgers are
-    <strong>append-only</strong> — you cannot delete a posted entry. So cancelling a document means posting
-    equal-and-opposite entries (debit and credit swapped) so the net effect is zero, while both the original
-    and the reversal survive. The document's <code>on_cancel</code> is the single owner of this reversal.
+    Pattern 3 said cancel "reverses its ledger effects." This pattern is the concrete mechanism. A posted ledger
+    effect is not physically deleted. Cancelling a document means posting equal-and-opposite entries (debit and
+    credit swapped) so the net effect is zero. In ERPNext classic mode the original rows are also marked
+    <code>is_cancelled=1</code>; in immutable-ledger mode originals remain untouched and dated reversals carry the correction.
+    The document's <code>on_cancel</code> is the single owner of this reversal.
   </p>
 
   <div class="pattern">
-    <div class="ph"><div class="tag">Pattern</div><h3>Reverse by swapping debit/credit; never delete a ledger row</h3></div>
+    <div class="ph"><div class="tag">Pattern</div><h3>Reverse by swapping debit/credit; never physically delete a ledger row</h3></div>
     <div class="body">
       <div class="pane p-idea">
         <div class="pl">The idea</div>
         <p>
-          A ledger is INSERT-only. To undo a posting you insert its mirror — debit and credit swapped — so
-          the running balance returns to where it was, while the table keeps both rows. The net is zero; the
-          history is complete.
+          To undo a posting you insert its mirror — debit and credit swapped — so the running balance returns
+          to where it was. If you are building greenfield, strict insert-only rows are the cleanest rule; if you
+          follow ERPNext classic mode, be explicit that cancellation also marks originals as cancelled.
         </p>
         <p>Every reversal row carries a back-reference to the source voucher so you can find, reverse and
           reconcile by document.</p>
@@ -476,7 +478,9 @@
       <div class="pane p-gen">
         <div class="pl">Apply to any ERP</div>
         <p>
-          Make ledger tables strictly INSERT-only — revoke UPDATE/DELETE, or enforce with triggers.
+          Prefer strict INSERT-only ledger rows for a new build — revoke UPDATE/DELETE, or enforce with triggers.
+          If you keep ERPNext-style classic cancellation, confine original-row mutation to the posting service and
+          treat <code>is_cancelled</code> as derived cancellation metadata, not a hand-editable field.
         </p>
         <ul>
           <li><code>cancel()</code>: load the doc's posted rows, insert reversal rows with debit/credit
@@ -776,10 +780,10 @@
     <li>Layer cross-cutting logic in a controller base class with <strong>ordered template-method hooks</strong> (validate → before/on_submit → before/on_cancel → on_update_after_submit → on_trash) and always call <code>super()</code> so invariants compose.</li>
     <li>Make <code>on_cancel</code> the <strong>exact mirror</strong> of <code>on_submit</code> — every side effect created on submit is reversed on cancel, line for line, or the books leak.</li>
     <li>A submitted document is <strong>immutable forever</strong>: never UPDATE or DELETE it. To change it, cancel (post equal-and-opposite reversals) and <strong>amend</strong> (deep-copy into a new Draft linked by <code>amended_from</code>, re-validate, re-submit). The only in-place edit is a whitelisted <code>on_update_after_submit</code> that re-posts deltas.</li>
-    <li>Keep ledgers <strong>strictly INSERT-only</strong>. Cancel by inserting reversal rows with debit/credit swapped and a voucher back-reference. Decide your regime — classic (mutate originals) vs immutable ledger (date the reversal) — explicitly.</li>
+    <li>Decide your ledger regime explicitly. For a greenfield ERP, prefer <strong>strictly INSERT-only</strong> rows and cancel by inserting reversal rows with debit/credit swapped and a voucher back-reference. ERPNext classic mode also marks originals <code>is_cancelled=1</code>; immutable-ledger mode dates the reversal and leaves originals untouched.</li>
     <li><strong>Derive</strong> human-readable status and fulfilment percentages from <code>docstatus</code> + rollup fields via a declarative rule table; recompute on every save. Refuse to post against an unsubmitted predecessor.</li>
     <li>Split validation into <strong>hard invariants that throw</strong> (roll back) and <strong>soft limits that warn</strong> (proceed, with a role-based bypass). Keep thresholds and override roles in settings rows, not code.</li>
-    <li>The headline: <strong>an ERP is trustworthy not because data can't be wrong, but because every posting is immutable and every correction is itself a new, traceable posting — the ledger only ever grows.</strong></li>
+    <li>The headline: <strong>an ERP is trustworthy not because data can't be wrong, but because every correction is traceable and ledger effects are reversed through controlled postings, not silently overwritten or deleted.</strong></li>
   </ol>
 </div>
 

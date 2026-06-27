@@ -1,0 +1,40 @@
+# Pre-commit gates: the fast static half of `npm run ci`, run before every commit.
+# pytest (which needs Postgres) stays in `npm run ci` / pre-push — kept out of the
+# commit path so committing stays quick. Install once: `pre-commit install`.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format --check (backend)
+        entry: bash -c 'cd app/backend && uv run ruff format --check .'
+        language: system
+        pass_filenames: false
+        files: ^app/backend/.*\.py$
+
+      - id: ruff-check
+        name: ruff check (backend)
+        entry: bash -c 'cd app/backend && uv run ruff check .'
+        language: system
+        pass_filenames: false
+        files: ^app/backend/.*\.py$
+
+      - id: mypy
+        name: mypy (backend)
+        entry: bash -c 'cd app/backend && uv run mypy core config'
+        language: system
+        pass_filenames: false
+        files: ^app/backend/.*\.py$
+
+      - id: import-linter
+        name: import-linter (backend)
+        entry: bash -c 'cd app/backend && uv run lint-imports'
+        language: system
+        pass_filenames: false
+        files: ^app/backend/.*\.py$
+
+      - id: tsc
+        name: tsc --noEmit (frontend)
+        entry: bash -c 'npm --prefix app/frontend run ci'
+        language: system
+        pass_filenames: false
+        files: ^app/frontend/.*\.(ts|tsx)$

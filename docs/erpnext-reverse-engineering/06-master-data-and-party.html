@@ -273,7 +273,7 @@ abbreviations.append(abbr_or_value)
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
       <p>GL Entry carries <code>party_type</code> (a Link → DocType) and <code>party</code> (a Dynamic Link keyed by <code>party_type</code>). All party behaviour is centralised in <span class="fileref">erpnext/accounts/party.py</span>.</p>
-      <p><code>get_party_account()</code> resolves the control account with a 3-level fallback (party record → group → company default), choosing receivable vs payable from the Party Type's <code>account_type</code>. <code>get_party_details()</code> snapshots address, contact, currency, price list, taxes and payment terms uniformly for any <code>party_type</code>. Customer and Supplier both subclass <code>TransactionBase</code> and reuse this code.</p>
+      <p><code>get_party_account()</code> resolves the control account with a fallback chain. For Customer/Supplier it checks the party record, then the customer/supplier group, then the company's explicit <code>default_receivable_account</code> / <code>default_payable_account</code>; the generic Party Type <code>account_type</code> path is the final abstraction for other party kinds. <code>get_party_details()</code> snapshots address, contact, currency, price list, taxes and payment terms uniformly for any <code>party_type</code>. Customer and Supplier both subclass <code>TransactionBase</code> and reuse this code.</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
       <p>Add a <code>party_type</code> (enum/text) column and a <code>party_id</code> column to ledger and transaction tables — a polymorphic reference.</p>
@@ -311,6 +311,9 @@ account = frappe.db.get_value(
         {<span class="s">"parenttype"</span>: party_group_doctype, <span class="s">"parent"</span>: group, <span class="s">"company"</span>: company}, <span class="s">"account"</span>)
 
 <span class="k">if not</span> account:
+    account = get_company_default_receivable_or_payable_account(company, party_type)
+
+<span class="k">if not</span> account:
     account_type = frappe.get_cached_value(<span class="s">"Party Type"</span>, party_type, <span class="s">"account_type"</span>)
     account = frappe.get_cached_value(<span class="s">"Company"</span>, company, <span class="s">"default_"</span> + account_type.lower() + <span class="s">"_account"</span>)</code></pre>
 
@@ -321,10 +324,12 @@ account = frappe.db.get_value(
   <div class="arr"></div>
   <div class="node">2 · Party Account on the party's Group<small>Customer Group / Supplier Group, this company</small></div>
   <div class="arr"></div>
-  <div class="node">3 · Company default by account_type<small>default_receivable_account / default_payable_account</small></div>
+  <div class="node">3 · Company default for Customer/Supplier<small>explicit default_receivable_account / default_payable_account</small></div>
+  <div class="arr"></div>
+  <div class="node">4 · Generic Party Type fallback<small>account_type → default_&lt;account_type&gt;_account</small></div>
 </div>
 
-<p>The third level is the elegant bit: it does not hard-code "receivable" or "payable". It reads the <code>account_type</code> from the Party Type record (Customer → "Receivable", Supplier → "Payable") and builds the company-default field name as <code>default_&lt;account_type&gt;_account</code>. Register a brand-new party type with <code>account_type="Receivable"</code> and this code resolves it correctly without a single edit.</p>
+<p>The generic final level is the elegant bit: it reads the <code>account_type</code> from the Party Type record and builds the company-default field name as <code>default_&lt;account_type&gt;_account</code>. Customer/Supplier get hard-coded company-default handling first because they are the dominant AR/AP parties; a brand-new party type with <code>account_type="Receivable"</code> can still resolve through the generic fallback.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha — you cannot JOIN a Dynamic Link in SQL</span>
 <p><code>party</code>'s target table is decided at runtime by <code>party_type</code>, so there is no single table to JOIN against. Aggregating across parties requires <code>party_type</code>-aware queries or a resolver, and every index that touches the party must cover <strong>(party_type, party)</strong> together — never <code>party</code> alone. On Postgres this is the standard cost of a polymorphic reference; budget for it.</p>

@@ -100,7 +100,7 @@
       (Ch&nbsp;01) and lifecycle (Ch&nbsp;02) are load-bearing for everything after them.</li>
     <li><strong>By layer, when you are building.</strong> The mental model below groups the chapters into five bands. Building the
       money core? Read the two ledger chapters (03, 04) and the lifecycle (02). Building screens and masters? Read 05–07.</li>
-    <li><strong>As a reference, forever.</strong> Chapter&nbsp;13 is a flat catalog of every DocType and module; Chapter&nbsp;12
+    <li><strong>As a reference, forever.</strong> Chapter&nbsp;13 is a flat catalog of the load-bearing DocTypes and modules; Chapter&nbsp;12
       is the build-it-yourself playbook. Those two are the pages you will come back to.</li>
   </ul>
 </section>
@@ -129,8 +129,8 @@
       <td>The <strong>business DocTypes</strong> and their controllers: Item, Customer, Supplier, Account, Warehouse; Sales/Purchase
         Invoice, Sales Order, Delivery Note, Purchase Receipt, Payment Entry, Journal Entry; the two ledgers (<code>GL Entry</code>,
         <code>Stock Ledger Entry</code>); the controller inheritance chain that posts them; the tax/pricing calculation engines; the
-        185 reports; the 21 process-aligned modules.</td>
-      <td><strong>Yes.</strong> ~700 DocTypes across 21 modules, each a JSON schema + optional <code>.py</code> controller +
+        184 reports in this clone; the 20 process-aligned modules listed in <code>erpnext/modules.txt</code>.</td>
+      <td><strong>Yes.</strong> ~528 actual DocType manifests across 20 modules, each a JSON schema + optional <code>.py</code> controller +
         optional <code>.js</code> client script + a test.</td>
     </tr>
   </table>
@@ -437,7 +437,7 @@
       <td>13</td>
       <td><a href="13-doctype-catalog.html">DocType catalog</a></td>
       <td>Synthesis</td>
-      <td>A flat reference: the 21 modules, ~700 DocTypes, the four structural flags (child / single / submittable / tree) that
+      <td>A flat reference: the 20 modules, the load-bearing subset of ~528 actual DocType manifests, the four structural flags (child / single / submittable / tree) that
         classify every entity, and the module map as a process decomposition. The page you return to most.</td>
     </tr>
   </table>

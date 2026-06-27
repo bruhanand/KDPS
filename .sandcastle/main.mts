@@ -28,14 +28,25 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // Configuration
 // ---------------------------------------------------------------------------
 
-// Maximum number of implement→review cycles to run before stopping.
-// Each cycle works on one issue. Raise this to process more issues per run.
-const MAX_ITERATIONS = 10;
+// One slice per run: build a single issue, then STOP on its branch for your
+// review. This is the gating node — Sandcastle never reaches `main`. Raise only
+// if you deliberately want to drain several issues unattended (never on money).
+const MAX_ITERATIONS = 1;
+
+// A model per stage, hoisted so a slice tunes in one edit. Use the 4-8 ids.
+// Default implementer = sonnet (free lane: K9 seed/components, screens, reports).
+// Bump MODEL_IMPL to "claude-opus-4-8" per-run on money slices (ledgers/GST/RBAC).
+// Reviewer stays on opus — cheap insurance before YOUR Chat B review.
+const MODEL_IMPL = "claude-sonnet-4-6";
+const MODEL_REVIEW = "claude-opus-4-8";
 
 // Hooks run inside the sandbox before the agent starts each iteration.
-// npm install ensures the sandbox always has fresh dependencies.
+// `npm run setup` = uv sync (app/backend) + npm install (app/frontend), run from
+// the repo root. A bare `uv sync` here fails — there is no root pyproject.toml.
+// DB is external: the sandbox still needs DATABASE_URL pointing at a reachable
+// Postgres service (see README / docker-compose) — wired in the pre-K9 pass.
 const hooks = {
-  sandbox: { onSandboxReady: [{ command: "npm install" }] },
+  sandbox: { onSandboxReady: [{ command: "npm run setup" }] },
 };
 
 // Copy node_modules from the host into the worktree before each sandbox
@@ -79,7 +90,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     const implement = await sandbox.run({
       name: "implementer",
       maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-opus-4-7"),
+      agent: sandcastle.claudeCode(MODEL_IMPL),
       promptFile: "./.sandcastle/implement-prompt.md",
     });
 
@@ -103,10 +114,13 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     await sandbox.run({
       name: "reviewer",
       maxIterations: 1,
-      agent: sandcastle.claudeCode("claude-opus-4-7"),
+      agent: sandcastle.claudeCode(MODEL_REVIEW),
       promptFile: "./.sandcastle/review-prompt.md",
       promptArgs: {
         BRANCH: branch,
+        // The review prompt diffs {{TARGET_BRANCH}}...{{BRANCH}}; without this it
+        // substitutes nothing and the diff fails. main is our trunk.
+        TARGET_BRANCH: "main",
       },
     });
 

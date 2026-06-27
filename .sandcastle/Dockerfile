@@ -15,6 +15,23 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
+# --- Python toolchain (KDPS Django backend) ---
+# Postgres client (psql) + libpq/build headers for psycopg, then uv, which
+# manages Python 3.12 itself. Installed system-wide so the non-root agent user
+# picks them up. K0 adds pyproject.toml; the onSandboxReady hook runs `uv sync`.
+RUN apt-get update && apt-get install -y \
+  postgresql-client \
+  libpq-dev \
+  build-essential \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV UV_INSTALL_DIR=/usr/local/bin
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+  && mkdir -p /opt/uv-python \
+  && uv python install 3.12 \
+  && chmod -R a+rX /opt/uv-python
+
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
 # and bind-mounted files share an owner without runtime chown.
