@@ -1,0 +1,63 @@
+[project]
+name = "kdps-backend"
+version = "0.0.0"
+description = "KDPS Operating System — backend (the Django kernel)"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.1,<5.2",
+    "psycopg[binary]>=3.2",
+    "dj-database-url>=2.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-django>=4.9",
+    "mypy>=1.13",
+    "django-stubs[compatible-mypy]>=5.1",
+    "ruff>=0.8",
+    "import-linter>=2.1",
+]
+
+# --- Lint / format -----------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "DJ"]
+
+# --- Types -------------------------------------------------------------------
+# K0 starts mypy strict on a tiny surface (core + config). As money slices land,
+# the strict surface grows with the code; it never shrinks.
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main"]
+strict = true
+exclude = ['migrations/', 'tests/']
+
+[[tool.mypy.overrides]]
+module = ["dj_database_url"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings"
+
+# --- Tests -------------------------------------------------------------------
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+addopts = "-q"
+
+# --- Architecture boundaries -------------------------------------------------
+# The kernel (`core`) must never depend on the project wiring layer (`config`).
+# This contract is the seed of "the kernel knows nothing about the modules".
+[tool.importlinter]
+root_packages = ["config", "core"]
+
+[[tool.importlinter.contracts]]
+name = "core (kernel) must not import the config/project layer"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["config"]

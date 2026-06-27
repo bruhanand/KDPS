@@ -7,8 +7,8 @@ node_modules/
 # --- Build output ---
 dist/
 
-# --- Sandcastle runtime ---
-.sandcastle/
+# --- Sandcastle: config is TRACKED; runtime (.env, logs, worktrees) is ignored
+#     by .sandcastle/.gitignore, not here ---
 
 # --- Scratch / logs ---
 scratch/
@@ -32,6 +32,10 @@ docs/meetings/audio-archive/
 **/__pycache__/
 .venv/
 *.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
 
 # --- OS ---
 .DS_Store
