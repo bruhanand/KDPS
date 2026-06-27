@@ -214,7 +214,7 @@
       <td>If approvals are fixed, single-actor, and won’t need configurable approvers/conditions, a hard-coded status field is correct and far simpler. Switch to the configurable engine the moment business users need "who approves what, under which condition". For KDPS’s early build, hard-coded status is right.</td>
     </tr>
     <tr>
-      <td><strong>The regional-override / app-layering system</strong> — <code>hooks.py</code>, separate <code>india_compliance</code> app (<a href="10-extensibility-and-customization.html">ch 10</a>)</td>
+      <td><strong>The regional-override / app-layering system</strong> — <code>hooks.py</code>, regional hook seams, and optional separate statutory apps (<a href="10-extensibility-and-customization.html">ch 10</a>)</td>
       <td><span class="badge b-warn">SKIP</span></td>
       <td>That machinery exists so <em>one product</em> serves every country without forking. You are building <em>one</em> ERP for India. Bake GST in directly (as date-effective data — see non-negotiables), don’t build a plugin runtime to host a tax regime you’ll never swap out.</td>
     </tr>

@@ -52,7 +52,7 @@
 <p>Build the ERP so that <strong>variation is data and layers, never forks</strong>. The data model is itself data (custom fields, property setters); behavior is extended only through a <strong>closed, declared catalog of hook points</strong>; every region / vertical / client tweak ships as a <strong>separate installable app</strong> that depends on core; cross-cutting policy lives in <strong>named data lists</strong> a generic engine reads; and schema evolves through an <strong>ordered, run-once, idempotent migration list</strong>. The payoff is the one thing a long-lived ERP must have: customers can be deeply customized and the vendor can still upgrade them.</p>
 </div>
 
-<p>ERPNext proves this works at the most demanding scale possible: the entire India GST regime — GSTIN validation, e-invoicing, HSN tax tables, GSTR returns — has been <strong>extracted out of the core app entirely</strong> into a separate <code>india_compliance</code> app. There is no longer an <span class="fileref">erpnext/regional/india</span> directory at all. A whole national tax system lives outside the core and plugs in through nothing but the public extension catalog. If a tax regime can be a layer, so can your client's quirks.</p>
+<p>ERPNext shows the layering idea through its hook catalog and regional modules: country and client variation plugs into declared seams instead of forking transaction controllers. India GST / <code>india_compliance</code> is useful external ecosystem context, but it is not present in this ERPNext checkout, so treat it as an example of the broader app-layering pattern rather than source evidence from this repo.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha · the framework half is not in this checkout</span>
 <p>ERPNext is an <em>application</em>; the machinery that <em>reads</em> hooks, realizes custom fields against the live schema, runs the patch log, and resolves overrides lives one layer down in the <strong>Frappe framework</strong> <span class="badge b-frappe">Frappe core</span>, which is not in this source tree. ERPNext shows you how to <em>use</em> every seam — <code>create_custom_fields(...)</code>, <code>@erpnext.allow_regional</code>, <code>hooks.py</code> entries, <code>patches.txt</code> — but the resolver behind each is framework code. If you rebuild this on Django, you are building <em>both</em> halves: the declarations <em>and</em> the engine that wires them.</p>
@@ -88,7 +88,7 @@
 <div class="band l-ctrl">
   <div class="bname">Layer 3 · Region / vertical / client apps — extend ERPNext through the same hooks</div>
   <div class="boxes">
-    <div class="bx">india_compliance<small>whole GST regime, out of core</small></div>
+    <div class="bx">external statutory app<small>for large country packs</small></div>
     <div class="bx">erpnext/regional/uae<small>VAT via custom fields</small></div>
     <div class="bx">your client app<small>their tweaks, isolated</small></div>
   </div>
@@ -296,8 +296,8 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
       <p>The base product never carries the variation. When two layers conflict, <strong>layering order resolves it</strong>: last installed app wins.</p>
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
-      <p>ERPNext is itself an app on Frappe (<span class="fileref">erpnext/modules.txt</span> lists 21 modules; <code>hooks.py</code> is its manifest). In-tree, <span class="fileref">erpnext/regional/*</span> holds UAE, Italy, US, South Africa, Turkey setups, all wired through hooks.</p>
-      <p>The clinching proof: India GST is extracted to a standalone <code>india_compliance</code> app — there is <strong>no</strong> <span class="fileref">erpnext/regional/india</span> directory at all. A whole tax regime lives outside core.</p>
+      <p>ERPNext is itself an app on Frappe (<span class="fileref">erpnext/modules.txt</span> lists 20 modules in this clone; <code>hooks.py</code> is its manifest). In-tree, <span class="fileref">erpnext/regional/*</span> holds regional setup/override code such as UAE and Italy, all wired through hooks.</p>
+      <p>The source-tree proof is that major country behavior is layered through hooks instead of being hard-coded into transaction controllers. This checkout does not contain <span class="fileref">erpnext/regional/india</span> or an <code>india_compliance</code> app, so India GST references should be treated as external ecosystem context, not ERPNext-source evidence.</p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
       <p>Make every customer / region / vertical a Python package (a Django app) that <strong>depends on the base ERP app</strong> and registers only through the same hook manifest. Resolve overrides by install order.</p>
@@ -306,7 +306,7 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
   </div>
 </div>
 
-<p>The India extraction is the single most instructive fact in this chapter. GST is not a small feature — it is GSTIN validation, place-of-supply rules, e-invoice JSON generation, e-way bills, HSN-coded tax tables, and three flavours of GSTR return. All of it once lived under <code>erpnext/regional/india</code>; all of it now lives in a separate <code>india_compliance</code> app and the core directory is gone. If the most invasive tax regime ERPNext supports can be a clean layer, the bar for "this must go in core" is very high indeed. The default answer to "where does this variation live?" is <strong>a layer</strong>.</p>
+<p>The source-backed lesson is that statutory variation belongs behind declared seams: regional setup code, custom fields, regional overrides and hook lists. For very large regimes, the same pattern can be lifted into a separate app. This ERPNext checkout does not contain India GST implementation files, so use the in-tree UAE/Italy hooks as the source example and treat India-specific packs as external context. The default answer to "where does this variation live?" is still <strong>a layer</strong>.</p>
 
 <div class="callout co-note"><span class="lbl">What "depends on core, registers through hooks" buys you</span>
 <p>Because the layer only <em>appends</em> to merged hook lists and <em>adds</em> custom-field rows, the core source on disk is identical whether the layer is installed or not. That is what makes vendor upgrades safe: <code>bench update</code> replaces core files wholesale, the layer's rows and manifest entries are untouched, and the merged behaviour re-composes on next boot. Forking would break this; layering preserves it by construction.</p>
@@ -356,7 +356,7 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
     <span class="k">return</span> gl_entries</code></pre>
 <p><span class="fileref">erpnext/accounts/doctype/sales_invoice/sales_invoice.py</span> <span class="srcline">:1206</span></p>
 
-<p>On a plain-vanilla company this does nothing — the GL entries pass straight through. But the UAE layer maps this function path in its <code>hooks.py</code> to <span class="fileref">erpnext/regional/united_arab_emirates/utils.py</span> :148, whose version <em>adds reverse-charge lines</em> to the ledger entries before returning them. The Sales Invoice controller never knows UAE exists; it just calls <code>make_regional_gl_entries</code> at the right moment, and the right body runs based on the company's country.</p>
+<p>On a plain-vanilla company this does nothing — the GL entries pass straight through. The same seam exists on Purchase Invoice, and in this ERPNext clone the UAE layer maps the <code>purchase_invoice.make_regional_gl_entries</code> path in <code>hooks.py</code> to <span class="fileref">erpnext/regional/united_arab_emirates/utils.py</span>, whose version adds reverse-charge lines before returning them. The transaction controller never knows UAE exists; it just calls the decorated function at the right moment, and the right body runs based on the company's country.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha · you can only override what core decorated</span>
 <p><code>regional_overrides</code> fires <strong>only</strong> through functions explicitly decorated <code>@erpnext.allow_regional</code>. You cannot override an arbitrary core function this way — there is no monkey-patch escape hatch, by design. If core lacks a seam where you need one, you must first <strong>add the decorated passthrough to core</strong> (a small upstream change), then override it from your layer. This is a feature, not a limitation: every override point is visible in the source, so the set of things a layer can change is auditable.</p>
@@ -447,14 +447,14 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
   </div>
 </div>
 
-<p>The most consequential of these lists encodes the ledger's most important invariant. <code>auto_cancel_exempted_doctypes</code> names the immutable ledgers — GL Entry, Stock Ledger Entry, Payment Ledger Entry. When a parent transaction is cancelled, Frappe's generic cancel cascade walks its children and cancels them too — <em>except</em> anything in this list. Those are never cancelled; instead, the controller posts <strong>reversal entries</strong>. The append-only book stays append-only.</p>
+<p>The most consequential of these lists encodes the ledger's most important cancellation invariant. <code>auto_cancel_exempted_doctypes</code> names ledger doctypes — GL Entry, Stock Ledger Entry, Payment Ledger Entry — that the generic cancel cascade must not cancel as ordinary linked documents. Instead, their owning controllers run ledger-specific reversal logic. In ERPNext classic mode that reversal path can also mark originals <code>is_cancelled=1</code>; immutable-ledger mode leaves originals untouched and posts dated reversals.</p>
 
 <div class="callout co-warn"><span class="lbl">Gotcha · ledger immutability is a data convention, not a framework guarantee</span>
-<p>Nothing in the framework <em>forces</em> GL Entry to be immutable — it is immutable <strong>because it is in the exemption list</strong>. The list <em>is</em> the rule. Reimplement a cancel cascade naively (cancel every child) and you will corrupt the books: a cancelled invoice would erase its postings instead of reversing them. When you build your own ledger, the exemption registry and the reverse-don't-delete engine that reads it are <em>both</em> mandatory. See <a href="03-accounting-ledger.html">the accounting ledger</a> and <a href="04-stock-ledger.html">the stock ledger</a> for how the reversal entries are written.</p>
+<p>Nothing in the framework alone makes GL Entry safe — the exemption list plus the controller reversal path are the rule. Reimplement a cancel cascade naively (cancel every linked ledger row as if it were a normal child) and you will corrupt the books: a cancelled invoice would erase or directly cancel its postings instead of reversing them. When you build your own ledger, the exemption registry and the reverse-don't-delete engine that reads it are <em>both</em> mandatory. See <a href="03-accounting-ledger.html">the accounting ledger</a> and <a href="04-stock-ledger.html">the stock ledger</a> for how the reversal entries are written.</p>
 </div>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
-<p>This is the mechanism behind KDPS's "documents write ledgers; ledgers are append-only" rule. The PT-posts-value-and-liability and GRN-posts-quantity events should be <code>doc_events</code>-style lifecycle handlers, and the resulting GL / Stock-Ledger entries belong on an <code>auto_cancel_exempted</code>-style list — so a cancelled or amended receipt <em>reverses</em>, never deletes. With Tally as the statutory book of record, an entry that was silently deleted instead of reversed would put the two books out of sync — which is exactly the failure the exemption list prevents.</p>
+<p>This is the mechanism behind KDPS's "documents write ledgers; ledger effects are traceable" rule. The PT-posts-value-and-liability and GRN-posts-quantity events should be <code>doc_events</code>-style lifecycle handlers, and the resulting GL / Stock-Ledger entries belong on an <code>auto_cancel_exempted</code>-style list — so a cancelled or amended receipt <em>reverses</em>, never deletes. With Tally as the statutory book of record, an entry that was silently deleted instead of reversed would put the two books out of sync — which is exactly the failure the exemption list prevents.</p>
 </div>
 </section>
 
@@ -534,7 +534,7 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
   <div class="arr"></div>
   <div class="node">4 · Ship a patch if existing data needs backfilling<small>ordered, idempotent, logged (pattern 5)</small></div>
   <div class="arr"></div>
-  <div class="node">5 · For a big regime, lift the whole thing into its own app<small>exactly what india_compliance did (pattern 3)</small></div>
+  <div class="node">5 · For a big regime, lift the whole thing into its own app<small>same layering pattern, outside this checkout when needed</small></div>
 </div>
 
 <p>Not one of those five steps edits a core file. The Item and Sales Invoice JSONs are untouched; the Sales Invoice controller is untouched; the ledger engine is untouched. The new country is entirely additive — and that is precisely why the next core upgrade lands cleanly on top of it.</p>
@@ -568,7 +568,7 @@ create_custom_fields(custom_fields, ignore_validate=<span class="k">True</span>)
   <li><strong>Variation is data and layers, never forks.</strong> The single property that keeps a long-lived ERP alive is that the core source on disk is identical on every site, so the vendor can always upgrade. Every customization must preserve that property by construction.</li>
   <li><strong>Make the data model itself data.</strong> A table/form is a schema record; add fields with a <code>CustomField</code> table and change properties with a <code>PropertyOverride</code> table. Customer customizations live in their own rows and survive core upgrades untouched. (Frappe: <code>create_custom_fields</code>, <code>make_property_setter</code>.)</li>
   <li><strong>Publish one closed manifest of named hook points</strong> — lifecycle events keyed per-model with a <code>"*"</code> wildcard and list-keys, scheduled jobs, class overrides, whitelisted-method overrides, and decorated overridable-function seams. The host iterates the manifest; extensions append, never patch. (ERPNext: <span class="fileref">hooks.py</span>, read via <code>get_hooks</code>.)</li>
-  <li><strong>Ship every region / vertical / client tweak as a separate installable app</strong> that depends on core and registers only through the manifest, with conflicts resolved by install order (last app wins). Proof it scales: India GST is an entire app outside core.</li>
+  <li><strong>Ship every region / vertical / client tweak as a separate installable app</strong> that depends on core and registers only through the manifest, with conflicts resolved by install order (last app wins). The source-backed pattern is regional behavior through hooks; very large statutory packs can live outside core as separate apps.</li>
   <li><strong>Make override points explicit and discoverable.</strong> A decorated dispatcher (<code>@allow_regional</code>) with a safe no-op default means unconfigured tenants run base behaviour and there is no monkey-patch back door — the set of overridable points is auditable in the source.</li>
   <li><strong>Put cross-cutting policy in named data lists</strong> that generic engines consult, not in scattered conditionals. Opting a doctype into a behaviour becomes a one-line data change — and ledger immutability is exactly such a list (<code>auto_cancel_exempted_doctypes</code>): the list is the rule, so build the reverse-don't-delete engine that honours it.</li>
   <li><strong>Evolve schema and data through an ordered, run-once, idempotent, logged migration list</strong> split into before-schema and after-schema phases. Each patch guards its preconditions and tolerates any starting state; never edit a shipped patch — append a new one.</li>

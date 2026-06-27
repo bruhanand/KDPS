@@ -91,7 +91,7 @@
 <tr><td><strong>Letter Head</strong></td><td>setup</td><td><span class="fileref">erpnext/setup/doctype/company/company.json</span></td><td>Branded header/footer doctype. Company references <code>default_letter_head</code> (documents) and <code>default_letter_head_report</code> (reports) <em>separately</em>.</td></tr>
 </table>
 
-<p>Reports physically live under <span class="fileref">erpnext/&lt;module&gt;/report/&lt;name&gt;/</span> — there are 185 of them — and the flavor is just a field in the JSON, not a separate subsystem. <span class="badge b-frappe">Frappe core</span> owns the runtime (filter form, pagination, export, role-check, caching, prepared-report queue); ERPNext supplies the records and the occasional <code>execute()</code> function.</p>
+<p>Reports physically live under <span class="fileref">erpnext/&lt;module&gt;/report/&lt;name&gt;/</span> — there are 184 report JSON records in this clone — and the flavor is just a field in the JSON, not a separate subsystem. <span class="badge b-frappe">Frappe core</span> owns the runtime (filter form, pagination, export, role-check, caching, prepared-report queue); ERPNext supplies the records and the occasional <code>execute()</code> function.</p>
 </section>
 
 <section>
@@ -408,7 +408,7 @@
 </div>
 
 <div class="callout co-warn"><span class="lbl">Gotcha — standard vs custom ownership</span>
-<p><code>is_standard: 'Yes'</code> marks framework-shipped reports and print formats as read-only — owned by Administrator, synced from disk, <strong>overwritten on upgrade</strong>. User edits must clone to a custom copy or they vanish at the next release. Separate "standard" (code-managed, on disk) from "custom" (DB-managed, user-editable) records explicitly, the same way ERPNext does.</p>
+<p>Standard records are code-managed and synced from disk, so user edits must clone to a custom copy or they vanish at the next release. The flag name differs by record type: Report JSON uses <code>is_standard: "Yes"</code>, while Print Format JSON uses <code>standard: "Yes"</code>. Separate "standard" (code-managed, on disk) from "custom" (DB-managed, user-editable) records explicitly, the same way ERPNext does.</p>
 </div>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>

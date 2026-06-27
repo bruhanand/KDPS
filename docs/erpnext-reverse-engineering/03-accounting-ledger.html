@@ -46,7 +46,7 @@
 
 <p>Strip an ERP of its screens, its inventory, its payroll, its CRM, and what remains — the thing that makes it an <em>ERP</em> and not a database of forms — is a general ledger. Every business event that matters financially, no matter how different it looks on the surface, eventually reduces to the same act: moving money between accounts in balanced pairs. A sale, a vendor bill, a salary run, a stock write-off, a year-end close — all of them are just different opinions about <strong>which</strong> accounts to debit and credit. The accounting engine is where those opinions become permanent, reconcilable truth.</p>
 
-<p>This is why getting the ledger right is the single highest-leverage decision in an ERP build. If the ledger is a clean, immutable, append-only stream of postings, then auditability, reproducibility, statutory reporting, multi-currency, multi-company and per-brand profitability all fall out of it almost for free. If the ledger is muddy — if balances are cached on account rows, if documents mutate totals directly, if cancellation deletes history — then every report becomes a negotiation with reality, the books drift, and you spend the rest of the project chasing reconciliation bugs that should never have been possible.</p>
+<p>This is why getting the ledger right is the single highest-leverage decision in an ERP build. If the ledger is a clean, controlled stream of postings with traceable reversals, then auditability, reproducibility, statutory reporting, multi-currency, multi-company and per-brand profitability all fall out of it almost for free. If the ledger is muddy — if balances are cached on account rows, if documents mutate totals directly, if cancellation deletes history — then every report becomes a negotiation with reality, the books drift, and you spend the rest of the project chasing reconciliation bugs that should never have been possible.</p>
 
 <p>ERPNext gets this right by obeying two laws without exception, and the whole of this chapter is an unpacking of them:</p>
 
@@ -54,7 +54,7 @@
 <p><strong>Documents post the ledger.</strong> No business document ever writes a balance. Each one, on submit, composes a balanced set of one-sided postings and hands them to a single shared posting engine. <strong>Reports read the ledger.</strong> The trial balance, P&amp;L, balance sheet and general-ledger report are pure aggregations of ledger rows — no derived balance is ever stored on an account.</p>
 </div>
 
-<p>Hold those two sentences in your head. Everything below — the immutable <code>GL Entry</code> row, the nested-set chart of accounts, the central balance check, party subledgers, accounting dimensions, period closing — is machinery in service of keeping those two laws true under real-world pressure: rounding, foreign currency, multiple legal entities, cancellations, and analytical slicing.</p>
+<p>Hold those two sentences in your head. Everything below — the controlled <code>GL Entry</code> row, the nested-set chart of accounts, the central balance check, party subledgers, accounting dimensions, period closing — is machinery in service of keeping those two laws true under real-world pressure: rounding, foreign currency, multiple legal entities, cancellations, and analytical slicing.</p>
 
 <h3>The five-layer place of the ledger</h3>
 
@@ -69,7 +69,7 @@
 </div></div>
 <div class="gap"></div>
 <div class="band l-ledg"><div class="bname">The ledger (the one truth)</div><div class="boxes">
-  <div class="bx">GL Entry<small>append-only, one-sided rows</small></div>
+  <div class="bx">GL Entry<small>one-sided rows + traceable reversals</small></div>
   <div class="bx">Account tree<small>typed nested-set chart</small></div>
   <div class="bx">Payment Ledger Entry<small>AR/AP projection</small></div>
 </div></div>
@@ -88,7 +88,7 @@
 
 <table>
 <tr><th>Doctype</th><th>Kind</th><th>Path</th><th>Role</th></tr>
-<tr><td><strong>GL Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td><td>The atomic append-only ledger row: one account, a debit <em>or</em> credit, voucher / against-voucher / party tags, three currency amounts. The single source of financial truth.</td></tr>
+<tr><td><strong>GL Entry</strong></td><td>ledger</td><td><span class="fileref">erpnext/accounts/doctype/gl_entry/gl_entry.json</span></td><td>The atomic ledger row: one account, a debit <em>or</em> credit, voucher / against-voucher / party tags, three currency amounts. The single source of financial truth; cancellation is handled through voucher-level reversal logic.</td></tr>
 <tr><td><strong>Account</strong></td><td>master</td><td><span class="fileref">erpnext/accounts/doctype/account/account.json</span></td><td>Chart-of-accounts node: a nested-set tree (<code>lft</code>/<code>rgt</code>, <code>parent_account</code>, <code>is_group</code>) classified by <code>root_type</code> and <code>account_type</code>. Only leaf accounts are postable.</td></tr>
 <tr><td><strong>Fiscal Year</strong></td><td>setup</td><td><span class="fileref">erpnext/accounts/doctype/fiscal_year/fiscal_year.json</span></td><td>Defines accounting period boundaries (<code>year_start_date</code>/<code>year_end_date</code>, <code>is_short_year</code>); every GL Entry is stamped with its <code>fiscal_year</code> for period reporting and closing.</td></tr>
 <tr><td><strong>Journal Entry</strong></td><td>transaction</td><td><span class="fileref">erpnext/accounts/doctype/journal_entry/journal_entry.py</span></td><td>Manual multi-line voucher; its child rows are the only place a human directly types debits/credits. Validates <code>total_debit == total_credit</code> before posting.</td></tr>
@@ -112,7 +112,7 @@
 <div class="pattern"><div class="ph"><div class="tag">Pattern</div><h3>Append-only, one-sided postings; balances are always a SUM</h3></div>
 <div class="body">
   <div class="pane p-idea"><div class="pl">The idea</div>
-    <p>Model money as an <strong>immutable stream of single-sided postings</strong>. Each row debits <em>or</em> credits exactly one account and is never updated or deleted. Balances are never stored; a balance is always <code>SUM(debit) − SUM(credit)</code>.</p>
+    <p>Model money as a <strong>controlled stream of single-sided postings</strong>. Each row debits <em>or</em> credits exactly one account; balances are never stored, they are always <code>SUM(debit) − SUM(credit)</code>. In a greenfield system, prefer strict insert-only ledger rows; ERPNext classic mode also marks originals cancelled while posting mirror rows.</p>
     <p>This buys you three things at once: the books are <strong>auditable</strong> (history is permanent), <strong>reproducible</strong> (any balance can be re-derived from rows), and <strong>concurrency-safe</strong> (inserts don't contend on a shared counter the way an updated running total would).</p>
   </div>
   <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
@@ -158,7 +158,7 @@
 </div>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS</span>
-<p>This append-only discipline is exactly what lets the internal KDPS ledger stay reconcilable with Tally (the statutory book of record). Build one <code>gl_entry</code> table and let every document funnel through it; never let a POS sale or a transfer "update a balance." A cancelled sale at the till becomes a reversal row, not a deleted one — so the day's audit trail survives even when staff void a transaction.</p>
+<p>This controlled-ledger discipline is exactly what lets the internal KDPS ledger stay reconcilable with Tally (the statutory book of record). Build one <code>gl_entry</code> table and let every document funnel through it; never let a POS sale or a transfer "update a balance." A cancelled sale at the till becomes a reversal row, not a deleted one — so the day's audit trail survives even when staff void a transaction.</p>
 </div>
 </section>
 
@@ -579,8 +579,8 @@ gl_entries.append(self.get_gl_dict({
 <p>If you are building a new ERP, make the General Ledger the spine and obey the two laws without exception. Concretely, on a Django/Postgres stack:</p>
 
 <dl class="gloss">
-<dt><code>gl_entry</code> table</dt><dd>One append-only table of one-sided postings: <code>account</code>, <code>debit</code> XOR <code>credit</code> (non-negative), voucher identity, optional <code>party</code> + <code>against_voucher</code> + dimensions, amounts in home/account/transaction currency. Insert-only — block <code>UPDATE</code>/<code>DELETE</code> at the DB or app layer.</dd>
-<dt><code>post_ledger()</code> service</dt><dd>The one funnel every poster passes through. It (1) normalizes/merges/cost-center-splits the lines, (2) enforces total-debit == total-credit with a small round-off tolerance, (3) inserts rows that are never updated or deleted. Cancellation is a compensating reversal, never a delete.</dd>
+<dt><code>gl_entry</code> table</dt><dd>One table of one-sided postings: <code>account</code>, <code>debit</code> XOR <code>credit</code> (non-negative), voucher identity, optional <code>party</code> + <code>against_voucher</code> + dimensions, amounts in home/account/transaction currency. ERPNext protects individual rows from direct cancellation, but in classic mode cancellation also marks originals <code>is_cancelled=1</code>; strict insert-only behavior is the immutable-ledger regime or a greenfield hardening choice.</dd>
+<dt><code>post_ledger()</code> service</dt><dd>The one funnel every poster passes through. It (1) normalizes/merges/cost-center-splits the lines, (2) enforces total-debit == total-credit with a small round-off tolerance, (3) writes rows only through the posting service. Cancellation is a compensating reversal, never a physical delete.</dd>
 <dt><code>account</code> tree</dt><dd>A typed tree (Asset/Liability/Income/Expense/Equity → Balance Sheet vs P&amp;L) where only leaves are postable and subtree rollups drive the statements. Nested-set, recursive CTE, <code>ltree</code>, or closure table — pick by your read/write ratio.</dd>
 <dt>party + against_voucher</dt><dd>Treat receivables/payables as ledger rows tagged with the party and the document being settled, so outstanding and aging fall out of the same table.</dd>
 <dt>dimensions</dt><dd>Make analytical slicing (cost center, project, branch, brand, store) configurable dimensions copied onto every posting, included in the merge key and report group-bys — not hard-coded columns.</dd>
@@ -589,9 +589,9 @@ gl_entries.append(self.get_gl_dict({
 <p>The deepest lesson, worth pinning above your desk: <strong>business documents differ wildly, but they all reduce to the same balanced ledger postings — so the accounting engine is small, generic, and stable, while the variety lives entirely in the per-document composers.</strong> Invest your design effort in the composers and the chart of accounts; keep the engine boring.</p>
 
 <div class="callout co-kdps"><span class="lbl">Applying to KDPS — the whole picture</span>
-<p>This subsystem is the blueprint for keeping <strong>Tally as the statutory book</strong> while running an internal ledger. Build one append-only <code>gl_entry</code> table and one <code>post_ledger()</code> service that every document funnels through:</p>
+<p>This subsystem is the blueprint for keeping <strong>Tally as the statutory book</strong> while running an internal ledger. Build one ledger table and one <code>post_ledger()</code> service that every document funnels through; if you are designing greenfield, prefer strict insert-only reversals even though ERPNext's classic mode also marks cancelled originals:</p>
 <ul>
-<li><strong>GRN</strong> posts quantity only (stock count under a barcode) — <em>no value</em> to the ledger.</li>
+<li><strong>GRN</strong> as a KDPS design choice posts quantity only (stock count under a barcode) — <em>no value</em> to the internal accounting ledger. ERPNext differs here: a Purchase Receipt can post GL in perpetual-inventory mode through <code>StockController.make_gl_entries</code>.</li>
 <li><strong>PT</strong> posts value + vendor liability.</li>
 <li><strong>POS sale</strong> posts Dr Debtors/Cash, Cr Sales Income, Cr GST Output, Dr COGS / Cr Stock.</li>
 <li><strong>Bihar↔Jharkhand transfer</strong> posts as a taxable IGST inter-company supply — the multi-company-stamp pattern.</li>
@@ -602,7 +602,7 @@ gl_entries.append(self.get_gl_dict({
 </section>
 
 <div class="takeaways"><h4>Takeaways</h4><ol>
-<li><strong>One append-only ledger is the only financial truth.</strong> The <code>GL Entry</code> is a single one-sided row (debit XOR credit), never updated or deleted. Balances are always <code>SUM(debit) − SUM(credit)</code> — never stored. Cancelling a row throws by design; you cancel the parent voucher, which posts mirror reversals.</li>
+<li><strong>One controlled ledger is the only financial truth.</strong> The <code>GL Entry</code> is a single one-sided row (debit XOR credit). Balances are always <code>SUM(debit) − SUM(credit)</code> — never stored. Cancelling a row throws by design; you cancel the parent voucher, which posts mirror reversals and, in ERPNext classic mode, marks originals <code>is_cancelled=1</code>.</li>
 <li><strong>Documents post, reports read — no exceptions.</strong> Every document composes a balanced <code>gl_map</code> and hands it to one shared <code>make_gl_entries</code>; nothing else writes the ledger, and every report is a pure aggregation over it. The engine is document-agnostic, so new transaction types mean new composers, not engine changes.</li>
 <li><strong>Enforce the balance invariant in exactly one place, with tolerance.</strong> <code>process_debit_credit_difference</code> throws on a large imbalance and auto-inserts a round-off line for sub-currency rounding. Tolerance varies by voucher type (0.5 for documents, near-zero for manual journals). Stored rows must be one-sided and non-negative.</li>
 <li><strong>The chart of accounts is a typed nested-set tree.</strong> <code>root_type</code> decides the statement; <code>account_type</code> drives posting rules; only leaves post; <code>lft</code>/<code>rgt</code> rolls a whole subtree into its parent in one query. Cross-field rules (party on AR/AP, cost center on P&amp;L) live on the GL Entry, not the document.</li>

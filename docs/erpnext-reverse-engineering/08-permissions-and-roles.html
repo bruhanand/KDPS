@@ -150,8 +150,8 @@
 
 <p>Note the structure: <code>add_permission(doctype, role, permlevel)</code> creates a row; <code>update_permission_property(doctype, role, permlevel, action, value)</code> flips one action bit on that row. A read-only role (<code>Auditor</code> here gets a bare row plus <code>print</code>+<code>report</code>) and a read-write role (<code>Accounts User</code>, same plus <code>write</code>) differ only in which properties get flipped. This is the same API the framework calls when you edit the matrix through the UI — there is no separate "code path" for permissions.</p>
 
-<div class="callout co-warn"><span class="lbl">Gotcha · the matrix is scattered across ~1300 rows in hundreds of files</span>
-<p>There is no single permissions table to eyeball — the matrix lives in one JSON per DocType. Across the corpus <code>System Manager</code> appears in <strong>175</strong> permission rows and <code>Auditor</code> in <strong>49</strong> (all read-only). Without tooling, over-grants and drift hide everywhere. If you build this model, also build a <em>flattening report</em> — an admin view that renders the entire matrix as one queryable table — or you will never be able to audit "who can cancel an invoice?" across the whole system.</p>
+<div class="callout co-warn"><span class="lbl">Gotcha · the matrix is scattered across hundreds of files</span>
+<p>There is no single permissions table to eyeball — the matrix lives in one JSON per DocType. In this clone's DocType <code>permissions</code> arrays there are roughly <strong>810</strong> rows; <code>System Manager</code> appears in about <strong>150</strong> of those rows, while <code>Auditor</code> appears in about <strong>17</strong>. If you also count role-bearing report JSON, Auditor appears in more places, so always state what corpus you counted. Without tooling, over-grants and drift hide everywhere. If you build this model, also build a <em>flattening report</em> — an admin view that renders the entire matrix as one queryable table — or you will never be able to audit "who can cancel an invoice?" across the whole system.</p>
 </div>
 </section>
 
@@ -302,7 +302,7 @@ get_permitted_documents(<span class="s">"Price List"</span>)   <span class="c">#
       <p>Don't hand-assign ten atomic roles to a user one at a time. Define named <strong>bundles</strong> (job functions) once and assign the bundle. And a "read-only" principal is <strong>not special code</strong> — it is simply a set of rows that grant <code>read/report/export</code> and withhold <code>write/submit</code>.</p>
     </div>
     <div class="pane p-erp"><div class="pl">How ERPNext does it</div>
-      <p><code>DEFAULT_ROLE_PROFILES</code> declares bundles (Inventory, Accounts, Sales, Purchase, Manufacturing) as data; <code>create_default_role_profiles()</code> inserts/reconciles Role Profile records at install. The <code>Auditor</code> role is read-only <em>purely by data</em>: across 49 doctypes its rows carry <code>read+report+export</code> but never <code>write/create/submit</code>.</p>
+      <p><code>DEFAULT_ROLE_PROFILES</code> declares bundles (Inventory, Accounts, Sales, Purchase, Manufacturing) as data; <code>create_default_role_profiles()</code> inserts/reconciles Role Profile records at install. The <code>Auditor</code> role is read-only <em>purely by data</em>: its DocType permission rows grant read/report-style access and omit <code>write/create/submit</code>; standard reports add more Auditor role-bearing records outside the DocType permission arrays.</p>
       <p><span class="fileref">erpnext/setup/install.py</span></p>
     </div>
     <div class="pane p-gen"><div class="pl">Apply to any ERP</div>
@@ -327,10 +327,10 @@ get_permitted_documents(<span class="s">"Price List"</span>)   <span class="c">#
 
 <table>
 <tr><th>Role</th><th>Typical row shape</th><th>Effect</th></tr>
-<tr><td><code>Auditor</code></td><td><code>read:1, report:1, export:1</code> (sometimes <code>print/share</code>) — never <code>write/create/submit</code></td><td>Read-only across ~49 doctypes (GL Entry, Cost Center, Account Closing Balance…). No special code; just omitted columns.</td></tr>
+<tr><td><code>Auditor</code></td><td><code>read:1, report:1, export:1</code> (sometimes <code>print/share</code>) — never <code>write/create/submit</code></td><td>Read-only by data; in this clone it appears in fewer DocType permission rows than in role-bearing reports. No special code; just omitted columns.</td></tr>
 <tr><td><code>Accounts User</code></td><td>all actions <em>except</em> <code>cancel</code> and <code>delete</code></td><td>Transacts fully but cannot reverse posted documents.</td></tr>
 <tr><td><code>Accounts Manager</code></td><td>all actions including <code>cancel/amend/delete</code></td><td>Owns the full lifecycle.</td></tr>
-<tr><td><code>System Manager</code></td><td>full actions on ~175 doctypes</td><td>The administrative super-role.</td></tr>
+<tr><td><code>System Manager</code></td><td>full actions on ~150 DocType permission rows in this clone</td><td>The administrative super-role.</td></tr>
 </table>
 </section>
 
@@ -516,7 +516,7 @@ frappe.has_permission(dt, <span class="s">"write"</span>, doc, throw=True)</code
 </dl>
 
 <div class="callout co-warn"><span class="lbl">Gotcha · build the audit view from day one</span>
-<p>ERPNext's matrix is invisible because it is scattered across hundreds of JSONs (System Manager appears 175×, Auditor 49×). If you store yours in one queryable table, you can — and should — ship an <strong>admin "flatten the matrix" report</strong> from the start: "show me every role that can <code>cancel</code> a Sales Invoice", "show me every level-1 field and who can write it". Without it, over-grants accumulate unseen. This is the one advantage you have over ERPNext — don't waste it.</p>
+<p>ERPNext's matrix is invisible because it is scattered across hundreds of JSONs. If you store yours in one queryable table, you can — and should — ship an <strong>admin "flatten the matrix" report</strong> from the start: "show me every role that can <code>cancel</code> a Sales Invoice", "show me every level-1 field and who can write it". Without it, over-grants accumulate unseen. This is the one advantage you have over ERPNext — don't waste it.</p>
 </div>
 </section>
 

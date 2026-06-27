@@ -173,7 +173,7 @@
 
   <div class="callout co-kdps">
     <span class="lbl">Applying to KDPS</span>
-    This is the backbone of D1 (vendor booking → Purchase Order), D2 (inbound: PO → GRN → PT/Purchase Invoice) and D3 (outbound: sale / transfer / return). Adopt the document-graph wholesale. The decided KDPS rule <strong>"GRN posts quantity / PT posts value + liability"</strong> is <em>exactly</em> ERPNext's split: the Purchase Receipt (a StockController) posts quantity to the stock ledger; the Purchase Invoice posts value + payable to the GL — two documents, two ledgers, one "against" link. That is the documents-write-ledgers rule, already proven in the source.
+    This is the backbone of D1 (vendor booking → Purchase Order), D2 (inbound: PO → GRN → PT/Purchase Invoice) and D3 (outbound: sale / transfer / return). Adopt the document-graph wholesale. The decided KDPS rule <strong>"GRN posts quantity / PT posts value + liability"</strong> is a deliberate simplification of the ERPNext split: Purchase Receipt always posts stock movement and, in ERPNext perpetual-inventory mode, can also post GL through <code>StockController.make_gl_entries</code>; Purchase Invoice posts the payable/value side. Keep the two-document, line-linked graph, but do not assume ERPNext Purchase Receipt is accounting-silent.
   </div>
 </section>
 
