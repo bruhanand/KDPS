@@ -15,7 +15,9 @@ Stack: React (TypeScript) PWA front end + Python/Django back end + PostgreSQL.
 
 ## Architecture (KDPS domain rules — never violate)
 - **SKU = Style × Size × Color.** Size×color must survive end-to-end; never collapse stock to style level.
-- **Documents write ledgers; ledgers are append-only.** Never mutate a posted ledger row — reverse and repost.
+- **Documents write ledgers; ledgers are append-only.** Never mutate a posted ledger row — a correction is a new dated reversing row. The DB app-role `REVOKE`s UPDATE/DELETE on ledger tables; never work around it.
+- **Money is integer paise** (`bigint`), never a float or stored `Decimal`. `₹28,50,000` → `285000000`. Convert at the edges only.
+- **Scoping fails closed.** A query with no scope returns nothing, never everything; a store user provably cannot read another store's rows.
 - **Snapshot masters** onto documents at write time (price, tax, vendor terms) — don't read live masters for historical documents.
 - **GST is data, not code** — slab/date-effective tax tables, two GSTINs (Bihar / Jharkhand). Tally stays the book of record.
 - **Profitability is derived** (cost from PT/invoice, revenue from POS) — never hand-entered.

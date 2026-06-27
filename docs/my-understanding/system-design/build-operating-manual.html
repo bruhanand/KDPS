@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS Build — Operating Manual (here → first line → whole product)</title>
+<style>
+  :root{
+    --ink:#1a1c23; --ink-soft:#4a4e5a; --muted:#7b8194;
+    --line:#e6e8ee; --bg:#f6f7f9; --card:#ffffff;
+    --accent:#4f46e5;        /* you / decide */
+    --code:#0f766e;          /* the AI codes */
+    --auto:#7c3aed;          /* autonomous (sandcastle) */
+    --good:#15803d; --good-bg:#eaf6ee;
+    --warn:#b45309; --warn-bg:#fbf1e3;
+    --stop:#b91c1c; --stop-bg:#fbeceb;
+    --info:#1d4ed8; --info-bg:#eaf0fd;
+    --money:#9d174d; --money-bg:#fbeaf1;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 22px 90px}
+  header{background:linear-gradient(135deg,#1a1c23,#2b2f44);color:#fff;margin-bottom:30px;padding:44px 22px 38px}
+  header .wrap{padding-bottom:0}
+  .eyebrow{text-transform:uppercase;letter-spacing:.14em;font-size:11.5px;color:#aab0c8;font-weight:600;margin:0 0 10px}
+  h1{font-size:30px;line-height:1.15;margin:0 0 12px;font-weight:700}
+  header p{color:#c9cde0;font-size:15px;margin:0;max-width:720px}
+  .meta{margin-top:18px;font-size:12.5px;color:#9aa0bd}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);font-weight:700;margin:50px 0 4px}
+  .sub{color:var(--muted);font-size:14px;margin:0 0 18px}
+  h3{font-size:17px;margin:0 0 8px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:14px 0;box-shadow:0 1px 2px rgba(20,22,35,.04)}
+  .lead{font-size:15.5px;border-left:4px solid var(--accent);border-radius:0 14px 14px 0}
+  .lead strong{color:var(--ink)}
+  ul,ol{margin:8px 0 4px;padding-left:20px} li{margin:6px 0} p{margin:8px 0}
+  .small{font-size:13px;color:var(--ink-soft)} b.k{color:var(--ink)}
+  code{background:#eef0f4;border-radius:5px;padding:1px 6px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 10px;letter-spacing:.02em;white-space:nowrap;vertical-align:1px}
+  .b-good{background:var(--good-bg);color:var(--good)}
+  .b-warn{background:var(--warn-bg);color:var(--warn)}
+  .b-stop{background:var(--stop-bg);color:var(--stop)}
+  .b-info{background:var(--info-bg);color:var(--info)}
+  .b-auto{background:#f1eafe;color:var(--auto)}
+  .b-money{background:var(--money-bg);color:var(--money)}
+  table{border-collapse:collapse;width:100%;font-size:13.4px;margin:8px 0}
+  td,th{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  /* numbered stage rows */
+  .stage{display:grid;grid-template-columns:32px 1fr;gap:14px;align-items:start;padding:14px 0;border-top:1px solid var(--line)}
+  .stage:first-child{border-top:none}
+  .stnum{width:30px;height:30px;border-radius:50%;background:#eef0fb;color:var(--accent);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+  .stage h3{font-size:15.5px;margin:1px 0 3px}
+  .who{font-size:11px;font-weight:700;border-radius:6px;padding:2px 8px;white-space:nowrap}
+  .w-you{background:#eef0fb;color:var(--accent)} .w-auto{background:#f1eafe;color:var(--auto)} .w-both{background:var(--warn-bg);color:var(--warn)}
+  /* loop strip */
+  .loop{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+  .step{flex:1 1 118px;min-width:116px;border-radius:11px;padding:11px 12px;color:#fff;position:relative}
+  .step .n{font-size:10px;opacity:.85;font-weight:700;letter-spacing:.06em}
+  .step .t{font-size:13.5px;font-weight:700;margin-top:1px}
+  .step .o{font-size:10.5px;opacity:.92;margin-top:3px;line-height:1.35}
+  .s-you{background:var(--accent)} .s-code{background:var(--code)} .s-auto{background:var(--auto)}
+  .gate{outline:3px solid #fbbf24;outline-offset:1px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);margin-top:12px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .callout{border-radius:14px;padding:15px 18px;margin:14px 0;font-size:13.8px}
+  .c-stop{background:var(--stop-bg);border:1px solid #f3cfcc}
+  .c-good{background:var(--good-bg);border:1px solid #cce7d4}
+  .c-note{background:#eef0fb;border:1px solid #d7dbf6}
+  .c-money{background:var(--money-bg);border:1px solid #f1cdde}
+  .c-warn{background:var(--warn-bg);border:1px solid #f0dcb6}
+  .chatbox{border:1px dashed #c7ccda;border-radius:12px;padding:14px 16px;margin:10px 0;background:#fcfcfe}
+  .chatbox .lab{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--auto)}
+  footer{margin-top:54px;border-top:1px solid var(--line);padding-top:18px;font-size:12px;color:var(--muted)}
+  .toc{columns:2;font-size:13.5px;gap:30px}
+  .toc a{color:var(--accent);text-decoration:none} .toc a:hover{text-decoration:underline}
+  @media(max-width:600px){h1{font-size:25px}.toc{columns:1}.step{flex-basis:100%}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">KDPS · Build Operating Manual · the runbook</p>
+    <h1>From here, to the first line of code, to the whole product</h1>
+    <p>The day-to-day operating rhythm for the build: what you do <b>now</b> (before any code), what the <b>first line of code</b> is, and the single repeating loop that carries you from the kernel through booking, inbound and every slice after — chat by chat, with the exact skills and Sandcastle at each step.</p>
+    <p class="meta">27 June 2026 · operational companion to <code>build-process-and-roadmap.html</code> (the <em>what/why</em>; this is the <em>how-to-operate</em>) · you are the planner &amp; reviewer, the AI writes the code.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- TL;DR -->
+  <h2>The short answer</h2>
+  <p class="sub">Two journeys and one rule. Read this and you have the shape.</p>
+  <div class="card lead">
+    <p><strong>Journey 1 — here → the first line of code.</strong> One short <b class="k">runway</b> of setup work: wire the issue tracker, the glossary, the safety rails, and install + modify Sandcastle. No product code yet. This is a handful of one-time chats. It ends the moment the repo can build.</p>
+    <p><strong>Journey 2 — first line → the whole product.</strong> The <b class="k">first line of code is K0</b> (the empty scaffold). After that it is the <em>same loop forever</em>: one slice → one spec → one issue → build → review → you approve → merge → next slice. Kernel first (built by hand, supervised), then booking, then inbound, then the rest — in spine order.</p>
+    <p style="margin-bottom:0"><strong>The one rule that answers “what do I do in a new chat?”</strong> <b class="k">One chat = one stage of one slice.</b> Chats are disposable; the <b class="k">GitHub issue is the memory that survives between them</b>. You don’t build in one giant chat — you turn each slice’s spec into an issue, then spin a fresh chat for spec, for review, for ship. The issue is what you “turn something into.”</p>
+  </div>
+
+  <h2>On this page</h2>
+  <div class="card toc">
+    <a href="#map">0 · Where we are → the two journeys</a><br>
+    <a href="#runway">1 · Here → the first line of code (the runway)</a><br>
+    <a href="#loop">2 · The repeating loop + the new-chat rhythm</a><br>
+    <a href="#kernel">3 · Build the kernel (K0 → K9)</a><br>
+    <a href="#booking">4 · After the kernel: booking, then inbound</a><br>
+    <a href="#rest">5 · Then the rest, in spine order</a><br>
+    <a href="#tools">6 · The tools at each step (skill map)</a><br>
+    <a href="#sandcastle">7 · Sandcastle setup (the exact edits)</a><br>
+    <a href="#guard">8 · Guardrails — what never runs unwatched</a>
+  </div>
+
+  <!-- 0 MAP -->
+  <h2 id="map">0 · Where we are</h2>
+  <p class="sub">Planning and discovery are done. The design is settled as 5 layers + 12 rules, modules D1–D8 locked, the kernel data model derived from real data. Nothing here reopens that.</p>
+  <div class="card">
+    <p><strong>The build has exactly two journeys.</strong> Everything below hangs off this split.</p>
+    <table>
+      <tr><th>Journey</th><th>What it is</th><th>Ends when…</th></tr>
+      <tr><td><b>1 · The runway</b><br><span class="small">here → first line</span></td><td>One-time setup: tracker, glossary, safety rails, Sandcastle installed &amp; rewired. <em>No product code.</em></td><td>The repo builds and CI is green on an empty skeleton.</td></tr>
+      <tr><td><b>2 · The loop</b><br><span class="small">first line → whole product</span></td><td>The same slice cycle, repeated. Kernel (K0–K9), then booking, inbound, and every slice after.</td><td>Never — it is the permanent rhythm of the build.</td></tr>
+    </table>
+    <div class="callout c-note" style="margin-bottom:0"><b>What “the first line of code” actually is.</b> It is <code>K0</code> — the empty scaffold: <code>django-admin startproject</code>, an empty <code>core</code> app, a Vite shell, and one CI script that goes green on nothing. The runway (Journey 1) is everything you do <em>before</em> you are allowed to write that line.</div>
+  </div>
+
+  <!-- 1 RUNWAY -->
+  <h2 id="runway">1 · Here → the first line of code <span class="badge b-info">the runway</span></h2>
+  <p class="sub">Do these top-to-bottom. Each numbered step is a <b>fresh chat</b> (or a short cluster). The output of the runway is: a tracker you can file issues into, a glossary the AI reads, safety rails, and a Sandcastle that builds one slice and stops. Then — and only then — you write K0.</p>
+  <div class="card">
+    <div class="stage"><div class="stnum">1</div><div>
+      <h3>Confirm the rails <span class="who w-you">YOU · 1 chat</span></h3>
+      <p class="small">Confirm the live GitHub remote (the tracker docs mention <code>bruhanand/KDPS</code> — verify it points at the real repo, or AFK agents grab the wrong backlog). Decide: <b>GitHub Issues is the work tracker</b> and the source of truth for what to build.</p>
+    </div></div>
+    <div class="stage"><div class="stnum">2</div><div>
+      <h3>Wire the issue pipeline <span class="who w-you">/setup-matt-pocock-skills</span></h3>
+      <p class="small">Wires the tracker + the triage labels so <code>/spec</code>, <code>/to-issues</code>, <code>/triage</code>, <code>/review</code> all work. <b>Decide the “ready for the agent” label and make Sandcastle’s planner look for that exact label</b> — a mismatch means Sandcastle silently picks zero issues. This is a hard check, not a nicety.</p>
+    </div></div>
+    <div class="stage"><div class="stnum">3</div><div>
+      <h3>Mint the glossary the AI reads <span class="who w-you">/ubiquitous-language</span></h3>
+      <p class="small">Turn <code>consolidation/glossary.html</code> + <code>.context/qa-decisions.md</code> into <b>one</b> machine-read file. <span class="badge b-stop">PICK ONE NAME</span> Call it <code>CONTEXT.md</code> and point every skill at it — <code>/grill-with-docs</code>, <code>/review</code> and <code>/tdd</code> all read a project context file, and if two filenames exist they silently read the wrong one.</p>
+    </div></div>
+    <div class="stage"><div class="stnum">4</div><div>
+      <h3>Safety rails <span class="who w-you">/setup-pre-commit · /git-guardrails-claude-code · /fewer-permission-prompts</span></h3>
+      <p class="small">Pre-commit (format + mypy/ruff + fast pytest), block dangerous git (<code>push</code> to main, <code>reset --hard</code>, <code>branch -D</code>), and allow-list the routine <code>manage.py</code>/pytest/git calls the loop will run thousands of times so you aren’t clicking “approve” all day.</p>
+    </div></div>
+    <div class="stage"><div class="stnum">5</div><div>
+      <h3>Install + rewire Sandcastle <span class="who w-you">1 focused chat — see §7</span></h3>
+      <p class="small"><code>npm i -D @ai-hero/sandcastle</code> → <code>init</code> (the <em>parallel-planner-with-review</em> template, Docker) → then five edits to <code>.sandcastle/main.mts</code> and the prompts so it builds <b>one slice per run and stops before merge</b>, runs <b>your</b> models per stage, and speaks <b>Python/Django + Postgres</b> instead of Node. Full edit list in §7.</p>
+    </div></div>
+    <div class="stage"><div class="stnum">6</div><div>
+      <h3>Slice the kernel into issues <span class="who w-both">/spec → issues</span></h3>
+      <p class="small">Write the kernel’s ten slices (K0–K9, §3) as issues you can build against. <span class="badge b-warn">NOTE</span> The kernel slices are <b>horizontal foundation cuts</b> (a base class, a CI gate, the auth layer) — <em>not</em> vertical user workflows. So write them with <code>/spec</code> straight into hand-authored issues; don’t force <code>/to-issues</code> here (its job is to cut <em>vertical</em> slices, and it will fight you on K0–K6). <code>/to-issues</code> comes into its own at booking and onward.</p>
+    </div></div>
+    <div class="callout c-good" style="margin-bottom:0"><b>Runway done = </b> a tracker with the kernel issues filed, <code>CONTEXT.md</code> in place, safety rails on, and a Sandcastle that runs one slice and halts on a branch. You have not written product code yet. Now write K0.</div>
+  </div>
+
+  <!-- 2 LOOP -->
+  <h2 id="loop">2 · The repeating loop — and what each new chat is for</h2>
+  <p class="sub">From the first line of code onward, every slice rides the same cycle. This is the answer to “what do I do in a new chat?”, drawn as the chats themselves.</p>
+  <div class="card">
+    <div class="loop">
+      <div class="step s-you gate"><div class="n">CHAT A · GATE 1</div><div class="t">Spec → Issue</div><div class="o">/spec (+/grill-with-docs on money). You approve. Turn it into one labelled issue.</div></div>
+      <div class="step s-you"><div class="n">CHAT A</div><div class="t">Tests named first</div><div class="o">Golden files / ledger invariants written before code, in the issue.</div></div>
+      <div class="step s-auto"><div class="n">SANDCASTLE</div><div class="t">Build + self-review</div><div class="o">Autonomous in a container: plan → implement (TDD) → review. Stops on a branch.</div></div>
+      <div class="step s-you gate"><div class="n">CHAT B · GATE 2</div><div class="t">You review</div><div class="o">/review + /code-review + /verify, then you read the diff. Money = line by line.</div></div>
+      <div class="step s-code"><div class="n">CHAT B</div><div class="t">Ship</div><div class="o">/ship → PR → you merge. /document-release, /learn. Tick the issue.</div></div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:var(--accent)"></span>You — a chat you drive</span>
+      <span><span class="dot" style="background:var(--auto)"></span>Sandcastle — autonomous, no chat</span>
+      <span><span class="dot" style="background:var(--code)"></span>Wrap-up in your review chat</span>
+      <span><span class="dot" style="background:#fbbf24"></span>Your control gate</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>The chats, concretely</h3>
+    <div class="chatbox"><span class="lab">Chat A — “spec &amp; cut” (you drive)</span>
+      <p class="small" style="margin:6px 0 0">Fresh chat. Run <code>/spec</code> for <em>one</em> slice; for any money/GST slice run <code>/grill-with-docs</code> first to pin the rule as an ADR. Name the golden test <b>before</b> the code. End by turning the spec into <b>one GitHub issue</b> with the agent label. <b>That issue is the handoff</b> — close the chat.</p>
+    </div>
+    <div class="chatbox"><span class="lab">No chat — Sandcastle run (autonomous)</span>
+      <p class="small" style="margin:6px 0 0">You launch the loop from a terminal, not a chat. It reads the labelled issue, builds it red-green-refactor in a container, self-reviews, commits to a branch <code>sandcastle/issue-{n}</code>, and <b>stops</b>. It cannot merge — that is by design (§8).</p>
+    </div>
+    <div class="chatbox"><span class="lab">Chat B — “review &amp; ship” (you drive)</span>
+      <p class="small" style="margin:6px 0 0">Fresh chat on that branch. Run <code>/review</code> (does it do what the issue asked?) and <code>/code-review</code> (is it correct?); <code>/verify</code> runs the app + golden suite. <b>You read the diff yourself</b> — every line on money code. Approve → <code>/ship</code> opens the PR → you merge. <code>/learn</code> + a note to <code>CONTEXT.md</code> carries any new fact to the next slice. Close the chat.</p>
+    </div>
+    <div class="callout c-note" style="margin-bottom:0"><b>Why fresh chats, not one long one.</b> Three reasons: (1) the skills (<code>/spec</code>, <code>/review</code>, <code>/tdd</code>) are built to run in a clean window — a stale, cluttered context makes them worse; (2) long chats drift and forget; (3) the <b>issue + CONTEXT.md + the merged code</b> already hold the memory, so a fresh chat loses nothing. When you must continue mid-task across a boundary, use <code>/handoff</code> to write a compact pickup note.</div>
+  </div>
+
+  <div class="callout c-warn"><b>Conductor angle.</b> Each slice can be its own Conductor workspace (its own branch), so several slices’ <em>review</em> chats can sit side by side. Sandcastle makes its own branches/worktrees underneath. Keep <b>one slice in flight on money code</b> though — parallel fleets are for chores, never for ledgers.</div>
+
+  <!-- 3 KERNEL -->
+  <h2 id="kernel">3 · Build the kernel — K0 → K9</h2>
+  <p class="sub">The kernel is the engine + the spine’s plumbing + staging. It carries <b>no business rules</b> — only the rails every later slice rides. It is built mostly <b>by hand and supervised</b>, because it is small, central, and ruinous to get wrong. Sandcastle’s autonomous loop earns its place at the <em>end</em> of the kernel (seed/components) and then on every business slice.</p>
+  <div class="card">
+    <table>
+      <tr><th>#</th><th>Slice</th><th>Delivers</th><th>Proven by</th><th>How to build it</th></tr>
+      <tr><td><b>K0</b></td><td>Scaffold + CI gate</td><td>Monorepo <code>app/{backend,frontend}</code>, empty <code>core</code>, Vite shell, one <code>npm run ci</code> (tsc + mypy + import-linter + migration-check + ruff + pytest) green on an empty skeleton, on <b>real Postgres</b>.</td><td>CI green on nothing.</td><td><span class="badge b-info">BY HAND</span> the first line of code</td></tr>
+      <tr><td><b>K1</b></td><td>Money type + append-only ledger base</td><td><code>MoneyField</code> (bigint paise, never float); <code>LedgerEntry</code> base that can only be inserted — <code>REVOKE UPDATE,DELETE</code> + trigger; correction = a new reversing row.</td><td>App role <em>cannot</em> edit/delete a ledger row; a reversal nets to zero.</td><td><span class="badge b-money">SUPERVISED · /tdd</span></td></tr>
+      <tr><td><b>K2</b></td><td>Document lifecycle + numbering</td><td><code>docstatus</code> FSM <code>draft→posted→cancelled</code> with one <code>post()</code> per doc; gap-free naming series (<code>DEO-SAL-…-001</code>, the Tally join key); three keys per row.</td><td>No re-post / no edit-after-post; no number collisions under parallel insert.</td><td><span class="badge b-money">SUPERVISED · /tdd</span></td></tr>
+      <tr><td><b>K3</b></td><td>Entity tree + dimensions</td><td><code>LegalEntity → GSTIN (per state) → Store</code>; every ledger leg carries <code>store / brand / season / gstin</code> as real FK columns, snapshotted at post time.</td><td>A leg refuses to post without its 4 dimensions; cross-state pair → IGST natively.</td><td><span class="badge b-money">SUPERVISED</span> highest blast radius</td></tr>
+      <tr><td><b>K4</b></td><td>Effective-dating (SCD-2)</td><td><code>valid_from/valid_to</code> mixin + the “row in force on date D” lookup used by GST slabs, brand terms, SOR clocks.</td><td>As-of query returns exactly one row; overlaps rejected.</td><td><span class="badge b-info">BY HAND · /tdd</span></td></tr>
+      <tr><td><b>K5</b></td><td>Login</td><td>Django session cookies (httpOnly/Secure/SameSite/CSRF) + lockout; one seeded user. Owners get WhatsApp digests, not logins.</td><td>Seeded user logs in; cookie flags asserted; lockout works.</td><td><span class="badge b-info">BY HAND</span></td></tr>
+      <tr><td><b>K6</b></td><td>Roles + scoping (RBAC)</td><td>Roles/permissions as data (~9 seed roles); scope <code>all/region/store-group/store</code>; maker-checker in <code>core</code>.</td><td><b>Cross-store isolation</b>: a store user sees only their store’s rows; a maker can’t self-approve.</td><td><span class="badge b-money">SUPERVISED · /security-review</span></td></tr>
+      <tr><td><b>K7</b></td><td>The posting engine, for real</td><td>The real <code>post_entries(doc, legs)</code>: balanced-or-fail in one transaction, writes dimension-tagged legs into the three append-only ledgers, snapshots state+GSTIN, stamps actor+time.</td><td><b>The walking-skeleton golden</b>: a throwaway document posts one balanced reversing pair into Postgres, read back through scoped access, matching <b>to the paise</b>.</td><td><span class="badge b-money">SUPERVISED · the keystone</span></td></tr>
+      <tr><td><b>K8</b></td><td>Staging / ingest tier</td><td>The messy-data layer: per-source layout profiles, alias tables (brand/vendor/season), flag-don’t-block exceptions; raw file → cleaned rows. <b>This is the weekly PT-maker.</b></td><td>A real vendor file ingests; a bad row raises an exception and does <em>not</em> block the batch.</td><td><span class="badge b-money">SUPERVISED</span> can use Sandcastle</td></tr>
+      <tr><td><b>K9</b></td><td>Seed + money components</td><td>Idempotent seed (roles, 16 stores, GSTINs, brands × 4 commercial models, date-effective GST slabs); ~150 real invoices wired as the golden corpus; the ₹ Lakh/Crore money input/reader + status chips.</td><td>Seed re-runs as a no-op; <code>₹28,50,000</code> renders from a paise integer.</td><td><span class="badge b-auto">SANDCASTLE</span> first autonomous run</td></tr>
+    </table>
+  </div>
+  <div class="callout c-money"><b>The kernel’s two speeds.</b> <span class="badge b-money">SUPERVISED</span> K1, K2, K3, K6, K7, K8 touch money, ledgers or access — you build them by hand or with a tight <code>/tdd</code> chat and <b>read every diff</b>. <span class="badge b-info">FREE</span> K0, K4, K5, K9 are mechanical — let the AI run, review the result. <b>K9 is where you first switch Sandcastle on</b> — a safe, non-money slice to shake the loop out before booking.</div>
+  <div class="callout c-note"><b>What the kernel is <em>not</em>.</b> The spine <em>tables</em> — <code>sku</code>, <code>cohort</code>, <code>pt</code>/<code>pt_line</code> — are <b>not</b> in K0–K9. They arrive with the first business slices (master data, inbound). The kernel builds the <em>engine and the three ledgers</em>; the business slices build the documents and masters that ride on them.</div>
+  <div class="callout c-good" style="margin-bottom:0"><b>Kernel done = </b> the four foundation tests green on real Postgres (balances Σdr=Σcr · ledger can’t be edited · cross-store isolation · golden-file to the paise), one user logs in and sees only their scope, and a throwaway document posts a balanced reversing pair. The engine is now trustworthy. Booking can begin.</div>
+
+  <!-- 4 BOOKING / INBOUND -->
+  <h2 id="booking">4 · After the kernel — booking, then inbound</h2>
+  <p class="sub">Now the slices turn <b>vertical</b> — a real workflow cutting top-to-bottom (master → document → ledger → control → screen). This is where the loop in §2 and Sandcastle run at full stride. Order is fixed by the spine: a shipment must exist before it can be sold; a booking before a shipment.</p>
+
+  <div class="card">
+    <h3>First vertical slice — <b>Booking</b> <span class="badge b-auto">Sandcastle, full loop</span></h3>
+    <p class="small">A booking is a document with light money (it commits an order; it doesn’t post to the ledgers yet). That makes it the <b>ideal first real vertical slice</b> — it exercises the whole loop (spec → issue → autonomous build → review → ship) and the first business screen, without betting the ledgers on a fresh autonomous run.</p>
+    <ul class="small">
+      <li><b>Chat A:</b> <code>/spec</code> the booking slice → <code>/to-issues</code> (now genuinely vertical — it cuts master+document+screen as one tracer bullet) → file the labelled issue, golden test named.</li>
+      <li><b>Sandcastle:</b> autonomous build of the Booking model + create/list screen + its test; stops on a branch.</li>
+      <li><b>Chat B:</b> <code>/review</code> + <code>/code-review</code> + <code>/verify</code>; you read it; <code>/ship</code>; you merge.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Then — <b>Inbound</b> (GRN → PT → stock + vendor ledger) <span class="badge b-money">SUPERVISED — money</span></h3>
+    <p class="small">Inbound is the first slice that <b>posts money</b>: goods arrive (GRN = quantity into stock), the PT prices the lot (value + vendor liability). It is the proof that the whole spine works end-to-end, and it is firmly in the slow lane.</p>
+    <ul class="small">
+      <li><b>Before Chat A — lock the conventions as ADRs</b> with <code>/grill-with-docs</code>: cost is frozen at stock-in (no re-posting), how a correction is made (a new dated reversing event + reason code), and how late freight / sold-before-PT are handled. Build the <em>mechanism</em> into the kernel; the brand’s actual rate is data (Rule 12). <span class="badge b-warn">CA-gated</span> The full SOR/GST ruling can wait for the SOR slice — these three conventions cannot.</li>
+      <li><b>Chat A:</b> <code>/spec</code> + <code>/plan-eng-review</code> (always, on a ledger slice). Golden file = a <em>real</em> vendor invoice → known-correct PT + ledger rows, to the paise.</li>
+      <li><b>Sandcastle:</b> implementer on the strong model; <code>/codex</code> challenge in the review prompt because it is money.</li>
+      <li><b>Chat B:</b> you read <b>every line</b> even when CI is green. <code>/security-review</code> if it touches vendor balances. Then <code>/ship</code>, you merge.</li>
+    </ul>
+  </div>
+  <div class="callout c-note" style="margin-bottom:0"><b>The first inbound slice stops at the ledger, not at the till.</b> The riskiest unknowns (Ten Software POS, Tally import, barcode) are spiked in parallel and do not gate the spine. Prove GRN→PT→stock on ground you control first; the POS edge arrives later, at the selling slice.</div>
+
+  <!-- 5 REST -->
+  <h2 id="rest">5 · Then the rest, in spine order</h2>
+  <p class="sub">Same loop, every time. Two speeds: money supervised, screens free.</p>
+  <div class="card">
+    <table>
+      <tr><th>After inbound</th><th>Slice</th><th>Lane</th></tr>
+      <tr><td>3</td><td>Vendor liability + vendor ledger</td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>4</td><td>Selling — ingest one POS sale <span class="small">(POS spike must be confirmed first)</span></td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>5</td><td>Offers on the sale</td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>6</td><td>Payments + collection audit</td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>7</td><td>Tally voucher export</td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>8</td><td>SOR / Consignment + the GST clock <span class="small">(CA ruling lands here)</span></td><td><span class="badge b-money">SUPERVISED</span></td></tr>
+      <tr><td>9</td><td>The Brain — analytics + WhatsApp digest <span class="small">(reads ledgers, never writes)</span></td><td><span class="badge b-info">FREE</span></td></tr>
+    </table>
+    <div class="callout c-note" style="margin-bottom:0">Screens, reports and seed data run freely through Sandcastle and are reviewed after. Anything that writes a ledger, a vendor balance, cash, GST or Tally stays in the supervised lane — you read every diff.</div>
+  </div>
+
+  <!-- 6 TOOLS -->
+  <h2 id="tools">6 · The tools at each step</h2>
+  <p class="sub">Which skill does what. Backbone = every slice. The rest is on-demand.</p>
+  <div class="card">
+    <table>
+      <tr><th>Group</th><th>Skills</th><th>When</th></tr>
+      <tr><td><b>Backbone</b><br><span class="small">every slice</span></td><td><code>/spec</code> · <code>/to-issues</code> (vertical slices only) · <code>/triage</code> · <code>/plan-eng-review</code> · <code>/tdd</code> · <code>/code-review</code> · <code>/review</code> · <code>/guard</code> on while building</td><td>The core loop, Chat A → build → Chat B.</td></tr>
+      <tr><td><b>Money add-ons</b><br><span class="small">supervised slices</span></td><td><code>/grill-with-docs</code> (lock the rule first) · <code>/codex</code> (challenge the review) · <code>/security-review</code> · strong model on the implementer</td><td>K1/K2/K3/K6/K7/K8 and every business money slice.</td></tr>
+      <tr><td><b>Gates &amp; ship</b></td><td><code>/verify</code> · <code>/ship</code> · <code>/land-and-deploy</code> <span class="small">(merge half only — hosting deferred)</span> · <code>/simplify</code></td><td>Chat B, after you approve.</td></tr>
+      <tr><td><b>Periodic</b></td><td><code>/health</code> (~every 3 slices) · <code>/retro</code> (weekly) · <code>/cso</code> (after auth/RBAC + before go-live) · <code>/learn</code> · <code>/investigate</code>·<code>/diagnose</code> (on test failure) · <code>/diagram</code>, <code>/document-generate</code> (doc aids)</td><td>On a cadence or on demand.</td></tr>
+      <tr><td><b>Setup-once</b></td><td><code>/setup-matt-pocock-skills</code> (first) · <code>/ubiquitous-language</code> · <code>/setup-pre-commit</code> · <code>/git-guardrails-claude-code</code> · <code>/fewer-permission-prompts</code></td><td>The runway (§1).</td></tr>
+      <tr><td><b>Skip for now</b></td><td>All <code>ios-*</code> · the <code>design-*</code> / <code>browse</code> / <code>qa</code> / <code>canary</code> family (no UI surface until React screens — revive at the screen slices) · writing/teaching skills · <code>setup-deploy</code> (hosting deferred)</td><td>Not on the kernel path.</td></tr>
+    </table>
+  </div>
+
+  <!-- 7 SANDCASTLE -->
+  <h2 id="sandcastle">7 · Sandcastle setup — the exact edits</h2>
+  <p class="sub">Sandcastle ships as a Node demo that picks several issues, builds them in parallel, and auto-merges. You want the opposite: <b>one slice, your models, stops before merge, Python/Postgres.</b> The only file that controls the loop is <code>.sandcastle/main.mts</code> (a plain TS script, not config).</p>
+  <div class="card">
+    <h3>a · One slice, then stop <span class="badge b-info">3 edits to <code>main.mts</code></span></h3>
+    <ul class="small">
+      <li><code>MAX_ITERATIONS = 1</code> — run the outer loop exactly once, then exit.</li>
+      <li>After the planner parses issues: <code>issues = issues.slice(0, 1)</code> — one slice, not a batch (the implement prompt is already single-task-scoped).</li>
+      <li><b>Delete (or guard) the merge phase</b> — that is the only code that crosses into <code>main</code>. With it gone, the slice is built + self-reviewed on a branch and the script exits, leaving the work for <b>your</b> review. <b>This deletion is your “gating node”</b>: the loop now <em>cannot</em> merge — only you can. (Optionally replace it with “open a PR” for a tidy review surface.)</li>
+    </ul>
+    <h3>b · A different model per stage</h3>
+    <p class="small">Each stage takes its model as <code>claudeCode("&lt;model&gt;")</code>. Hoist four constants to the top so a slice tunes in one edit:</p>
+    <p class="small"><code>MODEL_PLAN = "claude-opus-4-8"</code> (high effort) · <code>MODEL_IMPL = "claude-opus-4-8"</code> for money slices, <code>"claude-sonnet-4-6"</code> for scaffolding · <code>MODEL_REVIEW = "claude-opus-4-8"</code> (high) · <code>MODEL_MERGE = "claude-sonnet-4-6"</code> (mechanical). <span class="badge b-warn">Use the 4-8 ids</span> — older notes reference <code>opus-4-7</code>; explicit constants override the default.</p>
+    <h3>c · Python/Django + Postgres <span class="badge b-stop">do not skip</span></h3>
+    <ul class="small">
+      <li><b>Dockerfile</b> (<code>.sandcastle/Dockerfile</code>, today <code>node:22</code>): add Python 3.12 + <code>uv</code>/pip + Postgres client; keep <code>gh</code>, git, and the Claude Code CLI; keep Node (the Vite frontend).</li>
+      <li><b><code>onSandboxReady</code> hook</b>: change <code>npm install &amp;&amp; npm run build</code> → <code>uv sync &amp;&amp; npm install &amp;&amp; npm run build</code>.</li>
+      <li><b>Feedback commands in <em>all four</em> prompt files</b>: swap <code>npm run typecheck</code>/<code>npm run test</code> → your <code>npm run ci</code> (mypy + ruff + pytest + tsc…). <span class="badge b-stop">HARD GATE</span> Miss this and the agent runs Node commands that don’t exist and reports a false green/red.</li>
+      <li><b>Real Postgres, asserted.</b> Postgres runs <em>outside</em> the single container — point <code>DATABASE_URL</code> at a service. The foundation tests must hit real PG; make CI <b>fail if it isn’t Postgres</b>, or the append-only / isolation tests pass vacuously on SQLite.</li>
+    </ul>
+    <h3>d · Skills inside the loop, and committing <code>.sandcastle</code></h3>
+    <ul class="small">
+      <li>Sandcastle has no “skill” flag — the sandboxed agent <em>is</em> Claude Code, so wire skills through (1) the <b>prompt text</b> (have <code>review-prompt.md</code> invoke <code>/code-review</code>, etc.) and (2) the <b>Dockerfile</b> (install the skill). Copy the richer <code>agent-workflows/</code> prompts (they read <code>CONTEXT.md</code> + the ADRs at slice start) into <code>.sandcastle/</code> — <b>recommended</b> for a money build; <code>init</code> doesn’t bring them.</li>
+      <li><b>Commit the whole <code>.sandcastle/</code> folder</b> (<code>git add .sandcastle/</code>) so every clone/worktree shares the loop config — but <b>keep <code>.env</code>, <code>logs/</code>, <code>worktrees/</code> ignored</b> (secrets + scratch). Don’t blanket-remove the ignore file; just make sure the prompts, <code>main.mts</code>, Dockerfile and <code>CODING_STANDARDS.md</code> are tracked.</li>
+      <li><b>Money/DB safety even when AFK:</b> set <code>permissionMode</code> explicitly on the implementer for money slices rather than relying on the “skip permissions” default, so a stray <code>REVOKE</code>/migration/<code>git</code> is still gated.</li>
+    </ul>
+  </div>
+
+  <!-- 8 GUARD -->
+  <h2 id="guard">8 · Guardrails — what never runs unwatched</h2>
+  <div class="card">
+    <div class="callout c-stop" style="margin-top:0"><b>Autonomous merge is impossible by construction.</b> You deleted the merge phase. Sandcastle builds and self-reviews; it <em>cannot</em> reach <code>main</code>. Every slice waits on a branch for you. For money code that is not a preference — it is the architecture.</div>
+    <ul class="small">
+      <li><b>Money is read line by line</b> — ledgers, payments, Tally, GST, RBAC/scoping — even when CI is green.</li>
+      <li><b>Free-lane work</b> — scaffold, seed, components, screens, reports — runs through Sandcastle and is reviewed after the fact.</li>
+      <li><b>Corrections are new dated events</b>, never edits. The append-only test and the <code>REVOKE</code> grant enforce it; there is no “fix the old row” path anywhere.</li>
+      <li><b>One label, one tracker.</b> Confirm the agent label matches Sandcastle’s planner prompt and the remote is the live repo before any AFK run.</li>
+      <li><b>Discovery still loops</b> — a slice may surface a GST edge case or a missing alias; that fact updates <code>CONTEXT.md</code>/an ADR and feeds the <em>next</em> slice’s spec. It does not reopen the slice in flight.</li>
+    </ul>
+  </div>
+
+  <div class="callout c-good"><b>Bottom line.</b> From here: run the short runway (§1), then write K0. From K0: the same loop forever — spec → issue → Sandcastle builds → you review → merge → next. Kernel by hand and supervised (K0–K9), then booking (your first full autonomous vertical slice), then inbound (money, supervised), then the rest in spine order. One chat per stage; the issue is the memory between them; money is never merged unwatched.</div>
+
+  <footer>
+    KDPS · Build Operating Manual · 27 June 2026 — the operational companion to <code>build-process-and-roadmap.html</code> (the canonical <em>what/why</em>) and the kernel definition in <code>consolidation/kernel-data-model.html</code>. Method: spec-driven, test-first for money, vertical-slice delivery, two-speed review, autonomous build with a human merge gate.<br>
+    Supersedes the operating guidance in the stale <code>build-playbook.html</code> and <code>how-to-build-this-ERP.html</code> (v3, 23 Jun — flagged stale; archive candidates).
+  </footer>
+
+</div>
+</body>
+</html>
