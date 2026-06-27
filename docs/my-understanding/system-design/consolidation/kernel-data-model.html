@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Kernel Data Model (grounded in real data)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --teal:#0f7a73; --teal-bg:#e2f3f1;
+    --maxw:1040px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1340px; margin:0 auto; gap:0;}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto; width:272px; flex:0 0 272px; padding:28px 18px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:13px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:22px 0 8px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:5px 10px; border-radius:7px; font-size:13.3px; line-height:1.35}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  main{flex:1 1 auto; min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:980px){ nav.toc{display:none} main{padding:24px 16px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:31px; line-height:1.18; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:74ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:10px}
+  section{margin:42px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:26px 0 8px}
+  p{margin:10px 0} .lead{color:var(--muted)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px; border-radius:999px; vertical-align:middle}
+  .b-master{background:var(--blue-bg); color:var(--blue)}
+  .b-doc{background:var(--green-bg); color:var(--green)}
+  .b-ledger{background:var(--amber-bg); color:var(--amber)}
+  .b-scd2{background:var(--purple-bg); color:var(--purple)}
+  .b-stage{background:var(--grey-bg); color:#41506b}
+  .b-econ{background:var(--red-bg); color:var(--red)}
+  .b-new{background:var(--teal-bg); color:var(--teal)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px; padding:14px 16px; margin:16px 0; border:1px solid}
+  .co-note{background:#f3f1fb; border-color:#dcd3f3}
+  .co-key{background:var(--green-bg); border-color:#bfe0cd}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-dep{background:var(--blue-bg); border-color:#bcd6f3}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:8px 10px; font-size:12.2px; letter-spacing:.02em}
+  td{padding:8px 10px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; background:#f0f2f6; padding:1px 5px; border-radius:4px}
+  td code{font-size:11.6px; background:#eef1f6}
+  .pk{color:var(--rust); font-weight:700} .fk{color:var(--blue); font-weight:600}
+  ol,ul{margin:9px 0; padding-left:22px} li{margin:5px 0}
+  .tbl-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:700; color:var(--navy)}
+  .prov{color:var(--muted); font-size:11.6px}
+  .src{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; color:#41506b}
+  /* ERD figure */
+  .erd{background:#fff; border:1px solid var(--line); border-radius:12px; padding:20px 16px; margin:16px 0; overflow-x:auto}
+  .layer-label{font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--navy2); margin:16px 0 6px; border-bottom:1px dashed var(--line); padding-bottom:4px}
+  .erd-row{display:flex; gap:11px; flex-wrap:wrap; margin:8px 0}
+  .ent{border-radius:9px; padding:7px 11px; min-width:128px; font-size:12px; border:1.5px solid; flex:1 1 auto; max-width:230px}
+  .ent b{display:block; font-size:12.6px; color:var(--navy)}
+  .ent small{display:block; color:var(--muted); font-size:10.6px; margin-top:2px; line-height:1.4}
+  .e-stage{background:var(--grey-bg); border-color:#cfd6e2}
+  .e-master{background:var(--blue-bg); border-color:#bcd6f3}
+  .e-scd2{background:var(--purple-bg); border-color:#d3c4ee}
+  .e-doc{background:var(--green-bg); border-color:#bfe0cd}
+  .e-ledger{background:var(--amber-bg); border-color:#ecd9a6}
+  .e-econ{background:var(--red-bg); border-color:#f0c9c4}
+  .e-spine{background:#fff; border:2px solid var(--rust)}
+  .arrow{text-align:center; color:var(--rust); font-size:15px; line-height:1; margin:3px 0; font-weight:700}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; margin-top:14px}
+  .legend span{display:inline-flex; align-items:center; gap:6px}
+  .sw{width:14px; height:14px; border-radius:4px; border:1.5px solid}
+  footer{margin-top:60px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:13px}
+  .keyrow td{background:#fff7f3 !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <h2>Orient</h2>
+  <a href="#intro">1 · What this is</a>
+  <a href="#truth">2 · Staging vs Kernel</a>
+  <a href="#decisions">3 · The six locked calls</a>
+  <a href="#norms">4 · The norms (every table)</a>
+  <a href="#erd">5 · The model on one page</a>
+  <h2>Ingest</h2>
+  <a href="#stage">6 · Source &amp; staging layer</a>
+  <h2>Masters</h2>
+  <a href="#identity">7 · SKU · cohort · barcode</a>
+  <a href="#brand">8 · Brand · alias · vendor</a>
+  <a href="#geo">9 · Entity · GSTIN · store</a>
+  <a href="#season">10 · Season · taxonomy</a>
+  <a href="#commercial">11 · Brand-terms · GST slab</a>
+  <a href="#amm">12 · AMM · offers · claims</a>
+  <h2>Documents &amp; ledgers</h2>
+  <a href="#docs">13 · Document skeleton · PT line</a>
+  <a href="#ledgers">14 · The three ledgers</a>
+  <h2>Discipline</h2>
+  <a href="#dq">15 · Data-quality constraints</a>
+  <a href="#migration">16 · Migration-time fields</a>
+  <a href="#index">17 · Full table index</a>
+</nav>
+
+<main>
+<header class="doc" id="intro">
+  <div class="eyebrow">KDPS · Kernel · Data Model</div>
+  <h1>The Kernel Data Model</h1>
+  <p class="sub">The shape of the database the whole KDPS system sits on — <strong>derived from the real KDPS data, not invented</strong>. Every entity, column, key and constraint here was checked against the actual files in <code>docs/data-from-kdps/</code> (the PT format, ~33 vendor PT files, the supplier/brand/store masters, the bank &amp; daily-sales registers, real SOH + sale lines, the AMM list, the offer rulebook, the DN/CN register).</p>
+  <div class="stamp">27 June 2026 · Ground-truth kernel schema · Grounds &amp; refines <code>consolidation/data-model.html</code> (the design-phase schema-of-record) against the raw data, and bakes in the six decisions locked with Anand on 27 Jun. Read alongside <code>posting-catalog.html</code> (which legs each document posts).</div>
+</header>
+
+<section id="truth">
+  <h2 class="sec">The one truth the real data forces</h2>
+  <p><strong>Raw data is never clean, and it never arrives in our shape.</strong> Every file proves it — banner and grand-total rows mixed into the data; headers that lie (<code>Educational</code> = an invoice date, <code>TAX&nbsp;3</code> = the GST rate, <code>Buyer</code> = a GSTIN); one column holding two facts (<code>Description = Style#Colour</code>, <code>PACK/SIZE = "XL (105 CMS)"</code>); barcodes stored as integers (leading zeros lost); the <strong>Season</strong> column polluted with Excel dates and four spellings of one cohort; cost recorded <em>above</em> MRP (24 real cases); Jockey arriving in <strong>five</strong> different distributor layouts.</p>
+  <p>So the kernel is <strong>two tiers</strong>. A messy <span class="badge b-stage">staging</span> layer ingests each source through a per-source profile, splits composites, normalises against alias tables, and validates — <em>flagging, never blocking</em>. Only clean, validated rows are promoted into the <span class="badge b-master">canonical kernel</span>. The canonical target is KDPS's own <strong>20-column PT format</strong> (<code>pt-file-format.xlsx</code>); the weekly PT-maker <em>is</em> this ingest pipeline.</p>
+  <div class="erd" style="text-align:center">
+    <div class="erd-row" style="justify-content:center"><div class="ent e-stage" style="max-width:520px"><b>SOURCE FILES</b><small>vendor PTs · POS / DSR exports · bank statement · SOH — every one a different, messy layout</small></div></div>
+    <div class="arrow">▼&nbsp;&nbsp;ingest = source-layout profile · split composites · normalise via alias tables · validate (flag, don't block)</div>
+    <div class="erd-row" style="justify-content:center"><div class="ent e-stage" style="max-width:520px"><b>STAGING</b> <span class="badge b-stage">raw + mapping + exception queue</span><small>rows exactly as received, held until clean</small></div></div>
+    <div class="arrow">▼&nbsp;&nbsp;promote only validated rows</div>
+    <div class="erd-row" style="justify-content:center"><div class="ent e-spine" style="max-width:520px"><b>THE KERNEL</b> <span class="badge b-master">canonical · clean · append-only</span><small>the spine everything sits on — masters → documents → ledgers</small></div></div>
+  </div>
+</section>
+
+<section id="decisions">
+  <h2 class="sec">The six decisions locked into this schema</h2>
+  <table>
+    <tr><th style="width:30px">#</th><th>Decision (Anand, 27 Jun)</th><th>How it lands in the schema</th></tr>
+    <tr><td>1</td><td><strong>OM Ganpati Enterprises</strong> — keep it, but editable / removable later.</td><td><code>legal_entity</code> is relational (1..n) with <code>is_active</code>; seed <em>KDPS Lifestyle</em> + <em>OM Ganpati</em> as two rows you can edit or deactivate. Nothing hardcodes "one entity".</td></tr>
+    <tr><td>2</td><td><strong>Bihar GSTIN</strong> — leave the slot.</td><td><code>gstin</code> holds two rows; Jharkhand (<code>20…9945</code>) seeded, Bihar (state 10) row present with <code>gstin = NULL</code> until entered.</td></tr>
+    <tr><td>3</td><td><strong>GST values &amp; commercial terms per brand</strong> — KDPS enters them during the migration / data-entry phase; just give them options.</td><td><code>brand_terms</code>, <code>gst_slab</code> ship as empty masters with <strong>controlled option lists</strong> (enums) — see §16. Populated at migration, not invented now.</td></tr>
+    <tr><td>4</td><td><strong>AMM</strong> = the list of items discounts <em>can</em> apply to.</td><td><code>amm_style</code> = the discount-<em>eligibility</em> master (Approved Markdown Merchandise). Offers scope to it; a style not in it (or flagged off) sells at full MRP.</td></tr>
+    <tr><td>5</td><td><strong>Vendor-reimbursable claim economics</strong> — in the kernel now.</td><td><code>offer_claim</code>, <code>nsv_commission_slab</code>, <code>discount_budget</code> are first-class (§12).</td></tr>
+    <tr><td>6</td><td><strong>Brand canonical</strong> = the curated ~592 house list, sub-labels nested, aliases absorbed.</td><td><code>brand</code> (canonical + <code>parent_brand_id</code>) + <code>brand_alias</code> (typed: spelling / sub_label / v_flip / fresh / supplier_dump). The 1,163 supplier dump loads as aliases (§8).</td></tr>
+  </table>
+</section>
+
+<section id="norms">
+  <h2 class="sec">The norms every table obeys</h2>
+  <div class="card">
+    <ol style="margin:0">
+      <li><strong>Money = integer paise</strong> (<code>*_paise</code> bigint). Rates / GST% / margins = <code>numeric</code>. Unit cost is taken <em>directly</em> as the vendor's purchase rate (P RATE / SALE RATE / Net Value), <strong>never</strong> <code>÷(1+slab)</code>. Verified on the Rosetta pair: <code>BASIC = invoice taxable RATE</code>, <code>P&nbsp;RATE ≈ BASIC×1.20</code>.</li>
+      <li><strong>Barcode = <code>text</code>, non-unique scan-alias.</strong> Stock is a <em>count under</em> <code>(barcode, season)</code>, never a primary key. Schemes coexist (EAN-13, 7-digit internal, alphanumeric, leading-zero). 68% of suppliers ship no barcode → KDPS generates.</li>
+      <li><strong>Season = FK to a season master, never a free date.</strong> Reject Excel serials; normalise <code>SS25 ≡ SS-25</code> via <code>brand_season_map</code>.</li>
+      <li><strong>Three keys per document:</strong> surrogate <code>bigint</code> PK · business doc-number (<code>{FY}/{store}/{seq}</code>) · idempotency UUID for offline writes.</li>
+      <li><strong>Dirty masters carry canonical + alias</strong> (brand, vendor, season, taxonomy). Never join on raw vendor text; dedup to a surrogate id.</li>
+      <li><strong>Composite columns split on ingest</strong> (Style#Colour, size+measurement, gender+garment).</li>
+      <li><strong>Sentinels (<code>0</code>, <code>.</code>, <code>N/A</code>, <code>NA</code>) → NULL</strong>; banner / total rows (null natural key) are dropped, never stored.</li>
+      <li><strong>Snapshot masters onto documents; ledgers append-only; SCD-2</strong> where money depends on history (gstin, gst_slab, cost, price, brand_terms, amm).</li>
+      <li><strong>Dimension columns on every ledger leg</strong> — <code>store · brand · season · state_gstin</code> — so the books read per store/brand/state without reconstruction.</li>
+      <li><strong>Data-quality = constraints + flag-don't-block</strong> (§15). A bad row raises a visible exception; the floor keeps working.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="erd">
+  <h2 class="sec">The model on one page</h2>
+  <p class="lead">Five bands, top to bottom: how data enters, the reference masters, the events, the books they write, and the read-only intelligence above them. The <span style="color:var(--rust);font-weight:700">rust-outlined</span> boxes are the spine.</p>
+  <div class="erd">
+    <div class="layer-label">Ingest — the messy edge</div>
+    <div class="erd-row">
+      <div class="ent e-stage"><b>source_layout_profile</b><small>per-source header-row + column-map + splitters</small></div>
+      <div class="ent e-stage"><b>staging_row</b><small>raw row as received · status · raw JSON</small></div>
+      <div class="ent e-stage"><b>ingest_exception</b><small>flag-don't-block queue + owner</small></div>
+      <div class="ent e-stage"><b>brand_alias · vendor_alias · taxonomy_vendor_map · brand_season_map</b><small>raw string → canonical id</small></div>
+    </div>
+    <div class="arrow">▼ promote validated rows</div>
+
+    <div class="layer-label">Masters — the reference truth</div>
+    <div class="erd-row">
+      <div class="ent e-spine"><b>sku</b><small>Brand×Style×Color×Size · the identity</small></div>
+      <div class="ent e-spine"><b>cohort</b><small>(barcode,season) · frozen unit_cost · owned_flag</small></div>
+      <div class="ent e-master"><b>barcode_alias</b><small>non-unique scan → cohort</small></div>
+      <div class="ent e-master"><b>brand</b> + <b>brand_alias</b><small>canonical + parent + typed aliases</small></div>
+      <div class="ent e-master"><b>vendor</b><small>+ gstin + bank · deduped</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-master"><b>legal_entity</b><small>KDPS + OM Ganpati · editable</small></div>
+      <div class="ent e-scd2"><b>gstin</b><small>SCD-2 · Bihar slot blank</small></div>
+      <div class="ent e-master"><b>store</b><small>minted code · banner · format → gstin</small></div>
+      <div class="ent e-master"><b>season</b><small>{SS|AW}(Mon-YY) cohort calendar</small></div>
+      <div class="ent e-master"><b>taxonomy</b><small>gender/cat/type/item/fit/color/size lists</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-scd2"><b>brand_terms</b><small>ownership × return-terms + margins · migration-entered</small></div>
+      <div class="ent e-scd2"><b>gst_slab</b><small>HSN × price-band × date</small></div>
+      <div class="ent e-master"><b>amm_style</b> <span class="badge b-new">new</span><small>discount-eligibility master</small></div>
+      <div class="ent e-master"><b>offer_rule</b> + <b>offer_slab</b><small>polymorphic rewards · multi-dim scope</small></div>
+      <div class="ent e-econ"><b>offer_claim · nsv_commission_slab · discount_budget</b><small>vendor-reimbursable economics</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-master"><b>user · role · permission</b><small>RBAC as data</small></div>
+    </div>
+    <div class="arrow">▼ documents snapshot masters &amp; post legs</div>
+
+    <div class="layer-label">Documents — the only writers of the books</div>
+    <div class="erd-row">
+      <div class="ent e-doc"><b>booking</b><small>order book · style+size</small></div>
+      <div class="ent e-doc"><b>grn</b><small>arrival · quantity only</small></div>
+      <div class="ent e-spine"><b>pt</b> + <b>pt_line</b><small>the 20-column spine · stamps cost + liability</small></div>
+      <div class="ent e-doc"><b>store_split · transfer</b><small>location moves</small></div>
+    </div>
+    <div class="erd-row">
+      <div class="ent e-doc"><b>sale</b> + <b>sale_line</b><small>bill header + lines · returns as −qty</small></div>
+      <div class="ent e-doc"><b>return_dn</b> / <b>return_cn</b><small>claim → settlement</small></div>
+      <div class="ent e-doc"><b>payment</b> + <b>allocation</b><small>money out · bill-wise</small></div>
+      <div class="ent e-doc"><b>tally_voucher</b><small>deterministic export</small></div>
+    </div>
+    <div class="arrow">▼ post_entries(doc, legs) — balanced or fail · append-only</div>
+
+    <div class="layer-label">Ledgers — derived, append-only</div>
+    <div class="erd-row">
+      <div class="ent e-ledger"><b>stock_ledger</b><small>signed qty · movement reason · 4 dims</small></div>
+      <div class="ent e-ledger"><b>vendor_ledger</b><small>Dr/Cr per (vendor,brand)</small></div>
+      <div class="ent e-ledger"><b>cash_ledger</b><small>store×day×tender</small></div>
+      <div class="ent e-ledger"><b>bank_reconciliation</b><small>booked vs settled · per rail</small></div>
+      <div class="ent e-ledger"><b>petty_cash_ledger</b><small>store expense chart</small></div>
+      <div class="ent e-ledger"><b>sor_lot</b><small>two clocks · gst_recognised once</small></div>
+      <div class="ent e-ledger"><b>audit_log</b><small>who/why/when</small></div>
+    </div>
+    <div class="arrow">▲ read-only</div>
+    <div class="layer-label">Intelligence — derived views (never stored as truth)</div>
+    <div class="erd-row">
+      <div class="ent e-master" style="background:#fff"><b>SOH snapshot · sale report · brand report · dead-stock/aging · profitability</b><small>materialised from the ledgers — the report-maker's output</small></div>
+    </div>
+    <div class="legend">
+      <span><span class="sw e-stage"></span> staging / ingest</span>
+      <span><span class="sw e-master"></span> master</span>
+      <span><span class="sw e-scd2"></span> SCD-2 master</span>
+      <span><span class="sw e-doc"></span> document</span>
+      <span><span class="sw e-ledger"></span> ledger</span>
+      <span><span class="sw e-econ"></span> claim economics</span>
+      <span><span class="sw e-spine" style="background:#fff"></span> spine</span>
+    </div>
+  </div>
+</section>
+
+<section id="stage">
+  <h2 class="sec">6 · Source &amp; staging layer <span class="badge b-stage">ingest</span></h2>
+  <p>The buffer between messy reality and the clean kernel. Nothing reaches a master or ledger until it has passed through here. Mapping is keyed <strong>per source, not per brand</strong> — Jockey alone has five distributor layouts; one "Ten Software" template spans Mufti + Go&nbsp;Colours + Beevee.</p>
+
+  <h3 class="tbl-name">source_layout_profile</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes / from the real data</th></tr>
+    <tr><td><span class="pk">profile_id</span></td><td>bigint PK</td><td>—</td></tr>
+    <tr><td>source_name</td><td>text</td><td>e.g. <code>JOCKEY_DD_SALES</code>, <code>TEN_PT_EMAIL</code>, <code>MADURA_SAP</code>, <code>DSR</code>, <code>BANK_KOTAK</code></td></tr>
+    <tr><td>source_kind</td><td>enum</td><td><code>vendor_pt · pos_sale · soh · bank · dsr · dn_cn</code></td></tr>
+    <tr><td>file_format</td><td>enum</td><td><code>xlsx · xls · xlsb · csv · pdf</code> — <em>detect by content, not extension</em> (TWILLS.xls is really xlsx; "AS INNERWEAR.csv" is OLE2)</td></tr>
+    <tr><td>sheet_match, header_row</td><td>text, int</td><td>header is rarely row 0 — banner rows above it (Jockey r8, Ten-PT r2, Arvind/DEAL/BK r4)</td></tr>
+    <tr><td>column_map</td><td>jsonb</td><td>logical field → physical column/position. The cost column alone has 8 names (<code>P RATE · Cost · Net Unit Cost · RATE · INVOICE_RATE · NET Value · SALE RATE · RATE 60.24% OF MRP</code>)</td></tr>
+    <tr><td>splitters</td><td>jsonb</td><td>composite-column rules: <code>Style#Colour</code>, <code>"XL (105 CMS)"</code>, <code>gender+garment</code>, <code>STYLE-SUBSTYLE-COLOUR</code></td></tr>
+    <tr><td>drop_rules</td><td>jsonb</td><td>filter banner / subtotal / grand-total rows (no natural key, or <code>*Sub Total*</code>/<code>*Grand Total*</code> markers)</td></tr>
+  </table>
+
+  <h3 class="tbl-name">staging_row</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">staging_id</span></td><td>bigint PK</td><td>—</td></tr>
+    <tr><td><span class="fk">profile_id</span></td><td>FK → source_layout_profile</td><td>which layout produced it</td></tr>
+    <tr><td>batch_id, source_file</td><td>uuid, text</td><td>the upload / weekly run</td></tr>
+    <tr><td>raw</td><td>jsonb</td><td>the row exactly as received (lossless)</td></tr>
+    <tr><td>mapped</td><td>jsonb</td><td>after column-map + split + normalise</td></tr>
+    <tr><td>status</td><td>enum</td><td><code>pending · mapped · promoted · rejected</code></td></tr>
+    <tr><td>promoted_doc_id</td><td>bigint null</td><td>the kernel document/row it became</td></tr>
+  </table>
+
+  <h3 class="tbl-name">ingest_exception</h3>
+  <p class="prov">The flag-don't-block queue. Every validation failure (§15) lands here with a plain-words reason and an owner — the floor keeps working.</p>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+    <tr><td><span class="pk">exception_id</span></td><td>bigint PK</td><td>—</td></tr>
+    <tr><td><span class="fk">staging_id</span></td><td>FK</td><td>the offending row</td></tr>
+    <tr><td>rule_code</td><td>enum</td><td><code>cost_above_mrp · season_is_date · unknown_brand · unresolved_barcode · missing_cost · …</code> (the E-codes, §15)</td></tr>
+    <tr><td>severity</td><td>enum</td><td><code>flag · hold</code> (hold only for truly dangerous)</td></tr>
+    <tr><td>owner_role, status, resolved_by</td><td>—</td><td>who fixes it; <code>open · resolved</code></td></tr>
+  </table>
+
+  <h3>The normalisation lookups</h3>
+  <table>
+    <tr><th>Table</th><th>Shape</th><th>Why (from the data)</th></tr>
+    <tr><td class="tbl-name">brand_alias</td><td><code>raw_name → brand_id</code>, <code>alias_type</code></td><td>1,163-row supplier dump, <code>V SPYKAR</code>/<code>FS-MUFTI</code> prefixes, <code>BLACKBERRY</code>/<code>BLACKBERRYS</code> — see §8</td></tr>
+    <tr><td class="tbl-name">vendor_alias</td><td><code>raw_name → vendor_id</code></td><td><code>ADITYA BIRLA FASHION LTD</code> vs <code>…LIFESTYLE BRANDS LIMITED</code>; "LIFE STYLE" vs "LIFESTYLE"</td></tr>
+    <tr><td class="tbl-name">taxonomy_vendor_map</td><td><code>(kind, raw) → taxonomy_id</code></td><td><code>KIDSM/KIDS MALE/KIDM</code>; the PT format's own <code>SUGGESTED SUB CATEGORY/TYPE</code> mechanism</td></tr>
+    <tr><td class="tbl-name">brand_season_map</td><td><code>(brand_id, raw) → season_id</code></td><td><code>SS26 / SS-26 / SPRING SUMMER(Feb-26) / S26</code> all → one cohort</td></tr>
+  </table>
+</section>
+
+<section id="identity">
+  <h2 class="sec">7 · Identity — SKU · cohort · barcode <span class="badge b-master">master · spine</span></h2>
+  <p>The single most-confirmed rule in the data: <strong>SKU = Brand × Style × Color × Size</strong>, with <strong>barcode a non-unique scan-alias</strong> and stock a count under it. Across 33 vendor files the three facts arrive packed differently, but they always survive.</p>
+
+  <h3 class="tbl-name">sku <span class="prov">— the real product</span></h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Key</th><th>From the real data</th></tr>
+    <tr class="keyrow"><td>sku_id</td><td>bigint</td><td><span class="badge b-pk" style="background:var(--navy);color:#fff">PK</span></td><td>surrogate</td></tr>
+    <tr><td><span class="fk">brand_id</span></td><td>bigint</td><td>FK → brand</td><td>part of natural key</td></tr>
+    <tr><td>style_code</td><td>text</td><td>nat-key</td><td><span class="src">DESIGN · Style Code · Material · Generic Material · Variant Material</span></td></tr>
+    <tr><td>color</td><td>text</td><td>nat-key</td><td><span class="src">COLOR · Shade · COLOUR</span> — often a code; <em>contaminated with grade</em></td></tr>
+    <tr><td>color_tier</td><td>enum null</td><td></td><td><code>PREMIUM · MEDIUM · ECONOMY</code> (P/M/E) — <strong>split out</strong> of the COLOR column where it leaks in</td></tr>
+    <tr><td>size</td><td>text</td><td>nat-key</td><td><span class="src">SIZE</span> — free text scoped to the SKU, mixed schemes (alpha · waist-cm · age <code>7-8Y</code> · <code>FREE SIZE</code> · bra <code>38C</code>); <strong>not an enum</strong></td></tr>
+    <tr><td>gender · sub_category · type · item · fit</td><td>FK → taxonomy</td><td>FK</td><td>the eight controlled vocabularies</td></tr>
+    <tr><td>hsn</td><td>text</td><td></td><td>6- or 8-digit; → gst_slab</td></tr>
+    <tr><td>no_discount</td><td>bool</td><td></td><td><em>derived</em> from <code>amm_style</code> (default true = discountable; false where AMM says protected)</td></tr>
+    <tr><td>is_branded, is_active</td><td>bool</td><td></td><td>branded keeps vendor identity; non-branded = KDPS deterministic</td></tr>
+  </table>
+  <p class="prov">Natural key = <code>(brand_id, style_code, color, size)</code>. A <code>parent</code> style sits above the size-level SKU where the vendor exposes it (Madura <code>Generic Material → Variant Material</code>).</p>
+
+  <h3 class="tbl-name">cohort <span class="prov">— what we count &amp; price (holds the frozen cost)</span></h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>Key</th><th>From the real data</th></tr>
+    <tr class="keyrow"><td>cohort_id</td><td>bigint</td><td><span class="badge b-pk" style="background:var(--navy);color:#fff">PK</span></td><td>—</td></tr>
+    <tr><td><span class="fk">sku_id</span></td><td>bigint</td><td>FK → sku</td><td>which product</td></tr>
+    <tr><td>barcode</td><td><strong>text</strong></td><td>nat-key</td><td><strong>non-unique</strong> · EAN-13, 7-digit internal, alphanumeric (<code>AS159</code>, <code>HY581454</code>), leading-zero — stored as text, never int</td></tr>
+    <tr><td><span class="fk">season_id</span></td><td>bigint</td><td>FK → season</td><td>the other half of the count key</td></tr>
+    <tr><td>mrp_paise</td><td>bigint <span class="badge b-money">₹</span></td><td></td><td><span class="src">MRP</span> — retail ticket price</td></tr>
+    <tr><td>unit_cost_paise</td><td>bigint <span class="badge b-money">₹</span></td><td></td><td>= <strong>P RATE directly</strong>, <strong>frozen at PT stock-in</strong>; <code>CHECK unit_cost_paise ≤ mrp_paise</code> (flag, E1)</td></tr>
+    <tr><td>owned_flag</td><td>enum</td><td></td><td><code>owned · not_owned · provisional</code> — finalised at PT; the <strong>V-flip</strong> flips this, barcode unchanged</td></tr>
+  </table>
+  <p class="prov">Natural key = <code>(barcode, season_id)</code> — the unit of count. <span class="tbl-name">barcode_alias</span> (<code>barcode · cohort_id · resolution {single · oldest_season_FIFO · ask}</code>) resolves a scan to a cohort at the POS edge.</p>
+</section>
+
+<section id="brand">
+  <h2 class="sec">8 · Brand · alias · vendor <span class="badge b-master">master</span></h2>
+  <p><strong>Canonical brand = the curated ~592 house list</strong> (<span class="src">KDPS PT FILE SHEET.xlsx › Master Sheet › BRAND</span>), with the <code>V&nbsp;</code>/<code>FS-</code> prefix rows and spelling dups collapsed to their parents (≈560 true brands). The 1,163-row supplier dump and all vendor spellings load as <strong>aliases</strong>, so ingest never fails on an unseen brand.</p>
+
+  <div class="erd-row" style="margin:10px 0">
+    <div class="ent e-master" style="max-width:none;flex:1"><b>brand</b> (canonical)<small>brand_id · name · parent_brand_id (sub-labels: Allen Solly Junior → Allen Solly) · supplier_id · is_active</small></div>
+    <div class="arrow" style="align-self:center">←</div>
+    <div class="ent e-master" style="max-width:none;flex:1"><b>brand_alias</b><small>raw_name → brand_id · alias_type</small></div>
+  </div>
+  <table>
+    <tr><th><code>alias_type</code></th><th>Example raw → canonical</th><th>Behaviour</th></tr>
+    <tr><td><code>spelling</code></td><td><code>BLACKBERRY</code> · <code>ANJU FEB</code> → ANJU FAB · <code>TOM BOY</code></td><td>same brand</td></tr>
+    <tr><td><code>sub_label</code></td><td><code>RAYMOND HERITAGE</code>, <code>U.S. POLO KIDS</code></td><td>distinct brand, <code>parent_brand_id</code> set</td></tr>
+    <tr><td><code>v_flip</code></td><td><code>V SPYKAR</code> → SPYKAR</td><td>resolves to parent <strong>+ sets cohort owned_flag → KDPS-owned</strong> (the EOSS V-flip). Not a brand.</td></tr>
+    <tr><td><code>fresh</code></td><td><code>FS-MUFTI</code> → MUFTI</td><td>fresh-sale state of the parent</td></tr>
+    <tr><td><code>division</code></td><td><code>LP/LR/LY/LX/LA/LT</code> → Louis Philippe</td><td>vendor billing-division codes (Madura SAP / AMM)</td></tr>
+    <tr><td><code>supplier_dump</code></td><td>the 693 long-tail names not in the house list</td><td>load as alias; KDPS promotes to canonical at migration if stocked</td></tr>
+  </table>
+
+  <h3 class="tbl-name">vendor <span class="prov">— vendor ≠ brand ≠ firm (three facts)</span></h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>From the real data</th></tr>
+    <tr class="keyrow"><td>vendor_id</td><td>bigint PK</td><td>surrogate — never join on raw name</td></tr>
+    <tr><td>name</td><td>text (canonical)</td><td>~281–360 suppliers; wholesalers carry hundreds of labels (<code>SSS</code>=176, <code>VARIETY TEXTILE</code>=175, <code>P M SONS</code>=127)</td></tr>
+    <tr><td>location, party_type</td><td>text</td><td><span class="src">SUPPLIER DATA BASE › Location</span></td></tr>
+    <tr><td>barcode_capable</td><td>bool</td><td><strong>the one commercial attribute present</strong> — only 32% of suppliers ship barcoded goods</td></tr>
+    <tr><td>credit_days, cd_pct, agent_name, agent_phone</td><td>—</td><td>dirty / partly blank → captured fresh at migration</td></tr>
+    <tr><td>is_active</td><td>bool</td><td>soft-delete</td></tr>
+  </table>
+  <p class="prov">Children: <span class="tbl-name">vendor_gstin</span> (SCD-2, per billing state — <code>20…</code> JH, <code>07</code> Delhi, <code>08</code> Rajasthan, <code>19</code> WB all seen) · <span class="tbl-name">vendor_bank</span> (account, IFSC). GSTIN / bank / terms are mostly blank in source → migration capture.</p>
+</section>
+
+<section id="geo">
+  <h2 class="sec">9 · Entity · GSTIN · store <span class="badge b-master">master</span> <span class="badge b-scd2">SCD-2</span></h2>
+  <table>
+    <tr><th>Table</th><th>Key columns</th><th>From the real data + the locked decisions</th></tr>
+    <tr><td class="tbl-name">legal_entity</td><td><code>legal_entity_id</code> · pan · legal_name · tally_company · <strong>is_active</strong></td><td><strong>Two seeded rows</strong> (decision 1): <em>KDPS Lifestyle Pvt Ltd</em> + <em>OM Ganpati Enterprises</em> (the <code>FRENCHEEZI</code> billing column) — both editable / deactivatable. Relational 1..n.</td></tr>
+    <tr><td class="tbl-name">gstin <span class="badge b-scd2">SCD-2</span></td><td><code>gstin_id</code> · legal_entity_id · <code>gstin</code> (15, <strong>nullable</strong>) · state_code · valid_from/to · is_current</td><td>Jharkhand <code>20AAGCK9945D1ZM</code> seeded; <strong>Bihar (10) row present, gstin = NULL</strong> until entered (decision 2). State = first 2 digits → drives CGST+SGST vs IGST.</td></tr>
+    <tr><td class="tbl-name">store</td><td><code>store_id</code> · <strong>store_code</strong> (minted) · banner · format · city · state · <code>gstin_id</code> · email · cloud_pos · retailji · is_active</td><td>16 stores + Ranchi WH. Name is a <em>banner</em> (VAISHNAVI ×5) → mint a real code; codes already live in bill numbers (<code>DEO · VAB · LBKR · SGMR · GAYA · JSL</code>). format ∈ <code>EBO · MBO · WAREHOUSE</code>; state derived from city; GSTIN to be set.</td></tr>
+    <tr><td class="tbl-name">store_group / store_group_member</td><td><code>name · kind</code> · (store_id, group_id)</td><td>clusters / tiers / offer-scope; many-to-many</td></tr>
+  </table>
+</section>
+
+<section id="season">
+  <h2 class="sec">10 · Season · taxonomy <span class="badge b-master">master</span></h2>
+  <p><strong>Season is the dirtiest field in the whole corpus</strong> — same SKU gets 4+ spellings, blanks, and Excel dates; 34% disagree across two copies. So it is a governed master with heavy alias normalisation, never free text.</p>
+  <table>
+    <tr><th>Table</th><th>Key columns</th><th>From the real data</th></tr>
+    <tr><td class="tbl-name">season</td><td><code>season_id · code · season_half {SS|AW} · month · year · state {Open·EOSS·Closed}</code></td><td>A <strong>24-month rolling cohort calendar</strong> — <code>{SPRING SUMMER|AUTUMN WINTER}(Mon-YY)</code>, ~22 live values (not 2 seasons). SS=Jan–Jun, AW=Jul–Dec.</td></tr>
+    <tr><td class="tbl-name">taxonomy</td><td><code>taxonomy_id · kind · value · parent_id</code></td><td>Eight controlled vocabularies from the Master Sheet: GENDER(5) · SUB CATEGORY(9) · TYPE(7) · ITEM(95) · FIT(75) · COLOR(23, incl. P/M/E) · SIZE(open). SIZE &amp; FIT stay open per-SKU.</td></tr>
+    <tr><td class="tbl-name">gst_slab <span class="badge b-scd2">SCD-2</span></td><td><code>hsn · price_band_floor · price_band_ceiling · rate_pct · valid_from/to</code></td><td><code>{5, 12, 18}</code> + <code>TAX FREE</code> (rate 0 + flag). Apparel is slab-by-price-band &amp; date-effective. <em>Migration-entered options.</em></td></tr>
+  </table>
+</section>
+
+<section id="commercial">
+  <h2 class="sec">11 · Brand-terms — the commercial spine <span class="badge b-scd2">SCD-2</span> <span class="badge b-master">migration-entered</span></h2>
+  <p>The two-axis commercial model. <strong>Zero of these columns exist in the source data</strong> — confirmed by the analysis (the supplier/brand master carries only brand↔supplier + a barcode-yes/no flag). So <code>brand_terms</code> ships <strong>empty, with controlled option lists</strong>, and KDPS fills it per brand × season during migration (decision 3). The friendly label is <em>derived</em>, never stored.</p>
+  <table>
+    <tr><th>Column</th><th>Option list (what KDPS picks from)</th><th>Decides</th></tr>
+    <tr class="keyrow"><td>brand_terms_id</td><td>bigint PK</td><td>—</td></tr>
+    <tr><td><span class="fk">brand_id · season_id</span></td><td>FK</td><td>one terms card per brand per season (season = the version)</td></tr>
+    <tr><td><strong>ownership</strong></td><td><code>KDPS_owns · brand_owns</code></td><td>Axis 1 — GST trigger + on-book value</td></tr>
+    <tr><td><strong>return_terms</strong></td><td><code>none · capped · uncapped</code></td><td>Axis 2 — return to brand</td></tr>
+    <tr><td>rolling_top_up</td><td><code>true · false</code></td><td>Consignment (true) vs SOR (false)</td></tr>
+    <tr><td>liability_trigger</td><td><code>RECEIPT · SALE · SETTLEMENT</code></td><td>when vendor liability posts</td></tr>
+    <tr><td>gst_recognition_point</td><td><code>ARRIVAL · SALE</code></td><td>where input GST is recognised (CA call per brand)</td></tr>
+    <tr><td>return_window_days</td><td>int (60–120)</td><td>commercial clock, alarmed 30/15/7</td></tr>
+    <tr><td>normal_margin_pct · discount_margin_pct</td><td>numeric</td><td>the two margins</td></tr>
+    <tr><td>correction_allowance_pct · allowance_basis</td><td>numeric · <code>money · pieces</code></td><td>the 25-18-10 correction pool</td></tr>
+    <tr><td>credit_days · early_pay_discount_pct</td><td>int · numeric</td><td>→ payment due dates</td></tr>
+    <tr><td>valid_from · valid_to · is_current</td><td>date · bool</td><td>SCD-2</td></tr>
+  </table>
+  <div class="callout co-note"><strong>Derived label</strong> (a view, never stored): <code>(KDPS_owns, none) → Outright</code> · <code>(KDPS_owns, capped) → Correction</code> · <code>(brand_owns, uncapped, top_up=false) → SOR</code> · <code>(brand_owns, uncapped, top_up=true) → Consignment</code>. A new model = a new axis combination = a new row (Rule 12).</div>
+</section>
+
+<section id="amm">
+  <h2 class="sec">12 · AMM · offers · claim economics</h2>
+
+  <h3 class="tbl-name">amm_style <span class="badge b-new">new master</span> <span class="prov">— the discount-eligibility list</span></h3>
+  <p>AMM = <strong>Approved Markdown Merchandise</strong> — the master of <strong>items discounts &amp; offers CAN apply to</strong> (decision 4). Real file: 77,912 style codes with a flag + reason + provenance. A style not in the list, or flagged off, sells at full MRP.</p>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>From <span class="src">16_AMM List.xlsb</span></th></tr>
+    <tr class="keyrow"><td>amm_id</td><td>bigint PK</td><td>—</td></tr>
+    <tr><td><span class="fk">brand_id</span> · style_code · q_code</td><td>FK · text · text</td><td>join key (plain + trailing-<code>Q</code> form)</td></tr>
+    <tr><td>discount_eligible</td><td>bool</td><td><code>Discount / No Discount</code> — 453 of 77,912 are protected (off)</td></tr>
+    <tr><td>reason</td><td>text</td><td><code>Core · TR Line · Iconic Trousers · Festive Rebuy · Discontinued-from-AMM · Added-back</code></td></tr>
+    <tr><td>effective_date · provenance</td><td>date · text</td><td>"As on 20 Jan'26"; approval trail (email / WhatsApp) → audit_log</td></tr>
+  </table>
+
+  <h3 class="tbl-name">offer_rule + offer_slab <span class="prov">— polymorphic rewards, multi-dimensional scope</span></h3>
+  <p>One marketing offer = an <code>offer_rule</code> header with N <code>offer_slab</code> children. Rewards are polymorphic; scope is multi-dimensional. <code>Offer Details</code> arrives as a free-text mini-DSL (<code>B1-20%</code> in ≥10 spellings) → parsed into slabs, never stored raw.</p>
+  <table>
+    <tr><th>offer_rule</th><th>offer_slab</th></tr>
+    <tr><td style="vertical-align:top">
+      <code>offer_id</code> PK · <span class="fk">brand_id</span> · sub_brand_scope ·<br>
+      <strong>offer_type</strong> <code>GWP·ATV·EOSS·FRESH·Promo·AMM·ABV</code> ·<br>
+      season_id · start_date · end_date (nullable) · status ·<br>
+      <strong>scope:</strong> store_scope (<code>PAN INDIA</code>/store) · style_scope → amm ·<br>
+      category_include / category_exclude · gender_scope · fit_scope · mrp_band ·<br>
+      reward_variant (<code>₹ off ↔ ₹ free shopping</code>) · artwork_ref
+    </td><td style="vertical-align:top">
+      <code>slab_id</code> PK · <span class="fk">offer_id</span> ·<br>
+      <strong>mechanic</strong> ∈ <code>spend_amount_off · buyN_pct · buyN_getM_free · gwp_gift · flat_pct · fixed_price_mrp_band · additional_shopping</code> ·<br>
+      trigger_spend_paise · min_qty · percent_off ·<br>
+      free_qty (lowest-priced free) · gift_sku · gift_token_price_paise ·<br>
+      fixed_price_paise · mrp_low_paise · mrp_high_paise
+    </td></tr>
+  </table>
+
+  <h3>Claim economics <span class="badge b-econ">in the kernel now</span></h3>
+  <p>From <code>report-offer.md</code>: offers are applied <strong>retroactively to maximise vendor-claimable markdown</strong>, under a per-brand-per-month cap, against NSV commission tiers. These are real money events (decision 5).</p>
+  <table>
+    <tr><th>Table</th><th>Key columns</th><th>From the real data</th></tr>
+    <tr><td class="tbl-name">offer_claim</td><td><code>claim_id · offer_id · vendor_id · brand_id · period · claim_amount_paise · status · settlement_ref</code></td><td>the markdown support a brand reimburses (ties to the DN/CN settlement)</td></tr>
+    <tr><td class="tbl-name">nsv_commission_slab</td><td><code>brand_id · nsv_floor_paise · commission_pct</code></td><td><span class="src">"NSV - 24lakh 1% · 28lakh 2% · 34lakh 3%"</span></td></tr>
+    <tr><td class="tbl-name">discount_budget</td><td><code>brand_id · period(month) · cap_pct</code></td><td>the ~46–47% monthly discount cap per brand</td></tr>
+  </table>
+</section>
+
+<section id="docs">
+  <h2 class="sec">13 · Document skeleton &amp; the PT line <span class="badge b-doc">document</span></h2>
+  <p>Every document reuses one skeleton, then carries its own lines. Documents are the <strong>only</strong> writers of ledgers (through <code>post_entries</code>), and they <strong>snapshot</strong> the master values they used.</p>
+  <table>
+    <tr><th>Skeleton field group</th><th>Columns</th></tr>
+    <tr><td>Number</td><td><code>doc_number</code> (<code>{FY}/{store}/{seq}</code> — e.g. <code>26-27/DEO/74</code>) · <code>voucher_series_id</code></td></tr>
+    <tr><td>Type</td><td><code>doc_type · reason_code</code> — posting keyed on the pair, both config</td></tr>
+    <tr><td>Status</td><td><code>docstatus (draft·submitted·cancelled) · status</code></td></tr>
+    <tr><td>Idempotency</td><td><code>idempotency_uuid</code> (offline writes dedupe on it)</td></tr>
+    <tr><td>Actor / audit</td><td><code>created_by · created_at · approved_by · executed_by</code> (UTC stored, IST shown)</td></tr>
+    <tr><td>Snapshots</td><td><code>snapshot_*</code> — terms, price, season, GSTIN, offer used at creation</td></tr>
+    <tr><td>Dimensions</td><td><code>store_id · brand_id · season_id · state_gstin_id · vendor_id</code> — flow down to ledger legs</td></tr>
+    <tr><td>Links</td><td><code>source_doc_id · source_line_id · voucher_detail_no</code> (retro-link + corrections)</td></tr>
+  </table>
+
+  <h3 class="tbl-name">pt_line <span class="badge b-doc" style="background:#fff;border:2px solid var(--rust);color:var(--navy)">the spine</span></h3>
+  <p>The denormalised product row — KDPS's canonical 20-column PT. Identity + classification + price + cost + tax crystallise here; the masters normalise out of it.</p>
+  <table>
+    <tr><th>Column</th><th>Resolves to / note</th></tr>
+    <tr><td><code>season · brand · color · gender · sub_category · type · item · fit · size</code></td><td>→ sku + season (the 9 identity/classification axes)</td></tr>
+    <tr><td><code>barcode</code></td><td>→ cohort key half (text, non-unique)</td></tr>
+    <tr><td><code>design</code></td><td>→ sku.style_code</td></tr>
+    <tr><td><code>hsn</code></td><td>→ gst_slab lookup</td></tr>
+    <tr><td><code>qty</code> · <code>nag</code></td><td>pieces (collapse — same fact stored twice in real data)</td></tr>
+    <tr><td><code>mrp_paise</code></td><td>→ cohort.mrp</td></tr>
+    <tr><td><code>basic_paise</code></td><td>= invoice taxable RATE; <strong>informational</strong> — do not derive ex-GST cost from it</td></tr>
+    <tr><td><code>p_rate_paise</code></td><td>→ cohort.unit_cost (<strong>= cost directly</strong>, frozen; <code>≤ mrp</code>)</td></tr>
+    <tr><td><code>input_tax · output_tax</code></td><td>GST % per piece (may differ — inverted duty)</td></tr>
+    <tr><td><code>margin_paise</code></td><td>computed, never hand-entered</td></tr>
+  </table>
+  <p class="prov">Two-step posting: the <strong>GRN</strong> posts quantity only (no cost); the <strong>PT</strong> stamps unit cost + posts vendor liability per commercial model. Other documents (booking, sale+sale_line, store_split, transfer, return_dn/cn with the claim→settlement lifecycle, payment+allocation, tally_voucher) reuse the skeleton — full specs in <code>posting-catalog.html</code> / <code>lifecycles.html</code>.</p>
+</section>
+
+<section id="ledgers">
+  <h2 class="sec">14 · The three ledgers <span class="badge b-ledger">append-only · derived</span></h2>
+  <p>Built by summing document legs; never hand-edited. The real reports gave us the exact movement vocabulary.</p>
+
+  <h3 class="tbl-name">stock_ledger</h3>
+  <table>
+    <tr><th>Column</th><th>Type</th><th>From the real data</th></tr>
+    <tr><td><span class="fk">cohort_id</span></td><td>FK</td><td>what moved</td></tr>
+    <tr><td>qty_delta</td><td>int (signed)</td><td>balance = Σ over filters</td></tr>
+    <tr><td>movement_reason</td><td>enum</td><td><strong>the SOH report's columns are the reason set:</strong> <code>opening · purchase · sale · adjustment · sales_return · transfer_out · transfer_in · purchase_return</code></td></tr>
+    <tr><td>unit_cost_paise</td><td>bigint null</td><td>NULL on the GRN quantity leg; stamped at PT</td></tr>
+    <tr><td>location_type · condition · owned_flag</td><td>enum</td><td>on-hand / in-transit / quarantine / liquidation</td></tr>
+    <tr><td><span class="fk">store_id · brand_id · season_id · state_gstin_id</span></td><td>FK</td><td>the four dimensions on every leg</td></tr>
+    <tr><td>reason_code · source_doc_id · source_line_id</td><td>—</td><td>traces to one document</td></tr>
+  </table>
+
+  <h3 class="tbl-name">vendor_ledger &amp; cash_ledger</h3>
+  <table>
+    <tr><th>vendor_ledger</th><th>cash_ledger (+ bank_reconciliation)</th></tr>
+    <tr><td style="vertical-align:top">
+      <code>vendor_id · brand_id</code> · <code>amount_paise · dr_cr</code> ·<br>
+      <code>state_gstin_id · reason_code · source_doc_id</code><br>
+      <span class="prov">Purchase credits · payment/DN debits · running balance =<br>Opening + Invoices − CD − GR − Payments + Interest. The DN/CN<br>register (<code>{FY}/WH/PR-{seq}</code>) drives the claim→settlement legs.</span>
+    </td><td style="vertical-align:top">
+      <code>store_id · business_date · tender {cash·upi·card·dues}</code> ·<br>
+      <code>amount_paise · kind {sale·dues_recovery·bank_deposit·ho_transfer}</code><br>
+      <span class="prov">grain = store × day × tender. Closing = Opening + collections<br>− Bank Deposit − Cash-to-HO. <strong>bank_reconciliation</strong>: per non-cash rail<br><code>booked_paise vs settled_paise</code>, <code>mid_no</code>, <code>bank_charge_paise</code>,<br><code>outstanding_paise</code>. Bank UTR/IFSC parsed from the narration blob.</span>
+    </td></tr>
+  </table>
+  <p class="prov">Also: <span class="tbl-name">petty_cash_ledger</span> (store expense chart — salary/rent/electricity/courier…), <span class="tbl-name">sor_lot</span> (two clocks off one <code>removal_date</code> + <code>gst_recognised(date,voucher)</code> stamped once), <span class="tbl-name">audit_log</span> (who/why/when, AI-suggestion vs human-decision split).</p>
+</section>
+
+<section id="dq">
+  <h2 class="sec">15 · Data-quality constraints — the validation layer</h2>
+  <p>These are the real error classes the analysis found in KDPS data. Each becomes a <strong>constraint + an <code>ingest_exception</code> rule</strong> — flag, don't block.</p>
+  <table>
+    <tr><th>Code</th><th>Real error</th><th>Constraint the kernel encodes</th></tr>
+    <tr><td>E1</td><td>Cost recorded above MRP (24 items, up to ₹1,876 over)</td><td><code>CHECK unit_cost_paise ≤ mrp_paise</code> → flag <code>cost_above_mrp</code></td></tr>
+    <tr><td>E2/E3/E4</td><td>Season holds a date / 4 spellings / 34% disagree / 12% blank</td><td>Season is an FK to <code>season</code>; raw → <code>brand_season_map</code>; reject datetimes → flag <code>season_is_date</code></td></tr>
+    <tr><td>E6</td><td>Grand-total / subtotal rows inside the data</td><td>drop rows with null natural key (no barcode/qty); totals are derived</td></tr>
+    <tr><td>E7</td><td>Zero-stock catalogue rows mixed with live stock (24,576 of 33,382)</td><td>SOH = live positions only (<code>qty &gt; 0</code>); catalogue ≠ stock_ledger</td></tr>
+    <tr><td>E8</td><td>Sentinels <code>0 · . · N/A · NA</code> instead of null; <code>KIDSM</code> vs <code>KIDS MALE</code></td><td>sentinels → NULL; spelling → <code>taxonomy_vendor_map</code></td></tr>
+    <tr><td>E9</td><td>Barcode read as integer (leading-zero / length loss)</td><td>barcode is <strong>text</strong>, never coerced numeric</td></tr>
+    <tr><td>E10</td><td>Color column holds price-grade (PREMIUM/ECONOMY) + real color</td><td>split into <code>color</code> + <code>color_tier</code></td></tr>
+    <tr><td>—</td><td>Header lies / unnamed columns / file-extension lies</td><td>map by <code>source_layout_profile</code> position, never trust the header string</td></tr>
+  </table>
+</section>
+
+<section id="migration">
+  <h2 class="sec">16 · What KDPS fills at migration (the option lists)</h2>
+  <p>Migration is a real phase (decision 3). These masters ship <strong>empty but typed</strong> — the kernel hands KDPS dropdowns, they enter the data, it lands clean. Nothing here is invented now.</p>
+  <table>
+    <tr><th>Master</th><th>KDPS enters</th><th>From / against</th></tr>
+    <tr><td><code>brand_terms</code></td><td>ownership · return_terms · margins · GST recognition · credit days — per brand × season</td><td>option lists in §11; not in any source file</td></tr>
+    <tr><td><code>gstin</code></td><td>the Bihar GSTIN value</td><td>the blank slot in §9</td></tr>
+    <tr><td><code>gst_slab</code></td><td>HSN × price-band × rate × effective date</td><td><code>{5·12·18·TAX FREE}</code></td></tr>
+    <tr><td><code>store</code></td><td>store_code · GSTIN binding · state confirm</td><td>16 stores + WH; banners → codes</td></tr>
+    <tr><td><code>vendor</code></td><td>GSTIN · bank · credit terms</td><td>mostly blank in <code>SUPPLIER DATA BASE</code></td></tr>
+    <tr><td><code>brand</code></td><td>confirm canonical; promote long-tail aliases if stocked</td><td>the curated ~592 list (approved)</td></tr>
+    <tr><td><code>user · role · permission</code></td><td>real people · ₹ approval bands · scopes</td><td>not delivered (MOM <code>USERS</code> sheet empty)</td></tr>
+    <tr><td>opening stock</td><td>per-store opening SOH + frozen cost</td><td>the real SOH files (D9 migration)</td></tr>
+  </table>
+</section>
+
+<section id="index">
+  <h2 class="sec">17 · Full table index</h2>
+  <p><strong>Ingest:</strong> <code>source_layout_profile · staging_row · ingest_exception · brand_alias · vendor_alias · taxonomy_vendor_map · brand_season_map</code></p>
+  <p><strong>Masters:</strong> <code>sku · cohort · barcode_alias · brand · vendor · vendor_gstin · vendor_bank · legal_entity · gstin · store · store_group · store_group_member · season · taxonomy · gst_slab · brand_terms · amm_style · offer_rule · offer_slab · offer_claim · nsv_commission_slab · discount_budget · user · role · permission · role_permission · voucher_series</code></p>
+  <p><strong>Documents:</strong> <code>booking(+line) · shipment · grn(+line) · pt(+pt_line) · store_split · sale(+sale_line) · exchange · transfer · return_dn · return_cn · payment · allocation · tally_voucher</code> (+ <code>*_line</code> children)</p>
+  <p><strong>Ledgers:</strong> <code>stock_ledger · vendor_ledger · cash_ledger · bank_reconciliation · petty_cash_ledger · sor_lot · audit_log</code></p>
+  <div class="callout co-key" style="margin-top:18px"><strong>What changed vs the design-phase <code>data-model.html</code>:</strong> added the whole <em>staging / source-layout / exception</em> tier; <em>brand_alias</em> with v-flip/fresh/division types; the <em>amm_style</em> eligibility master; the offer <em>claim economics</em> (claim · NSV · budget); <em>bank_reconciliation</em> + <em>petty_cash</em>; the <em>color_tier</em> split; and the data-quality constraints — all forced by the real files. The design-phase schema's spine (sku/cohort/ledgers/two-axis terms/sor_lot) held up unchanged.</div>
+</section>
+
+<footer>
+  KDPS · Kernel Data Model · 27 June 2026 · grounded in <code>docs/data-from-kdps/</code> · build artifact for <code>core</code> + <code>masters</code>.
+  Read with <code>posting-catalog.html</code> (legs), <code>lifecycles.html</code> (state machines), <code>00-system-architecture.html</code> (the 12 rules).
+</footer>
+
+</main>
+</div>
+</body>
+</html>
