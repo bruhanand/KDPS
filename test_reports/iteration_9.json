@@ -1,0 +1,62 @@
+{
+  "summary": "Tested both backend and frontend for Vendor ageing, Users & Roles editor, OpenAPI client integration safety, inbound GRN flows, and nav rewiring. Requested module flows passed end-to-end. Auth playbook checks found security/config deviations (no app auth cookie, permissive CORS without credentials, bcrypt format mismatch, and no seed_admin command).",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/auth/login",
+        "issue": "Login response does not set an application auth httpOnly cookie; only Cloudflare __cf_bm cookie observed. Playbook expected cookie-backed auth behavior check.",
+        "priority": "HIGH"
+      },
+      {
+        "endpoint": "/api/auth/login (CORS preflight)",
+        "issue": "Preflight returns access-control-allow-origin='*' and no access-control-allow-credentials. Playbook expects explicit origin + credentials support when credentialed auth is used.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "seed/admin bootstrap",
+        "issue": "No seed_admin command found; project uses seed_foundation upsert instead. If playbook strictly requires seed_admin semantics, this is a gap to reconcile/document."
+      },
+      {
+        "endpoint": "password storage format",
+        "issue": "Owner password hash is pbkdf2_sha256..., not $2b$ bcrypt prefix expected by provided playbook check."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration9_rbac_vendor_inbound.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Decide and implement auth strategy alignment with playbook: either add secure httpOnly cookie auth flow (and credentials CORS) or explicitly update playbook/acceptance criteria to token-in-body pattern.",
+    "If bcrypt is mandatory by policy, configure PASSWORD_HASHERS and reseed/reset credentials safely; otherwise document PBKDF2 as accepted standard.",
+    "If seed_admin behavior is required, add/alias command with idempotent update semantics and test coverage.",
+    "Optional: keep current RBAC/inbound tests as regression baseline and run in CI."
+  ],
+  "critical_code_review_comments": [
+    "Requested product flows are implemented correctly and integrated: /ledgers/vendor ageing cards+table, /masters/users and /edges/rbac editor with owner/admin gating, /inbound list/new/detail, and nav wiring to /inbound.",
+    "Generated OpenAPI schema/client exists and app still authenticates and loads core pages; typedApi usage in MasterPages is functioning.",
+    "RBAC UI creation flow can be timing-sensitive right after role save (role dropdown option appears after refresh); this was a test-timing issue, not a product failure.",
+    "Auth/security checks from playbook currently do not match implementation posture (token JSON flow + permissive CORS)."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration9_rbac_vendor_inbound.py",
+    "/app/test_reports/iteration_9.json"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest passed for this iteration scope)",
+    "frontend": "100% (all requested UI/integration flows passed in browser automation)"
+  },
+  "test_credentials": "Read from /app/memory/test_credentials.md and used: owner/Owner@123, admin/Admin@123, deo.cashier/Store@123, accounts1/Acct@123.",
+  "seed_data_creation": "Created temporary UI/API test records and cleaned up: UI Auto Role + UI Auto User were deactivated in UI cleanup; backend fixture-created TEST role/user also deactivated in teardown. Created direct GRN test records remain as append-only business data.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Core requested feature set is passing. Focus next run on auth-policy reconciliation (cookie/CORS/hash/seed_admin expectations) and rerun auth playbook validations after fixes. Existing regression test file for this scope is ready at backend/tests/test_iteration9_rbac_vendor_inbound.py.",
+  "rca of the issue": "Auth deviations are configuration/architecture mismatch rather than runtime breakage: frontend/backend currently use JWT in response body + Authorization header. Therefore no app auth cookie is set, CORS credentials headers are absent, and password hashing uses Django default PBKDF2. Repro: POST /api/auth/login (owner creds) and inspect response headers; OPTIONS /api/auth/login with Origin and request headers shows ACAO='*' and no ACAC. Mitigation: either implement cookie-based auth + strict CORS credentials or formalize current bearer-token architecture in security playbook and acceptance checks."
+}

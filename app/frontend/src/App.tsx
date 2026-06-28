@@ -5,7 +5,7 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { Home } from "./pages/Home";
 import { Login } from "./pages/Login";
 import { ModulePage } from "./pages/ModulePage";
-import { BrandsPage, GstinsPage, SeasonsPage, StoresPage } from "./pages/MasterPages";
+import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage } from "./pages/MasterPages";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -28,6 +28,9 @@ export function App() {
             <Route path="/documents/inbound" element={<InboundPage />} />
             <Route path="/documents/inbound/new" element={<InboundNewPage />} />
             <Route path="/documents/inbound/:id" element={<GrnDetailPage />} />
+            <Route path="/inbound" element={<InboundPage />} />
+            <Route path="/inbound/new" element={<InboundNewPage />} />
+            <Route path="/inbound/:id" element={<GrnDetailPage />} />
             <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
             <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
             <Route path="/documents/pt-mapper/:id" element={<PtFileDetailPage />} />
@@ -40,6 +43,8 @@ export function App() {
             <Route path="/masters/brands" element={<BrandsPage />} />
             <Route path="/masters/seasons" element={<SeasonsPage />} />
             <Route path="/masters/gstins" element={<GstinsPage />} />
+            <Route path="/masters/users" element={<UsersRolesPage />} />
+            <Route path="/edges/rbac" element={<UsersRolesPage />} />
             <Route path="*" element={<ModulePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -13,7 +13,8 @@ from typing import Any
 
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import generics
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,11 +22,26 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from accounts.models import LoginAttempt
-from accounts.serializers import CustomTokenObtainPairSerializer, UserProfileSerializer
+from accounts.models import NAV_GROUPS, LoginAttempt, Role, ScopeType, User
+from accounts.serializers import (
+    AdminRoleSerializer,
+    AdminUserSerializer,
+    CustomTokenObtainPairSerializer,
+    UserProfileSerializer,
+)
+from masters.models import Store
 
 MAX_FAILURES = 5
 LOCK_MINUTES = 15
+RBAC_ADMIN_ROLES = {"owner", "it_admin"}
+
+
+class IsRbacAdmin(BasePermission):
+    def has_permission(self, request: Request, view: Any) -> bool:
+        role_code = getattr(getattr(request.user, "role", None), "code", "")
+        return bool(request.user and request.user.is_authenticated and (
+            request.user.is_superuser or role_code in RBAC_ADMIN_ROLES
+        ))
 
 
 class LoginView(TokenObtainPairView):
@@ -81,3 +97,49 @@ class LogoutView(APIView):
             except TokenError:
                 pass
         return Response({"detail": "Logged out."})
+
+
+class AdminMetaView(APIView):
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+
+    def get(self, request: Request) -> Response:
+        return Response(
+            {
+                "nav_groups": list(NAV_GROUPS),
+                "scope_types": [
+                    {"value": value, "label": label} for value, label in ScopeType.choices
+                ],
+                "stores": [
+                    {"id": s.id, "code": s.code, "name": s.name, "store_type": s.store_type}
+                    for s in Store.objects.filter(is_active=True).order_by("name")
+                ],
+            }
+        )
+
+
+class RoleListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+    serializer_class = AdminRoleSerializer
+    queryset = Role.objects.all().order_by("name")
+
+
+class RoleDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+    serializer_class = AdminRoleSerializer
+    queryset = Role.objects.all()
+
+
+class UserListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+    serializer_class = AdminUserSerializer
+
+    def get_queryset(self) -> Any:
+        return User.objects.select_related("role", "entity").prefetch_related("stores").order_by("username")
+
+
+class UserDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+    serializer_class = AdminUserSerializer
+
+    def get_queryset(self) -> Any:
+        return User.objects.select_related("role", "entity").prefetch_related("stores")
