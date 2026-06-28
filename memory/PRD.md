@@ -33,6 +33,27 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Phase D Slice 2 + Phase E: Readers & Warehouse→Patna workflow (28 Jun 2026) ✅
+- **Legacy/binary readers** (`ptmapper/engine.py`): `read_sheets` now dispatches by extension **and** magic
+  bytes — `.xls` via xlrd (OLE2), `.xlsb` via pyxlsb (Madura SAP), `.xlsx` via openpyxl, `.csv`; correctly
+  routes mislabelled files (a `.xls` that is really `.xlsx`, a `.csv` that is OLE2). Excel serial dates in
+  `.xlsb` decoded. `MAX_ROWS=8000` cap honoured. Deps added to `pyproject.toml`: openpyxl, xlrd, pyxlsb.
+- **Workflow stages** on `PtFile`: `mapping` (Warehouse/Ranchi) → `sent` (to Patna HO) → `posted` (locked).
+  Plus `manually_edited`, `sent_at`, `posted_at`. Resolve-propagation skips hand-edited/non-mapping files.
+- **Hand-editable KDPS table**: warehouse opens Edit → every cell becomes an inline input → Save
+  (`PATCH /api/ptmapper/files/:id/rows`, recomputes blanks/counts, sets `manually_edited`).
+- **Send / Recall / Post / Export**: `POST files/:id/send` (warehouse→Patna), `POST files/:id/recall`
+  (Patna sends back), `POST files/:id/post` (Patna pushes into system → **locks**), `GET files/:id/export.xlsx`
+  (real .xlsx, KDPS 22-col order) alongside the existing CSV export. `rerun` is 409-guarded to mapping stage.
+- **Frontend** (`PtMapper.tsx`): list gains Mapping + Workflow columns; detail page has a 3-step StageStepper,
+  role-aware actions (owner=all, `warehouse`=edit/send, `accounts`=Patna recall/post on sent files only),
+  inline edit grid, Excel+CSV download, stage banners. Large files render a 1000-row display cap (download
+  for full set) to keep the DOM light.
+- **Tested:** testing_agent iteration_4 → frontend 100%, 0 bugs across 11 scenarios (3 new readers via UI
+  upload, edit→save, send, post-lock, recall, role gating for all 3 users, xlsx/csv export, regression).
+- **NOT yet done (next P0):** "Push into system" currently transitions to `posted` and **locks** the record;
+  it does **not yet write the `core` stock ledger**. That first stock-ledger write is the remaining Phase E work.
+
 ## Implemented — Phase D: PT File Mapper (Warehouse / Ranchi) (28 Jun 2026) ✅
 - **Deterministic, table-driven engine — NO AI** (`ptmapper` Django app). Reads a brand PT file
   (.xlsx/.csv), detects the header row + data range, identifies the archetype profile (A generic /
@@ -84,11 +105,12 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
   `app/backend/tests/test_foundation.py`.
 
 ## Backlog (prioritised)
-- **P0 / Phase D Slice 2 — more readers/profiles:** `.xls` (Jockey, FAHRENHEIT, SUVIDHI, ambreli, TWILLS)
-  + `.xlsb` (Madura) + headerless CSV (USPOLO); archetypes D (Jockey SAP), E (wide SAP), F (printed invoice
-  with anchored header). Confirm BASIC/P RATE source columns + any loading factor with finance/CA.
-- **P0 / Phase E — Patna Inward Review & Reconcile (HO):** UI/API for Patna HO to review mapped PT files,
-  approve, reconcile booking lines, and trigger the `core` ledger stock posting (first stock-ledger write).
+- **P0 / Phase E — STOCK-LEDGER POSTING (the remaining half of Phase E):** the warehouse→Patna review/edit/
+  send/post workflow is built & tested (28 Jun), but "Push into system" only locks the file today. Wire the
+  POSTED transition to write the `core` append-only **stock ledger** (first real stock-ledger write): map each
+  KDPS row to item/GSTIN/store, post inward qty, and reconcile against the originating Booking lines.
+- **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
+  but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
 - **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
   generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
