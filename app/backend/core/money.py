@@ -12,7 +12,7 @@ only lossless conversion.
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db.models import BigIntegerField
 
@@ -29,12 +29,36 @@ else:
 class MoneyField(_MoneyBase):
     """A signed amount in integer paise. The stored Python value is always `int`.
 
-    A thin, semantic subclass of `BigIntegerField`: it never widens to `Decimal`
-    or `float`, and it gives every money column one name so no module reinvents
-    paise handling.
+    A semantic subclass of `BigIntegerField` that, unlike its parent, refuses to
+    *coerce*: plain `BigIntegerField` runs `int(value)`, so a stray `1.9` or
+    `Decimal("1.9")` silently truncates to `1` on write. A money column must never
+    swallow that — a `float`/`Decimal` reaching here means precision was already
+    lost upstream. Convert at the edge with `rupees_to_paise()`; the field accepts
+    only `int` (and `None`), rejecting `bool`, `float`, `Decimal` and everything
+    else. This guards every write path, not just the helper.
     """
 
     description = "Money amount in integer paise"
+
+    def _ensure_int_paise(self, value: Any) -> int | None:
+        if value is None:
+            return None
+        # bool is an int subclass, but True/False as an amount is always a bug.
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(
+                f"{type(self).__name__} stores integer paise; refusing "
+                f"{type(value).__name__} {value!r}. Convert at the edge with "
+                "rupees_to_paise() — a float/Decimal must never reach a money column."
+            )
+        return value
+
+    def get_prep_value(self, value: Any) -> int | None:
+        # The DB-write boundary: this is where BigIntegerField would coerce.
+        return self._ensure_int_paise(value)
+
+    def to_python(self, value: Any) -> int | None:
+        # The deserialization / full_clean() boundary.
+        return self._ensure_int_paise(value)
 
 
 def rupees_to_paise(rupees: Decimal | str | int) -> int:

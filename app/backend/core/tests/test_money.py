@@ -12,7 +12,13 @@ from decimal import Decimal
 import pytest
 
 from core.ledger import LedgerProbe
-from core.money import paise_to_rupees_str, rupees_to_paise
+from core.money import MoneyField, paise_to_rupees_str, rupees_to_paise
+
+# Values that are NOT integer paise. A float/Decimal silently truncates through
+# Django's integer coercion (1.9 -> 1), so the field itself must refuse them —
+# not just the rupees_to_paise() edge helper. bool is an int subclass but is
+# never a valid amount.
+NON_INT_PAISE = [1.9, 100.5, Decimal("1.9"), Decimal("285000000"), True, False, "100"]
 
 # A spread: 1 paise, sub-rupee, the ₹28,50,000 example, a large value, and a
 # signed value (a ledger leg may be negative).
@@ -26,6 +32,37 @@ def test_paise_round_trips_with_no_float_drift(paise: int) -> None:
     reloaded = LedgerProbe.objects.get(pk=row.pk)
     assert reloaded.amount == paise
     assert type(reloaded.amount) is int  # never float
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("bad", NON_INT_PAISE)
+def test_direct_model_write_rejects_non_int_paise(bad: object) -> None:
+    # A write that bypasses rupees_to_paise() must still be refused: the field
+    # guards the paise contract at the DB boundary, so a stray float/Decimal can
+    # never truncate into a money column.
+    with pytest.raises(TypeError):
+        LedgerProbe.objects.create(amount=bad)
+
+
+@pytest.mark.parametrize("bad", NON_INT_PAISE)
+def test_get_prep_value_rejects_non_int_paise(bad: object) -> None:
+    with pytest.raises(TypeError):
+        MoneyField().get_prep_value(bad)
+
+
+@pytest.mark.parametrize("bad", NON_INT_PAISE)
+def test_to_python_rejects_non_int_paise(bad: object) -> None:
+    with pytest.raises(TypeError):
+        MoneyField().to_python(bad)
+
+
+def test_money_field_passes_through_int_and_none() -> None:
+    field = MoneyField()
+    assert field.get_prep_value(285_000_000) == 285_000_000
+    assert field.get_prep_value(-150) == -150
+    assert field.get_prep_value(None) is None
+    assert field.to_python(285_000_000) == 285_000_000
+    assert field.to_python(None) is None
 
 
 def test_rupees_to_paise_is_exact() -> None:
