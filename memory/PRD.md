@@ -33,6 +33,21 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Phase 1 Inbound: Booking + Receive (GRN) (28 Jun 2026) ✅
+- **Backend (Django apps):** `files` (DB blob storage), `vendors` (Vendor master + Booking + BookingLine,
+  two-step human-in-the-loop draft→confirm), `inbound` (Grn + GrnLine, receive against a booking OR direct),
+  `aiagents` (Gemini document extraction via Emergent universal key). Endpoints: `GET/POST /api/bookings`,
+  `POST /api/bookings/draft` (AI), `GET /api/bookings/:id`, `GET /api/vendors`, `GET /api/inbound/pending`,
+  `POST /api/inbound/invoice-draft` (AI), `GET/POST /api/inbound/grns`, `GET /api/inbound/grns/:id`.
+- **Frontend:** `Bookings.tsx` (list / create with AI file-draft + graceful manual fallback / detail) and
+  `Inbound.tsx` (GRN list + pending-bookings, New receipt: against-booking auto-prefill OR direct receipt,
+  invoice AI prefill that degrades to manual, GRN detail). Routes wired in `App.tsx`; `/store/receive` → Inbound.
+- **AI (Gemini, Emergent key):** booking Receiving Reader + store/warehouse Invoice Reader. Universal Key
+  balance topped up by user (28 Jun 2026) — extraction verified (CSV read 2/2 lines @100% confidence).
+- **Scoping:** fail-closed — store user (deo.cashier) sees a LOCKED store on receive + only their store's
+  pending bookings; never warehouse/other-store data. Verified.
+- **Tested:** testing_agent iteration_2 → frontend 100% (11 flows), 0 bugs. Backend verified via curl.
+
 ## Implemented — Phase 0 Foundation (28 Jun 2026) ✅
 - **Auth:** JWT login/refresh/logout/me; brute-force lockout (5 fails → 15 min, HTTP 429); idempotent
   `seed_foundation` (roles, masters, demo users) → writes `memory/test_credentials.md`.
@@ -48,16 +63,20 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
   `app/backend/tests/test_foundation.py`.
 
 ## Backlog (prioritised)
-- **P0 / Phase 1 — Inbound:** Booking → GRN → PT(branded) → stock ledger entries; barcode registry; the
-  first money/stock vertical slice exercising the kernel end-to-end.
-- **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (make roles editable in-app),
-  generated OpenAPI → typed TS client wired into the frontend.
+- **P0 / Phase D — PT File Mapper (Warehouse/Ranchi):** data-driven mapping from varied Brand PT Excel files
+  to the KDPS target format, with an "unmapped queue" review screen. *Needs from user: the KDPS target column
+  schema + sample brand PT files / mapping rules before build.*
+- **P0 / Phase E — Patna Inward Review & Reconcile (HO):** UI/API for Patna HO to review mapped PT files,
+  approve, reconcile booking lines, and trigger the `core` ledger stock posting (first stock-ledger write).
+- **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
+  generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
 - **P2 — Phase 3+:** Money-in (collection & 3-rail bank audit), Transfers, Payments/vendor settlement,
   Controls (exception inbox, reconciliations, approvals/second-eye), Tally bridge, Intelligence (suggest-only).
-- **Infra:** decide production deployment path for the Django+Postgres stack (Emergent deploy is tuned for
-  the default FastAPI+Mongo stack — confirm with support before go-live).
+- **P2 — Non-Branded Booking / PO Maker agent:** deferred pending user's client clarification.
+- **P2 — Production hardening:** HTTPS/secure-cookie, refresh tokens out of localStorage; confirm
+  Django+Postgres deploy path with support (Emergent deploy tuned for FastAPI+Mongo).
 
 ## Next action items
-1. Confirm Phase-1 (Inbound) scope & open questions from the application map before building.
-2. Wire a generated typed API client; add Master Data create/edit + in-app role editing.
+1. Gather Phase D inputs: KDPS PT target schema + sample brand PT Excel files + mapping rules.
+2. Build Phase D (PT mapper + unmapped queue), then Phase E (Patna inward reconcile → stock ledger).

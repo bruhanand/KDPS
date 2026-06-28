@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend e2e of KDPS Branded Booking module (Phase 1): Bookings + Inbound (GRN). All 11 required flows pass with zero functional bugs. Owner login, bookings list, manual booking creation (vendor/brand/season/dest/lines -> save -> detail), inbound list with pending-bookings-grid + grn-table, receive-against-booking (auto-prefills 4 lines from BK-SS26-0001, store auto-set to DEO, GRN created), direct receipt (vendor name + line, Direct chip on detail), logout, deo.cashier login, store-scoping (receive-store-locked element visible with lock icon + 'DEO · Deoghar', dropdown absent; pending list only shows DEO-destined BK-SS26-0001, no warehouse/other-store bookings), deo.cashier direct receipt at locked store. BONUS: Gemini CSV upload on booking-dropzone read 2/2 lines at 100% confidence and prefilled them into booking-lines correctly.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_foundation.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Bookings.tsx + Inbound.tsx are clean, single-purpose page components (~300/630 lines) — no DRY/size violations.",
+    "useList/useDoc hooks correctly fetch via REACT_APP_BACKEND_URL (Axios api client) — no hard-coded URLs.",
+    "Store-locked rendering uses a separate data-testid='receive-store-locked' element with Lock icon (not a disabled select) — visually unambiguous lock affordance, matches spec.",
+    "AI degrade-gracefully path is correct: try/catch on /bookings/draft + /inbound/invoice-draft; on failure shows ai-warn and still lets user fill lines manually.",
+    "Booking-mode invoice AI matches AI lines onto existing booking lines by (style_code, size) and appends unmatched as variance rows — good UX.",
+    "Receive prefill computes received_qty = max(0, booked_qty - already_received) — correct remaining-to-receive logic.",
+    "Direct GRN payload sets booking_id=null and vendor_name as free-text — backend correctly returns is_direct=true and a purple 'Direct' chip is rendered on both list and detail."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (skipped per request)", "frontend": "100%" },
+  "test_credentials": "owner/Owner@123, deo.cashier/Store@123 — both verified working.",
+  "seed_data_creation": "Created (via UI) 1 booking (TEST-STY-001 line, DEO destination) and 3 GRNs (1 against BK-SS26-0001 booking by owner, 1 direct by owner at BKR, 1 direct by deo.cashier at DEO). Note: test data left in DB; consider cleanup if needed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "data-testids confirmed on this module: new-booking-btn, bookings-grid, booking-card-<NUMBER>, booking-dropzone, ai-note, ai-warn, booking-vendor, booking-brand, booking-season, booking-dest, booking-ref, add-line, booking-lines, save-booking, booking-detail-lines, goto-receive, new-receipt-btn, pending-bookings-grid, pending-booking-<NUMBER>, grn-table, grn-row-<NUMBER>, grn-empty, receipt-mode-toggle, mode-booking, mode-direct, receive-booking-select, receive-vendor-name, receive-store-locked, receive-store-select, receive-invoice-number, invoice-dropzone, invoice-ai-note, invoice-ai-warn, add-receive-line, receive-lines, rl-style-<i>, rl-received-<i>, receive-error, confirm-grn, grn-detail-lines. Useful timing note: useList/useDoc hooks need ~1-2s to populate dropdowns; wait with page.wait_for_function on options.length>1 rather than fixed timeout. Gemini extraction of CSV is fast (~3s); image/PDF may take longer.",
+  "rca of the issue": "No bugs to RCA. First playwright run had two false negatives (vendor=1 option, owner sees no pending bookings) — both turned out to be test-side race conditions because the script queried the DOM before the React useList hook had populated the <select> options and grids. Confirmed by directly hitting /api/vendors, /api/bookings, /api/inbound/pending with the owner token — all return correct data (6 vendors, 1 pending booking BK-SS26-0001). Re-ran with wait_for_function on options.length>1 → all flows pass."
+}
