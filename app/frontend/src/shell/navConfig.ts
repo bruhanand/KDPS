@@ -78,6 +78,7 @@ export const NAV: NavGroup[] = [
     layer: "ledgers",
     items: [
       { label: "Stock Ledger", to: "/ledgers/stock" },
+      { label: "Stock on Hand", to: "/ledgers/stock-on-hand" },
       { label: "Vendor Ledger", to: "/ledgers/vendor" },
       { label: "Cash Ledger", to: "/ledgers/cash" },
     ],
