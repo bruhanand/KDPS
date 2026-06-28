@@ -2,24 +2,24 @@
 Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). Specifically, the Branded Booking flow includes:
 1. Vendor/Brand master creation.
 2. AI-assisted Booking generation: Upload brand booking file (PDF/Excel/Image) → AI extracts style/size/qty → User reviews draft → Confirm booking.
-3. Receive Goods (GRN) at Store or Warehouse: Receive against a booking OR Direct receipt (no booking). Upload invoice photo → AI extracts info + manual count → Generate GRN.
+3. Receive Goods (GRN) at Store or Warehouse.
 4. PT file conversion (Brand format → KDPS format) and Patna HO inward reconciliation.
 
 **User's preferred language**: English (INSTRUCT NEXT AGENT TO RESPOND IN ENGLISH ONLY)
 
 **what currently exists?**: 
 A fully functional Django 5.1 + PostgreSQL 15 backend utilizing a custom  ledger, and a React 18 + Vite frontend with a Warm design system PWA shell. 
-Phase 0 (Foundation), Phase 1 (Bookings + GRN - Frontend and Backend), and Phase D Slice 1 (PT File Mapper - Backend deterministic engine & Frontend list/review UI for .xlsx/.csv) are completely implemented and tested. DB is Postgres natively configured in the container.
+Phase D (PT File Mapper with / legacy support), Phase E (Warehouse to Patna PT review workflow, Stock Ledger append-only posting, booking reconciliation), and Phase F ( Vendor/Cash append-only ledgers) are completely implemented and tested. DB is Postgres natively configured in the container. No MongoDB or FastAPI is used.
 
 **Last working item**:
-    - **Last item agent was working**: Phase D — PT File Mapper (Warehouse/Ranchi). Building a deterministic mapping engine reading brand files, parsing archetypes, and managing an unmapped review queue (strictly NO AI, per user instructions). Built frontend UI for file list, detailed table, and review queue.
-    - **Status**: COMPLETED
+    - **Last item agent was working**: Phase F — Concrete Vendor & Cash ledgers. Built the  app with append-only database models (, ), auto vendor-bill creation triggered by PT inward postings, and built frontend screens (, ).
+    - **Status**: USER VERIFICATION PENDING
     - **Agent Testing Done**: Y
-    - **Which testing method agent to use?**: testing_agent (Iteration 3)
+    - **Which testing method agent to use?**: testing_agent (Iteration 8)
     - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1: API client in React is currently hand-rolled (). (Carried over from previous fork)
+  - Issue 1 (P1): API client in React is currently hand-rolled (). (Carried over from previous fork)
      - Attempted fixes: None
      - Next debug checklist: Check ADR-0001, implement an auto-generated OpenAPI typescript client to replace the hand-rolled .
      - Why fix this issue and what will be achieved with the fix?: Maintain strict architectural typing between Django DRF and React.
@@ -28,42 +28,34 @@ Phase 0 (Foundation), Phase 1 (Bookings + GRN - Frontend and Backend), and Phase
      - Should Test frontend/backend/both after fix?: Frontend
      - Blocked on other issue: None
 
-**In progress Task List**:
-  - Task 1: Add spreadsheet library support for  and  files.
-     - Where to resume: Backend  / pip.
-     - What will be achieved with this?: The  engine handles  and , but older / archetypes (like Jockey, Madura) fail because , , , , and  are missing from the backend environment.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: Backend
-     - Blocked on something: None
+**In progress Task List**: 
+None.
 
 **Upcoming and Future Tasks**:
     Upcoming Tasks:
-    - Task 1 (P0): Patna Inward Review & Reconcile (Phase E) - Build UI/API for Patna HO to review mapped PT files, approve them, reconcile booking lines, and trigger the  ledger stock posting.
+    - Task 1 (P1): Master Data stewardship UI - Build views to create/edit master data.
+    - Task 2 (P1): Users & Roles Editor - In-app editor for roles and configuring users.
     
     Future Tasks:
-    - Task 2 (P1): Users & Roles Editor - In-app editor for roles and configuring users.
     - Task 3 (P2): Non-Branded Booking / PO Maker Agent - Deferred until user clarifies requirements with their client.
-    - Task 4 (P2): Production Hardening - HTTPS/secure-cookie blocks, move refresh tokens out of localStorage, replace hand-rolled API client with OpenAPI generated TS client.
+    - Task 4 (P2): Production Hardening - HTTPS/secure-cookie blocks, move refresh tokens out of localStorage, replace hand-rolled API client.
+    - Task 5 (P2): Vendor dues ageing widget - Dashboard widget to flag bills overdue past each vendor's payment terms to track payables accurately (Suggested as enhancement).
 
 **Completed work in this session**
-- Wired Bookings routes into  and built  (Receive/GRN screen) for Store/Warehouse operations (Tested 100% via testing_agent).
-- Verified Gemini AI CSV draft extraction (LLM key topped up by user).
-- Built  Django app containing Models, deterministic Engine, Profiles, Seed command, and API endpoints (Phase D).
-- Implemented  importing controlled vocab and taxonomy from Master Sheet.
-- Built  and  frontend for Warehouse role containing file list, KDPS format table, and unmapped review queue.
-- Phase D frontend fully tested via testing_agent with 0 bugs.
+- Added spreadsheet parsers ( & ) to backend for / archetype support, adding a 1000-row render cap on the frontend to prevent DOM crashes (DONE).
+- Built Phase E Workflow (Warehouse → Patna file approval), wiring POSTED states to the new  app (DONE).
+- Created  append-only models extending  with  triggers. Automated PT file posting and reversal mapping to Booking Lines (DONE).
+- Conducted Code Quality Refactor resolving cyclomatic complexities in ,  and , verified with zero regressions (DONE).
+- Implemented  server-side pagination, and added the Stock-on-Hand summary page  grouped by SKU/Brand (DONE).
+- Built  app establishing Vendor and Cash ledgers with strict append-only constraints and auto-bill triggers on PT postings. Implemented frontend ledgers  and  (DONE).
 
 **Earlier issues found/mentioned but not fixed**
-   Issue 1:
-   - Debug checklist: React still uses hand-rolled .
-   - Why to solve this issue and what will be achieved with this?: Ensure strict end-to-end type safety between Django and React.
-   - Should Test frontend/backend/both after fix: Frontend
-   - Is recurring issue?: N
+   None. False positive bugs reported in static analysis (e.g., valid  checks flagged as identity bugs) were correctly ignored during refactoring.
 
 **Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: Emergent LLM key failing due to /bin/bash balance.
+  - Issue recurrence in previous fork: None
   - Recurrence count: 0
-  - Status: RESOLVED (User has topped up the balance. Gemini API correctly extracting lines now).
+  - Status: RESOLVED
 
 **Code Architecture**
 /app/
@@ -72,6 +64,7 @@ Phase 0 (Foundation), Phase 1 (Bookings + GRN - Frontend and Backend), and Phase
 │   │   ├── config/ (Django settings)
 │   │   ├── core/ (Sacred ledger kernel)
 │   │   ├── accounts/, masters/, files/, vendors/, inbound/, aiagents/, ptmapper/
+│   │   ├── stockledger/, finledger/ (New Ledger apps)
 │   │   └── manage.py, server.py (ASGI)
 │   └── frontend/
 │       ├── src/ (React, Vite, Tailwind Warm design)
@@ -85,63 +78,70 @@ Phase 0 (Foundation), Phase 1 (Bookings + GRN - Frontend and Backend), and Phase
 - Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth.
 - Frontend: React 18, Vite, TypeScript, Tailwind CSS.
 - Infrastructure: Custom Supervisor setup () to keep PG running persistently inside the Emergent container workspace.
-- Specifics: Fail-closed scoping using custom  rules (Store-level isolation).
-- AI Constraint: PT file mapping MUST be purely deterministic rules (lookup tables, profiles, manual review). NO AI is permitted in Phase D (to maintain strict financial auditability).
+- Specifics: Fail-closed scoping using custom  rules. 
+- Ledger Constraint: Append-only ledgers enforced at the DB level using  trigger SQL preventing edits/deletions. Reversals must be written as negative append rows.
 
 **key DB schema**
-  - : {name, brands, active}
-  - : {vendor, brand, season, status, lines: [style, size, qty]}
-  - : {store, booking, total_received, direct_receipt_flag}
-  - : {file_data (blob), mime_type, filename}
-  - : {filename, status, profile, rows, mapping_stats} (new)
-  - : {file, field, original_value, status, resolved_value} (new)
+  - : {filename, status, rows, mapping_stats, manually_edited, posted_at, sent_at, stage, booking, inward_doc_number}
+  - : {extends LedgerEntry, pt_inward, pt_reversal, grn, line_no, barcode, brand, ...}
+  - : {extends LedgerEntry, vendor, bill_number, payment_ref, kind}
+  - : {extends LedgerEntry, account, payment_ref, kind}
 
 **changes in tech stack**
-  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL bridged into the environment. Do not alter these or default to MongoDB.
+  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL bridged into the environment.
 
 **All files of reference**
-  -  (GRN module)
-  - , ,  (Phase D mapper backend)
-  -  (Phase D vocab seed)
-  - ,  (Phase D mapper frontend)
-  - ,  (Updated navigation)
+  - ,  (Mapping logic & File Processing)
+  - ,  (Stock posting kernel)
+  - ,  (Vendor/Cash posting logic)
+  -  (Phase E Workflow UI)
+  - ,  (Stock UI)
+  - ,  (FinLedger UI)
 
 **Areas that need refactoring**: 
   -  (API client)
 
 **key api endpoints**
-  -  (Gemini AI Extraction)
-  -  (GRN creations)
-  - , ,  (PT Mapper)
+  - , 
+  - , 
+  - , 
 
 **Critical Info for New Agent**
-  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi. 
-  - **Phase D Architecture**: The PT File mapping is strictly deterministic and table-driven. DO NOT USE AI to map columns. Unknown values must strictly go into the Review Queue for human reconciliation.
-  - **Money Fields Rule**: Money fields (BASIC, P RATE) are mapped straight from source columns and flagged for review pending CA sign-off.
-  - **Terminology**: Patna = HO Office (Approver). Ranchi = Warehouse.
+  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi.
+  - **Append-only Constraints**: The  derived models (, , ) are locked by a database trigger preventing  or . Any corrections MUST be programmed as negative-value append rows.
+  - **Financial Flows**: No Invoice/Payment POS streams exist yet; PT Inward natively acts as the source triggering auto-vendor bill generation against .
 
 **documents and test reports created in this job**
   - 
   - 
   - 
+  - 
+  - 
+  - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - (User): Provided previous handoff summary.
- - (User): Informed that Universal Key credits were successfully topped up, unblocking AI feature.
- - (User): Uploaded  outlining the Phase D deterministic PT mapping logic and requesting the build (Warehouse mapping to KDPS format + unmapped queue).
- - (User): Responded to  regarding business rules for Phase D mapping: confirmed money fields should pass-through and be flagged, and COLOR fields should strictly map to true colors while tiers (PREMIUM/ECONOMY) stay as pass-through values for the review queue. 
+ - (User): Skip clarification; build Vendor & Cash Ledgers based on best judgment. (Completed)
+ - (User): Build the concrete Vendor & Cash ledgers (append-only models + screens). (Completed)
+ - (User): Request to build Stock-on-hand summary screen, server-side pagination on , and wire Vendor/Cash nav routes. (Completed)
+ - (User): Reminder to run  after bug fixes. (Completed)
+ - (User): Uploaded Code Quality Report showing cyclomatic complexities and (false positive) undefined variables. (Fixed Valid constraints, testing_agent run)
+ - (User): Wire POSTED status to  append-only stock ledger. (Completed)
+ - (User): Answers questions confirming Ledger specifics (RAN-WH default, Barcode keyed, Basic * QTY = Value, manual Booking selection). (Completed)
+ - (User): Approves skipping to specific directory to use PT files. (Completed)
+ - (User): Clarifies Warehouse & Patna HO workflow regarding PT file handling. (Completed)
+ - (User): Provided Handoff summary. (Read)
 
 **Project Health Check:**
-- Broken: None. 
-- Mocked: None, running on real DB.
+- Broken: None.
+- Mocked: None, running on real PostgreSQL database.
 
 **3rd Party Integrations**
-- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key. (Working successfully).
+- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key.
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iteration 2 for Phase 1 frontend, Iteration 3 for Phase D frontend)
+  - Testing agent used after significant changes: YES (Iterations 4, 5, 6, 7, 8 thoroughly executed)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
+  - Test files created: 
   - Known regressions: None
 
 **Credentials to test flow:**
@@ -151,4 +151,4 @@ Phase 0 (Foundation), Phase 1 (Bookings + GRN - Frontend and Backend), and Phase
   - Warehouse (Ranchi):  / 
 
 **What agent forgot to execute**
-- Acknowledged the need for spreadsheet parsing libraries (, , , , ) for processing older / archetypes but deferred their installation for a follow-up task.</analysis>
+- The user's entire requested feature flow up to Phase F was strictly and fully completed. No forgotten items remain.</analysis>

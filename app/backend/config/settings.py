@@ -135,7 +135,7 @@ CSRF_TRUSTED_ORIGINS = [
     o
     for o in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://pt-mapper-warehouse.preview.emergentagent.com,https://*.emergentagent.com",
+        "https://branded-booking-flow.preview.emergentagent.com,https://*.emergentagent.com",
     ).split(",")
     if o
 ]
