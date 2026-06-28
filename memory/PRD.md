@@ -41,6 +41,13 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Auth hardening from retest:** Added header-or-cookie JWT authentication (`CookieOrHeaderJWTAuthentication`), httpOnly `access_token` / `refresh_token` cookies on login/refresh, cookie clearing on logout, bcrypt-sha256 password hasher preference with PBKDF2 fallback, and `seed_admin` alias to existing `seed_foundation`.
 - **Tested:** iteration_9 passed product flows; iteration_10 passed auth-cookie hardening + regression checks. Self-tests: Django check, targeted Python/TS lint, frontend typecheck, `pytest tests/test_iteration9_rbac_vendor_inbound.py` 8/8, browser smoke. **Known non-app issue:** external preview ingress still injects wildcard CORS headers on OPTIONS; internal Django CORS returns explicit origin + credentials.
 
+## Implemented — Alpha-testing UI polish (28 Jun 2026) ✅
+- **Login simplified:** left-side brand panel now shows only the logo mark + “KDPS Operating System”; descriptive copy and module chips removed.
+- **Coming-soon placeholders:** unbuilt routes now show a clean “Coming soon” message with a short explanation of what that page will do; removed “191 pages across 14 modules” roadmap copy.
+- **Configurable shell:** sidebar width is resizable via a drag handle and persists in local storage. Sidebar items inside each section can be drag-reordered for early alpha testing; group/section positions remain fixed.
+- **Dashboard configurability:** home dashboard cards can be selected/hidden via “Configure dashboard”, reordered by dragging, and clicked to open a compact modal with a small visual graph + purpose text. Roadmap/build-status panel removed from dashboard.
+- **Tested:** targeted JS lint clean, TypeScript typecheck clean, browser smoke verified login copy removal, dashboard config modal, dashboard card modal, coming-soon copy, and sidebar resizing.
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
@@ -178,6 +185,7 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **P2 — Production hardening:** External ingress/proxy CORS policy alignment, reduce localStorage token reliance now that httpOnly cookies exist, HTTPS/secure-cookie review, Django+Postgres deploy path validation.
 
 ## Next action items
-1. Build Master Data stewardship UI for create/edit of mutable masters.
-2. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
-3. Continue POS ingest / selling floor planning after current P1 review.
+1. Run broader alpha QA over the current screens and capture issues from real users.
+2. Build Master Data stewardship UI for create/edit of mutable masters.
+3. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
+4. Continue POS ingest / selling floor planning after current P1 review.
