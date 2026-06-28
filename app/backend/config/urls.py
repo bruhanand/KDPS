@@ -27,6 +27,7 @@ urlpatterns = [
     path("api/inbound/", include("inbound.urls")),
     path("api/ptmapper/", include("ptmapper.urls")),
     path("api/stockledger/", include("stockledger.urls")),
+    path("api/finledger/", include("finledger.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
 ]

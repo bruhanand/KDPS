@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "inbound.apps.InboundConfig",
     "ptmapper.apps.PtmapperConfig",
     "stockledger.apps.StockledgerConfig",
+    "finledger.apps.FinledgerConfig",
 ]
 
 MIDDLEWARE = [

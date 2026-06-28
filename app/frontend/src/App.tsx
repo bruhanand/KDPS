@@ -11,6 +11,8 @@ import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
+import VendorLedger from "./pages/VendorLedger";
+import CashLedger from "./pages/CashLedger";
 
 export function App() {
   return (
@@ -31,6 +33,8 @@ export function App() {
             <Route path="/documents/pt-mapper/:id" element={<PtFileDetailPage />} />
             <Route path="/ledgers/stock" element={<StockLedger />} />
             <Route path="/ledgers/stock-on-hand" element={<StockOnHand />} />
+            <Route path="/ledgers/vendor" element={<VendorLedger />} />
+            <Route path="/ledgers/cash" element={<CashLedger />} />
             <Route path="/store/receive" element={<InboundPage />} />
             <Route path="/masters/stores" element={<StoresPage />} />
             <Route path="/masters/brands" element={<BrandsPage />} />
