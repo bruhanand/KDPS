@@ -1,0 +1,70 @@
+from __future__ import annotations
+
+from rest_framework import serializers
+
+from masters.models import Brand, Gstin, LegalEntity, Season, Store
+
+
+class LegalEntitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LegalEntity
+        fields = ["id", "code", "name", "pan", "is_active"]
+
+
+class GstinSerializer(serializers.ModelSerializer):
+    legal_entity_name = serializers.CharField(source="legal_entity.name", read_only=True)
+
+    class Meta:
+        model = Gstin
+        fields = [
+            "id",
+            "gstin",
+            "state_code",
+            "state_name",
+            "legal_entity",
+            "legal_entity_name",
+            "is_active",
+        ]
+
+
+class StoreSerializer(serializers.ModelSerializer):
+    state_name = serializers.CharField(source="gstin.state_name", read_only=True)
+    state_code = serializers.CharField(source="gstin.state_code", read_only=True)
+    gstin_number = serializers.CharField(source="gstin.gstin", read_only=True)
+
+    class Meta:
+        model = Store
+        fields = [
+            "id",
+            "code",
+            "name",
+            "store_type",
+            "city",
+            "gstin",
+            "gstin_number",
+            "state_name",
+            "state_code",
+            "is_active",
+        ]
+
+
+class SeasonSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Season
+        fields = ["id", "code", "name", "status", "sort_order"]
+
+
+class BrandSerializer(serializers.ModelSerializer):
+    commercial_label = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Brand
+        fields = [
+            "id",
+            "code",
+            "name",
+            "ownership",
+            "return_terms",
+            "commercial_label",
+            "is_active",
+        ]

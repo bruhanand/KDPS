@@ -1,0 +1,39 @@
+{
+  "summary": "First-pass test of KDPS Foundation (Django+DRF+Postgres backend, React/TS Vite frontend). All 9 backend pytest cases pass (health, login, /me with & without token, refresh, brute-force 429 lockout, scope isolation for owner vs deo.cashier, seeded masters counts incl. derived commercial_label). Frontend e2e flows all pass: warm login page, invalid-cred error, demo-chip login, owner dashboard (greeting + 8 nav groups + real master counts in 'Network at a glance'), store-switcher menu with 6 stores + 'All stores', all four master tables render correct row counts (6/10/3/2) with commercial-model column on brands, /documents/bookings shows module-placeholder with 'mapped, not yet built', logout returns to /login, protected route while logged out redirects to /login, deo.cashier sees only Home + Store Ops + Documents groups with Sell/Receive/Count/Transfer quick actions and store-switcher labelled 'DEO · Deoghar / Jharkhand'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Owner dashboard / store dashboard", "issues": ["Sample KPI tiles are clearly tagged 'SAMPLE' as expected — not a bug, called out per problem statement."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_foundation.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Minor (optional): The deo.cashier store-switcher is not visually 'locked'; clicking it opens the menu, but the menu correctly contains only the DEO store (fail-closed scope still holds). Consider disabling the chevron / dropdown affordance for store-scoped users so it visibly reads as locked, matching the spec wording 'store switcher locked to DEO·Jharkhand'."
+  ],
+  "critical_code_review_comments": [
+    "Backend fail-closed scoping in masters/views.scoped_stores() works correctly: store-scoped users get only their store; summary endpoint reflects scope (stores=1, warehouses=0).",
+    "JWT brute-force counter triggers HTTP 429 after 5 failed attempts as designed.",
+    "Frontend nav filtering via user.nav_groups works exactly per role; ProtectedRoute redirects unauthenticated users to /login.",
+    "Master data tables use proper <table> with data-testid row identifiers (e.g. store-row-BANKA, brand-row-allen-solly) — good for future regression tests.",
+    "No MongoDB _id leakage observed (project is Postgres). Pydantic-equivalent (DRF serializers) responses look clean.",
+    "Sample KPI values are explicitly tagged 'SAMPLE' in the UI — good transparency for users."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_foundation.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "owner/Owner@123, deo.cashier/Store@123 (from /app/memory/test_credentials.md). All seeded users verified.",
+  "seed_data_creation": "No new seed data created. Used existing seed_foundation output.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite lives at /app/backend/tests/test_foundation.py and writes JUnit XML to /app/test_reports/pytest/pytest_results.xml. data-testids confirmed present: login-username, login-password, login-submit, login-error, demo-<username>, greeting, sidebar-nav, store-switcher, store-switcher-menu, store-option-<CODE>, user-menu, logout-button, stores-table, brands-table, seasons-table, gstins-table, module-placeholder. Table rows use data-testid='<entity>-row-<code>' (e.g. store-row-BANKA, brand-row-allen-solly). Frontend uses Vite (port 3000) and backend Django ASGI (port 8001) via supervisor. JWT tokens are in localStorage keys kdps_access / kdps_refresh.",
+  "rca of the issue": "No bugs found in this iteration. Initial Playwright row count returned 0 because the selector ran before table hydration; switching to a JS evaluate after wait_for_selector confirmed exact expected row counts (6/10/3/2)."
+}
