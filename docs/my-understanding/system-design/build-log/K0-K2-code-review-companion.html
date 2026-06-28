@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS Kernel — Code Review Companion (K0 → K2)</title>
+<style>
+  :root{
+    --ink:#1a1c1f; --soft:#5b6470; --line:#e3e6ea; --bg:#fbfcfd; --card:#fff;
+    --accent:#1f6f54; --accent-soft:#e8f3ee; --warn:#9a5b00; --warn-soft:#fbf2e2;
+    --good:#1f6f54; --good-soft:#e8f3ee; --code-bg:#f5f7f9; --blue:#1d4e89; --blue-soft:#eaf1f9;
+    --maxw:920px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px 120px}
+  header.top{background:linear-gradient(135deg,#1f6f54,#16513c);color:#fff;padding:46px 0 40px;margin-bottom:8px}
+  header.top .wrap{padding-bottom:0}
+  header.top h1{margin:0 0 8px;font-size:30px;letter-spacing:-.4px}
+  header.top p{margin:4px 0 0;color:#d4e8e0;font-size:16px;max-width:680px}
+  .tag{display:inline-block;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.28);
+    padding:2px 10px;border-radius:30px;font-size:12.5px;margin:14px 8px 0 0;color:#eafff6}
+  h2{font-size:23px;margin:48px 0 6px;padding-top:14px;letter-spacing:-.3px;border-top:3px solid var(--accent);display:inline-block}
+  h2.full{display:block}
+  h3{font-size:18.5px;margin:30px 0 4px;color:#10271e}
+  h4{font-size:15.5px;margin:20px 0 2px;color:#23303a;text-transform:uppercase;letter-spacing:.04em}
+  p{margin:10px 0}
+  small{color:var(--soft)}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:var(--code-bg);border:1px solid var(--line);border-radius:5px;padding:1px 5px;
+    font:13.5px/1.5 "SF Mono",ui-monospace,Menlo,Consolas,monospace}
+  pre{background:var(--code-bg);border:1px solid var(--line);border-left:3px solid #c7d0d8;border-radius:8px;
+    padding:14px 16px;overflow:auto;font:13px/1.62 "SF Mono",ui-monospace,Menlo,Consolas,monospace;color:#26313a}
+  pre b{color:var(--accent);font-weight:600}
+  pre .c{color:#8a949e;font-style:italic}
+  .toc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:26px 0}
+  .toc h4{margin:0 0 8px}
+  .toc ol{margin:6px 0 0;padding-left:20px;columns:2;column-gap:34px}
+  .toc li{margin:3px 0;break-inside:avoid}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:6px 22px 18px;margin:18px 0}
+  .note,.plain,.why,.good,.warn{border-radius:10px;padding:13px 16px;margin:16px 0;font-size:15px}
+  .plain{background:var(--blue-soft);border:1px solid #cfe0f1}
+  .plain b{color:var(--blue)}
+  .why{background:#f4f6f8;border:1px solid var(--line)}
+  .good{background:var(--good-soft);border:1px solid #c5e3d6}
+  .good b{color:var(--good)}
+  .warn{background:var(--warn-soft);border:1px solid #ecd9b0}
+  .warn b{color:var(--warn)}
+  .promise{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .promise:last-child{border-bottom:0}
+  .promise .box{flex:0 0 auto;width:18px;height:18px;border:2px solid var(--accent);border-radius:4px;margin-top:3px}
+  .promise .t{flex:1}
+  .promise .t small{display:block}
+  table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14.5px}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top}
+  th{background:#f0f3f5;font-weight:600}
+  .files td:first-child code{white-space:nowrap}
+  .step{counter-increment:step;position:relative;padding-left:42px;margin:18px 0}
+  .step::before{content:counter(step);position:absolute;left:0;top:-2px;width:28px;height:28px;
+    background:var(--accent);color:#fff;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px}
+  .steps{counter-reset:step}
+  .pill{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:20px;vertical-align:middle}
+  .pill.k0{background:#eef0f2;color:#566} .pill.k1{background:#e7f0fb;color:#1d4e89}
+  .pill.k2{background:#e8f3ee;color:#1f6f54} .pill.fix{background:#fbf2e2;color:#9a5b00}
+  .lead{font-size:17px;color:#33414c}
+  hr{border:0;border-top:1px solid var(--line);margin:34px 0}
+  .kbd{font:12px ui-monospace,monospace;background:#22303a;color:#dfeaf0;padding:1px 7px;border-radius:5px}
+  ul.tight li{margin:4px 0}
+  .legend span{display:inline-block;margin-right:18px;font-size:13.5px}
+  .dot{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:middle;margin-right:5px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>KDPS Kernel — Code Review Companion</h1>
+    <p>Everything built so far (K0 → K2), file by file and change by change — explained in plain
+       language so you can review and sign off the money-critical core without being a coder.</p>
+    <span class="tag">Branch: k2-sandcastle-merge-review</span>
+    <span class="tag">3 K-slices · 6 commits · 659 lines of code</span>
+    <span class="tag">75 tests green on PostgreSQL 16</span>
+    <span class="tag">28 June 2026</span>
+  </div>
+</header>
+
+<div class="wrap">
+
+<p class="lead">You said you have little coding experience and want to understand the project before
+merging K2. Good — that instinct is exactly right for money code. This document does three things:
+it teaches you the <b>one trick</b> for reviewing code you can't write, it walks <b>every file</b> in
+order, and it gives you a <b>checklist of plain-English promises</b> that <em>is</em> the review. If
+each promise is one you'd want, and the tests are green, the code is sound.</p>
+
+<div class="toc">
+  <h4>What's in here</h4>
+  <ol>
+    <li><a href="#trick">The one trick: read the tests</a></li>
+    <li><a href="#primer">5-minute primer: the words</a></li>
+    <li><a href="#map">The map: every file</a></li>
+    <li><a href="#timeline">The timeline: 6 commits</a></li>
+    <li><a href="#k0">K0 — the foundation</a></li>
+    <li><a href="#k1money">K1 — money is paise</a></li>
+    <li><a href="#k1ledger">K1 — the append-only ledger</a></li>
+    <li><a href="#k2">K2 — the document skeleton</a></li>
+    <li><a href="#migrations">The migrations (the 4 DB steps)</a></li>
+    <li><a href="#promises">The full promise list (the review)</a></li>
+    <li><a href="#run">See it yourself: the commands</a></li>
+    <li><a href="#decision">Your merge checklist</a></li>
+    <li><a href="#glossary">Glossary</a></li>
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="trick" class="full">1 · The one trick: read the tests, not the code</h2>
+
+<p>You cannot validate this code by reading the Python — and you don't have to. Here is the trick the
+whole build is designed around:</p>
+
+<div class="plain">
+<b>A test is a promise written as an English sentence.</b> Every promise the code makes has a matching
+test whose <em>name</em> is that promise. The computer re-checks every promise on every change. So your
+job is not "is this Python correct?" — it's "<b>is this list of promises the right list, and are they all
+passing?</b>" That you can absolutely judge.
+</div>
+
+<p>Here is a real one from the code. You don't need to read the body — just the name and the shape:</p>
+
+<pre><span class="c"># file: core/tests/test_document_fsm.py</span>
+def <b>test_a_posted_document_cannot_be_edited</b>(series):
+    doc = _draft()
+    doc.post()                          <span class="c"># turn the draft into a real posted document</span>
+    reloaded.memo = "tampered"          <span class="c"># try to secretly change it</span>
+    with pytest.raises(DocumentEditError):   <span class="c"># the code MUST refuse — or this test fails</span>
+        reloaded.save()</pre>
+
+<p>Read only the name: <b>"a posted document cannot be edited."</b> That is a business promise — once a
+voucher is posted, nobody can quietly alter it. The body sets up the attempt and says <code>raises</code>,
+meaning "we <em>expect</em> this to be rejected." If the code ever stopped rejecting it, this test goes
+red and the change cannot merge. <b>The test is the contract; the code just has to satisfy it.</b></p>
+
+<div class="why">
+<b>The second thing to recognise everywhere: two locks, not one.</b> For every money rule, the code
+guards it in <em>two</em> independent places — once in the <b>database</b> itself (a "trigger," the deepest
+possible lock, which stops <em>even the system administrator</em>) and once in the <b>application code</b>
+(a friendly early error). You'll see this pattern in every file. It's the single most important sign that
+this code takes money seriously: the rule survives even if someone bypasses the app and goes straight to
+the database. The team calls this <em>"binds even the superuser."</em>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="primer" class="full">2 · A 5-minute primer: the eight words you'll meet</h2>
+
+<table>
+<tr><th>Word</th><th>In plain language (with a shop analogy)</th></tr>
+<tr><td><b>Model / table</b></td><td>A kind of record, stored as a table with rows. Like a register: each
+row is one line. <code>LedgerProbe</code>, <code>VoucherSeries</code> are tables.</td></tr>
+<tr><td><b>Migration</b></td><td>A dated instruction that changes the shape of the database (add a table,
+add a rule). They run in order, like numbered amendments to the rule book. There are 4 so far.</td></tr>
+<tr><td><b>Trigger</b></td><td>A rule baked <em>into the database itself</em>. It fires automatically on
+every write and can reject it. The strongest lock there is — it stops even an administrator. Think: a
+safe that physically won't close if the entry is wrong, no matter who's holding the pen.</td></tr>
+<tr><td><b>ORM / "the app code"</b></td><td>The ordinary Python layer the application uses to read and
+write. It does a friendly check first ("you can't do that") <em>before</em> the database has to slam the door.</td></tr>
+<tr><td><b>Paise (integer)</b></td><td>All money is stored as a whole number of paise (₹1 = 100 paise).
+Never as ₹1.005 with a decimal point — decimals drift and lose fractions of a paisa over millions of rows.</td></tr>
+<tr><td><b>Append-only</b></td><td>A ledger you can only <em>add</em> to, never erase or edit. A mistake is
+fixed by adding a reversing line, exactly like an accountant's ledger — you never white-out a posted entry.</td></tr>
+<tr><td><b>docstatus / FSM</b></td><td>Every document has a status that walks a fixed path:
+<b>draft → submitted → cancelled</b>. "FSM" just means it can only move along that path, never jump or go
+backwards. A draft can be edited; once <em>submitted</em> (posted) it's frozen; <em>cancelled</em> reverses
+it but the record stays.</td></tr>
+<tr><td><b>Voucher series / doc-number</b></td><td>The official document number, e.g.
+<code>26-27/DEO/SAL/74</code> — financial year / store / type / running number. It's the key that joins our
+system to Tally, so it must be <b>gap-free</b> (no skipped numbers) and never reused.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="map" class="full">3 · The map — every file built so far</h2>
+
+<p>The entire kernel so far is small on purpose: <b>659 lines of real code</b> in one folder
+(<code>app/backend/core/</code>), plus its tests and 4 database migrations. Here is all of it.</p>
+
+<table class="files">
+<tr><th>File</th><th>Slice</th><th>What it is</th><th>Lines</th></tr>
+<tr><td><code>config/settings.py</code></td><td><span class="pill k0">K0</span></td><td>The app's setup. The one rule that matters: <b>refuse to run on anything but PostgreSQL.</b></td><td>50</td></tr>
+<tr><td><code>core/money.py</code></td><td><span class="pill k1">K1</span></td><td>The money type — every amount is whole paise; a stray decimal is <b>rejected</b>, never rounded silently.</td><td>88</td></tr>
+<tr><td><code>core/ledger.py</code></td><td><span class="pill k1">K1</span></td><td>The append-only ledger base — a posted line can only be added, never edited or deleted.</td><td>105</td></tr>
+<tr><td><code>core/documents.py</code></td><td><span class="pill k2">K2</span></td><td>The document skeleton — the status lifecycle, the gap-free numbering, and the three keys. The biggest and most important file.</td><td>441</td></tr>
+<tr><td><code>core/models.py</code> · <code>apps.py</code></td><td><span class="pill k0">K0</span>+</td><td>Tiny wiring files so the database knows these tables exist.</td><td>25</td></tr>
+<tr><td><code>core/migrations/0001…0004</code></td><td>K1·K2</td><td>The 4 dated database steps that build the tables and install the locks.</td><td>188</td></tr>
+<tr><td><code>core/tests/</code> (7 files)</td><td>all</td><td>The 75 promises. This is what you actually review.</td><td>783</td></tr>
+</table>
+
+<div class="warn">
+<b>What is deliberately NOT here yet.</b> There are <em>no business documents</em> (no booking, no GRN,
+no PT, no sale), no stock or vendor or cash ledgers, no login, no screens. K0–K2 build the <em>engine and
+the empty chassis</em>. Real documents bolt on in the later slices. The two tables you'll see —
+<code>LedgerProbe</code> and <code>DocumentProbe</code> — are <b>test dummies</b>: throw-away tables that
+exist only so the locks can be proven to work against a real database. They are not part of the live system.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="timeline" class="full">4 · The timeline — six commits, in order</h2>
+
+<p>A "commit" is one saved change with a note. This is the "edition by edition" history you asked for —
+read top to bottom and you see exactly how the kernel grew, including the two rounds of review that
+sharpened K2.</p>
+
+<table>
+<tr><th>#</th><th>Commit</th><th>What changed, and why</th></tr>
+<tr><td>1</td><td><code>f5d3da6</code><br><span class="pill k0">K0</span></td><td><b>Foundation scaffold + CI gate.</b> The empty project: folders, the PostgreSQL-or-fail rule, and the automatic quality gate (<code>npm run ci</code>) that must pass green before anything merges. No business logic — just the rails.</td></tr>
+<tr><td>2</td><td><code>59dbac7</code><br><span class="pill k1">K1</span></td><td><b>Money type + append-only ledger.</b> Money becomes whole paise; the ledger becomes add-only with a database trigger that blocks edits/deletes even for an administrator.</td></tr>
+<tr><td>3</td><td><code>3cabbb9</code><br><span class="pill fix">K1 fix</span></td><td><b>Money refuses silent rounding.</b> A review (Codex) found the money field would quietly turn <code>1.9</code> into <code>1</code> — losing paise. Fixed so it <em>rejects</em> the bad value loudly instead. <small>This is the first example of the review process catching a real money bug before it shipped.</small></td></tr>
+<tr><td>4</td><td><code>9e39544</code><br><span class="pill k2">K2</span></td><td><b>The document skeleton.</b> Status lifecycle (draft→submitted→cancelled), gap-free numbering, three keys, and the database triggers enforcing them. Built test-first.</td></tr>
+<tr><td>5</td><td><code>417d4e9</code><br><span class="pill fix">K2 fix · review 1</span></td><td><b>Five holes closed (issue #18).</b> First independent review found: the type was missing from the number (SAL and GRN could clash), a stale edit could rewind the counter, a posted row could exist without a number, a raw cancel could tamper with other fields, and a long number could overflow. All fixed, each with a new test.</td></tr>
+<tr><td>6</td><td><code>7f963b3</code><br><span class="pill fix">K2 fix · review 2</span></td><td><b>Four more locks pushed fully into the database (this is the current top).</b> A second review found that some guards lived only in the app code, not the database. Now the counter can only step up by one (never rewind), a row must be <em>born</em> as a draft, and a used series can't be re-pointed — all at the database level. <b>Two deeper, rarer items were deliberately deferred and tracked as <a href="#decision">issue #19</a>, not chased</b> — that's how the review converged instead of looping forever.</td></tr>
+</table>
+
+<div class="good">
+<b>Read the history as good news, not as bugs piling up.</b> Each review found <em>fewer, deeper, rarer</em>
+things than the last, all on one theme ("push the lock all the way into the database"). Findings getting
+narrower is the signature of code <em>converging</em> on correct — and every single one was caught on this
+branch, before it reached the live <code>main</code> line. The safety net worked exactly as designed.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="k0" class="full">5 · K0 — the foundation</h2>
+<p>K0 is mostly plumbing (project setup, the quality gate). Only one line of it carries a real rule worth
+your eyes:</p>
+
+<h4>The "PostgreSQL or refuse to start" guard &nbsp;<small>config/settings.py</small></h4>
+<pre><span class="c"># The kernel's invariants — append-only ledgers, isolation — are meaningless</span>
+<span class="c"># on SQLite. Fail loudly rather than let the tests pass on the wrong engine.</span>
+if not _engine.endswith("postgresql"):
+    raise RuntimeError(<b>"KDPS requires PostgreSQL"</b> ...)</pre>
+<div class="plain"><b>Why this matters to you:</b> all the deep money locks (the triggers) are a
+PostgreSQL feature. A lighter test database (SQLite) would let the tests pass <em>without actually testing
+the locks</em> — a false green. This line makes that impossible: the system won't even start on the wrong
+database. <b>It guarantees "green" always means "green on the real thing."</b></div>
+
+<h4>The two smoke tests &nbsp;<small>tests/test_smoke.py</small></h4>
+<ul class="tight">
+<li><b>"1 + 1 = 2"</b> — proves the test machinery itself runs.</li>
+<li><b>"the database is PostgreSQL"</b> — proves the guard above is actually in force during tests.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="k1money" class="full">6 · K1 — money is integer paise</h2>
+<p><small>core/money.py — 88 lines</small></p>
+
+<p>One promise, and it's the bedrock of every rupee figure the company will ever see: <b>money is stored as
+a whole number of paise, and anything with a hidden fraction is rejected, never silently rounded.</b></p>
+
+<pre>class <b>MoneyField</b>(BigIntegerField):
+    <span class="c"># refuses to *coerce*: plain integer fields run int(1.9) -&gt; 1, truncating paise.</span>
+    def _ensure_int_paise(self, value):
+        if value is None: return None
+        if isinstance(value, bool) or not isinstance(value, int):
+            <b>raise TypeError</b>(... "a float/Decimal must never reach a money column.")
+        return value</pre>
+
+<div class="why"><b>The bug this prevents (and the one that was actually caught).</b> An ordinary number
+column, handed <code>1.9</code>, quietly stores <code>1</code> — it drops the 0.9 with no warning. Across
+millions of sale lines that silent drift corrupts every total and breaks the Tally reconciliation. This
+field instead <em>throws an error</em> the moment a decimal shows up, forcing the conversion to happen
+properly at the edge. Commit&nbsp;3 (the K1 fix) is exactly this hole being closed after a review.</div>
+
+<p>Two small helper functions convert at the edges, using exact decimal math (never the lossy
+<code>float</code> type): <code>rupees_to_paise("2850000")</code> → <code>285000000</code> paise, and its
+exact reverse. The famous example <b>₹28,50,000 = 285000000 paise</b> round-trips perfectly.</p>
+
+<h4>The promises that prove it &nbsp;<small>test_money.py</small></h4>
+<ul class="tight">
+<li><b>Paise round-trips with no drift</b> — save a value, reload it, get the exact same whole number back (tested across 1 paisa, sub-rupee, ₹28.5 lakh, and a negative).</li>
+<li><b>A direct decimal/float/text write is rejected</b> — not rounded. Tested at every entry point.</li>
+<li><b>The ₹↔paise conversions are exact</b>, rounding half-up at the paisa, the India standard.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="k1ledger" class="full">7 · K1 — the append-only ledger</h2>
+<p><small>core/ledger.py — 105 lines</small></p>
+
+<p>The promise: <b>a ledger line, once written, can never be edited or deleted — only reversed by adding a
+new line.</b> This is the accountant's golden rule, enforced by the computer. And here you meet the
+"two locks" pattern for the first time:</p>
+
+<pre><span class="c"># LOCK 1 — the database trigger (the deep one). Installed by migration 0001.</span>
+CREATE TRIGGER ... <b>BEFORE UPDATE OR DELETE</b> ON core_ledger_probe
+    ... <b>RAISE EXCEPTION 'append-only: ... is forbidden'</b>;
+REVOKE UPDATE, DELETE ON ... FROM PUBLIC;        <span class="c"># belt-and-braces</span>
+
+<span class="c"># LOCK 2 — the friendly app-code guard, in the Python base class.</span>
+def save(self, ...):
+    if not self._state.adding:                    <span class="c"># i.e. this row already exists</span>
+        <b>raise AppendOnlyError</b>("ledger rows are append-only; post a reversing entry")</pre>
+
+<div class="plain"><b>Why two locks?</b> Lock&nbsp;2 gives a clean, early error to normal app code. But a
+clever person could try to skip the app and edit the database directly. Lock&nbsp;1 — the trigger — sits
+<em>inside</em> the database and refuses them too, <b>even if they're the administrator</b>. That belt-and-
+braces design is the whole reason you can trust the ledger.</div>
+
+<h4>The promises that prove it &nbsp;<small>test_ledger_append_only.py · test_ledger_reversal.py</small></h4>
+<ul class="tight">
+<li><b>A raw database UPDATE is forbidden even for the superuser</b> — and the row is verified unchanged afterwards.</li>
+<li><b>A raw database DELETE is forbidden even for the superuser.</b></li>
+<li><b>A raw INSERT still works</b> — adding is always allowed; only editing/erasing is blocked.</li>
+<li><b>The app's own edit and delete both raise a clean error</b> before the database is even touched.</li>
+<li><b>A correction nets to exactly zero</b> — post ₹X, then post −₹X; the sum is the exact integer 0, the original line is byte-for-byte untouched, and <em>both</em> rows still exist. That's "fix by reversal."</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="k2" class="full">8 · K2 — the document skeleton</h2>
+<p><small>core/documents.py — 441 lines · the heart of this review</small></p>
+
+<p>This is the part you're about to merge, so it gets the most space. K2 builds the <b>generic skeleton that
+every future business document</b> (booking, goods-receipt, product-transfer, sale) will inherit. It owns
+exactly three things — and the whole file is just these three, locked twice each.</p>
+
+<h3>8a · The status lifecycle (docstatus FSM)</h3>
+<p>A document walks one fixed path and can never jump or reverse: <b>draft (0) → submitted (1) → cancelled
+(2)</b>. A draft is editable; <code>post()</code> submits it (and is the <em>only</em> way to do so); a
+submitted doc is frozen; <code>cancel()</code> reverses it but keeps the record.</p>
+
+<pre><span class="c"># The database trigger that enforces the path — it cannot be talked around.</span>
+IF TG_OP = 'INSERT'  ... a new row <b>must start as draft</b>            <span class="c"># can't be born posted</span>
+IF TG_OP = 'DELETE'  ... a posted/cancelled row is <b>cancelled, never deleted</b>
+IF OLD.docstatus = 2 ... a cancelled row is <b>frozen</b>
+IF OLD.docstatus = 1 ... submitted may <b>only move to cancelled</b>
+                     ... and the cancel may <b>not change any other column</b>  <span class="c"># no tampering</span>
+IF OLD.docstatus = 0 ... a draft may only <b>stay draft or be posted</b></pre>
+
+<div class="why"><b>Read that block as six business rules:</b> you can't create a document that's already
+posted; you can't delete a posted document (you cancel it, and the record survives for the audit trail);
+once cancelled it's frozen; a posted document can only ever move to cancelled; cancelling is <em>only</em> a
+status change and can't secretly rewrite the amount or memo; and a draft can only stay a draft or become
+posted. Every one is enforced inside the database.</div>
+
+<h3>8b · Gap-free numbering (the Tally join key)</h3>
+<p>Every posted document gets an official number like <code>26-27/DEO/SAL/74</code>. Because this is the key
+that joins to Tally, it must never skip a number and never be reused. Two careful decisions make that true:</p>
+<ul class="tight">
+<li><b>The number includes the type</b> (<code>SAL</code>, <code>GRN</code>…). The running counter is kept
+<em>per type</em>, so a sale and a goods-receipt both start at 1 — without the type in the number they'd
+collide as <code>26-27/DEO/1</code>. <small>(This was review-1 finding #1.)</small></li>
+<li><b>The counter steps up only inside the posting transaction.</b> If a post fails and rolls back, its
+number is handed back — so there are no gaps. A regular accounting "sequence" would leak a gap on every
+rollback; this uses a plain counted row instead, precisely to avoid that.</li>
+</ul>
+
+<pre><span class="c"># The number is taken atomically; a rolled-back post returns it. And review-2</span>
+<span class="c"># added a DB trigger so even a raw edit can only step the counter by +1:</span>
+IF NEW.next_seq &lt;&gt; OLD.next_seq AND NEW.next_seq &lt;&gt; OLD.next_seq + 1 THEN
+    <b>RAISE EXCEPTION 'next_seq may only advance by one'</b>;   <span class="c"># can't rewind or jump</span>
+IF OLD.next_seq &gt; 1 AND (fy/store/type changed) THEN
+    <b>RAISE EXCEPTION 'scope is frozen once numbering has started'</b>;</pre>
+
+<h3>8c · Three keys on every document</h3>
+<table>
+<tr><th>Key</th><th>Plain meaning</th></tr>
+<tr><td><b>Internal id</b></td><td>An automatic row number for the database's own use. Never seen by staff.</td></tr>
+<tr><td><b>doc_number</b></td><td>The official <code>26-27/DEO/SAL/74</code> — the human/Tally number. Blank while a draft, assigned at posting.</td></tr>
+<tr><td><b>idempotency_uuid</b></td><td>A one-time code the till attaches to each sale. If the connection drops and the till retries, the same code makes the system return the <em>same</em> sale instead of creating a duplicate. Essential for offline-first shops.</td></tr>
+</table>
+
+<h3>8d · The two safety nets again</h3>
+<p>As in the ledger, every K2 rule is locked twice. The app code (<code>post()</code>, <code>cancel()</code>,
+the edit/delete guards) gives clean early errors; the database triggers and CHECK rules are the deep backstop
+that binds even an administrator. K2 also adds two database CHECK rules worth naming in plain terms:</p>
+<ul class="tight">
+<li><b>"a posted document must have a number"</b> — it's impossible to have a submitted/cancelled row with a blank number, by any path.</li>
+<li><b>"status can only be 0, 1, or 2"</b> — a raw write can't park a document at some undefined status like 99.</li>
+</ul>
+
+<h4>The promises that prove K2 &nbsp;<small>test_document_fsm.py · test_voucher_series.py · test_document_idempotency.py</small></h4>
+<p>There are 36 of these — the complete list is in the <a href="#promises">promise list below</a>. The
+headline ones:</p>
+<ul class="tight">
+<li>A new document <b>starts as a draft with no number</b>; posting it mints <code>26-27/DEO/SAL/1</code>.</li>
+<li>A posted document <b>cannot be re-posted, edited, or deleted</b>; a draft can be freely edited or thrown away.</li>
+<li>Cancelling is a <b>reversal, not a delete</b> — the record stays.</li>
+<li>Numbers are <b>gap-free even when 12 tills post at the exact same instant</b> (a real concurrency test), and a rolled-back post <b>leaves no gap</b>.</li>
+<li>A sale and a goods-receipt in the same store <b>get different numbers</b>, never a clash.</li>
+<li>A retried sale with the same one-time code <b>returns the original</b>, never a duplicate.</li>
+<li>Raw database attempts to rewind the counter, tamper during a cancel, or forge a posted row are <b>all rejected</b>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="migrations" class="full">9 · The migrations — the 4 database steps</h2>
+<p>Migrations are the dated, ordered instructions that build the database and install the locks. There are
+four; reading their one-line purpose tells you the whole database story.</p>
+<table>
+<tr><th>Step</th><th>What it does</th></tr>
+<tr><td><code>0001</code> <span class="pill k1">K1</span></td><td>Creates the test ledger table and installs the <b>append-only trigger</b> (no edits/deletes).</td></tr>
+<tr><td><code>0002</code> <span class="pill k2">K2</span></td><td>Creates the voucher-series and document tables and installs the <b>status-lifecycle trigger</b>.</td></tr>
+<tr><td><code>0003</code> <span class="pill fix">review 1</span></td><td>Widens the number field so a long-but-valid number can't overflow; adds <b>"posted ⇒ has a number"</b>; re-applies the lifecycle trigger so a cancel can't tamper with other fields.</td></tr>
+<tr><td><code>0004</code> <span class="pill fix">review 2</span></td><td>Adds <b>"status must be 0/1/2"</b> and the <b>counter-ownership guard</b> (counter can only step up by one; a used series can't be re-pointed) — pushing the last app-only locks fully into the database.</td></tr>
+</table>
+<div class="why"><b>You can read the database's entire safety story from this table.</b> Four steps, each adding
+a lock, two of them added <em>because reviews asked for them</em>. That progression — and the fact that
+locks moved from the app down into the database over time — is the system getting <em>stronger</em>, on
+purpose.</div>
+
+<!-- ============================================================ -->
+<h2 id="promises" class="full">10 · The full promise list — this <em>is</em> the review</h2>
+<p>Here are all <b>75 promises</b> the code currently keeps, grouped, each as a plain sentence. This is your
+actual review instrument: <b>read each one and ask "do I want this to be true?"</b> If yes across the board,
+and the run is green (next section), the kernel does what it should. Tick them off.</p>
+
+<div class="card">
+<h4>Foundation <span class="pill k0">K0</span></h4>
+<div class="promise"><div class="box"></div><div class="t">The test machinery runs, and the tests run against <b>real PostgreSQL</b>, not a lookalike.</div></div>
+
+<h4 style="margin-top:22px">Money <span class="pill k1">K1</span></h4>
+<div class="promise"><div class="box"></div><div class="t">A money amount <b>saves and reloads as the exact same whole number of paise</b> — no drift — across tiny, large, and negative values.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>decimal, float, true/false, or text written to a money field is rejected</b>, never silently rounded — at every entry point.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Plain whole numbers and "no value" pass through untouched.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Rupee→paise conversion is <b>exact and rounds half-up at the paisa</b> (₹28,50,000 → 285000000); the reverse round-trips perfectly; a float is refused.</div></div>
+
+<h4 style="margin-top:22px">Append-only ledger <span class="pill k1">K1</span></h4>
+<div class="promise"><div class="box"></div><div class="t">A raw database <b>UPDATE is forbidden even for the superuser</b>; the row is verified unchanged.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A raw database <b>DELETE is forbidden even for the superuser</b>; the row still exists.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A raw <b>INSERT still succeeds</b> — adding is always allowed.</div></div>
+<div class="promise"><div class="box"></div><div class="t">The app's own <b>edit and delete each raise a clean error</b> before reaching the database.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A correction <b>nets to exactly zero</b>; the original line is untouched and both rows remain.</div></div>
+
+<h4 style="margin-top:22px">Document lifecycle <span class="pill k2">K2</span></h4>
+<div class="promise"><div class="box"></div><div class="t">A new document <b>starts as a draft with no number</b>.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Posting moves it to <b>submitted and mints its number</b> (<code>26-27/DEO/SAL/1</code>).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A posted document <b>cannot be re-posted</b> (and no extra number is burned).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A posted document <b>cannot be edited</b>.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>draft can be freely edited</b>.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Cancelling is a <b>reversing transition, not a delete</b> — the row remains.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>draft cannot be cancelled</b> (only a posted one can).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>cancelled document is frozen</b> — no re-post, re-cancel, or edit.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A posted document <b>cannot be deleted</b>; an unposted draft <b>can</b> be discarded.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Raw database attempts to <b>re-post or delete a submitted row are refused</b> (superuser included).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A posted/cancelled row <b>can never exist without a number</b> — blocked on both create and bulk-update.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A row <b>cannot be born already posted/cancelled</b>, and status <b>can't be set to an undefined value</b> (e.g. 99).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A raw cancel that also <b>tampers with another field is rejected</b>; a clean status-only cancel is allowed.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Posting uses the <b>committed, current details</b> — a stale in-memory copy can't stamp the wrong type's number.</div></div>
+
+<h4 style="margin-top:22px">Gap-free numbering <span class="pill k2">K2</span></h4>
+<div class="promise"><div class="box"></div><div class="t">The number renders as the <b>canonical <code>26-27/DEO/SAL/74</code></b>, type included.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Two types in one store get <b>distinct numbers</b> (sale ≠ goods-receipt), never a clash.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Admin-set prefix/suffix are <b>data, not code</b> — configurable without a release.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Sequential posts are <b>gap-free</b> (1, 2, 3, 4, 5).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>rolled-back post leaves no gap</b> — the number returns and the next post reuses it.</div></div>
+<div class="promise"><div class="box"></div><div class="t"><b>12 tills posting at the same instant</b> get 12 distinct, gap-free numbers — no collisions, no duplicates.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>stale config save cannot rewind the counter</b> (the app guard), and a <b>raw database rewind or jump is refused</b> (the deep guard).</div></div>
+<div class="promise"><div class="box"></div><div class="t">A long-but-valid number <b>fits without overflowing</b>.</div></div>
+<div class="promise"><div class="box"></div><div class="t">A <b>used series can't be re-pointed</b> to a new store/type; an <b>unused one can still be corrected</b>.</div></div>
+
+<h4 style="margin-top:22px">Offline-safe numbering keys <span class="pill k2">K2</span></h4>
+<div class="promise"><div class="box"></div><div class="t">A <b>retry with the same one-time code returns the original document</b> — never a duplicate.</div></div>
+<div class="promise"><div class="box"></div><div class="t">Different codes make <b>different documents</b>; every document <b>gets a code by default</b>; a <b>duplicate code is refused</b> by the database.</div></div>
+</div>
+
+<p><small>That's 75 checks once the multi-value tests are counted individually. Every one currently passes on
+PostgreSQL 16.</small></p>
+
+<!-- ============================================================ -->
+<h2 id="run" class="full">11 · See it yourself — the commands</h2>
+<p>You don't need to write code to <em>run</em> the proof. From the project folder:</p>
+
+<div class="steps">
+<div class="step"><b>Read the history.</b> <span class="kbd">git log --oneline -6</span> — shows the six commits from the timeline above.</div>
+<div class="step"><b>See K2's exact changes.</b> <span class="kbd">git log origin/main..HEAD</span> lists the three commits that would merge; <span class="kbd">git show 7f963b3</span> shows the latest one's lines (green = added).</div>
+<div class="step"><b>Run all 75 promises.</b> <span class="kbd">npm run ci</span> — this runs formatting, type-checks, and <b>every test</b> against real PostgreSQL. The line you're looking for is <code>75 passed</code>, and the final word <b>green / passing</b>.</div>
+<div class="step"><b>If you want to watch a promise fail on purpose</b> (optional, the real "aha"): change one expectation in a test file, run <code>npm run ci</code>, watch it go red, then undo it. That's proof the tests actually bite.</div>
+</div>
+
+<div class="plain"><b>What "green" means for you:</b> every one of the 75 promises held, on the real database.
+It does <em>not</em> require you to have read the Python. Green + a promise list you agree with = a sound slice.</div>
+
+<!-- ============================================================ -->
+<h2 id="decision" class="full">12 · Your merge checklist</h2>
+<p>K2 is on its branch, not yet on <code>main</code>. Merging is <b>your</b> decision (only a human reaches
+<code>main</code> — that's the rule). Here's the short tick-list:</p>
+
+<div class="card">
+<div class="promise"><div class="box"></div><div class="t"><b>The promise list (section 10) is the right set</b> — each is something you'd want true of the kernel.</div></div>
+<div class="promise"><div class="box"></div><div class="t"><b><code>npm run ci</code> is green</b> — 75 passed on PostgreSQL 16. <small>(Already run by the build; you can re-run.)</small></div></div>
+<div class="promise"><div class="box"></div><div class="t"><b>The two deferred items are acceptable as tracked, not blocking.</b> Review 2 left two rare, deeper items as <a>issue #19</a>: one needs a deliberate design decision (it can't be fully solved in a generic skeleton), one is minor. They're logged, not lost. Neither affects the normal, sanctioned path.</div></div>
+<div class="promise"><div class="box"></div><div class="t"><b>You've spot-read at least a few test names yourself</b> and they read like real promises (e.g. open <code>test_document_fsm.py</code> and read the lines starting <code>def test_</code>).</div></div>
+</div>
+
+<p>If all four are ticked, merge with confidence: <span class="kbd">git checkout main && git merge k2-sandcastle-merge-review</span> — then K3 is next.</p>
+
+<div class="good"><b>The honest bottom line.</b> This is a small, carefully-built, twice-reviewed core. The
+hard parts (no float money, append-only ledgers, frozen posted documents, gap-free numbering under
+concurrency) are all done and locked twice. The thing that made K2 <em>feel</em> endless wasn't broken code
+— it was that the finish line hadn't been drawn. Section 10 is that finish line. You're not behind; you're
+exactly where a careful money build should be at this stage.</div>
+
+<!-- ============================================================ -->
+<h2 id="glossary" class="full">13 · Glossary</h2>
+<table>
+<tr><td><b>Trigger</b></td><td>A rule inside the database that fires on every write and can reject it. The deepest lock; stops even an administrator.</td></tr>
+<tr><td><b>CHECK</b></td><td>A simpler database rule: "this column may only hold these values."</td></tr>
+<tr><td><b>ORM</b></td><td>The Python layer the app uses to talk to the database; gives friendly early errors.</td></tr>
+<tr><td><b>Migration</b></td><td>A dated, ordered instruction that changes the database shape or rules.</td></tr>
+<tr><td><b>Paise (integer)</b></td><td>All money stored as whole paise (₹1 = 100). No decimals, so no drift.</td></tr>
+<tr><td><b>Append-only</b></td><td>Add-only; corrections are new reversing lines, never edits.</td></tr>
+<tr><td><b>docstatus / FSM</b></td><td>The fixed status path draft → submitted → cancelled.</td></tr>
+<tr><td><b>Voucher series</b></td><td>The configured counter behind document numbers; one per store-and-type.</td></tr>
+<tr><td><b>doc_number</b></td><td>The official <code>FY/store/type/seq</code> number; the Tally join key; gap-free.</td></tr>
+<tr><td><b>Idempotency code</b></td><td>A one-time key per sale so a retried write returns the original, not a duplicate.</td></tr>
+<tr><td><b>Probe table</b></td><td>A throw-away test table (<code>LedgerProbe</code>, <code>DocumentProbe</code>) that exists only to prove the locks work; not part of the live system.</td></tr>
+<tr><td><b>Commit</b></td><td>One saved change with a note. Six so far.</td></tr>
+<tr><td><b>CI / <code>npm run ci</code></b></td><td>The automatic gate that runs all checks and tests; must be green before merge.</td></tr>
+</table>
+
+<hr>
+<p><small>Companion to the K0 build log. Source reviewed: <code>app/backend/core/</code> at commit
+<code>7f963b3</code> on <code>k2-sandcastle-merge-review</code>. Every code excerpt above is simplified for
+reading — the exact lines are in the named files. 28 June 2026.</small></p>
+
+</div>
+</body>
+</html>
