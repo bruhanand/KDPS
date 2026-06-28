@@ -1,0 +1,54 @@
+{
+  "summary": "Backend-only regression validation completed for refactored PT mapper, inbound GRN helpers, stockledger posting helpers, identity comparisons, and cookie/header JWT auth compatibility. All executed tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/app/auth_testing.md",
+        "issue": "Auth playbook file path referenced in instructions is missing in workspace; used /app/memory/test_credentials.md and API-level checks instead."
+      },
+      {
+        "endpoint": "/app/app/backend/accounts/authentication.py",
+        "issue": "pyflakes reports an unused import (`Any`). No runtime impact, but clean-up recommended."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/app/backend/tests/test_refactor_regression.py",
+    "/app/app/backend/tests/test_iteration9_rbac_vendor_inbound.py",
+    "/app/app/backend/tests/test_iteration10_auth_cookie_retest.py",
+    "/app/app/backend/tests/test_iteration11_pt_posting_regression.py",
+    "/app/test_reports/pytest/refactor_regression_iter11.xml",
+    "/app/test_reports/pytest/iteration9_iter11.xml",
+    "/app/test_reports/pytest/iteration10_iter11.xml",
+    "/app/test_reports/pytest/iteration11_pt_posting.xml"
+  ],
+  "action_items": [
+    "Optionally remove unused import in accounts/authentication.py.",
+    "If auth playbook documentation is expected at /app/auth_testing.md, add/restore it to avoid test-process ambiguity."
+  ],
+  "critical_code_review_comments": [
+    "No undefined-variable regressions were introduced in touched production files (compile + pyflakes checks passed except one unused import).",
+    "No incorrect identity comparison anti-patterns (`is` with literals) found in inspected production files; current `is None`/`is not None` uses are correct.",
+    "Refactor behavior remained stable in tested flows: PT mapping, GRN create/list, PT send/post/reverse append-only ledger behavior, booking reconciliation, and vendor bill creation/reversal linkage.",
+    "CookieOrHeaderJWTAuthentication remains compatible with browser login and cookie-only /api/auth/me."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration11_pt_posting_regression.py",
+    "/app/test_reports/iteration_11.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "N/A (not requested)"
+  },
+  "seed_data_creation": "Created test booking/GRN/PT-posting artifacts via public APIs for regression verification (append-only business data).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 11 added reusable regression file test_iteration11_pt_posting_regression.py covering cookie-only /auth/me, inbound direct/variance GRN line behavior, PT post+reverse append-only stock entries, booking inward reconciliation, and vendor bill linkage.",
+  "rca of the issue": "No functional regression reproduced in requested backend scope. Prior collection failure cause remains environment-variable setup (`REACT_APP_BACKEND_URL` missing) rather than app logic."
+}
