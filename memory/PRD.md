@@ -33,6 +33,12 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Ledgers: pagination + Stock-on-Hand + nav (28 Jun 2026) ✅
+- **Server-side pagination** on `GET /api/stockledger/entries` (DRF `PageNumberPagination`, page_size 50, scoped to this view only — `{count,next,previous,results}`); Stock Ledger page now has Prev/Next + "Showing X–Y of N".
+- **Stock on Hand** screen (`/ledgers/stock-on-hand`, `StockOnHand.tsx`) backed by `GET /api/stockledger/on-hand?group_by=sku|brand|store` — live net position (Σqty>0) from the append-only ledger, with SKU/Brand/Store grouping tabs + summary cards. Cross-linked with Stock Ledger.
+- **Ledgers nav wired**: added "Stock on Hand" item; Vendor/Cash Ledger remain intentional "Planned" placeholders (route via catch-all → ModulePage).
+- **Tested:** testing_agent iteration_7 → frontend 100% (5/5: pagination, on-hand 3 groupings with consistent 241-unit total, cross-links, nav placeholders). Added `.catch` error surface on the on-hand fetch.
+
 ## Implemented — Code-quality refactor (28 Jun 2026) ✅
 - Behavior-preserving refactor from a code review: split high-complexity functions into focused helpers —
   `engine.map_record` (`_map_prices`/`_map_season`/`_map_taxonomy`), `ptmapper.views.process_file` +
@@ -137,9 +143,8 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 ## Backlog (prioritised)
 - **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
   but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
-- **P1 — Stock balance view & ledgers polish:** a stock-on-hand (net qty/value per SKU/store) summary screen
-  over `StockLedgerEntry`; server-side pagination on `/api/stockledger/entries`; wire the Vendor/Cash ledger
-  nav placeholders. (Stock-ledger POSTING itself is DONE, 28 Jun.)
+- **P1 — Vendor & Cash ledgers (concrete models):** build the actual append-only Vendor and Cash ledgers (the
+  nav items already route to "Planned" placeholders). (Stock-on-hand + stock-ledger pagination DONE, 28 Jun.)
 - **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
   generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
