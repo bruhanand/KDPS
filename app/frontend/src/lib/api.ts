@@ -4,7 +4,8 @@ import createClient from "openapi-fetch";
 
 import type { components, paths } from "./api-schema";
 
-const BASE = (import.meta.env.REACT_APP_BACKEND_URL as string) || "";
+const BASE = import.meta.env.REACT_APP_BACKEND_URL as string;
+if (!BASE) throw new Error("REACT_APP_BACKEND_URL is required");
 
 export const api = axios.create({ baseURL: `${BASE}/api`, withCredentials: true });
 export const openApiClient = createClient<paths>({ baseUrl: BASE, credentials: "include" });
