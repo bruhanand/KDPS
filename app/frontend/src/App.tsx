@@ -9,6 +9,7 @@ import { BrandsPage, GstinsPage, SeasonsPage, StoresPage } from "./pages/MasterP
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
+import StockLedger from "./pages/StockLedger";
 
 export function App() {
   return (
@@ -27,6 +28,7 @@ export function App() {
             <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
             <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
             <Route path="/documents/pt-mapper/:id" element={<PtFileDetailPage />} />
+            <Route path="/ledgers/stock" element={<StockLedger />} />
             <Route path="/store/receive" element={<InboundPage />} />
             <Route path="/masters/stores" element={<StoresPage />} />
             <Route path="/masters/brands" element={<BrandsPage />} />
