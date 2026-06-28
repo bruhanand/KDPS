@@ -29,6 +29,8 @@ from django.db import connection, models, transaction
 
 #: One shared trigger function for every document table.
 TRIGGER_FUNCTION = "kdps_document_fsm"
+#: Guard function for the gap-free counter on `core_voucher_series`.
+VOUCHER_SERIES_GUARD_FUNCTION = "kdps_voucher_series_guard"
 
 
 class DocumentError(Exception):
@@ -181,6 +183,13 @@ class Document(models.Model):
                 condition=models.Q(docstatus=DocStatus.DRAFT) | models.Q(doc_number__isnull=False),
                 name="%(app_label)s_%(class)s_posted_has_number",
             ),
+            # [#B] docstatus is a plain integer column; the IntegerChoices are a
+            # Python-only convenience. Keep the stored domain to {draft, submitted,
+            # cancelled} so a raw write can't park a row at an undefined status.
+            models.CheckConstraint(
+                condition=models.Q(docstatus__in=DocStatus.values),
+                name="%(app_label)s_%(class)s_docstatus_domain",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -243,7 +252,17 @@ class Document(models.Model):
                 f"only a draft can be posted; this is {self.get_docstatus_display()}"
             )
         with transaction.atomic():
-            fy, store_code, doc_type = self.series_lookup()
+            # Re-read the row under a lock before deriving the series (#A). The
+            # committed row is the single source of truth: a concurrent edit to the
+            # scope fields (or a concurrent post of the same draft) must not let us
+            # mint a number for a stale (fy, store, doc_type), or stamp a SAL number
+            # onto what the DB now calls a GRN. The lock also serialises double-post.
+            locked = type(self).objects.select_for_update().get(pk=self.pk)
+            if locked.docstatus != DocStatus.DRAFT:
+                raise DocumentTransitionError(
+                    f"only a draft can be posted; this is {locked.get_docstatus_display()}"
+                )
+            fy, store_code, doc_type = locked.series_lookup()
             series, number = VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=doc_type)
             self.series = series
             self.doc_number = number
@@ -278,6 +297,9 @@ def document_fsm_function_sql() -> str:
     it is generic. It binds even the superuser CI connects as (a trigger, unlike a
     REVOKE, stops a superuser):
 
+    * every INSERT must start in draft — a row may not be born already
+      submitted/cancelled (or at an out-of-domain status), so it cannot skip the
+      FSM (#B);
     * no UPDATE may walk backwards or re-post (submitted may only reach cancelled;
       a draft may only stay draft or post);
     * cancellation is status-only — it may not rewrite any other column (#4), so
@@ -291,6 +313,13 @@ def document_fsm_function_sql() -> str:
     return f"""
     CREATE OR REPLACE FUNCTION {TRIGGER_FUNCTION}() RETURNS trigger AS $$
     BEGIN
+        IF TG_OP = 'INSERT' THEN
+            IF NEW.docstatus <> 0 THEN
+                RAISE EXCEPTION
+                    'docstatus FSM: a new row in % must start as draft', TG_TABLE_NAME;
+            END IF;
+            RETURN NEW;
+        END IF;
         IF TG_OP = 'DELETE' THEN
             IF OLD.docstatus <> 0 THEN
                 RAISE EXCEPTION
@@ -332,7 +361,7 @@ def document_fsm_sql(table_name: str) -> str:
     {document_fsm_function_sql()}
 
     CREATE TRIGGER {trigger_name}
-        BEFORE UPDATE OR DELETE ON {table_name}
+        BEFORE INSERT OR UPDATE OR DELETE ON {table_name}
         FOR EACH ROW EXECUTE FUNCTION {TRIGGER_FUNCTION}();
     """
 
@@ -340,6 +369,52 @@ def document_fsm_sql(table_name: str) -> str:
 def document_fsm_reverse_sql(table_name: str) -> str:
     """Reverse of `document_fsm_sql` for one table (leaves the shared function)."""
     return f"DROP TRIGGER IF EXISTS {table_name}_document_fsm ON {table_name};"
+
+
+def voucher_series_guard_sql(table_name: str = "core_voucher_series") -> str:
+    """SQL installing the counter-ownership guard on the voucher-series table.
+
+    The gap-free counter is the slice's whole reason to exist, so its protection
+    cannot live only in `Model.save()` — `QuerySet.update()`, raw SQL, and bulk
+    writes bypass the ORM. This trigger binds even the superuser:
+
+    * `next_seq` may only *hold* (a config save of prefix/suffix) or advance by
+      exactly one (an allocation). Any rewind, skip, or arbitrary set is rejected
+      (#D) — that is what keeps numbers gap-free and collision-free.
+    * a *used* series (one that has already minted a number, `next_seq > 1`) has
+      frozen identity: re-pointing `fy`/`store_code`/`doc_type` would strand its
+      counter and let the old scope restart at 1, colliding with history (#E).
+    """
+    trigger_name = f"{table_name}_guard"
+    return f"""
+    CREATE OR REPLACE FUNCTION {VOUCHER_SERIES_GUARD_FUNCTION}() RETURNS trigger AS $$
+    BEGIN
+        IF NEW.next_seq <> OLD.next_seq AND NEW.next_seq <> OLD.next_seq + 1 THEN
+            RAISE EXCEPTION
+                'voucher series: next_seq may only advance by one (got % from %)',
+                NEW.next_seq, OLD.next_seq;
+        END IF;
+        IF OLD.next_seq > 1 AND (
+            NEW.fy <> OLD.fy
+            OR NEW.store_code <> OLD.store_code
+            OR NEW.doc_type <> OLD.doc_type
+        ) THEN
+            RAISE EXCEPTION
+                'voucher series: fy/store_code/doc_type are frozen once numbering has started';
+        END IF;
+        RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER {trigger_name}
+        BEFORE UPDATE ON {table_name}
+        FOR EACH ROW EXECUTE FUNCTION {VOUCHER_SERIES_GUARD_FUNCTION}();
+    """
+
+
+def voucher_series_guard_reverse_sql(table_name: str = "core_voucher_series") -> str:
+    """Reverse of `voucher_series_guard_sql` (leaves the shared function)."""
+    return f"DROP TRIGGER IF EXISTS {table_name}_guard ON {table_name};"
 
 
 class DocumentProbe(Document):

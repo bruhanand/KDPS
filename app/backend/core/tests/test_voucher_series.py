@@ -12,7 +12,7 @@ from __future__ import annotations
 import threading
 
 import pytest
-from django.db import connection, transaction
+from django.db import DatabaseError, connection, transaction
 
 from core.documents import DocumentProbe, VoucherSeries
 
@@ -186,3 +186,64 @@ def test_a_long_but_valid_series_posts_without_overflow() -> None:
     assert len(doc.doc_number) > 64  # would have overflowed varchar(64)
     assert doc.doc_number.startswith("P" * 32)
     assert doc.doc_number.endswith("S" * 32)
+
+
+def _advance_counter_once() -> VoucherSeries:
+    """Seed a series and consume one number so next_seq == 2 (a *used* series)."""
+    series = _seed_series()
+    doc = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=DOC_TYPE)
+    with transaction.atomic():
+        doc.post()
+    series.refresh_from_db()
+    assert series.next_seq == 2
+    return series
+
+
+@pytest.mark.django_db
+def test_raw_sql_cannot_rewind_the_counter() -> None:
+    # [#D] The ORM save() guard is not enough — the slice's thesis is "binds even
+    # the superuser", so a raw UPDATE rewinding next_seq must be refused at the DB.
+    series = _advance_counter_once()
+    with pytest.raises(DatabaseError):
+        with transaction.atomic(), connection.cursor() as cur:
+            cur.execute("UPDATE core_voucher_series SET next_seq = 1 WHERE id = %s", [series.pk])
+    series.refresh_from_db()
+    assert series.next_seq == 2  # the rewind rolled back
+
+
+@pytest.mark.django_db
+def test_queryset_update_cannot_set_an_arbitrary_next_seq() -> None:
+    # [#D] A bulk UPDATE bypasses Model.save() entirely; the counter may only ever
+    # hold or advance by exactly one, never jump.
+    series = _advance_counter_once()
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            VoucherSeries.objects.filter(pk=series.pk).update(next_seq=999)
+    series.refresh_from_db()
+    assert series.next_seq == 2
+
+
+@pytest.mark.django_db
+def test_series_scope_is_frozen_once_numbering_starts() -> None:
+    # [#E] Re-pointing a used series to a new (fy, store, type) would strand its
+    # advanced counter and let the old scope restart at 1, colliding with history.
+    series = _advance_counter_once()  # next_seq == 2
+    with pytest.raises(DatabaseError):
+        with transaction.atomic(), connection.cursor() as cur:
+            cur.execute(
+                "UPDATE core_voucher_series SET doc_type = 'GRN' WHERE id = %s", [series.pk]
+            )
+    series.refresh_from_db()
+    assert series.doc_type == DOC_TYPE
+
+
+@pytest.mark.django_db
+def test_series_scope_is_editable_while_unused() -> None:
+    # [#E] A pristine series (next_seq == 1, no number minted) is still just config
+    # — a trained admin may fix a typo in its scope before it is ever used.
+    series = _seed_series()  # next_seq == 1
+    series.doc_type = "GRN"
+    series.save()
+    series.refresh_from_db()
+    assert series.doc_type == "GRN"
+    assert series.next_seq == 1

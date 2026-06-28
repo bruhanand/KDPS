@@ -160,12 +160,46 @@ def test_db_trigger_forbids_raw_delete_of_submitted(series: VoucherSeries) -> No
 # -- [#3] a posted row can never exist without a number (INSERT *and* UPDATE) ----
 @pytest.mark.django_db
 def test_cannot_insert_a_submitted_row_without_a_number(series: VoucherSeries) -> None:
-    # objects.create(docstatus=SUBMITTED) is an INSERT — it never touches post()
-    # or the UPDATE trigger, so only a DB CHECK constraint can stop it.
-    with pytest.raises(IntegrityError):
+    # objects.create(docstatus=SUBMITTED) is an INSERT — it never touches post().
+    # The INSERT FSM trigger (must start draft) catches it before the CHECK does.
+    with pytest.raises(DatabaseError):
         with transaction.atomic():
             DocumentProbe.objects.create(
                 fy=FY, store_code=STORE, doc_type=DOC_TYPE, docstatus=DocStatus.SUBMITTED
+            )
+
+
+# -- [#B] a new row must start in draft; docstatus stays in its domain ----------
+@pytest.mark.django_db
+def test_cannot_insert_a_non_draft_row_even_with_a_number(series: VoucherSeries) -> None:
+    # A non-null number satisfies the posted-has-number CHECK, so without an INSERT
+    # guard objects.create(docstatus=CANCELLED, doc_number=…) would forge a row
+    # that never walked the FSM. The INSERT trigger requires draft.
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            DocumentProbe.objects.create(
+                fy=FY,
+                store_code=STORE,
+                doc_type=DOC_TYPE,
+                docstatus=DocStatus.CANCELLED,
+                doc_number="26-27/DEO/SAL/9",
+            )
+
+
+@pytest.mark.django_db
+def test_cannot_insert_an_out_of_domain_docstatus(series: VoucherSeries) -> None:
+    # docstatus is a plain integer column; the IntegerChoices live in Python only.
+    # A CHECK keeps the domain to {0,1,2} so a raw 99 can never enter the table.
+    # The number is supplied so the posted-has-number CHECK can't pre-empt the
+    # domain check — this exercises the domain guard specifically.
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            DocumentProbe.objects.create(
+                fy=FY,
+                store_code=STORE,
+                doc_type=DOC_TYPE,
+                docstatus=99,
+                doc_number="26-27/DEO/SAL/9",
             )
 
 
@@ -212,3 +246,25 @@ def test_raw_status_only_cancel_is_allowed(series: VoucherSeries) -> None:
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute(f"UPDATE {table} SET docstatus = 2 WHERE id = %s", [doc.pk])
     assert DocumentProbe.objects.get(pk=doc.pk).docstatus == DocStatus.CANCELLED
+
+
+# -- [#A] post() mints from the committed scope, never a stale in-memory one ------
+@pytest.mark.django_db
+def test_post_uses_committed_scope_not_a_stale_in_memory_value() -> None:
+    # A draft is loaded as SAL; meanwhile another writer re-points it to GRN in the
+    # DB. Posting the stale instance must mint a GRN number (matching the committed
+    # row), never a SAL number stamped onto a GRN document.
+    VoucherSeries.objects.create(fy=FY, store_code=STORE, doc_type="SAL")
+    VoucherSeries.objects.create(fy=FY, store_code=STORE, doc_type="GRN")
+    stale = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type="SAL")
+
+    # another transaction commits a scope change on the same draft row
+    DocumentProbe.objects.filter(pk=stale.pk).update(doc_type="GRN")
+
+    with transaction.atomic():
+        stale.post()  # stale.doc_type is still "SAL" in memory
+
+    assert stale.doc_number == "26-27/DEO/GRN/1"  # derived from the committed GRN
+    reloaded = DocumentProbe.objects.get(pk=stale.pk)
+    assert reloaded.doc_type == "GRN"
+    assert reloaded.doc_number == "26-27/DEO/GRN/1"  # series and number agree
