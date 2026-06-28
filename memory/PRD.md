@@ -48,6 +48,14 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Dashboard configurability:** home dashboard cards can be selected/hidden via “Configure dashboard”, reordered by dragging, and clicked to open a compact modal with a small visual graph + purpose text. Roadmap/build-status panel removed from dashboard.
 - **Tested:** targeted JS lint clean, TypeScript typecheck clean, browser smoke verified login copy removal, dashboard config modal, dashboard card modal, coming-soon copy, and sidebar resizing.
 
+## Implemented — Code review stability fixes (28 Jun 2026) ✅
+- **PT mapper refactor:** split `ptmapper/engine.py::map_record()` into focused extraction, validation, price, resolution, row-building, and blank-column helpers while preserving output behavior.
+- **Inbound GRN refactor:** split `_add_grn_line()` validation/parsing and booking-line variance checks into smaller helpers; added safe integer conversion for received/damaged quantities.
+- **Stock ledger posting refactor:** split `post_pt_inward()` into PT-row entry construction, batch entry building, and PT-posted state update helpers; append-only posting behavior preserved.
+- **Identity checks reviewed:** production files flagged by the report contain correct `is None` / `is not None` checks only; no unsafe `is "literal"` comparisons were found.
+- **Auth type hints:** added explicit signature typing for cookie/header JWT authentication and removed unused import after tester feedback.
+- **Tested:** testing_agent iteration_11 passed backend regression. Additional self-checks: Python lint clean, Django check clean, `tests/test_refactor_regression.py` 6/6, `tests/test_iteration9_rbac_vendor_inbound.py` 8/8, and `tests/test_iteration11_pt_posting_regression.py` 3/3.
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
