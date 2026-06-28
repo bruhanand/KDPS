@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
+from masters.scoping import scoped_stores
 from masters.serializers import (
     BrandSerializer,
     GstinSerializer,
@@ -22,23 +23,6 @@ from masters.serializers import (
     SeasonSerializer,
     StoreSerializer,
 )
-
-
-def scoped_stores(user: Any) -> Any:
-    """Stores the actor may see (fail-closed for narrower scopes, ADR-0003).
-
-    Reads `scope_type` / `entity_id` / `stores` off the user by duck-typing so
-    `masters` never imports `accounts` (keeps the module seam, ADR-0002).
-    """
-    qs = Store.objects.filter(is_active=True).select_related("gstin")
-    if getattr(user, "is_superuser", False):
-        return qs
-    scope = getattr(user, "scope_type", "all")
-    if scope == "all":
-        return qs
-    if scope == "entity" and getattr(user, "entity_id", None):
-        return qs.filter(gstin__legal_entity_id=user.entity_id)
-    return qs.filter(pk__in=user.stores.values_list("pk", flat=True))
 
 
 class StoreListView(generics.ListAPIView):

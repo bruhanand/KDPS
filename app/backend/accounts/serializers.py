@@ -6,7 +6,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from accounts.models import NAV_GROUPS, Role, User
-from masters.views import scoped_stores
+from masters.scoping import scoped_stores
 
 
 class RoleSerializer(serializers.ModelSerializer):
