@@ -49,8 +49,8 @@ credentials.json
 
 # container/runtime artifacts (Emergent build env)
 staticfiles/
-/app/backend
-/app/frontend
+# Postgres data directory — runtime DB files, never commit (was the source of merge conflicts)
+.pgdata/
 .env
 __pycache__/
 *.pyc
