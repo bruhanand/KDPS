@@ -7,6 +7,7 @@ models so Django registers them and migrations are generated.
 
 from __future__ import annotations
 
+from core.documents import DocumentProbe, VoucherSeries
 from core.ledger import LedgerProbe
 
-__all__ = ["LedgerProbe"]
+__all__ = ["DocumentProbe", "LedgerProbe", "VoucherSeries"]
