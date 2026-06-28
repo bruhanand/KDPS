@@ -63,6 +63,16 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Tested:** testing_agent iteration_12 passed deployment-readiness regression; pytest `tests/test_iteration12_deployment_readiness.py` passed 8/8 after backend env hardening.
 - **Deployment blocker remaining:** provide/confirm external managed PostgreSQL `DATABASE_URL` or choose a major database migration strategy. Do not migrate to MongoDB without explicit architecture approval because append-only ledger guarantees are Postgres-oriented.
 
+## Implemented — Repo deploy-readiness (no app logic changes) (Jun 2026) ✅
+- **.gitignore bug fixed:** removed `/app/backend` and `/app/frontend` patterns that (anchored to repo root `/app`) silently ignored the *real* source at `app/backend/*` & `app/frontend/*`. Now tracked: `ptmapper` (16), `finledger` (9), `stockledger` (9) apps + new frontend pages (Bookings/Inbound/PtMapper/StockLedger/VendorLedger/CashLedger/StockOnHand → 15 files in `src/pages`).
+- **Postgres data untracked:** `git rm -r --cached .pgdata` removed 1539 wrongly-tracked PG data files; `.pgdata/` added to `.gitignore`.
+- **Missing server dep added:** `uvicorn[standard]>=0.25` added to `app/backend/pyproject.toml` (previously only in container `/root/.venv`). Verified a fresh `uv sync` venv boots `uvicorn server:app` and serves `/api/auth/login` (HTTP 200).
+- **Fresh-clone build verified:** `uv sync` (55 pkgs, incl. openpyxl/xlrd/pyxlsb/uvicorn) + `yarn build` (tsc + vite, 1863 modules) both succeed from committed `uv.lock` / `yarn.lock`.
+- **settings.py env hardening:** removed hardcoded `pt-mapper.preview...` host from CSRF default (now `https://*.emergentagent.com` wildcard, still covers preview); added additive env-driven `CORS_ALLOWED_ORIGINS`. The 4 deploy vars stay `os.environ[...]` fail-fast.
+- **Backend start cmd (fresh clone, from `app/backend`):** `uv sync && uv run python manage.py migrate && uv run uvicorn server:app --host 0.0.0.0 --port $PORT`.
+- **Tested:** testing_agent iteration_13 → backend 8/8 + frontend login→dashboard 100%, 0 CORS regressions. **GitHub push still pending — use the "Save to Github" feature** (no git remote configured in container).
+
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
