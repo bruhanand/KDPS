@@ -21,9 +21,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # local manage.py commands both read it. Protected vars never go in code.
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "insecure-dev-key-not-for-production")
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+DEBUG = os.environ["DJANGO_DEBUG"] == "1"
+ALLOWED_HOSTS = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -45,6 +45,9 @@ INSTALLED_APPS = [
     "files.apps.FilesConfig",
     "vendors.apps.VendorsConfig",
     "inbound.apps.InboundConfig",
+    "ptmapper.apps.PtmapperConfig",
+    "stockledger.apps.StockledgerConfig",
+    "finledger.apps.FinledgerConfig",
 ]
 
 MIDDLEWARE = [
@@ -80,7 +83,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL", "postgres://localhost:5432/kdps_dev"),
+        default=os.environ["DATABASE_URL"],
         conn_max_age=600,
     )
 }
@@ -101,9 +104,16 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
 ]
 
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+]
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.CookieOrHeaderJWTAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
@@ -125,17 +135,31 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
-# Same-origin in the preview (one host proxies /api and /); permissive in dev so
-# a local Vite server can call the API directly. Bearer tokens, not cookies.
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.emergentagent\.com$",
+    r"^https://.*\.preview\.emergentagent\.com$",
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
+# Extra explicit origins for non-Emergent deployments (comma-separated env).
+CORS_ALLOWED_ORIGINS = [
+    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
+]
 CSRF_TRUSTED_ORIGINS = [
     o
     for o in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://kdps-booking-hub.preview.emergentagent.com,https://*.emergentagent.com",
+        "https://*.emergentagent.com",
     ).split(",")
     if o
 ]
+
+JWT_COOKIE_SECURE = os.environ.get("JWT_COOKIE_SECURE", "1") == "1"
+JWT_COOKIE_SAMESITE = os.environ.get("JWT_COOKIE_SAMESITE", "Lax")
+JWT_ACCESS_COOKIE_MAX_AGE = int(os.environ.get("JWT_ACCESS_COOKIE_MAX_AGE", "3600"))
+JWT_REFRESH_COOKIE_MAX_AGE = int(os.environ.get("JWT_REFRESH_COOKIE_MAX_AGE", "604800"))
 
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"

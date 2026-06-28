@@ -2,14 +2,19 @@
 
 /* ---------- sidebar ---------- */
 .sidebar {
-  width: var(--sidebar-w);
   flex: none;
   background: var(--sidebar);
   border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  position: relative;
 }
+.sidebar-resizer {
+  position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 5;
+}
+.sidebar-resizer:hover { background: rgba(196, 98, 63, .16); }
+body.sidebar-resizing { cursor: col-resize; user-select: none; }
 .brand {
   display: flex; align-items: center; gap: 11px;
   padding: 18px 20px; border-bottom: 1px solid var(--sidebar-border);
@@ -42,6 +47,8 @@
   font-size: 13.5px; color: var(--muted); padding: 7px 11px; border-radius: 8px;
   transition: background-color .12s, color .12s; position: relative;
 }
+.nav-item[draggable="true"] { cursor: grab; }
+.nav-item[draggable="true"]:active { cursor: grabbing; }
 .nav-item:hover { background: rgba(196, 98, 63, .08); color: var(--ink); }
 .nav-item.active { background: rgba(196, 98, 63, .14); color: var(--rust); font-weight: 700; }
 .nav-item.active::before {

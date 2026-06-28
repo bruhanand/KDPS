@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only UI verification of the Ledgers iteration_7 work: server-side pagination on /ledgers/stock, new /ledgers/stock-on-hand screen with SKU/Brand/Store groupings, cross-links Stock Ledger <-> Stock on Hand, and Ledgers nav wiring including Vendor/Cash placeholder pages. All 5 review-request scenarios PASSED. (1) PAGINATION: stock-summary shows 354 entries / 241 units / 239891.88 / 175 SKUs; stock-pager reads 'Showing 1\u201350 of 354' on load with stock-prev disabled; click stock-next \u2192 'Showing 51\u2013100 of 354' Page 2; click stock-prev \u2192 back to 'Showing 1\u201350 of 354'. (2) STOCK ON HAND DEFAULT (SKU): onhand-summary = 241 / 239891.88 / 152 SKU lines, onhand-table renders 152 rows, By SKU tab active. (3) TAB SWITCHING: onhand-tab-brand \u2192 third card label switches to 'Brands' (2), table shows DEAL (RAN-WH, 55 SKUs, 108 units, \u20b90.00) and MUFTI (RAN-WH, 97 SKUs, 133 units, \u20b9239891.88); onhand-tab-store \u2192 'Stores' (1) with RAN-WH Ranchi Central Warehouse 175 SKUs / 241 units / \u20b9239891.88; onhand-tab-sku returns. Units on hand TOTAL stays 241 across all three groupings (consistency confirmed). (4) CROSS-LINKS: stock-on-hand-link navigates /ledgers/stock \u2192 /ledgers/stock-on-hand; stock-ledger-link navigates back. (5) NAV WIRING: Ledgers group lists all four items (Stock Ledger, Stock on Hand, Vendor Ledger, Cash Ledger) and all four nav links navigate correctly; /ledgers/vendor and /ledgers/cash both render module-placeholder with correct titles ('Vendor Ledger', 'Cash Ledger') and a 'Planned' chip\u2014no 404/blank. DEAL brand value \u20b90.00 is expected (blank BASIC in DEAL source file per agent context). No console errors, no overlay/click issues, no auth issues.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Stock Ledger / Stock on Hand", "issues": ["Brief but visible 'Loading\u2026' state shows zeros in summary cards while data resolves (1-2s). Cosmetic; not a bug. Consider skeleton/spinner placeholders or hiding the 0-valued cards during initial load for polish."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StockOnHand.tsx api call has no .catch — if /api/stockledger/on-hand 500s the page stays on 'Loading\u2026' forever with zeroed summary cards (loading flips false in .finally so it would render onhand-empty, but a transient network error has no surface). Low priority; add a try/catch + error banner pattern consistent with the rest of the app.",
+    "StockLedger.tsx pagination state resets to 1 only on doc/file filter changes (good), but PAGE_SIZE=50 is hardcoded on the client and StockLedgerPagination.page_size=50 is hardcoded on the server. They must stay in lockstep \u2014 worth a TODO or a shared constant if this is ever exposed as user-configurable.",
+    "navConfig.ts: 'Stock on Hand' nav item correctly slotted between 'Stock Ledger' and 'Vendor Ledger' in the ledgers group; clean diff, no orphan items.",
+    "DEAL brand showing \u20b90.00 value with 108 units across 55 SKUs is data-quality (blank BASIC in source), not a code bug \u2014 the on-hand SUM(qty*basic) honestly reports zero, which is the desired append-only ledger behavior. Worth surfacing as an Exception/Review-queue item upstream so finance can spot zero-cost inventory, but that's a future-phase concern.",
+    "App.tsx catch-all `path='*' element={<ModulePage/>}` correctly serves /ledgers/vendor and /ledgers/cash without explicit routes \u2014 elegant, but means a typo'd ledger URL would also serve a 'Planned' page rather than 404. Acceptable for a placeholder-heavy app phase."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only run; pagination + 3 groupings already curl-verified per main-agent note)", "frontend": "100% (5/5 review-request scenarios passed end-to-end through the UI)"},
+  "test_credentials": "owner / Owner@123 (verified, Ledgers nav access confirmed)",
+  "seed_data_creation": "None. Read-only verification against existing 354 ledger rows / 241 on-hand units / DEAL+MUFTI inventory.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Ledgers iteration_7 (pagination + Stock on Hand + nav wiring) is PRODUCTION READY end-to-end. Live numbers in the preview env: stock_ledger entries=354, on-hand units=241, value=\u20b9239891.88, distinct skus=175, sku-grouped lines=152, brands=2 (DEAL 108u/\u20b90.00 + MUFTI 133u/\u20b9239891.88), stores=1 (RAN-WH). Nav now has 4 Ledgers items; Vendor/Cash are intentional placeholders via the App.tsx catch-all + ModulePage component (module-placeholder testid, 'Planned' chip). Cross-links stock-on-hand-link / stock-ledger-link both work. If the next iteration builds out Vendor or Cash ledger for real, just add the route in App.tsx; the nav entry is already wired and the placeholder will be auto-replaced.",
+  "rca of the issue": "n/a \u2014 no failures observed."
+}

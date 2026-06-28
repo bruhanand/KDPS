@@ -1,228 +1,158 @@
 <analysis>**original_problem_statement**: 
-Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). Specifically, the user requested the Branded Booking flow:
+Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). Specifically, the Branded Booking flow includes:
 1. Vendor/Brand master creation.
 2. AI-assisted Booking generation: Upload brand booking file (PDF/Excel/Image) → AI extracts style/size/qty → User reviews draft → Confirm booking.
-3. Receive Goods (GRN) at Store or Warehouse: Receive against a booking OR Direct receipt (no booking). Upload invoice photo → AI extracts info + manual count → Generate GRN.
+3. Receive Goods (GRN) at Store or Warehouse.
 4. PT file conversion (Brand format → KDPS format) and Patna HO inward reconciliation.
 
-**User's preferred language**: English (User explicitly requested: The whole application will be in English only) -> INSTRUCT NEXT AGENT TO RESPOND IN ENGLISH ONLY.
+**User's preferred language**: English (INSTRUCT NEXT AGENT TO RESPOND IN ENGLISH ONLY)
 
 **what currently exists?**: 
 A fully functional Django 5.1 + PostgreSQL 15 backend utilizing a custom  ledger, and a React 18 + Vite frontend with a Warm design system PWA shell. 
-PostgreSQL is configured to run natively inside the container (persistent in ) via custom supervisor scripts. The Phase 0 foundation (Accounts, Masters, Auth, RBAC, Scoping) is 100% complete and tested. The Backend APIs for Phase 1 (Files, Vendors, Inbound GRNs, and Gemini AI agent integration) have been built and tested successfully via curl. 
+The application includes Phase D & E (PT File Mapper, Warehouse workflow, Stock Ledger), Phase F (Vendor/Cash ledgers), Vendor dues ageing report, User & Roles editor, and an  GRN UI. The frontend API client uses an auto-generated OpenAPI typescript client (). The application UI has been polished for alpha testing (resizable sidebar, configurable dashboard, Coming soon placeholder text).
 
 **Last working item**:
-- **Last item agent was working**: Building the frontend React components for the Phase 1 Booking and Receive (GRN) module (, , ).
-- **Status**: IN PROGRESS
-- **Agent Testing Done**: N (for this specific frontend slice)
-- **Which testing method agent to use?**: Frontend testing agent / Screenshot tool
-- **User Testing Done**: N
+    - **Last item agent was working**: Running  to check for readiness and applying strict fail-fast environment variable rules (, , ) to both backend and frontend.
+    - **Status**: BLOCKED (Deployment failed due to PostgreSQL requirement)
+    - **Agent Testing Done**: Y
+    - **Which testing method agent to use?**: testing_agent (Iteration 12)
+    - **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
-- **Issue 1: Emergent LLM Key has /bin/bash Balance (Budget Exceeded)**
-  - **Attempted fixes**: Verified backend agent logic; the API call to Gemini successfully routes but fails with HTTP 422 .
-  - **Next debug checklist**: Inform the user to add balance to their Universal Key (Profile -> Universal Key -> Add Balance). 
-  - **Why fix this issue**: AI is required for the Receiving Reader and Invoice Reader.
-  - **Status**: BLOCKED (Requires User Action)
-  - **Is recurring issue?**: Y
-  - **Should Test frontend/backend/both after fix?**: Both
-  - **Blocked on other issue**: User needs to top-up wallet. *CRITICAL: Ensure the UI components you are building gracefully handle this 422 error and allow manual data entry fallback.*
+  - Issue 1 (P0): Deployment Blocker (PostgreSQL Database Required)
+     - Attempted fixes: Ran deployment agent, which flagged PostgreSQL as a critical blocker since the standard Emergent platform deployment path strictly expects MongoDB. Added strict fail-fast validation for DB URLs to ensure safety.
+     - Next debug checklist: Provide/confirm production PostgreSQL hosting + , and confirm production values for , , and . Do NOT migrate to MongoDB.
+     - Why fix this issue and what will be achieved with the fix?: Required to deploy the application successfully to a live production environment.
+     - Status: BLOCKED
+     - Is recurring issue?: N
+     - Should Test frontend/backend/both after fix?: Both
+     - Blocked on other issue: Need external PostgreSQL hosting configuration.
 
-**In progress Task List**:
-- **Task 1: Complete Frontend UI for Bookings & Inbound GRN**
-  - **Where to resume**: . Build the Booking list view, Booking detail view, Create Booking form (with file upload & AI trigger), and the Receive/GRN form for both Store and Warehouse operators. Add routes to  and . 
-  - **What will be achieved**: End-to-end user ability to create bookings and receive goods.
-  - **Status**: IN PROGRESS
-  - **Should Test frontend/backend/both after fix?**: Frontend (Screenshot tool & Testing agent)
-  - **Blocked on something**: None.
+**In progress Task List**: 
+None.
 
 **Upcoming and Future Tasks**:
-- **Task 1: Build PT File Mapper (Phase D) (P0)**: Create data-driven mapping logic from varied Brand PT Excel files to the KDPS target format. Include an unmapped queue review screen for the Warehouse.
-- **Task 2: Patna Inward Review & Reconcile (Phase E) (P0)**: Build UI/API for Patna HO to review mapped PT files, approve them, reconcile booking lines, and trigger the  ledger stock posting.
-- **Task 3: Users & Roles Editor (P1)**: In-app editor for roles and configuring users (per user request).
-- **Task 4: Non-Branded Booking / PO Maker Agent (P2)**: Deferred until user clarifies requirements with their client.
-- **Task 5: Production Hardening (P2)**: HTTPS/secure-cookie blocks, move refresh tokens out of localStorage, replace hand-rolled API client with OpenAPI generated TS client.
+    Upcoming Tasks:
+    - Task 1 (P1): Master Data stewardship UI - Build views to create/edit master data.
+    - Task 2 (P2): Vendor dues ageing export - Add bill-level drill-down/export for Vendor Dues Ageing if Accounts needs it (Suggested enhancement, pending user approval).
+    
+    Future Tasks:
+    - Task 3 (P2): POS ingest / selling floor flows.
+    - Task 4 (P2): Vendor settlement/payment workflows.
+    - Task 5 (P2): External ingress CORS policy alignment (if needed for production proxy headers).
+    - Task 6 (P2): Further Code Quality refactors for , ,  (Flagged as moderately complex during code review).
 
-**Completed work in this session**:
-- Established persistent PostgreSQL 15 environment inside the container via  and custom supervisor configs (, ).
-- Built Phase 0 Foundation: ,  (Django) & PWA Shell + Role Dashboards (React) (DONE).
-- Foundation tested via  with 0 bugs (DONE).
-- Applied security/hygiene fixes requested via user's Claude Code review (Fail-closed scoping, gitignore, removed hardcoded creds from code, fixed CI tests) (DONE).
-- Built Phase 1 Backend:  (DB blob storage),  (Bookings),  (GRN), and  (Gemini integrations) (DONE).
-- Tested Phase 1 Backend flows via bash/curl: booking creation, partial receiving, and scoping rules work perfectly (DONE).
+**Completed work in this session**
+- Built Vendor-dues ageing report (0–30/31–60/60+) over the vendor ledger (DONE).
+- Built Users & Roles in-app editor (DONE).
+- Replaced hand-rolled  with an OpenAPI-generated TS client using  and  (DONE).
+- Built  GRN UI (DONE).
+- Hardened Authentication: added httpOnly JWT cookies, strict CORS, bcrypt-sha256 password seeding, and  alias (DONE).
+- Executed Alpha UI Polish: Simplified login screen, replaced roadmap with configurable dashboard cards, created a resizable sidebar, and replaced unbuilt pages with Coming soon state (DONE).
+- Code Quality Refactoring: Fixed cyclomatic complexities in , , and . Checked identity vs equality rules (DONE).
+- Set up fail-fast validations for missing environment variables in both Frontend and Backend (DONE).
 
-**Earlier issues found/mentioned but not fixed**:
-- **Issue 1**: API client in React is currently hand-rolled ().
-  - **Debug checklist**: ADR-0001 states it should be a generated OpenAPI typescript client.
-  - **Why to solve this issue**: Maintain strict architectural typing between Django DRF and React.
-  - **Should Test frontend/backend/both after fix**: Frontend.
-  - **Is recurring issue?**: N
+**Earlier issues found/mentioned but not fixed**
+   None.
 
-**Known issue recurrence from previous fork**:
-- Recurrence count: 0
-- Status: NOT STARTED
+**Known issue recurrence from previous fork**
+  - Issue recurrence in previous fork: None
+  - Recurrence count: 0
+  - Status: RESOLVED
 
-**Code Architecture**:
+**Code Architecture**
+/app/
+├── app/
+│   ├── backend/
+│   │   ├── config/ (Django settings with strict env rules)
+│   │   ├── core/ (Sacred ledger kernel)
+│   │   ├── accounts/, masters/, files/, vendors/, inbound/, aiagents/, ptmapper/
+│   │   ├── stockledger/, finledger/ (Ledger apps)
+│   │   ├── tests/ (Pytest regression suites)
+│   │   └── manage.py, server.py (ASGI)
+│   └── frontend/
+│       ├── src/ (React, Vite, Tailwind Warm design)
+│       │   ├── auth/, lib/ (contains api.ts, api-schema.ts), pages/, shell/
+│       │   └── App.tsx, index.css
+├── scripts/ (pg_run.sh, app_init.sh)
+├── memory/ (PRD.md, test_credentials.md)
+└── docs/ 
 
+**Key Technical Concepts**
+- Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth (Cookie fallback implemented).
+- Frontend: React 18, Vite, TypeScript, Tailwind CSS,  API client.
+- Infrastructure: Custom Supervisor setup () to keep PG running persistently inside the Emergent container workspace. 
+- Ledger Constraint: Append-only ledgers enforced at the DB level using  triggers preventing edits/deletions.
+- Env logic: Strict Fail-fast setup. Apps will crash immediately if  or  are missing.
 
-**Key Technical Concepts**:
-- Backend: Python 3.12 (managed via ), Django 5.1, PostgreSQL 15, DRF, JWT Auth.
-- Frontend: React 18, Vite, TypeScript, Tailwind CSS.
-- Infrastructure: Custom Supervisor setup to keep PG running persistently inside the Emergent container workspace.
-- Security: Fail-closed scoping using custom  rules (Store-level isolation).
+**key DB schema**
+  - : {filename, status, rows, mapping_stats, manually_edited, posted_at, sent_at, stage, booking, inward_doc_number}
+  - : {extends LedgerEntry, pt_inward, pt_reversal, grn, line_no, barcode, brand}
+  - : {extends LedgerEntry, vendor, bill_number, payment_ref, kind}
+  - : {extends LedgerEntry, account, payment_ref, kind}
+  - : {booking, store, vendor, doc_number, received_at}
 
-**key DB schema**:
-- : {name, brands, active}
-- : {vendor, brand, season, status, lines: [style, size, qty]}
-- : {store, booking, total_received, direct_receipt_flag}
-- : {file_data (blob), mime_type, filename}
+**changes in tech stack**
+  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL bridged into the environment. Do NOT migrate to MongoDB.
+  - API Client on frontend updated to strictly use  referencing the auto-generated .
 
-**changes in tech stack**:
-- **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. 
-- The project runs Django + PostgreSQL. The agent created symlinks ( -> ) and bash scripts () to seamlessly bridge Django/Postgres into the Emergent platform's default supervisor config. Do not alter these or default to MongoDB.
+**All files of reference**
+  - ,  (API Client Layer)
+  - ,  (Resizable sidebar)
+  -  (Configurable dashboard)
+  - , ,  (Refactored logic)
+  - ,  (Auth & environment fail-fast rules)
 
-**All files of reference**:
--  (Gemini API integration)
-- ,  (Booking backend)
-- ,  (GRN backend)
-- ,  (Frontend WIP)
-- Hit:1 https://cloudfront.debian.net/debian bookworm InRelease
-Hit:2 https://cloudfront.debian.net/debian bookworm-updates InRelease
-Hit:3 https://cloudfront.debian.net/debian-security bookworm-security InRelease
-Hit:4 https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 InRelease
-Hit:5 https://deb.nodesource.com/node_20.x nodistro InRelease
-Reading package lists...
-Reading package lists...
-Building dependency tree...
-Reading state information...
-The following additional packages will be installed:
-  libc-l10n libcommon-sense-perl libjson-perl libjson-xs-perl libllvm14 libpq5
-  libtypes-serialiser-perl locales logrotate postgresql-15
-  postgresql-client-15 postgresql-client-common postgresql-common ssl-cert
-  sysstat
-Suggested packages:
-  bsd-mailx | mailx postgresql-doc postgresql-doc-15 isag
-The following NEW packages will be installed:
-  libc-l10n libcommon-sense-perl libjson-perl libjson-xs-perl libllvm14 libpq5
-  libtypes-serialiser-perl locales logrotate postgresql postgresql-15
-  postgresql-client-15 postgresql-client-common postgresql-common
-  postgresql-contrib ssl-cert sysstat
-0 upgraded, 17 newly installed, 0 to remove and 3 not upgraded.
-Need to get 43.3 MB of archives.
-After this operation, 195 MB of additional disk space will be used.
-Get:1 https://cloudfront.debian.net/debian bookworm/main arm64 libjson-perl all 4.10000-1 [87.5 kB]
-Get:2 https://cloudfront.debian.net/debian bookworm/main arm64 postgresql-client-common all 248+deb12u1 [35.2 kB]
-Get:3 https://cloudfront.debian.net/debian bookworm/main arm64 ssl-cert all 1.1.2 [21.1 kB]
-Get:4 https://cloudfront.debian.net/debian bookworm/main arm64 postgresql-common all 248+deb12u1 [179 kB]
-Get:5 https://cloudfront.debian.net/debian bookworm/main arm64 logrotate arm64 3.21.0-1 [58.5 kB]
-Get:6 https://cloudfront.debian.net/debian bookworm/main arm64 libc-l10n all 2.36-9+deb12u14 [676 kB]
-Get:7 https://cloudfront.debian.net/debian bookworm/main arm64 locales all 2.36-9+deb12u14 [3906 kB]
-Get:8 https://cloudfront.debian.net/debian bookworm/main arm64 libcommon-sense-perl arm64 3.75-3 [23.0 kB]
-Get:9 https://cloudfront.debian.net/debian bookworm/main arm64 libtypes-serialiser-perl all 1.01-1 [12.2 kB]
-Get:10 https://cloudfront.debian.net/debian bookworm/main arm64 libjson-xs-perl arm64 4.040-1~deb12u1 [91.0 kB]
-Get:11 https://cloudfront.debian.net/debian bookworm/main arm64 libllvm14 arm64 1:14.0.6-12 [19.3 MB]
-Get:12 https://cloudfront.debian.net/debian-security bookworm-security/main arm64 libpq5 arm64 15.18-0+deb12u1 [188 kB]
-Get:13 https://cloudfront.debian.net/debian-security bookworm-security/main arm64 postgresql-client-15 arm64 15.18-0+deb12u1 [1693 kB]
-Get:14 https://cloudfront.debian.net/debian-security bookworm-security/main arm64 postgresql-15 arm64 15.18-0+deb12u1 [16.4 MB]
-Get:15 https://cloudfront.debian.net/debian bookworm/main arm64 postgresql all 15+248+deb12u1 [10.2 kB]
-Get:16 https://cloudfront.debian.net/debian bookworm/main arm64 postgresql-contrib all 15+248+deb12u1 [10.2 kB]
-Get:17 https://cloudfront.debian.net/debian bookworm/main arm64 sysstat arm64 12.6.1-1 [570 kB]
-Fetched 43.3 MB in 1s (50.6 MB/s)
-(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 43598 files and directories currently installed.)
-Preparing to unpack .../00-libjson-perl_4.10000-1_all.deb ...
-Unpacking libjson-perl (4.10000-1) ...
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/01-postgresql-client-common_248+deb12u1_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/01-postgresql-client-common_248+deb12u1_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/02-ssl-cert_1.1.2_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/02-ssl-cert_1.1.2_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/03-postgresql-common_248+deb12u1_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/03-postgresql-common_248+deb12u1_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/04-logrotate_3.21.0-1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/04-logrotate_3.21.0-1_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/05-libc-l10n_2.36-9+deb12u14_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/05-libc-l10n_2.36-9+deb12u14_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/06-locales_2.36-9+deb12u14_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/06-locales_2.36-9+deb12u14_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/07-libcommon-sense-perl_3.75-3_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/07-libcommon-sense-perl_3.75-3_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/08-libtypes-serialiser-perl_1.01-1_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/08-libtypes-serialiser-perl_1.01-1_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/09-libjson-xs-perl_4.040-1~deb12u1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/09-libjson-xs-perl_4.040-1~deb12u1_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/10-libllvm14_1%3a14.0.6-12_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/10-libllvm14_1%3a14.0.6-12_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/11-libpq5_15.18-0+deb12u1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/11-libpq5_15.18-0+deb12u1_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/12-postgresql-client-15_15.18-0+deb12u1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/12-postgresql-client-15_15.18-0+deb12u1_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/13-postgresql-15_15.18-0+deb12u1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/13-postgresql-15_15.18-0+deb12u1_arm64.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/14-postgresql_15+248+deb12u1_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/14-postgresql_15+248+deb12u1_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/15-postgresql-contrib_15+248+deb12u1_all.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/15-postgresql-contrib_15+248+deb12u1_all.deb': No such file or directory
-dpkg: error processing archive /tmp/apt-dpkg-install-83Bv8o/16-sysstat_12.6.1-1_arm64.deb (--unpack):
- cannot access archive '/tmp/apt-dpkg-install-83Bv8o/16-sysstat_12.6.1-1_arm64.deb': No such file or directory
-Errors were encountered while processing:
- /tmp/apt-dpkg-install-83Bv8o/01-postgresql-client-common_248+deb12u1_all.deb
- /tmp/apt-dpkg-install-83Bv8o/02-ssl-cert_1.1.2_all.deb
- /tmp/apt-dpkg-install-83Bv8o/03-postgresql-common_248+deb12u1_all.deb
- /tmp/apt-dpkg-install-83Bv8o/04-logrotate_3.21.0-1_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/05-libc-l10n_2.36-9+deb12u14_all.deb
- /tmp/apt-dpkg-install-83Bv8o/06-locales_2.36-9+deb12u14_all.deb
- /tmp/apt-dpkg-install-83Bv8o/07-libcommon-sense-perl_3.75-3_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/08-libtypes-serialiser-perl_1.01-1_all.deb
- /tmp/apt-dpkg-install-83Bv8o/09-libjson-xs-perl_4.040-1~deb12u1_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/10-libllvm14_1%3a14.0.6-12_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/11-libpq5_15.18-0+deb12u1_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/12-postgresql-client-15_15.18-0+deb12u1_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/13-postgresql-15_15.18-0+deb12u1_arm64.deb
- /tmp/apt-dpkg-install-83Bv8o/14-postgresql_15+248+deb12u1_all.deb
- /tmp/apt-dpkg-install-83Bv8o/15-postgresql-contrib_15+248+deb12u1_all.deb
- /tmp/apt-dpkg-install-83Bv8o/16-sysstat_12.6.1-1_arm64.deb (Postgres initializer)
+**Areas that need refactoring**: 
+  - , ,  (Functions within these files were noted by the user's code-quality report as somewhat complex. Refactor when touching these files).
 
-**Areas that need refactoring**:
--  (Should eventually be replaced with auto-generated OpenAPI client per user docs).
+**key api endpoints**
+  - , 
+  -  (Cookie & Bearer handling)
+  - , 
 
-**key api endpoints**:
-- 
-- 
--  (Triggers AI)
-- 
+**Critical Info for New Agent**
+  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi.
+  - **API Schema generation**: If you alter Django views/serializers, you must regenerate the frontend schema using yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. (or standard yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. sequence).
+  - **Append-only Constraints**: Modifying Ledger entries directly is prevented by DB triggers. Any corrections must be programmed as negative-value append rows.
+  - **Deployment Blocker**: The platform deployment health check failed due to PostgreSQL. Treat  carefully. Do NOT attempt to rewrite the app to MongoDB. Wait for external DB configuration from the user.
 
-**Critical Info for New Agent**:
-- **AI Agent Fails with 422**: The Emergent Universal Key currently has /bin/bash balance. The Gemini API calls in  will fail. *Do not waste time debugging the backend code for this*. Instruct the user to top up their balance. Crucially, design your React forms to degrade gracefully and allow manual typing when the AI extraction fails.
-- **Fail-closed Scoping**: When fetching data, ensure queries are scoped properly so a store user (e.g., ) cannot see warehouse or other store data.
-- **Terminology**: Patna = HO Office (Approver). Ranchi = Warehouse. Ensure UI terminology matches this.
+**documents and test reports created in this job**
+  - 
+  -  (Auth testing)
+  -  (Refactoring testing)
+  -  (Deployment/Env testing)
+  - 
+  - 
 
-**documents and test reports created in this job**:
-- 
-- 
-- 
+**Last 10 User Messages and any pending HUMAN messages** 
+ - (User): Request to build Vendor-dues ageing report, Users & Roles in-app editor, replace  with OpenAPI TS client, and build  UI. (Completed)
+ - (User): Request to apply Alpha UI polish (change login text, set placeholders to Coming soon, resizable sidebar, configurable dashboard). (Completed)
+ - (User): Provided Code Quality Report noting undefined variables, Cyclomatic Complexity in core logic files, and critical Identity vs Equality ( vs ) checks. (Completed)
+ - (User): System Reminder: run testing agent after bug fix. (Completed)
+ - (User): Call Deployer Agent and Run Health Check to Check for Readiness for Deployment. (Completed - resulted in Blocker)
+ - (User): System Reminder: run testing agent after bug fix. (Completed)
 
-**Last 10 User Messages and any pending HUMAN messages**:
-1. (User): Asked to build Booking module (Branded route first). Explained flow: Bookings -> AI reads files -> GRN receive at Store/Warehouse -> PT Conversion -> Patna Inwards.
-2. (User): Clarified that Direct Receipt (receiving goods without a prior booking) must also work.
-3. (User): Requested Gemini model for AI tasks. Provided instructions on Patna vs Ranchi terminology. Shared Claude Code review asking for security and architecture fixes (Fail-closed scoping, DB persistence, CI fixes).
-4. (User): Requested 3 separate AI agent touchpoints: Booking Receiving Reader, Store Invoice Reader, Warehouse Invoice Reader.
+**Project Health Check:**
+- Broken: Deployment Pipeline (Blocked by lack of external PostgreSQL/platform DB incompatibility). 
+- Mocked: None.
 
-**Project Health Check**:
-- Broken: AI extraction flow (Blocked entirely by User's /bin/bash Universal Key wallet balance).
-- Mocked: None, running on real Django/Postgres DB.
+**3rd Party Integrations**
+- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key.
 
-**3rd Party Integrations**:
-- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key. *(Currently failing due to 0 balance).*
+**Testing status**
+  - Testing agent used after significant changes: YES (Iterations 9, 10, 11, 12 thoroughly executed)
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: , , 
+  - Known regressions: None
 
-**Testing status**:
-- Testing agent used after significant changes: YES (For phase 0 foundation)
-- Troubleshoot agent used after agent stuck in loop: NO
-- Test files created: None
-- Known regressions: None
+**Credentials to test flow:**
+  - Read from 
+  - Admin/Owner:  / 
+  - Store Cashier:  / 
+  - Warehouse (Ranchi):  / 
 
-**Credentials to test flow**:
-- Read from 
-- Admin/Owner:  / 
-- Store Cashier:  / 
-
-**What agent forgot to execute**:
-- Phase D (PT File Mapper) and Phase E (Patna Inward Review) are pending. Frontend for Bookings was just started and needs to be completed.</analysis>
+**What agent forgot to execute**
+- Nothing was overlooked. All user requests up to alpha-readiness and code review remediations were fully completed.</analysis>

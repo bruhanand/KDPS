@@ -1,0 +1,45 @@
+{
+  "summary": "Completed backend+frontend retest for auth hardening and regression routes. All requested auth and regression checks passed in this environment.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "External preflight /api/auth/login (preview URL)",
+        "issue": "OPTIONS still returns access-control-allow-origin='*' at external ingress; internal Django endpoint returns explicit origin + access-control-allow-credentials=true. Classified as platform proxy behavior, not Django app code."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration10_auth_cookie_retest.py",
+    "/app/test_reports/pytest/iteration10_auth_cookie.xml"
+  ],
+  "action_items": [
+    "No app-code blocker found for this retest scope.",
+    "If external wildcard CORS must be removed, update ingress/proxy CORS policy to preserve explicit origin and credentials headers from app."
+  ],
+  "critical_code_review_comments": [
+    "Auth compatibility implementation is coherent: login/refresh JSON token behavior preserved while adding cookie-based auth support.",
+    "CookieOrHeaderJWTAuthentication correctly allows /api/auth/me using cookie only when Authorization header is absent.",
+    "seed_admin alias is present and idempotent via seed_foundation; owner password is restored and stored using Django bcrypt_sha256 hasher.",
+    "Process note: /app/auth_testing.md was not found in workspace, so playbook steps were executed from provided request instructions and existing credentials file."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration10_auth_cookie_retest.py",
+    "/app/test_reports/iteration_10.json"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8)",
+    "frontend": "100% (requested smoke/regression flows passed)"
+  },
+  "test_credentials": "Used /app/memory/test_credentials.md: owner/Owner@123, admin/Admin@123, deo.cashier/Store@123, accounts1/Acct@123",
+  "seed_data_creation": "No persistent fixture data created. Temporary lockout usernames and temporary owner password mutation were used in test, then restored by seed_admin during validation.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 10 validated auth cookie compatibility and regressions end-to-end. Reuse /app/app/backend/tests/test_iteration10_auth_cookie_retest.py for future auth policy regressions.",
+  "rca of the issue": "No app-side auth regression reproduced. External wildcard CORS header is introduced at ingress/proxy layer; internal Django CORS behavior is correct and credential-compatible."
+}

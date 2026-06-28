@@ -5,10 +5,13 @@ import {
   ArrowLeftRight,
   Banknote,
   ClipboardList,
+  GripVertical,
   PackageCheck,
+  Settings2,
   ShoppingCart,
   Sparkles,
   TrendingUp,
+  X,
 } from "lucide-react";
 
 import { api } from "../lib/api";
@@ -36,38 +39,63 @@ const today = new Date().toLocaleDateString("en-IN", {
   month: "long",
 });
 
-function Sample() {
-  return (
-    <span className="sample-tag" title="Sample — live once the Sales/Payments slices ship">
-      sample
-    </span>
-  );
+type CardId = "net_sales" | "owed" | "exceptions" | "receiving" | "cycle_count" | "pt_files" | "barcode";
+
+interface DashboardCard {
+  id: CardId;
+  label: string;
+  value: React.ReactNode;
+  sub: string;
+  icon: React.ReactNode;
+  purpose: string;
+  built: boolean;
+  points: number[];
 }
 
+const DASH_ORDER_KEY = "kdps-dashboard-card-order";
+const DASH_VISIBLE_KEY = "kdps-dashboard-card-visible";
+
 function Kpi({
+  id,
   icon,
   label,
   value,
   sub,
-  sample,
+  built,
+  onOpen,
+  onDragStart,
+  onDrop,
 }: {
+  id: string;
   icon: React.ReactNode;
   label: string;
   value: React.ReactNode;
   sub?: string;
-  sample?: boolean;
+  built: boolean;
+  onOpen: () => void;
+  onDragStart: () => void;
+  onDrop: () => void;
 }) {
   return (
-    <div className="kpi card" data-testid="kpi-tile">
+    <button
+      className="kpi card"
+      onClick={onOpen}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      data-testid={`kpi-tile-${id}`}
+    >
       <div className="kpi-top">
         <span className="kpi-ic">{icon}</span>
         <span className="kpi-label">
-          {label} {sample && <Sample />}
+          {label} {!built && <span className="sample-tag">Coming soon</span>}
         </span>
+        <GripVertical size={14} className="kpi-grip" />
       </div>
       <div className="kpi-value mono">{value}</div>
       {sub && <div className="kpi-sub">{sub}</div>}
-    </div>
+    </button>
   );
 }
 
@@ -103,53 +131,16 @@ function NetworkPanel({ s }: { s: Summary | null }) {
   );
 }
 
-const BUILD_STATUS: { label: string; state: string; tone: string }[] = [
-  { label: "Foundation · shell, auth, roles, masters", state: "Live", tone: "green" },
-  { label: "Inbound · GRN → PT → stock", state: "Phase 1", tone: "amber" },
-  { label: "Selling floor · POS ingest", state: "Phase 2", tone: "grey" },
-  { label: "Money in · collection & bank audit", state: "Phase 3", tone: "grey" },
-  { label: "Payments · vendor settlement", state: "Phase 5", tone: "grey" },
-  { label: "Tally bridge · statutory feed", state: "Phase 6", tone: "grey" },
-];
-
-function BuildPanel() {
-  return (
-    <div className="card panel">
-      <div className="panel-head">
-        <p className="eyebrow">Roadmap</p>
-        <h3 className="h3">Build status</h3>
-      </div>
-      <div className="build-list">
-        {BUILD_STATUS.map((b) => (
-          <div className="build-row" key={b.label}>
-            <span>{b.label}</span>
-            <span className={`chip chip-${b.tone}`}>{b.state}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function CollectionsBand() {
   return (
     <div className="band band-edge">
       <div className="band-head">
-        <h3 className="h3">Today's collections <Sample /></h3>
-        <span className="chip chip-blue">Edge · 3-rail</span>
+        <h3 className="h3">Collections</h3>
+        <span className="chip chip-blue">Coming soon</span>
       </div>
-      <div className="band-rows">
-        <div className="band-row">
-          <span>Cash &amp; UPI</span>
-          <span className="mono"><Money paise={1618400_00} /></span>
-          <span className="chip chip-green">deposited</span>
-        </div>
-        <div className="band-row">
-          <span>Card (net of MDR)</span>
-          <span className="mono"><Money paise={842000_00} /></span>
-          <span className="chip chip-amber">2 to clear</span>
-        </div>
-      </div>
+      <p className="ai-line">
+        This section will show cash, UPI, card clearing, deposits, and bank-audit status once the collections slice is enabled.
+      </p>
     </div>
   );
 }
@@ -164,11 +155,69 @@ function MorningBrief() {
         </span>
       </div>
       <p className="ai-line">
-        The intelligence layer (suggest-only) gets a home here. It surfaces &amp; drafts —
-        every commit stays a human decision. Built in a later phase.
+        Coming soon: this area will show a suggest-only morning summary for sales, stock,
+        exceptions, and follow-ups. Every operational action will still need human approval.
       </p>
       <div className="ai-fence">
         ✦ AI never writes stock, money or Tally. It opens drafts a human approves.
+      </div>
+    </div>
+  );
+}
+
+function readOrder(defaultIds: CardId[]): CardId[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DASH_ORDER_KEY) || "[]") as CardId[];
+    return [...saved.filter((id) => defaultIds.includes(id)), ...defaultIds.filter((id) => !saved.includes(id))];
+  } catch {
+    return defaultIds;
+  }
+}
+
+function readVisible(defaultIds: CardId[]): CardId[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DASH_VISIBLE_KEY) || "[]") as CardId[];
+    return saved.length ? saved.filter((id) => defaultIds.includes(id)) : defaultIds.slice(0, 3);
+  } catch {
+    return defaultIds.slice(0, 3);
+  }
+}
+
+function MiniGraph({ points }: { points: number[] }) {
+  const max = Math.max(...points, 1);
+  return (
+    <div className="mini-graph" data-testid="dashboard-card-graph">
+      {points.map((p, i) => <span key={i} style={{ height: `${Math.max(16, (p / max) * 100)}%` }} />)}
+    </div>
+  );
+}
+
+function DashboardConfigurator({
+  cards,
+  visible,
+  onToggle,
+  onClose,
+}: {
+  cards: DashboardCard[];
+  visible: CardId[];
+  onToggle: (id: CardId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" data-testid="dashboard-config-modal">
+      <div className="modal dashboard-modal">
+        <div className="modal-head">
+          <div><p className="eyebrow">Dashboard</p><h3 className="h3">Choose cards</h3></div>
+          <button className="btn btn-sm" onClick={onClose} data-testid="dashboard-config-close"><X size={14} /> Close</button>
+        </div>
+        <div className="dash-card-list">
+          {cards.map((c) => (
+            <label className="dash-card-choice" key={c.id}>
+              <input type="checkbox" checked={visible.includes(c.id)} onChange={() => onToggle(c.id)} data-testid={`dashboard-card-toggle-${c.id}`} />
+              <span><b>{c.label}</b><small>{c.purpose}</small></span>
+            </label>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -196,15 +245,77 @@ function QuickActions({ items }: { items: { label: string; icon: React.ReactNode
 export function Home() {
   const { user, activeStore } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<DashboardCard | null>(null);
+  const [dragCard, setDragCard] = useState<CardId | null>(null);
 
   useEffect(() => {
     api.get("/masters/summary").then((r) => setSummary(r.data)).catch(() => undefined);
   }, []);
 
+  const variant = user?.landing_page ?? "owner";
+  const cardCatalog: DashboardCard[] = variant === "store" ? [
+    { id: "net_sales", icon: <TrendingUp size={18} />, label: "Net sales today", value: <Money paise={284500_00} short />, sub: "Sales view coming from POS ingest", purpose: "Shows store sales once POS ingestion is connected.", built: false, points: [22, 28, 20, 31, 36, 29, 38] },
+    { id: "receiving", icon: <PackageCheck size={18} />, label: "Items to receive", value: "3 shipments", sub: "GRN workflow is live", purpose: "Opens receiving workload and GRN progress.", built: true, points: [2, 3, 4, 1, 3, 2, 3] },
+    { id: "cycle_count", icon: <ClipboardList size={18} />, label: "Cycle count due", value: "1 bin", sub: "Stock-count screen coming soon", purpose: "Will show cycle-count tasks and ageing bins.", built: false, points: [1, 2, 1, 1, 3, 1, 1] },
+  ] : variant === "warehouse" ? [
+    { id: "receiving", icon: <PackageCheck size={18} />, label: "Inbound queue", value: "7 shipments", sub: "GRN and PT mapper workflows are live", purpose: "Shows receiving workload and GRN/PT status.", built: true, points: [4, 6, 7, 5, 8, 6, 7] },
+    { id: "pt_files", icon: <ClipboardList size={18} />, label: "PTs to convert", value: "4", sub: "PT Mapper is live", purpose: "Tracks PT conversion files awaiting review.", built: true, points: [2, 3, 2, 5, 4, 3, 4] },
+    { id: "barcode", icon: <AlertTriangle size={18} />, label: "Barcode clashes", value: "2", sub: "Controls screen coming soon", purpose: "Will highlight barcode exceptions needing resolution.", built: false, points: [1, 1, 0, 2, 1, 3, 2] },
+  ] : [
+    { id: "net_sales", icon: <TrendingUp size={18} />, label: "Net sales today", value: <Money paise={1842000_00} short />, sub: "POS ingest coming soon", purpose: "Shows network sales once selling floor data is connected.", built: false, points: [18, 22, 21, 24, 26, 23, 29] },
+    { id: "owed", icon: <Banknote size={18} />, label: "Owed to brands", value: <Money paise={4260000_00} short />, sub: "Vendor ledger ageing is live", purpose: "Opens vendor payable health and ageing movement.", built: true, points: [42, 39, 44, 41, 43, 40, 46] },
+    { id: "exceptions", icon: <AlertTriangle size={18} />, label: "Open exceptions", value: "5", sub: "Exception inbox coming soon", purpose: "Will show imports, approvals, and mismatches needing action.", built: false, points: [3, 4, 5, 4, 6, 5, 5] },
+  ];
+  const allIds = cardCatalog.map((c) => c.id);
+  const [cardOrder, setCardOrder] = useState<CardId[]>(() => readOrder(allIds));
+  const [visibleCards, setVisibleCards] = useState<CardId[]>(() => readVisible(allIds));
+  const cardsById = new Map(cardCatalog.map((c) => [c.id, c]));
+  const orderedCards = cardOrder.map((id) => cardsById.get(id)).filter(Boolean) as DashboardCard[];
+  const dashboardCards = orderedCards.filter((c) => visibleCards.includes(c.id));
+
   if (!user) return null;
-  const variant = user.landing_page;
   const name = (user.full_name || user.username).split(" ")[0];
   const ctx = activeStore ? `${activeStore.code} · ${activeStore.name}, ${activeStore.state_name}` : "All stores · network view";
+
+  function toggleDashboardCard(id: CardId) {
+    const next = visibleCards.includes(id) ? visibleCards.filter((x) => x !== id) : [...visibleCards, id];
+    setVisibleCards(next);
+    localStorage.setItem(DASH_VISIBLE_KEY, JSON.stringify(next));
+  }
+
+  function moveDashboardCard(target: CardId) {
+    if (!dragCard || dragCard === target) return;
+    const next = [...cardOrder];
+    const from = next.indexOf(dragCard);
+    const to = next.indexOf(target);
+    if (from < 0 || to < 0) return;
+    const [picked] = next.splice(from, 1);
+    next.splice(to, 0, picked);
+    setCardOrder(next);
+    localStorage.setItem(DASH_ORDER_KEY, JSON.stringify(next));
+  }
+
+  function renderDashboardCards() {
+    return (
+      <div className="kpi-row" data-testid="dashboard-card-grid">
+        {dashboardCards.map((card) => (
+          <Kpi
+            key={card.id}
+            id={card.id}
+            icon={card.icon}
+            label={card.label}
+            value={card.value}
+            sub={card.sub}
+            built={card.built}
+            onOpen={() => setSelectedCard(card)}
+            onDragStart={() => setDragCard(card.id)}
+            onDrop={() => moveDashboardCard(card.id)}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="page-pad home">
@@ -216,6 +327,9 @@ export function Home() {
           {today} · here's your {variant === "store" || variant === "warehouse" ? "shift" : "day"} at a glance
           <span className="ctx-chip">{ctx}</span>
         </p>
+        <button className="btn btn-sm dash-config-btn" onClick={() => setConfigOpen(true)} data-testid="dashboard-config-button">
+          <Settings2 size={14} /> Configure dashboard
+        </button>
       </header>
 
       {variant === "store" ? (
@@ -228,14 +342,10 @@ export function Home() {
               { label: "Transfer", icon: <ArrowLeftRight size={20} /> },
             ]}
           />
-          <div className="kpi-row">
-            <Kpi icon={<TrendingUp size={18} />} label="Net sales today" value={<Money paise={284500_00} short />} sub="▲ 12% vs 14-day avg" sample />
-            <Kpi icon={<PackageCheck size={18} />} label="Items to receive" value="3 shipments" sub="awaiting door scan" sample />
-            <Kpi icon={<ClipboardList size={18} />} label="Cycle count due" value="1 bin" sub="oldest season first" sample />
-          </div>
+          {renderDashboardCards()}
           <div className="home-cols">
             <NetworkPanel s={summary} />
-            <BuildPanel />
+            <MorningBrief />
           </div>
         </>
       ) : variant === "warehouse" ? (
@@ -247,23 +357,15 @@ export function Home() {
               { label: "Transfer", icon: <ArrowLeftRight size={20} /> },
             ]}
           />
-          <div className="kpi-row">
-            <Kpi icon={<PackageCheck size={18} />} label="Inbound queue" value="7 shipments" sub="3 booking-less" sample />
-            <Kpi icon={<ClipboardList size={18} />} label="PTs to convert" value="4" sub="branded format" sample />
-            <Kpi icon={<AlertTriangle size={18} />} label="Barcode clashes" value="2" sub="need resolution" sample />
-          </div>
+          {renderDashboardCards()}
           <div className="home-cols">
             <NetworkPanel s={summary} />
-            <BuildPanel />
+            <MorningBrief />
           </div>
         </>
       ) : (
         <>
-          <div className="kpi-row">
-            <Kpi icon={<TrendingUp size={18} />} label="Net sales today" value={<Money paise={1842000_00} short />} sub="▲ 12% vs 14-day avg" sample />
-            <Kpi icon={<Banknote size={18} />} label="Owed to brands" value={<Money paise={4260000_00} short />} sub="3 due this week" sample />
-            <Kpi icon={<AlertTriangle size={18} />} label="Open exceptions" value="5" sub="2 need a decision" sample />
-          </div>
+          {renderDashboardCards()}
           <div className="home-cols">
             <div className="home-stack">
               <CollectionsBand />
@@ -271,10 +373,23 @@ export function Home() {
             </div>
             <div className="home-stack">
               <NetworkPanel s={summary} />
-              <BuildPanel />
+              <MorningBrief />
             </div>
           </div>
         </>
+      )}
+      {configOpen && <DashboardConfigurator cards={orderedCards} visible={visibleCards} onToggle={toggleDashboardCard} onClose={() => setConfigOpen(false)} />}
+      {selectedCard && (
+        <div className="modal-backdrop" data-testid="dashboard-card-modal">
+          <div className="modal dashboard-modal">
+            <div className="modal-head">
+              <div><p className="eyebrow">{selectedCard.built ? "Live / alpha" : "Coming soon"}</p><h3 className="h3">{selectedCard.label}</h3></div>
+              <button className="btn btn-sm" onClick={() => setSelectedCard(null)} data-testid="dashboard-card-modal-close"><X size={14} /> Close</button>
+            </div>
+            <MiniGraph points={selectedCard.points} />
+            <p className="lead" style={{ marginTop: 14 }}>{selectedCard.purpose}</p>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -6,7 +6,16 @@ import { Bell, ChevronDown, Lock, LogOut, MapPin, Search } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import type { Store } from "../auth/AuthContext";
 import { NAV } from "./navConfig";
+import type { NavGroup, NavItem } from "./navConfig";
 import "./AppShell.css";
+
+const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
+const NAV_ORDER_KEY = "kdps-nav-item-order";
+const MIN_SIDEBAR = 210;
+const MAX_SIDEBAR = 390;
+
+type DraggedItem = { groupKey: string; to: string } | null;
+type NavOrder = Record<string, string[]>;
 
 function initials(name: string, fallback: string): string {
   const src = (name || fallback).trim();
@@ -119,12 +128,47 @@ function UserMenu() {
   );
 }
 
-function Sidebar() {
+function readNavOrder(): NavOrder {
+  try {
+    return JSON.parse(localStorage.getItem(NAV_ORDER_KEY) || "{}") as NavOrder;
+  } catch {
+    return {};
+  }
+}
+
+function orderedItems(group: NavGroup, order: NavOrder): NavItem[] {
+  const saved = order[group.key] ?? [];
+  const known = new Set(group.items.map((i) => i.to));
+  const byPath = new Map(group.items.map((i) => [i.to, i]));
+  return [
+    ...saved.filter((to) => known.has(to)).map((to) => byPath.get(to)!),
+    ...group.items.filter((i) => !saved.includes(i.to)),
+  ];
+}
+
+function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: React.PointerEvent<HTMLDivElement>) => void }) {
   const { user } = useAuth();
+  const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
+  const [dragged, setDragged] = useState<DraggedItem>(null);
   if (!user) return null;
   const groups = NAV.filter((g) => user.nav_groups.includes(g.key));
+
+  function moveItem(group: NavGroup, targetTo: string) {
+    if (!dragged || dragged.groupKey !== group.key || dragged.to === targetTo) return;
+    const current = orderedItems(group, navOrder).map((i) => i.to);
+    const from = current.indexOf(dragged.to);
+    const to = current.indexOf(targetTo);
+    if (from < 0 || to < 0) return;
+    const next = [...current];
+    const [picked] = next.splice(from, 1);
+    next.splice(to, 0, picked);
+    const updated = { ...navOrder, [group.key]: next };
+    setNavOrder(updated);
+    localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
+  }
+
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" style={{ width }} data-testid="app-sidebar">
       <div className="brand">
         <span className="brand-mark">K</span>
         <span className="brand-text">
@@ -135,7 +179,8 @@ function Sidebar() {
       <nav className="nav" data-testid="sidebar-nav">
         {groups.map((g) => {
           const Icon = g.icon;
-          const single = g.items.length === 1;
+          const items = orderedItems(g, navOrder);
+          const single = items.length === 1;
           return (
             <div className="nav-group" key={g.key}>
               <div className="nav-group-head">
@@ -144,7 +189,7 @@ function Sidebar() {
                 </span>
                 {single ? (
                   <NavLink
-                    to={g.items[0].to}
+                    to={items[0].to}
                     end
                     className={({ isActive }) => `nav-grouplink ${isActive ? "active" : ""}`}
                     data-testid={`nav-${g.key}`}
@@ -157,10 +202,18 @@ function Sidebar() {
               </div>
               {!single && (
                 <div className="nav-items">
-                  {g.items.map((it) => (
+                  {items.map((it) => (
                     <NavLink
                       key={it.to}
                       to={it.to}
+                      draggable
+                      onDragStart={() => setDragged({ groupKey: g.key, to: it.to })}
+                      onDragEnd={() => setDragged(null)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        moveItem(g, it.to);
+                      }}
                       className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
                       data-testid={`nav-${g.key}-${it.to.split("/").pop()}`}
                     >
@@ -173,14 +226,41 @@ function Sidebar() {
           );
         })}
       </nav>
+      <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
     </aside>
   );
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return Number.isFinite(saved) && saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 258;
+  });
+
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    let latestWidth = startWidth;
+    document.body.classList.add("sidebar-resizing");
+    const onMove = (ev: PointerEvent) => {
+      const next = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, startWidth + ev.clientX - startX));
+      latestWidth = next;
+      setSidebarWidth(next);
+    };
+    const onUp = () => {
+      document.body.classList.remove("sidebar-resizing");
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(latestWidth));
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  }
+
   return (
     <div className="shell">
-      <Sidebar />
+      <Sidebar width={sidebarWidth} onResizeStart={startResize} />
       <div className="main">
         <header className="topbar">
           <StoreSwitcher />

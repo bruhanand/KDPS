@@ -38,7 +38,7 @@ export const NAV: NavGroup[] = [
     layer: "store",
     items: [
       { label: "Sell", to: "/store/sell" },
-      { label: "Receive", to: "/store/receive" },
+      { label: "Receive", to: "/inbound" },
       { label: "Count", to: "/store/count" },
       { label: "Transfer", to: "/store/transfer" },
     ],
@@ -50,7 +50,8 @@ export const NAV: NavGroup[] = [
     layer: "documents",
     items: [
       { label: "Bookings", to: "/documents/bookings" },
-      { label: "Inbound (GRN / PT)", to: "/documents/inbound" },
+      { label: "Inbound (GRN / PT)", to: "/inbound" },
+      { label: "PT Mapper", to: "/documents/pt-mapper" },
       { label: "Sales", to: "/documents/sales" },
       { label: "Transfers", to: "/documents/transfers" },
       { label: "Returns", to: "/documents/returns" },
@@ -77,6 +78,7 @@ export const NAV: NavGroup[] = [
     layer: "ledgers",
     items: [
       { label: "Stock Ledger", to: "/ledgers/stock" },
+      { label: "Stock on Hand", to: "/ledgers/stock-on-hand" },
       { label: "Vendor Ledger", to: "/ledgers/vendor" },
       { label: "Cash Ledger", to: "/ledgers/cash" },
     ],
