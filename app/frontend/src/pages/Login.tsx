@@ -41,18 +41,6 @@ export function Login() {
         <div className="login-brand-inner">
           <span className="brand-mark login-mark">K</span>
           <h1 className="login-title">KDPS Operating System</h1>
-          <p className="login-sub">
-            The deterministic operating system for KDPS Lifestyle — multi-brand retail
-            across Bihar &amp; Jharkhand. Documents write the ledgers; Tally stays the
-            statutory book.
-          </p>
-          <div className="login-layers">
-            {["Master data", "Documents", "Ledgers", "Controls", "Intelligence"].map((l, i) => (
-              <span key={l} className="login-layer" style={{ ["--i" as string]: i }}>
-                {l}
-              </span>
-            ))}
-          </div>
         </div>
       </aside>
 

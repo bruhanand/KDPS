@@ -1,6 +1,5 @@
 """KDPS Foundation backend tests — auth, scope isolation, masters."""
 import os
-import time
 import pytest
 import requests
 
