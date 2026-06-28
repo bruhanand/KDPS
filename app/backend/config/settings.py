@@ -21,9 +21,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # local manage.py commands both read it. Protected vars never go in code.
 load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "insecure-dev-key-not-for-production")
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+DEBUG = os.environ["DJANGO_DEBUG"] == "1"
+ALLOWED_HOSTS = os.environ["DJANGO_ALLOWED_HOSTS"].split(",")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -83,7 +83,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL", "postgres://localhost:5432/kdps_dev"),
+        default=os.environ["DATABASE_URL"],
         conn_max_age=600,
     )
 }

@@ -56,6 +56,13 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Auth type hints:** added explicit signature typing for cookie/header JWT authentication and removed unused import after tester feedback.
 - **Tested:** testing_agent iteration_11 passed backend regression. Additional self-checks: Python lint clean, Django check clean, `tests/test_refactor_regression.py` 6/6, `tests/test_iteration9_rbac_vendor_inbound.py` 8/8, and `tests/test_iteration11_pt_posting_regression.py` 3/3.
 
+## Deployment readiness check (28 Jun 2026) ⚠️
+- **Deployment agent status:** FAIL for Emergent managed deployment because KDPS intentionally requires **PostgreSQL**, while the target managed platform health check expects MongoDB-only managed database support. This is architectural, not a runtime regression.
+- **Checks passed:** supervisor config exists; frontend build passes; Django system check passes; ports are correct; CORS/CSRF settings are present; secrets/URLs are environment-driven; no mocked API layer.
+- **Hardening applied:** frontend `REACT_APP_BACKEND_URL` now fails fast when missing; backend `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `DATABASE_URL` now fail fast when missing.
+- **Tested:** testing_agent iteration_12 passed deployment-readiness regression; pytest `tests/test_iteration12_deployment_readiness.py` passed 8/8 after backend env hardening.
+- **Deployment blocker remaining:** provide/confirm external managed PostgreSQL `DATABASE_URL` or choose a major database migration strategy. Do not migrate to MongoDB without explicit architecture approval because append-only ledger guarantees are Postgres-oriented.
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
