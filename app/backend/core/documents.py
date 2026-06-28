@@ -5,8 +5,10 @@ NOT any business document itself. It owns three things and nothing more:
 
 1. **The docstatus FSM** — `draft → submitted → cancelled`, one `post()` per doc.
    Cancel is a *reversing transition*, never a delete; a posted doc is immutable.
-2. **The naming series** — the Tally join key `{FY}/{store}/{seq}` (e.g.
-   `26-27/DEO/74`), allocated gap-free and collision-free under parallel insert.
+2. **The naming series** — the Tally join key `{FY}/{store}/{type}/{seq}` (e.g.
+   `26-27/DEO/SAL/74`), allocated gap-free and collision-free under parallel
+   insert. `doc_type` is in the key because the counter is scoped per
+   `(fy, store, doc_type)` — without it, SAL and GRN would both mint `…/1`.
 3. **Three keys** per row — surrogate `bigint` PK · business `doc_number` ·
    `idempotency_uuid` (offline-write dedupe).
 
@@ -23,7 +25,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from django.db import models, transaction
+from django.db import connection, models, transaction
 
 #: One shared trigger function for every document table.
 TRIGGER_FUNCTION = "kdps_document_fsm"
@@ -57,8 +59,10 @@ class VoucherSeries(models.Model):
     A series is master config (Rule 12 — variation is data): a trained admin adds
     a row, no release. `next_seq` is a plain row counter — *not* a Postgres
     SEQUENCE — because a SEQUENCE leaks gaps on rollback, and the Tally join key
-    must be gap-free. Allocation locks the row (`SELECT … FOR UPDATE`) inside the
-    posting transaction, so a rolled-back post un-allocates its number.
+    must be gap-free. Allocation increments the counter DB-side inside the posting
+    transaction, so a rolled-back post un-allocates its number; the counter is
+    owned *solely* by `allocate()` — a config `save()` can never write it (so a
+    stale in-memory instance cannot rewind it).
     """
 
     fy = models.CharField(max_length=7)  # financial year, e.g. "26-27"
@@ -80,25 +84,56 @@ class VoucherSeries(models.Model):
     def __str__(self) -> str:
         return f"{self.fy}/{self.store_code}/{self.doc_type} → {self.next_seq}"
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist config — but never the counter.
+
+        `next_seq` is owned exclusively by `allocate()`'s DB-side increment. A
+        config `save()` (prefix/suffix/…), possibly from a stale instance loaded
+        before another till advanced the counter, must not write `next_seq` back
+        — that would rewind it and reuse a number. We strip `next_seq` from every
+        UPDATE; INSERT (a brand-new row) keeps the `default=1` start value.
+        """
+        if not self._state.adding:
+            fields = kwargs.get("update_fields")
+            if fields is None:
+                fields = [f.name for f in self._meta.concrete_fields if not f.primary_key]
+            kwargs["update_fields"] = [f for f in fields if f != "next_seq"]
+        super().save(*args, **kwargs)
+
     def render(self, seq: int) -> str:
-        """Format `seq` as the canonical `{FY}/{store}/{seq}` key, framed by any
-        admin-configured prefix/suffix. Empty affixes give `26-27/DEO/74`."""
-        return f"{self.prefix}{self.fy}/{self.store_code}/{seq}{self.suffix}"
+        """Format `seq` as the canonical `{FY}/{store}/{type}/{seq}` key, framed by
+        any admin-configured prefix/suffix. Empty affixes give `26-27/DEO/SAL/74`.
+
+        `doc_type` is part of the key: the counter is scoped per
+        `(fy, store, doc_type)`, so dropping it would mint the same number for two
+        types and corrupt the (globally unique) Tally join key.
+        """
+        return f"{self.prefix}{self.fy}/{self.store_code}/{self.doc_type}/{seq}{self.suffix}"
 
     @classmethod
     def allocate(cls, *, fy: str, store_code: str, doc_type: str) -> tuple[VoucherSeries, str]:
         """Consume the next number for a series, gap-free and collision-free.
 
         MUST run inside an outer `transaction.atomic()` (the caller's posting
-        transaction): the row lock is held until that transaction commits, so
-        concurrent allocators serialise and a rollback returns the number.
+        transaction). The counter advances in a single DB-side statement —
+        `UPDATE … SET next_seq = next_seq + 1 … RETURNING` — whose row lock is
+        held until that transaction commits: concurrent allocators serialise on
+        it, a rollback returns the number, and no in-memory `next_seq` is ever
+        written (so a stale config save can't rewind the counter, finding #2).
         """
-        series = cls.objects.select_for_update().get(
-            fy=fy, store_code=store_code, doc_type=doc_type
-        )
-        seq = series.next_seq
-        series.next_seq = seq + 1
-        series.save(update_fields=["next_seq"])
+        with connection.cursor() as cur:
+            cur.execute(
+                f"UPDATE {cls._meta.db_table} "  # noqa: S608 — db_table is a trusted identifier
+                "SET next_seq = next_seq + 1 "
+                "WHERE fy = %s AND store_code = %s AND doc_type = %s "
+                "RETURNING id, next_seq - 1",
+                [fy, store_code, doc_type],
+            )
+            row = cur.fetchone()
+        if row is None:
+            raise cls.DoesNotExist(f"no VoucherSeries for {fy}/{store_code}/{doc_type}")
+        series_id, seq = row
+        series = cls.objects.get(pk=series_id)
         return series, series.render(seq)
 
 
@@ -124,7 +159,8 @@ class Document(models.Model):
     #: Surrogate key (key 1 of 3). `BigAutoField` via DEFAULT_AUTO_FIELD.
     #: Business doc-number (key 2 of 3) — the Tally join key. NULL while a draft;
     #: minted gap-free at post() so an abandoned draft never burns a number.
-    doc_number = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    #: 128 wide so a long-but-valid prefix/suffix config can't overflow it (#5).
+    doc_number = models.CharField(max_length=128, unique=True, null=True, blank=True)
     #: Offline-write dedupe (key 3 of 3). Client-supplied for retries.
     idempotency_uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     docstatus = models.IntegerField(choices=DocStatus.choices, default=DocStatus.DRAFT)
@@ -136,6 +172,16 @@ class Document(models.Model):
 
     class Meta:
         abstract = True
+        constraints = [
+            # [#3] A non-draft row MUST carry a number. Fires on INSERT *and*
+            # UPDATE, so neither objects.create(docstatus=SUBMITTED) nor a bulk
+            # QuerySet.update(docstatus=1) can post a numberless row past the FSM.
+            # `%(class)s` materialises a distinct name per concrete table.
+            models.CheckConstraint(
+                condition=models.Q(docstatus=DocStatus.DRAFT) | models.Q(doc_number__isnull=False),
+                name="%(app_label)s_%(class)s_posted_has_number",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.doc_number or f"{type(self).__name__}(draft #{self.pk})"
@@ -225,19 +271,23 @@ class Document(models.Model):
             self._in_transition = False
 
 
-def document_fsm_sql(table_name: str) -> str:
-    """SQL installing the docstatus FSM trigger on `table_name`.
+def document_fsm_function_sql() -> str:
+    """SQL for the shared docstatus-FSM trigger *function* (no table binding).
 
-    Generic over every document table — it references only the `docstatus`
-    column, so the same function guards each one. It binds even the superuser CI
-    connects as (a trigger, unlike a REVOKE, stops a superuser):
+    One function guards every document table — it references only `docstatus`, so
+    it is generic. It binds even the superuser CI connects as (a trigger, unlike a
+    REVOKE, stops a superuser):
 
     * no UPDATE may walk backwards or re-post (submitted may only reach cancelled;
       a draft may only stay draft or post);
+    * cancellation is status-only — it may not rewrite any other column (#4), so
+      raw `UPDATE … SET docstatus=2, memo='x'` cannot mutate a posted fact;
     * a cancelled row is frozen;
     * a posted/cancelled row may not be DELETEd — it is cancelled, never deleted.
+
+    `CREATE OR REPLACE`, so a later migration can re-apply it to update behaviour
+    in place without dropping any table's trigger.
     """
-    trigger_name = f"{table_name}_document_fsm"
     return f"""
     CREATE OR REPLACE FUNCTION {TRIGGER_FUNCTION}() RETURNS trigger AS $$
     BEGIN
@@ -251,9 +301,20 @@ def document_fsm_sql(table_name: str) -> str:
         END IF;
         IF OLD.docstatus = 2 THEN
             RAISE EXCEPTION 'docstatus FSM: a cancelled row in % is frozen', TG_TABLE_NAME;
-        ELSIF OLD.docstatus = 1 AND NEW.docstatus <> 2 THEN
-            RAISE EXCEPTION
-                'docstatus FSM: a submitted row in % may only move to cancelled', TG_TABLE_NAME;
+        ELSIF OLD.docstatus = 1 THEN
+            IF NEW.docstatus <> 2 THEN
+                RAISE EXCEPTION
+                    'docstatus FSM: a submitted row in % may only move to cancelled',
+                    TG_TABLE_NAME;
+            END IF;
+            -- cancellation reverses; it must not also edit posted facts. Compare
+            -- every column except the two the transition legitimately writes.
+            IF (to_jsonb(OLD) - 'docstatus' - 'updated_at')
+               IS DISTINCT FROM (to_jsonb(NEW) - 'docstatus' - 'updated_at') THEN
+                RAISE EXCEPTION
+                    'docstatus FSM: cancelling a row in % may not change any other column',
+                    TG_TABLE_NAME;
+            END IF;
         ELSIF OLD.docstatus = 0 AND NEW.docstatus NOT IN (0, 1) THEN
             RAISE EXCEPTION
                 'docstatus FSM: a draft row in % may only stay draft or be posted', TG_TABLE_NAME;
@@ -261,6 +322,14 @@ def document_fsm_sql(table_name: str) -> str:
         RETURN NEW;
     END;
     $$ LANGUAGE plpgsql;
+    """
+
+
+def document_fsm_sql(table_name: str) -> str:
+    """SQL installing the FSM function (if absent) + its trigger on `table_name`."""
+    trigger_name = f"{table_name}_document_fsm"
+    return f"""
+    {document_fsm_function_sql()}
 
     CREATE TRIGGER {trigger_name}
         BEFORE UPDATE OR DELETE ON {table_name}
@@ -288,7 +357,9 @@ class DocumentProbe(Document):
     doc_type = models.CharField(max_length=16)
     memo = models.CharField(max_length=120, blank=True, default="")
 
-    class Meta:
+    class Meta(Document.Meta):
+        # Subclassing the abstract Meta inherits its constraints (the #3
+        # posted-has-number CHECK); Django resets abstract=False automatically.
         db_table = "core_document_probe"
 
     def series_lookup(self) -> tuple[str, str, str]:
