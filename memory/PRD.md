@@ -33,6 +33,14 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Vendor ageing, RBAC editor, `/inbound`, OpenAPI client, auth hardening (28 Jun 2026) ✅
+- **Vendor-dues ageing:** `GET /api/finledger/vendor/ageing` now calculates outstanding vendor dues from the append-only vendor ledger using FIFO allocation, grouped into **0–30 / 31–60 / 60+** buckets. `/ledgers/vendor` shows ageing summary cards and vendor-level ageing table beside existing balances and entries.
+- **Users & Roles editor:** `/masters/users` and `/edges/rbac` now provide an owner/IT-admin gated editor for creating/updating roles, nav groups, users, role assignments, active/staff flags, passwords, and store-scoped users. APIs added under `/api/auth/admin/{meta,roles,users}`.
+- **GRN UI route:** `/inbound`, `/inbound/new`, and `/inbound/:id` are first-class routes for store and owner receiving flows; Store Ops and Documents nav now point to `/inbound`. Store users get locked receiving store, direct GRN creation, and detail navigation.
+- **OpenAPI TS seam:** Generated `frontend/src/lib/api-schema.ts` from DRF schema via `openapi-typescript`; `api.ts` now exposes generated schema types plus `openApiClient` while preserving existing Axios compatibility. New RBAC screen uses the typed API helper.
+- **Auth hardening from retest:** Added header-or-cookie JWT authentication (`CookieOrHeaderJWTAuthentication`), httpOnly `access_token` / `refresh_token` cookies on login/refresh, cookie clearing on logout, bcrypt-sha256 password hasher preference with PBKDF2 fallback, and `seed_admin` alias to existing `seed_foundation`.
+- **Tested:** iteration_9 passed product flows; iteration_10 passed auth-cookie hardening + regression checks. Self-tests: Django check, targeted Python/TS lint, frontend typecheck, `pytest tests/test_iteration9_rbac_vendor_inbound.py` 8/8, browser smoke. **Known non-app issue:** external preview ingress still injects wildcard CORS headers on OPTIONS; internal Django CORS returns explicit origin + credentials.
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
@@ -161,17 +169,15 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 ## Backlog (prioritised)
 - **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
   but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
-- **P1 — Users & Roles editor; OpenAPI typed TS client; vendor-dues ageing report.**
-  (Vendor & Cash ledgers DONE 28 Jun; Stock-on-hand + pagination DONE 28 Jun.)
-- **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
-  generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
+- **P1:** Master Data stewardship UI (create/edit master data with stewardship controls).
+- **P1:** Continue replacing legacy page calls with `openApiClient` / generated schema types as pages are touched.
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
 - **P2 — Phase 3+:** Money-in (collection & 3-rail bank audit), Transfers, Payments/vendor settlement,
   Controls (exception inbox, reconciliations, approvals/second-eye), Tally bridge, Intelligence (suggest-only).
 - **P2 — Non-Branded Booking / PO Maker agent:** deferred pending user's client clarification.
-- **P2 — Production hardening:** HTTPS/secure-cookie, refresh tokens out of localStorage; confirm
-  Django+Postgres deploy path with support (Emergent deploy tuned for FastAPI+Mongo).
+- **P2 — Production hardening:** External ingress/proxy CORS policy alignment, reduce localStorage token reliance now that httpOnly cookies exist, HTTPS/secure-cookie review, Django+Postgres deploy path validation.
 
 ## Next action items
-1. Gather Phase D inputs: KDPS PT target schema + sample brand PT Excel files + mapping rules.
-2. Build Phase D (PT mapper + unmapped queue), then Phase E (Patna inward reconcile → stock ledger).
+1. Build Master Data stewardship UI for create/edit of mutable masters.
+2. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
+3. Continue POS ingest / selling floor planning after current P1 review.
