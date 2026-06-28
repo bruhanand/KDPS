@@ -33,7 +33,27 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
-## Implemented — Phase D Slice 2 + Phase E: Readers & Warehouse→Patna workflow (28 Jun 2026) ✅
+## Implemented — Phase E complete: append-only Stock Ledger posting (28 Jun 2026) ✅
+- **First real business ledger over the `core` kernel.** New `stockledger` app: `StockLedgerEntry(LedgerEntry)`
+  — append-only (ORM guard + `BEFORE UPDATE OR DELETE` DB trigger + REVOKE, verified blocks superuser
+  UPDATE/DELETE). Self-describing rows (barcode SKU + brand/design/colour/size/season/item/HSN), signed
+  `qty`, value `amount` = BASIC×qty in paise, `kind` (pt_inward / pt_reversal), gap-free `doc_number`.
+- **Patna "Push into system"** (`POST /api/ptmapper/files/:id/post`, body optional `{booking_id}`) →
+  `post_pt_inward`: mints a gap-free `PT` voucher for **RAN-WH** (`26-27/RAN-WH/PT/n` via `VoucherSeries`),
+  writes one inward entry per KDPS row, optionally **reconciles a Booking** (matches KDPS DESIGN+SIZE to
+  `BookingLine.style_code`+`size`, bumps `inwarded_qty`), locks the file. Verified: MUFTI 97 rows valued
+  (₹814.25/₹1920.10…), booking inwarded 39→5 & 32→3.
+- **Append-only correction** (`POST …/reverse` → `reverse_pt_inward`): mints its own PT voucher, writes a
+  negative mirror of every live inward row, un-bumps the booking, returns the file to `sent` (fix & re-post).
+  Verified net qty → 0 across the inward+reversal pair.
+- **API & UI:** `GET /api/stockledger/entries` (`?pt_file=` / `?doc_number=`) + `…/summary`. New **Stock
+  Ledger page** (`/ledgers/stock`, `StockLedger.tsx`): 4 summary cards + entries table (inward green /
+  reversal red chips). PT detail gains a booking selector on post, a Reverse button, and a posted banner
+  showing the voucher + booking + "View in Stock Ledger" (links by file → shows inward + reversals together).
+- **Tested:** testing_agent iteration_5 → frontend 100%, 0 bugs (post±booking, reconcile banner, reversal,
+  Stock Ledger page + filter, role gating). Backend curl + the append-only trigger verified directly.
+
+## Implemented — Phase D Slice 2 + Phase E workflow: Readers & Warehouse→Patna workflow (28 Jun 2026) ✅
 - **Legacy/binary readers** (`ptmapper/engine.py`): `read_sheets` now dispatches by extension **and** magic
   bytes — `.xls` via xlrd (OLE2), `.xlsb` via pyxlsb (Madura SAP), `.xlsx` via openpyxl, `.csv`; correctly
   routes mislabelled files (a `.xls` that is really `.xlsx`, a `.csv` that is OLE2). Excel serial dates in
@@ -105,12 +125,11 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
   `app/backend/tests/test_foundation.py`.
 
 ## Backlog (prioritised)
-- **P0 / Phase E — STOCK-LEDGER POSTING (the remaining half of Phase E):** the warehouse→Patna review/edit/
-  send/post workflow is built & tested (28 Jun), but "Push into system" only locks the file today. Wire the
-  POSTED transition to write the `core` append-only **stock ledger** (first real stock-ledger write): map each
-  KDPS row to item/GSTIN/store, post inward qty, and reconcile against the originating Booking lines.
 - **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
   but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
+- **P1 — Stock balance view & ledgers polish:** a stock-on-hand (net qty/value per SKU/store) summary screen
+  over `StockLedgerEntry`; server-side pagination on `/api/stockledger/entries`; wire the Vendor/Cash ledger
+  nav placeholders. (Stock-ledger POSTING itself is DONE, 28 Jun.)
 - **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
   generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
