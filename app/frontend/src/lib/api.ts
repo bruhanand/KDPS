@@ -1,11 +1,13 @@
 import axios from "axios";
 import type { AxiosRequestConfig } from "axios";
+import createClient from "openapi-fetch";
 
 import type { components, paths } from "./api-schema";
 
 const BASE = (import.meta.env.REACT_APP_BACKEND_URL as string) || "";
 
-export const api = axios.create({ baseURL: `${BASE}/api` });
+export const api = axios.create({ baseURL: `${BASE}/api`, withCredentials: true });
+export const openApiClient = createClient<paths>({ baseUrl: BASE, credentials: "include" });
 
 const ACCESS_KEY = "kdps_access";
 const REFRESH_KEY = "kdps_refresh";
