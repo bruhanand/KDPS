@@ -1,0 +1,79 @@
+# Render Blueprint — KDPS Operating System (alpha / demo)
+# -----------------------------------------------------------------------------
+# Provisions the whole stack from one file:
+#   - kdps-db      PostgreSQL 16 (managed)
+#   - kdps-erp-api Django API (uvicorn), serves its own static via WhiteNoise
+#   - kdps-erp-web React PWA (static site)
+#
+# Deploy: push to GitHub, then Render Dashboard → New → Blueprint → pick this
+# repo. Render reads this file and creates all three. See DEPLOY.md.
+#
+# IMPORTANT (one manual step): the two cross-URLs below assume the service
+# subdomains `kdps-erp-api` and `kdps-erp-web` are free on onrender.com. If
+# Render assigns different hostnames, update REACT_APP_BACKEND_URL,
+# CORS_ALLOWED_ORIGINS and CSRF_TRUSTED_ORIGINS to the real URLs and redeploy.
+# -----------------------------------------------------------------------------
+
+databases:
+  - name: kdps-db
+    databaseName: kdps
+    user: kdps
+    plan: free                 # NOTE: free Postgres is deleted after 30 days. Upgrade to keep data.
+    postgresMajorVersion: "16"
+    region: singapore          # closest Render region to India
+
+services:
+  # --- Django API ------------------------------------------------------------
+  - type: web
+    name: kdps-erp-api
+    runtime: python
+    plan: free                 # free web services spin down when idle (~50s cold start)
+    region: singapore
+    rootDir: app/backend
+    buildCommand: >-
+      pip install uv &&
+      uv sync --frozen &&
+      uv run python manage.py collectstatic --noinput &&
+      uv run python manage.py migrate &&
+      uv run python manage.py seed_foundation
+    startCommand: uv run uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true    # Render generates a strong secret
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kdps-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        fromService:
+          type: web
+          name: kdps-erp-api
+          property: host        # this service's own onrender.com host
+      - key: CORS_ALLOWED_ORIGINS
+        value: https://kdps-erp-web.onrender.com
+      - key: CSRF_TRUSTED_ORIGINS
+        value: https://kdps-erp-web.onrender.com
+      - key: JWT_COOKIE_SECURE
+        value: "1"
+      - key: JWT_COOKIE_SAMESITE
+        value: "None"           # API and web are different onrender.com sites
+
+  # --- React PWA (static) ----------------------------------------------------
+  - type: web
+    name: kdps-erp-web
+    runtime: static
+    region: singapore
+    rootDir: app/frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: REACT_APP_BACKEND_URL   # inlined into the bundle at build time
+        value: https://kdps-erp-api.onrender.com
+    routes:
+      - type: rewrite                # SPA: let React Router handle deep links
+        source: /*
+        destination: /index.html

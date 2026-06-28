@@ -18,6 +18,8 @@ dependencies = [
     "xlrd>=2.0",
     "pyxlsb>=1.0",
     "uvicorn[standard]>=0.25",
+    "gunicorn>=26.0.0",
+    "whitenoise>=6.12.0",
 ]
 
 [dependency-groups]
