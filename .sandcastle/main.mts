@@ -21,6 +21,8 @@
 // Or add to package.json:
 //   "scripts": { "sandcastle": "npx tsx .sandcastle/main.mts" }
 
+import { execSync } from "node:child_process";
+
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
@@ -37,7 +39,8 @@ const MAX_ITERATIONS = 1;
 // Default implementer = sonnet (free lane: K9 seed/components, screens, reports).
 // Bump MODEL_IMPL to "claude-opus-4-8" per-run on money slices (ledgers/GST/RBAC).
 // Reviewer stays on opus — cheap insurance before YOUR Chat B review.
-const MODEL_IMPL = "claude-sonnet-4-6";
+// K1 is a SUPERVISED money slice — implementer bumped to opus per the manual.
+const MODEL_IMPL = "claude-opus-4-8";
 const MODEL_REVIEW = "claude-opus-4-8";
 
 // Hooks run inside the sandbox before the agent starts each iteration.
@@ -53,6 +56,13 @@ const hooks = {
 // starts. Avoids a full npm install from scratch; the hook above handles
 // platform-specific binaries and any packages added since the last copy.
 const copyToWorktree = ["node_modules"];
+
+// The branch this run was launched from — i.e. THIS Conductor worktree's branch.
+// Sandcastle builds the slice on an isolated temp branch (so the worktree stays
+// clean while the agent works), then we fast-forward it back into this branch at
+// the end. That puts the finished diff right here in the worktree for human
+// review. We NEVER touch main — merging this branch to main is the human gate.
+const launchBranch = execSync("git rev-parse --abbrev-ref HEAD").toString().trim();
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -116,15 +126,27 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       maxIterations: 1,
       agent: sandcastle.claudeCode(MODEL_REVIEW),
       promptFile: "./.sandcastle/review-prompt.md",
+      // BRANCH is the slice's temp branch. TARGET_BRANCH is a Sandcastle built-in
+      // (the branch the sandbox forked from = launchBranch) and MUST NOT be passed
+      // here — overriding it throws PromptError and the reviewer never runs. The
+      // review prompt's {{TARGET_BRANCH}}...{{BRANCH}} diff resolves it on its own.
       promptArgs: {
         BRANCH: branch,
-        // The review prompt diffs {{TARGET_BRANCH}}...{{BRANCH}}; without this it
-        // substitutes nothing and the diff fails. main is our trunk.
-        TARGET_BRANCH: "main",
       },
     });
 
     console.log("\nReview complete.");
+
+    // Land the finished, reviewed slice back into this worktree's branch via a
+    // fast-forward, so the diff is visible right here in Conductor for the human
+    // read. The temp branch is then redundant (its commits now live on
+    // launchBranch), so drop it. Still nothing reaches main — that's the human
+    // merge gate.
+    execSync(`git merge --ff-only ${branch}`, { stdio: "inherit" });
+    execSync(`git branch -D ${branch}`, { stdio: "inherit" });
+    console.log(
+      `\nLanded ${branch} into ${launchBranch}. Review the diff in this workspace, then merge to main.`,
+    );
   } finally {
     await sandbox.close();
   }
