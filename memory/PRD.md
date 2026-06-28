@@ -33,6 +33,24 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
+- **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
+  `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
+  `finledger_cash_entry`, verified blocks superuser). Gap-free vouchers via `VoucherSeries` under store_code
+  'HO' (doc_types VEND / CASH). Sign: vendor +bill/−payment (Σ=payable); cash +receipt/−payment (Σ=on hand).
+- **Posting** (`finledger/posting.py`, finance-only via `_is_finance`): manual Record Bill / Record Payment
+  (payment auto-posts a paired cash-OUT) / Record Cash Movement; append-only reversals (a vendor-payment
+  reversal also reverses its paired cash row). **Auto vendor bill**: `stockledger.post_pt_inward` now calls
+  `post_pt_vendor_bill` when a PT file is posted *with a booking* (amount = BASIC×qty stock value); PT reverse
+  calls `reverse_pt_vendor_bills`.
+- **API**: `/api/finledger/vendor/{entries(paginated),balances,bill,payment,entries/:id/reverse}` and
+  `/api/finledger/cash/{entries(paginated),summary,movement,entries/:id/reverse}`.
+- **Screens**: `/ledgers/vendor` (`VendorLedger.tsx`) — payable summary, outstanding-by-vendor, paginated
+  entries, Record Bill/Payment forms, Reverse. `/ledgers/cash` (`CashLedger.tsx`) — cash-on-hand by account,
+  paginated movements, Record Movement (account select CASH/BANK/UPI), Reverse. Nav wired; finance-role gated.
+- **Tested:** testing_agent iteration_8 → frontend 100% (bill/payment+auto cash-out, reversals, pagination,
+  role gating: warehouse sees no posting buttons). Backend curl + append-only triggers verified directly.
+
 ## Implemented — Ledgers: pagination + Stock-on-Hand + nav (28 Jun 2026) ✅
 - **Server-side pagination** on `GET /api/stockledger/entries` (DRF `PageNumberPagination`, page_size 50, scoped to this view only — `{count,next,previous,results}`); Stock Ledger page now has Prev/Next + "Showing X–Y of N".
 - **Stock on Hand** screen (`/ledgers/stock-on-hand`, `StockOnHand.tsx`) backed by `GET /api/stockledger/on-hand?group_by=sku|brand|store` — live net position (Σqty>0) from the append-only ledger, with SKU/Brand/Store grouping tabs + summary cards. Cross-linked with Stock Ledger.
@@ -143,8 +161,8 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 ## Backlog (prioritised)
 - **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
   but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
-- **P1 — Vendor & Cash ledgers (concrete models):** build the actual append-only Vendor and Cash ledgers (the
-  nav items already route to "Planned" placeholders). (Stock-on-hand + stock-ledger pagination DONE, 28 Jun.)
+- **P1 — Users & Roles editor; OpenAPI typed TS client; vendor-dues ageing report.**
+  (Vendor & Cash ledgers DONE 28 Jun; Stock-on-hand + pagination DONE 28 Jun.)
 - **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
   generated OpenAPI → typed TS client wired into the frontend (replace hand-rolled `api.ts`).
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
