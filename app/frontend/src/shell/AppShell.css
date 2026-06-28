@@ -85,6 +85,8 @@
   font-size: 13.5px; font-weight: 600; color: var(--navy); transition: background-color .15s;
 }
 .switcher-btn:hover { background: #f0e9e0; }
+.switcher-btn.locked { cursor: default; color: var(--muted); }
+.switcher-btn.locked:hover { background: var(--inner); }
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .user-btn {

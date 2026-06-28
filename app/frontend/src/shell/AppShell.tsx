@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, LogOut, MapPin, Search } from "lucide-react";
+import { Bell, ChevronDown, Lock, LogOut, MapPin, Search } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import type { Store } from "../auth/AuthContext";
@@ -21,10 +21,21 @@ function StoreSwitcher() {
   const canSeeAll = user.scope_type === "all" || user.scope_type === "entity";
   const label = activeStore ? `${activeStore.code} · ${activeStore.name}` : "All stores";
   const state = activeStore ? activeStore.state_name : "Network";
+  const locked = !canSeeAll && user.stores.length <= 1;
 
   function pick(s: Store | null) {
     setActiveStore(s);
     setOpen(false);
+  }
+
+  if (locked) {
+    return (
+      <div className="switcher-btn locked" data-testid="store-switcher">
+        <Lock size={14} />
+        <span className="switcher-label">{label}</span>
+        <span className={`chip chip-${state === "Bihar" ? "amber" : "blue"}`}>{state}</span>
+      </div>
+    );
   }
 
   return (
