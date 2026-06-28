@@ -33,6 +33,27 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Phase D: PT File Mapper (Warehouse / Ranchi) (28 Jun 2026) ✅
+- **Deterministic, table-driven engine — NO AI** (`ptmapper` Django app). Reads a brand PT file
+  (.xlsx/.csv), detects the header row + data range, identifies the archetype profile (A generic /
+  B Tally-Vistaar / C Ginesys PT-EMAIL), maps columns, normalises controlled fields via DB lookups,
+  derives SEASON (from invoice date), NAG=QTY, MARGIN=(MRP−P RATE)/MRP×100, OUTPUT TAX=INPUT TAX,
+  and carries BASIC / P RATE from source (money flagged, CA-gated per spec §5).
+- **Lookup tables are the product:** seeded from KDPS's real Master Sheet via `seed_ptmapper`
+  (970 controlled values, 592 brands, 23 colours, 135 sizes, 98 ITEM→sub/type, 30 taxonomy rules).
+  Unmapped raw values go to a **review queue**; a human maps one (adds a Lookup/TaxonomyRule) and
+  re-running re-maps every file — zero code change. COLOR vocab keeps price tiers (PREMIUM/ECONOMY).
+- **API:** `POST /api/ptmapper/files` (upload+map), `GET files/:id`, `POST files/:id/rerun`,
+  `GET files/:id/export` (CSV in KDPS 22-col order), `GET /api/ptmapper/review`,
+  `POST /api/ptmapper/review/:id/resolve`, `GET /api/ptmapper/controlled?dimension=`.
+- **Frontend** (`PtMapper.tsx`, Documents > PT Mapper): upload + files table, file detail with the
+  wide KDPS output table (blank cells flagged amber) + Re-run + Export CSV, and the Unmapped queue
+  (single-dim select resolve + 5-axis taxonomy resolve). Reachable by warehouse + owner roles.
+- **Tested:** testing_agent iteration_3 → frontend 100%, 0 bugs. Verified resolve→propagate loop
+  (DEAL unresolved 7→6→5). Backend verified via curl (MUFTI 97 rows; 88-BEIGE→CREAM re-mapped 15 rows).
+- **Deferred to Slice 2:** `.xls`/`.xlsb` readers (Jockey/Madura, archetypes D/E/F) — currently return a
+  friendly "not yet supported" message.
+
 ## Implemented — Phase 1 Inbound: Booking + Receive (GRN) (28 Jun 2026) ✅
 - **Backend (Django apps):** `files` (DB blob storage), `vendors` (Vendor master + Booking + BookingLine,
   two-step human-in-the-loop draft→confirm), `inbound` (Grn + GrnLine, receive against a booking OR direct),
@@ -63,9 +84,9 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
   `app/backend/tests/test_foundation.py`.
 
 ## Backlog (prioritised)
-- **P0 / Phase D — PT File Mapper (Warehouse/Ranchi):** data-driven mapping from varied Brand PT Excel files
-  to the KDPS target format, with an "unmapped queue" review screen. *Needs from user: the KDPS target column
-  schema + sample brand PT files / mapping rules before build.*
+- **P0 / Phase D Slice 2 — more readers/profiles:** `.xls` (Jockey, FAHRENHEIT, SUVIDHI, ambreli, TWILLS)
+  + `.xlsb` (Madura) + headerless CSV (USPOLO); archetypes D (Jockey SAP), E (wide SAP), F (printed invoice
+  with anchored header). Confirm BASIC/P RATE source columns + any loading factor with finance/CA.
 - **P0 / Phase E — Patna Inward Review & Reconcile (HO):** UI/API for Patna HO to review mapped PT files,
   approve, reconcile booking lines, and trigger the `core` ledger stock posting (first stock-ledger write).
 - **P1:** Master Data stewardship UI (create/edit), Users & Roles admin screen (in-app role editing),
