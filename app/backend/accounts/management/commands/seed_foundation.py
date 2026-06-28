@@ -16,6 +16,7 @@ from django.db import transaction
 
 from accounts.models import NAV_GROUPS, Role, User
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
+from vendors.models import Booking, BookingLine, Vendor
 
 ROLES: list[dict[str, Any]] = [
     {
@@ -100,7 +101,9 @@ class Command(BaseCommand):
         self._seed_seasons()
         self._seed_brands()
         self._seed_gst_slab()
+        vendors = self._seed_vendors()
         self._seed_users(entity, stores)
+        self._seed_sample_booking(vendors, stores)
         self._write_credentials()
         self.stdout.write(self.style.SUCCESS("Foundation seed complete."))
 
@@ -140,7 +143,7 @@ class Command(BaseCommand):
             ("HZB", "Hazaribagh", "store", "jharkhand", "Hazaribagh"),
             ("DUM", "Dumka", "store", "jharkhand", "Dumka"),
             ("BANKA", "Banka", "store", "bihar", "Banka"),
-            ("PAT-WH", "Patna Central Warehouse", "warehouse", "bihar", "Patna"),
+            ("RAN-WH", "Ranchi Central Warehouse", "warehouse", "jharkhand", "Ranchi"),
         ]
         out: dict[str, Store] = {}
         for code, name, stype, state, city in rows:
@@ -197,6 +200,78 @@ class Command(BaseCommand):
                 "effective_from": datetime.date(2025, 9, 22),
             },
         )
+
+    def _seed_vendors(self) -> dict[str, Vendor]:
+        rows = [
+            ("abfrl", "Aditya Birla Fashion (Madura)", "Bengaluru", "29AAACX1234M1Z1",
+             "29", "Karnataka", ["louis-philippe", "van-heusen", "allen-solly", "peter-england"]),
+            ("arvind", "Arvind Fashions", "Bengaluru", "29AAACA5678M1Z2",
+             "29", "Karnataka", ["us-polo", "spykar"]),
+            ("credo", "Credo Brands (Mufti)", "Mumbai", "27AAACC9012M1Z3",
+             "27", "Maharashtra", ["mufti"]),
+            ("blackberrys", "Blackberrys Menswear", "New Delhi", "07AAACB3456M1Z4",
+             "07", "Delhi", ["blackberry"]),
+            ("page", "Page Industries (Jockey)", "Bengaluru", "29AAACP7890M1Z5",
+             "29", "Karnataka", ["jockey"]),
+            ("kewalkiran", "Kewal Kiran (Killer)", "Mumbai", "27AAACK2345M1Z6",
+             "27", "Maharashtra", ["killer"]),
+        ]
+        out: dict[str, Vendor] = {}
+        for code, name, city, gstin, sc, sn, brand_codes in rows:
+            vendor, _ = Vendor.objects.update_or_create(
+                code=code,
+                defaults={
+                    "name": name,
+                    "city": city,
+                    "gstin": gstin,
+                    "state_code": sc,
+                    "state_name": sn,
+                    "payment_terms": "Net 30",
+                },
+            )
+            vendor.brands.set(Brand.objects.filter(code__in=brand_codes))
+            out[code] = vendor
+        return out
+
+    def _seed_sample_booking(
+        self, vendors: dict[str, Vendor], stores: dict[str, Store]
+    ) -> None:
+        season = Season.objects.filter(code="SS26").first()
+        brand = Brand.objects.filter(code="peter-england").first()
+        vendor = vendors.get("abfrl")
+        if not (season and brand and vendor):
+            return
+        booking, created = Booking.objects.get_or_create(
+            number="BK-SS26-0001",
+            defaults={
+                "vendor": vendor,
+                "brand": brand,
+                "season": season,
+                "destination_store": stores.get("DEO"),
+                "status": Booking.Status.BOOKED,
+                "vendor_ref": "PE/ORD/2026/118",
+                "ownership": brand.ownership,
+                "return_terms": brand.return_terms,
+            },
+        )
+        if created:
+            for style, size, qty, mrp in [
+                ("PE-FSHIRT-001", "39", 12, 1799_00),
+                ("PE-FSHIRT-001", "40", 18, 1799_00),
+                ("PE-TROUSER-100", "32", 10, 2499_00),
+                ("PE-TROUSER-100", "34", 8, 2499_00),
+            ]:
+                BookingLine.objects.create(
+                    booking=booking,
+                    style_code=style,
+                    size=size,
+                    booked_qty=qty,
+                    mrp_paise=mrp,
+                )
+            booking.estimated_value_paise = sum(
+                line.booked_qty * (line.mrp_paise or 0) for line in booking.lines.all()
+            )
+            booking.save(update_fields=["estimated_value_paise"])
 
     def _seed_users(self, entity: LegalEntity, stores: dict[str, Store]) -> None:
         for username, password, role_code, scope, store_codes, full_name in USERS:

@@ -42,6 +42,9 @@ INSTALLED_APPS = [
     "core.apps.CoreConfig",
     "masters.apps.MastersConfig",
     "accounts.apps.AccountsConfig",
+    "files.apps.FilesConfig",
+    "vendors.apps.VendorsConfig",
+    "inbound.apps.InboundConfig",
 ]
 
 MIDDLEWARE = [
@@ -129,7 +132,7 @@ CSRF_TRUSTED_ORIGINS = [
     o
     for o in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://*.preview.emergentagent.com,https://*.emergentagent.com",
+        "https://kdps-booking-hub.preview.emergentagent.com,https://*.emergentagent.com",
     ).split(",")
     if o
 ]
