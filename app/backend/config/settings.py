@@ -143,11 +143,15 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^http://localhost:\d+$",
     r"^http://127\.0\.0\.1:\d+$",
 ]
+# Extra explicit origins for non-Emergent deployments (comma-separated env).
+CORS_ALLOWED_ORIGINS = [
+    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
+]
 CSRF_TRUSTED_ORIGINS = [
     o
     for o in os.environ.get(
         "CSRF_TRUSTED_ORIGINS",
-        "https://pt-mapper.preview.emergentagent.com,https://*.emergentagent.com",
+        "https://*.emergentagent.com",
     ).split(",")
     if o
 ]

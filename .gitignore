@@ -49,8 +49,9 @@ credentials.json
 
 # container/runtime artifacts (Emergent build env)
 staticfiles/
-/app/backend
-/app/frontend
 .env
 __pycache__/
 *.pyc
+
+# --- Local Postgres data dir (never commit) ---
+.pgdata/

@@ -1,0 +1,51 @@
+{
+  "summary": "Regression smoke after deploy-readiness CORS/CSRF env-driven config change in settings.py and uvicorn dep add in pyproject.toml. All 3 seeded role logins, owner core read endpoints, Django-layer CORS preflight, and frontend login->dashboard verified clean on preview URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/inbound/grns/",
+        "issue": "Trailing-slash URL returns 404; only `/api/inbound/grns` (no trailing slash) resolves. Either acceptance criterion or inbound/urls.py route should be aligned (path('grns', ...) currently)."
+      },
+      {
+        "endpoint": "(ingress) /api/* public",
+        "issue": "Cloudflare/k8s ingress overrides Django CORS headers with `Access-Control-Allow-Origin: *` and `Access-Control-Allow-Headers: *` on public preview URL. Django itself echoes the preview origin and sets allow-credentials true correctly (verified via internal localhost:8001). Because the React frontend is served from the same origin as /api, the browser does not perform CORS preflight — login works. The settings.py change is functionally correct; the ingress override is environmental and not a regression."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration13_cors_config_regression.py",
+    "/app/test_reports/pytest/iteration13_cors_config.xml"
+  ],
+  "action_items": [
+    "No regression from the CORS/CSRF env-driven settings change or uvicorn dep add. App works end-to-end on preview URL.",
+    "Optional: decide whether `/api/inbound/grns/` (trailing slash) should be added as an alias in inbound/urls.py, or update API docs to reflect the slashless route.",
+    "Note (informational, not a defect): the public ingress rewrites CORS headers to `*`; if a non-Emergent external origin ever needs credentialed CORS via the preview URL, the ingress layer (not Django) would need configuration."
+  ],
+  "critical_code_review_comments": [
+    "settings.py CORS regex list still safely covers preview hosts (`^https://.*\\.preview\\.emergentagent\\.com$`) and localhost dev ports — login from preview origin still preflights successfully at the Django layer.",
+    "CSRF_TRUSTED_ORIGINS default `https://*.emergentagent.com` correctly covers `pt-mapper.preview.emergentagent.com` (wildcard match) — verified login POST succeeds.",
+    "CORS_ALLOWED_ORIGINS additive env split correctly filters empty strings (`[o for o in ... if o]`) — no `[\"\"]` poisoning when the env var is unset.",
+    "DJANGO_SECRET_KEY / DATABASE_URL / DJANGO_DEBUG / DJANGO_ALLOWED_HOSTS use `os.environ[...]` (fail-fast). Good."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration13_cors_config_regression.py",
+    "/app/test_reports/iteration_13.json",
+    "/app/test_reports/pytest/iteration13_cors_config.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 pytest)",
+    "frontend": "100% (login + dashboard, 0 console errors, 0 CORS errors)"
+  },
+  "test_credentials": "owner/Owner@123, deo.cashier/Store@123, wh.patna/Wh@123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 13 covers deploy-readiness regression: env-driven CORS_ALLOWED_ORIGINS, CSRF_TRUSTED_ORIGINS default 'https://*.emergentagent.com', and uvicorn dep. Reusable test: /app/app/backend/tests/test_iteration13_cors_config_regression.py. Note: CORS preflight assertions must hit http://localhost:8001 directly because the public ingress overrides CORS headers to `*`. Inbound list endpoint is `/api/inbound/grns` (no trailing slash).",
+  "rca of the issue": "No defects introduced by the settings.py / pyproject.toml deploy-readiness changes. Two findings worth surfacing: (1) trailing-slash mismatch on /api/inbound/grns vs review-request URL — pre-existing route shape; (2) public ingress rewrites CORS headers — environmental, not a Django config issue."
+}
