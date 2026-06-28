@@ -33,6 +33,16 @@ Navy #1f2d4d + rust #c4623f on warm cream surfaces (paper #faf7f2, surface #fffd
 per-layer colour bands; system fonts only + ui-monospace for IDs/money; navy-tinted shadows; 16px card
 radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserved for wordmark/login/one CTA.
 
+## Implemented — Code-quality refactor (28 Jun 2026) ✅
+- Behavior-preserving refactor from a code review: split high-complexity functions into focused helpers —
+  `engine.map_record` (`_map_prices`/`_map_season`/`_map_taxonomy`), `ptmapper.views.process_file` +
+  `ReviewResolveView.post` (`_resolve_single`/`_resolve_taxonomy`/`_repropagate`), `inbound.views.create`
+  (`_resolve_receiving_store`/`_build_grn`/`_add_grn_line`), and `seed_ptmapper.handle`. Removed dead code +
+  unused import, added type hints. **Verified zero behavior change**: 84/84 kernel+foundation pytest, new
+  `tests/test_refactor_regression.py` 6/6, ruff/django-check clean, seed reproduces identical counts
+  (iteration_6, 100%). Note: the review's "3 undefined variables" and "35 is-vs-`==`" were tool false
+  positives (all are correct `is None`/`is True/False`; changing them would be a regression) — not applied.
+
 ## Implemented — Phase E complete: append-only Stock Ledger posting (28 Jun 2026) ✅
 - **First real business ledger over the `core` kernel.** New `stockledger` app: `StockLedgerEntry(LedgerEntry)`
   — append-only (ORM guard + `BEFORE UPDATE OR DELETE` DB trigger + REVOKE, verified blocks superuser
