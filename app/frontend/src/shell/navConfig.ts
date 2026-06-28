@@ -51,6 +51,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Bookings", to: "/documents/bookings" },
       { label: "Inbound (GRN / PT)", to: "/documents/inbound" },
+      { label: "PT Mapper", to: "/documents/pt-mapper" },
       { label: "Sales", to: "/documents/sales" },
       { label: "Transfers", to: "/documents/transfers" },
       { label: "Returns", to: "/documents/returns" },

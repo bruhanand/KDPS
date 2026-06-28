@@ -8,6 +8,7 @@ import { ModulePage } from "./pages/ModulePage";
 import { BrandsPage, GstinsPage, SeasonsPage, StoresPage } from "./pages/MasterPages";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
+import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 
 export function App() {
   return (
@@ -23,6 +24,9 @@ export function App() {
             <Route path="/documents/inbound" element={<InboundPage />} />
             <Route path="/documents/inbound/new" element={<InboundNewPage />} />
             <Route path="/documents/inbound/:id" element={<GrnDetailPage />} />
+            <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
+            <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
+            <Route path="/documents/pt-mapper/:id" element={<PtFileDetailPage />} />
             <Route path="/store/receive" element={<InboundPage />} />
             <Route path="/masters/stores" element={<StoresPage />} />
             <Route path="/masters/brands" element={<BrandsPage />} />

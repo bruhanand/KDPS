@@ -1,0 +1,25 @@
+{
+  "summary": "Phase D PT File Mapper - comprehensive frontend E2E testing PASSED. All critical flows verified: owner login -> PT Mapper page -> dropzone/files-table/review-queue-link visible with MUFTI pre-loaded (97 rows, 20 unresolved). Uploaded DEAL SS26 2970.xlsx (archetype B, Tally/Vistaar profile, 55 rows, SEASON=SPRING SUMMER(Feb-26), ITEM=JEANS, 7 unresolved, amber blank-cells '-'). Uploaded DSY.xlsx (archetype A, Generic header-name auto-map, 23 rows, GENDER=MALE derived). Re-run stays on same URL (id=3). Export KDPS CSV downloads real file (3040 bytes) with EXACT 22-column KDPS header order. Review queue: 28 open items loaded (Colour + Taxonomy dimensions with chips/raw-value/occurrence count). Resolved 'MID BLUE' Colour -> BLUE (24 vocab options): API 200, item removed, queue 28->27, DEAL unresolved 7->6 (propagation confirmed). Resolved 'WOMAN TOP DEAL WOMAN TOP' Taxonomy -> T-SHIRT (item:99/sub:10/type:8/gender:6/fit:76 options + pattern input): API 200, item removed, DEAL unresolved 6->5 (propagation confirmed). Warehouse user wh.patna/Wh@123 logs in, sees PT Mapper nav link under Documents, page renders with all files - role-based access correct.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "PtMapper.tsx (383 lines) is under the 700-line file-size threshold but already contains 3 page components (PtMapperPage/PtFileDetailPage/ReviewQueuePage) + ReviewRow; consider splitting per-route file for future maintainability.",
+    "PtFileDetailPage exportCsv() does not show loading/error state; if the blob download fails network-side the user gets no feedback. Minor; non-blocking.",
+    "ReviewQueuePage fetches 9 controlled-vocabulary endpoints sequentially via Promise.all on mount with no loading indicator for vocab; user can race-click resolve before options populate. Mitigated in practice by 3s settle time, but a vocab-loaded flag would be safer.",
+    "Taxonomy resolve has no client-side validation - user can click Resolve with all selects empty (backend may 400). Consider disabling button until at least item is chosen.",
+    "All required data-testid attributes are present and correctly named (pt-upload-dropzone, pt-files-table, review-queue-link, ptfile-rerun, ptfile-export, ptfile-rows-table, ptfile-unresolved-banner, ptfile-ready-banner, review-list, review-item-<id>, review-target-<id>, review-resolve-<id>, review-ignore-<id>, tx-item/sub/type/gender/fit/pattern-<id>). Excellent testability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100%"},
+  "test_credentials": "owner/Owner@123, wh.patna/Wh@123 - both verified",
+  "seed_data_creation": "Uploaded 2 new files (DEAL SS26 2970.xlsx id=2, DSY.xlsx id=3). Resolved 2 review items (Colour 'MID BLUE'->BLUE id=22, Taxonomy 'WOMAN TOP DEAL WOMAN TOP'->T-SHIRT id=24). Queue count: 28 -> 26. Note: this changes the seed state for future test iterations.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase D PT Mapper frontend is production ready. Initial seed state (MUFTI alone, 21 unresolved) has been advanced by this run to 3 files (MUFTI/DEAL/DSY) and 26 open review items - 2 lookups added (Colour:MID BLUE=BLUE and a Taxonomy mapping). To reset to clean state, run the seed script or delete the new lookups. Backend verification per E1's note was via curl and showed full round-trip working."
+}

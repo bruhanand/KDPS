@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "files.apps.FilesConfig",
     "vendors.apps.VendorsConfig",
     "inbound.apps.InboundConfig",
+    "ptmapper.apps.PtmapperConfig",
 ]
 
 MIDDLEWARE = [
