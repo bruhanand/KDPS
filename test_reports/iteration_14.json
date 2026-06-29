@@ -1,0 +1,58 @@
+{
+  "summary": "Frontend-only regression smoke for Phase D (PtFile + Grn reparented onto core.Document with computed stage and gap-free VoucherSeries numbering). All 8 review-request flows verified on the preview URL with zero JS console errors. The computed stage property renders correctly across all four lifecycle stages, FSM-frozen behaviour is enforced in the UI for posted/reversed files, role-aware action visibility (Owner / Warehouse / Accounts) matches the spec, store-cashier scope lock is fail-closed, and a fresh direct GRN was created end-to-end and minted a gap-free voucher (26-27/DEO/GRN/5, immediately after the previously seeded /4).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "No action items. Phase D frontend verification is clean — main agent can proceed to wrap up the remediation."
+  ],
+  "critical_code_review_comments": [
+    "PtFile.stage is a derived @property reading docstatus first, falling back to draft_stage — UI badge text and tone correctly track the computed value across mapping/sent/posted/reversed without any extra frontend change. Good split between persisted draft_stage and computed stage.",
+    "Posted PtFile detail page correctly hides edit/send/post controls — only Reverse, Export, posted banner, and Stock Ledger link are exposed. This proves the role-aware action gating already keys off the computed stage, not a stored field, so Phase D didn't need parallel frontend work.",
+    "GRN doc_number minting via Document FSM post() produces the expected per-series-shard FY/STORE/GRN/N format (verified: 26-27/DEO/GRN/4 -> /5). VoucherSeries gap-free numbering works end-to-end."
+  ],
+  "updated_files": ["/app/test_reports/iteration_14.json"],
+  "success_rate": { "backend": "n/a (not retested per request)", "frontend": "100% (8/8 review-request flows pass, 0 console errors)" },
+  "test_credentials": "owner/Owner@123, wh.patna/Wh@123, accounts1/Acct@123, deo.cashier/Store@123 (from /app/memory/test_credentials.md, exposed via demo chips on /login).",
+  "seed_data_creation": "Created one direct GRN via UI as deo.cashier — vendor 'TEST_PHASED_VENDOR', invoice 'INV-PHASED-001', 2 lines (PHD_STYLE_1 L BLUE PHDBAR-001 qty 3, PHD_STYLE_2 M RED PHDBAR-002 qty 5). Minted doc_number 26-27/DEO/GRN/5 (id 52). This validates the Document FSM post() path in /inbound/grns and is reusable evidence of gap-free numbering.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase D (PtFile/Grn → core.Document FSM with computed PtFile.stage) is verified at the UI layer. Key observations for future regressions: (1) the actual stage_label strings the frontend renders are 'Mapping (Warehouse)' / 'Sent to Patna' / 'Posted to system' / 'Reversed' (not the bare lowercase stage values; backend ptmapper/models.py:_STAGE_LABELS). (2) Seeded PT file IDs at time of run, useful for re-tests without uploading: mapping=81, sent=76, posted=46, reversed=79. (3) GRN doc_number series shard for the DEO store is 'FY/DEO/GRN/N' — next number after this run is /6. (4) Store cashier (deo.cashier) is correctly scope-locked: receive-store-locked is shown, no receive-store-select dropdown, and only DEOstore GRNs appear in the list (35 rows, all DEOstore). (5) Owner-on-posted file exposes only ptfile-reverse + ptfile-posted-banner + ptfile-ledger-link + exports — confirming FSM-frozen UI. (6) Inbound list endpoint is `/inbound/grns` (no trailing slash), as documented in iteration_13.",
+  "evidence": {
+    "pt_mapper_list": { "rows_rendered": 52, "stage_distribution_visible": ["mapping","sent","posted","reversed"], "console_errors": 0 },
+    "pt_file_detail_per_stage": [
+      { "file_id": 81, "stage": "mapping", "badge_text": "Mapping (Warehouse)", "visible_actions": ["ptfile-edit","ptfile-rerun","ptfile-send","ptfile-export","ptfile-export-xlsx","ptfile-rows-table","pt-stage-stepper"] },
+      { "file_id": 76, "stage": "sent",    "badge_text": "Sent to Patna",       "visible_actions": ["ptfile-export","ptfile-export-xlsx","ptfile-recall","ptfile-post","ptfile-sent-banner","ptfile-rows-table","pt-stage-stepper"] },
+      { "file_id": 46, "stage": "posted",  "badge_text": "Posted to system",    "visible_actions": ["ptfile-export","ptfile-export-xlsx","ptfile-reverse","ptfile-posted-banner","ptfile-ledger-link","ptfile-rows-table","pt-stage-stepper"], "fsm_frozen": "ptfile-edit, ptfile-send, ptfile-post are absent — verified" },
+      { "file_id": 79, "stage": "reversed","badge_text": "Reversed",            "visible_actions": ["ptfile-export","ptfile-export-xlsx","ptfile-rows-table","pt-stage-stepper"], "fsm_frozen": "all write actions absent — verified" }
+    ],
+    "role_gating": {
+      "warehouse_on_mapping_81": ["ptfile-edit","ptfile-rerun","ptfile-send","ptfile-export","ptfile-export-xlsx"],
+      "warehouse_on_sent_76":    ["ptfile-export","ptfile-export-xlsx","ptfile-sent-banner"],
+      "accounts_on_mapping_81":  ["ptfile-export","ptfile-export-xlsx"],
+      "accounts_on_sent_76":     ["ptfile-recall","ptfile-post","ptfile-export","ptfile-export-xlsx","ptfile-sent-banner"]
+    },
+    "store_cashier_scope": {
+      "receive_store_locked": true,
+      "receive_store_select_present": false,
+      "locked_store_label": "DEO · Deoghar",
+      "grn_rows_visible": 35,
+      "all_rows_scoped_to_DEO": true
+    },
+    "grn_creation": {
+      "as": "deo.cashier",
+      "mode": "direct",
+      "new_doc_number": "26-27/DEO/GRN/5",
+      "previous_latest": "26-27/DEO/GRN/4",
+      "gap_free_format_valid": true,
+      "top_of_list_matches_new": true,
+      "lines_persisted_table_rendered": true,
+      "total_received": 8
+    }
+  },
+  "rca of the issue": "No defects observed. The Phase D backend reparenting (PtFile/Grn → core.Document with computed stage and VoucherSeries-driven doc_number) is fully covered by existing frontend code paths because (a) the serializers still expose 'stage' and 'stage_label' with the same shape and string values that PtMapper.tsx and Inbound.tsx already consume, and (b) the role-aware action gating in the frontend keys off the computed 'stage' string rather than a persisted enum, so a docstatus-derived stage value flows transparently into the badge/stepper/action gating. No frontend changes were required for Phase D, and none of the data-testids broke."
+}
