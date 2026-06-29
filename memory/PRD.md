@@ -73,6 +73,67 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Tested:** testing_agent iteration_13 → backend 8/8 + frontend login→dashboard 100%, 0 CORS regressions. **GitHub push still pending — use the "Save to Github" feature** (no git remote configured in container).
 
 
+## Implemented — Code-review remediation Phase A + B (30 Jun 2026) ✅
+Acting on the LordCode implementation review (`implementation-review-2026-06-30`). The
+review's critical/high findings were **independently verified** against live code AND the
+locked decisions in `CONTEXT.md` (all confirmed; not false positives). User chose: do
+Phase A (security) + Phase B (verification spine) now, then PAUSE before the money core.
+
+**Phase A — security holes (exploitable now, no money rework):**
+- **CORS:** the broad `*.emergentagent.com` + localhost origin regexes are now gated behind
+  `DEBUG` (`config/settings.py`). In production (`DEBUG=0`) CORS is driven purely by the
+  exact-origin `CORS_ALLOWED_ORIGINS` env allowlist — no credentialed wildcard on the shared
+  preview domain. Preview (DEBUG=1) behaviour unchanged.
+- **Fail-closed reads:** `scope_by_store` applied to all stock-ledger reads
+  (`stockledger/views.py`: list/summary/on-hand). `finledger` vendor+cash reads now gated by a
+  new `IsFinance` DRF permission (payables/ageing/cash are finance-only).
+- **Money/role gates (`ptmapper/views.py`):** PT `post`/`reverse` restricted to Patna/HO roles
+  `{accounts, owner, it_admin}`; `review/resolve` restricted to mapping stewards
+  `{warehouse, data_steward, ho_ops, owner, it_admin}`. Role check runs BEFORE object lookup
+  (forbidden→403 even for missing pk; allowed→404).
+- **Append-only audit:** posted/sent PT can no longer be `DELETE`d (`PtFileDetailView.destroy`
+  guards stage==MAPPING → 409 otherwise).
+- **Booking write-path scope (`inbound/views.py`):** GRN create now scope-checks the booking
+  (`_resolve_booking`, fail-closed by destination store) and resolves the booking line only
+  within that booking — a payload can no longer mutate another store's booking line.
+- **Seed hardening (`seed_foundation.py`):** demo users/sample-booking/credentials gated behind
+  `SEED_DEMO` (default "1"; set "0" in prod); `set_password` now runs **only on user create** —
+  a redeploy no longer reverts an operator-rotated password. `/admin` mount gated behind
+  `DEBUG or ENABLE_DJANGO_ADMIN=1` (`config/urls.py`).
+
+**Phase B — verification spine:**
+- Deleted the bug-cementing assertions: `test_iteration11` no longer asserts "a vendor bill is
+  always raised" (liability is commercial-model dependent — Phase E golden tests will own it);
+  rewrote the two seed-revert tests (`iteration10`, `iteration12`) to assert the NEW correct
+  behaviour (re-seed does NOT overwrite a rotated password) with self-cleaning `finally` restore.
+- New `tests/test_iteration14_security_hardening.py`: finance-gated finledger reads, Patna-gated
+  PT post/reverse, steward-gated review-resolve, store-scoped stock reads, PT delete guard.
+- Fixed an order-dependent flake in `test_foundation::test_me_without_token_returns_401` (used a
+  fresh session so a shared-jar cookie can't authenticate it).
+- Added `.github/workflows/ci.yml` — Postgres service + kernel anti-cheat suites + API
+  regression suites + frontend build (runs on push via "Save to Github"; not executed in-container).
+- **Tested:** full backend suite green — **130 tests** (`tests/` + `core/tests`) pass deterministically;
+  browser smoke: owner login → dashboard → stock ledger OK; Django check clean.
+
+**New env vars (defaults preserve preview; set these for production):**
+`SEED_DEMO=0`, `ENABLE_DJANGO_ADMIN=0` (omit), `CORS_ALLOWED_ORIGINS=https://app.kdps...` (exact),
+`DJANGO_DEBUG=0`.
+
+**PAUSED here for user review before the money core (Phases C–E).**
+
+## Code-review remediation roadmap (Phases C–F) — NOT yet started
+- **C (P0):** Build `core.post_entries(doc, legs)` — balanced-or-fail (Σ=0 paise, one txn, dims
+  snapshotted) + minimal value GL; add `BEFORE TRUNCATE` trigger + `REVOKE TRUNCATE`.
+- **D (P0):** Reparent `GRN`/`PtFile`/`Booking` onto `core.documents.Document` — FSM +
+  immutability + `idempotency_uuid` + `VoucherSeries` numbering, `select_for_update` on post,
+  reversal-as-cancel (drafts stay editable; only submitted/posted freeze).
+- **E (P0):** Rebuild inbound→PT→vendor on `post_entries` — **P RATE** valuation + per-unit
+  `unit_cost_paise` + `CHECK unit_cost ≤ mrp`; **commercial-model liability branching**
+  (Outright/Correction@PT, SOR@Sale, Consignment never@PT); GST carry; strict money conversion
+  (bad cell → blocking review item); per-commercial-model golden tests over real invoices.
+- **F (P1):** `sku` + `cohort(barcode,season)` masters; `MoneyField` on `*_paise`; materialised
+  stock-on-hand + indexes; fix silent `[:2000]`/`MAX_ROWS=8000` truncation.
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /

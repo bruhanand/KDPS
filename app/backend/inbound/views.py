@@ -110,9 +110,13 @@ def _grn_quantities(raw: dict) -> tuple[int, int]:
     return _safe_int(raw.get("received_qty") or raw.get("quantity")), _safe_int(raw.get("damaged_qty"))
 
 
-def _booking_line_from_payload(raw: dict) -> BookingLine | None:
+def _booking_line_from_payload(raw: dict, booking: Any) -> BookingLine | None:
+    """Resolve the referenced booking line — only ever within *this* GRN's booking,
+    so a payload can never link/mutate another booking's line."""
     bl_id = raw.get("booking_line_id") or raw.get("booking_line")
-    return BookingLine.objects.filter(pk=bl_id).first() if bl_id else None
+    if not (bl_id and booking):
+        return None
+    return BookingLine.objects.filter(pk=bl_id, booking=booking).first()
 
 
 def _line_is_variance(raw: dict, booking_line: BookingLine | None, booking: Any) -> bool:
@@ -123,7 +127,7 @@ def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
     qty, damaged_qty = _grn_quantities(raw)
     if qty <= 0 and damaged_qty <= 0:
         return  # empty row (no received & no damaged units) — intentionally skipped
-    bl = _booking_line_from_payload(raw)
+    bl = _booking_line_from_payload(raw, booking)
     GrnLine.objects.create(
         grn=grn,
         booking_line=bl,
@@ -141,6 +145,23 @@ def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
         bl.save(update_fields=["received_qty", "updated_at"])
 
 
+def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
+    """Fetch the optional booking and fail-closed scope-check it (ADR-0003): a
+    store-scoped user may only receive against a booking bound to one of their stores."""
+    booking_id = data.get("booking_id") or data.get("booking")
+    if not booking_id:
+        return None, None
+    booking = Booking.objects.filter(pk=booking_id).first()
+    if booking is None:
+        return None, Response({"detail": "Booking not found."}, status=400)
+    ids = visible_store_ids(user)
+    if ids is not None and booking.destination_store_id not in ids:
+        return None, Response(
+            {"detail": "You may not receive against this booking."}, status=403
+        )
+    return booking, None
+
+
 class GrnListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
@@ -156,10 +177,9 @@ class GrnListCreateView(generics.ListCreateAPIView):
         if err is not None:
             return err
 
-        booking = None
-        booking_id = data.get("booking_id") or data.get("booking")
-        if booking_id:
-            booking = Booking.objects.get(pk=booking_id)
+        booking, err = _resolve_booking(data, request.user)
+        if err is not None:
+            return err
 
         grn = _build_grn(data, store, booking, request.user)
         for raw in data.get("lines", []):

@@ -42,6 +42,20 @@ from vendors.models import Booking
 SINGLE_DIMS = {"color", "size", "brand", "season"}
 KDPS_COLUMN_SET = set(KDPS_COLUMNS)
 
+# Pushing a PT into the system (post) and reversing it write the stock ledger and
+# raise vendor liability — a Patna/HO accounts action, never the warehouse. Resolving
+# review items grows the master lookup tables — a mapping-steward action.
+PATNA_ROLES = {"accounts", "owner", "it_admin"}
+MAPPING_STEWARD_ROLES = {"warehouse", "data_steward", "ho_ops", "owner", "it_admin"}
+
+
+def _role_code(user: Any) -> str:
+    return getattr(getattr(user, "role", None), "code", "")
+
+
+def _forbidden(detail: str) -> Response:
+    return Response({"detail": detail}, status=status.HTTP_403_FORBIDDEN)
+
 
 def _sync_review_items(reviews: list[dict]) -> int:
     """Upsert each engine miss into the review queue; return the open count."""
@@ -133,6 +147,16 @@ class PtFileDetailView(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = PtFileDetailSerializer
     queryset = PtFile.objects.prefetch_related("rows")
+
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        pt = self.get_object()
+        if pt.stage != PtFile.Stage.MAPPING:
+            return Response(
+                {"detail": "Only files still in mapping can be deleted; "
+                           "sent/posted files are immutable (append-only audit)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
 
 
 class PtFileRerunView(APIView):
@@ -239,6 +263,8 @@ class PtFilePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in PATNA_ROLES:
+            return _forbidden("Only Patna HO (accounts/owner) can post a PT into the system.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -263,6 +289,8 @@ class PtFileReverseView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in PATNA_ROLES:
+            return _forbidden("Only Patna HO (accounts/owner) can reverse a posted PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -394,6 +422,8 @@ class ReviewResolveView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+            return _forbidden("Only mapping stewards (warehouse/data steward/HO ops) can resolve review items.")
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)

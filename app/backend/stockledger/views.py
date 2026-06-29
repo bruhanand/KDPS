@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
+from masters.scoping import scope_by_store
 from stockledger.models import StockLedgerEntry
 from stockledger.serializers import StockLedgerEntrySerializer
 
@@ -29,7 +30,11 @@ class StockLedgerListView(generics.ListAPIView):
     pagination_class = StockLedgerPagination
 
     def get_queryset(self) -> Any:
-        qs = StockLedgerEntry.objects.select_related("store", "booking", "pt_file")
+        qs = scope_by_store(
+            StockLedgerEntry.objects.select_related("store", "booking", "pt_file"),
+            self.request.user,
+            "store_id",
+        )
         pt = self.request.query_params.get("pt_file")
         if pt:
             qs = qs.filter(pt_file_id=pt)
@@ -43,7 +48,7 @@ class StockLedgerSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        qs = StockLedgerEntry.objects.all()
+        qs = scope_by_store(StockLedgerEntry.objects.all(), request.user, "store_id")
         agg = qs.aggregate(
             entries=Count("id"),
             net_qty=Sum("qty"),
@@ -82,7 +87,7 @@ class StockOnHandView(APIView):
         group_by = request.query_params.get("group_by", "sku")
         if group_by not in _GROUP_FIELDS:
             group_by = "sku"
-        qs = StockLedgerEntry.objects.all()
+        qs = scope_by_store(StockLedgerEntry.objects.all(), request.user, "store_id")
         if store := request.query_params.get("store"):
             qs = qs.filter(store__code=store)
         if brand := request.query_params.get("brand"):

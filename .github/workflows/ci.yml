@@ -1,0 +1,91 @@
+name: CI
+
+# The verification spine (review §"build sequence" step 2): run the kernel
+# anti-cheat suites + the API regression suites against a REAL PostgreSQL service
+# on every push / PR. The kernel invariants are meaningless on SQLite, so this
+# wires the gate the constitution requires (ADR-0005) instead of it being green
+# only inside the build container.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/backend
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: kdps
+          POSTGRES_PASSWORD: kdps
+          POSTGRES_DB: kdps_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kdps"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://kdps:kdps@localhost:5432/kdps_ci
+      DJANGO_SECRET_KEY: ci-secret-not-for-production
+      DJANGO_DEBUG: "1"
+      DJANGO_ALLOWED_HOSTS: "*"
+      SEED_DEMO: "1"
+      EMERGENT_LLM_KEY: "ci-placeholder"
+      GEMINI_MODEL: "gemini-3.1-pro-preview"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Migrate
+        run: uv run python manage.py migrate --noinput
+
+      - name: Kernel anti-cheat suites (append-only, FSM, idempotency, money, vouchers)
+        run: uv run pytest core/tests -q
+
+      - name: Seed foundation (roles, masters, demo users)
+        run: uv run python manage.py seed_foundation
+
+      - name: Boot ASGI server for API regression suites
+        run: |
+          uv run uvicorn server:app --host 0.0.0.0 --port 8001 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8001/api/health && break
+            sleep 1
+          done
+
+      - name: API regression suites (auth, RBAC, inbound, PT, ledgers, security)
+        env:
+          REACT_APP_BACKEND_URL: http://localhost:8001
+        run: uv run pytest tests -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend
+    env:
+      REACT_APP_BACKEND_URL: http://localhost:8001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+      - name: Type-check & build
+        run: yarn build

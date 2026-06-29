@@ -137,13 +137,21 @@ SPECTACULAR_SETTINGS = {
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.emergentagent\.com$",
-    r"^https://.*\.preview\.emergentagent\.com$",
-    r"^http://localhost:\d+$",
-    r"^http://127\.0\.0\.1:\d+$",
-]
-# Extra explicit origins for non-Emergent deployments (comma-separated env).
+# The broad Emergent-preview + localhost regexes are a credentialed wildcard on a
+# *shared* preview domain (any `<x>.emergentagent.com` could ride the cookie), so
+# they are gated to DEBUG (preview/dev) only. In production (DEBUG=0) CORS is driven
+# purely by the explicit, exact-origin CORS_ALLOWED_ORIGINS allowlist below.
+CORS_ALLOWED_ORIGIN_REGEXES = (
+    [
+        r"^https://.*\.emergentagent\.com$",
+        r"^https://.*\.preview\.emergentagent\.com$",
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
+    if DEBUG
+    else []
+)
+# Exact origins for non-Emergent / production deployments (comma-separated env).
 CORS_ALLOWED_ORIGINS = [
     o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
 ]

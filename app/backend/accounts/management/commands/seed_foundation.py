@@ -8,6 +8,7 @@ have current logins.
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,11 @@ from django.db import transaction
 from accounts.models import NAV_GROUPS, Role, User
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
+
+# Demo logins (documented credentials) must NOT be (re)created on a production
+# deploy. Gate them behind SEED_DEMO (default on, so preview/CI keep working);
+# set SEED_DEMO=0 in production.
+SEED_DEMO = os.environ.get("SEED_DEMO", "1") == "1"
 
 ROLES: list[dict[str, Any]] = [
     {
@@ -102,10 +108,13 @@ class Command(BaseCommand):
         self._seed_brands()
         self._seed_gst_slab()
         vendors = self._seed_vendors()
-        self._seed_users(entity, stores)
-        self._seed_sample_booking(vendors, stores)
-        self._write_credentials()
-        self.stdout.write(self.style.SUCCESS("Foundation seed complete."))
+        if SEED_DEMO:
+            self._seed_users(entity, stores)
+            self._seed_sample_booking(vendors, stores)
+            self._write_credentials()
+            self.stdout.write(self.style.SUCCESS("Foundation seed complete (incl. demo users)."))
+        else:
+            self.stdout.write(self.style.SUCCESS("Foundation seed complete (SEED_DEMO=0: demo users skipped)."))
 
     def _seed_roles(self) -> None:
         for r in ROLES:
@@ -277,7 +286,7 @@ class Command(BaseCommand):
         for username, password, role_code, scope, store_codes, full_name in USERS:
             role = Role.objects.filter(code=role_code).first()
             is_admin = username == "admin"
-            user, _ = User.objects.update_or_create(
+            user, created = User.objects.update_or_create(
                 username=username,
                 defaults={
                     "full_name": full_name,
@@ -289,8 +298,11 @@ class Command(BaseCommand):
                     "is_superuser": is_admin,
                 },
             )
-            user.set_password(password)
-            user.save()
+            # Set the password only when the user is first created — never overwrite
+            # an operator-changed password on a re-seed / redeploy.
+            if created:
+                user.set_password(password)
+                user.save(update_fields=["password"])
             user.stores.set([stores[c] for c in store_codes if c in stores])
 
     def _write_credentials(self) -> None:
