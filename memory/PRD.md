@@ -163,6 +163,17 @@ Labels below are the **code-review** phases (distinct from the older product pha
 `unit_cost_paise` + DB `CHECK unit_cost ≤ mrp`; `MoneyField` on `*_paise`; materialised
 stock-on-hand + indexes; fix silent `[:2000]`/`MAX_ROWS=8000` truncation.
 
+## Phase D frontend verification — DONE (30 Jun 2026) ✅
+- testing_agent iteration_14 → **frontend 100% (8/8 flows, 0 console errors, 0 bugs)**. Closes the
+  last open item: confirmed the PtFile/Grn → `core.Document` reparenting renders correctly on the UI.
+- Verified: computed `PtFile.stage` badge/stepper tracks docstatus across all 4 stages
+  (mapping/sent/posted/reversed with labels Mapping (Warehouse)/Sent to Patna/Posted to system/Reversed);
+  FSM-frozen posted/reversed files hide edit/send/post (only Reverse + Export + ledger link); role-aware
+  action gating (Owner/Warehouse/Accounts) matches spec; store-cashier (deo.cashier) scope-locked
+  (receive-store-locked, only DEO GRNs); fresh direct GRN minted gap-free `26-27/DEO/GRN/5`.
+- No frontend code changes were required — serializers kept the same `stage`/`stage_label` shape the
+  React pages already consume. **Code-review remediation Phases A–E + D reparent are now complete & verified.**
+
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending
   `core.LedgerEntry` — append-only (ORM + `BEFORE UPDATE/DELETE` trigger on `finledger_vendor_entry` /
