@@ -8,6 +8,7 @@ have current logins.
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 from typing import Any
 
@@ -311,6 +312,12 @@ class Command(BaseCommand):
             "`admin` is the Django superuser (also reaches `/admin`).",
             "",
         ]
-        path = Path("/app/memory/test_credentials.md")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("\n".join(lines), encoding="utf-8")
+        # Best-effort convenience dump of the demo logins. The data is already in
+        # the DB, so never let a read-only or absent filesystem (e.g. Render's
+        # build container, where /app does not exist) fail the seed.
+        path = Path(os.environ.get("SEED_CREDENTIALS_PATH", "/app/memory/test_credentials.md"))
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("\n".join(lines), encoding="utf-8")
+        except OSError as exc:
+            self.stdout.write(self.style.WARNING(f"Skipped writing {path}: {exc}"))
