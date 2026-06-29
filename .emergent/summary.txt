@@ -1,59 +1,52 @@
-<analysis>**original_problem_statement**: 
-Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). Specifically, the Branded Booking flow includes:
-1. Vendor/Brand master creation.
-2. AI-assisted Booking generation: Upload brand booking file (PDF/Excel/Image) → AI extracts style/size/qty → User reviews draft → Confirm booking.
-3. Receive Goods (GRN) at Store or Warehouse.
-4. PT file conversion (Brand format → KDPS format) and Patna HO inward reconciliation.
+<analysis>**original_problem_statement**: Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). The Branded Booking flow includes Vendor/Brand master creation, AI-assisted Booking generation (extracts style/size/qty), GRN (Receive Goods) at Store/Warehouse, and PT file conversion (Brand format → KDPS format) with reconciliation.
 
 **User's preferred language**: English (INSTRUCT NEXT AGENT TO RESPOND IN ENGLISH ONLY)
 
-**what currently exists?**: 
-A fully functional Django 5.1 + PostgreSQL 15 backend utilizing a custom  ledger, and a React 18 + Vite frontend with a Warm design system PWA shell. 
-The application includes Phase D & E (PT File Mapper, Warehouse workflow, Stock Ledger), Phase F (Vendor/Cash ledgers), Vendor dues ageing report, User & Roles editor, and an  GRN UI. The frontend API client uses an auto-generated OpenAPI typescript client (). The application UI has been polished for alpha testing (resizable sidebar, configurable dashboard, Coming soon placeholder text).
+**what currently exists?**: A fully functional Django 5.1 + PostgreSQL 15 backend utilizing a custom append-only  ledger, and a React 18 + Vite frontend with a Warm design system PWA shell. The app uses  for strict frontend API client typing. The codebase is now deploy-ready with all appropriate source files correctly tracked in git,  untracked, and  verified in  for fresh-clone bootstrapping.
 
 **Last working item**:
-    - **Last item agent was working**: Running  to check for readiness and applying strict fail-fast environment variable rules (, , ) to both backend and frontend.
-    - **Status**: BLOCKED (Deployment failed due to PostgreSQL requirement)
-    - **Agent Testing Done**: Y
-    - **Which testing method agent to use?**: testing_agent (Iteration 12)
-    - **User Testing Done**: N
+    - Last item agent was working: Repo deploy-readiness. Fixing  to track correct backend/frontend app source files, untracking the  directory from git, adding missing  dependency to , and verifying env-driven variables in .
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
+    - Which testing method agent to use?: testing_agent (Iteration 13)
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1 (P0): Deployment Blocker (PostgreSQL Database Required)
-     - Attempted fixes: Ran deployment agent, which flagged PostgreSQL as a critical blocker since the standard Emergent platform deployment path strictly expects MongoDB. Added strict fail-fast validation for DB URLs to ensure safety.
-     - Next debug checklist: Provide/confirm production PostgreSQL hosting + , and confirm production values for , , and . Do NOT migrate to MongoDB.
+  Issue 1: Deployment Blocker (PostgreSQL Database Required)
+     - Attempted fixes: The Emergent managed deployment path expects MongoDB, but this project strictly requires PostgreSQL. The codebase is fully prepped for external deployment.
+     - Next debug checklist: Provide/confirm production PostgreSQL hosting + , and confirm production values for , , and  to finally execute the deployment.
      - Why fix this issue and what will be achieved with the fix?: Required to deploy the application successfully to a live production environment.
      - Status: BLOCKED
      - Is recurring issue?: N
      - Should Test frontend/backend/both after fix?: Both
-     - Blocked on other issue: Need external PostgreSQL hosting configuration.
+     - Blocked on other issue: External PostgreSQL database provisioning by the user.
 
-**In progress Task List**: 
-None.
+**In progress Task List**:
+  None
 
 **Upcoming and Future Tasks**:
     Upcoming Tasks:
-    - Task 1 (P1): Master Data stewardship UI - Build views to create/edit master data.
-    - Task 2 (P2): Vendor dues ageing export - Add bill-level drill-down/export for Vendor Dues Ageing if Accounts needs it (Suggested enhancement, pending user approval).
+    - Task 1 (P1): Master Data stewardship UI - Build views to create/edit master data (Stores/Brands/Seasons/GSTINs) with stewardship controls.
     
     Future Tasks:
+    - Task 2 (P2): Vendor dues ageing export - Add bill-level drill-down/export for Vendor Dues Ageing if Accounts needs it.
     - Task 3 (P2): POS ingest / selling floor flows.
     - Task 4 (P2): Vendor settlement/payment workflows.
     - Task 5 (P2): External ingress CORS policy alignment (if needed for production proxy headers).
-    - Task 6 (P2): Further Code Quality refactors for , ,  (Flagged as moderately complex during code review).
+    - Task 6 (P2): PT mapper printed-invoice archetypes (D/E/F) — /USPOLO files currently produce 0 rows.
+    - Task 7 (P2): Code Quality refactors for , ,  (Flagged as moderately complex during code review).
 
 **Completed work in this session**
-- Built Vendor-dues ageing report (0–30/31–60/60+) over the vendor ledger (DONE).
-- Built Users & Roles in-app editor (DONE).
-- Replaced hand-rolled  with an OpenAPI-generated TS client using  and  (DONE).
-- Built  GRN UI (DONE).
-- Hardened Authentication: added httpOnly JWT cookies, strict CORS, bcrypt-sha256 password seeding, and  alias (DONE).
-- Executed Alpha UI Polish: Simplified login screen, replaced roadmap with configurable dashboard cards, created a resizable sidebar, and replaced unbuilt pages with Coming soon state (DONE).
-- Code Quality Refactoring: Fixed cyclomatic complexities in , , and . Checked identity vs equality rules (DONE).
-- Set up fail-fast validations for missing environment variables in both Frontend and Backend (DONE).
+- Fixed  bug by removing lines that wrongly ignored  and  (DONE).
+- Staged and committed missing source files for , , , and frontend  (DONE).
+- Untracked  (1539 files) from the git repository (DONE).
+- Added  dependency to  and updated  for fresh environment boots (DONE).
+- Validated  for purely env-driven vars (, , , ) and removed hardcoded CSRF host (DONE).
+- Verified fresh-clone app bootstrapping via  and yarn run v1.22.22
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. (DONE).
 
 **Earlier issues found/mentioned but not fixed**
-   None.
+   None
 
 **Known issue recurrence from previous fork**
   - Issue recurrence in previous fork: None
@@ -69,20 +62,30 @@ None.
 │   │   ├── accounts/, masters/, files/, vendors/, inbound/, aiagents/, ptmapper/
 │   │   ├── stockledger/, finledger/ (Ledger apps)
 │   │   ├── tests/ (Pytest regression suites)
+│   │   ├── pyproject.toml, uv.lock (uv managed dependencies)
 │   │   └── manage.py, server.py (ASGI)
 │   └── frontend/
 │       ├── src/ (React, Vite, Tailwind Warm design)
 │       │   ├── auth/, lib/ (contains api.ts, api-schema.ts), pages/, shell/
 │       │   └── App.tsx, index.css
+│       ├── package.json, yarn.lock
 ├── scripts/ (pg_run.sh, app_init.sh)
 ├── memory/ (PRD.md, test_credentials.md)
+├── test_reports/
 └── docs/ 
 
 **Key Technical Concepts**
-- Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth (Cookie fallback implemented).
-- Frontend: React 18, Vite, TypeScript, Tailwind CSS,  API client.
+- Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth (Cookie fallback implemented). Dependencies strictly managed via . Server runs via .
+- Frontend: React 18, Vite, TypeScript, Tailwind CSS,  API client. Dependencies managed via yarn install v1.22.22
+info No lockfile found.
+[1/4] Resolving packages...
+[2/4] Fetching packages...
+[3/4] Linking dependencies...
+[4/4] Building fresh packages...
+success Saved lockfile.
+Done in 9.68s..
 - Infrastructure: Custom Supervisor setup () to keep PG running persistently inside the Emergent container workspace. 
-- Ledger Constraint: Append-only ledgers enforced at the DB level using  triggers preventing edits/deletions.
+- Ledger Constraint: Append-only ledgers enforced at the DB level using PostgreSQL  triggers preventing edits/deletions.
 - Env logic: Strict Fail-fast setup. Apps will crash immediately if  or  are missing.
 
 **key DB schema**
@@ -93,18 +96,17 @@ None.
   - : {booking, store, vendor, doc_number, received_at}
 
 **changes in tech stack**
-  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL bridged into the environment. Do NOT migrate to MongoDB.
-  - API Client on frontend updated to strictly use  referencing the auto-generated .
+  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL. Do NOT migrate to MongoDB.
+  - Python backend dependencies now utilize  instead of standard pip.
 
 **All files of reference**
-  - ,  (API Client Layer)
-  - ,  (Resizable sidebar)
-  -  (Configurable dashboard)
-  - , ,  (Refactored logic)
-  - ,  (Auth & environment fail-fast rules)
+  -  (Updated to track correct app source and exclude )
+  -  &  (Updated to include )
+  -  (Env-driven configurations)
+  -  (ASGI entrypoint)
 
 **Areas that need refactoring**: 
-  - , ,  (Functions within these files were noted by the user's code-quality report as somewhat complex. Refactor when touching these files).
+  - , ,  (Cyclomatic complexity flagged in earlier code reviews. Prioritize refactoring when updating these modules).
 
 **key api endpoints**
   - , 
@@ -112,40 +114,34 @@ None.
   - , 
 
 **Critical Info for New Agent**
-  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi.
-  - **API Schema generation**: If you alter Django views/serializers, you must regenerate the frontend schema using yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. (or standard yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. sequence).
+  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi. Do NOT attempt to rewrite the app to MongoDB.
+  - **Git Operations**: User is expected to push to remote repository using the platform's Save to Github feature. Do not attempt direct  from the bash terminal.
+  - **Dependencies Setup**: Python backend strictly uses . Frontend strictly uses yarn install v1.22.22
+[1/4] Resolving packages...
+success Already up-to-date.
+Done in 0.06s.. 
+  - **Server Command**: Boot backend with .
   - **Append-only Constraints**: Modifying Ledger entries directly is prevented by DB triggers. Any corrections must be programmed as negative-value append rows.
-  - **Deployment Blocker**: The platform deployment health check failed due to PostgreSQL. Treat  carefully. Do NOT attempt to rewrite the app to MongoDB. Wait for external DB configuration from the user.
 
 **documents and test reports created in this job**
-  - 
-  -  (Auth testing)
-  -  (Refactoring testing)
-  -  (Deployment/Env testing)
-  - 
+  -  (Deploy-readiness regression test)
   - 
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - (User): Request to build Vendor-dues ageing report, Users & Roles in-app editor, replace  with OpenAPI TS client, and build  UI. (Completed)
- - (User): Request to apply Alpha UI polish (change login text, set placeholders to Coming soon, resizable sidebar, configurable dashboard). (Completed)
- - (User): Provided Code Quality Report noting undefined variables, Cyclomatic Complexity in core logic files, and critical Identity vs Equality ( vs ) checks. (Completed)
- - (User): System Reminder: run testing agent after bug fix. (Completed)
- - (User): Call Deployer Agent and Run Health Check to Check for Readiness for Deployment. (Completed - resulted in Blocker)
+ - (User): Request to prep repo for deployment by fixing  (untrack , track app source), verifying fresh clone behavior, verifying  envs, and resolving all uncommitted changes. (Completed)
  - (User): System Reminder: run testing agent after bug fix. (Completed)
 
 **Project Health Check:**
-- Broken: Deployment Pipeline (Blocked by lack of external PostgreSQL/platform DB incompatibility). 
+- Broken: Deployment Pipeline (Blocked by lack of external PostgreSQL instance). 
 - Mocked: None.
 
 **3rd Party Integrations**
-- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key.
+- Gemini 1.5 Flash/Pro / Gemini 3.1 Pro (Text/Image Extraction) — uses Emergent LLM Key.
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 9, 10, 11, 12 thoroughly executed)
+  - Testing agent used after significant changes: YES (Iteration 13 executed)
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: , , 
+  - Test files created: None
   - Known regressions: None
 
 **Credentials to test flow:**
@@ -155,4 +151,4 @@ info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this comm
   - Warehouse (Ranchi):  / 
 
 **What agent forgot to execute**
-- Nothing was overlooked. All user requests up to alpha-readiness and code review remediations were fully completed.</analysis>
+- Nothing was overlooked. The git repository is clean,  is untracked, dependencies are correct, and all  variables map cleanly to environment constraints.</analysis>
