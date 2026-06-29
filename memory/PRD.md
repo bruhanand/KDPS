@@ -163,6 +163,35 @@ Labels below are the **code-review** phases (distinct from the older product pha
 `unit_cost_paise` + DB `CHECK unit_cost ≤ mrp`; `MoneyField` on `*_paise`; materialised
 stock-on-hand + indexes; fix silent `[:2000]`/`MAX_ROWS=8000` truncation.
 
+## Phase F (P0) + Books-Health card + Master stewardship — DONE & TESTED (30 Jun 2026) ✅
+Delivered the user-approved trio (a + b + c). All verified: backend **97 unit + 17 integration pytest pass**,
+testing_agent **iteration_15** (frontend 6/6, backend 7 pass / 1 skip-by-design), curl e2e.
+
+**(a) Phase F — identity & scale (P0):**
+- **MoneyField everywhere:** `*_paise` columns now use `core.money.MoneyField` (refuses float/Decimal at the
+  write boundary) — `vendors.Booking.estimated_value_paise`, `vendors.BookingLine.mrp_paise`,
+  `masters.GstSlab.threshold_paise`, plus the new SKU/cohort/on-hand money columns. (`vendors/0002`, `masters/0002`).
+- **SKU + cohort masters** (`masters.Sku`, `masters.Cohort`): barcode IS the SKU; a cohort = (barcode, season)
+  holding the locked per-unit `unit_cost_paise` with a **DB CHECK `unit_cost ≤ mrp`**. Registered/refreshed inside
+  every PT post (`stockledger.posting._register_identity`). Backfilled from the live ledger in `masters/0002`.
+- **Materialised stock-on-hand** (`stockledger.StockOnHand`, `db_table=stockledger_on_hand`): indexed projection
+  per (store × barcode), maintained inside each post/reverse (`_apply_on_hand`), backfilled in `stockledger/0003`,
+  rebuildable via `manage.py rebuild_stock_on_hand`. `StockOnHandView` now serves all 3 groupings from it.
+- **Truncation no longer silent:** PT reader flags `meta.truncated` + `row_limit` when a file hits the 8000-row cap
+  (banner `ptfile-source-truncated-banner`); on-hand reports `summary.{lines,displayed,truncated}` (banner
+  `onhand-truncated-banner`) — the old silent `[:2000]` drop is gone.
+
+**(b) Books-Health card (P1):** `GET /api/finledger/health` (IsFinance-gated) returns trial balance (Σ GL legs = 0),
+balanced flag, and the equation of state (Σ inventory+SOR vs Σ payable+GRNI+contra). Owner dashboard renders the
+"Equation of state" panel (`trial-balance-panel`) — live: **Books tie · ₹0 · 8 vouchers · 16 legs**.
+
+**(c) Master Data stewardship UI (P1):** create/edit for Stores/Brands/Seasons/GSTINs. New steward-gated CRUD
+(`masters.IsMasterSteward` = owner/it_admin/data_steward; reads open) — ListCreate + Detail views, `/masters/{res}` &
+`/masters/{res}/{id}`. Frontend `MasterPages.tsx` adds New/Edit editors + active toggle per registry (New/Edit hidden
+for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger-referenced masters).
+
+**Phase F (P1) — NOT started (superseded above):**
+
 ## Phase D frontend verification — DONE (30 Jun 2026) ✅
 - testing_agent iteration_14 → **frontend 100% (8/8 flows, 0 console errors, 0 bugs)**. Closes the
   last open item: confirmed the PtFile/Grn → `core.Document` reparenting renders correctly on the UI.
