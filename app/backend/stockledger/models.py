@@ -12,6 +12,7 @@ from __future__ import annotations
 from django.db import models
 
 from core.ledger import LedgerEntry
+from core.money import MoneyField
 
 
 class StockLedgerEntry(LedgerEntry):
@@ -57,3 +58,47 @@ class StockLedgerEntry(LedgerEntry):
 
     def __str__(self) -> str:
         return f"{self.doc_number} · {self.sku_code} × {self.qty}"
+
+
+class StockOnHand(models.Model):
+    """Materialised net stock position per (store × barcode) — a fast, indexed
+    projection of the append-only ledger, maintained INSIDE each post/reverse
+    transaction and fully rebuildable (`manage.py rebuild_stock_on_hand`). It is a
+    cache, never the source of truth: the ledger is. Mutable (no append-only
+    trigger) so it can be updated/rebuilt."""
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="on_hand"
+    )
+    gstin = models.ForeignKey(
+        "masters.Gstin", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="on_hand",
+    )
+    sku_code = models.CharField(max_length=64, db_index=True)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    net_qty = models.IntegerField(default=0)
+    net_value_paise = MoneyField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "stockledger_on_hand"
+        ordering = ["brand", "-net_qty"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["store", "sku_code"], name="uq_on_hand_store_sku"
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["brand"], name="onhand_brand_idx"),
+            models.Index(fields=["season"], name="onhand_season_idx"),
+            models.Index(fields=["net_qty"], name="onhand_net_qty_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.store_id}/{self.sku_code} = {self.net_qty}"

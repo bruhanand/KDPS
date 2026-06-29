@@ -159,7 +159,7 @@ def _read_csv(content: bytes) -> list[tuple[str, list[list]]]:
             continue
     if text is None:
         raise UnsupportedFormat("Could not decode the CSV text.")
-    rows = list(csv.reader(io.StringIO(text)))[:MAX_ROWS]
+    rows = list(csv.reader(io.StringIO(text)))[:MAX_ROWS + 1]
     return [("csv", rows)]
 
 
@@ -554,6 +554,7 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
     """Map a brand file into KDPS rows + review misses. Pure read (no DB writes)."""
     sheets = read_sheets(content, filename, content_type)
     sheet_name, rows = choose_sheet(sheets)
+    truncated = len(rows) > MAX_ROWS
     header_idx = detect_header(rows)
     headers = [norm(c) for c in rows[header_idx]]
     header_set = {h for h in headers if h}
@@ -586,6 +587,7 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
         "meta": {
             "sheet": sheet_name, "header_row": header_idx,
             "headers": [h for h in headers if h], "source_rows": len(records),
+            "truncated": truncated, "row_limit": MAX_ROWS,
         },
         "rows": kdps_rows,
         "reviews": reviews,

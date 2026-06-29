@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.urls import path
 
+from finledger.health import BooksHealthView
 from finledger.views import (
     CashEntriesView,
     CashMovementView,
@@ -26,4 +27,5 @@ urlpatterns = [
     path("cash/summary", CashSummaryView.as_view(), name="cash-summary"),
     path("cash/movement", CashMovementView.as_view(), name="cash-movement"),
     path("cash/entries/<int:pk>/reverse", CashReverseView.as_view(), name="cash-reverse"),
+    path("health", BooksHealthView.as_view(), name="books-health"),
 ]

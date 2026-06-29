@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
 from masters.scoping import scope_by_store
-from stockledger.models import StockLedgerEntry
+from stockledger.models import StockLedgerEntry, StockOnHand
 from stockledger.serializers import StockLedgerEntrySerializer
 
 
@@ -66,74 +66,80 @@ class StockLedgerSummaryView(APIView):
         })
 
 
-# Columns surfaced per grouping for the Stock-on-Hand screen.
-_GROUP_FIELDS = {
-    "sku": ["store__code", "brand", "design", "color", "size", "item", "season", "sku_code"],
-    "brand": ["store__code", "brand"],
-    "store": ["store__code", "store__name"],
-}
-
-
 class StockOnHandView(APIView):
-    """Net stock currently on hand (Σqty > 0) grouped by SKU / brand / store.
+    """Net stock on hand (Σqty > 0) grouped by SKU / brand / store, served from the
+    **materialised** `StockOnHand` projection (maintained inside each post/reverse,
+    rebuildable via `manage.py rebuild_stock_on_hand`).
 
-    Computed live from the append-only ledger: inward (+) minus reversals (−),
-    so a fully-reversed posting simply drops out of the on-hand view.
+    Large result sets are capped to `MAX_LINES` for payload safety, but the true
+    line count and a `truncated` flag are ALWAYS reported — the previous silent
+    `[:2000]` drop is gone.
     """
 
     permission_classes = [IsAuthenticated]
+    MAX_LINES = 2000
 
     def get(self, request: Request) -> Response:
         group_by = request.query_params.get("group_by", "sku")
-        if group_by not in _GROUP_FIELDS:
+        if group_by not in ("sku", "brand", "store"):
             group_by = "sku"
-        qs = scope_by_store(StockLedgerEntry.objects.all(), request.user, "store_id")
+        qs = scope_by_store(
+            StockOnHand.objects.filter(net_qty__gt=0).select_related("store"),
+            request.user,
+            "store_id",
+        )
         if store := request.query_params.get("store"):
             qs = qs.filter(store__code=store)
         if brand := request.query_params.get("brand"):
             qs = qs.filter(brand=brand)
 
-        fields = _GROUP_FIELDS[group_by]
-        grouped = (
-            qs.values(*fields)
-            .annotate(
-                net_qty=Sum("qty"),
-                net_value=Sum("amount"),
-                skus=Count("sku_code", distinct=True),
-            )
-            .filter(net_qty__gt=0)
-            .order_by("brand" if group_by != "store" else "store__code", "-net_qty")[:2000]
-        )
-
-        rows = []
-        total_qty = total_value = 0
-        for g in grouped:
-            net_value = g["net_value"] or 0
-            total_qty += g["net_qty"]
-            total_value += net_value
-            rows.append({
-                "store_code": g.get("store__code", ""),
-                "store_name": g.get("store__name", ""),
-                "brand": g.get("brand", ""),
-                "design": g.get("design", ""),
-                "color": g.get("color", ""),
-                "size": g.get("size", ""),
-                "item": g.get("item", ""),
-                "season": g.get("season", ""),
-                "sku_code": g.get("sku_code", ""),
-                "net_qty": g["net_qty"],
-                "skus": g["skus"],
-                "net_value_paise": net_value,
-                "net_value_rupees": paise_to_rupees_str(net_value),
-            })
-
+        totals = qs.aggregate(units=Sum("net_qty"), value=Sum("net_value_paise"))
+        rows, lines = self._rows(qs, group_by)
         return Response({
             "group_by": group_by,
             "summary": {
-                "units_on_hand": total_qty,
-                "value_paise": total_value,
-                "value_rupees": paise_to_rupees_str(total_value),
-                "lines": len(rows),
+                "units_on_hand": totals["units"] or 0,
+                "value_paise": totals["value"] or 0,
+                "value_rupees": paise_to_rupees_str(totals["value"] or 0),
+                "lines": lines,
+                "displayed": len(rows),
+                "truncated": len(rows) < lines,
             },
             "rows": rows,
         })
+
+    def _rows(self, qs: Any, group_by: str) -> tuple[list[dict], int]:
+        if group_by == "sku":
+            lines = qs.count()
+            page = qs.order_by("brand", "-net_qty")[: self.MAX_LINES]
+            rows = [{
+                "store_code": o.store.code, "store_name": o.store.name,
+                "brand": o.brand, "design": o.design, "color": o.color,
+                "size": o.size, "item": o.item, "season": o.season,
+                "sku_code": o.sku_code, "net_qty": o.net_qty, "skus": 1,
+                "net_value_paise": o.net_value_paise,
+                "net_value_rupees": paise_to_rupees_str(o.net_value_paise),
+            } for o in page]
+            return rows, lines
+
+        fields = ["store__code", "brand"] if group_by == "brand" else ["store__code", "store__name"]
+        grouped = (
+            qs.values(*fields)
+            .annotate(
+                g_qty=Sum("net_qty"),
+                g_value=Sum("net_value_paise"),
+                skus=Count("sku_code", distinct=True),
+            )
+            .filter(g_qty__gt=0)
+            .order_by("brand" if group_by == "brand" else "store__code")
+        )
+        lines = grouped.count()
+        rows = [{
+            "store_code": g.get("store__code", ""), "store_name": g.get("store__name", ""),
+            "brand": g.get("brand", ""), "design": "", "color": "", "size": "",
+            "item": "", "season": "", "sku_code": "",
+            "net_qty": g["g_qty"], "skus": g["skus"],
+            "net_value_paise": g["g_value"] or 0,
+            "net_value_rupees": paise_to_rupees_str(g["g_value"] or 0),
+        } for g in grouped[: self.MAX_LINES]]
+        return rows, lines

@@ -13,6 +13,7 @@ from __future__ import annotations
 from django.db import models
 
 from core.base import TimeStampedModel
+from core.money import MoneyField
 from masters.models import Brand
 
 
@@ -61,7 +62,7 @@ class Booking(TimeStampedModel):
     # commercial model snapshot (defaulted from brand, overridable on the booking)
     ownership = models.CharField(max_length=12, default="")
     return_terms = models.CharField(max_length=12, default="")
-    estimated_value_paise = models.BigIntegerField(null=True, blank=True)
+    estimated_value_paise = MoneyField(null=True, blank=True)
     notes = models.CharField(max_length=400, blank=True, default="")
     source_file = models.ForeignKey(
         "files.StoredFile", null=True, blank=True, on_delete=models.SET_NULL
@@ -99,7 +100,7 @@ class BookingLine(TimeStampedModel):
     size = models.CharField(max_length=24, blank=True, default="")
     description = models.CharField(max_length=200, blank=True, default="")
     booked_qty = models.IntegerField(default=0)
-    mrp_paise = models.BigIntegerField(null=True, blank=True)
+    mrp_paise = MoneyField(null=True, blank=True)
     received_qty = models.IntegerField(default=0)
     inwarded_qty = models.IntegerField(default=0)
 

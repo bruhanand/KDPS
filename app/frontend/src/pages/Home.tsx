@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   Banknote,
+  CheckCircle2,
   ClipboardList,
   GripVertical,
   PackageCheck,
@@ -127,6 +128,61 @@ function NetworkPanel({ s }: { s: Summary | null }) {
           Open season <span className="chip chip-green">{s.open_season}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+interface Health {
+  balanced: boolean;
+  trial_balance_paise: number;
+  assets_paise: number;
+  liabilities_paise: number;
+  leg_count: number;
+  voucher_count: number;
+}
+
+function TrialBalancePanel() {
+  const [h, setH] = useState<Health | null>(null);
+  const [denied, setDenied] = useState(false);
+  useEffect(() => {
+    api.get("/finledger/health").then((r) => setH(r.data)).catch(() => setDenied(true));
+  }, []);
+  if (denied) return null;
+  const balanced = h?.balanced ?? true;
+  return (
+    <div className="card panel" data-testid="trial-balance-panel">
+      <div className="panel-head">
+        <p className="eyebrow">Books health · value ledger</p>
+        <h3 className="h3">Equation of state</h3>
+      </div>
+      <div
+        data-testid="trial-balance-state"
+        style={{
+          display: "flex", gap: 12, alignItems: "center", padding: "12px 14px",
+          borderRadius: 12, marginBottom: 12,
+          background: balanced ? "rgba(31,122,77,0.08)" : "rgba(196,98,63,0.10)",
+          color: balanced ? "#1f7a4d" : "var(--rust)",
+        }}
+      >
+        {balanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <b>{balanced ? "Books tie" : "Out of balance"}</b>
+          <span style={{ fontSize: 13, opacity: 0.85 }}>
+            Trial balance <b className="mono"><Money paise={h?.trial_balance_paise ?? 0} /></b>
+            {" "}· {h?.voucher_count ?? 0} vouchers · {h?.leg_count ?? 0} legs
+          </span>
+        </div>
+      </div>
+      <div className="net-grid">
+        <div className="net-cell">
+          <span className="net-num mono"><Money paise={h?.assets_paise ?? 0} short /></span>
+          <span className="net-label">Inventory + SOR stock</span>
+        </div>
+        <div className="net-cell">
+          <span className="net-num mono"><Money paise={h?.liabilities_paise ?? 0} short /></span>
+          <span className="net-label">Payables + GRNI + contra</span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -368,8 +424,8 @@ export function Home() {
           {renderDashboardCards()}
           <div className="home-cols">
             <div className="home-stack">
+              <TrialBalancePanel />
               <CollectionsBand />
-              <MorningBrief />
             </div>
             <div className="home-stack">
               <NetworkPanel s={summary} />

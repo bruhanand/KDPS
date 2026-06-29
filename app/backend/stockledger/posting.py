@@ -30,8 +30,8 @@ from core.documents import VoucherSeries
 from core.gl import GLAccount, GLEntry
 from core.posting import Leg, PostingRef, cr, dr, post_entries
 from finledger.posting import post_pt_vendor_bill, reverse_pt_vendor_bills
-from masters.models import Brand, Store
-from stockledger.models import StockLedgerEntry
+from masters.models import Brand, Cohort, Sku, Store
+from stockledger.models import StockLedgerEntry, StockOnHand
 
 WAREHOUSE_CODE = "RAN-WH"
 DOC_TYPE = "PT"
@@ -198,6 +198,84 @@ def _reconcile(booking, pt, sign: int) -> int:
     return touched
 
 
+def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
+    """Fold signed stock deltas into the materialised `StockOnHand` projection,
+    inside the caller's posting transaction. Inward adds; a reversal subtracts.
+    Descriptive dimensions are refreshed from the latest real inward row."""
+    by_key: dict[tuple[int, str], dict] = {}
+    for e in entries:
+        agg = by_key.setdefault(
+            (e.store_id, e.sku_code), {"dq": 0, "dv": 0, "any": e, "inward": None}
+        )
+        agg["dq"] += e.qty
+        agg["dv"] += e.amount
+        if e.qty > 0:
+            agg["inward"] = e
+    for (store_id, sku_code), agg in by_key.items():
+        e = agg["inward"] or agg["any"]
+        obj, _ = StockOnHand.objects.get_or_create(
+            store_id=store_id,
+            sku_code=sku_code,
+            defaults={
+                "gstin_id": e.gstin_id, "design": e.design, "color": e.color,
+                "size": e.size, "brand": e.brand, "season": e.season,
+                "item": e.item, "hsn": e.hsn, "net_qty": 0, "net_value_paise": 0,
+            },
+        )
+        obj.net_qty += agg["dq"]
+        obj.net_value_paise += agg["dv"]
+        if agg["inward"] is not None:
+            obj.design, obj.color, obj.size = e.design, e.color, e.size
+            obj.brand, obj.season = e.brand, e.season
+            obj.item, obj.hsn, obj.gstin_id = e.item, e.hsn, e.gstin_id
+        obj.save()
+
+
+def _register_identity(pt, number: str) -> None:
+    """Upsert the SKU master + the (barcode, season) cohort for every valued row,
+    persisting the locked per-unit cost (the queryable identity spine, ADR Phase F).
+    Costs are already P RATE-validated by `_build_inward_entries`; the cohort's DB
+    CHECK (`unit_cost ≤ mrp`) is defence-in-depth."""
+    for row in pt.rows.all():
+        data = row.data
+        qty = _row_qty(data)
+        if qty <= 0:
+            continue
+        barcode = str(data.get("BARCODE") or "")[:64]
+        if not barcode:
+            continue
+        try:
+            unit_paise = _unit_cost_paise(data, row.line_no)
+            mrp = _decimal(data.get("MRP"))
+        except (PtPostingError, InvalidOperation, ValueError, ArithmeticError):
+            continue
+        mrp_paise = _rupees_to_paise(mrp) if (mrp is not None and mrp > 0) else None
+        sku, _ = Sku.objects.update_or_create(
+            barcode=barcode,
+            defaults={
+                "design": str(data.get("DESIGN") or "")[:120],
+                "color": str(data.get("COLOR") or "")[:60],
+                "size": str(data.get("SIZE") or "")[:24],
+                "brand": str(data.get("BRAND") or "")[:120],
+                "item": str(data.get("ITEM") or "")[:120],
+                "hsn": str(data.get("HSN") or "")[:24],
+                "mrp_paise": mrp_paise,
+                "is_active": True,
+            },
+        )
+        if not sku.first_doc_number:
+            sku.first_doc_number = number
+            sku.save(update_fields=["first_doc_number", "updated_at"])
+        Cohort.objects.update_or_create(
+            barcode=barcode,
+            season=str(data.get("SEASON") or "")[:120],
+            defaults={
+                "sku": sku, "unit_cost_paise": unit_paise,
+                "mrp_paise": mrp_paise, "last_doc_number": number,
+            },
+        )
+
+
 @transaction.atomic
 def post_pt_inward(pt, user, booking=None) -> dict:
     """Post a *sent* PT file: mint its inward voucher via the Document FSM, then write
@@ -221,10 +299,12 @@ def post_pt_inward(pt, user, booking=None) -> dict:
 
     entries = _build_inward_entries(pt, store, number, user, booking)
     StockLedgerEntry.objects.bulk_create(entries)
+    _apply_on_hand(entries)
     reconciled = _reconcile(booking, pt, sign=1) if booking is not None else 0
     total_value = sum(e.amount for e in entries)
     _post_value_gl(pt, store, number, booking, total_value, user)
     vendor_bill = post_pt_vendor_bill(pt, booking, total_value, user)
+    _register_identity(pt, number)
     return {
         "doc_number": number,
         "entries": len(entries),
@@ -282,6 +362,7 @@ def reverse_pt_inward(pt, user) -> dict:
         for o in originals
     ]
     StockLedgerEntry.objects.bulk_create(reversals)
+    _apply_on_hand(reversals)
     _reverse_value_gl(pt.doc_number, number, store, user)
     if pt.booking_id:
         _reconcile(pt.booking, pt, sign=-1)
