@@ -36,7 +36,7 @@ from ptmapper.serializers import (
     PtFileListSerializer,
     ReviewItemSerializer,
 )
-from stockledger.posting import post_pt_inward, reverse_pt_inward
+from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
 from vendors.models import Booking
 
 SINGLE_DIMS = {"color", "size", "brand", "season"}
@@ -276,7 +276,10 @@ class PtFilePostView(APIView):
             booking = Booking.objects.filter(pk=booking_id).first()
             if not booking:
                 return Response({"detail": "Booking not found."}, status=400)
-        result = post_pt_inward(pt, request.user, booking=booking)
+        try:
+            result = post_pt_inward(pt, request.user, booking=booking)
+        except PtPostingError as exc:
+            return Response({"detail": str(exc)}, status=422)
         data = PtFileDetailSerializer(pt).data
         data["post_result"] = result
         return Response(data)

@@ -8,6 +8,7 @@ Booking capture is a two-step, human-in-the-loop flow:
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any
 
 from django.db import transaction
@@ -17,6 +18,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.documents import VoucherSeries
 from files.models import StoredFile
 from masters.models import Brand, Season
 from vendors.agents import read_booking_receipt
@@ -35,6 +37,21 @@ def _rupees_to_paise(value: Any) -> int | None:
         return int(round(float(value) * 100))
     except (TypeError, ValueError):
         return None
+
+
+def _financial_year(d: date) -> str:
+    start = d.year if d.month >= 4 else d.year - 1
+    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
+
+
+def _allocate_booking_number(season: Season) -> str:
+    """Gap-free, collision-free booking number per (FY, season) — replaces the racy
+    `count()+1` (which double-allocates under concurrent booking creation)."""
+    fy = _financial_year(date.today())
+    scope = season.code[:16]
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=scope, doc_type="BK")
+    _, number = VoucherSeries.allocate(fy=fy, store_code=scope, doc_type="BK")
+    return number
 
 
 class VendorListCreateView(generics.ListCreateAPIView):
@@ -99,10 +116,8 @@ class BookingListCreateView(generics.ListCreateAPIView):
         season: Season = data["season"]
         vendor: Vendor = data["vendor"]
 
-        seq = Booking.objects.filter(season=season).count() + 1
-        number = f"BK-{season.code}-{seq:04d}"
-
         dest_id = data.get("destination_store")
+        number = _allocate_booking_number(season)
         booking = Booking.objects.create(
             number=number,
             vendor=vendor,

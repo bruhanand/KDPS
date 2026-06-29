@@ -14,6 +14,7 @@ from django.db import transaction
 
 from core.documents import VoucherSeries
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
+from masters.models import Brand
 
 HO_CODE = "HO"
 VENDOR_DOC = "VEND"
@@ -100,8 +101,13 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
 
 
 def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedgerEntry | None:
-    """Auto vendor liability when a PT file is posted against a booking."""
+    """Auto vendor liability when a PT file is posted against a booking — but ONLY
+    for KDPS-owned goods (Outright / Correction). Brand-owned models never raise a
+    payable from the PT: SOR accrues liability on the *Sale*, Consignment never does
+    (CONTEXT.md commercial-model timing). The booking carries the snapshot."""
     if booking is None or total_value_paise <= 0:
+        return None
+    if booking.ownership != Brand.Ownership.OWNED:
         return None
     return post_vendor_bill(
         booking.vendor, total_value_paise,

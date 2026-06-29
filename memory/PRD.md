@@ -121,18 +121,47 @@ Phase A (security) + Phase B (verification spine) now, then PAUSE before the mon
 
 **PAUSED here for user review before the money core (Phases C–E).**
 
-## Code-review remediation roadmap (Phases C–F) — NOT yet started
-- **C (P0):** Build `core.post_entries(doc, legs)` — balanced-or-fail (Σ=0 paise, one txn, dims
-  snapshotted) + minimal value GL; add `BEFORE TRUNCATE` trigger + `REVOKE TRUNCATE`.
-- **D (P0):** Reparent `GRN`/`PtFile`/`Booking` onto `core.documents.Document` — FSM +
-  immutability + `idempotency_uuid` + `VoucherSeries` numbering, `select_for_update` on post,
-  reversal-as-cancel (drafts stay editable; only submitted/posted freeze).
-- **E (P0):** Rebuild inbound→PT→vendor on `post_entries` — **P RATE** valuation + per-unit
-  `unit_cost_paise` + `CHECK unit_cost ≤ mrp`; **commercial-model liability branching**
-  (Outright/Correction@PT, SOR@Sale, Consignment never@PT); GST carry; strict money conversion
-  (bad cell → blocking review item); per-commercial-model golden tests over real invoices.
-- **F (P1):** `sku` + `cohort(barcode,season)` masters; `MoneyField` on `*_paise`; materialised
-  stock-on-hand + indexes; fix silent `[:2000]`/`MAX_ROWS=8000` truncation.
+## Code-review remediation — Phase C + E DONE, D partial (30 Jun 2026) ✅
+Labels below are the **code-review** phases (distinct from the older product phases C/D/E).
+
+**Phase C — kernel posting primitive (DONE, 8 kernel tests):**
+- `core/gl.py` — `GLEntry`, the append-only **value general ledger**: one balanced
+  posting fans into ≥2 legs, signed paise (debit +, credit −), so a voucher sums to 0
+  and the whole ledger's `trial_balance()` = Σ(amount) = 0. `GLAccount` codes
+  (INVENTORY, VENDOR_PAYABLE, GRNI, SOR_STOCK, SOR_CONTRA, INPUT_GST, CASH).
+- `core/posting.py` — `post_entries(doc, legs)`: the **sole** GL writer, balanced-or-fail
+  (Σ=0, ≥2 legs, integer paise), all-or-none in one txn, dims snapshotted; `Leg`/`dr`/`cr`/`PostingRef`.
+- `core/ledger.py` — `truncate_guard_sql`: `BEFORE TRUNCATE` trigger (binds even the
+  superuser) + `REVOKE TRUNCATE`, applied to GL + stock + vendor/cash + probe tables
+  (migrations `core/0005`, `stockledger/0002`, `finledger/0002`). Test-only escape hatch
+  (`kdps.allow_truncate`) set per-connection by `conftest.py` so Django flush still works.
+
+**Phase E — money slice rebuilt on `post_entries` (DONE, 5 per-model golden tests). Fixes C1/C2/C3:**
+- **C2:** stock valued at **P RATE** (locked unit cost), not ex-GST BASIC; `P RATE ≤ MRP`
+  enforced; **strict money** — an unreadable/missing/over-MRP cost raises `PtPostingError`
+  → API **422** listing offending rows (no silent ₹0 valuation).
+- **C1:** vendor liability branches by **commercial model** (booking snapshot): owned
+  (Outright/Correction) → bill at PT; brand-owned (SOR/Consignment) → **never** a payable at PT.
+- **C3:** every PT inward now posts a **balanced value voucher** via `post_entries`
+  (owned → Dr INVENTORY/Cr VENDOR_PAYABLE; brand-owned → off-book Dr SOR_STOCK/Cr SOR_CONTRA;
+  direct → Dr INVENTORY/Cr GRNI). Reversal appends the negated mirror of stock + GL + payable.
+- `stockledger/posting.py` rewritten; `finledger.post_pt_vendor_bill` model-gated.
+
+**Phase D — gap-free numbering DONE; full FSM reparent PENDING (design decision):**
+- DONE: GRN + Booking numbers now via gap-free `VoucherSeries.allocate` (`26-27/<scope>/GRN|BK/<n>`),
+  replacing the racy `count()+1` (review H5). Idempotent under concurrency.
+- PENDING (needs user steer): reparent `PtFile`/`GRN`/`Booking` onto `core.Document` (docstatus FSM,
+  DB immutability, `idempotency_uuid`, `select_for_update` on post, **reversal-as-cancel**).
+  *Design finding:* Booking is a poor fit for freeze-on-submit (it is numbered at birth and mutates
+  through fulfilment — status/received roll-ups), and PT reversal-as-cancel changes the
+  current "reverse → back to 'sent' → re-post" correction workflow + frontend stage display.
+  Recommend: fully reparent **PtFile** + **GRN** (clean fits); keep **Booking** a living master
+  with gap-free numbering (+ optional `idempotency_uuid`). Awaiting confirmation.
+- Tested: full suite **143 pass** (8 GL + 5 Phase-E golden + existing), live MUFTI PT post/reverse OK.
+
+**Phase F (P1) — NOT started:** `sku` + `cohort(barcode,season)` masters; persisted per-unit
+`unit_cost_paise` + DB `CHECK unit_cost ≤ mrp`; `MoneyField` on `*_paise`; materialised
+stock-on-hand + indexes; fix silent `[:2000]`/`MAX_ROWS=8000` truncation.
 
 ## Implemented — Vendor & Cash ledgers (append-only) (28 Jun 2026) ✅
 - **New `finledger` app**: `VendorLedgerEntry` (accounts payable) + `CashLedgerEntry`, both extending

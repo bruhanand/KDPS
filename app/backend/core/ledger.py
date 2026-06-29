@@ -92,6 +92,50 @@ def append_only_reverse_sql(table_name: str) -> str:
     return f"DROP TRIGGER IF EXISTS {table_name}_forbid_update_delete ON {table_name};"
 
 
+#: One shared statement-level trigger function forbidding TRUNCATE on guarded tables.
+TRUNCATE_GUARD_FUNCTION = "kdps_forbid_truncate"
+
+
+def truncate_guard_sql(table_name: str) -> str:
+    """SQL that forbids TRUNCATE on `table_name` — closing the append-only/FSM bypass.
+
+    `BEFORE UPDATE OR DELETE` does NOT fire on TRUNCATE, so without this a TRUNCATE
+    would silently wipe an append-only ledger or a posted document table — bypassing
+    every other guard. Defence-in-depth, mirroring the K1 ledger:
+
+    * the **statement-level trigger is primary** — it binds even the superuser (the
+      role CI/migrations connect as), which a `REVOKE` cannot;
+    * **`REVOKE TRUNCATE`** is defence-in-depth for the production non-owner app role.
+
+    A test-only escape hatch (`kdps.allow_truncate = 'on'`, set per-connection by the
+    pytest `conftest.py` so Django's TransactionTestCase flush can still TRUNCATE) is
+    honoured. Production never sets it, so the guard is fully active there.
+    """
+    trigger_name = f"{table_name}_forbid_truncate"
+    return f"""
+    CREATE OR REPLACE FUNCTION {TRUNCATE_GUARD_FUNCTION}() RETURNS trigger AS $$
+    BEGIN
+        IF current_setting('kdps.allow_truncate', true) = 'on' THEN
+            RETURN NULL;  -- test-harness flush only; never set in production
+        END IF;
+        RAISE EXCEPTION
+            'append-only: TRUNCATE on % is forbidden; post reversing entries', TG_TABLE_NAME;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    CREATE TRIGGER {trigger_name}
+        BEFORE TRUNCATE ON {table_name}
+        FOR EACH STATEMENT EXECUTE FUNCTION {TRUNCATE_GUARD_FUNCTION}();
+
+    REVOKE TRUNCATE ON {table_name} FROM PUBLIC;
+    """
+
+
+def truncate_guard_reverse_sql(table_name: str) -> str:
+    """Reverse of `truncate_guard_sql` for one table (leaves the shared function)."""
+    return f"DROP TRIGGER IF EXISTS {table_name}_forbid_truncate ON {table_name};"
+
+
 class LedgerProbe(LedgerEntry):
     """Kernel-internal concrete ledger that exercises the append-only invariants
     against real Postgres.

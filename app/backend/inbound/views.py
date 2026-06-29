@@ -6,7 +6,7 @@ ever sees / writes their own store's receipts.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date
 from typing import Any
 
 from django.db import transaction
@@ -16,6 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
@@ -24,6 +25,20 @@ from masters.models import Store
 from masters.scoping import scope_by_store, visible_store_ids
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
+
+
+def _financial_year(d: date) -> str:
+    start = d.year if d.month >= 4 else d.year - 1
+    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
+
+
+def _allocate_grn_number(store: Store) -> str:
+    """Gap-free, collision-free GRN number per (FY, store) — replaces the racy
+    `count()+1` (which double-allocates under concurrent receipts)."""
+    fy = _financial_year(date.today())
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=store.code, doc_type="GRN")
+    _, number = VoucherSeries.allocate(fy=fy, store_code=store.code, doc_type="GRN")
+    return number
 
 
 def _safe_int(value: Any) -> int:
@@ -84,8 +99,7 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
 
 
 def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
-    seq = Grn.objects.count() + 1
-    number = f"GRN-{datetime.now(timezone.utc):%y%m%d}-{seq:04d}"
+    number = _allocate_grn_number(store)
     received_at = (
         Grn.ReceivedAt.WAREHOUSE
         if store.store_type == Store.StoreType.WAREHOUSE
