@@ -26,6 +26,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from django.db import transaction
 
+from core.documents import VoucherSeries
 from core.gl import GLAccount, GLEntry
 from core.posting import Leg, PostingRef, cr, dr, post_entries
 from finledger.posting import post_pt_vendor_bill, reverse_pt_vendor_bills
@@ -96,8 +97,6 @@ def _norm(s) -> str:
 
 
 def _allocate_number() -> str:
-    from core.documents import VoucherSeries
-
     fy = financial_year(date.today())
     VoucherSeries.objects.get_or_create(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
     _, number = VoucherSeries.allocate(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
@@ -199,31 +198,33 @@ def _reconcile(booking, pt, sign: int) -> int:
     return touched
 
 
-def _mark_pt_posted(pt, number: str, booking=None) -> None:
-    from django.utils import timezone
-
-    pt.stage = pt.Stage.POSTED
-    pt.posted_at = timezone.now()
-    pt.inward_doc_number = number
-    pt.booking = booking
-    pt.save(update_fields=["stage", "posted_at", "inward_doc_number", "booking", "updated_at"])
-
-
 @transaction.atomic
 def post_pt_inward(pt, user, booking=None) -> dict:
-    """Write the inward stock-ledger + value-GL entries for a sent PT file and lock it.
+    """Post a *sent* PT file: mint its inward voucher via the Document FSM, then write
+    the stock-ledger + value-GL entries and lock the file (SUBMITTED).
 
-    Raises `PtPostingError` (rolling back everything) if any row cannot be valued.
+    Raises `PtPostingError` (rolling back everything, incl. the minted number) if any
+    row cannot be valued.
     """
+    from django.utils import timezone
+
     store = Store.objects.get(code=WAREHOUSE_CODE)
-    number = _allocate_number()
+    # Record booking + posted_at on the draft, then post() to mint the gap-free PT
+    # voucher number and freeze the document (one source of numbering — the kernel).
+    fy = financial_year(date.today())
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
+    pt.booking = booking
+    pt.posted_at = timezone.now()
+    pt.save(update_fields=["booking", "posted_at", "updated_at"])
+    pt.post()
+    number = pt.doc_number
+
     entries = _build_inward_entries(pt, store, number, user, booking)
     StockLedgerEntry.objects.bulk_create(entries)
     reconciled = _reconcile(booking, pt, sign=1) if booking is not None else 0
     total_value = sum(e.amount for e in entries)
     _post_value_gl(pt, store, number, booking, total_value, user)
     vendor_bill = post_pt_vendor_bill(pt, booking, total_value, user)
-    _mark_pt_posted(pt, number, booking)
     return {
         "doc_number": number,
         "entries": len(entries),
@@ -257,14 +258,15 @@ def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, 
 
 @transaction.atomic
 def reverse_pt_inward(pt, user) -> dict:
-    """Append a negative mirror of every live inward row + value voucher; return the
-    file to 'sent'."""
+    """Append the negative mirror of every live inward row + value voucher + vendor
+    bill, then `cancel()` the file (reversal-as-cancel — a posted fact is frozen, the
+    correction is a new append, never an edit)."""
     store = Store.objects.get(code=WAREHOUSE_CODE)
     number = _allocate_number()
     originals = list(
         StockLedgerEntry.objects.filter(
             pt_file=pt,
-            doc_number=pt.inward_doc_number,
+            doc_number=pt.doc_number,
             kind=StockLedgerEntry.Kind.PT_INWARD,
         )
     )
@@ -280,14 +282,9 @@ def reverse_pt_inward(pt, user) -> dict:
         for o in originals
     ]
     StockLedgerEntry.objects.bulk_create(reversals)
-    _reverse_value_gl(pt.inward_doc_number, number, store, user)
+    _reverse_value_gl(pt.doc_number, number, store, user)
     if pt.booking_id:
         _reconcile(pt.booking, pt, sign=-1)
     vendor_reversed = reverse_pt_vendor_bills(pt, user)
-
-    pt.stage = pt.Stage.SENT
-    pt.posted_at = None
-    pt.inward_doc_number = ""
-    pt.booking = None
-    pt.save(update_fields=["stage", "posted_at", "inward_doc_number", "booking", "updated_at"])
+    pt.cancel()  # SUBMITTED → CANCELLED; the file is frozen forever
     return {"doc_number": number, "entries": len(reversals), "vendor_reversed": vendor_reversed}

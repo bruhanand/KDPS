@@ -203,8 +203,8 @@ class PtRowsUpdateView(APIView):
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
-        if pt.stage == PtFile.Stage.POSTED:
-            return Response({"detail": "Posted files are locked."}, status=409)
+        if pt.stage in (PtFile.Stage.POSTED, PtFile.Stage.REVERSED):
+            return Response({"detail": "Posted/reversed files are locked."}, status=409)
         edits = {int(e["id"]): e.get("data", {}) for e in request.data.get("rows", []) if "id" in e}
         rows = list(pt.rows.filter(id__in=edits.keys()))
         for r in rows:
@@ -233,9 +233,9 @@ class PtFileSendView(APIView):
             return Response({"detail": "This file is not in the mapping stage."}, status=409)
         if pt.row_count == 0:
             return Response({"detail": "Nothing to send — the file has no rows."}, status=409)
-        pt.stage = PtFile.Stage.SENT
+        pt.draft_stage = PtFile.DraftStage.SENT
         pt.sent_at = timezone.now()
-        pt.save(update_fields=["stage", "sent_at", "updated_at"])
+        pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -250,9 +250,9 @@ class PtFileRecallView(APIView):
             return Response({"detail": "Not found."}, status=404)
         if pt.stage != PtFile.Stage.SENT:
             return Response({"detail": "Only sent files can be returned."}, status=409)
-        pt.stage = PtFile.Stage.MAPPING
+        pt.draft_stage = PtFile.DraftStage.MAPPING
         pt.sent_at = None
-        pt.save(update_fields=["stage", "sent_at", "updated_at"])
+        pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -286,8 +286,9 @@ class PtFilePostView(APIView):
 
 
 class PtFileReverseView(APIView):
-    """Append-only correction: reverse a posted PT inward (negative mirror rows),
-    returning the file to 'sent' so it can be fixed and re-posted."""
+    """Append-only correction: reverse a posted PT inward (negative mirror stock + GL
+    rows, vendor-bill reversal) and `cancel()` the file (reversal-as-cancel) — the
+    posted fact is frozen forever; you re-upload to re-post."""
 
     permission_classes = [IsAuthenticated]
 
@@ -297,7 +298,7 @@ class PtFileReverseView(APIView):
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
-        if pt.stage != PtFile.Stage.POSTED or not pt.inward_doc_number:
+        if pt.stage != PtFile.Stage.POSTED:
             return Response({"detail": "Only a posted file can be reversed."}, status=409)
         result = reverse_pt_inward(pt, request.user)
         data = PtFileDetailSerializer(pt).data
@@ -418,7 +419,7 @@ class ReviewResolveView(APIView):
         propagates everywhere without clobbering manual edits / sent files."""
         for pt in PtFile.objects.filter(
             status=PtFile.Status.NEEDS_REVIEW,
-            stage=PtFile.Stage.MAPPING,
+            draft_stage=PtFile.DraftStage.MAPPING,
             manually_edited=False,
         ):
             process_file(pt)

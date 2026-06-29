@@ -52,7 +52,9 @@ def _booking(world, brand, *, number):
 
 
 def _pt_with_row(*, prate="100", basic="80", mrp="200", qty="2", design="STYLE1", size="M"):
-    pt = PtFile.objects.create(original_filename="test.xlsx", stage=PtFile.Stage.SENT, row_count=1)
+    pt = PtFile.objects.create(
+        original_filename="test.xlsx", draft_stage=PtFile.DraftStage.SENT, row_count=1
+    )
     PtRow.objects.create(
         pt_file=pt, line_no=1,
         data={

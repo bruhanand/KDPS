@@ -111,7 +111,7 @@ def test_bruteforce_lockout_after_five_failures_still_active():
 
 
 def test_internal_django_cors_allows_explicit_origin_and_credentials():
-    origin = "https://erp-foundation-12.preview.emergentagent.com"
+    origin = "https://ledger-kernel-v2.preview.emergentagent.com"
     r = requests.options(
         "http://localhost:8001/api/auth/login",
         headers={

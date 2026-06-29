@@ -24,6 +24,7 @@ class GrnLineSerializer(serializers.ModelSerializer):
 
 class GrnSerializer(serializers.ModelSerializer):
     lines = GrnLineSerializer(many=True, read_only=True)
+    number = serializers.CharField(source="doc_number", read_only=True, allow_null=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
     booking_number = serializers.CharField(source="booking.number", read_only=True, default=None)

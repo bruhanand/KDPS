@@ -14,7 +14,7 @@ import requests
 
 BASE_URL = os.environ.get(
     "REACT_APP_BACKEND_URL",
-    "https://erp-foundation-12.preview.emergentagent.com",
+    "https://ledger-kernel-v2.preview.emergentagent.com",
 ).rstrip("/")
 
 PT_DIR = "/app/docs/data-from-kdps/Q&A-req-recieved/PT FILE"

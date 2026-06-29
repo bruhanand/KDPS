@@ -32,15 +32,6 @@ def _financial_year(d: date) -> str:
     return f"{start % 100:02d}-{(start + 1) % 100:02d}"
 
 
-def _allocate_grn_number(store: Store) -> str:
-    """Gap-free, collision-free GRN number per (FY, store) — replaces the racy
-    `count()+1` (which double-allocates under concurrent receipts)."""
-    fy = _financial_year(date.today())
-    VoucherSeries.objects.get_or_create(fy=fy, store_code=store.code, doc_type="GRN")
-    _, number = VoucherSeries.allocate(fy=fy, store_code=store.code, doc_type="GRN")
-    return number
-
-
 def _safe_int(value: Any) -> int:
     try:
         return int(value or 0)
@@ -98,15 +89,21 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
     return Store.objects.get(pk=store_id), None
 
 
+def _ensure_grn_series(store: Store) -> None:
+    """Make sure the gap-free GRN voucher series exists for (FY, store) before post()."""
+    VoucherSeries.objects.get_or_create(
+        fy=_financial_year(date.today()), store_code=store.code, doc_type="GRN"
+    )
+
+
 def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
-    number = _allocate_grn_number(store)
+    """Create the GRN as a DRAFT (no number yet); `post()` mints it after lines land."""
     received_at = (
         Grn.ReceivedAt.WAREHOUSE
         if store.store_type == Store.StoreType.WAREHOUSE
         else Grn.ReceivedAt.STORE
     )
     return Grn.objects.create(
-        number=number,
         booking=booking,
         vendor=booking.vendor if booking else None,
         vendor_name_raw=data.get("vendor_name", "") if not booking else "",
@@ -198,6 +195,8 @@ class GrnListCreateView(generics.ListCreateAPIView):
         grn = _build_grn(data, store, booking, request.user)
         for raw in data.get("lines", []):
             _add_grn_line(grn, raw, booking)
+        _ensure_grn_series(store)
+        grn.post()  # mint the gap-free GRN number + freeze (SUBMITTED)
         if booking:
             booking.recompute_status()
         return Response(GrnSerializer(grn).data, status=status.HTTP_201_CREATED)

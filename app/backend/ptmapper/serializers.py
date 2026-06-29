@@ -24,7 +24,9 @@ class ReviewItemSerializer(serializers.ModelSerializer):
 
 class PtFileListSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
-    stage_label = serializers.CharField(source="get_stage_display", read_only=True)
+    stage = serializers.ReadOnlyField()
+    stage_label = serializers.ReadOnlyField()
+    inward_doc_number = serializers.SerializerMethodField()
     booking_number = serializers.CharField(source="booking.number", read_only=True, default="")
 
     class Meta:
@@ -32,10 +34,13 @@ class PtFileListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "original_filename", "brand_guess", "profile_code", "profile_name",
             "archetype", "status", "status_label", "stage", "stage_label",
-            "manually_edited", "sent_at", "posted_at", "inward_doc_number",
+            "manually_edited", "sent_at", "posted_at", "doc_number", "inward_doc_number",
             "booking", "booking_number", "row_count", "blank_cell_count",
             "unresolved_count", "error", "created_at",
         ]
+
+    def get_inward_doc_number(self, obj: PtFile) -> str:
+        return obj.doc_number or ""
 
 
 class PtFileDetailSerializer(PtFileListSerializer):
