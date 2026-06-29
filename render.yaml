@@ -49,10 +49,11 @@ services:
           name: kdps-db
           property: connectionString
       - key: DJANGO_ALLOWED_HOSTS
-        fromService:
-          type: web
-          name: kdps-erp-api
-          property: host        # this service's own onrender.com host
+        # NOTE: `fromService property: host` resolves to the bare service slug
+        # ("kdps-erp-api"), NOT the public domain, so Django rejected every
+        # request as DisallowedHost (HTTP 400). Use the literal host plus a
+        # `.onrender.com` wildcard so any onrender.com subdomain is accepted.
+        value: kdps-erp-api.onrender.com,.onrender.com
       - key: CORS_ALLOWED_ORIGINS
         value: https://kdps-erp-web.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
