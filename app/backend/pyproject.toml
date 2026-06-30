@@ -20,7 +20,23 @@ dependencies = [
     "uvicorn[standard]>=0.25",
     "gunicorn>=26.0.0",
     "whitenoise>=6.12.0",
+    # AI document-reader (booking/invoice extraction) — the LLM gateway client.
+    # Sourced from a private index/CDN (see [tool.uv] below), not PyPI; litellm is
+    # a pinned wheel the gateway requires as a direct URL dependency.
+    "litellm @ https://customer-assets.emergentagent.com/internal-asset/library/litellm-1.80.0-py3-none-any.whl",
+    "emergentintegrations",
 ]
+
+# The document-reader gateway client lives on a private package index, not PyPI.
+# `explicit = true` confines that index to emergentintegrations alone (mapped via
+# [tool.uv.sources]); every other package still resolves from the default PyPI.
+[[tool.uv.index]]
+name = "emergent"
+url = "https://d33sy5i8bnduwe.cloudfront.net/simple/"
+explicit = true
+
+[tool.uv.sources]
+emergentintegrations = { index = "emergent" }
 
 [dependency-groups]
 dev = [

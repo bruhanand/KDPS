@@ -12,6 +12,7 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 import re
 import tempfile
@@ -22,6 +23,8 @@ load_dotenv()
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+
+logger = logging.getLogger(__name__)
 
 _EXCEL_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -106,6 +109,8 @@ def extract(content: bytes, content_type: str, system: str, prompt: str) -> dict
     try:
         raw = asyncio.run(_ask(system, prompt, path, mime))
     except Exception as exc:  # noqa: BLE001 - never surface provider/gateway internals to the UI
+        # Log the real cause to the server only; the UI gets the generic message.
+        logger.exception("document reader failed")
         raise RuntimeError("The document reader is temporarily unavailable.") from exc
     finally:
         try:
