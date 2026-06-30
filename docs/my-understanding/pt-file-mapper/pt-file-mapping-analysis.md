@@ -1,3 +1,11 @@
+> **Superseded (1 Jul 2026) → see [`pt-mapper-engine-build.html`](pt-mapper-engine-build.html).**
+> This analysis was sound on the *target format* and the *archetype* idea, but it described the
+> mapper as software-to-build. The engine was in fact already built (Django app `ptmapper`) and
+> was simply **under-fed** (sparse lookup tables) and **missing profiles** for archetypes D/E/F.
+> The HTML doc has the corrected diagnosis (an audit harness quantified each field), the fix that
+> was shipped (size/colour normalisers, 274 colour aliases, 125 taxonomy rules, profiles D/E/F,
+> layered resolver), and measured before/after fill rates. Read that for current state.
+
 # PT File Mapper — Brand → KDPS Format Mapping
 
 **What this is.** A build specification for the software that converts each brand's "PT file" (the item/price file the brand sends with a consignment) into KDPS's single in-house PT format. **No AI, no agents** — this is deterministic, table-driven column mapping with a human review queue for anything the tables don't yet cover.

@@ -178,6 +178,10 @@ class PtRow(TimeStampedModel):
     line_no = models.IntegerField(default=0)
     data = models.JSONField(default=dict)  # {SEASON:.., BRAND:.., ...}
     blanks = models.JSONField(default=list)  # KDPS field names left unresolved
+    # {field: source} — how each derived cell was filled (direct/alias/rule/inferred/
+    # derived/manual). Lets the UI flag low-confidence cells so a wrong auto-mapping is
+    # visible to a steward instead of silent. See engine.LOW_CONFIDENCE_SOURCES.
+    provenance = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["line_no"]

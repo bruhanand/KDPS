@@ -8,7 +8,7 @@ from ptmapper.models import PtFile, PtRow, ReviewItem
 class PtRowSerializer(serializers.ModelSerializer):
     class Meta:
         model = PtRow
-        fields = ["id", "line_no", "data", "blanks"]
+        fields = ["id", "line_no", "data", "blanks", "provenance"]
 
 
 class ReviewItemSerializer(serializers.ModelSerializer):

@@ -30,6 +30,12 @@ from ptmapper.profiles import (
 
 MAX_ROWS = 8000
 
+# Provenance of a derived cell. 'direct' (normalised value IS a Master value) and
+# 'derived' (deterministic, e.g. season-from-date) are trustworthy; the rest encode a
+# judgement (an alias/seed mapping, a keyword rule, or a gender inferred from text) and
+# are worth a steward's glance — that is what the UI should surface.
+LOW_CONFIDENCE_SOURCES = {"alias", "rule", "inferred"}
+
 
 @dataclass(frozen=True)
 class BaseMappedFields:
@@ -138,6 +144,163 @@ def parse_date(v: Any) -> date | None:
 def season_label(d: date) -> str:
     prefix = "SPRING SUMMER" if d.month <= 6 else "AUTUMN WINTER"
     return f"{prefix}({d.strftime('%b')}-{d.strftime('%y')})"
+
+
+# --------------------------------------------------------------------------- normalisers
+# Mechanical value normalisers: turn a brand's raw string into the KDPS canonical
+# form *deterministically* so it lands directly on a Master-Sheet value. They do NOT
+# encode business judgement (shade→bucket, category→item) — that lives in the DB
+# lookup tables (grown by the review queue). Pure functions → unit-tested without a DB.
+
+# Alpha size variants → KDPS master size. Master has XS/S/M/L/XL/XXL/3XL/4XL/5XL/6XL
+# and "FREE SIZE" (no "2XL"/"XXXL"), so collapse those here.
+_ALPHA_SIZE_ALIASES = {
+    "2XL": "XXL",
+    "XXXL": "3XL",
+    "XXXXL": "4XL",
+    "XXXXXL": "5XL",
+    "XXXXXXL": "6XL",
+    "FS": "FREE SIZE",
+    "F": "FREE SIZE",
+    "FREE": "FREE SIZE",
+    "FREESIZE": "FREE SIZE",
+    "ONESIZE": "FREE SIZE",
+    "OS": "FREE SIZE",
+    "1MTR": "FREE SIZE",
+    "1MTR.": "FREE SIZE",
+}
+_AGE_Y_RE = re.compile(r"^(\d+)\s*-\s*(\d+)\s*(?:Y|YR|YRS|YEAR|YEARS)\.?$")
+_AGE_M_RE = re.compile(r"^(\d+)\s*-\s*(\d+)\s*(?:M|MO|MTH|MTHS|MONTH|MONTHS)\.?$")
+_PAREN_RE = re.compile(r"\(([^)]+)\)")
+_ALPHA_SIZE_RE = re.compile(r"\d*X*[SML]")  # S, M, L, XS, XL, XXL, 3XL, ...
+
+
+def _canon_alpha_size(s: str) -> str:
+    u = re.sub(r"\s+", " ", s.strip().upper())
+    return _ALPHA_SIZE_ALIASES.get(u.replace(" ", ""), u)
+
+
+def _is_alpha_size(s: str) -> bool:
+    return bool(_ALPHA_SIZE_RE.fullmatch(s.replace(" ", "")))
+
+
+def _size_once(s: str) -> str:
+    """One normalisation pass over an already upper/cleaned size string."""
+    # "100 CMS" / "96 CMS." → drop the (possibly repeated) plural CMS suffix to the bare
+    # number (a bare "96 CM" stays, since the Master keeps "96 CM" distinct from "96").
+    s = re.sub(r"(?:\s*CMS\.?)+\s*$", "", s)
+    if not s:
+        return ""
+    if s.replace(" ", "") in _ALPHA_SIZE_ALIASES:  # FS, 2XL, FREE, 1 MTR. ...
+        return _ALPHA_SIZE_ALIASES[s.replace(" ", "")]
+    m = _PAREN_RE.search(s)  # a measurement + an alpha size, either side in the parens
+    if m:
+        base = _canon_alpha_size(s[: m.start()])  # "XL (105 CMS)" → base "XL"
+        inner = _canon_alpha_size(m.group(1))  # "1.14M(2XL)" → inner "XXL"
+        if _is_alpha_size(base):
+            return base
+        if _is_alpha_size(inner):
+            return inner
+        return base or inner  # neither side alpha → reduced further on the next pass
+    if "/" in s:  # "36/XS" = the SAME size in two notations → take the alpha (XS)
+        parts = [p.strip() for p in s.split("/") if p.strip()]
+        alpha = [p for p in parts if re.search(r"[A-Za-z]", p)]
+        numeric = [p for p in parts if re.fullmatch(r"\d+", p)]
+        if len(alpha) == 1 and numeric:  # num/alpha equivalence ("44/XXL" → "XXL")
+            return _canon_alpha_size(alpha[0])
+        return s  # ambiguous ("S/M" = two sizes, "36/38") → unchanged → review queue
+    m = _AGE_Y_RE.match(s)  # "7-8Y" / "8-9 YEARS" → "7-8 Y"
+    if m:
+        return f"{int(m.group(1))}-{int(m.group(2))} Y"
+    m = _AGE_M_RE.match(s)  # "0-6M" / "12-18 MONTHS" → "0-6 M"
+    if m:
+        return f"{int(m.group(1))}-{int(m.group(2))} M"
+    return _canon_alpha_size(s)
+
+
+def normalize_size(raw: Any) -> str:
+    """Brand size string → KDPS master size (best effort; unresolved stays for review).
+
+    Handles float artifacts ('44.0'→'44'), free-size words, metric-with-alpha
+    ('1.14M(2XL)'→'XXL', '96CM(M)'→'M'), slash duals ('36/XS'→'XS'), and age
+    bands ('7-8Y'/'8-9 YEARS'→'7-8 Y'). Plain numbers/bra sizes pass through.
+
+    Idempotent: a paren/slash can expose a further-reducible token (e.g. '(105 CMS)'),
+    so passes are repeated to a fixed point — f(f(x)) == f(x), so re-running the engine
+    never drifts a value.
+    """
+    s = clean_code(raw).upper().strip()
+    for _ in range(4):
+        nxt = _size_once(s)
+        if nxt == s:
+            return nxt
+        s = nxt
+    return s
+
+
+_COLOR_LEAD_CODE = re.compile(r"^\s*\d+\s*[-_]\s*")  # "88-BEIGE", "16 - BLUE"
+_COLOR_TRAIL_NUM = re.compile(r"\s*\d+\s*(?:/\s*\d+)?\s*$")  # "BLACK73", "WHITE74/1"
+_COLOR_TRAIL_TOK = re.compile(r"\s+(?:DN|DBY|DB|MEL|MELANGE)\s*$")  # denim/melange wash codes
+
+
+def normalize_color(raw: Any) -> str:
+    """Strip a brand colour string down to its shade word (mechanical only):
+    leading numeric codes ('88-BEIGE'→'BEIGE'), trailing wash/lot codes
+    ('BLACK73/1'→'BLACK', 'BLUE DN89'→'BLUE'). The shade→23-bucket judgement
+    ('MID BLUE'→'BLUE') lives in the colour lookup table, not here.
+    """
+    s0 = re.sub(r"\s+", " ", raw_str(raw).upper()).strip()
+    if not s0:
+        return ""
+    # strip leading codes + trailing lot numbers / wash codes to a fixed point, so the
+    # result is idempotent (e.g. "L BLU DN88" → "L BLU", "BLACK73/1" → "BLACK").
+    s = s0
+    prev = None
+    while prev != s:
+        prev = s
+        s = _COLOR_LEAD_CODE.sub("", s)
+        s = _COLOR_TRAIL_NUM.sub("", s)
+        s = _COLOR_TRAIL_TOK.sub("", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    # An all-code input ("501", "123-") must NOT vanish to blank — keep it reviewable
+    # (a blank colour records no miss, so the value would be silently dropped).
+    return s or s0
+
+
+_GENDER_KEYWORDS = (
+    # (keyword, KDPS gender) — order matters: kids/female checked before adult/male
+    (" GIRLS ", "KIDS FEMALE"),
+    (" GIRL ", "KIDS FEMALE"),
+    (" BOYS ", "KIDS MALE"),
+    (" BOY ", "KIDS MALE"),
+    (" INFANT ", "UNISEX"),
+    (" WOMENS ", "FEMALE"),
+    (" WOMEN ", "FEMALE"),
+    (" WOMAN ", "FEMALE"),
+    (" LADIES ", "FEMALE"),
+    (" LADIE ", "FEMALE"),
+    (" FEMALE ", "FEMALE"),
+    (" MENS ", "MALE"),
+    (" MEN ", "MALE"),
+    (" MAN ", "MALE"),
+    (" GENTS ", "MALE"),
+    (" MALE ", "MALE"),
+    (" KIDS ", "UNISEX"),
+    (" KID ", "UNISEX"),
+    (" JUNIOR ", "UNISEX"),
+    (" UNISEX ", "UNISEX"),
+)
+
+
+def gender_from_text(text: str) -> str:
+    """Infer KDPS gender from words in a description (fallback to a gender column).
+    Separators are flattened so 'SOCKS-MENS' and 'Senior Girls Top' both match.
+    """
+    flat = " " + re.sub(r"[^A-Z0-9]+", " ", norm(text)).strip() + " "
+    for kw, g in _GENDER_KEYWORDS:
+        if kw in flat:
+            return g
+    return ""
 
 
 # ----------------------------------------------------------------------------- reading
@@ -251,7 +414,7 @@ def score_header(row: list) -> float:
 
 def detect_header(rows: list[list]) -> int:
     best_i, best = 0, -1.0
-    for i in range(min(16, len(rows))):
+    for i in range(min(25, len(rows))):  # printed-invoice item tables can start deep
         sc = score_header(rows[i])
         if sc > best:
             best, best_i = sc, i
@@ -294,7 +457,13 @@ def identify_profile(filename: str, header_set: set[str], sheet_name: str) -> di
     up = (filename or "").upper()
     for kw, code in FILENAME_HINTS.items():
         if kw in up:
-            return profile_by_code(code)
+            p = profile_by_code(code)
+            need = p.get("match", {}).get("header_has")
+            # Use the filename hint only if the file's columns actually fit that profile;
+            # otherwise a simple sheet named like a wide-format brand would be forced into
+            # the wrong profile and drop every row. Fall through to fingerprinting instead.
+            if not need or all(h in header_set for h in need):
+                return p
     for p in PROFILES:
         m = p["match"]
         if not m:
@@ -335,8 +504,12 @@ class Resolver:
 
     def __init__(self) -> None:
         self.controlled: dict[str, set[str]] = {}
+        # normalised key → exact master value, so a normaliser whose output already
+        # IS a master value resolves directly (no lookup row needed).
+        self.controlled_exact: dict[str, dict[str, str]] = {}
         for cv in ControlledValue.objects.all():
             self.controlled.setdefault(cv.dimension, set()).add(cv.value)
+            self.controlled_exact.setdefault(cv.dimension, {})[norm(cv.value)] = cv.value
         self.lookups: dict[str, dict[str, str]] = {}
         for lk in Lookup.objects.all():
             self.lookups.setdefault(lk.dimension, {})[lk.source_key] = lk.target_value
@@ -360,30 +533,46 @@ class Resolver:
             if sample and sample not in rec["samples"]:
                 rec["samples"].append(sample[:120])
 
-    def _single(self, dimension: str, raw_value: str, ctx: dict | None = None) -> str | None:
-        key = norm(raw_value)
+    def _resolve(self, dimension: str, candidate: Any, ctx: dict | None = None) -> tuple:
+        """Layered resolve → ``(value, source)``. source is 'direct' (the normalised
+        candidate IS a Master value — high confidence), 'alias' (a lookup-table/seed
+        mapping — review-able judgement), or '' (a miss, recorded for the queue under
+        the normalised candidate so a human resolution re-maps the file on re-run)."""
+        key = norm(candidate)
         if not key:
-            return None
+            return None, ""
+        exact = self.controlled_exact.get(dimension, {}).get(key)
+        if exact:
+            return exact, "direct"
         hit = self.lookups.get(dimension, {}).get(key)
         if hit:
-            return hit
-        self._miss(dimension, raw_value, ctx)
-        return None
+            return hit, "alias"
+        self._miss(dimension, str(candidate), ctx)
+        return None, ""
 
-    def brand(self, raw_value: str, ctx=None):
-        return self._single("brand", raw_value, ctx)
+    def brand(self, raw_value: str, ctx=None) -> tuple:
+        return self._resolve("brand", raw_value, ctx)
 
-    def color(self, raw_value: str, ctx=None):
-        return self._single("color", raw_value, ctx)
+    def color(self, raw_value: str, ctx=None) -> tuple:
+        return self._resolve("color", normalize_color(raw_value), ctx)
 
-    def size(self, raw_value: Any, ctx=None):
-        return self._single("size", clean_code(raw_value), ctx)
+    def size(self, raw_value: Any, ctx=None) -> tuple:
+        return self._resolve("size", normalize_size(raw_value), ctx)
 
-    def gender(self, raw_value: str):
+    def fit(self, raw_value: str, ctx=None) -> tuple:
+        return self._resolve("fit", raw_value, ctx)
+
+    def gender(self, raw_value: str) -> tuple:
         key = norm(raw_value)
         if not key:
-            return ""
-        return self.lookups.get("gender", {}).get(key, "")
+            return "", ""
+        exact = self.controlled_exact.get("gender", {}).get(key)
+        if exact:  # a real Master gender ("MALE") is high-confidence, not an alias
+            return exact, "direct"
+        hit = self.lookups.get("gender", {}).get(key)
+        if hit:  # an alias ("MEN"→MALE, "GIRLS"→KIDS FEMALE)
+            return hit, "alias"
+        return "", ""
 
     def season_from_date(self, d: date):
         label = season_label(d)
@@ -392,19 +581,29 @@ class Resolver:
         return None
 
     def season_from_code(self, code: str, ctx=None):
+        """Resolve an explicit brand season code via the lookup table only.
+        Returns None (without recording a miss) when unknown — the caller decides
+        whether to fall back to the invoice date before logging a single miss."""
         key = norm(code)
         if not key:
             return None
-        hit = self.lookups.get("season", {}).get(key)
-        if hit:
-            return hit
-        self._miss("season", code, ctx)
-        return None
+        return self.lookups.get("season", {}).get(key)
 
     def taxonomy(self, desc: str, ctx=None) -> dict:
-        up = " " + norm(desc) + " "
+        # Whole-word/phrase match for every pattern ("PANT" hits "TRACK PANT" but never
+        # "PANTIE"/"LAPTOP"). A glued substring match is allowed ONLY inside an SAP
+        # "finished-goods" token (Madura packs the item into 'FGTROUSER'/'FGKJEANS'); this
+        # recovers those without the plain-English false positives a global substring match
+        # caused (e.g. 'FLOWER' contains 'LOWER', 'ADDRESS' contains 'DRESS').
+        spaced = re.sub(r"[^A-Z0-9]+", " ", norm(desc)).strip()
+        flat = " " + spaced + " "
+        fg_tokens = [t for t in spaced.split() if t.startswith("FG")]
         for rule in self.rules:
-            if norm(rule.pattern) in up:
+            p = re.sub(r"[^A-Z0-9]+", " ", norm(rule.pattern)).strip()
+            if not p:
+                continue
+            glued_ok = " " not in p and len(p) >= 5 and any(p in t for t in fg_tokens)
+            if f" {p} " in flat or glued_ok:
                 return {
                     "gender": rule.gender,
                     "sub_category": rule.sub_category,
@@ -456,7 +655,7 @@ def _extract_base_fields(
         qty=num(g("QTY")),
         mrp=money(g("MRP")),
         desc=_build_desc(rec, profile),
-        raw_brand=raw_str(g("BRAND_SRC")) or brand_default,
+        raw_brand=raw_str(g("BRAND_SRC")) or profile.get("brand_const", "") or brand_default,
     )
 
 
@@ -480,28 +679,65 @@ def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields
     return PriceFields(prate=prate, basic=basic, input_tax=input_tax)
 
 
-def _map_season(resolver: Resolver, g, ctx: dict) -> str | None:
-    """SEASON from the explicit season code first — a season is a NAME, never a date.
-    Derive it from the invoice date only as a fallback when no season code is present
-    (so a date can never override an explicit, if-unresolved-then-reviewed code)."""
-    season = resolver.season_from_code(raw_str(g("SEASON_SRC")), ctx)
-    if not season:
-        d = parse_date(g("DATE_SRC"))
-        season = resolver.season_from_date(d) if d else None
-    return season
+def _map_season(resolver: Resolver, g, ctx: dict) -> tuple:
+    """SEASON → ``(value, source)``. The explicit season code wins ('alias') — a season
+    is a NAME, never a date; the invoice date is the fallback ('derived'). A single miss
+    is recorded only when *both* a code and a date fail (an unknown code alone shouldn't
+    clutter the queue when the date resolves it)."""
+    code = raw_str(g("SEASON_SRC"))
+    season = resolver.season_from_code(code)
+    if season:
+        return season, "alias"
+    d = parse_date(g("DATE_SRC"))
+    if d:
+        season = resolver.season_from_date(d)
+        if season:
+            return season, "derived"
+    subject = code or (d.isoformat() if d else "")
+    if subject:
+        resolver._miss("season", subject, ctx)
+    return None, ""
 
 
-def _map_taxonomy(resolver: Resolver, desc: str, g, ctx: dict) -> dict:
-    """The 5-axis merchandising grid (+ ITEM-suggested sub/type) for one row."""
+def _map_taxonomy(resolver: Resolver, desc: str, g, ctx: dict, prov: dict) -> dict:
+    """The 5-axis merchandising grid (+ ITEM-suggested sub/type) for one row, recording
+    each axis's provenance in ``prov``.
+
+    GENDER: a gender column wins ('direct'/'alias'), then a gender word in the
+    description ('inferred'), then a rule's default ('rule'). FIT: an explicit fit
+    column ('direct'/'alias') beats a rule's fit ('rule'). ITEM / SUB CATEGORY / TYPE
+    come from the matched rule + ITEM→helper ('rule').
+    """
     tax = resolver.taxonomy(desc, ctx)
-    gender = resolver.gender(raw_str(g("GENDER_SRC"))) or tax.get("gender", "")
-    item, fit = tax.get("item", ""), tax.get("fit", "")
+    gender, g_src = resolver.gender(raw_str(g("GENDER_SRC")))
+    if not gender:
+        from_text = gender_from_text(desc)
+        if from_text:
+            gender, g_src = from_text, "inferred"
+        elif tax.get("gender"):
+            gender, g_src = tax["gender"], "rule"
+    prov["GENDER"] = g_src if gender else ""
+
+    item = tax.get("item", "")
+    prov["ITEM"] = "rule" if item else ""
+
+    fit, fit_src = resolver.fit(raw_str(g("FIT_SRC")))
+    if not fit and tax.get("fit"):
+        fit, fit_src = tax["fit"], "rule"
+    prov["FIT"] = fit_src if fit else ""
+
     sub, typ = tax.get("sub_category", ""), tax.get("type", "")
+    sub_src = "rule" if sub else ""
+    typ_src = "rule" if typ else ""
     sug_sub = sug_type = ""
     if item and item in resolver.item_taxonomy:
         sug_sub, sug_type = resolver.item_taxonomy[item]
-        sub = sub or sug_sub
-        typ = typ or sug_type
+        if not sub:
+            sub, sub_src = sug_sub, "rule"
+        if not typ:
+            typ, typ_src = sug_type, "rule"
+    prov["SUB CATEGORY"] = sub_src if sub else ""
+    prov["TYPE"] = typ_src if typ else ""
     return {
         "gender": gender,
         "item": item,
@@ -528,15 +764,27 @@ def _color_src(g: Callable[[str], Any], profile: dict) -> str:
 
 
 def _resolve_fields(
-    resolver: Resolver, g: Callable[[str], Any], base: BaseMappedFields, profile: dict
+    resolver: Resolver,
+    g: Callable[[str], Any],
+    base: BaseMappedFields,
+    profile: dict,
+    prov: dict,
 ) -> ResolvedFields:
     ctx = {"brand": base.raw_brand, "desc": base.desc}
+    brand_v, brand_s = resolver.brand(base.raw_brand, ctx)
+    color_v, color_s = resolver.color(_color_src(g, profile), ctx)
+    size_v, size_s = resolver.size(g("SIZE_SRC"), ctx)
+    season_v, season_s = _map_season(resolver, g, ctx)
+    prov["BRAND"] = brand_s if brand_v else ""
+    prov["COLOR"] = color_s if color_v else ""
+    prov["SIZE"] = size_s if size_v else ""
+    prov["SEASON"] = season_s if season_v else ""
     return ResolvedFields(
-        brand=resolver.brand(base.raw_brand, ctx),
-        color=resolver.color(_color_src(g, profile), ctx),
-        size=resolver.size(g("SIZE_SRC"), ctx),
-        season=_map_season(resolver, g, ctx),
-        taxonomy=_map_taxonomy(resolver, base.desc, g, ctx),
+        brand=brand_v,
+        color=color_v,
+        size=size_v,
+        season=season_v,
+        taxonomy=_map_taxonomy(resolver, base.desc, g, ctx, prov),
     )
 
 
@@ -588,21 +836,24 @@ def _blank_controlled_columns(row: dict) -> list:
 
 def map_record(
     rec: dict, profile: dict, resolver: Resolver, brand_default: str
-) -> tuple[dict, list] | None:
+) -> tuple[dict, list, dict] | None:
     g = _getter(rec, profile)
     base = _extract_base_fields(rec, profile, g, brand_default)
     if not _has_mappable_payload(base):
         return None
+    prov: dict[str, str] = {}
     prices = _price_fields(rec, profile, g, base.qty)
-    resolved = _resolve_fields(resolver, g, base, profile)
+    resolved = _resolve_fields(resolver, g, base, profile, prov)
     row = _build_kdps_row(base, prices, resolved, g)
-    return row, _blank_controlled_columns(row)
+    return row, _blank_controlled_columns(row), prov
 
 
 def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
     """Map a brand file into KDPS rows + review misses. Pure read (no DB writes)."""
     sheets = read_sheets(content, filename, content_type)
     sheet_name, rows = choose_sheet(sheets)
+    if not any(any(raw_str(c) for c in r) for r in rows):
+        raise UnsupportedFormat("This file has no data rows to map.")
     truncated = len(rows) > MAX_ROWS
     header_idx = detect_header(rows)
     headers = [norm(c) for c in rows[header_idx]]
@@ -618,14 +869,16 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
     kdps_rows: list[dict] = []
     line_no = 0
     blank_cells = 0
+    low_confidence_cells = 0
     for rec in records:
         mapped = map_record(rec, profile, resolver, brand_default)
         if mapped is None:
             continue
         line_no += 1
-        row, blanks = mapped
+        row, blanks, prov = mapped
         blank_cells += len(blanks)
-        kdps_rows.append({"line_no": line_no, "data": row, "blanks": blanks})
+        low_confidence_cells += sum(1 for s in prov.values() if s in LOW_CONFIDENCE_SOURCES)
+        kdps_rows.append({"line_no": line_no, "data": row, "blanks": blanks, "provenance": prov})
 
     reviews = list(resolver.misses.values())
     return {
@@ -644,4 +897,5 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
         "rows": kdps_rows,
         "reviews": reviews,
         "blank_cells": blank_cells,
+        "low_confidence_cells": low_confidence_cells,
     }

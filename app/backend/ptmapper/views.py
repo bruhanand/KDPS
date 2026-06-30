@@ -39,7 +39,7 @@ from ptmapper.serializers import (
 from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
 from vendors.models import Booking
 
-SINGLE_DIMS = {"color", "size", "brand", "season"}
+SINGLE_DIMS = {"color", "size", "brand", "season", "fit"}
 KDPS_COLUMN_SET = set(KDPS_COLUMNS)
 
 # Pushing a PT into the system (post) and reversing it write the stock ledger and
@@ -99,7 +99,13 @@ def process_file(pt: PtFile) -> PtFile:
 
     PtRow.objects.bulk_create(
         [
-            PtRow(pt_file=pt, line_no=r["line_no"], data=r["data"], blanks=r["blanks"])
+            PtRow(
+                pt_file=pt,
+                line_no=r["line_no"],
+                data=r["data"],
+                blanks=r["blanks"],
+                provenance=r.get("provenance", {}),
+            )
             for r in result["rows"]
         ]
     )
@@ -109,7 +115,7 @@ def process_file(pt: PtFile) -> PtFile:
     pt.profile_name = result["profile_name"]
     pt.archetype = result["archetype"]
     pt.brand_guess = result["brand_guess"]
-    pt.meta = result["meta"]
+    pt.meta = {**result["meta"], "low_confidence_cells": result.get("low_confidence_cells", 0)}
     pt.row_count = len(result["rows"])
     pt.blank_cell_count = result["blank_cells"]
     pt.unresolved_count = open_count
@@ -215,11 +221,14 @@ class PtRowsUpdateView(APIView):
         rows = list(pt.rows.filter(id__in=edits.keys()))
         for r in rows:
             new_data = {**r.data}
+            new_prov = {**(r.provenance or {})}
             for col, val in edits[r.id].items():
                 if col in KDPS_COLUMN_SET:
                     new_data[col] = val
+                    new_prov[col] = "manual"  # a human set it → trusted, no longer flagged
             r.data = new_data
-        PtRow.objects.bulk_update(rows, ["data"])
+            r.provenance = new_prov
+        PtRow.objects.bulk_update(rows, ["data", "provenance"])
         pt.manually_edited = True
         _recompute_counts(pt)
         pt.save()

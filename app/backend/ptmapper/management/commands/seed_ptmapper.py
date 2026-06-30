@@ -3,15 +3,18 @@
 Idempotent. Loads:
   - ControlledValue (the allowed value of every derived column),
   - ItemTaxonomy (ITEM → suggested SUB CATEGORY / TYPE),
-  - identity + alias Lookups for brand / colour / size / gender,
-  - a starter set of TaxonomyRules (keyword → 5-axis grid).
+  - identity + alias Lookups for brand / colour / size / gender / fit,
+  - a starter set of TaxonomyRules (keyword → ITEM, with gender/fit where invariant).
 
-Misses found while mapping real files flow into the review queue and grow these
-tables further — no code change needed.
+The aliases below are the *seed* of business judgement (which raw shade is which
+KDPS bucket, which brand alias maps where). Misses found while mapping real files
+flow into the review queue and grow these tables further — no code change needed.
+Every alias is written only if its target is a real Master-Sheet value.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import openpyxl
@@ -36,34 +39,354 @@ DIM_COLS = {
 BRAND_ALIASES = {
     "FM": "FLYING MACHINE",
     "PJ": "PETER ENGLAND",
-    "GO COLORS": "GO COLOURS",
-    "BLACKBERRYS": "BLACKBERRY",
-    "MADURA": "PETER ENGLAND",
+    "PE": "PETER ENGLAND",
+    "GO COLORS": "GOCOLORS",
+    "GO COLOURS": "GOCOLORS",
+    "BLACKBERRY": "BLACKBERRYS",
+    "BLACKBERRY'S": "BLACKBERRYS",
+    "VH": "VAN HEUSEN",
+    "AS": "ALLEN SOLLY",
+    "LP": "LOUIS PHILIPPE",
+    "US POLO": "U S POLO ASSN",
+    "USPOLO": "U S POLO ASSN",
+    "U.S. POLO ASSN": "U S POLO ASSN",
+    "JOCKEY PARAS": "JOCKEY",
+    "JOCKEY NARAYANI": "JOCKEY",
+    "JOCKEY NARVADA": "JOCKEY",
+    "JOCKEY DD SALES": "JOCKEY",
+    "SPYKAR": "SPYKAR",
+    "KILLER JUNIOR": "KILLER",
+    "JUNIOR KILLER": "KILLER",
 }
+
+# Brand shade string → one of KDPS's ~18 real colour buckets. (PREMIUM / ECONOMY /
+# MEDIUM are price tiers that already live in the COLOR vocabulary and pass through.)
 COLOR_ALIASES = {
+    # BLUE family
     "LIGHT BLUE": "BLUE",
     "DARK BLUE": "BLUE",
     "SKY BLUE": "BLUE",
-    "NAVY BLUE": "NAVY",
+    "SKY": "BLUE",
+    "ROYAL BLUE": "BLUE",
+    "ROYAL": "BLUE",
+    "MID BLUE": "BLUE",
+    "BLUE BLACK": "BLUE",
+    # NB: no bare "DENIM" alias — "DENIM" is as often a fabric/category as a shade, and
+    # some files expose a product group in the colour column. "DENIM BLUE"/"DENIM BLU"
+    # are unambiguous shades and stay.
+    "DENIM BLUE": "BLUE",
+    "DENIM BLU": "BLUE",
+    "BLUE DN": "BLUE",
+    "L BLU": "BLUE",
+    "BL": "BLUE",
     "INDIGO": "BLUE",
+    "INDIGO BLUE": "BLUE",
     "INDIGO MEL": "BLUE",
+    "MID INDIGO": "BLUE",
+    "DARK INDIGO BLUE": "BLUE",
+    "DEEP INDIGO BLUE": "BLUE",
+    "LIGHT INDIGO": "BLUE",
+    "SULPHUR BLUE": "BLUE",
+    "SULPHUR": "BLUE",
+    "AIRFORCE": "BLUE",
+    "AIR FORCE": "BLUE",
+    "AIRFORCE BLUE": "BLUE",
+    "BT AIRFORCE": "BLUE",
+    "POWDER BLUE": "BLUE",
+    "POWDER": "BLUE",
+    "CORN BLUE": "BLUE",
+    "COBALT": "BLUE",
+    "ELECTRIC BLUE": "BLUE",
+    "STEEL BLUE": "BLUE",
+    "ICE BLUE": "BLUE",
+    "AQUA BLUE": "BLUE",
+    "DENIM BLU DN": "BLUE",
+    # NAVY
+    "NAVY BLUE": "NAVY",
     "TNAVY": "NAVY",
-    "OFF WHITE": "WHITE",
-    "MUSTARD": "YELLOW",
-    "WINE": "MAROON",
-    "PEACH": "ORANGE",
-    "BEIGE": "CREAM",
-    "KHAKI": "OLIVE",
+    "NVY": "NAVY",
+    "DARK NAVY": "NAVY",
+    "INK BLUE": "NAVY",
+    "INK": "NAVY",
+    "MIDNIGHT": "NAVY",
+    "MIDNIGHT BLUE": "NAVY",
+    "NAVI": "NAVY",
+    # TEAL
     "TEAL BLUE": "TEAL",
-    "AQUA": "BLUE",
+    "TEAL GREEN": "TEAL",
+    "TURQUOISE": "TEAL",
+    "TURQUOISE BLUE": "TEAL",
+    "TURQ": "TEAL",
+    "PEACOCK": "TEAL",
+    "PEACOCK BLUE": "TEAL",
+    "PEACOCK GREEN": "TEAL",
+    "AQUA": "TEAL",
+    "AQUA GREEN": "TEAL",
+    "CYAN": "TEAL",
+    # GREEN
+    "SEA GREEN": "GREEN",
+    "PISTA": "GREEN",
+    "PISTA GREEN": "GREEN",
+    "LEAF GREEN": "GREEN",
+    "LIME": "GREEN",
+    "LIME GREEN": "GREEN",
+    "BOTTLE GREEN": "GREEN",
+    "DARK GREEN": "GREEN",
+    "LIGHT GREEN": "GREEN",
+    "FOREST GREEN": "GREEN",
+    "FOREST": "GREEN",
+    "PARROT GREEN": "GREEN",
+    "PARROT": "GREEN",
+    "EMERALD": "GREEN",
+    "MINT": "GREEN",
+    "MINT GREEN": "GREEN",
+    "FERN": "GREEN",
+    "KIWI": "GREEN",
+    "NEON GREEN": "GREEN",
+    "APPLE GREEN": "GREEN",
     "GREEN MEL": "GREEN",
+    # OLIVE
+    "OLIVE GREEN": "OLIVE",
+    "ARMY": "OLIVE",
+    "ARMY GREEN": "OLIVE",
+    "MILITARY": "OLIVE",
+    "MILITARY GREEN": "OLIVE",
+    "MOSS": "OLIVE",
+    "MOSS GREEN": "OLIVE",
+    "MEHENDI": "OLIVE",
+    "MEHANDI": "OLIVE",
+    "KHAKI": "OLIVE",
+    "KHAKHI": "OLIVE",
+    "DARK OLIVE": "OLIVE",
+    "OIL GREEN": "OLIVE",
+    # RED
+    "BRIGHT RED": "RED",
+    "DARK RED": "RED",
+    "CHERRY": "RED",
+    "CHERRY RED": "RED",
+    "SCARLET": "RED",
+    "CRIMSON": "RED",
+    "BLOOD RED": "RED",
+    "FERRARI RED": "RED",
+    "TOMATO": "RED",
+    "TOMATO RED": "RED",
+    "CHILLI": "RED",
+    "CHILLI RED": "RED",
+    # MAROON
+    "WINE": "MAROON",
+    "WINE RED": "MAROON",
+    "DEEP MAROON": "MAROON",
+    "DARK MAROON": "MAROON",
+    "BURGUNDY": "MAROON",
+    "MEHROON": "MAROON",
+    "MAHROON": "MAROON",
+    "DK WNE": "MAROON",
+    "WNE": "MAROON",
+    "OXBLOOD": "MAROON",
+    "CLARET": "MAROON",
+    # ORANGE
+    "PEACH": "ORANGE",
+    "DEEP PEACH": "ORANGE",
+    "LIGHT PEACH": "ORANGE",
+    "LT PEACH": "ORANGE",
+    "LT. PEACH": "ORANGE",
+    "CORAL": "ORANGE",
+    "CORAL ORANGE": "ORANGE",
+    "TANGERINE": "ORANGE",
+    "APRICOT": "ORANGE",
+    "SALMON": "ORANGE",
+    "NEON ORANGE": "ORANGE",
+    "CARROT": "ORANGE",
+    "GAJARI": "ORANGE",
+    # RUST
+    "BRICK": "RUST",
+    "BRICK RED": "RUST",
+    "COPPER": "RUST",
+    "TERRACOTTA": "RUST",
+    "BURNT ORANGE": "RUST",
+    "RUST ORANGE": "RUST",
+    "CLAY": "RUST",
+    # PINK
+    "BLUSH": "PINK",
+    "BABY PINK": "PINK",
+    "LIGHT PINK": "PINK",
+    "HOT PINK": "PINK",
+    "DARK PINK": "PINK",
+    "MEDIUM PINK": "PINK",
+    "RANI": "PINK",
+    "RANI PINK": "PINK",
+    "FUCHSIA": "PINK",
+    "FUSCHIA": "PINK",
+    "MAGENTA": "PINK",
+    "LIPSTICK": "PINK",
+    "LIPSTICK PINK": "PINK",
+    "ROSE": "PINK",
+    "ROSE PINK": "PINK",
+    "DUSTY ROSE": "PINK",
+    "DUSTY PINK": "PINK",
+    "PASTEL PINK": "PINK",
+    "FLAMINGO": "PINK",
+    "ONION": "PINK",
+    "ONION PINK": "PINK",
+    "CARNATION": "PINK",
+    "BUBBLEGUM": "PINK",
+    "SALMON PINK": "PINK",
+    # PURPLE
+    "LILAC": "PURPLE",
+    "LAVENDER": "PURPLE",
+    "LAVENDAR": "PURPLE",
+    "MAUVE": "PURPLE",
+    "VIOLET": "PURPLE",
+    "PLUM": "PURPLE",
+    "GRAPE": "PURPLE",
+    "AUBERGINE": "PURPLE",
+    "EGGPLANT": "PURPLE",
+    "ORCHID": "PURPLE",
+    "AMETHYST": "PURPLE",
+    # YELLOW
+    "MUSTARD": "YELLOW",
+    "LEMON": "YELLOW",
+    "LEMON YELLOW": "YELLOW",
+    "GOLD": "YELLOW",
+    "GOLDEN": "YELLOW",
+    "YELLOW OCHRE": "YELLOW",
+    "OCHRE": "YELLOW",
+    "CORN": "YELLOW",
+    "CORN YELLOW": "YELLOW",
+    "SUNFLOWER": "YELLOW",
+    "MANGO": "YELLOW",
+    "HONEY": "YELLOW",
+    "AMBER": "YELLOW",
+    "CANARY": "YELLOW",
+    "TURMERIC": "YELLOW",
+    # BROWN
+    "COFFEE": "BROWN",
+    "CHOCOLATE": "BROWN",
+    "CHOCO": "BROWN",
+    "TAN": "BROWN",
+    "CAMEL": "BROWN",
+    "MOCHA": "BROWN",
+    "COCOA": "BROWN",
+    "WALNUT": "BROWN",
+    "TOBACCO": "BROWN",
+    "LIGHT BROWN": "BROWN",
+    "DARK BROWN": "BROWN",
+    "TEA LEAF": "BROWN",
+    "TEAK": "BROWN",
+    "RUST BROWN": "BROWN",
+    "MUD": "BROWN",
+    "MUD BROWN": "BROWN",
+    "ESPRESSO": "BROWN",
+    "HAZEL": "BROWN",
+    "TAUPE": "BROWN",
+    # CREAM
+    "BEIGE": "CREAM",
+    "LIGHT BEIGE": "CREAM",
+    "LT BEIGE": "CREAM",
+    "LT. BEIGE": "CREAM",
+    "OFF WHITE": "CREAM",
+    "OFF-WHITE": "CREAM",
+    "IVORY": "CREAM",
+    "ECRU": "CREAM",
+    "FAWN": "CREAM",
+    "SAND": "CREAM",
+    "OATS": "CREAM",
+    "OAT": "CREAM",
+    "OATMEAL": "CREAM",
+    "NUDE": "CREAM",
+    "SKIN": "CREAM",
+    "NATURAL": "CREAM",
+    "CHALK": "CREAM",
+    "PEARL": "CREAM",
+    "VANILLA": "CREAM",
+    "LINEN": "CREAM",
+    "BONE": "CREAM",
+    "WHEAT": "CREAM",
+    "CHAMPAGNE": "CREAM",
+    "BUFF": "CREAM",
+    "BISCUIT": "CREAM",
+    # CHIKU (tan-khaki bucket KDPS keeps distinct)
+    "CHIKOO": "CHIKU",
+    "CHICOO": "CHIKU",
+    "CHIKKU": "CHIKU",
+    # WHITE
+    "PURE WHITE": "WHITE",
+    "BRIGHT WHITE": "WHITE",
+    "MILK": "WHITE",
+    "MILKY WHITE": "WHITE",
+    "SNOW": "WHITE",
+    "SNOW WHITE": "WHITE",
+    "CLOUD": "WHITE",
+    "OPTIC WHITE": "WHITE",
+    "WHITE MEL": "WHITE",
+    # GREY
+    "GRAY": "GREY",
+    "GREY MEL": "GREY",
+    "GREY MELANGE": "GREY",
+    "MELANGE GREY": "GREY",
+    "M GREY": "GREY",
+    "MID GREY": "GREY",
+    "LIGHT GREY": "GREY",
+    "DARK GREY": "GREY",
+    "CHARCOAL": "GREY",
+    "CHARCOAL GREY": "GREY",
+    "SLV GY": "GREY",
+    "SILVER": "GREY",
+    "SILVER GREY": "GREY",
+    "STONE": "GREY",
+    "STONE GREY": "GREY",
+    "ASH": "GREY",
+    "ASH GREY": "GREY",
+    "SMOKE": "GREY",
+    "SMOKE GREY": "GREY",
+    "STEEL": "GREY",
+    "STEEL GREY": "GREY",
+    "ANTHRACITE": "GREY",
+    "GRINDLE": "GREY",
+    "MILANGE": "GREY",
+    "MELANGE": "GREY",
+    "GRAPHITE": "GREY",
+    "SLATE": "GREY",
+    "GUNMETAL": "GREY",
+    "CARBON": "GREY",
+    # BLACK
+    "JET BLACK": "BLACK",
+    "PURE BLACK": "BLACK",
+    "PITCH BLACK": "BLACK",
+    "DENIM BLACK": "BLACK",
+    "BLACK MEL": "BLACK",
+    "COAL": "BLACK",
 }
+
+# Most size variants are handled by normalize_size(); these are the few word forms.
 SIZE_ALIASES = {
-    "FREE SIZE": "FREE",
-    "F": "FREE",
-    "FS": "FREE",
-    "1 MTR.": "FREE",
+    "FREE SIZE": "FREE SIZE",
+    "STANDARD": "FREE SIZE",
 }
+
+# Brand fit-column value → KDPS master FIT.
+FIT_ALIASES = {
+    "SLIM FIT": "SLIM",
+    "REGULAR FIT": "REGULAR",
+    "COMFORT FIT": "RELAXED",
+    "COMFORT": "RELAXED",
+    "RELAXED FIT": "RELAXED",
+    "SKINNY FIT": "SKINNY",
+    "STRAIGHT FIT": "STRAIGHT",
+    "BOOTCUT FIT": "BOOTCUT",
+    "TAILORED FIT": "TAILORED",
+    "CLASSIC": "CLASSIC FIT",
+    "SUPER SLIM FIT": "SUPER SLIM",
+    "SLIM TAPERED": "SLIM TEPAR",
+    "SLIM STRAIGHT FIT": "SLIM STRAIGHT",
+    "REGULAR STRAIGHT FIT": "REGULAR STRAIGHT",
+    "CREW": "CREW NECK",
+    "ROUND": "ROUND NECK",
+    "POLO": "POLO NECK",
+    # NB: no "V NECK" alias — the Master FIT list has no V-neck, and mapping it to
+    # ROUND NECK would be deterministically wrong. Leave it for the review queue.
+}
+
 GENDER_MAP = {
     "MALE": "MALE",
     "MEN": "MALE",
@@ -71,56 +394,173 @@ GENDER_MAP = {
     "MAN": "MALE",
     "M": "MALE",
     "GENTS": "MALE",
+    "GENT": "MALE",
     "BOYS": "KIDS MALE",
     "BOY": "KIDS MALE",
     "KIDS MALE": "KIDS MALE",
+    "KIDS BOYS": "KIDS MALE",
+    "JUNIOR BOYS": "KIDS MALE",
     "FEMALE": "FEMALE",
     "WOMEN": "FEMALE",
     "WOMENS": "FEMALE",
     "WOMAN": "FEMALE",
     "LADIES": "FEMALE",
+    "LADY": "FEMALE",
+    "F": "FEMALE",
     "GIRLS": "KIDS FEMALE",
     "GIRL": "KIDS FEMALE",
     "KIDS FEMALE": "KIDS FEMALE",
+    "KIDS GIRLS": "KIDS FEMALE",
+    "JUNIOR GIRLS": "KIDS FEMALE",
     "UNISEX": "UNISEX",
     "KIDS": "UNISEX",
+    "KID": "UNISEX",
+    "INFANT": "UNISEX",
 }
 
-# (pattern, gender, sub_category, type, item, fit) — filtered to valid Master values at load.
+# (pattern, gender, item, fit). SUB CATEGORY / TYPE auto-fill from the ITEM→helper.
+# gender here is only a default for invariant items — a gender column or a gender word
+# in the description overrides it (see engine._map_taxonomy).
 RULE_SEED = [
-    ("TRACK PANT", "", "SPORTS WEAR", "BOTTOM WEAR", "TRACK PANT", ""),
-    ("TRACKPANT", "", "SPORTS WEAR", "BOTTOM WEAR", "TRACK PANT", ""),
-    ("JEANS", "", "CASUAL WEAR", "BOTTOM WEAR", "JEANS", ""),
-    ("T-SHIRT", "", "CASUAL WEAR", "TOP WEAR", "T-SHIRT", ""),
-    ("T SHIRT", "", "CASUAL WEAR", "TOP WEAR", "T-SHIRT", ""),
-    ("TSHIRT", "", "CASUAL WEAR", "TOP WEAR", "T-SHIRT", ""),
-    ("TROUSER", "", "FORMAL WEAR", "BOTTOM WEAR", "TROUSER", ""),
-    ("FORMAL SHIRT", "", "FORMAL WEAR", "TOP WEAR", "SHIRT", ""),
-    ("SHIRT", "", "CASUAL WEAR", "TOP WEAR", "SHIRT", ""),
-    ("PYJAMA", "", "NIGHTWEAR", "BOTTOM WEAR", "PYJAMA", ""),
-    ("PALAZZO", "", "CASUAL WEAR", "BOTTOM WEAR", "PALAZZO", ""),
-    ("KURTI", "", "CASUAL WEAR", "TOP WEAR", "KURTI", ""),
-    ("KURTA", "", "CASUAL WEAR", "TOP WEAR", "KURTA", ""),
-    ("SAREE", "", "PARTY WEAR", "ONE-PIECE", "SAREE", ""),
-    ("BRIEF", "", "INNERWEAR", "BOTTOM WEAR", "BRIEF", ""),
-    ("BRA", "", "INNERWEAR", "TOP WEAR", "BRA", ""),
-    ("CAMISOLE", "", "INNERWEAR", "TOP WEAR", "CAMISOLE", ""),
-    ("SKIRT", "", "CASUAL WEAR", "BOTTOM WEAR", "SKIRT", ""),
-    ("CAPRI", "", "CASUAL WEAR", "BOTTOM WEAR", "CAPRI", ""),
-    ("CARGO", "", "CASUAL WEAR", "BOTTOM WEAR", "CARGO", ""),
-    ("SHORTS", "", "CASUAL WEAR", "BOTTOM WEAR", "SHORTS", ""),
-    ("BLAZER", "", "FORMAL WEAR", "TOP WEAR", "BLAZER", ""),
-    ("BLOUSE", "", "CASUAL WEAR", "TOP WEAR", "BLOUSE", ""),
-    ("FROCK", "", "PARTY WEAR", "ONE-PIECE", "FROCK", ""),
-    ("DRESS", "", "PARTY WEAR", "ONE-PIECE", "DRESSES", ""),
-    ("BELT", "", "ACCESSORIES", "ACCESSORIES", "BELT", ""),
-    ("CAP", "", "ACCESSORIES", "ACCESSORIES", "CAP", ""),
-    ("3 PCS SUIT", "", "PARTY WEAR", "FULL SET", "", ""),
-    ("SUIT", "", "FORMAL WEAR", "FULL SET", "", ""),
-    ("CO-ORD", "", "CASUAL WEAR", "FULL SET", "CO-ORD SET", ""),
-    ("CROP TOP", "", "CASUAL WEAR", "TOP WEAR", "CROP TOP", ""),
-    ("DUPATTA", "", "ACCESSORIES", "ACCESSORIES", "DUPATTA", ""),
-    ("DUNGAREE", "", "CASUAL WEAR", "FULL SET", "DUNGAREE", ""),
+    # --- top wear
+    ("T-SHIRT", "", "T-SHIRT", ""),
+    ("T SHIRT", "", "T-SHIRT", ""),
+    ("TSHIRT", "", "T-SHIRT", ""),
+    ("TEE", "", "T-SHIRT", ""),
+    ("POLO", "", "T-SHIRT", "POLO NECK"),
+    ("FORMAL SHIRT", "", "SHIRT", ""),
+    ("CASUAL SHIRT", "", "SHIRT", ""),
+    ("SHIRT", "", "SHIRT", ""),
+    ("KURTI", "FEMALE", "KURTI", ""),
+    ("TUNIC", "FEMALE", "KURTI", ""),
+    ("KURTA SET", "", "KURTI SET", ""),
+    ("KURTI SET", "FEMALE", "KURTI SET", ""),
+    ("KURTA", "", "KURTA", ""),
+    ("KURTHA", "", "KURTA", ""),
+    ("CROP TOP", "FEMALE", "CROP TOP", ""),
+    ("CAMISOLE", "FEMALE", "CAMISOLE", ""),
+    ("CAMI", "FEMALE", "CAMISOLE", ""),
+    ("BLOUSE", "FEMALE", "BLOUSE", ""),
+    ("TOP", "", "TOP", ""),
+    ("SWEATSHIRT", "", "SWEATSHIRT", ""),
+    ("SWEAT SHIRT", "", "SWEATSHIRT", ""),
+    ("HOODIE", "", "SWEATSHIRT", ""),
+    ("SWEATER", "", "SWEATER", ""),
+    ("PULLOVER", "", "SWEATER", ""),
+    ("CARDIGAN", "", "CARDIGAN", ""),
+    ("BLAZER", "", "BLAZER", ""),
+    ("WAISTCOAT", "", "BLAZER", ""),
+    ("NEHRU JACKET", "MALE", "NEHRU JACKET", ""),
+    ("JACKET", "", "JACKET", ""),
+    ("SHACKET", "", "SHACKET", ""),
+    ("WINDCHEATER", "", "WINDCHEATER", ""),
+    ("WIND CHEATER", "", "WINDCHEATER", ""),
+    ("RAINCOAT", "", "RAINCOAT", ""),
+    ("THERMAL", "", "THERMAL", ""),
+    # --- one-piece
+    ("GOWN", "FEMALE", "GOWN", ""),
+    ("DRESS", "FEMALE", "DRESSES", ""),
+    ("FROCK", "KIDS FEMALE", "FROCK", ""),
+    ("MIDI", "FEMALE", "MIDY", ""),
+    ("MIDY", "FEMALE", "MIDY", ""),
+    ("JUMPSUIT", "", "JUMP SUIT", ""),
+    ("JUMP SUIT", "", "JUMP SUIT", ""),
+    ("DUNGAREE", "", "DUNGAREE", ""),
+    ("NIGHTY", "FEMALE", "NIGHTY", ""),
+    ("SAREE", "FEMALE", "SAREE", ""),
+    ("LEHENGA", "FEMALE", "LEHENGA", ""),
+    ("SALWAR", "FEMALE", "SALWAR SUIT", ""),
+    ("SHERWANI", "MALE", "SHERWANI", ""),
+    # --- bottom wear
+    ("JEANS", "", "JEANS", ""),
+    ("JEAN", "", "JEANS", ""),
+    ("JEGGING", "FEMALE", "JEGGING", ""),
+    ("JEGGINGS", "FEMALE", "JEGGING", ""),
+    ("TROUSER", "", "TROUSER", ""),
+    ("TROUSERS", "", "TROUSER", ""),
+    ("CHINO", "", "TROUSER", ""),
+    ("FORMAL PANT", "", "TROUSER", ""),
+    ("PANT", "", "TROUSER", ""),
+    ("TRACK PANT", "", "JOGGER", "TRACK PANT"),
+    ("TRACKPANT", "", "JOGGER", "TRACK PANT"),
+    ("JOGGER", "", "JOGGER", ""),
+    ("JOGGERS", "", "JOGGER", ""),
+    ("LOWER", "", "LOWER", ""),
+    ("LOWERS", "", "LOWER", ""),
+    ("SHORTS", "", "SHORTS", ""),
+    ("BERMUDA", "", "SHORTS", "BERMUDA"),
+    ("CAPRI", "", "CAPRI", ""),
+    ("CAPRIS", "", "CAPRI", ""),
+    ("LEGGING", "FEMALE", "LEGGING", ""),
+    ("LEGGINGS", "FEMALE", "LEGGING", ""),
+    ("PALAZZO", "FEMALE", "PALAZZO", ""),
+    ("PALAZZO SET", "FEMALE", "PALAZZO SET", ""),
+    ("PLAZO", "FEMALE", "PALAZZO", ""),
+    ("PLAZZO", "FEMALE", "PALAZZO", ""),
+    ("PLAZOO", "FEMALE", "PALAZZO", ""),
+    ("SKIRT", "FEMALE", "SKIRT", ""),
+    ("CARGO", "", "CARGO", ""),
+    ("DHOTI", "MALE", "DHOTI", ""),
+    ("PATIALA", "FEMALE", "PATIALA", ""),
+    ("PETTICOAT", "FEMALE", "PETTICOAT", ""),
+    # --- full set
+    ("CO-ORD", "", "CO-ORD SET", ""),
+    ("CO ORD", "", "CO-ORD SET", ""),
+    ("COORD", "", "CO-ORD SET", ""),
+    ("NIGHT SUIT", "", "NIGHT SUIT", ""),
+    ("NIGHTSUIT", "", "NIGHT SUIT", ""),
+    ("TRACKSUIT", "", "TRACKSUIT", ""),
+    ("TRACK SUIT", "", "TRACKSUIT", ""),
+    ("BABA SUIT", "KIDS MALE", "BABA SUIT", ""),
+    ("PANT SET", "", "CO-ORD SET", "PANT SET"),
+    ("SHORTS SET", "", "CO-ORD SET", "SHORTS SET"),
+    ("DRESS MATERIAL", "", "DRESS MATERIAL", ""),
+    ("SUIT", "", "SUIT", ""),
+    # --- innerwear
+    ("BRIEF", "", "BRIEF", ""),
+    ("TRUNK", "MALE", "BRIEF", "TRUNK"),
+    ("BOXER", "", "BRIEF", "BOXER"),
+    ("VEST", "", "VEST", ""),
+    ("BRA", "FEMALE", "BRA", ""),
+    ("PANTIE", "FEMALE", "PANTIE", ""),
+    ("PANTY", "FEMALE", "PANTIE", ""),
+    ("BLOOMER", "", "BLOOMER", ""),
+    ("SOCKS", "", "SOCKS", ""),
+    ("SOCK", "", "SOCKS", ""),
+    # --- accessories
+    ("BELT", "", "BELT", ""),
+    ("WALLET", "", "WALLET", ""),
+    ("CAP", "", "CAP", ""),
+    ("HANDBAG", "", "HANDBAG", ""),
+    ("HAND BAG", "", "HANDBAG", ""),
+    ("BACKPACK", "", "BACKPACK", ""),
+    ("DUFFLE", "", "DUFFLE BAG", ""),
+    ("DUPATTA", "FEMALE", "DUPATTA", ""),
+    ("STOLE", "", "STOLE", ""),
+    ("SCARF", "", "SCARVES", ""),
+    ("SCARVES", "", "SCARVES", ""),
+    ("MUFFLER", "", "MUFFLER", ""),
+    ("TIE", "", "TIES & BOWTIE", ""),
+    ("HANDKERCHIEF", "", "HANDKERCHIEF", ""),
+    ("POCKET SQUARE", "", "POCKET SQUARE", ""),
+    ("SHOES", "", "SHOES", ""),
+    ("SLIPPER", "", "SLIPPERS", ""),
+    ("JUTI", "", "JUTI", ""),
+    ("TOWEL", "", "TOWEL", ""),
+    ("BEDSHEET", "", "BEDSHEET", ""),
+    ("PERFUME", "", "PERFUME", ""),
+    ("DEODRANT", "", "DEODRENT", ""),
+    ("DEODORANT", "", "DEODRENT", ""),
+    # --- ethnic top variants
+    ("INDO WESTERN", "", "KURTI SET", "INDO WESTERN"),
+    # --- Madura SAP glued material codes the substring matcher can't split
+    ("TROUSR", "", "TROUSER", ""),
+    ("FGKTROUSR", "", "TROUSER", ""),
+    ("FGSUIT", "", "SUIT", ""),
+    ("FGTRAKPNT", "", "JOGGER", "TRACK PANT"),
+    ("FGTOPS", "", "TOP", ""),
+    ("FGCKNTOP", "", "TOP", ""),
+    ("FGTOP", "", "TOP", ""),
 ]
 
 
@@ -132,8 +572,22 @@ def cv(val) -> str:
     return str(val).strip()
 
 
-def first_token(val: str) -> str:
-    return val.split("/")[0].strip() if val else val
+def _pick_valid(cell: str, valid: set[str]) -> str:
+    """From a Master helper cell that may hold several '/'-separated options
+    ('FORMAL / CASUAL/ PARTY WEAR'), return the first that resolves to a real value
+    (exact, else a Master value that starts with the token: 'CASUAL'→'CASUAL WEAR')."""
+    if not cell:
+        return ""
+    for tok in re.split(r"[/,]", cell):
+        tok = tok.strip()
+        if not tok:
+            continue
+        if tok in valid:
+            return tok
+        for v in sorted(valid):  # sorted → deterministic when a token prefixes >1 value
+            if v.startswith(tok):
+                return v
+    return ""
 
 
 def _add_lookup(dim: str, key: str, target: str) -> None:
@@ -154,82 +608,87 @@ def _load_master_sheet(path: Path) -> list[list]:
 
 def _extract_vocabulary(rows: list[list]) -> tuple[dict[str, set[str]], dict[str, tuple[str, str]]]:
     dim_values: dict[str, set[str]] = {d: set() for d in DIM_COLS.values()}
-    item_tax: dict[str, tuple[str, str]] = {}
+    item_rows: dict[str, tuple[str, str]] = {}
     for r in rows[1:]:
         for ci, dim in DIM_COLS.items():
             if ci < len(r):
                 v = cv(r[ci])
                 if v:
                     dim_values[dim].add(v)
-        # ITEM (col 6) → suggested SUB CATEGORY (col 10) / TYPE (col 11)
+        # ITEM (col 6) → suggested SUB CATEGORY (col 10) / TYPE (col 11) on the same row
         if len(r) > 6:
             item = cv(r[6])
             if item:
-                sub = first_token(cv(r[10])) if len(r) > 10 else ""
-                typ = first_token(cv(r[11])) if len(r) > 11 else ""
-                item_tax[item] = (sub, typ)
-    return dim_values, item_tax
+                sub = cv(r[10]) if len(r) > 10 else ""
+                typ = cv(r[11]) if len(r) > 11 else ""
+                item_rows[item] = (sub, typ)
+    return dim_values, item_rows
 
 
-def _seed_controlled(dim_values: dict[str, set[str]], item_tax: dict[str, tuple[str, str]]) -> None:
+def _seed_controlled(
+    dim_values: dict[str, set[str]], item_rows: dict[str, tuple[str, str]]
+) -> None:
     for dim, values in dim_values.items():
         for v in values:
             ControlledValue.objects.get_or_create(dimension=dim, value=v)
     sub_set, type_set = dim_values["sub_category"], dim_values["type"]
-    for item, (sub, typ) in item_tax.items():
+    for item, (sub_raw, type_raw) in item_rows.items():
         ItemTaxonomy.objects.update_or_create(
             item=item,
             defaults={
-                "sub_category": sub if sub in sub_set else "",
-                "type": typ if typ in type_set else "",
+                "sub_category": _pick_valid(sub_raw, sub_set),
+                "type": _pick_valid(type_raw, type_set),
             },
         )
 
 
+def _seed_aliased(dim: str, identity: set[str], aliases: dict[str, str], valid: set[str]) -> None:
+    for v in identity:
+        _add_lookup(dim, v, v)
+    for alias, target in aliases.items():
+        if target in valid:
+            _add_lookup(dim, alias, target)
+
+
 def _seed_lookups(dim_values: dict[str, set[str]]) -> None:
-    for b in dim_values["brand"]:
-        _add_lookup("brand", b, b)
-    for alias, target in BRAND_ALIASES.items():
-        if target in dim_values["brand"]:
-            _add_lookup("brand", alias, target)
-    for c in dim_values["color"]:
-        _add_lookup("color", c, c)
-    for alias, target in COLOR_ALIASES.items():
-        if target in dim_values["color"]:
-            _add_lookup("color", alias, target)
-    for s in dim_values["size"]:
-        _add_lookup("size", s, s)
-    for alias, target in SIZE_ALIASES.items():
-        if target in dim_values["size"]:
-            _add_lookup("size", alias, target)
+    _seed_aliased("brand", dim_values["brand"], BRAND_ALIASES, dim_values["brand"])
+    _seed_aliased("color", dim_values["color"], COLOR_ALIASES, dim_values["color"])
+    _seed_aliased("size", dim_values["size"], SIZE_ALIASES, dim_values["size"])
+    _seed_aliased("fit", dim_values["fit"], FIT_ALIASES, dim_values["fit"])
     for alias, target in GENDER_MAP.items():
         if target in dim_values["gender"]:
             _add_lookup("gender", alias, target)
 
 
+# Per-rule SUB CATEGORY override, for items that span categories so the single
+# ITEM→helper row would otherwise collapse the distinction (a SHIRT defaults to
+# FORMAL WEAR in the Master helper, but a "casual shirt" must stay CASUAL WEAR).
+SUB_OVERRIDE = {
+    "FORMAL SHIRT": "FORMAL WEAR",
+    "CASUAL SHIRT": "CASUAL WEAR",
+    "SHIRT": "CASUAL WEAR",
+    "FORMAL PANT": "FORMAL WEAR",
+}
+
+
 def _seed_rules(dim_values: dict[str, set[str]]) -> int:
     item_set, gender_set, fit_set = dim_values["item"], dim_values["gender"], dim_values["fit"]
-    sub_set, type_set = dim_values["sub_category"], dim_values["type"]
+    sub_set = dim_values["sub_category"]
     made_rules = 0
-    for pattern, gender, sub, typ, item, fit in RULE_SEED:
+    for pattern, gender, item, fit in RULE_SEED:
         if item and item not in item_set:
-            continue
-        if sub and sub not in sub_set:
-            sub = ""
-        if typ and typ not in type_set:
-            typ = ""
-        if gender and gender not in gender_set:
-            gender = ""
-        if fit and fit not in fit_set:
-            fit = ""
+            continue  # never seed a rule whose ITEM is not a real Master value
+        sub = SUB_OVERRIDE.get(pattern, "")
         TaxonomyRule.objects.update_or_create(
             pattern=pattern,
             defaults={
-                "gender": gender,
-                "sub_category": sub,
-                "type": typ,
+                "gender": gender if gender in gender_set else "",
+                # explicit SUB CATEGORY only where the item spans categories; otherwise
+                # blank → auto-filled from the ITEM→helper at map time.
+                "sub_category": sub if sub in sub_set else "",
+                "type": "",
                 "item": item,
-                "fit": fit,
+                "fit": fit if fit in fit_set else "",
                 "priority": len(pattern),
             },
         )
@@ -251,16 +710,16 @@ class Command(BaseCommand):
             self.stderr.write(f"Master Sheet not found at {path}")
             return
         rows = _load_master_sheet(path)
-        dim_values, item_tax = _extract_vocabulary(rows)
-        _seed_controlled(dim_values, item_tax)
+        dim_values, item_rows = _extract_vocabulary(rows)
+        _seed_controlled(dim_values, item_rows)
         _seed_lookups(dim_values)
         made_rules = _seed_rules(dim_values)
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"Seeded controlled values ({sum(len(v) for v in dim_values.values())}), "
-                f"item taxonomy ({len(item_tax)}), lookups "
-                f"(brand {len(dim_values['brand'])}, color {len(dim_values['color'])}, "
-                f"size {len(dim_values['size'])}), taxonomy rules ({made_rules})."
+                f"item taxonomy ({len(item_rows)}), lookups "
+                f"(brand +{len(BRAND_ALIASES)}, color +{len(COLOR_ALIASES)}, "
+                f"fit +{len(FIT_ALIASES)} aliases), taxonomy rules ({made_rules})."
             )
         )
