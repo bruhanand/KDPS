@@ -45,9 +45,9 @@ class PendingBookingsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        qs = Booking.objects.select_related("vendor", "brand", "season", "destination_store").filter(
-            status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED]
-        )
+        qs = Booking.objects.select_related(
+            "vendor", "brand", "season", "destination_store"
+        ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
         ids = visible_store_ids(request.user)
         if ids is not None:  # store-scoped user → only their store's deliveries
             qs = qs.filter(destination_store_id__in=ids)
@@ -118,7 +118,9 @@ def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
 
 
 def _grn_quantities(raw: dict) -> tuple[int, int]:
-    return _safe_int(raw.get("received_qty") or raw.get("quantity")), _safe_int(raw.get("damaged_qty"))
+    return _safe_int(raw.get("received_qty") or raw.get("quantity")), _safe_int(
+        raw.get("damaged_qty")
+    )
 
 
 def _booking_line_from_payload(raw: dict, booking: Any) -> BookingLine | None:
@@ -167,9 +169,7 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
         return None, Response({"detail": "Booking not found."}, status=400)
     ids = visible_store_ids(user)
     if ids is not None and booking.destination_store_id not in ids:
-        return None, Response(
-            {"detail": "You may not receive against this booking."}, status=403
-        )
+        return None, Response({"detail": "You may not receive against this booking."}, status=403)
     return booking, None
 
 

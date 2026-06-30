@@ -1,4 +1,7 @@
-"""Iteration 11 backend regression: inbound line semantics, PT inward posting/reversal, cookie auth fallback."""
+"""Iteration 11 backend regression.
+
+Inbound line semantics, PT inward posting/reversal, cookie auth fallback.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +12,6 @@ from typing import Any
 
 import pytest
 import requests
-
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -127,7 +129,9 @@ def test_grn_direct_line_keeps_received_and_damaged_qty() -> None:
         ],
     }
     create = requests.post(f"{API}/inbound/grns", headers=h, json=payload, timeout=30)
-    assert create.status_code == 201, f"direct GRN create failed: {create.status_code} {create.text[:250]}"
+    assert create.status_code == 201, (
+        f"direct GRN create failed: {create.status_code} {create.text[:250]}"
+    )
     grn = create.json()
     assert grn.get("is_direct") is True
     assert isinstance(grn.get("lines"), list) and grn["lines"]
@@ -183,7 +187,9 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
         "lines": [{"style_code": "ITER11-VARIANCE", "size": "M", "received_qty": 1}],
     }
     grn = requests.post(f"{API}/inbound/grns", headers=h, json=variance_payload, timeout=30)
-    assert grn.status_code == 201, f"booking variance GRN failed: {grn.status_code} {grn.text[:250]}"
+    assert grn.status_code == 201, (
+        f"booking variance GRN failed: {grn.status_code} {grn.text[:250]}"
+    )
     grn_line = grn.json()["lines"][0]
     assert grn_line.get("is_variance") is True
 
@@ -253,4 +259,6 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
     )
     assert original_ledger.status_code == 200
     original_entries = _list_of(original_ledger.json())
-    assert original_entries, "original inward entries disappeared after reversal (append-only breach)"
+    assert original_entries, (
+        "original inward entries disappeared after reversal (append-only breach)"
+    )

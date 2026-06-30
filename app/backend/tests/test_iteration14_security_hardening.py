@@ -46,19 +46,25 @@ def _count(payload: Any) -> int:
 
 # --- finledger reads are finance-only ----------------------------------------
 
+
 def test_finledger_reads_require_finance_role() -> None:
     owner = _login("owner", "Owner@123")
     cashier = _login("deo.cashier", "Store@123")
     warehouse = _login("wh.patna", "Wh@123")
 
-    for path in ("/finledger/vendor/entries", "/finledger/vendor/balances",
-                 "/finledger/vendor/ageing", "/finledger/cash/summary"):
+    for path in (
+        "/finledger/vendor/entries",
+        "/finledger/vendor/balances",
+        "/finledger/vendor/ageing",
+        "/finledger/cash/summary",
+    ):
         assert requests.get(f"{API}{path}", headers=owner, timeout=30).status_code == 200, path
         assert requests.get(f"{API}{path}", headers=cashier, timeout=30).status_code == 403, path
         assert requests.get(f"{API}{path}", headers=warehouse, timeout=30).status_code == 403, path
 
 
 # --- PT post / reverse are Patna/HO-only -------------------------------------
+
 
 def test_pt_post_and_reverse_require_patna_role() -> None:
     owner = _login("owner", "Owner@123")
@@ -76,10 +82,11 @@ def test_pt_post_and_reverse_require_patna_role() -> None:
 
 # --- review-resolve is mapping-steward-only ----------------------------------
 
+
 def test_review_resolve_requires_steward_role() -> None:
-    warehouse = _login("wh.patna", "Wh@123")     # steward → passes gate
+    warehouse = _login("wh.patna", "Wh@123")  # steward → passes gate
     cashier = _login("deo.cashier", "Store@123")  # store staff → forbidden
-    accounts = _login("accounts1", "Acct@123")    # finance, not a steward → forbidden
+    accounts = _login("accounts1", "Acct@123")  # finance, not a steward → forbidden
 
     url = f"{API}/ptmapper/review/{MISSING_PK}/resolve"
     assert requests.post(url, headers=cashier, json={}, timeout=30).status_code == 403
@@ -89,8 +96,9 @@ def test_review_resolve_requires_steward_role() -> None:
 
 # --- stock-ledger reads are store-scoped -------------------------------------
 
+
 def test_stockledger_reads_are_store_scoped() -> None:
-    owner = _login("owner", "Owner@123")          # scope = all
+    owner = _login("owner", "Owner@123")  # scope = all
     cashier = _login("deo.cashier", "Store@123")  # scope = single store (DEO)
 
     owner_entries = requests.get(f"{API}/stockledger/entries", headers=owner, timeout=30)
@@ -102,12 +110,13 @@ def test_stockledger_reads_are_store_scoped() -> None:
     assert _count(cashier_entries.json()) <= _count(owner_entries.json())
 
     # On-hand is also scoped and must not error for a single-store user.
-    assert requests.get(
-        f"{API}/stockledger/on-hand", headers=cashier, timeout=30
-    ).status_code == 200
+    assert (
+        requests.get(f"{API}/stockledger/on-hand", headers=cashier, timeout=30).status_code == 200
+    )
 
 
 # --- a non-mapping PT cannot be deleted via the API --------------------------
+
 
 def test_pt_delete_endpoint_guards_non_mapping() -> None:
     owner = _login("owner", "Owner@123")

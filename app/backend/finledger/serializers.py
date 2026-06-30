@@ -15,9 +15,21 @@ class VendorLedgerEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = VendorLedgerEntry
         fields = [
-            "id", "created_at", "doc_number", "kind", "kind_label",
-            "vendor", "vendor_name", "vendor_code", "amount", "amount_rupees",
-            "description", "reference", "mode", "pt_file", "booking",
+            "id",
+            "created_at",
+            "doc_number",
+            "kind",
+            "kind_label",
+            "vendor",
+            "vendor_name",
+            "vendor_code",
+            "amount",
+            "amount_rupees",
+            "description",
+            "reference",
+            "mode",
+            "pt_file",
+            "booking",
         ]
 
     def get_amount_rupees(self, obj: VendorLedgerEntry) -> str:
@@ -32,8 +44,18 @@ class CashLedgerEntrySerializer(serializers.ModelSerializer):
     class Meta:
         model = CashLedgerEntry
         fields = [
-            "id", "created_at", "doc_number", "kind", "kind_label", "account",
-            "amount", "amount_rupees", "description", "mode", "vendor", "vendor_name",
+            "id",
+            "created_at",
+            "doc_number",
+            "kind",
+            "kind_label",
+            "account",
+            "amount",
+            "amount_rupees",
+            "description",
+            "mode",
+            "vendor",
+            "vendor_name",
         ]
 
     def get_amount_rupees(self, obj: CashLedgerEntry) -> str:

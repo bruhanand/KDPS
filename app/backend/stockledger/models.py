@@ -41,16 +41,20 @@ class StockLedgerEntry(LedgerEntry):
     doc_number = models.CharField(max_length=128, db_index=True)  # gap-free PT voucher
     line_no = models.IntegerField(default=0)
     pt_file = models.ForeignKey(
-        "ptmapper.PtFile", null=True, blank=True, on_delete=models.SET_NULL,
+        "ptmapper.PtFile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="stock_entries",
     )
     booking = models.ForeignKey(
-        "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL,
+        "vendors.Booking",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="stock_entries",
     )
-    posted_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
-    )
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         db_table = "stockledger_entry"
@@ -67,11 +71,12 @@ class StockOnHand(models.Model):
     cache, never the source of truth: the ledger is. Mutable (no append-only
     trigger) so it can be updated/rebuilt."""
 
-    store = models.ForeignKey(
-        "masters.Store", on_delete=models.PROTECT, related_name="on_hand"
-    )
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="on_hand")
     gstin = models.ForeignKey(
-        "masters.Gstin", null=True, blank=True, on_delete=models.PROTECT,
+        "masters.Gstin",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="on_hand",
     )
     sku_code = models.CharField(max_length=64, db_index=True)
@@ -90,9 +95,7 @@ class StockOnHand(models.Model):
         db_table = "stockledger_on_hand"
         ordering = ["brand", "-net_qty"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["store", "sku_code"], name="uq_on_hand_store_sku"
-            ),
+            models.UniqueConstraint(fields=["store", "sku_code"], name="uq_on_hand_store_sku"),
         ]
         indexes = [
             models.Index(fields=["brand"], name="onhand_brand_idx"),

@@ -51,6 +51,7 @@ class LedgerPagination(PageNumberPagination):
 
 # --- Vendor ledger ---------------------------------------------------------
 
+
 class VendorEntriesView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsFinance]
     serializer_class = VendorLedgerEntrySerializer
@@ -79,20 +80,24 @@ class VendorBalancesView(APIView):
             bal = r["outstanding"] or 0
             total += bal
             if bal != 0:
-                out.append({
-                    "vendor_id": r["vendor_id"],
-                    "vendor_code": r["vendor__code"],
-                    "vendor_name": r["vendor__name"],
-                    "outstanding_paise": bal,
-                    "outstanding_rupees": paise_to_rupees_str(bal),
-                    "entries": r["entries"],
-                })
-        return Response({
-            "total_payable_paise": total,
-            "total_payable_rupees": paise_to_rupees_str(total),
-            "vendors_with_dues": len(out),
-            "rows": out,
-        })
+                out.append(
+                    {
+                        "vendor_id": r["vendor_id"],
+                        "vendor_code": r["vendor__code"],
+                        "vendor_name": r["vendor__name"],
+                        "outstanding_paise": bal,
+                        "outstanding_rupees": paise_to_rupees_str(bal),
+                        "entries": r["entries"],
+                    }
+                )
+        return Response(
+            {
+                "total_payable_paise": total,
+                "total_payable_rupees": paise_to_rupees_str(total),
+                "vendors_with_dues": len(out),
+                "rows": out,
+            }
+        )
 
 
 def _bucket_for_days(days: int) -> str:
@@ -108,12 +113,14 @@ def _open_vendor_lots(entries: list[VendorLedgerEntry]) -> list[dict[str, Any]]:
     for entry in entries:
         amount = int(entry.amount or 0)
         if amount > 0:
-            lots.append({
-                "amount": amount,
-                "created_at": entry.created_at,
-                "doc_number": entry.doc_number,
-                "reference": entry.reference,
-            })
+            lots.append(
+                {
+                    "amount": amount,
+                    "created_at": entry.created_at,
+                    "doc_number": entry.doc_number,
+                    "reference": entry.reference,
+                }
+            )
             continue
         remaining = abs(amount)
         while remaining > 0 and lots:
@@ -155,34 +162,38 @@ class VendorAgeingView(APIView):
             total_due = sum(buckets.values())
             if total_due <= 0:
                 continue
-            rows.append({
-                "vendor_id": vendor_id,
-                "vendor_code": first.vendor.code,
-                "vendor_name": first.vendor.name,
-                "payment_terms": first.vendor.payment_terms,
-                "oldest_days": oldest_days,
-                "bucket_0_30_paise": buckets["bucket_0_30"],
-                "bucket_0_30_rupees": paise_to_rupees_str(buckets["bucket_0_30"]),
-                "bucket_31_60_paise": buckets["bucket_31_60"],
-                "bucket_31_60_rupees": paise_to_rupees_str(buckets["bucket_31_60"]),
-                "bucket_60_plus_paise": buckets["bucket_60_plus"],
-                "bucket_60_plus_rupees": paise_to_rupees_str(buckets["bucket_60_plus"]),
-                "total_due_paise": total_due,
-                "total_due_rupees": paise_to_rupees_str(total_due),
-                "open_bill_count": len(open_lots),
-            })
+            rows.append(
+                {
+                    "vendor_id": vendor_id,
+                    "vendor_code": first.vendor.code,
+                    "vendor_name": first.vendor.name,
+                    "payment_terms": first.vendor.payment_terms,
+                    "oldest_days": oldest_days,
+                    "bucket_0_30_paise": buckets["bucket_0_30"],
+                    "bucket_0_30_rupees": paise_to_rupees_str(buckets["bucket_0_30"]),
+                    "bucket_31_60_paise": buckets["bucket_31_60"],
+                    "bucket_31_60_rupees": paise_to_rupees_str(buckets["bucket_31_60"]),
+                    "bucket_60_plus_paise": buckets["bucket_60_plus"],
+                    "bucket_60_plus_rupees": paise_to_rupees_str(buckets["bucket_60_plus"]),
+                    "total_due_paise": total_due,
+                    "total_due_rupees": paise_to_rupees_str(total_due),
+                    "open_bill_count": len(open_lots),
+                }
+            )
 
         rows.sort(key=lambda r: (r["bucket_60_plus_paise"], r["total_due_paise"]), reverse=True)
         total_due = sum(totals.values())
-        return Response({
-            "as_of": today.isoformat(),
-            "total_due_paise": total_due,
-            "total_due_rupees": paise_to_rupees_str(total_due),
-            "bucket_0_30_rupees": paise_to_rupees_str(totals["bucket_0_30"]),
-            "bucket_31_60_rupees": paise_to_rupees_str(totals["bucket_31_60"]),
-            "bucket_60_plus_rupees": paise_to_rupees_str(totals["bucket_60_plus"]),
-            "rows": rows,
-        })
+        return Response(
+            {
+                "as_of": today.isoformat(),
+                "total_due_paise": total_due,
+                "total_due_rupees": paise_to_rupees_str(total_due),
+                "bucket_0_30_rupees": paise_to_rupees_str(totals["bucket_0_30"]),
+                "bucket_31_60_rupees": paise_to_rupees_str(totals["bucket_31_60"]),
+                "bucket_60_plus_rupees": paise_to_rupees_str(totals["bucket_60_plus"]),
+                "rows": rows,
+            }
+        )
 
 
 class VendorBillView(APIView):
@@ -198,7 +209,10 @@ class VendorBillView(APIView):
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
         entry = post_vendor_bill(
-            vendor, amount, request.data.get("description", ""), request.user,
+            vendor,
+            amount,
+            request.data.get("description", ""),
+            request.user,
             reference=request.data.get("reference", ""),
         )
         return Response(VendorLedgerEntrySerializer(entry).data, status=201)
@@ -217,7 +231,10 @@ class VendorPaymentView(APIView):
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
         entry = post_vendor_payment(
-            vendor, amount, request.data.get("description", ""), request.user,
+            vendor,
+            amount,
+            request.data.get("description", ""),
+            request.user,
             mode=request.data.get("mode", "cash"),
             account=request.data.get("account", "CASH"),
             also_cash=request.data.get("also_cash", True),
@@ -241,6 +258,7 @@ class VendorReverseView(APIView):
 
 
 # --- Cash ledger -----------------------------------------------------------
+
 
 class CashEntriesView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsFinance]
@@ -269,17 +287,21 @@ class CashSummaryView(APIView):
         for r in rows:
             bal = r["balance"] or 0
             total += bal
-            out.append({
-                "account": r["account"],
-                "balance_paise": bal,
-                "balance_rupees": paise_to_rupees_str(bal),
-                "entries": r["entries"],
-            })
-        return Response({
-            "total_paise": total,
-            "total_rupees": paise_to_rupees_str(total),
-            "accounts": out,
-        })
+            out.append(
+                {
+                    "account": r["account"],
+                    "balance_paise": bal,
+                    "balance_rupees": paise_to_rupees_str(bal),
+                    "entries": r["entries"],
+                }
+            )
+        return Response(
+            {
+                "total_paise": total,
+                "total_rupees": paise_to_rupees_str(total),
+                "accounts": out,
+            }
+        )
 
 
 class CashMovementView(APIView):
@@ -295,7 +317,10 @@ class CashMovementView(APIView):
         if amount <= 0:
             return Response({"detail": "A positive amount is required."}, status=400)
         entry = post_cash_movement(
-            direction, amount, request.data.get("description", ""), request.user,
+            direction,
+            amount,
+            request.data.get("description", ""),
+            request.user,
             account=request.data.get("account", "CASH"),
             mode=request.data.get("mode", ""),
         )

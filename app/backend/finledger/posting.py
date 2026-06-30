@@ -49,33 +49,64 @@ def _user(user):
 
 # --- Vendor ledger ---------------------------------------------------------
 
+
 @transaction.atomic
-def post_vendor_bill(vendor, amount_paise: int, description: str, user,
-                     *, pt_file=None, booking=None, reference: str = "") -> VendorLedgerEntry:
+def post_vendor_bill(
+    vendor,
+    amount_paise: int,
+    description: str,
+    user,
+    *,
+    pt_file=None,
+    booking=None,
+    reference: str = "",
+) -> VendorLedgerEntry:
     """+amount: increases what we owe the vendor."""
     return VendorLedgerEntry.objects.create(
-        vendor=vendor, amount=amount_paise, kind=VendorLedgerEntry.Kind.BILL,
-        doc_number=_allocate(VENDOR_DOC), description=description, reference=reference,
-        pt_file=pt_file, booking=booking, posted_by=_user(user),
+        vendor=vendor,
+        amount=amount_paise,
+        kind=VendorLedgerEntry.Kind.BILL,
+        doc_number=_allocate(VENDOR_DOC),
+        description=description,
+        reference=reference,
+        pt_file=pt_file,
+        booking=booking,
+        posted_by=_user(user),
     )
 
 
 @transaction.atomic
-def post_vendor_payment(vendor, amount_paise: int, description: str, user,
-                        *, mode: str = "", account: str = "CASH",
-                        also_cash: bool = True) -> VendorLedgerEntry:
+def post_vendor_payment(
+    vendor,
+    amount_paise: int,
+    description: str,
+    user,
+    *,
+    mode: str = "",
+    account: str = "CASH",
+    also_cash: bool = True,
+) -> VendorLedgerEntry:
     """−amount on the vendor ledger; optionally a paired cash-out on the cash ledger."""
     entry = VendorLedgerEntry.objects.create(
-        vendor=vendor, amount=-abs(amount_paise), kind=VendorLedgerEntry.Kind.PAYMENT,
-        doc_number=_allocate(VENDOR_DOC), description=description, mode=mode,
+        vendor=vendor,
+        amount=-abs(amount_paise),
+        kind=VendorLedgerEntry.Kind.PAYMENT,
+        doc_number=_allocate(VENDOR_DOC),
+        description=description,
+        mode=mode,
         posted_by=_user(user),
     )
     if also_cash and amount_paise:
         CashLedgerEntry.objects.create(
-            account=account, amount=-abs(amount_paise), kind=CashLedgerEntry.Kind.PAYMENT,
+            account=account,
+            amount=-abs(amount_paise),
+            kind=CashLedgerEntry.Kind.PAYMENT,
             doc_number=_allocate(CASH_DOC),
             description=description or f"Payment to {vendor.name}",
-            mode=mode, vendor=vendor, link_doc=entry.doc_number, posted_by=_user(user),
+            mode=mode,
+            vendor=vendor,
+            link_doc=entry.doc_number,
+            posted_by=_user(user),
         )
     return entry
 
@@ -85,17 +116,28 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
     """Append a negative mirror; also reverse a paired cash-out if one exists."""
     number = _allocate(VENDOR_DOC)
     rev = VendorLedgerEntry.objects.create(
-        vendor=entry.vendor, amount=-entry.amount, kind=VendorLedgerEntry.Kind.REVERSAL,
-        doc_number=number, description=f"Reversal of {entry.doc_number}",
-        pt_file=entry.pt_file, booking=entry.booking, posted_by=_user(user),
+        vendor=entry.vendor,
+        amount=-entry.amount,
+        kind=VendorLedgerEntry.Kind.REVERSAL,
+        doc_number=number,
+        description=f"Reversal of {entry.doc_number}",
+        pt_file=entry.pt_file,
+        booking=entry.booking,
+        posted_by=_user(user),
     )
     for cash in CashLedgerEntry.objects.filter(
         link_doc=entry.doc_number, kind=CashLedgerEntry.Kind.PAYMENT
     ):
         CashLedgerEntry.objects.create(
-            account=cash.account, amount=-cash.amount, kind=CashLedgerEntry.Kind.REVERSAL,
-            doc_number=_allocate(CASH_DOC), description=f"Reversal of {cash.doc_number}",
-            mode=cash.mode, vendor=cash.vendor, link_doc=number, posted_by=_user(user),
+            account=cash.account,
+            amount=-cash.amount,
+            kind=CashLedgerEntry.Kind.REVERSAL,
+            doc_number=_allocate(CASH_DOC),
+            description=f"Reversal of {cash.doc_number}",
+            mode=cash.mode,
+            vendor=cash.vendor,
+            link_doc=number,
+            posted_by=_user(user),
         )
     return rev
 
@@ -110,9 +152,13 @@ def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedg
     if booking.ownership != Brand.Ownership.OWNED:
         return None
     return post_vendor_bill(
-        booking.vendor, total_value_paise,
-        f"PT inward {pt.original_filename}", user,
-        pt_file=pt, booking=booking, reference=booking.number,
+        booking.vendor,
+        total_value_paise,
+        f"PT inward {pt.original_filename}",
+        user,
+        pt_file=pt,
+        booking=booking,
+        reference=booking.number,
     )
 
 
@@ -128,15 +174,25 @@ def reverse_pt_vendor_bills(pt, user) -> int:
 
 # --- Cash ledger -----------------------------------------------------------
 
+
 @transaction.atomic
-def post_cash_movement(direction: str, amount_paise: int, description: str, user,
-                       *, account: str = "CASH", mode: str = "") -> CashLedgerEntry:
+def post_cash_movement(
+    direction: str,
+    amount_paise: int,
+    description: str,
+    user,
+    *,
+    account: str = "CASH",
+    mode: str = "",
+) -> CashLedgerEntry:
     is_in = direction == "in"
     return CashLedgerEntry.objects.create(
         account=account or "CASH",
         amount=abs(amount_paise) if is_in else -abs(amount_paise),
         kind=CashLedgerEntry.Kind.RECEIPT if is_in else CashLedgerEntry.Kind.PAYMENT,
-        doc_number=_allocate(CASH_DOC), description=description, mode=mode,
+        doc_number=_allocate(CASH_DOC),
+        description=description,
+        mode=mode,
         posted_by=_user(user),
     )
 
@@ -144,7 +200,13 @@ def post_cash_movement(direction: str, amount_paise: int, description: str, user
 @transaction.atomic
 def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
     return CashLedgerEntry.objects.create(
-        account=entry.account, amount=-entry.amount, kind=CashLedgerEntry.Kind.REVERSAL,
-        doc_number=_allocate(CASH_DOC), description=f"Reversal of {entry.doc_number}",
-        mode=entry.mode, vendor=entry.vendor, link_doc=entry.doc_number, posted_by=_user(user),
+        account=entry.account,
+        amount=-entry.amount,
+        kind=CashLedgerEntry.Kind.REVERSAL,
+        doc_number=_allocate(CASH_DOC),
+        description=f"Reversal of {entry.doc_number}",
+        mode=entry.mode,
+        vendor=entry.vendor,
+        link_doc=entry.doc_number,
+        posted_by=_user(user),
     )

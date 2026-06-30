@@ -62,7 +62,8 @@ def _sync_review_items(reviews: list[dict]) -> int:
     open_count = 0
     for m in reviews:
         obj, created = ReviewItem.objects.get_or_create(
-            dimension=m["dimension"], raw_value=m["raw"][:300],
+            dimension=m["dimension"],
+            raw_value=m["raw"][:300],
             defaults={"occurrences": m["occurrences"], "context": {"samples": m["samples"]}},
         )
         if not created and obj.status == ReviewItem.Status.OPEN:
@@ -96,10 +97,12 @@ def process_file(pt: PtFile) -> PtFile:
     except Exception as exc:  # noqa: BLE001
         return _fail_file(pt, f"Could not read this file: {exc}")
 
-    PtRow.objects.bulk_create([
-        PtRow(pt_file=pt, line_no=r["line_no"], data=r["data"], blanks=r["blanks"])
-        for r in result["rows"]
-    ])
+    PtRow.objects.bulk_create(
+        [
+            PtRow(pt_file=pt, line_no=r["line_no"], data=r["data"], blanks=r["blanks"])
+            for r in result["rows"]
+        ]
+    )
     open_count = _sync_review_items(result["reviews"])
 
     pt.profile_code = result["profile_code"]
@@ -152,8 +155,10 @@ class PtFileDetailView(generics.RetrieveDestroyAPIView):
         pt = self.get_object()
         if pt.stage != PtFile.Stage.MAPPING:
             return Response(
-                {"detail": "Only files still in mapping can be deleted; "
-                           "sent/posted files are immutable (append-only audit)."},
+                {
+                    "detail": "Only files still in mapping can be deleted; "
+                    "sent/posted files are immutable (append-only audit)."
+                },
                 status=status.HTTP_409_CONFLICT,
             )
         return super().destroy(request, *args, **kwargs)
@@ -167,9 +172,7 @@ class PtFileRerunView(APIView):
         if not pt:
             return Response({"detail": "Not found."}, status=404)
         if pt.stage != PtFile.Stage.MAPPING:
-            return Response(
-                {"detail": "Only files still in mapping can be re-run."}, status=409
-            )
+            return Response({"detail": "Only files still in mapping can be re-run."}, status=409)
         pt.manually_edited = False
         process_file(pt)
         return Response(PtFileDetailSerializer(pt).data)
@@ -376,8 +379,7 @@ class ReviewResolveView(APIView):
         if not target:
             return Response({"detail": "target_value is required."}, status=400)
         valid = set(
-            ControlledValue.objects.filter(dimension=item.dimension)
-            .values_list("value", flat=True)
+            ControlledValue.objects.filter(dimension=item.dimension).values_list("value", flat=True)
         )
         if target not in valid:
             return Response(
@@ -385,7 +387,8 @@ class ReviewResolveView(APIView):
                 status=400,
             )
         Lookup.objects.update_or_create(
-            dimension=item.dimension, source_key=norm(item.raw_value),
+            dimension=item.dimension,
+            source_key=norm(item.raw_value),
             defaults={"target_value": target},
         )
         item.resolved_value = target
@@ -409,7 +412,8 @@ class ReviewResolveView(APIView):
                     {"detail": f"'{val}' is not an allowed {dim_key} value."}, status=400
                 )
         TaxonomyRule.objects.update_or_create(
-            pattern=pattern, defaults={**grid, "priority": len(pattern)},
+            pattern=pattern,
+            defaults={**grid, "priority": len(pattern)},
         )
         item.resolved_value = grid.get("item") or pattern
         return None
@@ -427,7 +431,9 @@ class ReviewResolveView(APIView):
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
         if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
-            return _forbidden("Only mapping stewards (warehouse/data steward/HO ops) can resolve review items.")
+            return _forbidden(
+                "Only mapping stewards (warehouse/data steward/HO ops) can resolve review items."
+            )
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)
@@ -462,6 +468,7 @@ class ControlledValuesView(APIView):
             return Response({"detail": "dimension is required."}, status=400)
         values = list(
             ControlledValue.objects.filter(dimension=dim)
-            .order_by("value").values_list("value", flat=True)
+            .order_by("value")
+            .values_list("value", flat=True)
         )
         return Response({"dimension": dim, "values": values})

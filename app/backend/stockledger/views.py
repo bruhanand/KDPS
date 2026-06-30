@@ -56,14 +56,16 @@ class StockLedgerSummaryView(APIView):
         )
         distinct_skus = qs.values("sku_code").distinct().count()
         distinct_docs = qs.values("doc_number").distinct().count()
-        return Response({
-            "entries": agg["entries"] or 0,
-            "net_qty": agg["net_qty"] or 0,
-            "net_value_paise": agg["net_value"] or 0,
-            "net_value_rupees": paise_to_rupees_str(agg["net_value"] or 0),
-            "distinct_skus": distinct_skus,
-            "distinct_documents": distinct_docs,
-        })
+        return Response(
+            {
+                "entries": agg["entries"] or 0,
+                "net_qty": agg["net_qty"] or 0,
+                "net_value_paise": agg["net_value"] or 0,
+                "net_value_rupees": paise_to_rupees_str(agg["net_value"] or 0),
+                "distinct_skus": distinct_skus,
+                "distinct_documents": distinct_docs,
+            }
+        )
 
 
 class StockOnHandView(APIView):
@@ -95,31 +97,43 @@ class StockOnHandView(APIView):
 
         totals = qs.aggregate(units=Sum("net_qty"), value=Sum("net_value_paise"))
         rows, lines = self._rows(qs, group_by)
-        return Response({
-            "group_by": group_by,
-            "summary": {
-                "units_on_hand": totals["units"] or 0,
-                "value_paise": totals["value"] or 0,
-                "value_rupees": paise_to_rupees_str(totals["value"] or 0),
-                "lines": lines,
-                "displayed": len(rows),
-                "truncated": len(rows) < lines,
-            },
-            "rows": rows,
-        })
+        return Response(
+            {
+                "group_by": group_by,
+                "summary": {
+                    "units_on_hand": totals["units"] or 0,
+                    "value_paise": totals["value"] or 0,
+                    "value_rupees": paise_to_rupees_str(totals["value"] or 0),
+                    "lines": lines,
+                    "displayed": len(rows),
+                    "truncated": len(rows) < lines,
+                },
+                "rows": rows,
+            }
+        )
 
     def _rows(self, qs: Any, group_by: str) -> tuple[list[dict], int]:
         if group_by == "sku":
             lines = qs.count()
             page = qs.order_by("brand", "-net_qty")[: self.MAX_LINES]
-            rows = [{
-                "store_code": o.store.code, "store_name": o.store.name,
-                "brand": o.brand, "design": o.design, "color": o.color,
-                "size": o.size, "item": o.item, "season": o.season,
-                "sku_code": o.sku_code, "net_qty": o.net_qty, "skus": 1,
-                "net_value_paise": o.net_value_paise,
-                "net_value_rupees": paise_to_rupees_str(o.net_value_paise),
-            } for o in page]
+            rows = [
+                {
+                    "store_code": o.store.code,
+                    "store_name": o.store.name,
+                    "brand": o.brand,
+                    "design": o.design,
+                    "color": o.color,
+                    "size": o.size,
+                    "item": o.item,
+                    "season": o.season,
+                    "sku_code": o.sku_code,
+                    "net_qty": o.net_qty,
+                    "skus": 1,
+                    "net_value_paise": o.net_value_paise,
+                    "net_value_rupees": paise_to_rupees_str(o.net_value_paise),
+                }
+                for o in page
+            ]
             return rows, lines
 
         fields = ["store__code", "brand"] if group_by == "brand" else ["store__code", "store__name"]
@@ -134,12 +148,22 @@ class StockOnHandView(APIView):
             .order_by("brand" if group_by == "brand" else "store__code")
         )
         lines = grouped.count()
-        rows = [{
-            "store_code": g.get("store__code", ""), "store_name": g.get("store__name", ""),
-            "brand": g.get("brand", ""), "design": "", "color": "", "size": "",
-            "item": "", "season": "", "sku_code": "",
-            "net_qty": g["g_qty"], "skus": g["skus"],
-            "net_value_paise": g["g_value"] or 0,
-            "net_value_rupees": paise_to_rupees_str(g["g_value"] or 0),
-        } for g in grouped[: self.MAX_LINES]]
+        rows = [
+            {
+                "store_code": g.get("store__code", ""),
+                "store_name": g.get("store__name", ""),
+                "brand": g.get("brand", ""),
+                "design": "",
+                "color": "",
+                "size": "",
+                "item": "",
+                "season": "",
+                "sku_code": "",
+                "net_qty": g["g_qty"],
+                "skus": g["skus"],
+                "net_value_paise": g["g_value"] or 0,
+                "net_value_rupees": paise_to_rupees_str(g["g_value"] or 0),
+            }
+            for g in grouped[: self.MAX_LINES]
+        ]
         return rows, lines

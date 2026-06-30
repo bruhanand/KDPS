@@ -32,16 +32,20 @@ class VendorLedgerEntry(LedgerEntry):
     reference = models.CharField(max_length=120, blank=True, default="")  # vendor invoice no etc.
     mode = models.CharField(max_length=24, blank=True, default="")  # cash / bank / upi (payments)
     pt_file = models.ForeignKey(
-        "ptmapper.PtFile", null=True, blank=True, on_delete=models.SET_NULL,
+        "ptmapper.PtFile",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="vendor_entries",
     )
     booking = models.ForeignKey(
-        "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL,
+        "vendors.Booking",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="vendor_entries",
     )
-    posted_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
-    )
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         db_table = "finledger_vendor_entry"
@@ -63,13 +67,14 @@ class CashLedgerEntry(LedgerEntry):
     description = models.CharField(max_length=240, blank=True, default="")
     mode = models.CharField(max_length=24, blank=True, default="")
     vendor = models.ForeignKey(
-        "vendors.Vendor", null=True, blank=True, on_delete=models.SET_NULL,
+        "vendors.Vendor",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="cash_entries",
     )  # set when this cash-out pays a vendor
     link_doc = models.CharField(max_length=128, blank=True, default="")  # paired vendor doc_number
-    posted_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
-    )
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         db_table = "finledger_cash_entry"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 
 from core.base import TimeStampedModel
@@ -27,7 +29,7 @@ class StoredFile(TimeStampedModel):
         return f"{self.filename} ({self.kind})"
 
     @classmethod
-    def from_upload(cls, upload, kind: str, user=None) -> "StoredFile":
+    def from_upload(cls, upload: Any, kind: str, user: Any = None) -> StoredFile:
         data = upload.read()
         return cls.objects.create(
             filename=getattr(upload, "name", "upload"),

@@ -11,12 +11,12 @@ import os
 
 from django.conf import settings
 from django.contrib import admin
-from django.http import JsonResponse
+from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 
-def health(_request):
+def health(_request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok", "service": "kdps-backend"})
 
 

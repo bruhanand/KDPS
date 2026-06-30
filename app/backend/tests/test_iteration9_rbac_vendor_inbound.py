@@ -1,4 +1,7 @@
-"""Iteration 9 regression: vendor ageing, RBAC admin editor APIs, inbound GRN flows, auth guardrails."""
+"""Iteration 9 regression.
+
+Vendor ageing, RBAC admin editor APIs, inbound GRN flows, auth guardrails.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +11,6 @@ from typing import Any
 
 import pytest
 import requests
-
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -72,7 +74,9 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
         },
         timeout=30,
     )
-    assert role_resp.status_code == 201, f"role create failed: {role_resp.status_code} {role_resp.text[:250]}"
+    assert role_resp.status_code == 201, (
+        f"role create failed: {role_resp.status_code} {role_resp.text[:250]}"
+    )
     role = role_resp.json()
 
     meta = requests.get(f"{API}/auth/admin/meta", headers=headers, timeout=30)
@@ -96,7 +100,9 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
         },
         timeout=30,
     )
-    assert user_resp.status_code == 201, f"user create failed: {user_resp.status_code} {user_resp.text[:250]}"
+    assert user_resp.status_code == 201, (
+        f"user create failed: {user_resp.status_code} {user_resp.text[:250]}"
+    )
     user = user_resp.json()
 
     yield {"role": role, "user": user, "store_id": store_id, "username": username}
@@ -117,8 +123,11 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
 
 # --- Vendor ageing report ---------------------------------------------------
 
+
 def test_vendor_ageing_shape(owner_auth: dict[str, Any]):
-    r = requests.get(f"{API}/finledger/vendor/ageing", headers=_auth_headers(owner_auth["access"]), timeout=30)
+    r = requests.get(
+        f"{API}/finledger/vendor/ageing", headers=_auth_headers(owner_auth["access"]), timeout=30
+    )
     assert r.status_code == 200
     body = r.json()
 
@@ -140,20 +149,31 @@ def test_vendor_ageing_shape(owner_auth: dict[str, Any]):
 
 # --- RBAC users & roles admin APIs -----------------------------------------
 
-def test_rbac_lists_access_control(owner_auth: dict[str, Any], admin_auth: dict[str, Any], accounts_auth: dict[str, Any]):
-    owner_roles = requests.get(f"{API}/auth/admin/roles", headers=_auth_headers(owner_auth["access"]), timeout=30)
+
+def test_rbac_lists_access_control(
+    owner_auth: dict[str, Any], admin_auth: dict[str, Any], accounts_auth: dict[str, Any]
+):
+    owner_roles = requests.get(
+        f"{API}/auth/admin/roles", headers=_auth_headers(owner_auth["access"]), timeout=30
+    )
     assert owner_roles.status_code == 200
     assert isinstance(owner_roles.json(), list)
 
-    admin_users = requests.get(f"{API}/auth/admin/users", headers=_auth_headers(admin_auth["access"]), timeout=30)
+    admin_users = requests.get(
+        f"{API}/auth/admin/users", headers=_auth_headers(admin_auth["access"]), timeout=30
+    )
     assert admin_users.status_code == 200
     assert isinstance(admin_users.json(), list)
 
-    denied = requests.get(f"{API}/auth/admin/users", headers=_auth_headers(accounts_auth["access"]), timeout=30)
+    denied = requests.get(
+        f"{API}/auth/admin/users", headers=_auth_headers(accounts_auth["access"]), timeout=30
+    )
     assert denied.status_code == 403
 
 
-def test_rbac_create_and_edit_role_and_user(owner_auth: dict[str, Any], created_entities: dict[str, Any]):
+def test_rbac_create_and_edit_role_and_user(
+    owner_auth: dict[str, Any], created_entities: dict[str, Any]
+):
     access = owner_auth["access"]
     headers = _auth_headers(access)
     role_id = created_entities["role"]["id"]
@@ -207,12 +227,19 @@ def test_store_scope_requires_store_ids(owner_auth: dict[str, Any]):
 
 # --- Inbound GRN ------------------------------------------------------------
 
-def test_inbound_list_owner_and_store_user(owner_auth: dict[str, Any], cashier_auth: dict[str, Any]):
-    r_owner = requests.get(f"{API}/inbound/grns", headers=_auth_headers(owner_auth["access"]), timeout=30)
+
+def test_inbound_list_owner_and_store_user(
+    owner_auth: dict[str, Any], cashier_auth: dict[str, Any]
+):
+    r_owner = requests.get(
+        f"{API}/inbound/grns", headers=_auth_headers(owner_auth["access"]), timeout=30
+    )
     assert r_owner.status_code == 200
     assert isinstance(r_owner.json(), list)
 
-    r_cashier = requests.get(f"{API}/inbound/grns", headers=_auth_headers(cashier_auth["access"]), timeout=30)
+    r_cashier = requests.get(
+        f"{API}/inbound/grns", headers=_auth_headers(cashier_auth["access"]), timeout=30
+    )
     assert r_cashier.status_code == 200
     assert isinstance(r_cashier.json(), list)
 
@@ -261,6 +288,7 @@ def test_inbound_direct_grn_create_and_detail_for_store_user(cashier_auth: dict[
 
 
 # --- Auth playbook checks ---------------------------------------------------
+
 
 def test_login_bruteforce_lockout_after_five_failures():
     username = f"lockout.iter9.{int(time.time())}"

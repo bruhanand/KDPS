@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 import requests
 
-
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
@@ -127,7 +126,11 @@ def test_seed_does_not_overwrite_existing_user_password():
     def shell(code: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, "manage.py", "shell", "-c", code],
-            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
 
     temp = "OpsRotated#456"
@@ -141,7 +144,11 @@ def test_seed_does_not_overwrite_existing_user_password():
 
         seed = subprocess.run(
             [sys.executable, "manage.py", "seed_admin"],
-            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
         assert seed.returncode == 0, seed.stderr[-500:]
 

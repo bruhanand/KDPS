@@ -11,9 +11,10 @@ from __future__ import annotations
 import csv
 import io
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Callable
+from typing import Any
 
 import openpyxl
 
@@ -101,8 +102,13 @@ def clean_code(v: Any) -> str:
 
 
 _DATE_FORMATS = [
-    "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%Y",
-    "%Y%m%d", "%m/%d/%Y",
+    "%Y-%m-%d %H:%M:%S",
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%d-%m-%Y",
+    "%d.%m.%Y",
+    "%Y%m%d",
+    "%m/%d/%Y",
 ]
 
 
@@ -159,7 +165,7 @@ def _read_csv(content: bytes) -> list[tuple[str, list[list]]]:
             continue
     if text is None:
         raise UnsupportedFormat("Could not decode the CSV text.")
-    rows = list(csv.reader(io.StringIO(text)))[:MAX_ROWS + 1]
+    rows = list(csv.reader(io.StringIO(text)))[: MAX_ROWS + 1]
     return [("csv", rows)]
 
 
@@ -305,7 +311,7 @@ def build_records(rows: list[list], header_idx: int) -> list[dict[str, Any]]:
     headers = [norm(c) for c in rows[header_idx]]
     records: list[dict[str, Any]] = []
     blanks_in_a_row = 0
-    for r in rows[header_idx + 1:]:
+    for r in rows[header_idx + 1 :]:
         if not any(raw_str(c) for c in r):
             blanks_in_a_row += 1
             if blanks_in_a_row >= 3:
@@ -344,7 +350,10 @@ class Resolver:
         raw = raw.strip()[:300]
         if not raw:
             return
-        rec = self.misses.setdefault(dimension + "|" + raw, {"dimension": dimension, "raw": raw, "occurrences": 0, "samples": []})
+        rec = self.misses.setdefault(
+            dimension + "|" + raw,
+            {"dimension": dimension, "raw": raw, "occurrences": 0, "samples": []},
+        )
         rec["occurrences"] += 1
         if ctx and len(rec["samples"]) < 5:
             sample = ctx.get("desc") or ctx.get("brand") or ""
@@ -397,8 +406,11 @@ class Resolver:
         for rule in self.rules:
             if norm(rule.pattern) in up:
                 return {
-                    "gender": rule.gender, "sub_category": rule.sub_category,
-                    "type": rule.type, "item": rule.item, "fit": rule.fit,
+                    "gender": rule.gender,
+                    "sub_category": rule.sub_category,
+                    "type": rule.type,
+                    "item": rule.item,
+                    "fit": rule.fit,
                 }
         if desc.strip():
             self._miss("taxonomy", desc, ctx or {"desc": desc})
@@ -468,7 +480,7 @@ def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields
     return PriceFields(prate=prate, basic=basic, input_tax=input_tax)
 
 
-def _map_season(resolver: "Resolver", g, ctx: dict) -> str | None:
+def _map_season(resolver: Resolver, g, ctx: dict) -> str | None:
     """SEASON from the invoice date if available, else from a season code."""
     d = parse_date(g("DATE_SRC"))
     season = resolver.season_from_date(d) if d else None
@@ -477,7 +489,7 @@ def _map_season(resolver: "Resolver", g, ctx: dict) -> str | None:
     return season
 
 
-def _map_taxonomy(resolver: "Resolver", desc: str, g, ctx: dict) -> dict:
+def _map_taxonomy(resolver: Resolver, desc: str, g, ctx: dict) -> dict:
     """The 5-axis merchandising grid (+ ITEM-suggested sub/type) for one row."""
     tax = resolver.taxonomy(desc, ctx)
     gender = resolver.gender(raw_str(g("GENDER_SRC"))) or tax.get("gender", "")
@@ -489,8 +501,13 @@ def _map_taxonomy(resolver: "Resolver", desc: str, g, ctx: dict) -> dict:
         sub = sub or sug_sub
         typ = typ or sug_type
     return {
-        "gender": gender, "item": item, "fit": fit, "sub": sub, "typ": typ,
-        "sug_sub": sug_sub, "sug_type": sug_type,
+        "gender": gender,
+        "item": item,
+        "fit": fit,
+        "sub": sub,
+        "typ": typ,
+        "sug_sub": sug_sub,
+        "sug_type": sug_type,
     }
 
 
@@ -509,7 +526,7 @@ def _color_src(g: Callable[[str], Any], profile: dict) -> str:
 
 
 def _resolve_fields(
-    resolver: "Resolver", g: Callable[[str], Any], base: BaseMappedFields, profile: dict
+    resolver: Resolver, g: Callable[[str], Any], base: BaseMappedFields, profile: dict
 ) -> ResolvedFields:
     ctx = {"brand": base.raw_brand, "desc": base.desc}
     return ResolvedFields(
@@ -538,16 +555,28 @@ def _build_kdps_row(
     tx = resolved.taxonomy
     input_tax = prices.input_tax if prices.input_tax is not None else ""
     return {
-        "SEASON": resolved.season or "", "BRAND": resolved.brand or "", "COLOR": resolved.color or "",
-        "GENDER": tx["gender"] or "", "SUB CATEGORY": tx["sub"] or "", "TYPE": tx["typ"] or "",
-        "ITEM": tx["item"] or "", "FIT": tx["fit"] or "", "SIZE": resolved.size or "",
-        "BARCODE": base.barcode, "DESIGN": base.design, "HSN": clean_code(g("HSN")),
-        "QTY": _quantity_out(base.qty), "MRP": base.mrp if base.mrp is not None else "",
+        "SEASON": resolved.season or "",
+        "BRAND": resolved.brand or "",
+        "COLOR": resolved.color or "",
+        "GENDER": tx["gender"] or "",
+        "SUB CATEGORY": tx["sub"] or "",
+        "TYPE": tx["typ"] or "",
+        "ITEM": tx["item"] or "",
+        "FIT": tx["fit"] or "",
+        "SIZE": resolved.size or "",
+        "BARCODE": base.barcode,
+        "DESIGN": base.design,
+        "HSN": clean_code(g("HSN")),
+        "QTY": _quantity_out(base.qty),
+        "MRP": base.mrp if base.mrp is not None else "",
         "BASIC": prices.basic if prices.basic is not None else "",
         "P RATE": prices.prate if prices.prate is not None else "",
-        "INPUT TAX": input_tax, "OUTPUT TAX": input_tax,
-        "NAG": _quantity_out(base.qty), "MARGIN": _margin(base.mrp, prices.prate),
-        "SUGGESTED SUB CATEGORY": tx["sug_sub"], "SUGGESTED TYPE": tx["sug_type"],
+        "INPUT TAX": input_tax,
+        "OUTPUT TAX": input_tax,
+        "NAG": _quantity_out(base.qty),
+        "MARGIN": _margin(base.mrp, prices.prate),
+        "SUGGESTED SUB CATEGORY": tx["sug_sub"],
+        "SUGGESTED TYPE": tx["sug_type"],
     }
 
 
@@ -555,7 +584,9 @@ def _blank_controlled_columns(row: dict) -> list:
     return [column for column in CONTROLLED if not row[column]]
 
 
-def map_record(rec: dict, profile: dict, resolver: Resolver, brand_default: str) -> tuple[dict, list] | None:
+def map_record(
+    rec: dict, profile: dict, resolver: Resolver, brand_default: str
+) -> tuple[dict, list] | None:
     g = _getter(rec, profile)
     base = _extract_base_fields(rec, profile, g, brand_default)
     if not _has_mappable_payload(base):
@@ -601,9 +632,12 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
         "archetype": profile["archetype"],
         "brand_guess": brand_default,
         "meta": {
-            "sheet": sheet_name, "header_row": header_idx,
-            "headers": [h for h in headers if h], "source_rows": len(records),
-            "truncated": truncated, "row_limit": MAX_ROWS,
+            "sheet": sheet_name,
+            "header_row": header_idx,
+            "headers": [h for h in headers if h],
+            "source_rows": len(records),
+            "truncated": truncated,
+            "row_limit": MAX_ROWS,
         },
         "rows": kdps_rows,
         "reviews": reviews,

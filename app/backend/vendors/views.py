@@ -69,9 +69,7 @@ class BookingDraftView(APIView):
         upload = request.FILES.get("file")
         if not upload:
             return Response({"detail": "A file is required."}, status=400)
-        stored = StoredFile.from_upload(
-            upload, StoredFile.Kind.BOOKING_RECEIPT, request.user
-        )
+        stored = StoredFile.from_upload(upload, StoredFile.Kind.BOOKING_RECEIPT, request.user)
         try:
             result = read_booking_receipt(bytes(stored.content), stored.content_type)
         except Exception as exc:  # noqa: BLE001 - surface a clean message to the UI

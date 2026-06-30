@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 import requests
 
-
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
@@ -66,7 +65,9 @@ def test_auth_me_works_with_cookie_only_without_authorization_header(session: re
     assert isinstance(data.get("stores"), list)
 
 
-def test_refresh_from_cookie_sets_access_cookie_and_keeps_json_compatibility(session: requests.Session):
+def test_refresh_from_cookie_sets_access_cookie_and_keeps_json_compatibility(
+    session: requests.Session,
+):
     login = _json_login(session, "owner", "Owner@123")
     assert login.status_code == 200
 
@@ -135,13 +136,21 @@ def test_seed_admin_is_idempotent_and_does_not_overwrite_password():
     def shell(code: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, "manage.py", "shell", "-c", code],
-            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
 
     # seed_admin exists and runs (idempotent)
     run1 = subprocess.run(
         [sys.executable, "manage.py", "seed_admin"],
-        cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+        cwd=backend_dir,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
     )
     assert run1.returncode == 0, run1.stderr[-500:]
 
@@ -159,7 +168,11 @@ def test_seed_admin_is_idempotent_and_does_not_overwrite_password():
         # Re-seed must NOT clobber the rotated password (security fix).
         run2 = subprocess.run(
             [sys.executable, "manage.py", "seed_admin"],
-            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+            cwd=backend_dir,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
         assert run2.returncode == 0, run2.stderr[-500:]
 

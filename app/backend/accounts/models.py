@@ -12,6 +12,8 @@ hierarchy, never by minting a per-store role.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -65,9 +67,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     role = models.ForeignKey(
         Role, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
     )
-    scope_type = models.CharField(
-        max_length=20, choices=ScopeType.choices, default=ScopeType.ALL
-    )
+    scope_type = models.CharField(max_length=20, choices=ScopeType.choices, default=ScopeType.ALL)
     entity = models.ForeignKey(
         "masters.LegalEntity",
         null=True,
@@ -83,7 +83,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     objects = UserManager()
 
     USERNAME_FIELD = "username"
-    REQUIRED_FIELDS: list[str] = []
+    REQUIRED_FIELDS: ClassVar[list[str]] = []
 
     class Meta:
         ordering = ["username"]

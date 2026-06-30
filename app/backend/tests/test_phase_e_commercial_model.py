@@ -18,7 +18,7 @@ from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from ptmapper.models import PtFile, PtRow
 from stockledger.models import StockLedgerEntry
 from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
-from vendors.models import Booking, BookingLine, Vendor
+from vendors.models import Booking, Vendor
 
 
 @pytest.fixture
@@ -32,22 +32,36 @@ def world(db):
     )
     season = Season.objects.create(code="SS26", name="SS26")
     owned_brand = Brand.objects.create(
-        code="mufti", name="Mufti", ownership=Brand.Ownership.OWNED, return_terms=Brand.ReturnTerms.NONE
+        code="mufti",
+        name="Mufti",
+        ownership=Brand.Ownership.OWNED,
+        return_terms=Brand.ReturnTerms.NONE,
     )
     sor_brand = Brand.objects.create(
-        code="lp", name="Louis Philippe",
-        ownership=Brand.Ownership.BRAND_OWNED, return_terms=Brand.ReturnTerms.UNCAPPED,
+        code="lp",
+        name="Louis Philippe",
+        ownership=Brand.Ownership.BRAND_OWNED,
+        return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(code="v-abfrl", name="ABFRL")
     return {
-        "wh": wh, "season": season, "owned": owned_brand, "sor": sor_brand, "vendor": vendor,
+        "wh": wh,
+        "season": season,
+        "owned": owned_brand,
+        "sor": sor_brand,
+        "vendor": vendor,
     }
 
 
 def _booking(world, brand, *, number):
     return Booking.objects.create(
-        number=number, vendor=world["vendor"], brand=brand, season=world["season"],
-        status=Booking.Status.BOOKED, ownership=brand.ownership, return_terms=brand.return_terms,
+        number=number,
+        vendor=world["vendor"],
+        brand=brand,
+        season=world["season"],
+        status=Booking.Status.BOOKED,
+        ownership=brand.ownership,
+        return_terms=brand.return_terms,
     )
 
 
@@ -56,10 +70,19 @@ def _pt_with_row(*, prate="100", basic="80", mrp="200", qty="2", design="STYLE1"
         original_filename="test.xlsx", draft_stage=PtFile.DraftStage.SENT, row_count=1
     )
     PtRow.objects.create(
-        pt_file=pt, line_no=1,
+        pt_file=pt,
+        line_no=1,
         data={
-            "BARCODE": "B1", "DESIGN": design, "SIZE": size, "BRAND": "X", "SEASON": "SS26",
-            "P RATE": prate, "BASIC": basic, "MRP": mrp, "QTY": qty, "NAG": qty,
+            "BARCODE": "B1",
+            "DESIGN": design,
+            "SIZE": size,
+            "BRAND": "X",
+            "SEASON": "SS26",
+            "P RATE": prate,
+            "BASIC": basic,
+            "MRP": mrp,
+            "QTY": qty,
+            "NAG": qty,
         },
     )
     return pt
@@ -139,5 +162,10 @@ def test_reversal_unwinds_stock_payable_and_value_gl(world):
     assert account_balance(GLAccount.VENDOR_PAYABLE) == 0
     assert trial_balance() == 0
     # vendor ledger: a bill and its reversal both present (append-only)
-    assert VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.BILL).count() == 1
-    assert VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.REVERSAL).count() == 1
+    assert (
+        VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.BILL).count() == 1
+    )
+    assert (
+        VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.REVERSAL).count()
+        == 1
+    )

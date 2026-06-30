@@ -45,21 +45,25 @@ class BooksHealthView(APIView):
         liabilities = -sum(balances[c] for c, _, side in ACCOUNTS if side == "liability")
         accounts: list[dict[str, Any]] = [
             {
-                "code": code, "label": label, "side": side,
+                "code": code,
+                "label": label,
+                "side": side,
                 "balance_paise": balances[code],
                 "balance_rupees": paise_to_rupees_str(balances[code]),
             }
             for code, label, side in ACCOUNTS
         ]
-        return Response({
-            "balanced": tb == 0,
-            "trial_balance_paise": tb,
-            "trial_balance_rupees": paise_to_rupees_str(tb),
-            "assets_paise": assets,
-            "assets_rupees": paise_to_rupees_str(assets),
-            "liabilities_paise": liabilities,
-            "liabilities_rupees": paise_to_rupees_str(liabilities),
-            "leg_count": GLEntry.objects.count(),
-            "voucher_count": GLEntry.objects.values("doc_number").distinct().count(),
-            "accounts": accounts,
-        })
+        return Response(
+            {
+                "balanced": tb == 0,
+                "trial_balance_paise": tb,
+                "trial_balance_rupees": paise_to_rupees_str(tb),
+                "assets_paise": assets,
+                "assets_rupees": paise_to_rupees_str(assets),
+                "liabilities_paise": liabilities,
+                "liabilities_rupees": paise_to_rupees_str(liabilities),
+                "leg_count": GLEntry.objects.count(),
+                "voucher_count": GLEntry.objects.values("doc_number").distinct().count(),
+                "accounts": accounts,
+            }
+        )

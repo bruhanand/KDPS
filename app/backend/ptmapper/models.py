@@ -123,9 +123,7 @@ class PtFile(Document):
     profile_code = models.CharField(max_length=60, blank=True, default="")
     profile_name = models.CharField(max_length=160, blank=True, default="")
     archetype = models.CharField(max_length=4, blank=True, default="")
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.NEEDS_REVIEW
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEEDS_REVIEW)
     draft_stage = models.CharField(
         max_length=12, choices=DraftStage.choices, default=DraftStage.MAPPING
     )
@@ -133,7 +131,10 @@ class PtFile(Document):
     sent_at = models.DateTimeField(null=True, blank=True)
     posted_at = models.DateTimeField(null=True, blank=True)
     booking = models.ForeignKey(
-        "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL,
+        "vendors.Booking",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="pt_files",
     )
     row_count = models.IntegerField(default=0)
@@ -194,9 +195,7 @@ class ReviewItem(TimeStampedModel):
     dimension = models.CharField(max_length=20)  # color | size | brand | season | taxonomy
     raw_value = models.CharField(max_length=300)
     context = models.JSONField(default=dict, blank=True)  # {brands:[], samples:[], files:[]}
-    status = models.CharField(
-        max_length=12, choices=Status.choices, default=Status.OPEN
-    )
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     resolved_value = models.CharField(max_length=300, blank=True, default="")
     occurrences = models.IntegerField(default=1)
 
