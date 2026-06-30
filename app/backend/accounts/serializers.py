@@ -153,7 +153,7 @@ class AdminUserSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        scope = attrs.get("scope_type") or getattr(self.instance, "scope_type", "all")
+        scope = attrs.get("scope_type") or getattr(self.instance, "scope_type", "store")
         stores = attrs.get("stores")
         if scope == "store" and stores is not None and len(stores) == 0:
             raise serializers.ValidationError(

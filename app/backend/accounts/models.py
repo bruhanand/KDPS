@@ -67,7 +67,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     role = models.ForeignKey(
         Role, null=True, blank=True, on_delete=models.SET_NULL, related_name="users"
     )
-    scope_type = models.CharField(max_length=20, choices=ScopeType.choices, default=ScopeType.ALL)
+    # Fail-closed default: a user created without an explicit scope sees the
+    # narrowest scope (its own stores — nothing until stores are assigned), never
+    # the whole network. Network-wide access must be granted deliberately.
+    scope_type = models.CharField(max_length=20, choices=ScopeType.choices, default=ScopeType.STORE)
     entity = models.ForeignKey(
         "masters.LegalEntity",
         null=True,
