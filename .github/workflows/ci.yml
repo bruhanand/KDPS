@@ -57,6 +57,11 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
+        with:
+          # Disable the uv cache: on the hosted runner its post-job "Prune cache"
+          # step hangs ~5 min and is killed with exit 2, failing the whole job even
+          # though every test step passed. `uv sync` is fast enough without it.
+          enable-cache: false
 
       - name: Sync dependencies
         run: uv sync
