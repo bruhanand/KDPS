@@ -36,9 +36,7 @@ class Gstin(TimeStampedModel):
     """A state tax identity. Two GSTINs = two 'distinct persons'; the first two
     digits are the state code that drives intra- vs cross-state (IGST) treatment."""
 
-    legal_entity = models.ForeignKey(
-        LegalEntity, on_delete=models.PROTECT, related_name="gstins"
-    )
+    legal_entity = models.ForeignKey(LegalEntity, on_delete=models.PROTECT, related_name="gstins")
     gstin = models.CharField(max_length=15, unique=True)
     state_code = models.CharField(max_length=2)  # e.g. "10" Bihar, "20" Jharkhand
     state_name = models.CharField(max_length=40)
@@ -62,9 +60,7 @@ class Store(TimeStampedModel):
 
     code = models.SlugField(max_length=16, unique=True)  # e.g. "DEO"
     name = models.CharField(max_length=120)
-    store_type = models.CharField(
-        max_length=12, choices=StoreType.choices, default=StoreType.STORE
-    )
+    store_type = models.CharField(max_length=12, choices=StoreType.choices, default=StoreType.STORE)
     gstin = models.ForeignKey(Gstin, on_delete=models.PROTECT, related_name="stores")
     city = models.CharField(max_length=80, blank=True, default="")
     is_active = models.BooleanField(default=True)
@@ -113,9 +109,7 @@ class Brand(TimeStampedModel):
 
     code = models.SlugField(max_length=32, unique=True)
     name = models.CharField(max_length=120)
-    ownership = models.CharField(
-        max_length=12, choices=Ownership.choices, default=Ownership.OWNED
-    )
+    ownership = models.CharField(max_length=12, choices=Ownership.choices, default=Ownership.OWNED)
     return_terms = models.CharField(
         max_length=12, choices=ReturnTerms.choices, default=ReturnTerms.NONE
     )
@@ -198,9 +192,7 @@ class Cohort(TimeStampedModel):
     class Meta:
         ordering = ["barcode", "season"]
         constraints = [
-            models.UniqueConstraint(
-                fields=["barcode", "season"], name="uq_cohort_barcode_season"
-            ),
+            models.UniqueConstraint(fields=["barcode", "season"], name="uq_cohort_barcode_season"),
             models.CheckConstraint(
                 condition=models.Q(mrp_paise__isnull=True)
                 | models.Q(unit_cost_paise__lte=models.F("mrp_paise")),

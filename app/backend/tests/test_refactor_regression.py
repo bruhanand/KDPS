@@ -2,12 +2,15 @@
 
 - ptmapper.engine.map_record() (split into _map_prices/_map_season/_map_taxonomy)
 - ptmapper.views.ReviewResolveView.post() helpers
-- inbound.views GrnListCreateView.create() helpers (_resolve_receiving_store / _build_grn / _add_grn_line)
+- inbound.views GrnListCreateView.create() helpers
+  (_resolve_receiving_store / _build_grn / _add_grn_line)
 
 These hit the LIVE preview env via REACT_APP_BACKEND_URL.
 """
+
 import os
 import time
+from pathlib import Path
 
 import pytest
 import requests
@@ -17,7 +20,8 @@ BASE_URL = os.environ.get(
     "https://ledger-kernel-v2.preview.emergentagent.com",
 ).rstrip("/")
 
-PT_DIR = "/app/docs/data-from-kdps/Q&A-req-recieved/PT FILE"
+# Repo-relative so fixtures resolve in Claude Code, Emergent (/app) and CI alike.
+PT_DIR = str(Path(__file__).resolve().parents[3] / "docs/data-from-kdps/Q&A-req-recieved/PT FILE")
 
 
 def _login(username: str, password: str) -> str:
@@ -46,6 +50,7 @@ def _auth(tok):
 
 # ---- PT MAPPER engine refactor ----------------------------------------------
 
+
 def _upload_pt(token: str, path: str) -> dict:
     with open(path, "rb") as fh:
         r = requests.post(
@@ -58,7 +63,9 @@ def _upload_pt(token: str, path: str) -> dict:
     return r.json()
 
 
-def _wait_processed(token: str, file_id: int, want_rows: int | None = None, retries: int = 40) -> dict:
+def _wait_processed(
+    token: str, file_id: int, want_rows: int | None = None, retries: int = 40
+) -> dict:
     last = None
     for _ in range(retries):
         r = requests.get(
@@ -68,7 +75,9 @@ def _wait_processed(token: str, file_id: int, want_rows: int | None = None, retr
         )
         assert r.status_code == 200, r.text[:300]
         last = r.json()
-        if last.get("status") in {"mapped", "ready", "needs_review", "failed"} or last.get("row_count"):
+        if last.get("status") in {"mapped", "ready", "needs_review", "failed"} or last.get(
+            "row_count"
+        ):
             if want_rows is None or last.get("row_count", 0) >= want_rows:
                 return last
         time.sleep(1.5)
@@ -114,12 +123,14 @@ def test_jockey852_xls_maps_generic_archetype_a(owner_token):
     profile = (final.get("profile") or final.get("mapping_profile") or "").lower()
     arche = (final.get("archetype") or "").upper()
     # Tolerate either spelling/casing; main agent reported "Generic (header-name auto-map)" + A.
-    assert "generic" in profile or final.get("profile_name", "").lower().startswith("generic"), \
+    assert "generic" in profile or final.get("profile_name", "").lower().startswith("generic"), (
         f"JOCKEY 852 profile={profile!r}"
+    )
     assert arche in ("A", "") or "A" in arche, f"JOCKEY 852 archetype={arche!r}"
 
 
 # ---- INBOUND / GRN refactor --------------------------------------------------
+
 
 def test_grn_create_direct_receipt(cashier_token):
     """Direct GRN (no booking): must succeed (201) and be visible in list."""
@@ -153,8 +164,9 @@ def test_grn_create_direct_receipt(cashier_token):
     assert rl.status_code == 200, rl.text[:300]
     listed = rl.json()
     items = listed if isinstance(listed, list) else listed.get("results", [])
-    assert any((it.get("id") or it.get("grn_id")) == grn_id for it in items), \
+    assert any((it.get("id") or it.get("grn_id")) == grn_id for it in items), (
         "newly created GRN not in cashier's list"
+    )
 
 
 def test_grn_create_against_booking_updates_progress(cashier_token):
@@ -199,8 +211,9 @@ def test_grn_create_against_booking_updates_progress(cashier_token):
     if bk2:
         line2 = next((ln for ln in bk2["lines"] if ln["id"] == line["id"]), None)
         if line2:
-            assert int(line2["received_qty"]) >= prev_recv + 1, \
+            assert int(line2["received_qty"]) >= prev_recv + 1, (
                 f"booking line received_qty did not advance: {prev_recv} -> {line2['received_qty']}"
+            )
 
 
 def test_grn_list_scope_fail_closed(cashier_token):
@@ -209,13 +222,16 @@ def test_grn_list_scope_fail_closed(cashier_token):
     assert r.status_code == 200
     listed = r.json()
     items = listed if isinstance(listed, list) else listed.get("results", [])
-    stores = {(it.get("store") or it.get("store_code") or it.get("receiving_store")) for it in items}
+    stores = {
+        (it.get("store") or it.get("store_code") or it.get("receiving_store")) for it in items
+    }
     # If a store field is exposed, all rows should belong to a single store (DEO).
     stores.discard(None)
     assert len(stores) <= 1, f"cashier sees multiple stores: {stores}"
 
 
 # ---- REVIEW QUEUE refactor (smoke) ------------------------------------------
+
 
 def test_review_queue_reachable(owner_token):
     r = requests.get(f"{BASE_URL}/api/ptmapper/review", headers=_auth(owner_token), timeout=30)

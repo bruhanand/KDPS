@@ -36,18 +36,30 @@ def world(db):
     )
     season = Season.objects.create(code="SS26", name="SS26")
     owned = Brand.objects.create(
-        code="mufti", name="Mufti",
-        ownership=Brand.Ownership.OWNED, return_terms=Brand.ReturnTerms.NONE,
+        code="mufti",
+        name="Mufti",
+        ownership=Brand.Ownership.OWNED,
+        return_terms=Brand.ReturnTerms.NONE,
     )
     vendor = Vendor.objects.create(code="v1", name="V1")
-    return {"entity": entity, "gstin": gstin, "wh": wh, "season": season,
-            "owned": owned, "vendor": vendor}
+    return {
+        "entity": entity,
+        "gstin": gstin,
+        "wh": wh,
+        "season": season,
+        "owned": owned,
+        "vendor": vendor,
+    }
 
 
 def _booking(world):
     return Booking.objects.create(
-        number="BK-F-1", vendor=world["vendor"], brand=world["owned"], season=world["season"],
-        status=Booking.Status.BOOKED, ownership=world["owned"].ownership,
+        number="BK-F-1",
+        vendor=world["vendor"],
+        brand=world["owned"],
+        season=world["season"],
+        status=Booking.Status.BOOKED,
+        ownership=world["owned"].ownership,
         return_terms=world["owned"].return_terms,
     )
 
@@ -57,11 +69,22 @@ def _pt(*, qty="3", prate="100", mrp="200", barcode="B1", season="SS26"):
         original_filename="t.xlsx", draft_stage=PtFile.DraftStage.SENT, row_count=1
     )
     PtRow.objects.create(
-        pt_file=pt, line_no=1,
+        pt_file=pt,
+        line_no=1,
         data={
-            "BARCODE": barcode, "DESIGN": "D1", "SIZE": "M", "COLOR": "RED",
-            "BRAND": "Mufti", "SEASON": season, "ITEM": "SHIRT", "HSN": "6105",
-            "P RATE": prate, "BASIC": "80", "MRP": mrp, "QTY": qty, "NAG": qty,
+            "BARCODE": barcode,
+            "DESIGN": "D1",
+            "SIZE": "M",
+            "COLOR": "RED",
+            "BRAND": "Mufti",
+            "SEASON": season,
+            "ITEM": "SHIRT",
+            "HSN": "6105",
+            "P RATE": prate,
+            "BASIC": "80",
+            "MRP": mrp,
+            "QTY": qty,
+            "NAG": qty,
         },
     )
     return pt
@@ -74,15 +97,15 @@ def _user(role_code: str, scope: str = "all") -> User:
 
 # --- MoneyField -----------------------------------------------------------
 
+
 def test_moneyfield_rejects_float_on_paise_column(world):
     booking = _booking(world)
     with pytest.raises(TypeError):
-        BookingLine.objects.create(
-            booking=booking, style_code="x", booked_qty=1, mrp_paise=19.99
-        )
+        BookingLine.objects.create(booking=booking, style_code="x", booked_qty=1, mrp_paise=19.99)
 
 
 # --- SKU + cohort identity -----------------------------------------------
+
 
 def test_post_registers_sku_and_cohort_with_locked_cost(world):
     post_pt_inward(_pt(qty="3", prate="100", mrp="200"), None, booking=_booking(world))
@@ -100,12 +123,16 @@ def test_cohort_db_check_blocks_cost_over_mrp(world):
     with pytest.raises(IntegrityError):
         with transaction.atomic():
             Cohort.objects.create(
-                sku=sku, barcode="BX", season="SS26",
-                unit_cost_paise=30000, mrp_paise=20000,
+                sku=sku,
+                barcode="BX",
+                season="SS26",
+                unit_cost_paise=30000,
+                mrp_paise=20000,
             )
 
 
 # --- Materialised stock-on-hand ------------------------------------------
+
 
 def test_stock_on_hand_materialises_and_zeroes_on_reversal(world):
     pt = _pt(qty="3", prate="100", mrp="200")
@@ -121,11 +148,10 @@ def test_stock_on_hand_materialises_and_zeroes_on_reversal(world):
 
 # --- PT reader truncation (no longer silent) ------------------------------
 
+
 def test_pt_reader_flags_row_cap_truncation(db, monkeypatch):
     monkeypatch.setattr(engine, "MAX_ROWS", 2)
-    body = b"BARCODE,DESIGN,QTY,MRP\n" + b"\n".join(
-        f"B{i},D,1,100".encode() for i in range(5)
-    )
+    body = b"BARCODE,DESIGN,QTY,MRP\n" + b"\n".join(f"B{i},D,1,100".encode() for i in range(5))
     result = engine.run_mapping(body, "big.csv", "text/csv")
     assert result["meta"]["truncated"] is True
     assert result["meta"]["row_limit"] == 2
@@ -139,6 +165,7 @@ def test_pt_reader_not_truncated_for_small_file(db, monkeypatch):
 
 
 # --- Books-health (trial balance) ----------------------------------------
+
 
 def test_books_health_reports_balanced_books_after_post(world):
     post_pt_inward(_pt(), None, booking=_booking(world))
@@ -159,10 +186,15 @@ def test_books_health_is_finance_gated(world):
 
 # --- Master-data stewardship gate ----------------------------------------
 
+
 def test_master_steward_can_create_store_others_cannot(world):
     payload = {
-        "code": "NEW", "name": "New Store", "store_type": "store",
-        "gstin": world["gstin"].id, "city": "Patna", "is_active": True,
+        "code": "NEW",
+        "name": "New Store",
+        "store_type": "store",
+        "gstin": world["gstin"].id,
+        "city": "Patna",
+        "is_active": True,
     }
     steward = APIClient()
     steward.force_authenticate(_user("data_steward"))

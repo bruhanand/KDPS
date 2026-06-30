@@ -21,29 +21,69 @@ from django.core.management.base import BaseCommand
 from ptmapper.models import ControlledValue, ItemTaxonomy, Lookup, TaxonomyRule
 
 DIM_COLS = {
-    0: "season", 1: "brand", 2: "color", 3: "gender", 4: "sub_category",
-    5: "type", 6: "item", 7: "fit", 8: "size", 9: "gst",
+    0: "season",
+    1: "brand",
+    2: "color",
+    3: "gender",
+    4: "sub_category",
+    5: "type",
+    6: "item",
+    7: "fit",
+    8: "size",
+    9: "gst",
 }
 
 BRAND_ALIASES = {
-    "FM": "FLYING MACHINE", "PJ": "PETER ENGLAND", "GO COLORS": "GO COLOURS",
-    "BLACKBERRYS": "BLACKBERRY", "MADURA": "PETER ENGLAND",
+    "FM": "FLYING MACHINE",
+    "PJ": "PETER ENGLAND",
+    "GO COLORS": "GO COLOURS",
+    "BLACKBERRYS": "BLACKBERRY",
+    "MADURA": "PETER ENGLAND",
 }
 COLOR_ALIASES = {
-    "LIGHT BLUE": "BLUE", "DARK BLUE": "BLUE", "SKY BLUE": "BLUE", "NAVY BLUE": "NAVY",
-    "INDIGO": "BLUE", "INDIGO MEL": "BLUE", "TNAVY": "NAVY", "OFF WHITE": "WHITE",
-    "MUSTARD": "YELLOW", "WINE": "MAROON", "PEACH": "ORANGE", "BEIGE": "CREAM",
-    "KHAKI": "OLIVE", "TEAL BLUE": "TEAL", "AQUA": "BLUE", "GREEN MEL": "GREEN",
+    "LIGHT BLUE": "BLUE",
+    "DARK BLUE": "BLUE",
+    "SKY BLUE": "BLUE",
+    "NAVY BLUE": "NAVY",
+    "INDIGO": "BLUE",
+    "INDIGO MEL": "BLUE",
+    "TNAVY": "NAVY",
+    "OFF WHITE": "WHITE",
+    "MUSTARD": "YELLOW",
+    "WINE": "MAROON",
+    "PEACH": "ORANGE",
+    "BEIGE": "CREAM",
+    "KHAKI": "OLIVE",
+    "TEAL BLUE": "TEAL",
+    "AQUA": "BLUE",
+    "GREEN MEL": "GREEN",
 }
 SIZE_ALIASES = {
-    "FREE SIZE": "FREE", "F": "FREE", "FS": "FREE", "1 MTR.": "FREE",
+    "FREE SIZE": "FREE",
+    "F": "FREE",
+    "FS": "FREE",
+    "1 MTR.": "FREE",
 }
 GENDER_MAP = {
-    "MALE": "MALE", "MEN": "MALE", "MENS": "MALE", "MAN": "MALE", "M": "MALE", "GENTS": "MALE",
-    "BOYS": "KIDS MALE", "BOY": "KIDS MALE", "KIDS MALE": "KIDS MALE",
-    "FEMALE": "FEMALE", "WOMEN": "FEMALE", "WOMENS": "FEMALE", "WOMAN": "FEMALE",
-    "LADIES": "FEMALE", "GIRLS": "KIDS FEMALE", "GIRL": "KIDS FEMALE",
-    "KIDS FEMALE": "KIDS FEMALE", "UNISEX": "UNISEX", "KIDS": "UNISEX",
+    "MALE": "MALE",
+    "MEN": "MALE",
+    "MENS": "MALE",
+    "MAN": "MALE",
+    "M": "MALE",
+    "GENTS": "MALE",
+    "BOYS": "KIDS MALE",
+    "BOY": "KIDS MALE",
+    "KIDS MALE": "KIDS MALE",
+    "FEMALE": "FEMALE",
+    "WOMEN": "FEMALE",
+    "WOMENS": "FEMALE",
+    "WOMAN": "FEMALE",
+    "LADIES": "FEMALE",
+    "GIRLS": "KIDS FEMALE",
+    "GIRL": "KIDS FEMALE",
+    "KIDS FEMALE": "KIDS FEMALE",
+    "UNISEX": "UNISEX",
+    "KIDS": "UNISEX",
 }
 
 # (pattern, gender, sub_category, type, item, fit) — filtered to valid Master values at load.
@@ -98,7 +138,8 @@ def first_token(val: str) -> str:
 
 def _add_lookup(dim: str, key: str, target: str) -> None:
     Lookup.objects.update_or_create(
-        dimension=dim, source_key=key.upper().strip(),
+        dimension=dim,
+        source_key=key.upper().strip(),
         defaults={"target_value": target},
     )
 
@@ -184,8 +225,12 @@ def _seed_rules(dim_values: dict[str, set[str]]) -> int:
         TaxonomyRule.objects.update_or_create(
             pattern=pattern,
             defaults={
-                "gender": gender, "sub_category": sub, "type": typ,
-                "item": item, "fit": fit, "priority": len(pattern),
+                "gender": gender,
+                "sub_category": sub,
+                "type": typ,
+                "item": item,
+                "fit": fit,
+                "priority": len(pattern),
             },
         )
         made_rules += 1
@@ -211,9 +256,11 @@ class Command(BaseCommand):
         _seed_lookups(dim_values)
         made_rules = _seed_rules(dim_values)
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Seeded controlled values ({sum(len(v) for v in dim_values.values())}), "
-            f"item taxonomy ({len(item_tax)}), lookups "
-            f"(brand {len(dim_values['brand'])}, color {len(dim_values['color'])}, "
-            f"size {len(dim_values['size'])}), taxonomy rules ({made_rules})."
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Seeded controlled values ({sum(len(v) for v in dim_values.values())}), "
+                f"item taxonomy ({len(item_tax)}), lookups "
+                f"(brand {len(dim_values['brand'])}, color {len(dim_values['color'])}, "
+                f"size {len(dim_values['size'])}), taxonomy rules ({made_rules})."
+            )
+        )

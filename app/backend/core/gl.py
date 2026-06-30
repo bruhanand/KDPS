@@ -25,14 +25,14 @@ class GLAccount:
     convention is carried by the leg amount (dr +, cr −), not the account.
     """
 
-    INVENTORY = "INVENTORY"            # owned stock value (asset)
-    SOR_STOCK = "SOR_STOCK"            # brand-owned stock held on SOR/consignment (memo asset)
-    SOR_CONTRA = "SOR_CONTRA"          # off-book contra for SOR/consignment stock
+    INVENTORY = "INVENTORY"  # owned stock value (asset)
+    SOR_STOCK = "SOR_STOCK"  # brand-owned stock held on SOR/consignment (memo asset)
+    SOR_CONTRA = "SOR_CONTRA"  # off-book contra for SOR/consignment stock
     VENDOR_PAYABLE = "VENDOR_PAYABLE"  # accounts payable to vendors (liability)
-    GRNI = "GRNI"                      # goods received not invoiced (interim)
-    INPUT_GST = "INPUT_GST"            # recoverable input GST (asset)
-    CASH = "CASH"                      # cash / bank / UPI (asset)
-    SUSPENSE = "SUSPENSE"              # balancing holding account
+    GRNI = "GRNI"  # goods received not invoiced (interim)
+    INPUT_GST = "INPUT_GST"  # recoverable input GST (asset)
+    CASH = "CASH"  # cash / bank / UPI (asset)
+    SUSPENSE = "SUSPENSE"  # balancing holding account
 
 
 class GLEntry(LedgerEntry):
@@ -49,20 +49,24 @@ class GLEntry(LedgerEntry):
     party_type = models.CharField(max_length=16, blank=True, default="")
     party_code = models.CharField(max_length=64, blank=True, default="")
     store = models.ForeignKey(
-        "masters.Store", null=True, blank=True, on_delete=models.PROTECT,
+        "masters.Store",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="gl_entries",
     )
     gstin = models.ForeignKey(
-        "masters.Gstin", null=True, blank=True, on_delete=models.PROTECT,
+        "masters.Gstin",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
         related_name="gl_entries",
     )
     brand = models.CharField(max_length=120, blank=True, default="")
     season = models.CharField(max_length=120, blank=True, default="")
     line_no = models.IntegerField(default=0)
     memo = models.CharField(max_length=240, blank=True, default="")
-    posted_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
-    )
+    posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         db_table = "core_gl_entry"

@@ -31,21 +31,36 @@ class Command(BaseCommand):
                 d = desc.get(key)
                 if d is None or e.id > d["id"]:
                     desc[key] = {
-                        "id": e.id, "gstin_id": e.gstin_id, "design": e.design,
-                        "color": e.color, "size": e.size, "brand": e.brand,
-                        "season": e.season, "item": e.item, "hsn": e.hsn,
+                        "id": e.id,
+                        "gstin_id": e.gstin_id,
+                        "design": e.design,
+                        "color": e.color,
+                        "size": e.size,
+                        "brand": e.brand,
+                        "season": e.season,
+                        "item": e.item,
+                        "hsn": e.hsn,
                     }
 
         StockOnHand.objects.all().delete()
         rows = []
         for (store_id, sku_code), (q, v) in agg.items():
             d = desc.get((store_id, sku_code), {})
-            rows.append(StockOnHand(
-                store_id=store_id, sku_code=sku_code, gstin_id=d.get("gstin_id"),
-                design=d.get("design", "") or "", color=d.get("color", "") or "",
-                size=d.get("size", "") or "", brand=d.get("brand", "") or "",
-                season=d.get("season", "") or "", item=d.get("item", "") or "",
-                hsn=d.get("hsn", "") or "", net_qty=q, net_value_paise=v,
-            ))
+            rows.append(
+                StockOnHand(
+                    store_id=store_id,
+                    sku_code=sku_code,
+                    gstin_id=d.get("gstin_id"),
+                    design=d.get("design", "") or "",
+                    color=d.get("color", "") or "",
+                    size=d.get("size", "") or "",
+                    brand=d.get("brand", "") or "",
+                    season=d.get("season", "") or "",
+                    item=d.get("item", "") or "",
+                    hsn=d.get("hsn", "") or "",
+                    net_qty=q,
+                    net_value_paise=v,
+                )
+            )
         StockOnHand.objects.bulk_create(rows)
         self.stdout.write(self.style.SUCCESS(f"Rebuilt {len(rows)} StockOnHand rows."))

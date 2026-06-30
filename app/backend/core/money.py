@@ -21,7 +21,9 @@ PAISE_PER_RUPEE = 100
 # `BigIntegerField` is generic to django-stubs but not subscriptable at runtime,
 # so we pin the get/set types for the type checker only.
 if TYPE_CHECKING:
-    _MoneyBase = BigIntegerField[int, int]
+    # Get/set typed Optional so nullable money columns (null=True) type-check;
+    # non-null columns are still enforced by the DB and `_ensure_int_paise`.
+    _MoneyBase = BigIntegerField[int | None, int | None]
 else:
     _MoneyBase = BigIntegerField
 

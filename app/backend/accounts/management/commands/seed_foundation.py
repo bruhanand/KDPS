@@ -114,7 +114,9 @@ class Command(BaseCommand):
             self._write_credentials()
             self.stdout.write(self.style.SUCCESS("Foundation seed complete (incl. demo users)."))
         else:
-            self.stdout.write(self.style.SUCCESS("Foundation seed complete (SEED_DEMO=0: demo users skipped)."))
+            self.stdout.write(
+                self.style.SUCCESS("Foundation seed complete (SEED_DEMO=0: demo users skipped).")
+            )
 
     def _seed_roles(self) -> None:
         for r in ROLES:
@@ -212,18 +214,60 @@ class Command(BaseCommand):
 
     def _seed_vendors(self) -> dict[str, Vendor]:
         rows = [
-            ("abfrl", "Aditya Birla Fashion (Madura)", "Bengaluru", "29AAACX1234M1Z1",
-             "29", "Karnataka", ["louis-philippe", "van-heusen", "allen-solly", "peter-england"]),
-            ("arvind", "Arvind Fashions", "Bengaluru", "29AAACA5678M1Z2",
-             "29", "Karnataka", ["us-polo", "spykar"]),
-            ("credo", "Credo Brands (Mufti)", "Mumbai", "27AAACC9012M1Z3",
-             "27", "Maharashtra", ["mufti"]),
-            ("blackberrys", "Blackberrys Menswear", "New Delhi", "07AAACB3456M1Z4",
-             "07", "Delhi", ["blackberry"]),
-            ("page", "Page Industries (Jockey)", "Bengaluru", "29AAACP7890M1Z5",
-             "29", "Karnataka", ["jockey"]),
-            ("kewalkiran", "Kewal Kiran (Killer)", "Mumbai", "27AAACK2345M1Z6",
-             "27", "Maharashtra", ["killer"]),
+            (
+                "abfrl",
+                "Aditya Birla Fashion (Madura)",
+                "Bengaluru",
+                "29AAACX1234M1Z1",
+                "29",
+                "Karnataka",
+                ["louis-philippe", "van-heusen", "allen-solly", "peter-england"],
+            ),
+            (
+                "arvind",
+                "Arvind Fashions",
+                "Bengaluru",
+                "29AAACA5678M1Z2",
+                "29",
+                "Karnataka",
+                ["us-polo", "spykar"],
+            ),
+            (
+                "credo",
+                "Credo Brands (Mufti)",
+                "Mumbai",
+                "27AAACC9012M1Z3",
+                "27",
+                "Maharashtra",
+                ["mufti"],
+            ),
+            (
+                "blackberrys",
+                "Blackberrys Menswear",
+                "New Delhi",
+                "07AAACB3456M1Z4",
+                "07",
+                "Delhi",
+                ["blackberry"],
+            ),
+            (
+                "page",
+                "Page Industries (Jockey)",
+                "Bengaluru",
+                "29AAACP7890M1Z5",
+                "29",
+                "Karnataka",
+                ["jockey"],
+            ),
+            (
+                "kewalkiran",
+                "Kewal Kiran (Killer)",
+                "Mumbai",
+                "27AAACK2345M1Z6",
+                "27",
+                "Maharashtra",
+                ["killer"],
+            ),
         ]
         out: dict[str, Vendor] = {}
         for code, name, city, gstin, sc, sn, brand_codes in rows:
@@ -242,9 +286,7 @@ class Command(BaseCommand):
             out[code] = vendor
         return out
 
-    def _seed_sample_booking(
-        self, vendors: dict[str, Vendor], stores: dict[str, Store]
-    ) -> None:
+    def _seed_sample_booking(self, vendors: dict[str, Vendor], stores: dict[str, Store]) -> None:
         season = Season.objects.filter(code="SS26").first()
         brand = Brand.objects.filter(code="peter-england").first()
         vendor = vendors.get("abfrl")

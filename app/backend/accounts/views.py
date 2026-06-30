@@ -11,10 +11,9 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from django.utils import timezone
 from django.conf import settings
-from rest_framework import status
-from rest_framework import generics
+from django.utils import timezone
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -41,9 +40,11 @@ RBAC_ADMIN_ROLES = {"owner", "it_admin"}
 class IsRbacAdmin(BasePermission):
     def has_permission(self, request: Request, view: Any) -> bool:
         role_code = getattr(getattr(request.user, "role", None), "code", "")
-        return bool(request.user and request.user.is_authenticated and (
-            request.user.is_superuser or role_code in RBAC_ADMIN_ROLES
-        ))
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (request.user.is_superuser or role_code in RBAC_ADMIN_ROLES)
+        )
 
 
 class LoginView(TokenObtainPairView):
@@ -196,7 +197,11 @@ class UserListCreateView(generics.ListCreateAPIView):
     serializer_class = AdminUserSerializer
 
     def get_queryset(self) -> Any:
-        return User.objects.select_related("role", "entity").prefetch_related("stores").order_by("username")
+        return (
+            User.objects.select_related("role", "entity")
+            .prefetch_related("stores")
+            .order_by("username")
+        )
 
 
 class UserDetailView(generics.RetrieveUpdateAPIView):

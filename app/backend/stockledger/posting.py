@@ -70,8 +70,10 @@ def _unit_cost_paise(data: dict, line_no: int) -> int:
         prate = _decimal(data.get("P RATE"))
         basic = _decimal(data.get("BASIC"))
         mrp = _decimal(data.get("MRP"))
-    except (InvalidOperation, ValueError, ArithmeticError):
-        raise PtPostingError(f"row {line_no}: unreadable price cell (P RATE / BASIC / MRP)")
+    except (InvalidOperation, ValueError, ArithmeticError) as exc:
+        raise PtPostingError(
+            f"row {line_no}: unreadable price cell (P RATE / BASIC / MRP)"
+        ) from exc
     cost = prate if (prate is not None and prate > 0) else basic
     if cost is None or cost <= 0:
         raise PtPostingError(f"row {line_no}: missing P RATE / BASIC — cannot value the stock")
@@ -103,7 +105,9 @@ def _allocate_number() -> str:
     return number
 
 
-def _stock_entry_from_pt_row(row, store: Store, number: str, unit_paise: int, qty: int, user, booking=None) -> StockLedgerEntry:
+def _stock_entry_from_pt_row(
+    row, store: Store, number: str, unit_paise: int, qty: int, user, booking=None
+) -> StockLedgerEntry:
     data = row.data
     return StockLedgerEntry(
         store=store,
@@ -127,7 +131,9 @@ def _stock_entry_from_pt_row(row, store: Store, number: str, unit_paise: int, qt
     )
 
 
-def _build_inward_entries(pt, store: Store, number: str, user, booking=None) -> list[StockLedgerEntry]:
+def _build_inward_entries(
+    pt, store: Store, number: str, user, booking=None
+) -> list[StockLedgerEntry]:
     """Value every positive-qty row at P RATE; raise (blocking the whole post) if any
     row has an unreadable/missing cost or P RATE > MRP."""
     entries: list[StockLedgerEntry] = []
@@ -168,8 +174,13 @@ def _post_value_gl(pt, store: Store, number: str, booking, total_value_paise: in
     elif booking.ownership == OWNED:  # Outright / Correction → on-book asset + payable
         legs = [
             dr(GLAccount.INVENTORY, total_value_paise, brand=brand, season=season),
-            cr(GLAccount.VENDOR_PAYABLE, total_value_paise, party_type="vendor",
-               party_code=booking.vendor.code, against_voucher=booking.number),
+            cr(
+                GLAccount.VENDOR_PAYABLE,
+                total_value_paise,
+                party_type="vendor",
+                party_code=booking.vendor.code,
+                against_voucher=booking.number,
+            ),
         ]
     else:  # SOR / Consignment → brand-owned, off-book memo, NEVER a payable from the PT
         legs = [
@@ -217,9 +228,16 @@ def _apply_on_hand(entries: list[StockLedgerEntry]) -> None:
             store_id=store_id,
             sku_code=sku_code,
             defaults={
-                "gstin_id": e.gstin_id, "design": e.design, "color": e.color,
-                "size": e.size, "brand": e.brand, "season": e.season,
-                "item": e.item, "hsn": e.hsn, "net_qty": 0, "net_value_paise": 0,
+                "gstin_id": e.gstin_id,
+                "design": e.design,
+                "color": e.color,
+                "size": e.size,
+                "brand": e.brand,
+                "season": e.season,
+                "item": e.item,
+                "hsn": e.hsn,
+                "net_qty": 0,
+                "net_value_paise": 0,
             },
         )
         obj.net_qty += agg["dq"]
@@ -270,8 +288,10 @@ def _register_identity(pt, number: str) -> None:
             barcode=barcode,
             season=str(data.get("SEASON") or "")[:120],
             defaults={
-                "sku": sku, "unit_cost_paise": unit_paise,
-                "mrp_paise": mrp_paise, "last_doc_number": number,
+                "sku": sku,
+                "unit_cost_paise": unit_paise,
+                "mrp_paise": mrp_paise,
+                "last_doc_number": number,
             },
         )
 
@@ -321,13 +341,23 @@ def _reverse_value_gl(original_number: str, reversal_number: str, store: Store, 
     if not source:
         return False
     ref = PostingRef(
-        doc_type=DOC_TYPE, doc_number=reversal_number, store=store, gstin=store.gstin, posted_by=user
+        doc_type=DOC_TYPE,
+        doc_number=reversal_number,
+        store=store,
+        gstin=store.gstin,
+        posted_by=user,
     )
     legs = [
         Leg(
-            account=g.account, amount=-g.amount, store=g.store, gstin=g.gstin,
-            brand=g.brand, season=g.season, party_type=g.party_type,
-            party_code=g.party_code, against_voucher=g.against_voucher,
+            account=g.account,
+            amount=-g.amount,
+            store=g.store,
+            gstin=g.gstin,
+            brand=g.brand,
+            season=g.season,
+            party_type=g.party_type,
+            party_code=g.party_code,
+            against_voucher=g.against_voucher,
             memo=f"reversal of {original_number}",
         )
         for g in source
@@ -352,11 +382,23 @@ def reverse_pt_inward(pt, user) -> dict:
     )
     reversals = [
         StockLedgerEntry(
-            store=o.store, gstin=o.gstin, qty=-o.qty, amount=-o.amount,
-            sku_code=o.sku_code, design=o.design, color=o.color, size=o.size,
-            brand=o.brand, season=o.season, item=o.item, hsn=o.hsn,
-            kind=StockLedgerEntry.Kind.PT_REVERSAL, doc_number=number, line_no=o.line_no,
-            pt_file=pt, booking=o.booking,
+            store=o.store,
+            gstin=o.gstin,
+            qty=-o.qty,
+            amount=-o.amount,
+            sku_code=o.sku_code,
+            design=o.design,
+            color=o.color,
+            size=o.size,
+            brand=o.brand,
+            season=o.season,
+            item=o.item,
+            hsn=o.hsn,
+            kind=StockLedgerEntry.Kind.PT_REVERSAL,
+            doc_number=number,
+            line_no=o.line_no,
+            pt_file=pt,
+            booking=o.booking,
             posted_by=user if getattr(user, "is_authenticated", False) else None,
         )
         for o in originals

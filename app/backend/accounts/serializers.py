@@ -153,10 +153,12 @@ class AdminUserSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        scope = attrs.get("scope_type") or getattr(self.instance, "scope_type", "all")
+        scope = attrs.get("scope_type") or getattr(self.instance, "scope_type", "store")
         stores = attrs.get("stores")
         if scope == "store" and stores is not None and len(stores) == 0:
-            raise serializers.ValidationError({"store_ids": "A store-scoped user needs at least one store."})
+            raise serializers.ValidationError(
+                {"store_ids": "A store-scoped user needs at least one store."}
+            )
         if self.instance is None and not attrs.get("password"):
             raise serializers.ValidationError({"password": "Password is required for a new user."})
         return attrs

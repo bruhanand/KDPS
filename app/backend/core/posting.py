@@ -13,8 +13,9 @@ the calling document (which legs it hands us), never in this engine.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from django.db import transaction
 
@@ -96,9 +97,7 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     doc_type = getattr(doc, "doc_type", None)
     doc_number = getattr(doc, "doc_number", None)
     if not doc_type or not doc_number:
-        raise PostingError(
-            "post_entries requires a doc with a doc_type and a minted doc_number"
-        )
+        raise PostingError("post_entries requires a doc with a doc_type and a minted doc_number")
 
     default_store = getattr(doc, "store", None)
     default_gstin = getattr(doc, "gstin", None)

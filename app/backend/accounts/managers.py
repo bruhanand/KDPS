@@ -5,7 +5,7 @@ from typing import Any
 from django.contrib.auth.models import BaseUserManager
 
 
-class UserManager(BaseUserManager):
+class UserManager(BaseUserManager[Any]):
     """Username-based manager (no email required — English-only internal ERP)."""
 
     use_in_migrations = True

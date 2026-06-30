@@ -5,14 +5,17 @@ Covers:
   * GET /api/stockledger/on-hand?group_by=sku — truncation surface.
   * Masters CRUD: stores/brands/seasons/gstins — IsMasterSteward gating.
 """
+
 import os
-import time
 import uuid
+from pathlib import Path
+
 import pytest
 import requests
 
+
 def _read_frontend_env():
-    env_path = "/app/frontend/.env"
+    env_path = str(Path(__file__).resolve().parents[3] / "app/frontend/.env")
     if os.path.exists(env_path):
         with open(env_path) as f:
             for line in f:
@@ -27,7 +30,9 @@ API = f"{BASE_URL}/api"
 
 
 def _login(username: str, password: str) -> str:
-    r = requests.post(f"{API}/auth/login", json={"username": username, "password": password}, timeout=15)
+    r = requests.post(
+        f"{API}/auth/login", json={"username": username, "password": password}, timeout=15
+    )
     assert r.status_code == 200, f"login {username} failed: {r.status_code} {r.text}"
     body = r.json()
     # token field may be 'access' or 'token'
@@ -88,11 +93,11 @@ class TestStockOnHand:
         for key in ("lines", "displayed", "truncated"):
             assert key in summary, f"missing summary key {key!r} in {summary!r}"
         assert isinstance(summary["truncated"], bool)
-        # live data check (~241 units / 152 lines per spec)
-        units = summary.get("units_on_hand") or body.get("units_on_hand")
-        value = summary.get("value_rupees") or body.get("value_rupees")
-        assert units, f"units_on_hand falsy: {summary}"
-        assert value, f"value_rupees falsy: {summary}"
+        # Magnitude is data-dependent (a fresh DB legitimately has no stock), so assert
+        # only the shape here. The on-hand VALUE path is covered hermetically by
+        # test_phase_e_commercial_model.test_stock_on_hand_projection_reflects_inward.
+        assert isinstance(summary.get("units_on_hand"), int)
+        assert isinstance(summary.get("value_rupees"), str)
 
 
 # ───── Masters stewardship CRUD ────────────────────────────────────────
@@ -119,7 +124,9 @@ class TestMastersSteward:
             "gstin": gstin_id,
             "is_active": True,
         }
-        r = requests.post(f"{API}/masters/stores", headers=_hdr(steward_token), json=payload, timeout=15)
+        r = requests.post(
+            f"{API}/masters/stores", headers=_hdr(steward_token), json=payload, timeout=15
+        )
         assert r.status_code == 201, f"create store failed: {r.status_code} {r.text}"
         store = r.json()
         assert store["code"] == code
@@ -147,7 +154,9 @@ class TestMastersSteward:
             "gstin": gstin_id,
             "is_active": True,
         }
-        r = requests.post(f"{API}/masters/stores", headers=_hdr(cashier_token), json=payload, timeout=15)
+        r = requests.post(
+            f"{API}/masters/stores", headers=_hdr(cashier_token), json=payload, timeout=15
+        )
         assert r.status_code == 403, f"expected 403 got {r.status_code} {r.text}"
 
     def test_steward_creates_brand(self, steward_token):
@@ -159,14 +168,18 @@ class TestMastersSteward:
             "return_terms": "none",
             "is_active": True,
         }
-        r = requests.post(f"{API}/masters/brands", headers=_hdr(steward_token), json=payload, timeout=15)
+        r = requests.post(
+            f"{API}/masters/brands", headers=_hdr(steward_token), json=payload, timeout=15
+        )
         assert r.status_code == 201, f"create brand failed: {r.status_code} {r.text}"
         assert r.json()["code"] == code
 
     def test_steward_creates_season(self, steward_token):
         code = f"ZZS{self.UNIQUE}"
         payload = {"code": code, "name": f"Season {self.UNIQUE}", "status": "open"}
-        r = requests.post(f"{API}/masters/seasons", headers=_hdr(steward_token), json=payload, timeout=15)
+        r = requests.post(
+            f"{API}/masters/seasons", headers=_hdr(steward_token), json=payload, timeout=15
+        )
         assert r.status_code == 201, f"create season failed: {r.status_code} {r.text}"
         assert r.json()["code"] == code
 
@@ -179,9 +192,13 @@ class TestMastersSteward:
             "state_code": "10",
             "active": True,
         }
-        r = requests.post(f"{API}/masters/gstins", headers=_hdr(steward_token), json=payload, timeout=15)
-        # accept 201 (created); if backend validates gstin checksum, accept 400 but mark via assert text
+        r = requests.post(
+            f"{API}/masters/gstins", headers=_hdr(steward_token), json=payload, timeout=15
+        )
+        # accept 201; if the backend validates the gstin checksum, accept 400 too
         assert r.status_code in (201, 400), f"unexpected status {r.status_code}: {r.text}"
         if r.status_code == 400:
-            pytest.skip(f"gstin creation rejected by validation (expected for non-checksum value): {r.text}")
+            pytest.skip(
+                f"gstin creation rejected by validation (expected for non-checksum value): {r.text}"
+            )
         assert r.json().get("gstin") or r.json().get("number")

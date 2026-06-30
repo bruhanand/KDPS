@@ -11,16 +11,37 @@ class StockLedgerEntrySerializer(serializers.ModelSerializer):
     store_name = serializers.CharField(source="store.name", read_only=True)
     kind_label = serializers.CharField(source="get_kind_display", read_only=True)
     value_rupees = serializers.SerializerMethodField()
-    source_file = serializers.CharField(source="pt_file.original_filename", read_only=True, default="")
+    source_file = serializers.CharField(
+        source="pt_file.original_filename", read_only=True, default=""
+    )
     booking_number = serializers.CharField(source="booking.number", read_only=True, default="")
 
     class Meta:
         model = StockLedgerEntry
         fields = [
-            "id", "created_at", "doc_number", "kind", "kind_label",
-            "store_code", "store_name", "sku_code", "design", "color", "size",
-            "brand", "season", "item", "hsn", "qty", "amount", "value_rupees",
-            "line_no", "pt_file", "source_file", "booking", "booking_number",
+            "id",
+            "created_at",
+            "doc_number",
+            "kind",
+            "kind_label",
+            "store_code",
+            "store_name",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "amount",
+            "value_rupees",
+            "line_no",
+            "pt_file",
+            "source_file",
+            "booking",
+            "booking_number",
         ]
 
     def get_value_rupees(self, obj: StockLedgerEntry) -> str:

@@ -156,9 +156,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = (
     else []
 )
 # Exact origins for non-Emergent / production deployments (comma-separated env).
-CORS_ALLOWED_ORIGINS = [
-    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
-]
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o]
 CSRF_TRUSTED_ORIGINS = [
     o
     for o in os.environ.get(

@@ -45,6 +45,7 @@ class IsMasterSteward(BasePermission):
 
 # --- Stores --------------------------------------------------------------
 
+
 class StoreListView(generics.ListCreateAPIView):
     serializer_class = StoreSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
@@ -61,6 +62,7 @@ class StoreDetailView(generics.RetrieveUpdateAPIView):
 
 # --- Brands --------------------------------------------------------------
 
+
 class BrandListView(generics.ListCreateAPIView):
     serializer_class = BrandSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
@@ -74,6 +76,7 @@ class BrandDetailView(generics.RetrieveUpdateAPIView):
 
 
 # --- Seasons -------------------------------------------------------------
+
 
 class SeasonListView(generics.ListCreateAPIView):
     serializer_class = SeasonSerializer
@@ -89,6 +92,7 @@ class SeasonDetailView(generics.RetrieveUpdateAPIView):
 
 # --- GSTINs --------------------------------------------------------------
 
+
 class GstinListView(generics.ListCreateAPIView):
     serializer_class = GstinSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
@@ -102,6 +106,7 @@ class GstinDetailView(generics.RetrieveUpdateAPIView):
 
 
 # --- Legal entities ------------------------------------------------------
+
 
 class LegalEntityListView(generics.ListAPIView):
     serializer_class = LegalEntitySerializer
@@ -120,9 +125,7 @@ class SummaryView(APIView):
                 "entities": LegalEntity.objects.filter(is_active=True).count(),
                 "gstins": Gstin.objects.filter(is_active=True).count(),
                 "stores": stores.count(),
-                "warehouses": stores.filter(
-                    store_type=Store.StoreType.WAREHOUSE
-                ).count(),
+                "warehouses": stores.filter(store_type=Store.StoreType.WAREHOUSE).count(),
                 "brands": Brand.objects.filter(is_active=True).count(),
                 "seasons": Season.objects.count(),
                 "open_season": open_season.name if open_season else None,

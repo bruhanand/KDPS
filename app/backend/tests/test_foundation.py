@@ -1,5 +1,8 @@
 """KDPS Foundation backend tests — auth, scope isolation, masters."""
+
 import os
+from pathlib import Path
+
 import pytest
 import requests
 
@@ -7,7 +10,7 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 if not BASE_URL:
     # fallback to frontend .env (CI env may not propagate)
     try:
-        with open("/app/frontend/.env") as f:
+        with open(Path(__file__).resolve().parents[3] / "app/frontend/.env") as f:
             for line in f:
                 if line.startswith("REACT_APP_BACKEND_URL="):
                     BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
@@ -33,7 +36,9 @@ def test_health(s):
 
 # ---------- Login ----------
 def _login(s, username, password):
-    return s.post(f"{API}/auth/login", json={"username": username, "password": password}, timeout=15)
+    return s.post(
+        f"{API}/auth/login", json={"username": username, "password": password}, timeout=15
+    )
 
 
 def test_login_owner_returns_tokens_and_profile(s):
@@ -93,7 +98,9 @@ def test_brute_force_lockout_429():
     sess = requests.Session()
     statuses = []
     for _ in range(6):
-        r = sess.post(f"{API}/auth/login", json={"username": target, "password": "WrongPass!"}, timeout=15)
+        r = sess.post(
+            f"{API}/auth/login", json={"username": target, "password": "WrongPass!"}, timeout=15
+        )
         statuses.append(r.status_code)
     # After 5 failures, the 6th should be 429
     assert 429 in statuses, f"Expected 429 in {statuses}"
@@ -104,14 +111,18 @@ def test_scope_isolation_stores_and_summary(s):
     # owner sees all 6 stores
     r = _login(s, "owner", "Owner@123")
     owner_token = r.json()["access"]
-    o_stores = s.get(f"{API}/masters/stores", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15)
+    o_stores = s.get(
+        f"{API}/masters/stores", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15
+    )
     assert o_stores.status_code == 200
     o_data = o_stores.json()
     # Could be list or paginated dict
     o_list = o_data if isinstance(o_data, list) else o_data.get("results", o_data.get("items", []))
     assert len(o_list) == 6, f"owner should see 6 stores, saw {len(o_list)}"
 
-    o_summary = s.get(f"{API}/masters/summary", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15)
+    o_summary = s.get(
+        f"{API}/masters/summary", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15
+    )
     assert o_summary.status_code == 200
     osd = o_summary.json()
     assert osd.get("stores") == 6
@@ -121,14 +132,18 @@ def test_scope_isolation_stores_and_summary(s):
     r2 = _login(s, "deo.cashier", "Store@123")
     assert r2.status_code == 200, r2.text
     deo_token = r2.json()["access"]
-    d_stores = s.get(f"{API}/masters/stores", headers={"Authorization": f"Bearer {deo_token}"}, timeout=15)
+    d_stores = s.get(
+        f"{API}/masters/stores", headers={"Authorization": f"Bearer {deo_token}"}, timeout=15
+    )
     assert d_stores.status_code == 200
     d_data = d_stores.json()
     d_list = d_data if isinstance(d_data, list) else d_data.get("results", d_data.get("items", []))
     assert len(d_list) == 1, f"deo.cashier should see 1 store, saw {len(d_list)}"
     assert "DEO" in (d_list[0].get("code", "") + d_list[0].get("name", ""))
 
-    d_summary = s.get(f"{API}/masters/summary", headers={"Authorization": f"Bearer {deo_token}"}, timeout=15)
+    d_summary = s.get(
+        f"{API}/masters/summary", headers={"Authorization": f"Bearer {deo_token}"}, timeout=15
+    )
     assert d_summary.status_code == 200
     dsd = d_summary.json()
     assert dsd.get("stores") == 1

@@ -19,9 +19,7 @@ def visible_store_ids(user: Any) -> list[int] | None:
         return None
     if scope == "entity" and getattr(user, "entity_id", None):
         return list(
-            Store.objects.filter(gstin__legal_entity_id=user.entity_id).values_list(
-                "id", flat=True
-            )
+            Store.objects.filter(gstin__legal_entity_id=user.entity_id).values_list("id", flat=True)
         )
     # store / store_group / region → explicit membership; empty ⇒ sees nothing
     return list(user.stores.values_list("id", flat=True))
