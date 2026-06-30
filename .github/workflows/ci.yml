@@ -70,6 +70,9 @@ jobs:
       - name: Seed foundation (roles, masters, demo users)
         run: uv run python manage.py seed_foundation
 
+      - name: Seed PT mapper (taxonomy rules, item taxonomy, controlled values, lookups)
+        run: uv run python manage.py seed_ptmapper
+
       - name: Boot ASGI server for API regression suites
         run: |
           uv run uvicorn server:app --host 0.0.0.0 --port 8001 &
