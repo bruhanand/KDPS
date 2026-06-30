@@ -169,7 +169,7 @@ interface PtRowT {
   blanks: string[];
 }
 interface PtFileDetailT extends PtFileT {
-  meta: { sheet?: string; header_row?: number; source_rows?: number; headers?: string[] };
+  meta: { sheet?: string; header_row?: number; source_rows?: number; headers?: string[]; truncated?: boolean; row_limit?: number };
   rows: PtRowT[];
 }
 
@@ -303,6 +303,12 @@ export function PtFileDetailPage() {
       </div>
 
       <StageStepper stage={file.stage} />
+
+      {file.meta?.truncated && (
+        <div className="warn-note" data-testid="ptfile-source-truncated-banner" style={{ marginTop: 10 }}>
+          <AlertTriangle size={14} /> This source file exceeds the {file.meta.row_limit ?? 8000}-row import cap — only the first {file.meta.row_limit ?? 8000} rows were read. Split the file and re-upload to map the remainder.
+        </div>
+      )}
 
       <div className="toolbar" style={{ marginTop: 8 }}>
         <button className="btn" onClick={() => download("xlsx")} data-testid="ptfile-export-xlsx"><Download size={15} /> Excel (KDPS)</button>

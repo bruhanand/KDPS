@@ -11,6 +11,8 @@ from __future__ import annotations
 from django.db import models
 
 from core.base import TimeStampedModel
+from core.documents import DocStatus, Document
+from core.fiscal import financial_year
 
 
 class ControlledValue(TimeStampedModel):
@@ -80,18 +82,38 @@ class TaxonomyRule(TimeStampedModel):
         return f"{self.pattern} → {self.item or '?'}"
 
 
-class PtFile(TimeStampedModel):
-    """One uploaded brand PT file + the result of mapping it to KDPS format."""
+class PtFile(Document):
+    """One uploaded brand PT file + the result of mapping it to KDPS format.
 
-    class Status(models.TextChoices):
+    A document (ADR-0004): while a DRAFT it walks the warehouse sub-stages
+    `mapping → sent` (freely editable). `post()` (Patna "push into system") mints its
+    gap-free `{FY}/RAN-WH/PT/{n}` number — the inward voucher — and freezes it
+    (SUBMITTED). "Reverse posting" is a `cancel()` (reversal-as-cancel): the file is
+    frozen forever and the stock/GL/payable reversals are appended; you re-upload to
+    re-post, never edit a posted fact.
+    """
+
+    class Status(models.TextChoices):  # mapping quality (draft-time)
         NEEDS_REVIEW = "needs_review", "Needs review"
         READY = "ready", "Ready"
         FAILED = "failed", "Failed"
 
-    class Stage(models.TextChoices):
+    class DraftStage(models.TextChoices):  # the stored pre-post sub-stage
         MAPPING = "mapping", "Mapping (Warehouse)"
         SENT = "sent", "Sent to Patna"
-        POSTED = "posted", "Posted to system"
+
+    class Stage:  # the full lifecycle vocabulary the UI/API speak (computed below)
+        MAPPING = "mapping"
+        SENT = "sent"
+        POSTED = "posted"
+        REVERSED = "reversed"
+
+    _STAGE_LABELS = {
+        "mapping": "Mapping (Warehouse)",
+        "sent": "Sent to Patna",
+        "posted": "Posted to system",
+        "reversed": "Reversed",
+    }
 
     stored_file = models.ForeignKey(
         "files.StoredFile", null=True, blank=True, on_delete=models.SET_NULL
@@ -104,13 +126,12 @@ class PtFile(TimeStampedModel):
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.NEEDS_REVIEW
     )
-    stage = models.CharField(
-        max_length=12, choices=Stage.choices, default=Stage.MAPPING
+    draft_stage = models.CharField(
+        max_length=12, choices=DraftStage.choices, default=DraftStage.MAPPING
     )
     manually_edited = models.BooleanField(default=False)
     sent_at = models.DateTimeField(null=True, blank=True)
     posted_at = models.DateTimeField(null=True, blank=True)
-    inward_doc_number = models.CharField(max_length=128, blank=True, default="")
     booking = models.ForeignKey(
         "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL,
         related_name="pt_files",
@@ -124,8 +145,26 @@ class PtFile(TimeStampedModel):
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
     )
 
-    class Meta:
+    class Meta(Document.Meta):
+        db_table = "ptmapper_ptfile"
         ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        return financial_year(), "RAN-WH", "PT"
+
+    @property
+    def stage(self) -> str:
+        """The lifecycle stage the UI/API speak, derived from docstatus: a cancelled
+        file reads 'reversed', a submitted one 'posted', else the draft sub-stage."""
+        if self.docstatus == DocStatus.CANCELLED:
+            return self.Stage.REVERSED
+        if self.docstatus == DocStatus.SUBMITTED:
+            return self.Stage.POSTED
+        return self.draft_stage
+
+    @property
+    def stage_label(self) -> str:
+        return self._STAGE_LABELS.get(self.stage, self.stage)
 
     def __str__(self) -> str:
         return self.original_filename

@@ -1,7 +1,8 @@
-"""Read-only master-data API for the foundation: the scoped store list that
-feeds the store/GSTIN context switcher, the brand/season/GSTIN registries, and a
-small counts summary for the role dashboards. Full CRUD/stewardship screens
-arrive with the D8 slice; the Django admin covers editing in the meantime.
+"""Master-data API: scoped reads for the foundation switcher + steward-gated
+create/edit (the D8 stewardship slice). Reads stay open to any authenticated
+user; writes require a master-data steward (owner / IT admin / data steward).
+Records are deactivated (`is_active`), never hard-deleted — masters are referenced
+by append-only ledger rows.
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,32 +25,83 @@ from masters.serializers import (
     StoreSerializer,
 )
 
+STEWARD_ROLES = {"owner", "it_admin", "data_steward"}
 
-class StoreListView(generics.ListAPIView):
+
+class IsMasterSteward(BasePermission):
+    """Read-open, write-gated to master-data stewards (ADR-0003 / Rule 12)."""
+
+    message = "Master-data steward role required (owner / IT admin / data steward)."
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        if request.method in SAFE_METHODS:
+            return True
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        role = getattr(getattr(user, "role", None), "code", "")
+        return bool(user.is_superuser or role in STEWARD_ROLES)
+
+
+# --- Stores --------------------------------------------------------------
+
+class StoreListView(generics.ListCreateAPIView):
     serializer_class = StoreSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsMasterSteward]
 
     def get_queryset(self) -> Any:
         return scoped_stores(self.request.user)
 
 
-class BrandListView(generics.ListAPIView):
+class StoreDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = StoreSerializer
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+    queryset = Store.objects.select_related("gstin").all()
+
+
+# --- Brands --------------------------------------------------------------
+
+class BrandListView(generics.ListCreateAPIView):
     serializer_class = BrandSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Brand.objects.filter(is_active=True)
 
 
-class SeasonListView(generics.ListAPIView):
+class BrandDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = BrandSerializer
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+    queryset = Brand.objects.all()
+
+
+# --- Seasons -------------------------------------------------------------
+
+class SeasonListView(generics.ListCreateAPIView):
     serializer_class = SeasonSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Season.objects.all()
 
 
-class GstinListView(generics.ListAPIView):
+class SeasonDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = SeasonSerializer
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+    queryset = Season.objects.all()
+
+
+# --- GSTINs --------------------------------------------------------------
+
+class GstinListView(generics.ListCreateAPIView):
     serializer_class = GstinSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsMasterSteward]
     queryset = Gstin.objects.select_related("legal_entity").filter(is_active=True)
 
+
+class GstinDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = GstinSerializer
+    permission_classes = [IsAuthenticated, IsMasterSteward]
+    queryset = Gstin.objects.select_related("legal_entity").all()
+
+
+# --- Legal entities ------------------------------------------------------
 
 class LegalEntityListView(generics.ListAPIView):
     serializer_class = LegalEntitySerializer

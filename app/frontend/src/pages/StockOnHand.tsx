@@ -25,7 +25,7 @@ interface RowT {
 
 interface OnHandT {
   group_by: Group;
-  summary: { units_on_hand: number; value_rupees: string; lines: number };
+  summary: { units_on_hand: number; value_rupees: string; lines: number; displayed?: number; truncated?: boolean };
   rows: RowT[];
 }
 
@@ -100,6 +100,11 @@ export default function StockOnHand() {
         </div>
       ) : (
         <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
+          {data.summary.truncated && (
+            <div className="warn-note" data-testid="onhand-truncated-banner" style={{ marginBottom: 10 }}>
+              Showing the first {data.summary.displayed ?? data.rows.length} of {data.summary.lines} lines. Filter by store or brand to narrow the view.
+            </div>
+          )}
           <table className="data kdps-table" data-testid="onhand-table">
             <thead>
               <tr>

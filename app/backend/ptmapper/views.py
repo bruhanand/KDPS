@@ -36,11 +36,25 @@ from ptmapper.serializers import (
     PtFileListSerializer,
     ReviewItemSerializer,
 )
-from stockledger.posting import post_pt_inward, reverse_pt_inward
+from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
 from vendors.models import Booking
 
 SINGLE_DIMS = {"color", "size", "brand", "season"}
 KDPS_COLUMN_SET = set(KDPS_COLUMNS)
+
+# Pushing a PT into the system (post) and reversing it write the stock ledger and
+# raise vendor liability — a Patna/HO accounts action, never the warehouse. Resolving
+# review items grows the master lookup tables — a mapping-steward action.
+PATNA_ROLES = {"accounts", "owner", "it_admin"}
+MAPPING_STEWARD_ROLES = {"warehouse", "data_steward", "ho_ops", "owner", "it_admin"}
+
+
+def _role_code(user: Any) -> str:
+    return getattr(getattr(user, "role", None), "code", "")
+
+
+def _forbidden(detail: str) -> Response:
+    return Response({"detail": detail}, status=status.HTTP_403_FORBIDDEN)
 
 
 def _sync_review_items(reviews: list[dict]) -> int:
@@ -134,6 +148,16 @@ class PtFileDetailView(generics.RetrieveDestroyAPIView):
     serializer_class = PtFileDetailSerializer
     queryset = PtFile.objects.prefetch_related("rows")
 
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        pt = self.get_object()
+        if pt.stage != PtFile.Stage.MAPPING:
+            return Response(
+                {"detail": "Only files still in mapping can be deleted; "
+                           "sent/posted files are immutable (append-only audit)."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return super().destroy(request, *args, **kwargs)
+
 
 class PtFileRerunView(APIView):
     permission_classes = [IsAuthenticated]
@@ -179,8 +203,8 @@ class PtRowsUpdateView(APIView):
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
-        if pt.stage == PtFile.Stage.POSTED:
-            return Response({"detail": "Posted files are locked."}, status=409)
+        if pt.stage in (PtFile.Stage.POSTED, PtFile.Stage.REVERSED):
+            return Response({"detail": "Posted/reversed files are locked."}, status=409)
         edits = {int(e["id"]): e.get("data", {}) for e in request.data.get("rows", []) if "id" in e}
         rows = list(pt.rows.filter(id__in=edits.keys()))
         for r in rows:
@@ -209,9 +233,9 @@ class PtFileSendView(APIView):
             return Response({"detail": "This file is not in the mapping stage."}, status=409)
         if pt.row_count == 0:
             return Response({"detail": "Nothing to send — the file has no rows."}, status=409)
-        pt.stage = PtFile.Stage.SENT
+        pt.draft_stage = PtFile.DraftStage.SENT
         pt.sent_at = timezone.now()
-        pt.save(update_fields=["stage", "sent_at", "updated_at"])
+        pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -226,9 +250,9 @@ class PtFileRecallView(APIView):
             return Response({"detail": "Not found."}, status=404)
         if pt.stage != PtFile.Stage.SENT:
             return Response({"detail": "Only sent files can be returned."}, status=409)
-        pt.stage = PtFile.Stage.MAPPING
+        pt.draft_stage = PtFile.DraftStage.MAPPING
         pt.sent_at = None
-        pt.save(update_fields=["stage", "sent_at", "updated_at"])
+        pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -239,6 +263,8 @@ class PtFilePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in PATNA_ROLES:
+            return _forbidden("Only Patna HO (accounts/owner) can post a PT into the system.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -250,23 +276,29 @@ class PtFilePostView(APIView):
             booking = Booking.objects.filter(pk=booking_id).first()
             if not booking:
                 return Response({"detail": "Booking not found."}, status=400)
-        result = post_pt_inward(pt, request.user, booking=booking)
+        try:
+            result = post_pt_inward(pt, request.user, booking=booking)
+        except PtPostingError as exc:
+            return Response({"detail": str(exc)}, status=422)
         data = PtFileDetailSerializer(pt).data
         data["post_result"] = result
         return Response(data)
 
 
 class PtFileReverseView(APIView):
-    """Append-only correction: reverse a posted PT inward (negative mirror rows),
-    returning the file to 'sent' so it can be fixed and re-posted."""
+    """Append-only correction: reverse a posted PT inward (negative mirror stock + GL
+    rows, vendor-bill reversal) and `cancel()` the file (reversal-as-cancel) — the
+    posted fact is frozen forever; you re-upload to re-post."""
 
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in PATNA_ROLES:
+            return _forbidden("Only Patna HO (accounts/owner) can reverse a posted PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
-        if pt.stage != PtFile.Stage.POSTED or not pt.inward_doc_number:
+        if pt.stage != PtFile.Stage.POSTED:
             return Response({"detail": "Only a posted file can be reversed."}, status=409)
         result = reverse_pt_inward(pt, request.user)
         data = PtFileDetailSerializer(pt).data
@@ -387,13 +419,15 @@ class ReviewResolveView(APIView):
         propagates everywhere without clobbering manual edits / sent files."""
         for pt in PtFile.objects.filter(
             status=PtFile.Status.NEEDS_REVIEW,
-            stage=PtFile.Stage.MAPPING,
+            draft_stage=PtFile.DraftStage.MAPPING,
             manually_edited=False,
         ):
             process_file(pt)
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+            return _forbidden("Only mapping stewards (warehouse/data steward/HO ops) can resolve review items.")
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)

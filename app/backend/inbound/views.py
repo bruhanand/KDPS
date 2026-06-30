@@ -6,7 +6,7 @@ ever sees / writes their own store's receipts.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date
 from typing import Any
 
 from django.db import transaction
@@ -16,6 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
@@ -24,6 +25,11 @@ from masters.models import Store
 from masters.scoping import scope_by_store, visible_store_ids
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
+
+
+def _financial_year(d: date) -> str:
+    start = d.year if d.month >= 4 else d.year - 1
+    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
 
 
 def _safe_int(value: Any) -> int:
@@ -83,16 +89,21 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
     return Store.objects.get(pk=store_id), None
 
 
+def _ensure_grn_series(store: Store) -> None:
+    """Make sure the gap-free GRN voucher series exists for (FY, store) before post()."""
+    VoucherSeries.objects.get_or_create(
+        fy=_financial_year(date.today()), store_code=store.code, doc_type="GRN"
+    )
+
+
 def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
-    seq = Grn.objects.count() + 1
-    number = f"GRN-{datetime.now(timezone.utc):%y%m%d}-{seq:04d}"
+    """Create the GRN as a DRAFT (no number yet); `post()` mints it after lines land."""
     received_at = (
         Grn.ReceivedAt.WAREHOUSE
         if store.store_type == Store.StoreType.WAREHOUSE
         else Grn.ReceivedAt.STORE
     )
     return Grn.objects.create(
-        number=number,
         booking=booking,
         vendor=booking.vendor if booking else None,
         vendor_name_raw=data.get("vendor_name", "") if not booking else "",
@@ -110,9 +121,13 @@ def _grn_quantities(raw: dict) -> tuple[int, int]:
     return _safe_int(raw.get("received_qty") or raw.get("quantity")), _safe_int(raw.get("damaged_qty"))
 
 
-def _booking_line_from_payload(raw: dict) -> BookingLine | None:
+def _booking_line_from_payload(raw: dict, booking: Any) -> BookingLine | None:
+    """Resolve the referenced booking line — only ever within *this* GRN's booking,
+    so a payload can never link/mutate another booking's line."""
     bl_id = raw.get("booking_line_id") or raw.get("booking_line")
-    return BookingLine.objects.filter(pk=bl_id).first() if bl_id else None
+    if not (bl_id and booking):
+        return None
+    return BookingLine.objects.filter(pk=bl_id, booking=booking).first()
 
 
 def _line_is_variance(raw: dict, booking_line: BookingLine | None, booking: Any) -> bool:
@@ -123,7 +138,7 @@ def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
     qty, damaged_qty = _grn_quantities(raw)
     if qty <= 0 and damaged_qty <= 0:
         return  # empty row (no received & no damaged units) — intentionally skipped
-    bl = _booking_line_from_payload(raw)
+    bl = _booking_line_from_payload(raw, booking)
     GrnLine.objects.create(
         grn=grn,
         booking_line=bl,
@@ -141,6 +156,23 @@ def _add_grn_line(grn: Grn, raw: dict, booking: Any) -> None:
         bl.save(update_fields=["received_qty", "updated_at"])
 
 
+def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
+    """Fetch the optional booking and fail-closed scope-check it (ADR-0003): a
+    store-scoped user may only receive against a booking bound to one of their stores."""
+    booking_id = data.get("booking_id") or data.get("booking")
+    if not booking_id:
+        return None, None
+    booking = Booking.objects.filter(pk=booking_id).first()
+    if booking is None:
+        return None, Response({"detail": "Booking not found."}, status=400)
+    ids = visible_store_ids(user)
+    if ids is not None and booking.destination_store_id not in ids:
+        return None, Response(
+            {"detail": "You may not receive against this booking."}, status=403
+        )
+    return booking, None
+
+
 class GrnListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
@@ -156,14 +188,15 @@ class GrnListCreateView(generics.ListCreateAPIView):
         if err is not None:
             return err
 
-        booking = None
-        booking_id = data.get("booking_id") or data.get("booking")
-        if booking_id:
-            booking = Booking.objects.get(pk=booking_id)
+        booking, err = _resolve_booking(data, request.user)
+        if err is not None:
+            return err
 
         grn = _build_grn(data, store, booking, request.user)
         for raw in data.get("lines", []):
             _add_grn_line(grn, raw, booking)
+        _ensure_grn_series(store)
+        grn.post()  # mint the gap-free GRN number + freeze (SUBMITTED)
         if booking:
             booking.recompute_status()
         return Response(GrnSerializer(grn).data, status=status.HTTP_201_CREATED)

@@ -198,7 +198,11 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
     post_result = posted.get("post_result") or {}
     assert int(post_result.get("entries") or 0) > 0
     assert int(post_result.get("reconciled_lines") or 0) >= 1
-    assert post_result.get("vendor_bill")
+    # NOTE: a vendor bill is intentionally NOT asserted here. Liability timing is
+    # commercial-model dependent (Outright/Correction → at PT; SOR → on Sale;
+    # Consignment → never from PT). Per-commercial-model golden tests are added in
+    # the supervised money-slice rebuild (Phase E); asserting "a bill is always
+    # raised" here would re-cement the model-blind liability defect.
     doc_number = str(post_result.get("doc_number"))
 
     bk_after = requests.get(f"{API}/bookings/{booking_id}", headers=h, timeout=30)
@@ -217,13 +221,9 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
     assert all(e.get("kind") == "pt_inward" for e in entries)
     assert all(int(e.get("qty") or 0) > 0 for e in entries)
 
-    v_entries_resp = requests.get(f"{API}/finledger/vendor/entries", headers=h, timeout=30)
-    assert v_entries_resp.status_code == 200
-    v_entries = _list_of(v_entries_resp.json())
-    assert any(
-        (e.get("kind") == "bill") and (e.get("pt_file") == pt_id) and (e.get("booking") == booking_id)
-        for e in v_entries
-    ), "vendor bill entry linked to posted PT/booking not found"
+    # Vendor-bill existence is deliberately not asserted (see note above): whether a
+    # PT raises liability is decided by the booking's commercial model, validated by
+    # the Phase E per-model golden suite, not this stock-posting regression.
 
     rev = requests.post(f"{API}/ptmapper/files/{pt_id}/reverse", headers=h, json={}, timeout=60)
     assert rev.status_code == 200, f"PT reverse failed: {rev.status_code} {rev.text[:250]}"

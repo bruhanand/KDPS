@@ -69,7 +69,11 @@ def test_me_with_token(s):
 
 
 def test_me_without_token_returns_401(s):
-    me = s.get(f"{API}/auth/me", timeout=15)
+    # A request with neither a Bearer header nor a valid auth cookie must be 401.
+    # Use a fresh session so a cookie left in the shared jar by a prior login test
+    # cannot authenticate this call (cookie-or-header JWT auth).
+    fresh = requests.Session()
+    me = fresh.get(f"{API}/auth/me", timeout=15)
     assert me.status_code == 401
 
 

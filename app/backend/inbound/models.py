@@ -11,9 +11,15 @@ from __future__ import annotations
 from django.db import models
 
 from core.base import TimeStampedModel
+from core.documents import Document
+from core.fiscal import financial_year
 
 
-class Grn(TimeStampedModel):
+class Grn(Document):
+    """Goods Receipt Note — a document (ADR-0004): created as a draft, then `post()`
+    mints its gap-free `{FY}/{store}/GRN/{n}` number and freezes it. A receipt is an
+    immutable fact; corrections are new documents, never edits."""
+
     class Status(models.TextChoices):
         RECEIVED = "received", "Received"
         SENT_TO_HO = "sent_to_ho", "Sent to HO (Patna)"
@@ -23,7 +29,6 @@ class Grn(TimeStampedModel):
         STORE = "store", "Store"
         WAREHOUSE = "warehouse", "Warehouse"
 
-    number = models.CharField(max_length=32, unique=True)
     booking = models.ForeignKey(
         "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL, related_name="grns"
     )
@@ -46,11 +51,15 @@ class Grn(TimeStampedModel):
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL
     )
 
-    class Meta:
+    class Meta(Document.Meta):
+        db_table = "inbound_grn"
         ordering = ["-created_at"]
 
+    def series_lookup(self) -> tuple[str, str, str]:
+        return financial_year(), self.store.code, "GRN"
+
     def __str__(self) -> str:
-        return self.number
+        return self.doc_number or f"GRN draft #{self.pk}"
 
 
 class GrnLine(TimeStampedModel):
