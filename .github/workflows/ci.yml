@@ -40,7 +40,7 @@ jobs:
       DJANGO_ALLOWED_HOSTS: "*"
       SEED_DEMO: "1"
       EMERGENT_LLM_KEY: "ci-placeholder"
-      GEMINI_MODEL: "gemini-3.1-pro-preview"
+      GEMINI_MODEL: "gemini-2.5-flash"
       # The black-box regression suite talks to the API over plain http on
       # localhost, so the JWT auth cookies must not be Secure (a Secure cookie is
       # never sent back over http, which would 401 every cookie-authed request).

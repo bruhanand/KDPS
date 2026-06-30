@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 _EXCEL_TYPES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
