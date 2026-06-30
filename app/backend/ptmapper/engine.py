@@ -481,11 +481,13 @@ def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields
 
 
 def _map_season(resolver: Resolver, g, ctx: dict) -> str | None:
-    """SEASON from the invoice date if available, else from a season code."""
-    d = parse_date(g("DATE_SRC"))
-    season = resolver.season_from_date(d) if d else None
+    """SEASON from the explicit season code first — a season is a NAME, never a date.
+    Derive it from the invoice date only as a fallback when no season code is present
+    (so a date can never override an explicit, if-unresolved-then-reviewed code)."""
+    season = resolver.season_from_code(raw_str(g("SEASON_SRC")), ctx)
     if not season:
-        season = resolver.season_from_code(raw_str(g("SEASON_SRC")), ctx)
+        d = parse_date(g("DATE_SRC"))
+        season = resolver.season_from_date(d) if d else None
     return season
 
 
