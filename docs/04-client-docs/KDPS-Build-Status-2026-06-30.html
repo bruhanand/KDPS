@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>KDPS Operating System — What's Built So Far</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --orange:#d2693f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+    --green:#1f7a4d; --greensoft:#eef6f1;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.5pt; line-height:1.5;
+  }
+  .wrap{max-width:780px; margin:0 auto; padding:24px 4px 8px;}
+  header.hero{border-bottom:3px solid var(--orange); padding-bottom:14px; margin-bottom:18px;}
+  .eyebrow{color:var(--orange); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 6px; font-size:23pt; color:var(--navy); letter-spacing:-.3px;}
+  .sub{margin:0; color:var(--muted); font-size:11pt; max-width:640px;}
+  h2{font-size:13.5pt; margin:22px 0 4px; color:var(--navy); padding-left:10px; border-left:4px solid var(--orange);}
+  h2 .pill{font-size:8.5pt; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:2px 8px; border-radius:20px; margin-left:8px; vertical-align:middle;}
+  .pill-live{background:var(--greensoft); color:var(--green); border:1px solid #bfe0cd;}
+  .pill-next{background:#fbf4ee; color:var(--orange); border:1px solid #e7c9b4;}
+  h3{font-size:10.5pt; color:var(--navy); margin:14px 0 4px; text-transform:uppercase; letter-spacing:.5px; font-weight:700;}
+  ul{margin:4px 0 0; padding-left:0; list-style:none;}
+  li{padding:3px 0 3px 22px; position:relative; font-size:10.7pt;}
+  li b, strong{color:var(--navy);}
+  .live li::before{content:"✓"; position:absolute; left:2px; top:3px; color:var(--green); font-weight:700;}
+  .next li::before{content:"›"; position:absolute; left:4px; top:2px; color:var(--orange); font-weight:700; font-size:13pt; line-height:1;}
+  .lead{color:var(--muted); font-size:10.5pt; margin:2px 0 6px;}
+  .ask{background:#fbf4ee; border:1px solid #e7c9b4; border-left:4px solid var(--orange); border-radius:6px; padding:6px 16px 10px; margin:14px 0 6px;}
+  .ask h2{border:0; padding:0; margin:8px 0 2px;}
+  .ask ul li::before{content:"•"; color:var(--orange);}
+  footer{margin-top:20px; padding-top:10px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+  @media print{ body{font-size:11pt;} .wrap{padding-top:6px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · Progress Update · 30 June 2026</div>
+  <h1>The KDPS System — What's Built So Far</h1>
+  <p class="sub">A plain snapshot of where the system stands today. It already runs in any web browser — nothing to install. Below is what your team can use now, and what comes next.</p>
+</header>
+
+<section>
+<h2>Ready to use today<span class="pill pill-live">Live · early access</span></h2>
+
+<h3>Getting in</h3>
+<ul class="live">
+  <li><b>Secure login with roles.</b> Each person signs in and sees only what their job needs — owner, store, warehouse, finance or master-data.</li>
+  <li><b>Home dashboard.</b> A personalised landing screen for each role, with tiles you can show, hide and re-order. <span class="lead" style="display:inline">(Final layout still being decided with you — see the last section.)</span></li>
+</ul>
+
+<h3>Your backbone records (master data)</h3>
+<ul class="live">
+  <li><b>Stores &amp; warehouses, Brands, Seasons, GST registrations, Users &amp; Roles</b> — view, add and edit, all in one place.</li>
+</ul>
+
+<h3>Day-to-day documents</h3>
+<ul class="live">
+  <li><b>Vendor bookings.</b> Record what each brand has booked for a season.</li>
+  <li><b>Goods inward (GRN).</b> Receive shipments into a store or warehouse.</li>
+  <li><b>PT converter.</b> Turns a brand's PT / invoice file into clean, ready stock data automatically. Anything it cannot read with certainty goes to a review list instead of being guessed.</li>
+</ul>
+
+<h3>Stock &amp; money (the books)</h3>
+<ul class="live">
+  <li><b>Stock ledger &amp; Stock on hand.</b> Every movement, and the live quantity — always kept correctly by item: style, size <em>and</em> colour.</li>
+  <li><b>Vendor ledger.</b> What is owed to each brand, with ageing.</li>
+  <li><b>Cash ledger.</b> Cash movements.</li>
+  <li><b>Self-balancing books.</b> Stock value and brand dues stay in balance at all times, with SOR and outright brands handled correctly and GST built in. This is the base for accurate profit reporting later.</li>
+</ul>
+</section>
+
+<section>
+<h2>Coming next<span class="pill pill-next">Building, one at a time</span></h2>
+<p class="lead">Built in order so each part is checked and correct before the next begins.</p>
+<ul class="next">
+  <li><b>Selling at the counter (POS)</b> — billing, returns, exchanges and day-close.</li>
+  <li><b>Store count &amp; transfers</b> — stock counts and moving stock between locations.</li>
+  <li><b>Sales &amp; payments documents</b> — sales records, POS import, customer returns and vendor payments.</li>
+  <li><b>Controls</b> — exception inbox, reconciliations, approvals and a full audit trail.</li>
+  <li><b>Business intelligence</b> — dashboards, profit by brand / store / season, dead-stock and ageing, demand forecast, report maker.</li>
+  <li><b>Connections</b> — Tally export for the statutory books, and POS data sources.</li>
+  <li><b>Morning brief (AI)</b> — a suggest-only daily summary. AI never moves stock or money on its own; a person always approves.</li>
+</ul>
+</section>
+
+<section class="ask">
+<h2 style="padding-left:0;border-left:0;margin-top:8px">What we need from KDPS</h2>
+<ul>
+  <li><b>Home dashboard:</b> tell us what each role should see first, so we finalise the landing screen.</li>
+  <li><b>Master lists:</b> confirm the final stores, brands and GST registrations for go-live.</li>
+  <li><b>Access</b> for Tally and the POS system when we reach the connections stage.</li>
+</ul>
+</section>
+
+<footer>
+  KDPS Operating System · early-access build · prepared for KDPS Lifestyle Pvt. Ltd. · 30 June 2026.
+</footer>
+
+</div>
+</body>
+</html>

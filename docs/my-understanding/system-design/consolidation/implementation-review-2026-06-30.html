@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS — Implementation Code Review (30 Jun 2026)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb; --red:#a32a2a; --red-bg:#fde8e8;
+    --maxw:1000px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1320px; margin:0 auto; gap:0;}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:272px; flex:0 0 272px; padding:26px 16px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:20px 0 7px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:4px 10px; border-radius:7px; font-size:13.5px; line-height:1.32}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  nav.toc a.crit{color:#f6b8b8}
+  main{flex:1 1 auto; min-width:0; padding:38px 46px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:960px){ nav.toc{display:none} main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:29px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:74ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:10px}
+  section{margin:36px 0; scroll-margin-top:14px}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 7px}
+  h4{margin:0 0 5px; font-size:15px; color:var(--navy)}
+  p{margin:9px 0}
+  .lead{font-size:15.5px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 8px; border-radius:999px; vertical-align:middle}
+  .b-crit{background:var(--red-bg); color:var(--red)}
+  .b-high{background:var(--amber-bg); color:var(--amber)}
+  .b-med{background:var(--blue-bg); color:var(--blue)}
+  .b-low{background:var(--grey-bg); color:var(--muted)}
+  .b-ok{background:var(--green-bg); color:var(--green)}
+  .grade{display:inline-block; font-weight:800; font-size:12px; padding:2px 9px; border-radius:7px}
+  .g-a{background:var(--green-bg); color:var(--green)} .g-b{background:#eaf4ea; color:#2f7d32}
+  .g-c{background:var(--amber-bg); color:var(--amber)} .g-d{background:#fbe7df; color:#b4521f}
+  .g-f{background:var(--red-bg); color:var(--red)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .find{border-left:5px solid var(--line)}
+  .find.crit{border-left-color:var(--red)} .find.high{border-left-color:var(--amber)}
+  .find .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:9px; margin-bottom:3px}
+  .find h4{font-size:15.5px}
+  .find .loc{font-size:12.5px; color:var(--muted); margin:6px 0}
+  .find dl{margin:8px 0 0} .find dt{font-weight:700; color:var(--navy2); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; margin-top:9px} .find dd{margin:2px 0 0; font-size:14px}
+  .tag{font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); background:var(--grey-bg); padding:1px 7px; border-radius:6px}
+  .conf{font-size:11px; color:var(--green); font-weight:700}
+  .callout{border-radius:12px; padding:13px 16px; margin:14px 0; border:1px solid}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-warn{background:var(--amber-bg); border-color:#ecd9a6}
+  .co-money{background:#fdf1ea; border-color:#eccbb9}
+  .co-bad{background:var(--red-bg); border-color:#f0c2c2}
+  .co-good{background:var(--green-bg); border-color:#bfe0cd}
+  .callout strong{color:var(--navy)}
+  .callout p{margin:6px 0}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:8px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  code{background:#eef0f4; padding:1px 5px; border-radius:5px; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  ul.tight li{margin:3px 0}
+  .kpi{display:flex; flex-wrap:wrap; gap:12px; margin:14px 0}
+  .kpi .box{flex:1 1 150px; border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:#fff}
+  .kpi .n{font-size:26px; font-weight:800; color:var(--navy); line-height:1}
+  .kpi .l{font-size:12px; color:var(--muted); margin-top:4px}
+  .kpi .box.crit .n{color:var(--red)} .kpi .box.high .n{color:var(--amber)}
+  footer{margin-top:54px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+  .pill-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <h2>Review</h2>
+  <a href="#summary">Executive summary</a>
+  <a href="#scorecard">Scorecard &amp; severity</a>
+  <a href="#method">Method &amp; scope</a>
+  <h2>Findings</h2>
+  <a href="#themes">The 8 themes</a>
+  <a class="crit" href="#critical">Critical defects (3)</a>
+  <a href="#high">High findings</a>
+  <a href="#medium">Medium findings</a>
+  <h2>Evaluation</h2>
+  <a href="#erpnext">ERPNext comparison</a>
+  <a href="#firstprinciples">First-principles: is this the right build?</a>
+  <a href="#strengths">What is genuinely good</a>
+  <h2>Action</h2>
+  <a href="#sequence">Recommended build sequence</a>
+  <a href="#verdict">Bottom line</a>
+</nav>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">KDPS Operating System · Implementation Code Review</div>
+  <h1>Deep review of the built code — kernel, money path, security &amp; build fitness</h1>
+  <p class="sub">A line-by-line and multi-agent review of the committed application (<code>app/backend</code> Django + <code>app/frontend</code> React/TS) — the Emergent-generated business slices riding on the hand-built <code>core</code> kernel. Measured against the project's own contracts (the 12 rules, the 7 ADRs, the money-critical locked decisions), against ERPNext best practice, and — independently of the docs — against how a multi-brand retail ERP should actually be built.</p>
+  <p class="stamp"><strong>Date:</strong> 30 June 2026 &nbsp;·&nbsp; <strong>Reviewed at commit:</strong> <code>0f39c78</code> (main, post Emergent export #26) &nbsp;·&nbsp; <strong>Method:</strong> 14 parallel review lenses (9 subsystem + 5 cross-cutting) → adversarial verification of every critical/high → synthesis, plus the reviewer's own line-by-line read of the kernel and posting paths. 60 agents · ~3.2M tokens · 101 findings.</p>
+</header>
+
+<!-- ============================================================ -->
+<section id="summary">
+  <h2 class="sec">Executive summary</h2>
+  <p class="lead">The hand-built <strong>kernel is genuinely excellent</strong> (grade A−). The AI-generated business code that sits on top of it is <strong>not</strong> — it bypasses the kernel on exactly the money-critical seams, and ships <strong>three distinct money-critical defects plus three live security holes</strong>. Overall grade: <span class="grade g-c">C−</span> — kernel A−, masters B−, the generated inbound→PT→vendor money layer ≈ D.</p>
+
+  <div class="callout co-bad">
+    <p><strong>The one-sentence finding.</strong> A superb, supervised kernel (money-as-paise, append-only ledgers, docstatus FSM, gap-free numbering) was built — and then the money slices were generated wholesale by an unsupervised builder that <em>does not use it</em>: vendor liability is posted for every brand regardless of commercial model, inventory is valued from the wrong column (~16.7% low), there is no balanced double-entry engine so the books cannot be proven to tie, and the stock/finance read APIs leak every store's data to any logged-in user.</p>
+  </div>
+
+  <p>The most important structural fact: the kernel's most valuable guarantees — the <code>docstatus</code> FSM, immutability triggers, the three keys (incl. the offline idempotency UUID), gap-free voucher numbering, and the to-be-built <em>balanced</em> posting — currently protect only the kernel's own internal <code>DocumentProbe</code>. <strong>Not a single real business document (GRN, PT, Booking) inherits them.</strong> They re-roll their own <code>count()+1</code> numbering (a concurrency race), an ad-hoc mutable status flipped by a bare <code>save()</code>, and no idempotency key. The result is that a posted PT is API-deletable, an offline receipt double-counts on retry, and concurrent posts double-write stock and the vendor bill.</p>
+
+  <p>This is, at root, a <strong>process</strong> outcome, not a talent one. The constitution's own rule — money/ledger/GST slices are <em>supervised, read every line, golden-file tested</em> — was not followed for these slices; the business layer has no balanced/golden/per-model tests, the CI gate is not wired (green only inside the build container), and one regression test actually <em>asserts the buggy behaviour</em> (a vendor bill is always raised), cementing it. The good news is symmetrical: the kernel, the masters/data-model layer, the auth scaffolding, and the deterministic PT mapping engine are sound and worth keeping. The fix is to build the kernel's missing balanced-posting primitive, reparent the business documents onto the kernel, and <strong>rebuild the inbound→PT→vendor slice supervised</strong> — before any further money slice is written.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="scorecard">
+  <h2 class="sec">Scorecard &amp; severity</h2>
+  <table>
+    <thead><tr><th style="width:24%">Area</th><th style="width:10%">Grade</th><th>One-line</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Kernel</strong> (<code>core/</code> money, ledger, documents, base)</td><td><span class="grade g-a">A−</span></td><td>Production-grade, defence-in-depth, tested against real Postgres with a 12-thread contention test. Keep verbatim. Gaps: <code>post_entries</code> not built yet; <code>TRUNCATE</code> bypasses the triggers.</td></tr>
+      <tr><td><strong>Masters</strong> (entity/GSTIN/store, brand, season, GST slab)</td><td><span class="grade g-b">B−</span></td><td>The bright spot of the generated code. Two-axis commercial model, <code>LegalEntity→GSTIN→Store</code>, date-effective slab — modelled exactly to spec. The data needed to fix the liability bug is already captured.</td></tr>
+      <tr><td><strong>PT mapping engine</strong> (<code>ptmapper/engine.py</code>)</td><td><span class="grade g-c">C+</span></td><td>Clean, deterministic, table-driven, AI-free; unresolved values go to a review queue, not a guess. But carries money as <em>float</em> through the whole pipeline.</td></tr>
+      <tr><td><strong>Inbound / GRN</strong></td><td><span class="grade g-c">C</span></td><td>Bypasses the document kernel; racy numbering; offline retries double-count; write-path scope leak; GRN posts nothing to the stock ledger.</td></tr>
+      <tr><td><strong>Stock ledger</strong></td><td><span class="grade g-d">D+</span></td><td>Valued at BASIC not P RATE; silent-zero money converter; single-sided (no contra); reads are fail-open.</td></tr>
+      <tr><td><strong>Vendor / cash ledger</strong> (<code>finledger</code>)</td><td><span class="grade g-d">D+</span></td><td>Liability ignores commercial model; omits GST; double-reversal possible; reads open to any authenticated user.</td></tr>
+      <tr><td><strong>Auth / RBAC</strong></td><td><span class="grade g-c">C</span></td><td>Sound scaffolding (custom user, scope dimension, brute-force lock) but coarse enforcement (money writes only <code>IsAuthenticated</code>); JWT in <code>localStorage</code>; default scope fail-open.</td></tr>
+      <tr><td><strong>Config / deploy</strong></td><td><span class="grade g-c">C+</span></td><td>SQLite-reject guard is excellent. But credentialed CORS wildcard, seeded admin creds + exposed <code>/admin</code>, CI gate not wired.</td></tr>
+      <tr><td><strong>Frontend</strong></td><td><span class="grade g-c">C</span></td><td>Typed client present; but tokens in <code>localStorage</code> (XSS-exfiltratable) layered on top of httpOnly cookies, nullifying the cookie protection.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="kpi">
+    <div class="box crit"><div class="n">10</div><div class="l">Critical findings<br>(collapse to 3 distinct defects)</div></div>
+    <div class="box high"><div class="n">26</div><div class="l">High findings</div></div>
+    <div class="box"><div class="n">43</div><div class="l">Medium findings</div></div>
+    <div class="box"><div class="n">16</div><div class="l">Low / 6 info</div></div>
+    <div class="box ok" style="--green:#1f7a4d"><div class="n" style="color:var(--green)">39</div><div class="l">Critical/high findings independently <strong>confirmed</strong> on re-read (1 refuted)</div></div>
+  </div>
+  <p style="font-size:13px;color:var(--muted)">The three money-critical defects were each surfaced <em>independently</em> by up to six of the fourteen review lenses (money-integrity, domain-fidelity, ERPNext, first-principles, plus the subsystem reviews) and then re-confirmed by a separate verifier that re-opened the cited code. That convergence is the strongest signal in this report.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="method">
+  <h2 class="sec">Method &amp; scope</h2>
+  <p>Scope was the committed application code: the Django backend (<code>app/backend</code>, ~8,300 LOC across 10 apps) and the React/TS PWA (<code>app/frontend</code>). The review ran along three axes simultaneously:</p>
+  <ul class="tight">
+    <li><strong>Conformance</strong> — does the code obey the project's own contracts (the 12 rules, ADRs 0001–0007, the money-critical locked decisions in <code>CONTEXT.md</code>)?</li>
+    <li><strong>ERPNext best practice</strong> — how does the implementation compare to the mature India retail/GST ERP whose contracts this project set out to re-implement?</li>
+    <li><strong>First principles</strong> — setting the docs aside, is this the right way to build a 40-brand, 50-store, 20,000-SKU fashion-retail ERP? (Your added ask.)</li>
+  </ul>
+  <p style="font-size:13px;color:var(--muted)">Fourteen review agents fed adversarial verification of every critical/high finding, then a synthesis pass. Three subsystem agents (stock-ledger, auth, frontend) hit a structured-output limit and were dropped; those areas are covered by the cross-cutting money/domain/security lenses and by the reviewer's own direct read of <code>stockledger/posting.py</code>, <code>accounts/*</code> and <code>frontend/src/lib/api.ts</code>, so coverage is complete. Every finding below carries a file:line you can open.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="themes">
+  <h2 class="sec">The eight themes</h2>
+
+  <div class="card"><div class="pill-row"><span class="badge b-crit">Critical</span></div>
+  <h4>1 · The kernel is excellent; the generated slices bypass it on the money-critical seams</h4>
+  <p><code>core/</code> is faithful defence-in-depth on real Postgres invariant tests. But <code>GRN</code>/<code>PtFile</code>/<code>Booking</code> inherit a plain <code>TimeStampedModel</code> instead of <code>core.documents.Document</code>; <code>finledger</code>/<code>stockledger</code> re-invent <code>rupees_to_paise</code> as error-swallowing return-0 helpers; numbering is <code>count()+1</code> not the gap-free <code>VoucherSeries</code>. The kernel's FSM, immutability, idempotency and balanced posting protect only the <code>DocumentProbe</code>.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-crit">Critical</span></div>
+  <h4>2 · Money-critical locked decisions are violated in the one place they matter</h4>
+  <p>Liability timing ignores the commercial model (full vendor bill for every PT); valuation freezes <code>BASIC</code> instead of the locked <code>P RATE</code>. Both are silent, systematic, on every inward, and confirmed against live code.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-crit">Critical</span></div>
+  <h4>3 · No double-entry: <code>post_entries</code> was never built, so the books cannot be proven to balance</h4>
+  <p>ADR-0006's one-writer balanced-or-fail engine exists only as a docstring. Stock value and vendor liability are independent single-sided writes with no Σ=0 invariant and no GL; a booking-less PT raises inventory value with no contra entry at all.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-high">High</span></div>
+  <h4>4 · Re-invented money helpers swallow errors to zero — inverting the kernel's whole thesis</h4>
+  <p><code>stockledger._to_paise</code> / <code>finledger.rupees_to_paise</code> return 0 on blank/unparseable input and accept floats, shadowing <code>core.money.rupees_to_paise</code> which deliberately <em>raises</em>. The stock path has no <code>&gt;0</code> guard, so a blank <code>BASIC</code> posts a zero-valued line and under-bills the vendor invisibly.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-high">High</span></div>
+  <h4>5 · Business documents are mutable, racy, and non-idempotent</h4>
+  <p>Ad-hoc status flipped by bare <code>save()</code>; <code>count()+1</code> numbering that 500s under load; no <code>idempotency_uuid</code>. A posted PT is DELETE-able via the API; offline GRN retries double-count; concurrent PT posts double-write (TOCTOU stage check outside the lock).</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-high">High</span></div>
+  <h4>6 · Fail-closed scoping exists — but is not wired to the money/stock reads, and the deploy is insecure</h4>
+  <p>The correct <code>scope_by_store</code> helper is used in inbound, but the stock-ledger and finance read endpoints use <code>.objects.all()</code> with only <code>IsAuthenticated</code>. Plus a credentialed CORS wildcard, seeded admin creds with <code>/admin</code> exposed, and password auto-revert on every deploy.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-high">High</span></div>
+  <h4>7 · Process &amp; test gap: money slices generated unsupervised, with a regression that cements the bug</h4>
+  <p>Every defect is in the Emergent-generated apps; the supervised kernel is clean. No balanced/golden/per-model tests; the ADR-0005 CI gate is not wired (green only in-container); <code>test_iteration11</code> asserts a vendor bill is always raised — encoding the model-blind liability bug as expected behaviour.</p></div>
+
+  <div class="card"><div class="pill-row"><span class="badge b-med">Medium</span></div>
+  <h4>8 · Data-model &amp; scale fitness will not survive 20k SKU × 50 stores</h4>
+  <p>One self-describing value-bearing stock ledger flattens brand/season/colour/size to free-text strings with no referential integrity; no <code>sku</code>/<code>cohort</code> masters; barcode mislabeled as SKU identity; stock-on-hand runs a full <code>GROUP BY</code> over the whole append-only ledger on unindexed text, capped at a silent <code>[:2000]</code> slice that drops rows.</p></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="critical">
+  <h2 class="sec">Critical defects — the three that must be fixed first</h2>
+  <p>The ten critical findings collapse to three distinct money/architecture defects. Each is confirmed, each is silent, and each is on every inward.</p>
+
+  <div class="card find crit">
+    <div class="top"><span class="badge b-crit">Critical</span><span class="tag">domain-money</span><span class="conf">✓ confirmed by 6 lenses</span></div>
+    <h4>C1 · Vendor liability is posted in full for every PT, regardless of commercial model</h4>
+    <p class="loc"><code>finledger/posting.py:102–110</code> (<code>post_pt_vendor_bill</code>) · called unconditionally from <code>stockledger/posting.py:141</code> · the model lives unused at <code>vendors/models.py:62–63</code> (<code>Booking.ownership/return_terms</code>)</p>
+    <dl>
+      <dt>What it does</dt><dd><code>post_pt_vendor_bill</code> raises a full vendor bill whenever a booking exists and <code>total_value &gt; 0</code>. It never reads <code>ownership</code>/<code>return_terms</code> — those fields appear nowhere in any posting path.</dd>
+      <dt>Why it's money-critical</dt><dd>The locked decision: Outright/Correction → liability at PT; <strong>SOR → liability on the Sale</strong>; <strong>Consignment → never from the PT</strong>. For a 40-brand fashion retailer most brands are SOR/consignment, so KDPS books payables it does not owe at inward, overstates AP and the SRBNB picture, and will <em>double-count</em> once the sale-side liability is added. Conversely a booking-less Outright receipt posts no liability at all (the gate is "has booking", not "which model").</dd>
+      <dt>Fix</dt><dd>Branch on the already-snapshotted axes: post at PT only for <code>ownership=owned</code>; for SOR accrue on the Sale; for Consignment never post from the PT. ADR-0006 already says liability timing lives on the document, not the engine. Add a per-model golden test asserting the vendor-ledger delta.</dd>
+    </dl>
+  </div>
+
+  <div class="card find crit">
+    <div class="top"><span class="badge b-crit">Critical</span><span class="tag">domain-money</span><span class="conf">✓ confirmed by 5 lenses</span></div>
+    <h4>C2 · Stock (and the derived vendor bill) is valued at <code>BASIC</code>, not the locked <code>P RATE</code></h4>
+    <p class="loc"><code>stockledger/posting.py:74</code> — <code>unit_paise = _to_paise(data.get("BASIC"))</code>; the docstring literally says "value = BASIC × qty". The engine emits both columns at <code>ptmapper/engine.py:530–531</code> and its own margin calc uses <code>P RATE</code>.</p>
+    <dl>
+      <dt>What it does</dt><dd>Freezes the pre-tax taxable amount (<code>BASIC</code>) as unit cost. In the raw PTs <code>P RATE = BASIC × 1.20</code>, so every line is valued at ≈ 83% of the locked unit cost.</dd>
+      <dt>Why it's money-critical</dt><dd>Inventory value, COGS, gross-margin, dead-stock valuation, and the auto vendor bill (which inherits the same base) are all understated by ~16.7% — silently, on every inward. It is the exact "ex-GST cost" the decision forbids deriving, produced by picking the wrong column. There is also no <code>unit_cost ≤ mrp</code> guard, so a mis-mapped row can value stock above its MRP undetected.</dd>
+      <dt>Fix</dt><dd>Value the stock leg from the <code>P RATE</code> column; persist an explicit per-unit <code>unit_cost_paise</code> (not just a line total); add the locked <code>CHECK unit_cost ≤ mrp</code> that raises an exception item on breach. Decide the vendor-payable base explicitly (P RATE vs invoice-incl-GST). Reconcile against the CA-gated P-RATE statutory-cost sign-off before go-live.</dd>
+    </dl>
+  </div>
+
+  <div class="card find crit">
+    <div class="top"><span class="badge b-crit">Critical</span><span class="tag">architecture / kernel-contract</span><span class="conf">✓ confirmed</span></div>
+    <h4>C3 · No balanced double-entry engine — the books cannot be proven to tie</h4>
+    <p class="loc"><code>post_entries</code> absent (only two doc-comments repo-wide) · <code>stockledger/posting.py:132–148</code> (<code>bulk_create</code>) · <code>finledger/posting.py:51–145</code> (<code>.objects.create</code>)</p>
+    <dl>
+      <dt>What it does</dt><dd>ADR-0006's single balanced-or-fail writer was deferred to K7 and never built; the generated slices were built ahead of it. Stock value, vendor liability and cash are three independent <em>single-sided</em> registers with no Σ=0 check and no general ledger.</dd>
+      <dt>Why it's critical</dt><dd>Nothing guarantees <code>inventory_value == payable_raised</code>. A booking-less PT (in scope) posts inventory value with <code>post_pt_vendor_bill</code> returning <code>None</code> — value created with no offsetting payable. A wrong or duplicated leg is caught by <em>nothing</em>; there is no trial balance to detect the drift. The core money-safety property of a deterministic ERP is absent below the kernel.</dd>
+      <dt>Fix</dt><dd>Build <code>core.post_entries(doc, legs)</code> as the sole ledger writer — validate Σ(legs)=0 in paise inside one <code>transaction.atomic()</code>, all legs or none, dimensions snapshotted on every leg — plus a minimal value GL. Route PT inward + vendor bill + payment through it as balanced leg-sets. Add the ADR-0005 balanced-posting anti-cheat suite asserting Σ=0 per document type.</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="high">
+  <h2 class="sec">High findings</h2>
+  <p>26 high findings, grouped. (Several were filed by multiple lenses; deduplicated here.)</p>
+
+  <h3>Money discipline</h3>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">kernel-contract</span></div>
+    <h4>Money converters silently return 0 on bad input — the PT valuation path is unguarded</h4>
+    <p class="loc"><code>stockledger/posting.py:37–44</code> (<code>_to_paise</code>) · <code>finledger/posting.py:28–36</code> (<code>rupees_to_paise</code>) · also <code>vendors/views.py:31</code></p>
+    <p>The engine already emits <code>''</code> for cells it could not parse; these helpers turn that into 0 paise. The finledger callers guard <code>amount ≤ 0</code>, but the stock path only guards <code>qty ≤ 0</code> — so a row with valid qty and blank/garbled <code>BASIC</code> posts a <strong>zero-valued</strong> stock line and under-bills the vendor, with no error and no flag. This is precisely the silent-zero failure the kernel's <em>raising</em> helper exists to prevent. <em>Fix:</em> delete the local helpers, use <code>core.money.rupees_to_paise</code>, and treat an unparseable required money cell as a blocking review item (flag, never silently zero).</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">domain-money</span></div>
+    <h4>Vendor liability carries no GST; the date-effective slab engine is dead</h4>
+    <p class="loc"><code>stockledger/posting.py:141</code> · <code>masters/models.py:138</code> (<code>GstSlab</code> defined, never referenced)</p>
+    <p>The vendor bill is set equal to the internal stock valuation and omits GST entirely; the parsed tax and the <code>GstSlab</code> master are never applied or carried. Tally/TIR cannot be fed a correct GST purchase voucher. <em>Fix:</em> snapshot per-line GST (HSN, rate, tax_paise) at PT, carry-never-recompute, and include GST in the payable per the posting catalog.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">correctness</span></div>
+    <h4>A vendor/cash entry can be reversed more than once</h4>
+    <p class="loc"><code>finledger/views.py:219–231</code>, <code>296–308</code> — the guard only blocks reversing a <em>reversal</em>, not re-reversing an already-reversed bill.</p>
+    <p>Reversing the same bill twice appends two negative mirrors, over-crediting the vendor. <em>Fix:</em> track and reject when a source entry already has a live reversal.</p>
+  </div>
+
+  <h3>Document-kernel bypass</h3>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">kernel-contract</span></div>
+    <h4><code>GRN</code> / <code>PtFile</code> / <code>Booking</code> bypass <code>core.documents.Document</code></h4>
+    <p class="loc"><code>inbound/models.py:16</code> · <code>ptmapper/models.py:83</code> · <code>vendors/models.py:38</code> — all extend <code>TimeStampedModel</code>; <code>core.Document</code> is used only by the kernel's <code>DocumentProbe</code>.</p>
+    <p>No <code>draft→submitted→cancelled</code> FSM, no DB immutability trigger, no three keys, no idempotency. A "posted" PT/GRN is a plain row editable or deletable via the ORM. <em>Fix:</em> reparent onto <code>core.Document</code> — FSM + immutability + idempotency_uuid + <code>VoucherSeries</code> numbering come for free; reversal becomes a cancel transition, not a stage rewind.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">correctness</span></div>
+    <h4>GRN &amp; Booking numbers minted by <code>count()+1</code> — a race/collision bug</h4>
+    <p class="loc"><code>inbound/views.py:87–88</code> · <code>vendors/views.py:102–103</code></p>
+    <p>Two concurrent creates read the same count and collide on the unique number (IntegrityError → 500); deleting a middle row makes <code>count()</code> non-monotonic → guaranteed future collision. The number is also not the canonical <code>{FY}/{store}/{type}/{seq}</code> Tally join key. <em>Fix:</em> allocate through <code>VoucherSeries.allocate()</code> inside the create transaction (gap-free, lock-serialised, rollback-safe).</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">correctness</span></div>
+    <h4>PT push has no idempotency key + a TOCTOU stage check → double-post</h4>
+    <p class="loc"><code>ptmapper/views.py:241–256</code> · <code>stockledger/posting.py:132–148</code></p>
+    <p>Two concurrent requests (double-click, or a client retry after timeout) both pass the <code>SENT</code> check and both run <code>post_pt_inward</code> — writing inward stock twice and creating two vendor bills. Stock-on-hand and vendor payable silently double. <em>Fix:</em> <code>select_for_update</code> the <code>PtFile</code> and re-check stage inside the transaction; accept a client idempotency key.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">correctness</span></div>
+    <h4>GRN retry double-counts received quantity; a posted PT is API-deletable</h4>
+    <p class="loc"><code>inbound/views.py:139–141</code> (<code>bl.received_qty += qty</code>) · <code>ptmapper/views.py:132</code> (<code>PtFileDetailView</code> is a <code>RetrieveDestroyAPIView</code>)</p>
+    <p>On this offline-first PWA a resubmitted GRN increments <code>booking_line.received_qty</code> a second time, flipping the booking to RECEIVED on phantom quantity that the PT/stock then inherit. Separately, a posted PT can be <code>DELETE</code>d, orphaning its already-posted ledger rows (<code>pt_file=SET_NULL</code>) and destroying the audit source. <em>Fix:</em> idempotent create keyed on the client UUID; derive <code>received_qty</code> as a SUM over lines; remove DELETE on posted documents.</p>
+  </div>
+
+  <h3>Security (exploitable on the current deploy)</h3>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">security</span></div>
+    <h4>Credentialed CORS wildcard for <code>*.emergentagent.com</code> is always active — even on the Render prod deploy</h4>
+    <p class="loc"><code>config/settings.py:142–153</code> · <code>render.yaml:62–63</code> (<code>JWT_COOKIE_SAMESITE=None</code>)</p>
+    <p><code>emergentagent.com</code> is a shared preview platform whose subdomains are handed to any user. With an unconditional regex, <code>CORS_ALLOW_CREDENTIALS=True</code>, and <code>SameSite=None</code>, any <code>https://&lt;attacker&gt;.emergentagent.com</code> page can issue credentialed fetches, the cookie rides along, and the reflected <code>Allow-Origin</code> lets the attacker's JS <em>read</em> authenticated responses — a cross-origin data-exfiltration vector against a live login. Setting <code>CORS_ALLOWED_ORIGINS</code> on Render does not lock it down because the wildcard stays. <em>Fix:</em> gate the preview regexes behind <code>DEBUG</code>/explicit env; in prod drive the allowlist purely from exact origins.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">security</span></div>
+    <h4>Public deploy seeds documented superuser creds, exposes <code>/admin</code>, and auto-reverts password changes</h4>
+    <p class="loc"><code>render.yaml:33–39</code> · <code>accounts/management/commands/seed_foundation.py</code> · <code>config/urls.py:21</code> · <code>DEPLOY.md:34–41</code></p>
+    <p><code>seed_foundation</code> runs on every deploy and unconditionally <code>set_password</code>s hardcoded <code>admin/Admin@123</code> (superuser) and <code>owner/Owner@123</code> — both published in <code>DEPLOY.md</code> — while <code>/admin</code> is mounted. A passing test even asserts the password is restored after an operator changes it, so the one mitigation is undone every deploy. <em>Fix:</em> drop <code>seed_foundation</code> from the prod build (or gate behind <code>SEED_DEMO=1</code>); <code>set_password</code> only on create or from a secret; restrict <code>/admin</code>.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">security</span></div>
+    <h4>Stock-ledger &amp; finance reads are fail-open — cross-store / cross-GSTIN / payables leak</h4>
+    <p class="loc"><code>stockledger/views.py:32,46,85</code> · <code>finledger/views.py:45–176, 236–273</code></p>
+    <p>These use <code>.objects.all()</code> with only <code>IsAuthenticated</code>, while the correct fail-closed <code>scope_by_store</code> helper exists and is already used in inbound. Any single-store cashier can read every store's stock and valuation across both GSTINs, plus all vendor payables, ageing and cash balances. <em>Fix:</em> apply <code>scope_by_store</code> to the stock querysets; gate the finance reads behind the existing <code>_is_finance</code> role check; add a cross-store isolation test.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">security</span></div>
+    <h4>Booking write-path is not scope-checked → mutate another store's receiving</h4>
+    <p class="loc"><code>inbound/views.py:160–162, 113–115, 139–141, 168</code></p>
+    <p>Only the read paths and the store FK enforce scope. A store-scoped user can pass an arbitrary <code>booking_id</code>/<code>booking_line_id</code> from another store's booking and increment its <code>received_qty</code> (and recompute its status). <em>Fix:</em> validate booking + line against <code>visible_store_ids</code> before linking/mutating.</p>
+  </div>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">security</span></div>
+    <h4>JWT stored in <code>localStorage</code> (XSS-exfiltratable) layered on httpOnly cookies</h4>
+    <p class="loc"><code>frontend/src/lib/api.ts:13–37</code> stores access+refresh in <code>localStorage</code> and sends both a <code>Bearer</code> header and <code>withCredentials</code>; the backend independently sets the same tokens as httpOnly cookies.</p>
+    <p>The httpOnly protection is nullified because the same token also lives in JS-readable storage — any XSS yields full account takeover, and the dual model adds CSRF surface. <em>Fix:</em> pick one model. The cookie-only path is already built; drop the <code>localStorage</code> tokens and the Bearer interceptor, and add CSRF protection to the cookie path.</p>
+  </div>
+
+  <h3>Process &amp; testing</h3>
+  <div class="card find high">
+    <div class="top"><span class="badge b-high">High</span><span class="tag">testing</span></div>
+    <h4>The ADR-0005 CI gate is not wired, and a regression test cements the liability bug</h4>
+    <p class="loc">no <code>.github/workflows/*</code> · <code>tests/test_iteration11_*</code> asserts a vendor bill is always raised · golden "suite" is 2 non-portable invoices, not the ~150-invoice Dr/Cr set · the append-only <code>REVOKE</code> runs as table-owner so anti-cheat #2 is false-green</p>
+    <p>The four money anti-cheat suites the constitution requires (balanced, append-only, isolation, golden-file) are effectively absent for the business layer; CI is green only inside the Emergent container. Worse, a test encodes the model-blind liability behaviour as <em>expected</em>. <em>Fix:</em> wire GitHub Actions on a Postgres service container; add balanced-posting + cross-store-isolation + per-commercial-model goldens over the real invoices; delete the bug-asserting test.</p>
+  </div>
+
+  <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;color:var(--navy2)">Remaining high findings (kernel hardening &amp; identity)</summary>
+  <ul class="tight" style="margin-top:10px">
+    <li><span class="badge b-high">High</span> <strong>Kernel:</strong> <code>TRUNCATE</code> bypasses both the append-only and docstatus-FSM triggers — a real hole in the "binds even the superuser" claim. Add a <code>BEFORE TRUNCATE</code> trigger + <code>REVOKE TRUNCATE</code>. <code>core/ledger.py:73–87</code>, <code>core/documents.py:357–366</code></li>
+    <li><span class="badge b-high">High</span> <strong>Identity:</strong> no <code>sku</code>/<code>cohort</code> masters — identity is denormalised free-text on each ledger row, and <code>barcode</code> is mislabeled as SKU identity. The same value spelled two ways fragments stock. <code>stockledger/models.py:30</code></li>
+  </ul></details>
+</section>
+
+<!-- ============================================================ -->
+<section id="medium">
+  <h2 class="sec">Medium findings (selected)</h2>
+  <p>43 medium findings; the load-bearing ones:</p>
+  <table>
+    <thead><tr><th style="width:30%">Finding</th><th style="width:14%">Area</th><th>Where &amp; why</th></tr></thead>
+    <tbody>
+      <tr><td><strong>GRN posts nothing to the stock ledger</strong></td><td>two-step inbound</td><td><code>inbound/views.py:122–141</code>. "GRN posts quantity only" / documents-write-ledgers is not implemented — received goods are invisible in stock until the PT. The two-step inbound exists as document stages but not as ledger postings; the PT then posts qty <em>and</em> value together. No SRBNB accrual.</td></tr>
+      <tr><td><strong>Cancel cannot record actor/reason</strong></td><td>kernel</td><td><code>core/documents.py:339–346</code>. The FSM trigger forbids any other-column write on cancel, so a cancellation cannot stamp who/why/when on the row — tension with "every action has an actor".</td></tr>
+      <tr><td><strong>No <code>cohort (barcode, season)</code> entity</strong></td><td>data-model</td><td>Frozen unit cost / <code>owned_flag</code> / age not modelled; barcode treated as identity rather than a non-unique scan-alias. Latent data-quality failure at 20k SKU.</td></tr>
+      <tr><td><strong>GST never computed or carried</strong></td><td>domain-money</td><td><code>GstSlab</code> defined but never applied; vendor bill posts ex-tax; no HSN/IGST split. Cross-state IGST flagging absent (<code>state_code</code> never read on a movement).</td></tr>
+      <tr><td><strong>Money on a float path</strong></td><td>domain-money</td><td><code>ptmapper/engine.py:74–88</code> (<code>num/money</code> return float; <code>basic = round(tax/qty,2)</code>); money lives as float in the <code>PtRow</code> JSON spine; <code>vendors/views.py:31–37</code>. Re-quantized at posting, but float should never carry money.</td></tr>
+      <tr><td><strong>Money columns aren't <code>MoneyField</code></strong></td><td>kernel-contract</td><td><code>vendors/models.py:64,102</code>, <code>masters/models.py:144</code> use plain <code>BigIntegerField</code> — no float-refusal guard.</td></tr>
+      <tr><td><strong>Default <code>scope_type=ALL</code> fails open</strong></td><td>security</td><td><code>accounts/models.py:69</code>. A newly created user with no explicit scope sees everything. Default to the narrowest scope.</td></tr>
+      <tr><td><strong>Money endpoints only <code>IsAuthenticated</code></strong></td><td>security</td><td>PT post/reverse and review-resolve raise vendor liability with no role gate (<code>ptmapper/views.py:239,263,340</code>); booking list/detail unscoped (<code>vendors/views.py:76–91,142–147</code>).</td></tr>
+      <tr><td><strong>Season guessed from invoice date</strong></td><td>domain</td><td><code>ptmapper/engine.py:132–134,471–477</code>. Contradicts "season is a name, never a date"; a date-derived label can beat an explicit season code, and isn't pushed to review.</td></tr>
+      <tr><td><strong>Silent truncation at scale</strong></td><td>performance</td><td><code>MAX_ROWS=8000</code> drops the tail of large PT files with no flag; <code>StockOnHandView</code> caps at <code>[:2000]</code> and aggregates the full ledger on unindexed text; <code>VendorAgeingView</code> loads all entries into Python.</td></tr>
+      <tr><td><strong>Untrusted upload hardening</strong></td><td>security</td><td><code>files/models.py</code> has no size cap; xlsx/xls/xlsb/csv parsers on untrusted uploads (zip-bomb/formula); CSV/formula injection on export.</td></tr>
+      <tr><td><strong>No <code>unit_cost ≤ mrp</code> check anywhere</strong></td><td>domain-money</td><td>The locked CHECK is absent; a cost-above-retail row flows through silently.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<section id="erpnext">
+  <h2 class="sec">ERPNext comparison</h2>
+  <p>The project set out to re-implement ERPNext's <em>contracts</em> as plain Django. Area by area, here is how the implementation actually compares.</p>
+  <table>
+    <thead><tr><th style="width:15%">Area</th><th style="width:27%">KDPS today</th><th style="width:25%">ERPNext</th><th style="width:33%">Verdict &amp; recommendation</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Document lifecycle / naming</strong></td><td>Kernel matches ERPNext's submittable FSM + atomic series — but GRN/PT/Booking don't inherit it; <code>count()+1</code> + bare-<code>save()</code> status.</td><td>Every transactional DocType is submittable (docstatus 0/1/2), cancel-not-delete, numbers from atomic per-prefix Naming Series.</td><td><strong>Kernel superior; business docs regress below ERPNext.</strong> Reparent GRN/PT/Booking onto <code>core.Document</code>; mint via <code>VoucherSeries</code>.</td></tr>
+      <tr><td><strong>Ledgering / double-entry</strong></td><td>No GL, no <code>post_entries</code>; stock/vendor/cash are three single-sided ledgers; value folded into the stock row.</td><td>One <code>make_gl_entries</code> writes balanced GL Entries (Σdr = Σcr); Stock Ledger Entry (qty+valuation) and GL Entry kept as two reconciled books.</td><td><strong>Major regression — the single biggest borrow is unbuilt.</strong> Build <code>post_entries</code> + a minimal value GL; keep Tally statutory.</td></tr>
+      <tr><td><strong>Inventory valuation</strong></td><td>Frozen-cost-per-lot (a <em>correct</em> divergence from moving-average for SOR) — but freezes <code>BASIC</code> not <code>P RATE</code>; no cohort/unit_cost; no <code>≤ mrp</code> guard.</td><td>Moving-average / FIFO <code>valuation_rate</code> per warehouse, recomputed on every movement.</td><td><strong>Right model, wrong source column → silent undervaluation.</strong> Value from P RATE; persist per-unit unit_cost on a cohort; add the CHECK.</td></tr>
+      <tr><td><strong>Item / variant identity</strong></td><td>No SKU/Cohort master; identity is free-text strings per ledger row; barcode mislabeled as identity; no referential integrity.</td><td>Item template + variant: each colour×size is a real stocked Item with its own ledger and a many-barcode child table.</td><td><strong>Missing — latent data-quality failure at 20k SKU.</strong> Add the designed <code>sku</code> + <code>cohort</code> masters; FK the stock leg; barcode = non-unique alias.</td></tr>
+      <tr><td><strong>Warehouse / GST dimensions</strong></td><td><code>Store→GSTIN</code> snapshotted on the stock leg (good); but vendor/cash legs carry no dimensions, brand/season are free-text, GstSlab unused, cross-state IGST absent.</td><td>Accounting dimensions on every GL leg; tax computed once at the document and carried; place-of-supply + state-code drives intra/inter-state.</td><td><strong>Partial — dimension idea right, GST carry &amp; cross-state missing.</strong> FK dimensions on every leg; apply slab by HSN at PT and carry the breakup.</td></tr>
+      <tr><td><strong>Authorization / scoping</strong></td><td>Fail-closed <code>scope_by_store</code> exists and is wired into inbound/masters — but stock/finance reads are fail-open and money writes are only <code>IsAuthenticated</code>.</td><td>Role permissions + record-level User Permissions + restrict-by-territory/company on every list and form.</td><td><strong>Right primitive, inconsistently applied.</strong> Apply <code>scope_by_store</code> everywhere; add role-based DRF permissions on money writes.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================================ -->
+<section id="firstprinciples">
+  <h2 class="sec">First principles — is this the right way to build it?</h2>
+  <p>Setting the project's own docs aside and judging the design on its merits for a 40-brand, 50-store, 20,000-SKU Bihar/Jharkhand fashion retailer replacing POS + Tally + Excel:</p>
+
+  <div class="callout co-key">
+    <p><strong>The intent is right; the execution of the money layer is not, and the build <em>process</em> is the root cause.</strong> A deterministic, document-drives-ledger ERP with AI strictly at the edges is exactly the correct shape for this business — and the kernel proves the team can build it to a high standard. But generating the money slices wholesale with an unsupervised builder produced code that is locally plausible and globally wrong in the few places that decide whether the books are correct. The lesson is not "AI can't build this" — it's "money/ledger/GST slices must be built the way the constitution already says: supervised, on the kernel, golden-file-gated."</p>
+  </div>
+
+  <table>
+    <thead><tr><th style="width:18%">Area</th><th style="width:36%">Current</th><th style="width:36%">Should be</th><th style="width:10%">Priority</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Posting engine</strong></td><td>Three independent single-sided subledgers via <code>create()</code>/<code>bulk_create()</code>; no balance check, no GL; booking-less PT has no contra.</td><td>One balanced-or-fail <code>post_entries(doc, legs)</code> as the sole writer; all legs or none; dimensions snapshotted; a value GL/trial balance so every event ties to zero in paise.</td><td><span class="badge b-crit">P0</span></td></tr>
+      <tr><td><strong>Valuation source of truth</strong></td><td>Stock &amp; vendor bill valued at <code>BASIC</code>; no per-unit unit_cost; same number reused for valuation and payable.</td><td>Frozen <code>unit_cost = P RATE</code> per-unit on a cohort, validated <code>≤ mrp</code>; vendor payable derived independently from the invoice (taxable + GST), decoupled from internal valuation.</td><td><span class="badge b-crit">P0</span></td></tr>
+      <tr><td><strong>Liability timing</strong></td><td>Full vendor bill for every booking-linked PT; the snapshotted model ignored.</td><td>Liability branches on the document's two-axis model: Outright/Correction at PT, SOR on the sale, Consignment never from PT.</td><td><span class="badge b-crit">P0</span></td></tr>
+      <tr><td><strong>Business document model</strong></td><td>Plain mutable <code>TimeStampedModel</code>s; <code>count()+1</code>; no FSM/immutability/idempotency; posted PT API-deletable.</td><td>Every business doc inherits <code>core.Document</code> (FSM + immutability + three keys incl. idempotency_uuid); numbers via <code>VoucherSeries</code>; reversal is a cancel transition.</td><td><span class="badge b-crit">P0</span></td></tr>
+      <tr><td><strong>Money type at the edges</strong></td><td>Re-invented helpers swallow bad input to 0 and accept floats; <code>*_paise</code> columns are plain ints; PT money is JSON float.</td><td>One strict <code>rupees_to_paise</code> that raises at the API edge (→400); <code>MoneyField</code> on every money column; <code>Decimal</code> end-to-end; a bad money cell is a blocking review item.</td><td><span class="badge b-high">P1</span></td></tr>
+      <tr><td><strong>Identity / SKU model</strong></td><td>No sku/cohort masters; free-text identity per ledger row; same value spelled two ways fragments stock.</td><td>A <code>sku</code> master (brand×style×colour×size) and a <code>cohort</code> (barcode+season, frozen cost/mrp/owned_flag); stock leg FK'd to cohort; barcode a non-unique alias.</td><td><span class="badge b-high">P1</span></td></tr>
+      <tr><td><strong>Security &amp; scoping</strong></td><td>Fail-open stock/finance reads; money writes only <code>IsAuthenticated</code>; credentialed CORS wildcard + <code>SameSite=None</code>; seeded admin creds.</td><td>Fail-closed scoping on every dimensioned read; role-gated writes; exact-origin CORS in prod; no seeded creds / restricted admin.</td><td><span class="badge b-crit">Now</span></td></tr>
+      <tr><td><strong>Build process &amp; verification</strong></td><td>Money slices generated wholesale, unsupervised; no balanced/golden/per-model tests; CI gate not wired; a test cements the bug.</td><td>Supervised, line-by-line, golden-file-gated construction for money/ledger/GST on a wired Postgres CI, with per-commercial-model liability goldens and a P-RATE valuation golden over the real invoice corpus.</td><td><span class="badge b-crit">P0</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Will the data model survive scale?</h3>
+  <p>Not as built. A single self-describing, value-bearing stock ledger with stringly-typed dimensions is fine at demo size but will not hold at 20k SKU × 50 stores × daily movement: stock-on-hand aggregates the entire append-only ledger with a <code>GROUP BY</code> over unindexed text and silently truncates at 2,000 rows; vendor ageing pulls every entry into Python and FIFOs in a loop. The ERPNext split — a qty+valuation Stock Ledger Entry separate from a balanced GL, with a materialised stock balance per (item, warehouse) — exists precisely to make this scale and to make the books provable. Adopt that split, add the <code>sku</code>/<code>cohort</code> masters, FK every leg's dimensions, and maintain a materialised stock-on-hand balance.</p>
+
+  <h3>What's missing for a working retail ERP, and in what order</h3>
+  <p>The built surface is inbound→PT→vendor only. Still absent (and most should follow the rebuilt money core, not precede it): sales/outbound posting (the POS adapter + the source-agnostic Sale), returns/exchanges, stock transfers (incl. the cross-state IGST flag), offers/discounts at the till, payments/settlement &amp; bank reconciliation, stocktake, and the one-way Tally voucher export. None of these should be built until the posting engine, the document base, and the valuation/liability fixes are in — otherwise each new slice inherits the same single-entry, model-blind foundation.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="strengths">
+  <h2 class="sec">What is genuinely good (keep it)</h2>
+  <div class="callout co-good">
+  <ul class="tight">
+    <li><strong>The kernel is production-grade.</strong> <code>MoneyField</code> refuses float/Decimal/bool/str at both <code>get_prep_value</code> and <code>to_python</code>; append-only is a <code>BEFORE UPDATE/DELETE</code> trigger + <code>REVOKE</code> that binds even the superuser CI connects as; the docstatus FSM is a generic DB trigger; <code>VoucherSeries.allocate</code> is gap-free via <code>UPDATE…RETURNING</code> under row-lock and is exercised by a real 12-thread Postgres contention test.</li>
+    <li><strong>SQLite is rejected at settings load</strong> — the kernel invariants can't pass vacuously on the wrong engine.</li>
+    <li><strong>The business ledgers do ride the append-only primitive.</strong> Vendor/Cash/Stock entries inherit <code>core.LedgerEntry</code> and install the trigger per table; corrections are append-only negative-mirror reversals throughout, never edit-in-place.</li>
+    <li><strong>The two-axis commercial model is implemented exactly to spec</strong> (<code>Brand.ownership × return_terms</code> with a derived label, snapshotted onto the Booking) — the data needed to fix the liability bug is already captured correctly.</li>
+    <li><strong>The <code>LegalEntity → GSTIN → Store</code> hierarchy faithfully implements ADR-0007</strong> (one PAN, two-digit state code, PROTECT FKs), and <code>GstSlab</code> is genuinely date-effective data.</li>
+    <li><strong>The AI boundary is respected everywhere</strong> (Rule 8): the Gemini invoice/booking readers return draft dicts a human confirms; no AI path writes stock, money, vendor or Tally, and <code>GrnLine</code> has no cost/mrp column.</li>
+    <li><strong>The PT mapping engine is a clean, deterministic, table-driven, AI-free mapper:</strong> unresolved values go to a review queue rather than a guess, money-bearing doc numbers are minted gap-free through the kernel's <code>VoucherSeries</code>, and full SKU identity survives onto every self-describing stock-ledger row.</li>
+    <li><strong><code>masters/scoping.py</code> is a correct fail-closed implementation</strong> (unknown/empty scope → no rows; superuser/all → unrestricted) — the right primitive exists; it just needs applying to the stock/finance reads.</li>
+  </ul>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section id="sequence">
+  <h2 class="sec">Recommended build sequence</h2>
+  <ol>
+    <li><strong>Freeze further generated money slices.</strong> Do not extend the current inbound/PT/vendor code.</li>
+    <li><strong>Stand up the verification spine first.</strong> Wire GitHub Actions on a real Postgres service container running the kernel anti-cheat suites + new balanced-posting and cross-store-isolation suites; replace the container-absolute golden paths with bundled repo-relative fixtures; delete the test that asserts a vendor bill is always raised.</li>
+    <li><strong>Close the three live security holes in parallel</strong> (no money rework needed): gate the <code>emergentagent</code> CORS regexes behind env/DEBUG and drive prod CORS from exact origins; remove <code>seed_foundation</code> from the prod build / gate behind <code>SEED_DEMO</code> and restrict <code>/admin</code>; wire <code>scope_by_store</code> + role gates onto the stock/finledger/ptmapper money endpoints.</li>
+    <li><strong>Build the kernel's missing primitive:</strong> <code>core.post_entries(doc, legs)</code> balanced-or-fail + a minimal value GL; add the <code>BEFORE TRUNCATE</code> trigger + <code>REVOKE TRUNCATE</code>.</li>
+    <li><strong>Reparent <code>GRN</code>/<code>PtFile</code>/<code>Booking</code> onto <code>core.documents.Document</code></strong> — FSM, immutability, <code>idempotency_uuid</code>, <code>VoucherSeries</code> numbering, <code>select_for_update</code> on post, reversal-as-cancel; remove DELETE on posted docs.</li>
+    <li><strong>Rebuild the inbound→PT→vendor slice supervised on <code>post_entries</code>:</strong> P RATE valuation with <code>unit_cost ≤ mrp</code>, commercial-model liability branching off the snapshotted axes, GST carry on the payable, strict money conversion, period-lock, and per-commercial-model golden tests over the real invoices.</li>
+    <li><strong>Introduce the <code>sku</code> + <code>cohort</code> masters</strong> and FK every ledger leg's dimensions; promote <code>*_paise</code> columns to <code>MoneyField</code>; add a materialised stock-on-hand balance + indexes to fix scale/truncation.</li>
+    <li><strong>Only then resume forward slices</strong> (sale/outbound, transfers/IGST, Tally sync). Keep and harden masters, files, auth and the PT mapping engine throughout — they are sound.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="verdict">
+  <h2 class="sec">Bottom line</h2>
+  <div class="callout co-money">
+    <p><strong>Not safe to build further on as-is along the money path.</strong> The kernel is genuinely production-grade and should be kept verbatim; the masters/data-model and the deterministic PT mapping engine are sound. But the AI-generated inbound→PT→vendor slice violates three money-critical locked decisions (commercial-model liability timing, P RATE valuation, two-step inbound) and sits on an absent double-entry primitive, so vendor balances and inventory valuation are silently wrong today and the books cannot be proven to balance.</p>
+    <p>Before any new money slice: freeze the generated money code, build <code>core.post_entries</code> + a minimal value GL, reparent the business documents onto <code>core.Document</code>, then rebuild inbound/PT/vendor supervised with P RATE valuation, commercial-model liability branching, strict money conversion, GST carry, and per-model golden tests over the real invoice corpus. Independently and immediately, close the three live security holes — they are exploitable now regardless of the money work.</p>
+  </div>
+</section>
+
+<footer>
+  KDPS Operating System — Implementation Code Review · 30 June 2026 · reviewed at <code>0f39c78</code>.
+  Method: 14 parallel review lenses (9 subsystem + 5 cross-cutting: money-integrity, domain-fidelity, security, ERPNext, first-principles) → adversarial verification of every critical/high finding → synthesis, supplemented by the reviewer's own line-by-line read of the kernel and posting paths. 101 findings; the three critical defects were independently surfaced by up to six lenses and re-confirmed against the cited code. Companion docs: <code>CONTEXT.md</code> (contracts), the ADR chain (<code>adr/0001–0007</code>), and the design-of-record <code>consolidated-system-design.html</code>.
+</footer>
+
+</main>
+</div>
+</body>
+</html>
