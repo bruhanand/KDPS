@@ -21,6 +21,11 @@ VENDOR_DOC = "VEND"
 CASH_DOC = "CASH"
 
 
+class AlreadyReversedError(Exception):
+    """A ledger entry that already has a live reversal cannot be reversed again
+    (a second reversal would over-credit the vendor / over-pay the cash account)."""
+
+
 def financial_year(d: date) -> str:
     start = d.year if d.month >= 4 else d.year - 1
     return f"{start % 100:02d}-{(start + 1) % 100:02d}"
@@ -113,7 +118,14 @@ def post_vendor_payment(
 
 @transaction.atomic
 def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
-    """Append a negative mirror; also reverse a paired cash-out if one exists."""
+    """Append a negative mirror; also reverse a paired cash-out if one exists.
+
+    Refuses to reverse a reversal, or to reverse the same entry twice (a second
+    reversal would over-credit the vendor)."""
+    if entry.kind == VendorLedgerEntry.Kind.REVERSAL:
+        raise AlreadyReversedError("a reversal cannot itself be reversed")
+    if VendorLedgerEntry.objects.filter(reverses=entry).exists():
+        raise AlreadyReversedError(f"{entry.doc_number} has already been reversed")
     number = _allocate(VENDOR_DOC)
     rev = VendorLedgerEntry.objects.create(
         vendor=entry.vendor,
@@ -123,11 +135,14 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
         description=f"Reversal of {entry.doc_number}",
         pt_file=entry.pt_file,
         booking=entry.booking,
+        reverses=entry,
         posted_by=_user(user),
     )
     for cash in CashLedgerEntry.objects.filter(
         link_doc=entry.doc_number, kind=CashLedgerEntry.Kind.PAYMENT
     ):
+        if CashLedgerEntry.objects.filter(reverses=cash).exists():
+            continue  # this paired cash-out was already reversed
         CashLedgerEntry.objects.create(
             account=cash.account,
             amount=-cash.amount,
@@ -137,6 +152,7 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
             mode=cash.mode,
             vendor=cash.vendor,
             link_doc=number,
+            reverses=cash,
             posted_by=_user(user),
         )
     return rev
@@ -167,6 +183,8 @@ def reverse_pt_vendor_bills(pt, user) -> int:
     """Reverse the live auto-bills raised for a PT file (called on PT reversal)."""
     count = 0
     for entry in VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.BILL):
+        if VendorLedgerEntry.objects.filter(reverses=entry).exists():
+            continue  # already reversed — never double-reverse
         reverse_vendor_entry(entry, user)
         count += 1
     return count
@@ -199,6 +217,10 @@ def post_cash_movement(
 
 @transaction.atomic
 def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
+    if entry.kind == CashLedgerEntry.Kind.REVERSAL:
+        raise AlreadyReversedError("a reversal cannot itself be reversed")
+    if CashLedgerEntry.objects.filter(reverses=entry).exists():
+        raise AlreadyReversedError(f"{entry.doc_number} has already been reversed")
     return CashLedgerEntry.objects.create(
         account=entry.account,
         amount=-entry.amount,
@@ -208,5 +230,6 @@ def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
         mode=entry.mode,
         vendor=entry.vendor,
         link_doc=entry.doc_number,
+        reverses=entry,
         posted_by=_user(user),
     )

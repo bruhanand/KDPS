@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from core.money import paise_to_rupees_str
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from finledger.posting import (
+    AlreadyReversedError,
     post_cash_movement,
     post_vendor_bill,
     post_vendor_payment,
@@ -251,9 +252,10 @@ class VendorReverseView(APIView):
         entry = VendorLedgerEntry.objects.filter(pk=pk).first()
         if not entry:
             return Response({"detail": "Not found."}, status=404)
-        if entry.kind == VendorLedgerEntry.Kind.REVERSAL:
-            return Response({"detail": "A reversal cannot be reversed."}, status=409)
-        rev = reverse_vendor_entry(entry, request.user)
+        try:
+            rev = reverse_vendor_entry(entry, request.user)
+        except AlreadyReversedError as exc:
+            return Response({"detail": str(exc)}, status=409)
         return Response(VendorLedgerEntrySerializer(rev).data, status=201)
 
 
@@ -336,7 +338,8 @@ class CashReverseView(APIView):
         entry = CashLedgerEntry.objects.filter(pk=pk).first()
         if not entry:
             return Response({"detail": "Not found."}, status=404)
-        if entry.kind == CashLedgerEntry.Kind.REVERSAL:
-            return Response({"detail": "A reversal cannot be reversed."}, status=409)
-        rev = reverse_cash_entry(entry, request.user)
+        try:
+            rev = reverse_cash_entry(entry, request.user)
+        except AlreadyReversedError as exc:
+            return Response({"detail": str(exc)}, status=409)
         return Response(CashLedgerEntrySerializer(rev).data, status=201)

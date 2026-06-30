@@ -46,6 +46,11 @@ class VendorLedgerEntry(LedgerEntry):
         related_name="vendor_entries",
     )
     posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    # The entry this row reverses (a REVERSAL points back at its BILL/PAYMENT). Lets us
+    # reject a *second* reversal of the same source row (double-reversal → over-credit).
+    reverses = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="reversed_by"
+    )
 
     class Meta:
         db_table = "finledger_vendor_entry"
@@ -75,6 +80,10 @@ class CashLedgerEntry(LedgerEntry):
     )  # set when this cash-out pays a vendor
     link_doc = models.CharField(max_length=128, blank=True, default="")  # paired vendor doc_number
     posted_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    # The entry this row reverses — guards against a second reversal (over-credit).
+    reverses = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT, related_name="reversed_by"
+    )
 
     class Meta:
         db_table = "finledger_cash_entry"
