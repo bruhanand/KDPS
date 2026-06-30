@@ -16,7 +16,7 @@ from core.gl import GLAccount, account_balance, trial_balance
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from ptmapper.models import PtFile, PtRow
-from stockledger.models import StockLedgerEntry
+from stockledger.models import StockLedgerEntry, StockOnHand
 from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
 from vendors.models import Booking, Vendor
 
@@ -169,3 +169,13 @@ def test_reversal_unwinds_stock_payable_and_value_gl(world):
         VendorLedgerEntry.objects.filter(pt_file=pt, kind=VendorLedgerEntry.Kind.REVERSAL).count()
         == 1
     )
+
+
+def test_stock_on_hand_projection_reflects_inward(world):
+    booking = _booking(world, world["owned"], number="BK-OH-1")
+    pt = _pt_with_row(prate="100", mrp="200", qty="2")
+    post_pt_inward(pt, None, booking=booking)
+
+    soh = StockOnHand.objects.get(sku_code="B1")
+    assert soh.net_qty == 2
+    assert soh.net_value_paise == 20000  # P RATE 100 × qty 2

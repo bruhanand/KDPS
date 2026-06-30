@@ -93,11 +93,11 @@ class TestStockOnHand:
         for key in ("lines", "displayed", "truncated"):
             assert key in summary, f"missing summary key {key!r} in {summary!r}"
         assert isinstance(summary["truncated"], bool)
-        # live data check (~241 units / 152 lines per spec)
-        units = summary.get("units_on_hand") or body.get("units_on_hand")
-        value = summary.get("value_rupees") or body.get("value_rupees")
-        assert units, f"units_on_hand falsy: {summary}"
-        assert value, f"value_rupees falsy: {summary}"
+        # Magnitude is data-dependent (a fresh DB legitimately has no stock), so assert
+        # only the shape here. The on-hand VALUE path is covered hermetically by
+        # test_phase_e_commercial_model.test_stock_on_hand_projection_reflects_inward.
+        assert isinstance(summary.get("units_on_hand"), int)
+        assert isinstance(summary.get("value_rupees"), str)
 
 
 # ───── Masters stewardship CRUD ────────────────────────────────────────
