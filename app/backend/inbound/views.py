@@ -17,7 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import VoucherSeries
-from files.models import StoredFile
+from files.models import StoredFile, UploadTooLarge
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
@@ -63,7 +63,10 @@ class InvoiceDraftView(APIView):
         upload = request.FILES.get("file")
         if not upload:
             return Response({"detail": "A file is required."}, status=400)
-        stored = StoredFile.from_upload(upload, StoredFile.Kind.INVOICE, request.user)
+        try:
+            stored = StoredFile.from_upload(upload, StoredFile.Kind.INVOICE, request.user)
+        except UploadTooLarge as exc:
+            return Response({"detail": str(exc)}, status=413)
         try:
             result = read_invoice(bytes(stored.content), stored.content_type)
         except Exception as exc:  # noqa: BLE001

@@ -19,7 +19,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from files.models import StoredFile
+from files.models import StoredFile, UploadTooLarge
 from ptmapper.engine import UnsupportedFormat, norm, run_mapping
 from ptmapper.models import (
     ControlledValue,
@@ -136,7 +136,10 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         upload = request.FILES.get("file")
         if not upload:
             return Response({"detail": "A file is required."}, status=400)
-        stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
+        try:
+            stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
+        except UploadTooLarge as exc:
+            return Response({"detail": str(exc)}, status=413)
         pt = PtFile.objects.create(
             stored_file=stored,
             original_filename=stored.filename,
