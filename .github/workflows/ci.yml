@@ -41,9 +41,19 @@ jobs:
       SEED_DEMO: "1"
       EMERGENT_LLM_KEY: "ci-placeholder"
       GEMINI_MODEL: "gemini-3.1-pro-preview"
+      # The black-box regression suite talks to the API over plain http on
+      # localhost, so the JWT auth cookies must not be Secure (a Secure cookie is
+      # never sent back over http, which would 401 every cookie-authed request).
+      JWT_COOKIE_SECURE: "0"
 
     steps:
       - uses: actions/checkout@v4
+
+      # The regression tests reference PT sample fixtures by the build-container
+      # path (/app/docs/...). Map /app to the checkout so those paths resolve on
+      # the Actions runner without touching the test files.
+      - name: Map /app to the checkout (for fixture paths)
+        run: sudo ln -sfn "$GITHUB_WORKSPACE" /app
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
