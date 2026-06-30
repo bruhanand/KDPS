@@ -494,11 +494,27 @@ def _map_taxonomy(resolver: "Resolver", desc: str, g, ctx: dict) -> dict:
     }
 
 
-def _resolve_fields(resolver: "Resolver", g: Callable[[str], Any], base: BaseMappedFields) -> ResolvedFields:
+_COLOR_CODE_PREFIX = re.compile(r"^\s*\d+\s*-\s*")
+
+
+def _color_src(g: Callable[[str], Any], profile: dict) -> str:
+    """COLOR source value, with a leading numeric code prefix stripped for archetypes
+    that encode colour as '<code>-<NAME>' (Ginesys CATEGORY3, e.g. '16-BLUE' → 'BLUE').
+    Plain colour names and unflagged profiles pass through unchanged; an unresolved
+    colour still goes to the review queue (never guessed)."""
+    raw = raw_str(g("COLOR_SRC"))
+    if profile.get("flags", {}).get("color_strip_code_prefix"):
+        return _COLOR_CODE_PREFIX.sub("", raw)
+    return raw
+
+
+def _resolve_fields(
+    resolver: "Resolver", g: Callable[[str], Any], base: BaseMappedFields, profile: dict
+) -> ResolvedFields:
     ctx = {"brand": base.raw_brand, "desc": base.desc}
     return ResolvedFields(
         brand=resolver.brand(base.raw_brand, ctx),
-        color=resolver.color(raw_str(g("COLOR_SRC")), ctx),
+        color=resolver.color(_color_src(g, profile), ctx),
         size=resolver.size(g("SIZE_SRC"), ctx),
         season=_map_season(resolver, g, ctx),
         taxonomy=_map_taxonomy(resolver, base.desc, g, ctx),
@@ -545,7 +561,7 @@ def map_record(rec: dict, profile: dict, resolver: Resolver, brand_default: str)
     if not _has_mappable_payload(base):
         return None
     prices = _price_fields(rec, profile, g, base.qty)
-    resolved = _resolve_fields(resolver, g, base)
+    resolved = _resolve_fields(resolver, g, base, profile)
     row = _build_kdps_row(base, prices, resolved, g)
     return row, _blank_controlled_columns(row)
 

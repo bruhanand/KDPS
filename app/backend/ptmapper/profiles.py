@@ -99,7 +99,10 @@ PROFILES = [
             "DATE_SRC": "INVOICE_DATE",
             "DESC_SRC": ["CATEGORY5", "DEPARTMENT", "SECTION", "DIVISION", "CATEGORY2"],
         },
-        "flags": {"basic_from_taxable_per_unit": True},  # BASIC = TAXABLE_AMOUNT / QTY
+        "flags": {
+            "basic_from_taxable_per_unit": True,  # BASIC = TAXABLE_AMOUNT / QTY
+            "color_strip_code_prefix": True,  # CATEGORY3 colour is "<code>-NAME", e.g. "16-BLUE"
+        },
     },
     {
         "code": "ginesys_billwise",
