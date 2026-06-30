@@ -14,7 +14,10 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
-PT_SAMPLE = "/app/docs/data-from-kdps/Q&A-req-recieved/PT FILE/MUFTI.xlsx"
+# Repo-relative so the fixture resolves in Claude Code, Emergent (/app) and CI alike.
+PT_SAMPLE = str(
+    Path(__file__).resolve().parents[3] / "docs/data-from-kdps/Q&A-req-recieved/PT FILE/MUFTI.xlsx"
+)
 
 
 def _login(username: str, password: str) -> dict[str, Any]:

@@ -8,6 +8,7 @@ These hit the LIVE preview env via REACT_APP_BACKEND_URL.
 """
 import os
 import time
+from pathlib import Path
 
 import pytest
 import requests
@@ -17,7 +18,8 @@ BASE_URL = os.environ.get(
     "https://ledger-kernel-v2.preview.emergentagent.com",
 ).rstrip("/")
 
-PT_DIR = "/app/docs/data-from-kdps/Q&A-req-recieved/PT FILE"
+# Repo-relative so fixtures resolve in Claude Code, Emergent (/app) and CI alike.
+PT_DIR = str(Path(__file__).resolve().parents[3] / "docs/data-from-kdps/Q&A-req-recieved/PT FILE")
 
 
 def _login(username: str, password: str) -> str:

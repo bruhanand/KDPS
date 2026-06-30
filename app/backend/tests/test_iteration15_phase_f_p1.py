@@ -8,11 +8,13 @@ Covers:
 import os
 import time
 import uuid
+from pathlib import Path
+
 import pytest
 import requests
 
 def _read_frontend_env():
-    env_path = "/app/frontend/.env"
+    env_path = str(Path(__file__).resolve().parents[3] / "app/frontend/.env")
     if os.path.exists(env_path):
         with open(env_path) as f:
             for line in f:
