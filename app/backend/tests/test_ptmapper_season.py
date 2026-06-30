@@ -23,8 +23,9 @@ def _g(season_src: str, date_src: str):
 
 
 def test_explicit_season_code_beats_the_invoice_date():
-    assert _map_season(_Resolver(), _g("SS26", "2025-11-01"), {}) == "SS26"
+    # _map_season now returns (value, source); the explicit code resolves via 'alias'.
+    assert _map_season(_Resolver(), _g("SS26", "2025-11-01"), {}) == ("SS26", "alias")
 
 
 def test_falls_back_to_date_when_no_season_code():
-    assert _map_season(_Resolver(), _g("", "2025-11-01"), {}) == "AW25"
+    assert _map_season(_Resolver(), _g("", "2025-11-01"), {}) == ("AW25", "derived")

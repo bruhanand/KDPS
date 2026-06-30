@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PT Mapper Engine — Build & Results</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --red:#b3261e; --red-bg:#fbe9e7; --maxw:920px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5; -webkit-font-smoothing:antialiased}
+  main{max-width:var(--maxw); margin:0 auto; padding:40px 28px 100px}
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:10px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:29px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:70ch}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:38px 0 14px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 8px}
+  p,li{font-size:14.5px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-done{background:var(--green-bg); color:var(--green)}
+  .b-open{background:var(--amber-bg); color:var(--amber)}
+  .b-next{background:var(--blue-bg); color:var(--blue)}
+  .b-ca{background:var(--red-bg); color:var(--red)}
+  table{border-collapse:collapse; width:100%; margin:12px 0; font-size:13.5px}
+  th,td{border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top}
+  th{background:var(--navy); color:#fff; font-weight:600; font-size:12.5px}
+  tr:nth-child(even) td{background:#fafbfc}
+  td.num{text-align:right; font-variant-numeric:tabular-nums}
+  .bar{display:inline-block; height:10px; background:var(--rust); border-radius:2px; vertical-align:middle}
+  code{background:var(--grey-bg); padding:1px 6px; border-radius:5px; font-size:12.5px;
+    font-family:"SF Mono",Menlo,Consolas,monospace}
+  pre{background:#1f2733; color:#e6edf3; padding:14px 16px; border-radius:10px; overflow-x:auto; font-size:12.5px; line-height:1.5}
+  .up{color:var(--green); font-weight:700}
+  .key{background:var(--amber-bg); border-left:4px solid var(--amber); padding:12px 16px; border-radius:0 8px 8px 0; margin:14px 0}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  @media(max-width:680px){.grid2{grid-template-columns:1fr}}
+  ul{margin:8px 0; padding-left:22px}
+  .small{font-size:12.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS · Goods Inward · PT Mapper</div>
+  <h1>PT Mapper Engine — Build &amp; Results</h1>
+  <p class="sub">Turning every brand's "PT file" into KDPS's one in-house format. This documents
+  what the engine needs, why the nine merchandising fields were coming out blank, what was built
+  to fix it, and the measured before/after across all 33 sample brand files.</p>
+  <p class="small">1 July 2026 · supersedes the earlier <code>pt-file-mapping-analysis.md</code> (which
+  described the mapper as yet-to-build; it was in fact already built but under-fed).</p>
+</header>
+
+<h2 class="sec">1 · What the engine needs</h2>
+<p>To convert a brand PT file into the KDPS PT format, five things must work together. The engine
+had #1 and a thin version of #4–5; the nine fields you flagged failed in #2, #3 and #4.</p>
+<table>
+  <tr><th style="width:30px">#</th><th>Stage</th><th>What it does</th><th style="width:90px">Before</th></tr>
+  <tr><td>1</td><td><b>Read &amp; locate</b></td><td>Open .xlsx/.xls/.xlsb/.csv by content (not extension), find the header row under any banner, stop at totals/blanks.</td><td><span class="badge b-done">worked</span></td></tr>
+  <tr><td>2</td><td><b>Column map per archetype</b></td><td>Which source column feeds each KDPS field. One profile per file-family, not per brand.</td><td><span class="badge b-open">3 of 6</span></td></tr>
+  <tr><td>3</td><td><b>Value normalisers</b></td><td>Mechanical transforms so a raw value becomes a Master value: <code>1.14M(2XL)</code>→<code>XXL</code>, <code>88-BEIGE</code>→<code>BEIGE</code>.</td><td><span class="badge b-open">missing</span></td></tr>
+  <tr><td>4</td><td><b>Lookup tables</b></td><td>The judgement maps — shade→bucket, brand alias, keyword→taxonomy. Data, grown by the review queue.</td><td><span class="badge b-open">starved</span></td></tr>
+  <tr><td>5</td><td><b>Derive</b></td><td>Season from invoice date, NAG=QTY, MARGIN. (BASIC / P&nbsp;RATE stay flagged &amp; CA-gated — out of scope here.)</td><td><span class="badge b-done">worked</span></td></tr>
+</table>
+
+<h2 class="sec">2 · Why the nine fields were blank — the diagnosis</h2>
+<p>I built a repeatable audit (<code>manage.py ptmap_audit</code>) that runs the real engine over all 33 files
+and reports the fill rate per field. The baseline was unambiguous — two separate causes, not one:</p>
+<div class="grid2">
+  <div class="card"><h3 style="margin-top:0">Cause A — missing profiles</h3>
+    <p>Only Ginesys and Tally profiles existed. <b>Jockey, Peter England, Blackberry, Madura and the
+    printed invoices fell to <code>generic</code></b>, which never located their colour / size / fit / date
+    columns — so the value was never even read.</p></div>
+  <div class="card"><h3 style="margin-top:0">Cause B — starved tables</h3>
+    <p>Where values <i>were</i> read, the lookup tables held ~39 colour keys for 120+ real shades, no
+    size normaliser for <code>36/XS</code>-style strings, and 30 taxonomy rules for 98 items. Everything
+    else hit the review queue and the cell went blank.</p></div>
+</div>
+<p class="small">A running instance can also map nothing because its database has never been seeded — the
+<code>kdps_dev</code> DB had no PT-mapper tables at all. The seed command below fixes that.</p>
+
+<h2 class="sec">3 · What was built</h2>
+<table>
+  <tr><th>Field(s)</th><th>Fix</th></tr>
+  <tr><td><b>SIZE</b></td><td><code>normalize_size()</code> — parenthetical alpha <code>1.14M(2XL)</code>→<code>XXL</code> &amp; <code>XL (105 CMS)</code>→<code>XL</code>, slash duals <code>36/XS</code>→<code>XS</code>, age bands <code>8-9 YEARS</code>→<code>8-9 Y</code>, <code>2XL</code>→<code>XXL</code>, float &amp; CMS cleanup.</td></tr>
+  <tr><td><b>COLOR</b></td><td><code>normalize_color()</code> strips code prefixes/suffixes (<code>88-BEIGE</code>, <code>BLACK73/1</code>, <code>BLUE DN89</code>) + a <b>274-entry shade→bucket</b> seed. Price tiers (<code>PREMIUM</code>/<code>ECONOMY</code>) pass through.</td></tr>
+  <tr><td><b>SUB&nbsp;CAT / TYPE / ITEM</b></td><td>Taxonomy rules expanded 30→125 covering all 98 items + synonyms; a <b>hybrid word/substring matcher</b> (fixes <code>PANT</code>≠<code>PANTIE</code> yet recovers glued codes like Madura <code>FGTROUSER</code>); SUB/TYPE auto-fill from the ITEM→helper.</td></tr>
+  <tr><td><b>GENDER</b></td><td>Inferred from description words (<code>Senior Girls</code>→KIDS FEMALE, <code>SOCKS-MENS</code>→MALE) as a fallback to a gender column.</td></tr>
+  <tr><td><b>FIT</b></td><td>New fit source column (Peter England <code>FIT TYPE</code>, Blackberry <code>FIT</code>) + 18 fit aliases.</td></tr>
+  <tr><td><b>BRAND / SEASON</b></td><td>Better per-profile extraction, filename→brand for Jockey, corrected aliases (<code>GO COLORS</code>→<code>GOCOLORS</code>). Season derives from the invoice date; an explicit code no longer floods the queue.</td></tr>
+  <tr><td><b>Profiles</b></td><td>Added <b>D&nbsp;Jockey</b>, <b>E&nbsp;Peter England / Blackberry / Madura</b>, <b>F&nbsp;printed-invoice</b>.</td></tr>
+  <tr><td><b>Resolver</b></td><td>Layered: <i>normalise → direct Master hit → lookup → review</i>, so most values resolve with no lookup row at all.</td></tr>
+</table>
+
+<h2 class="sec">4 · Results — before &amp; after</h2>
+<div class="key"><b>How to read this.</b> <b>Row-weighted</b> counts every line, so it is dominated by the one
+huge file (Madura = 8,000 of 9,410 rows, which carries no colour/brand/gender). <b>File-averaged</b> weighs
+each of the 31 readable brand files equally — it is the honest "does the mapping work per brand" number.</p></div>
+<table>
+  <tr><th>Field</th><th class="num">Before<br><span class="small" style="color:#cdd">row-wt</span></th><th class="num">After<br><span class="small" style="color:#cdd">row-wt</span></th><th class="num">After<br><span class="small" style="color:#cdd">file-avg</span></th><th>After (file-averaged)</th></tr>
+  <tr><td>SEASON</td><td class="num">9%</td><td class="num">94%</td><td class="num"><b>67%</b></td><td><span class="bar" style="width:134px"></span></td></tr>
+  <tr><td>BRAND</td><td class="num">10%</td><td class="num">13%</td><td class="num"><b>86%</b></td><td><span class="bar" style="width:172px"></span></td></tr>
+  <tr><td>SUB CATEGORY</td><td class="num">6%</td><td class="num">92%</td><td class="num"><b>51%</b></td><td><span class="bar" style="width:102px"></span></td></tr>
+  <tr><td>TYPE</td><td class="num">6%</td><td class="num">92%</td><td class="num"><b>51%</b></td><td><span class="bar" style="width:102px"></span></td></tr>
+  <tr><td>ITEM</td><td class="num">6%</td><td class="num">92%</td><td class="num"><b>50%</b></td><td><span class="bar" style="width:100px"></span></td></tr>
+  <tr><td>COLOR</td><td class="num">5%</td><td class="num">9%</td><td class="num"><b>47%</b></td><td><span class="bar" style="width:94px"></span></td></tr>
+  <tr><td>GENDER</td><td class="num">3%</td><td class="num">6%</td><td class="num"><b>25%</b></td><td><span class="bar" style="width:50px"></span></td></tr>
+  <tr><td>FIT</td><td class="num">0%</td><td class="num">1%</td><td class="num"><b>6%</b></td><td><span class="bar" style="width:12px"></span></td></tr>
+  <tr><td>SIZE</td><td class="num">95%</td><td class="num">99%</td><td class="num"><b>87%</b></td><td><span class="bar" style="width:174px"></span></td></tr>
+</table>
+<p>Per-file, the well-structured files now map cleanly: <span class="up">BEEVEE 89%, BLACKBERRY 89%,
+DEAL 85%, DSY 83%, peppermint 81%, go colours 80%, MUFTI 79%, ZILU 78%, kidcity 78%, Peter England 74%,
+AMIDHARA 72%, KILLER 70%</span> (of all nine fields, including ones the file simply doesn't carry). Madura
+went 11%→55%.</p>
+
+<h2 class="sec">5 · What's left — and why it's correct</h2>
+<p>The remaining gaps are <b>structural</b> (the data isn't in the file as mappable text), not engine
+failures. By design these go to the <b>review queue</b>: a steward maps the value once and every file
+re-maps forever — no code change.</p>
+<ul>
+  <li><b>Jockey</b> — colour is a numeric code and the item is hidden in a style number (<code>1250-0105-CANPI</code>); there are no garment words to read. Needs a Jockey style→item lookup or operator entry.</li>
+  <li><b>Printed invoices</b> (Suvidhi, Fahrenheit) — items are style <i>names</i> (AMBROSIA, CELERY), not garment types.</li>
+  <li><b>Colour / gender</b> file-averages sit at ~47% / 25% mainly because ~10 files (Jockey, Madura, printed invoices) carry <b>no colour or gender column at all</b>. Files that do carry them now resolve well — the leftover misses are 7 opaque codes (<code>CP</code>, <code>A</code>, <code>B</code>, <code>TINTED</code>…).</li>
+  <li><b>FIT</b> stays low — brand fit columns are coded (Peter England <code>PJ RG OCTANEMIDSTR</code>); these need a few review-queue mappings.</li>
+</ul>
+
+<h2 class="sec">6 · Decisions for you <span class="badge b-ca">needs Anand</span></h2>
+<div class="card">
+  <p><b>1. Madura colour &amp; brand.</b> KDPS's own worked sheets put a <i>price tier</i> (<code>PREMIUM</code>/<code>ECONOMY</code>)
+  in COLOR for Madura brands, and the file packs three brands (Allen Solly / Van Heusen / Louis Philippe) into
+  one sheet. Which column holds the tier, and how should brand be split? Until confirmed, both go to review.</p>
+  <p><b>2. Operator context at upload <span class="badge b-next">proposed next slice</span>.</b> The cleanest fix for
+  structurally brand-less / date-less files (Madura, Jockey, Xerics, printed invoices) is to let the operator pick the
+  <b>brand</b> and <b>consignment date</b> (→ season) once at upload — both are known from the booking. Small, well-scoped
+  follow-up; not built here.</p>
+  <p><b>3. Master-data hygiene.</b> The COLOR master contains typos (<code>GREE</code>, <code>STARD</code>) and the
+  <code>96</code>-vs-<code>96 CM</code> overlap. Worth a one-time clean.</p>
+</div>
+
+<h2 class="sec">7 · Hardening round — making silent errors visible</h2>
+<p>A second pass added three guards on top of the engine, then an independent cross-model
+(<code>codex</code>) review challenged the lot.</p>
+<div class="grid2">
+  <div class="card"><h3 style="margin-top:0">Provenance per cell <span class="badge b-done">done</span></h3>
+    <p>Every derived cell now records <i>how</i> it was filled — <code>direct</code> (a Master value) /
+    <code>derived</code> (date→season) are trusted; <code>alias</code> / <code>rule</code> / <code>inferred</code>
+    are judgement calls worth a glance. Stored on each row + served by the API. The audit shows
+    <b>COLOR is only ~46% "trusted"</b> — half its fills are alias guesses. (UI rendering of the flag is the one
+    remaining frontend task.)</p></div>
+  <div class="card"><h3 style="margin-top:0">Fuzz tests <span class="badge b-done">done</span></h3>
+    <p>Seeded-random + adversarial inputs assert the normalisers never crash and are <b>idempotent</b>
+    (f(f(x))=f(x)). They caught two real bugs (a colour like <code>S M DN89 DN</code> and <code>100 CMS CMS</code>
+    drifted across passes) — now fixed with a fixed-point loop.</p></div>
+</div>
+<div class="card"><h3 style="margin-top:0">Accuracy harness <span class="badge b-done">done</span> — fill-rate ≠ correctness</h3>
+  <p>Fill rate says a value was assigned; it doesn't say it's right. <code>ptmap_goldenset</code> exports the
+  engine's guesses for a sample of rows; a merchandiser corrects the wrong cells; <code>ptmap_accuracy</code>
+  re-runs the engine and reports per field: <b>correct / wrong / missed / over</b> (the <i>wrong</i> column is the
+  dangerous one — a confident mis-map). This is the yardstick that turns "92% filled" into "X% correct".</p></div>
+<h3>Cross-model review (codex) — found 12 real defects, fixed</h3>
+<p>An independent model reviewed the diff adversarially. The legitimate findings, now fixed:</p>
+<table>
+  <tr><th>Defect</th><th>Fix</th></tr>
+  <tr><td><code>FLOWER TOP</code> matched item <code>LOWER</code> (substring false positive)</td><td>glued-substring match now restricted to SAP <code>FG</code>-code tokens (Madura) only</td></tr>
+  <tr><td><code>fit</code> review items couldn't be resolved (not in the resolvable set)</td><td>added <code>fit</code> to the single-value resolve path</td></tr>
+  <tr><td><code>FORMAL SHIRT</code> &amp; <code>CASUAL SHIRT</code> lost their sub-category</td><td>per-rule sub-category override for items that span categories</td></tr>
+  <tr><td><code>V NECK</code>→<code>ROUND NECK</code> (wrong); bare <code>DENIM</code>→<code>BLUE</code> (fabric vs shade)</td><td>both aliases removed → they go to review</td></tr>
+  <tr><td>slash <code>S/M</code> confidently became <code>M</code>; numeric colour <code>501</code> silently dropped</td><td>ambiguous slashes &amp; all-code colours now go to review (never silent)</td></tr>
+  <tr><td>filename hint forced a simple file into a wide-format profile (dropped all rows)</td><td>a filename hint applies only if the file's columns fit that profile</td></tr>
+  <tr><td>empty file → <code>IndexError</code></td><td>clean "no data rows" error</td></tr>
+</table>
+<p class="small"><b>Flagged, not fixed (pre-existing, separate scope):</b> a sent (not-yet-posted) PT can be PATCHed by
+any authenticated user and the hand-edit path doesn't validate values; and <code>READY</code> ignores blank cells.
+Both belong to the posting/authz hardening pass, not this taxonomy slice.</p>
+
+<h2 class="sec">8 · How to run it</h2>
+<pre>cd app/backend
+# 1. create tables + load the lookup vocabulary from the Master Sheet (idempotent)
+python manage.py migrate
+python manage.py seed_ptmapper
+
+# 2. measure mapping quality across the real brand files (fill rate + provenance)
+python manage.py ptmap_audit
+
+# 3. accuracy harness: export guesses → human corrects → measure correctness
+python manage.py ptmap_goldenset --out golden.csv --sample 30
+python manage.py ptmap_accuracy --golden golden.csv   # after a merchandiser corrects it
+
+# 4. unit + fuzz tests for the normalisers (pure, no DB)
+pytest tests/test_ptmapper_normalize.py tests/test_ptmapper_fuzz.py \
+       tests/test_ptmapper_color.py tests/test_ptmapper_season.py</pre>
+<p class="small">Engine: <code>app/backend/ptmapper/engine.py</code> · profiles: <code>ptmapper/profiles.py</code> ·
+seed data: <code>ptmapper/management/commands/seed_ptmapper.py</code> · audit: <code>ptmapper/management/commands/ptmap_audit.py</code>.
+The mapping is fully deterministic and auditable — no AI anywhere in this path.</p>
+</main>
+</body>
+</html>

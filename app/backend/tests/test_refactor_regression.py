@@ -115,18 +115,19 @@ def test_mufti_xlsx_maps_with_populated_prices(owner_token):
     assert have_color, "no COLOR populated -> _map_taxonomy regression"
 
 
-def test_jockey852_xls_maps_generic_archetype_a(owner_token):
+def test_jockey852_xls_maps_jockey_sap_archetype_d(owner_token):
     info = _upload_pt(owner_token, f"{PT_DIR}/JOCKEY 852.xls")
     fid = info["id"]
     final = _wait_processed(owner_token, fid, want_rows=9)
     assert final.get("row_count", 0) >= 9, f"JOCKEY row_count={final.get('row_count')}"
     profile = (final.get("profile") or final.get("mapping_profile") or "").lower()
     arche = (final.get("archetype") or "").upper()
-    # Tolerate either spelling/casing; main agent reported "Generic (header-name auto-map)" + A.
-    assert "generic" in profile or final.get("profile_name", "").lower().startswith("generic"), (
+    # Jockey/Page SAP exports now route to the jockey_sap profile (archetype D) by header
+    # fingerprint (STOCKNO/COLOUR CODE/DOC RATE/MDP) instead of falling through to generic.
+    assert "jockey" in profile or final.get("profile_name", "").lower().startswith("jockey"), (
         f"JOCKEY 852 profile={profile!r}"
     )
-    assert arche in ("A", "") or "A" in arche, f"JOCKEY 852 archetype={arche!r}"
+    assert arche in ("D", "") or "D" in arche, f"JOCKEY 852 archetype={arche!r}"
 
 
 # ---- INBOUND / GRN refactor --------------------------------------------------
