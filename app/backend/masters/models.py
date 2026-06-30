@@ -12,6 +12,7 @@ from __future__ import annotations
 from django.db import models
 
 from core.base import TimeStampedModel
+from core.money import MoneyField
 
 
 class LegalEntity(TimeStampedModel):
@@ -141,7 +142,7 @@ class GstSlab(TimeStampedModel):
 
     name = models.CharField(max_length=80, default="Apparel")
     hsn_prefix = models.CharField(max_length=8, blank=True, default="")
-    threshold_paise = models.BigIntegerField(default=250000)  # ₹2,500 / piece
+    threshold_paise = MoneyField(default=250000)  # ₹2,500 / piece
     rate_below = models.DecimalField(max_digits=5, decimal_places=2, default=5)
     rate_above = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     effective_from = models.DateField()
@@ -151,3 +152,62 @@ class GstSlab(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.name} (from {self.effective_from})"
+
+
+class Sku(TimeStampedModel):
+    """Canonical product identity — the barcode IS the SKU (D-grain). Registered /
+    refreshed whenever a PT posts; the queryable home of the unit's MRP and its
+    merchandising dimensions, so downstream slices stop re-deriving identity from
+    free-text ledger rows."""
+
+    barcode = models.CharField(max_length=64, unique=True, db_index=True)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    mrp_paise = MoneyField(null=True, blank=True)
+    first_doc_number = models.CharField(max_length=128, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["barcode"]
+        indexes = [
+            models.Index(fields=["brand"], name="masters_sku_brand_idx"),
+            models.Index(fields=["design"], name="masters_sku_design_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.barcode
+
+
+class Cohort(TimeStampedModel):
+    """A buying cohort = (barcode, season): the same SKU can be bought across
+    seasons at different locked unit costs. Holds the per-unit `unit_cost_paise`
+    (the PT P RATE), DB-guarded `unit_cost ≤ mrp` so a cost can never exceed the
+    ticketed price even via a raw write."""
+
+    sku = models.ForeignKey(Sku, on_delete=models.CASCADE, related_name="cohorts")
+    barcode = models.CharField(max_length=64, db_index=True)
+    season = models.CharField(max_length=120)
+    unit_cost_paise = MoneyField()
+    mrp_paise = MoneyField(null=True, blank=True)
+    last_doc_number = models.CharField(max_length=128, blank=True, default="")
+
+    class Meta:
+        ordering = ["barcode", "season"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["barcode", "season"], name="uq_cohort_barcode_season"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(mrp_paise__isnull=True)
+                | models.Q(unit_cost_paise__lte=models.F("mrp_paise")),
+                name="ck_cohort_unit_cost_le_mrp",
+            ),
+        ]
+        indexes = [models.Index(fields=["season"], name="masters_cohort_season_idx")]
+
+    def __str__(self) -> str:
+        return f"{self.barcode}@{self.season}"

@@ -111,7 +111,7 @@ def test_bruteforce_lockout_after_five_failures_still_active():
 
 
 def test_internal_django_cors_allows_explicit_origin_and_credentials():
-    origin = "https://pt-mapper.preview.emergentagent.com"
+    origin = "https://ledger-kernel-v2.preview.emergentagent.com"
     r = requests.options(
         "http://localhost:8001/api/auth/login",
         headers={
@@ -129,70 +129,58 @@ def test_internal_django_cors_allows_explicit_origin_and_credentials():
 # --- Password hasher + seed_admin idempotency -------------------------------
 
 
-def test_seed_admin_exists_is_idempotent_and_owner_password_is_bcrypt_sha256():
+def test_seed_admin_is_idempotent_and_does_not_overwrite_password():
     backend_dir = Path(__file__).resolve().parents[1]
 
-    # Ensure command exists and runs
+    def shell(code: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "manage.py", "shell", "-c", code],
+            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+        )
+
+    # seed_admin exists and runs (idempotent)
     run1 = subprocess.run(
         [sys.executable, "manage.py", "seed_admin"],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
+        cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
     )
     assert run1.returncode == 0, run1.stderr[-500:]
 
-    # Change owner password/hash, then ensure seed_admin restores expected password
-    mutate_script = (
-        "from django.contrib.auth import get_user_model; "
-        "u=get_user_model().objects.get(username='owner'); "
-        "u.set_password('TempOwner@123'); u.save(); "
-        "print(u.password.split('$')[0])"
-    )
-    mutate = subprocess.run(
-        [sys.executable, "manage.py", "shell", "-c", mutate_script],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert mutate.returncode == 0, mutate.stderr[-500:]
+    temp = "OpsRotated#789"
+    try:
+        # Rotate owner's password (operator action); the bcrypt_sha256 hasher is used.
+        mutate = shell(
+            "from django.contrib.auth import get_user_model; "
+            "u=get_user_model().objects.get(username='owner'); "
+            f"u.set_password('{temp}'); u.save(); print(u.password.split('$')[0])"
+        )
+        assert mutate.returncode == 0, mutate.stderr[-500:]
+        assert mutate.stdout.strip().splitlines()[-1].strip() == "bcrypt_sha256"
 
-    run2 = subprocess.run(
-        [sys.executable, "manage.py", "seed_admin"],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert run2.returncode == 0, run2.stderr[-500:]
+        # Re-seed must NOT clobber the rotated password (security fix).
+        run2 = subprocess.run(
+            [sys.executable, "manage.py", "seed_admin"],
+            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+        )
+        assert run2.returncode == 0, run2.stderr[-500:]
 
-    verify_script = (
-        "from django.contrib.auth import get_user_model; "
-        "from django.contrib.auth.hashers import check_password; "
-        "u=get_user_model().objects.get(username='owner'); "
-        "print(u.password); print(check_password('Owner@123', u.password))"
-    )
-    verify = subprocess.run(
-        [sys.executable, "manage.py", "shell", "-c", verify_script],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert verify.returncode == 0, verify.stderr[-500:]
-
-    out = verify.stdout.strip().splitlines()
-    assert len(out) >= 2
-    stored_hash = out[0].strip()
-    password_valid = out[1].strip().lower() == "true"
-
-    assert stored_hash.startswith("bcrypt_sha256$")
-    assert password_valid is True
+        verify = shell(
+            "from django.contrib.auth import get_user_model; "
+            "from django.contrib.auth.hashers import check_password; "
+            "u=get_user_model().objects.get(username='owner'); "
+            f"print(u.password); print(check_password('{temp}', u.password))"
+        )
+        assert verify.returncode == 0, verify.stderr[-500:]
+        out = verify.stdout.strip().splitlines()
+        assert len(out) >= 2
+        assert out[0].strip().startswith("bcrypt_sha256$")
+        # The operator-set password SURVIVES the re-seed (no auto-revert).
+        assert out[-1].strip().lower() == "true"
+    finally:
+        shell(
+            "from django.contrib.auth import get_user_model; "
+            "u=get_user_model().objects.get(username='owner'); "
+            "u.set_password('Owner@123'); u.save(); print('restored')"
+        )
 
 
 # --- Regression sanity for requested feature routes -------------------------

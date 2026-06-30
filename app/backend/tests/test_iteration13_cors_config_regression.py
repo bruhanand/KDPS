@@ -17,7 +17,7 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
-PREVIEW_ORIGIN = "https://pt-mapper.preview.emergentagent.com"
+PREVIEW_ORIGIN = "https://ledger-kernel-v2.preview.emergentagent.com"
 
 
 # --- shared helpers ---------------------------------------------------------

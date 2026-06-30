@@ -1,56 +1,57 @@
-<analysis>**original_problem_statement**: 
-Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). Specifically, the Branded Booking flow includes:
-1. Vendor/Brand master creation.
-2. AI-assisted Booking generation: Upload brand booking file (PDF/Excel/Image) → AI extracts style/size/qty → User reviews draft → Confirm booking.
-3. Receive Goods (GRN) at Store or Warehouse.
-4. PT file conversion (Brand format → KDPS format) and Patna HO inward reconciliation.
+<analysis>**original_problem_statement**: Build KDPS ERP Foundation & Booking Module (Branded Route). The project follows strict architectural rules (Django+Postgres kernel, append-only ledger). A recent extensive Code Review highlighted critical money/core defects (valuation errors, single-sided ledgers, FSM bypasses) and security holes. The task was to evaluate this review, formulate a remediation plan, and execute it phase by phase.
 
 **User's preferred language**: English (INSTRUCT NEXT AGENT TO RESPOND IN ENGLISH ONLY)
 
-**what currently exists?**: 
-A fully functional Django 5.1 + PostgreSQL 15 backend utilizing a custom  ledger, and a React 18 + Vite frontend with a Warm design system PWA shell. 
-The application includes Phase D & E (PT File Mapper, Warehouse workflow, Stock Ledger), Phase F (Vendor/Cash ledgers), Vendor dues ageing report, User & Roles editor, and an  GRN UI. The frontend API client uses an auto-generated OpenAPI typescript client (). The application UI has been polished for alpha testing (resizable sidebar, configurable dashboard, Coming soon placeholder text).
+**what currently exists?**: A Django 5.1 + PostgreSQL 15 backend with React 18 + Vite frontend. The backend kernel has just been massively upgraded based on the code review: it now includes a balanced  primitive, a minimal General Ledger (), strict  valuation, commercial-model liability branching, and a hardened  FSM that  and  now inherit from (with gap-free  numbering and data-preserving migrations). Security has been hardened (CORS, read-scoping, seed constraints).
 
 **Last working item**:
-    - **Last item agent was working**: Running  to check for readiness and applying strict fail-fast environment variable rules (, , ) to both backend and frontend.
-    - **Status**: BLOCKED (Deployment failed due to PostgreSQL requirement)
-    - **Agent Testing Done**: Y
-    - **Which testing method agent to use?**: testing_agent (Iteration 12)
-    - **User Testing Done**: N
+    - Last item agent was working: Smoke testing the  frontend UI after successfully reparenting  and  onto  (Phase D). The backend logic and data migrations were fully verified (143/143 tests passed), but the  crashed with a coroutine error when trying to visually verify the  route.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y (Extensive backend testing done; UI test blocked by tool error)
+    - Which testing method agent to use?: screenshot tool / frontend testing agent
+    - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-  - Issue 1 (P0): Deployment Blocker (PostgreSQL Database Required)
-     - Attempted fixes: Ran deployment agent, which flagged PostgreSQL as a critical blocker since the standard Emergent platform deployment path strictly expects MongoDB. Added strict fail-fast validation for DB URLs to ensure safety.
-     - Next debug checklist: Provide/confirm production PostgreSQL hosting + , and confirm production values for , , and . Do NOT migrate to MongoDB.
+  Issue 1: Deployment Blocker (PostgreSQL Database Required)
+     - Attempted fixes: The Emergent managed deployment path expects MongoDB, but this project strictly requires PostgreSQL. The codebase is fully prepped for external deployment.
+     - Next debug checklist: Provide/confirm production PostgreSQL hosting + , and confirm production values for , , and  to finally execute the deployment.
      - Why fix this issue and what will be achieved with the fix?: Required to deploy the application successfully to a live production environment.
      - Status: BLOCKED
      - Is recurring issue?: N
      - Should Test frontend/backend/both after fix?: Both
-     - Blocked on other issue: Need external PostgreSQL hosting configuration.
+     - Blocked on other issue: External PostgreSQL database provisioning by the user.
 
-**In progress Task List**: 
-None.
+  Issue 2: Screenshot Tool  on Smoke Test
+     - Attempted fixes: Attempted to run  on the frontend URL , but it failed with .
+     - Next debug checklist: Use the frontend testing agent or try executing UI checks manually if the screenshot tool continues to throw python tool-level coroutine errors.
+     - Why fix this issue and what will be achieved with the fix?: Need to verify that the Phase D reparenting (which changed API shapes subtly like  becoming a computed property) renders correctly on the frontend without visual breakage.
+     - Status: TESTING PENDING
+     - Is recurring issue?: N
+     - Should Test frontend/backend/both after fix?: Frontend
+     - Blocked on other issue: None.
+
+**In progress Task List**:
+  None. (Phase C, D, and E of the code review remediation roadmap were successfully completed).
 
 **Upcoming and Future Tasks**:
     Upcoming Tasks:
-    - Task 1 (P1): Master Data stewardship UI - Build views to create/edit master data.
-    - Task 2 (P2): Vendor dues ageing export - Add bill-level drill-down/export for Vendor Dues Ageing if Accounts needs it (Suggested enhancement, pending user approval).
+    - Task 1 (P0): Phase F (Identity & scale) of Code Review Remediation — Implement  +  masters; enforce  on  fields; materialize stock-on-hand with indexes; fix the silent / truncation in PT processing.
+    - Task 2 (P1): Dashboard Health Card — Implement Equation of state / Trial balance health card on the owner dashboard (Σ INVENTORY+SOR_STOCK vs Σ PAYABLE/GRNI) to visibly prove the new balanced-posting guarantee.
+    - Task 3 (P1): Master Data stewardship UI — Build views to create/edit master data (Stores/Brands/Seasons/GSTINs) with stewardship controls.
     
     Future Tasks:
-    - Task 3 (P2): POS ingest / selling floor flows.
-    - Task 4 (P2): Vendor settlement/payment workflows.
-    - Task 5 (P2): External ingress CORS policy alignment (if needed for production proxy headers).
-    - Task 6 (P2): Further Code Quality refactors for , ,  (Flagged as moderately complex during code review).
+    - Task 4 (P2): Vendor dues ageing export — Add bill-level drill-down/export for Vendor Dues Ageing if Accounts needs it.
+    - Task 5 (P2): POS ingest / selling floor flows.
+    - Task 6 (P2): Vendor settlement/payment workflows.
+    - Task 7 (P2): Code Quality refactors for , ,  (Flagged as moderately complex during code review).
 
 **Completed work in this session**
-- Built Vendor-dues ageing report (0–30/31–60/60+) over the vendor ledger (DONE).
-- Built Users & Roles in-app editor (DONE).
-- Replaced hand-rolled  with an OpenAPI-generated TS client using  and  (DONE).
-- Built  GRN UI (DONE).
-- Hardened Authentication: added httpOnly JWT cookies, strict CORS, bcrypt-sha256 password seeding, and  alias (DONE).
-- Executed Alpha UI Polish: Simplified login screen, replaced roadmap with configurable dashboard cards, created a resizable sidebar, and replaced unbuilt pages with Coming soon state (DONE).
-- Code Quality Refactoring: Fixed cyclomatic complexities in , , and . Checked identity vs equality rules (DONE).
-- Set up fail-fast validations for missing environment variables in both Frontend and Backend (DONE).
+- Evaluated external Code Review document and verified claims against live code and  (DONE).
+- Phase A (Security): Gated wildcard CORS behind , scoped stock/fin ledger reads by role/store, removed DELETE on posted PTs, and gated demo seeds (DONE).
+- Phase B (Verification Spine): Added new security tests, fixed brittle tests causing brute-force lockouts, and added  (DONE).
+- Phase C (Kernel primitive): Built  (balanced-or-fail), added , and installed  trigger with test-bypass (DONE).
+- Phase E (Money core): Rebuilt PT posting logic to value at  (with  guard), branch liability strictly by commercial model (Owned vs SOR/Consignment), and added golden tests (DONE).
+- Phase D (Document reparenting): Reparented  and  onto , utilizing gap-free , document FSM constraints, and wrote data-preserving migrations for live rows (DONE).
 
 **Earlier issues found/mentioned but not fixed**
    None.
@@ -64,89 +65,1204 @@ None.
 /app/
 ├── app/
 │   ├── backend/
-│   │   ├── config/ (Django settings with strict env rules)
-│   │   ├── core/ (Sacred ledger kernel)
+│   │   ├── config/ (Django settings)
+│   │   ├── core/ (Sacred ledger kernel, FSM Document base, GL, VoucherSeries)
 │   │   ├── accounts/, masters/, files/, vendors/, inbound/, aiagents/, ptmapper/
 │   │   ├── stockledger/, finledger/ (Ledger apps)
 │   │   ├── tests/ (Pytest regression suites)
+│   │   ├── pyproject.toml, uv.lock (uv managed dependencies)
 │   │   └── manage.py, server.py (ASGI)
 │   └── frontend/
 │       ├── src/ (React, Vite, Tailwind Warm design)
 │       │   ├── auth/, lib/ (contains api.ts, api-schema.ts), pages/, shell/
 │       │   └── App.tsx, index.css
+│       ├── package.json, yarn.lock
 ├── scripts/ (pg_run.sh, app_init.sh)
 ├── memory/ (PRD.md, test_credentials.md)
-└── docs/ 
+├── .github/workflows/ci.yml
 
 **Key Technical Concepts**
-- Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth (Cookie fallback implemented).
+- Backend: Python 3.12, Django 5.1, PostgreSQL 15, DRF, JWT Auth. Dependencies managed via . Server via .
 - Frontend: React 18, Vite, TypeScript, Tailwind CSS,  API client.
-- Infrastructure: Custom Supervisor setup () to keep PG running persistently inside the Emergent container workspace. 
-- Ledger Constraint: Append-only ledgers enforced at the DB level using  triggers preventing edits/deletions.
-- Env logic: Strict Fail-fast setup. Apps will crash immediately if  or  are missing.
+- Ledger & FSM Constraints: Append-only ledgers enforced via PG DB triggers. Business documents (, ) inherit from  and follow strict FSM rules (draft -> submitted -> cancelled) preventing state mutation after posting.
+- Double-entry Posting:  enforces balanced transactions (sum = 0) to .
 
 **key DB schema**
-  - : {filename, status, rows, mapping_stats, manually_edited, posted_at, sent_at, stage, booking, inward_doc_number}
-  - : {extends LedgerEntry, pt_inward, pt_reversal, grn, line_no, barcode, brand}
-  - : {extends LedgerEntry, vendor, bill_number, payment_ref, kind}
-  - : {extends LedgerEntry, account, payment_ref, kind}
-  - : {booking, store, vendor, doc_number, received_at}
+  - : Abstract base, enforces FSM and gap-free naming via .
+  - : {account, amount, doc_number, posted_at, line_no}
+  - : {doc_number, docstatus, series, rows, booking, mapping_stats, manually_edited} (inherits )
+  - : {doc_number, docstatus, series, booking, store, vendor} (inherits )
+  -  /  / : Append-only rows.
 
 **changes in tech stack**
-  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL bridged into the environment. Do NOT migrate to MongoDB.
-  - API Client on frontend updated to strictly use  referencing the auto-generated .
+  - **CRITICAL**: The default Emergent FastAPI/MongoDB stack is **NOT USED**. The project runs Django + PostgreSQL. Do NOT migrate to MongoDB.
 
 **All files of reference**
-  - ,  (API Client Layer)
-  - ,  (Resizable sidebar)
-  -  (Configurable dashboard)
-  - , ,  (Refactored logic)
-  - ,  (Auth & environment fail-fast rules)
+  - , ,  (Created/updated for Phase C GL and balanced postings).
+  - ,  (Updated to inherit from ).
+  - ,  (Rewritten to route through  and validate ).
+  -  (Added specific suites like  and ).
+  -  (Updated with completion of Phases A-E).
 
 **Areas that need refactoring**: 
-  - , ,  (Functions within these files were noted by the user's code-quality report as somewhat complex. Refactor when touching these files).
+  - ,  (Cyclomatic complexity flagged in earlier code reviews).
 
 **key api endpoints**
-  - , 
-  -  (Cookie & Bearer handling)
+  - 
+  - , , 
   - , 
 
 **Critical Info for New Agent**
-  - **Environment**: Django + PostgreSQL. Do not spin up Mongo or Fastapi.
-  - **API Schema generation**: If you alter Django views/serializers, you must regenerate the frontend schema using yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. (or standard yarn run v1.22.22
-info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command. sequence).
-  - **Append-only Constraints**: Modifying Ledger entries directly is prevented by DB triggers. Any corrections must be programmed as negative-value append rows.
-  - **Deployment Blocker**: The platform deployment health check failed due to PostgreSQL. Treat  carefully. Do NOT attempt to rewrite the app to MongoDB. Wait for external DB configuration from the user.
+  - **Environment**: Django + PostgreSQL. NO MongoDB or FastAPI.
+  - **FSM Rules**: Do not attempt to update properties on  or  dynamically without respecting the  FSM. Changes to posted documents must occur via reversal/cancellation (appending negative entries), not inline edits.
+  - **Testing**: Backend testing is extensive via pytest. Run ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.14.1, django-4.12.0, xdist-3.8.0
+collected 34 items / 28 errors
+
+==================================== ERRORS ====================================
+_________ ERROR collecting app/backend/core/tests/test_document_fsm.py _________
+app/backend/core/tests/test_document_fsm.py:14: in <module>
+    from core.documents import (
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_____ ERROR collecting app/backend/core/tests/test_document_idempotency.py _____
+app/backend/core/tests/test_document_idempotency.py:15: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting app/backend/core/tests/test_gl_post_entries.py ________
+app/backend/core/tests/test_gl_post_entries.py:13: in <module>
+    from core.gl import GLAccount, GLEntry, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+______ ERROR collecting app/backend/core/tests/test_ledger_append_only.py ______
+app/backend/core/tests/test_ledger_append_only.py:13: in <module>
+    from core.ledger import AppendOnlyError, LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting app/backend/core/tests/test_ledger_reversal.py ________
+app/backend/core/tests/test_ledger_reversal.py:12: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+____________ ERROR collecting app/backend/core/tests/test_money.py _____________
+app/backend/core/tests/test_money.py:14: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+________ ERROR collecting app/backend/core/tests/test_voucher_series.py ________
+app/backend/core/tests/test_voucher_series.py:17: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+__ ERROR collecting app/backend/tests/test_iteration10_auth_cookie_retest.py ___
+app/backend/tests/test_iteration10_auth_cookie_retest.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration11_pt_posting_regression.py _
+app/backend/tests/test_iteration11_pt_posting_regression.py:15: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration12_deployment_readiness.py __
+app/backend/tests/test_iteration12_deployment_readiness.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration13_cors_config_regression.py _
+app/backend/tests/test_iteration13_cors_config_regression.py:18: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting app/backend/tests/test_iteration14_security_hardening.py ___
+app/backend/tests/test_iteration14_security_hardening.py:22: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting app/backend/tests/test_iteration9_rbac_vendor_inbound.py ___
+app/backend/tests/test_iteration9_rbac_vendor_inbound.py:14: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_____ ERROR collecting app/backend/tests/test_phase_e_commercial_model.py ______
+app/backend/tests/test_phase_e_commercial_model.py:15: in <module>
+    from core.gl import GLAccount, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+___________ ERROR collecting backend/core/tests/test_document_fsm.py ___________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_document_fsm.py:14: in <module>
+    from core.documents import (
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting backend/core/tests/test_document_idempotency.py _______
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_document_idempotency.py:15: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_________ ERROR collecting backend/core/tests/test_gl_post_entries.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_gl_post_entries.py:13: in <module>
+    from core.gl import GLAccount, GLEntry, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+________ ERROR collecting backend/core/tests/test_ledger_append_only.py ________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_ledger_append_only.py:13: in <module>
+    from core.ledger import AppendOnlyError, LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_________ ERROR collecting backend/core/tests/test_ledger_reversal.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_ledger_reversal.py:12: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+______________ ERROR collecting backend/core/tests/test_money.py _______________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_money.py:14: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+__________ ERROR collecting backend/core/tests/test_voucher_series.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_voucher_series.py:17: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+____ ERROR collecting backend/tests/test_iteration10_auth_cookie_retest.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration10_auth_cookie_retest.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+___ ERROR collecting backend/tests/test_iteration11_pt_posting_regression.py ___
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration11_pt_posting_regression.py:15: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+___ ERROR collecting backend/tests/test_iteration12_deployment_readiness.py ____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration12_deployment_readiness.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting backend/tests/test_iteration13_cors_config_regression.py ___
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration13_cors_config_regression.py:18: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+____ ERROR collecting backend/tests/test_iteration14_security_hardening.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration14_security_hardening.py:22: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+____ ERROR collecting backend/tests/test_iteration9_rbac_vendor_inbound.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration9_rbac_vendor_inbound.py:14: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_______ ERROR collecting backend/tests/test_phase_e_commercial_model.py ________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_phase_e_commercial_model.py:15: in <module>
+    from core.gl import GLAccount, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+=========================== short test summary info ============================
+ERROR app/backend/core/tests/test_document_fsm.py - django.core.exceptions.Im...
+ERROR app/backend/core/tests/test_document_idempotency.py - django.core.excep...
+ERROR app/backend/core/tests/test_gl_post_entries.py - django.core.exceptions...
+ERROR app/backend/core/tests/test_ledger_append_only.py - django.core.excepti...
+ERROR app/backend/core/tests/test_ledger_reversal.py - django.core.exceptions...
+ERROR app/backend/core/tests/test_money.py - django.core.exceptions.Improperl...
+ERROR app/backend/core/tests/test_voucher_series.py - django.core.exceptions....
+ERROR app/backend/tests/test_iteration10_auth_cookie_retest.py - AssertionErr...
+ERROR app/backend/tests/test_iteration11_pt_posting_regression.py - Assertion...
+ERROR app/backend/tests/test_iteration12_deployment_readiness.py - AssertionE...
+ERROR app/backend/tests/test_iteration13_cors_config_regression.py - Assertio...
+ERROR app/backend/tests/test_iteration14_security_hardening.py - AssertionErr...
+ERROR app/backend/tests/test_iteration9_rbac_vendor_inbound.py - AssertionErr...
+ERROR app/backend/tests/test_phase_e_commercial_model.py - django.core.except...
+ERROR backend/core/tests/test_document_fsm.py - django.core.exceptions.Improp...
+ERROR backend/core/tests/test_document_idempotency.py - django.core.exception...
+ERROR backend/core/tests/test_gl_post_entries.py - django.core.exceptions.Imp...
+ERROR backend/core/tests/test_ledger_append_only.py - django.core.exceptions....
+ERROR backend/core/tests/test_ledger_reversal.py - django.core.exceptions.Imp...
+ERROR backend/core/tests/test_money.py - django.core.exceptions.ImproperlyCon...
+ERROR backend/core/tests/test_voucher_series.py - django.core.exceptions.Impr...
+ERROR backend/tests/test_iteration10_auth_cookie_retest.py - AssertionError: ...
+ERROR backend/tests/test_iteration11_pt_posting_regression.py - AssertionErro...
+ERROR backend/tests/test_iteration12_deployment_readiness.py - AssertionError...
+ERROR backend/tests/test_iteration13_cors_config_regression.py - AssertionErr...
+ERROR backend/tests/test_iteration14_security_hardening.py - AssertionError: ...
+ERROR backend/tests/test_iteration9_rbac_vendor_inbound.py - AssertionError: ...
+ERROR backend/tests/test_phase_e_commercial_model.py - django.core.exceptions...
+!!!!!!!!!!!!!!!!!!! Interrupted: 28 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 28 errors in 1.15s ============================== (via ) for verification. Do not bypass backend testing for money/core changes.
 
 **documents and test reports created in this job**
-  - 
-  -  (Auth testing)
-  -  (Refactoring testing)
-  -  (Deployment/Env testing)
-  - 
-  - 
+  -  (GitHub Actions Postgres CI pipeline created)
+  -  (Updated tracking)
 
 **Last 10 User Messages and any pending HUMAN messages** 
- - (User): Request to build Vendor-dues ageing report, Users & Roles in-app editor, replace  with OpenAPI TS client, and build  UI. (Completed)
- - (User): Request to apply Alpha UI polish (change login text, set placeholders to Coming soon, resizable sidebar, configurable dashboard). (Completed)
- - (User): Provided Code Quality Report noting undefined variables, Cyclomatic Complexity in core logic files, and critical Identity vs Equality ( vs ) checks. (Completed)
- - (User): System Reminder: run testing agent after bug fix. (Completed)
- - (User): Call Deployer Agent and Run Health Check to Check for Readiness for Deployment. (Completed - resulted in Blocker)
- - (User): System Reminder: run testing agent after bug fix. (Completed)
+ - (User): Uploaded implementation code review HTML. Requested evaluation and plan.
+ - (User): System Reminder: run testing agent after bug fix.
+ - (User): Lets do according to your recommendation." (Proceed with Security Phase A+B).
+ - (User): System Reminders regarding batching tool calls.
+ - (User): Instructed to proceed with Phase C, Phase D, and Phase E (Money core).
+ - (User): System Reminders regarding batching tool calls.
+ - (User): "Lets go with A. (Approved option A to fully reparent GRN/PtFile onto Document FSM).
+ - (User): System Reminders regarding batching tool calls.
+ *(No pending human messages. The agent stopped after finishing the phase due to a screenshot tool crash).*
 
 **Project Health Check:**
-- Broken: Deployment Pipeline (Blocked by lack of external PostgreSQL/platform DB incompatibility). 
+- Broken: Deployment Pipeline (Blocked by lack of external PostgreSQL instance). 
+- Broken:  throwing python  coroutine errors locally.
 - Mocked: None.
 
 **3rd Party Integrations**
-- Gemini 1.5 Flash/Pro (Text/Image Extraction) — uses Emergent LLM Key.
+- Gemini 1.5 Flash/Pro / Gemini 3.1 Pro (Text/Image Extraction) — uses Emergent LLM Key.
 
 **Testing status**
-  - Testing agent used after significant changes: YES (Iterations 9, 10, 11, 12 thoroughly executed)
+  - Testing agent used after significant changes: NO (Agent performed deep self-testing via ============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /app
+plugins: anyio-4.14.1, django-4.12.0, xdist-3.8.0
+collected 34 items / 28 errors
+
+==================================== ERRORS ====================================
+_________ ERROR collecting app/backend/core/tests/test_document_fsm.py _________
+app/backend/core/tests/test_document_fsm.py:14: in <module>
+    from core.documents import (
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_____ ERROR collecting app/backend/core/tests/test_document_idempotency.py _____
+app/backend/core/tests/test_document_idempotency.py:15: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting app/backend/core/tests/test_gl_post_entries.py ________
+app/backend/core/tests/test_gl_post_entries.py:13: in <module>
+    from core.gl import GLAccount, GLEntry, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+______ ERROR collecting app/backend/core/tests/test_ledger_append_only.py ______
+app/backend/core/tests/test_ledger_append_only.py:13: in <module>
+    from core.ledger import AppendOnlyError, LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting app/backend/core/tests/test_ledger_reversal.py ________
+app/backend/core/tests/test_ledger_reversal.py:12: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+____________ ERROR collecting app/backend/core/tests/test_money.py _____________
+app/backend/core/tests/test_money.py:14: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+________ ERROR collecting app/backend/core/tests/test_voucher_series.py ________
+app/backend/core/tests/test_voucher_series.py:17: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+__ ERROR collecting app/backend/tests/test_iteration10_auth_cookie_retest.py ___
+app/backend/tests/test_iteration10_auth_cookie_retest.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration11_pt_posting_regression.py _
+app/backend/tests/test_iteration11_pt_posting_regression.py:15: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration12_deployment_readiness.py __
+app/backend/tests/test_iteration12_deployment_readiness.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_ ERROR collecting app/backend/tests/test_iteration13_cors_config_regression.py _
+app/backend/tests/test_iteration13_cors_config_regression.py:18: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting app/backend/tests/test_iteration14_security_hardening.py ___
+app/backend/tests/test_iteration14_security_hardening.py:22: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting app/backend/tests/test_iteration9_rbac_vendor_inbound.py ___
+app/backend/tests/test_iteration9_rbac_vendor_inbound.py:14: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_____ ERROR collecting app/backend/tests/test_phase_e_commercial_model.py ______
+app/backend/tests/test_phase_e_commercial_model.py:15: in <module>
+    from core.gl import GLAccount, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+___________ ERROR collecting backend/core/tests/test_document_fsm.py ___________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_document_fsm.py:14: in <module>
+    from core.documents import (
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_______ ERROR collecting backend/core/tests/test_document_idempotency.py _______
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_document_idempotency.py:15: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_________ ERROR collecting backend/core/tests/test_gl_post_entries.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_gl_post_entries.py:13: in <module>
+    from core.gl import GLAccount, GLEntry, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+________ ERROR collecting backend/core/tests/test_ledger_append_only.py ________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_ledger_append_only.py:13: in <module>
+    from core.ledger import AppendOnlyError, LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+_________ ERROR collecting backend/core/tests/test_ledger_reversal.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_ledger_reversal.py:12: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+______________ ERROR collecting backend/core/tests/test_money.py _______________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_money.py:14: in <module>
+    from core.ledger import LedgerProbe
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+__________ ERROR collecting backend/core/tests/test_voucher_series.py __________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/core/tests/test_voucher_series.py:17: in <module>
+    from core.documents import DocumentProbe, VoucherSeries
+app/backend/core/documents.py:57: in <module>
+    class VoucherSeries(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+____ ERROR collecting backend/tests/test_iteration10_auth_cookie_retest.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration10_auth_cookie_retest.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+___ ERROR collecting backend/tests/test_iteration11_pt_posting_regression.py ___
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration11_pt_posting_regression.py:15: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+___ ERROR collecting backend/tests/test_iteration12_deployment_readiness.py ____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration12_deployment_readiness.py:16: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+__ ERROR collecting backend/tests/test_iteration13_cors_config_regression.py ___
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration13_cors_config_regression.py:18: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+____ ERROR collecting backend/tests/test_iteration14_security_hardening.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration14_security_hardening.py:22: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+____ ERROR collecting backend/tests/test_iteration9_rbac_vendor_inbound.py _____
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_iteration9_rbac_vendor_inbound.py:14: in <module>
+    assert BASE_URL, "REACT_APP_BACKEND_URL not set"
+E   AssertionError: REACT_APP_BACKEND_URL not set
+E   assert ''
+_______ ERROR collecting backend/tests/test_phase_e_commercial_model.py ________
+/usr/local/lib/python3.11/importlib/__init__.py:126: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+<frozen importlib._bootstrap>:1204: in _gcd_import
+    ???
+<frozen importlib._bootstrap>:1176: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1147: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:690: in _load_unlocked
+    ???
+/root/.venv/lib/python3.11/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
+    exec(co, module.__dict__)
+app/backend/tests/test_phase_e_commercial_model.py:15: in <module>
+    from core.gl import GLAccount, account_balance, trial_balance
+app/backend/core/gl.py:18: in <module>
+    from core.ledger import LedgerEntry
+app/backend/core/ledger.py:33: in <module>
+    class LedgerEntry(models.Model):
+/root/.venv/lib/python3.11/site-packages/django/db/models/base.py:129: in __new__
+    app_config = apps.get_containing_app_config(module)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:260: in get_containing_app_config
+    self.check_apps_ready()
+/root/.venv/lib/python3.11/site-packages/django/apps/registry.py:137: in check_apps_ready
+    settings.INSTALLED_APPS
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:81: in __getattr__
+    self._setup(name)
+/root/.venv/lib/python3.11/site-packages/django/conf/__init__.py:61: in _setup
+    raise ImproperlyConfigured(
+E   django.core.exceptions.ImproperlyConfigured: Requested setting INSTALLED_APPS, but settings are not configured. You must either define the environment variable DJANGO_SETTINGS_MODULE or call settings.configure() before accessing settings.
+=========================== short test summary info ============================
+ERROR app/backend/core/tests/test_document_fsm.py - django.core.exceptions.Im...
+ERROR app/backend/core/tests/test_document_idempotency.py - django.core.excep...
+ERROR app/backend/core/tests/test_gl_post_entries.py - django.core.exceptions...
+ERROR app/backend/core/tests/test_ledger_append_only.py - django.core.excepti...
+ERROR app/backend/core/tests/test_ledger_reversal.py - django.core.exceptions...
+ERROR app/backend/core/tests/test_money.py - django.core.exceptions.Improperl...
+ERROR app/backend/core/tests/test_voucher_series.py - django.core.exceptions....
+ERROR app/backend/tests/test_iteration10_auth_cookie_retest.py - AssertionErr...
+ERROR app/backend/tests/test_iteration11_pt_posting_regression.py - Assertion...
+ERROR app/backend/tests/test_iteration12_deployment_readiness.py - AssertionE...
+ERROR app/backend/tests/test_iteration13_cors_config_regression.py - Assertio...
+ERROR app/backend/tests/test_iteration14_security_hardening.py - AssertionErr...
+ERROR app/backend/tests/test_iteration9_rbac_vendor_inbound.py - AssertionErr...
+ERROR app/backend/tests/test_phase_e_commercial_model.py - django.core.except...
+ERROR backend/core/tests/test_document_fsm.py - django.core.exceptions.Improp...
+ERROR backend/core/tests/test_document_idempotency.py - django.core.exception...
+ERROR backend/core/tests/test_gl_post_entries.py - django.core.exceptions.Imp...
+ERROR backend/core/tests/test_ledger_append_only.py - django.core.exceptions....
+ERROR backend/core/tests/test_ledger_reversal.py - django.core.exceptions.Imp...
+ERROR backend/core/tests/test_money.py - django.core.exceptions.ImproperlyCon...
+ERROR backend/core/tests/test_voucher_series.py - django.core.exceptions.Impr...
+ERROR backend/tests/test_iteration10_auth_cookie_retest.py - AssertionError: ...
+ERROR backend/tests/test_iteration11_pt_posting_regression.py - AssertionErro...
+ERROR backend/tests/test_iteration12_deployment_readiness.py - AssertionError...
+ERROR backend/tests/test_iteration13_cors_config_regression.py - AssertionErr...
+ERROR backend/tests/test_iteration14_security_hardening.py - AssertionError: ...
+ERROR backend/tests/test_iteration9_rbac_vendor_inbound.py - AssertionError: ...
+ERROR backend/tests/test_phase_e_commercial_model.py - django.core.exceptions...
+!!!!!!!!!!!!!!!!!!! Interrupted: 28 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 28 errors in 1.80s ==============================, 143/143 tests passed).
   - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: , , 
-  - Known regressions: None
+  - Test files created: , , .
+  - Known regressions: None code-wise. Screenshot tool failing technically on frontend checks.
 
 **Credentials to test flow:**
   - Read from 
@@ -155,4 +1271,4 @@ info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this comm
   - Warehouse (Ranchi):  / 
 
 **What agent forgot to execute**
-- Nothing was overlooked. All user requests up to alpha-readiness and code review remediations were fully completed.</analysis>
+- Nothing was overlooked functionally. The agent successfully addressed Phase A through E of the code review. The only minor incompletion was visually smoke-testing the frontend PT Mapper page due to a tool failure.</analysis>

@@ -9,7 +9,7 @@ from django.db.models import Count, Sum
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -34,6 +34,15 @@ def _is_finance(user: Any) -> bool:
     return getattr(getattr(user, "role", None), "code", "") in FINANCE_ROLES
 
 
+class IsFinance(BasePermission):
+    """Vendor/cash payables, balances and ageing are finance-only data (ADR-0003)."""
+
+    message = "Finance role required."
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        return bool(request.user and request.user.is_authenticated and _is_finance(request.user))
+
+
 class LedgerPagination(PageNumberPagination):
     page_size = 50
     page_size_query_param = "page_size"
@@ -43,7 +52,7 @@ class LedgerPagination(PageNumberPagination):
 # --- Vendor ledger ---------------------------------------------------------
 
 class VendorEntriesView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
     serializer_class = VendorLedgerEntrySerializer
     pagination_class = LedgerPagination
 
@@ -56,7 +65,7 @@ class VendorEntriesView(generics.ListAPIView):
 
 
 class VendorBalancesView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def get(self, request: Request) -> Response:
         rows = (
@@ -118,7 +127,7 @@ def _open_vendor_lots(entries: list[VendorLedgerEntry]) -> list[dict[str, Any]]:
 
 
 class VendorAgeingView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def get(self, request: Request) -> Response:
         grouped: dict[int, list[VendorLedgerEntry]] = defaultdict(list)
@@ -177,7 +186,7 @@ class VendorAgeingView(APIView):
 
 
 class VendorBillView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def post(self, request: Request) -> Response:
         if not _is_finance(request.user):
@@ -196,7 +205,7 @@ class VendorBillView(APIView):
 
 
 class VendorPaymentView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def post(self, request: Request) -> Response:
         if not _is_finance(request.user):
@@ -217,7 +226,7 @@ class VendorPaymentView(APIView):
 
 
 class VendorReverseView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def post(self, request: Request, pk: int) -> Response:
         if not _is_finance(request.user):
@@ -234,7 +243,7 @@ class VendorReverseView(APIView):
 # --- Cash ledger -----------------------------------------------------------
 
 class CashEntriesView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
     serializer_class = CashLedgerEntrySerializer
     pagination_class = LedgerPagination
 
@@ -247,7 +256,7 @@ class CashEntriesView(generics.ListAPIView):
 
 
 class CashSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def get(self, request: Request) -> Response:
         rows = (
@@ -274,7 +283,7 @@ class CashSummaryView(APIView):
 
 
 class CashMovementView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def post(self, request: Request) -> Response:
         if not _is_finance(request.user):
@@ -294,7 +303,7 @@ class CashMovementView(APIView):
 
 
 class CashReverseView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsFinance]
 
     def post(self, request: Request, pk: int) -> Response:
         if not _is_finance(request.user):

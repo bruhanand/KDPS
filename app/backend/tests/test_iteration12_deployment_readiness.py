@@ -118,50 +118,49 @@ def test_password_hash_contains_bcrypt_2b_prefix_for_owner_record():
     assert "$2b$" in stored
 
 
-def test_seed_admin_updates_existing_admin_password_if_changed():
+def test_seed_does_not_overwrite_existing_user_password():
+    """Security fix (review C/§seed): re-running the seed must NOT revert an
+    operator-changed password. `set_password` runs only on user CREATE, never on an
+    existing user — so a redeploy can no longer undo a rotated credential."""
     backend_dir = Path(__file__).resolve().parents[1]
 
-    mutate = (
-        "from django.contrib.auth import get_user_model; "
-        "u=get_user_model().objects.get(username='owner'); "
-        "u.set_password('TempOwner@123'); u.save(); print('ok')"
-    )
-    m = subprocess.run(
-        [sys.executable, "manage.py", "shell", "-c", mutate],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert m.returncode == 0, m.stderr[-500:]
+    def shell(code: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "manage.py", "shell", "-c", code],
+            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+        )
 
-    seed = subprocess.run(
-        [sys.executable, "manage.py", "seed_admin"],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert seed.returncode == 0, seed.stderr[-500:]
+    temp = "OpsRotated#456"
+    try:
+        m = shell(
+            "from django.contrib.auth import get_user_model; "
+            "u=get_user_model().objects.get(username='owner'); "
+            f"u.set_password('{temp}'); u.save(); print('ok')"
+        )
+        assert m.returncode == 0, m.stderr[-500:]
 
-    verify = (
-        "from django.contrib.auth import get_user_model; "
-        "from django.contrib.auth.hashers import check_password; "
-        "u=get_user_model().objects.get(username='owner'); "
-        "print(check_password('Owner@123', u.password))"
-    )
-    v = subprocess.run(
-        [sys.executable, "manage.py", "shell", "-c", verify],
-        cwd=backend_dir,
-        capture_output=True,
-        text=True,
-        timeout=120,
-        check=False,
-    )
-    assert v.returncode == 0, v.stderr[-500:]
-    assert v.stdout.strip().lower() == "true"
+        seed = subprocess.run(
+            [sys.executable, "manage.py", "seed_admin"],
+            cwd=backend_dir, capture_output=True, text=True, timeout=120, check=False,
+        )
+        assert seed.returncode == 0, seed.stderr[-500:]
+
+        v = shell(
+            "from django.contrib.auth import get_user_model; "
+            "from django.contrib.auth.hashers import check_password; "
+            "u=get_user_model().objects.get(username='owner'); "
+            f"print(check_password('{temp}', u.password))"
+        )
+        assert v.returncode == 0, v.stderr[-500:]
+        # The operator-set password SURVIVES the re-seed (no auto-revert).
+        assert v.stdout.strip().lower() == "true"
+    finally:
+        # Restore the documented demo password so downstream tests / the app work.
+        shell(
+            "from django.contrib.auth import get_user_model; "
+            "u=get_user_model().objects.get(username='owner'); "
+            "u.set_password('Owner@123'); u.save(); print('restored')"
+        )
 
 
 def test_cors_preflight_allows_credentials_and_explicit_origin():

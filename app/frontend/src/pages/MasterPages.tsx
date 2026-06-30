@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Save, ShieldCheck, UserPlus, Users, X } from "lucide-react";
+import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-react";
 
 import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { CommercialBadge, StatusChip } from "../lib/format";
 
+const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
+
+function useSteward(): boolean {
+  const { user } = useAuth();
+  return Boolean(user?.is_superuser || STEWARD_ROLES.includes(user?.role?.code ?? ""));
+}
+
 function useList<T>(url: string) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
+    setLoading(true);
     api
       .get(url)
       .then((r) => live && setData(r.data))
@@ -19,30 +28,49 @@ function useList<T>(url: string) {
     return () => {
       live = false;
     };
-  }, [url]);
-  return { data, loading };
+  }, [url, tick]);
+  return { data, loading, reload: () => setTick((t) => t + 1) };
 }
 
 function Screen({
   eyebrow,
   title,
   count,
+  action,
   children,
 }: {
   eyebrow: string;
   title: string;
   count: number;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="page-pad">
-      <p className="eyebrow">{eyebrow}</p>
-      <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>{title}</h1>
-      <p className="lead" style={{ marginBottom: 20 }}>{count} record{count === 1 ? "" : "s"}</p>
+      <div className="toolbar">
+        <div>
+          <p className="eyebrow">{eyebrow}</p>
+          <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>{title}</h1>
+          <p className="lead">{count} record{count === 1 ? "" : "s"}</p>
+        </div>
+        <div className="spacer" />
+        {action}
+      </div>
       {children}
     </div>
   );
 }
+
+function Feedback({ error, ok }: { error: string; ok: string }) {
+  return (
+    <>
+      {error && <div className="warn-note" data-testid="master-error">{error}</div>}
+      {ok && <div className="ok-note" data-testid="master-ok">{ok}</div>}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- Stores
 
 interface Store {
   id: number;
@@ -51,27 +79,71 @@ interface Store {
   store_type: string;
   city: string;
   state_name: string;
+  gstin: number;
   gstin_number: string;
+  is_active: boolean;
 }
 
+interface GstinOpt { id: number; gstin: string; state_name: string; state_code: string; legal_entity_name: string; legal_entity: number; is_active: boolean; }
+
+const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", gstin: 0, is_active: true };
+
 export function StoresPage() {
-  const { data } = useList<Store>("/masters/stores");
+  const canEdit = useSteward();
+  const { data, loading, reload } = useList<Store>("/masters/stores");
+  const { data: gstins } = useList<GstinOpt>("/masters/gstins");
+  const [form, setForm] = useState(blankStore);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  async function save() {
+    setError(""); setOk("");
+    const payload = { code: form.code, name: form.name, store_type: form.store_type, city: form.city, gstin: form.gstin || null, is_active: form.is_active };
+    try {
+      if (form.id) await api.patch(`/masters/stores/${form.id}`, payload);
+      else await api.post("/masters/stores", payload);
+      setForm(blankStore); setOpen(false); setOk("Store saved."); reload();
+    } catch (e) { setError(apiErrorMessage(e)); }
+  }
+  function edit(s: Store) { setOpen(true); setOk(""); setError(""); setForm({ id: s.id, code: s.code, name: s.name, store_type: s.store_type, city: s.city || "", gstin: s.gstin, is_active: s.is_active }); }
+  function add() { setForm(blankStore); setOpen(true); setOk(""); setError(""); }
+
   return (
-    <Screen eyebrow="Master data" title="Stores & Warehouses" count={data.length}>
+    <Screen eyebrow="Master data" title="Stores & Warehouses" count={data.length}
+      action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="store-new-button"><Plus size={15} /> New store</button>}>
+      <Feedback error={error} ok={ok} />
+      {canEdit && open && (
+        <div className="card section-card" data-testid="store-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">{form.id ? "Edit store" : "Create store"}</h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="store-editor-close"><X size={14} /> Close</button>
+          </div>
+          <div className="form-grid wide-form">
+            <input className="input" placeholder="Code (e.g. DEO)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} data-testid="store-code-input" />
+            <input className="input" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="store-name-input" />
+            <select className="select" value={form.store_type} onChange={(e) => setForm({ ...form, store_type: e.target.value })} data-testid="store-type-select">
+              <option value="store">Store</option>
+              <option value="warehouse">Warehouse</option>
+            </select>
+            <input className="input" placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} data-testid="store-city-input" />
+            <select className="select" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: Number(e.target.value) })} data-testid="store-gstin-select">
+              <option value={0}>Select GSTIN / state…</option>
+              {gstins.map((g) => <option key={g.id} value={g.id}>{g.state_name} · {g.gstin}</option>)}
+            </select>
+            <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="store-active-checkbox" /> Active</label>
+            <button className="btn btn-cta" onClick={save} disabled={!form.code || !form.name || !form.gstin} data-testid="store-save-button"><Save size={15} /> Save store</button>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="data" data-testid="stores-table">
           <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Type</th>
-              <th>City</th>
-              <th>State</th>
-              <th>GSTIN</th>
-            </tr>
+            <tr><th>Code</th><th>Name</th><th>Type</th><th>City</th><th>State</th><th>GSTIN</th><th>Status</th>{canEdit && <th />}</tr>
           </thead>
           <tbody>
-            {data.map((s) => (
+            {loading ? <tr><td colSpan={8}>Loading…</td></tr> : data.map((s) => (
               <tr key={s.id} data-testid={`store-row-${s.code}`}>
                 <td><b className="mono">{s.code}</b></td>
                 <td>{s.name}</td>
@@ -79,6 +151,8 @@ export function StoresPage() {
                 <td>{s.city || "—"}</td>
                 <td><span className={`chip chip-${s.state_name === "Bihar" ? "amber" : "blue"}`}>{s.state_name}</span></td>
                 <td className="mono" style={{ fontSize: 12.5 }}>{s.gstin_number}</td>
+                <td><span className={`chip chip-${s.is_active ? "green" : "red"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
+                {canEdit && <td><button className="btn btn-sm" onClick={() => edit(s)} data-testid={`edit-store-${s.code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>
             ))}
           </tbody>
@@ -88,36 +162,73 @@ export function StoresPage() {
   );
 }
 
-interface Brand {
-  id: number;
-  code: string;
-  name: string;
-  ownership: string;
-  return_terms: string;
-  commercial_label: string;
-}
+// ---------------------------------------------------------------- Brands
+
+interface Brand { id: number; code: string; name: string; ownership: string; return_terms: string; commercial_label: string; is_active: boolean; }
+
+const blankBrand = { id: 0, code: "", name: "", ownership: "owned", return_terms: "none", is_active: true };
 
 export function BrandsPage() {
-  const { data } = useList<Brand>("/masters/brands");
+  const canEdit = useSteward();
+  const { data, loading, reload } = useList<Brand>("/masters/brands");
+  const [form, setForm] = useState(blankBrand);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  async function save() {
+    setError(""); setOk("");
+    const payload = { code: form.code, name: form.name, ownership: form.ownership, return_terms: form.return_terms, is_active: form.is_active };
+    try {
+      if (form.id) await api.patch(`/masters/brands/${form.id}`, payload);
+      else await api.post("/masters/brands", payload);
+      setForm(blankBrand); setOpen(false); setOk("Brand saved."); reload();
+    } catch (e) { setError(apiErrorMessage(e)); }
+  }
+  function edit(b: Brand) { setOpen(true); setOk(""); setError(""); setForm({ id: b.id, code: b.code, name: b.name, ownership: b.ownership, return_terms: b.return_terms, is_active: b.is_active }); }
+  function add() { setForm(blankBrand); setOpen(true); setOk(""); setError(""); }
+
   return (
-    <Screen eyebrow="Master data" title="Brands" count={data.length}>
+    <Screen eyebrow="Master data" title="Brands" count={data.length}
+      action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="brand-new-button"><Plus size={15} /> New brand</button>}>
+      <Feedback error={error} ok={ok} />
+      {canEdit && open && (
+        <div className="card section-card" data-testid="brand-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">{form.id ? "Edit brand" : "Create brand"}</h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="brand-editor-close"><X size={14} /> Close</button>
+          </div>
+          <div className="form-grid wide-form">
+            <input className="input" placeholder="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} data-testid="brand-code-input" />
+            <input className="input" placeholder="Brand name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="brand-name-input" />
+            <select className="select" value={form.ownership} onChange={(e) => setForm({ ...form, ownership: e.target.value })} data-testid="brand-ownership-select">
+              <option value="owned">KDPS-owned</option>
+              <option value="brand_owned">Brand-owned</option>
+            </select>
+            <select className="select" value={form.return_terms} onChange={(e) => setForm({ ...form, return_terms: e.target.value })} data-testid="brand-return-select">
+              <option value="none">No returns</option>
+              <option value="capped">Capped allowance</option>
+              <option value="uncapped">Uncapped</option>
+              <option value="rolling">Uncapped + rolling top-up</option>
+            </select>
+            <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="brand-active-checkbox" /> Active</label>
+            <button className="btn btn-cta" onClick={save} disabled={!form.code || !form.name} data-testid="brand-save-button"><Save size={15} /> Save brand</button>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="data" data-testid="brands-table">
-          <thead>
-            <tr>
-              <th>Brand</th>
-              <th>Ownership</th>
-              <th>Return terms</th>
-              <th>Commercial model</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Brand</th><th>Ownership</th><th>Return terms</th><th>Commercial model</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {data.map((b) => (
+            {loading ? <tr><td colSpan={6}>Loading…</td></tr> : data.map((b) => (
               <tr key={b.id} data-testid={`brand-row-${b.code}`}>
                 <td><b>{b.name}</b></td>
                 <td>{b.ownership === "owned" ? "KDPS-owned" : "Brand-owned"}</td>
                 <td style={{ textTransform: "capitalize" }}>{b.return_terms}</td>
                 <td><CommercialBadge label={b.commercial_label} /></td>
+                <td><span className={`chip chip-${b.is_active ? "green" : "red"}`}>{b.is_active ? "Active" : "Inactive"}</span></td>
+                {canEdit && <td><button className="btn btn-sm" onClick={() => edit(b)} data-testid={`edit-brand-${b.code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>
             ))}
           </tbody>
@@ -127,33 +238,66 @@ export function BrandsPage() {
   );
 }
 
-interface Season {
-  id: number;
-  code: string;
-  name: string;
-  status: string;
-  sort_order: number;
-}
+// ---------------------------------------------------------------- Seasons
+
+interface Season { id: number; code: string; name: string; status: string; sort_order: number; }
+
+const blankSeason = { id: 0, code: "", name: "", status: "open", sort_order: 0 };
 
 export function SeasonsPage() {
-  const { data } = useList<Season>("/masters/seasons");
+  const canEdit = useSteward();
+  const { data, loading, reload } = useList<Season>("/masters/seasons");
+  const [form, setForm] = useState(blankSeason);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  async function save() {
+    setError(""); setOk("");
+    const payload = { code: form.code, name: form.name, status: form.status, sort_order: Number(form.sort_order) || 0 };
+    try {
+      if (form.id) await api.patch(`/masters/seasons/${form.id}`, payload);
+      else await api.post("/masters/seasons", payload);
+      setForm(blankSeason); setOpen(false); setOk("Season saved."); reload();
+    } catch (e) { setError(apiErrorMessage(e)); }
+  }
+  function edit(s: Season) { setOpen(true); setOk(""); setError(""); setForm({ id: s.id, code: s.code, name: s.name, status: s.status, sort_order: s.sort_order }); }
+  function add() { setForm(blankSeason); setOpen(true); setOk(""); setError(""); }
+
   return (
-    <Screen eyebrow="Master data" title="Season Calendar" count={data.length}>
+    <Screen eyebrow="Master data" title="Season Calendar" count={data.length}
+      action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="season-new-button"><Plus size={15} /> New season</button>}>
+      <Feedback error={error} ok={ok} />
+      {canEdit && open && (
+        <div className="card section-card" data-testid="season-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">{form.id ? "Edit season" : "Create season"}</h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="season-editor-close"><X size={14} /> Close</button>
+          </div>
+          <div className="form-grid wide-form">
+            <input className="input" placeholder="Code (e.g. SS26)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} data-testid="season-code-input" />
+            <input className="input" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="season-name-input" />
+            <select className="select" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} data-testid="season-status-select">
+              <option value="open">Open</option>
+              <option value="eoss">EOSS</option>
+              <option value="closed">Closed</option>
+            </select>
+            <input className="input" type="number" placeholder="Sort order" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })} data-testid="season-sort-input" />
+            <button className="btn btn-cta" onClick={save} disabled={!form.code || !form.name} data-testid="season-save-button"><Save size={15} /> Save season</button>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="data" data-testid="seasons-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Name</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+          <thead><tr><th>Code</th><th>Name</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {data.map((s) => (
+            {loading ? <tr><td colSpan={4}>Loading…</td></tr> : data.map((s) => (
               <tr key={s.id} data-testid={`season-row-${s.code}`}>
                 <td><b className="mono">{s.code}</b></td>
                 <td>{s.name}</td>
                 <td><StatusChip status={s.status} /></td>
+                {canEdit && <td><button className="btn btn-sm" onClick={() => edit(s)} data-testid={`edit-season-${s.code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>
             ))}
           </tbody>
@@ -163,35 +307,70 @@ export function SeasonsPage() {
   );
 }
 
-interface Gstin {
-  id: number;
-  gstin: string;
-  state_name: string;
-  state_code: string;
-  legal_entity_name: string;
-}
+// ---------------------------------------------------------------- GSTINs
+
+interface Gstin { id: number; gstin: string; state_name: string; state_code: string; legal_entity: number; legal_entity_name: string; is_active: boolean; }
+interface EntityOpt { id: number; code: string; name: string; }
+
+const blankGstin = { id: 0, gstin: "", state_code: "", state_name: "", legal_entity: 0, is_active: true };
 
 export function GstinsPage() {
-  const { data } = useList<Gstin>("/masters/gstins");
+  const canEdit = useSteward();
+  const { data, loading, reload } = useList<Gstin>("/masters/gstins");
+  const { data: entities } = useList<EntityOpt>("/masters/entities");
+  const [form, setForm] = useState(blankGstin);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  async function save() {
+    setError(""); setOk("");
+    const payload = { gstin: form.gstin, state_code: form.state_code, state_name: form.state_name, legal_entity: form.legal_entity || null, is_active: form.is_active };
+    try {
+      if (form.id) await api.patch(`/masters/gstins/${form.id}`, payload);
+      else await api.post("/masters/gstins", payload);
+      setForm(blankGstin); setOpen(false); setOk("GSTIN saved."); reload();
+    } catch (e) { setError(apiErrorMessage(e)); }
+  }
+  function edit(g: Gstin) { setOpen(true); setOk(""); setError(""); setForm({ id: g.id, gstin: g.gstin, state_code: g.state_code, state_name: g.state_name, legal_entity: g.legal_entity, is_active: g.is_active }); }
+  function add() { setForm({ ...blankGstin, legal_entity: entities[0]?.id ?? 0 }); setOpen(true); setOk(""); setError(""); }
+
   return (
-    <Screen eyebrow="Master data" title="GSTIN Registry" count={data.length}>
+    <Screen eyebrow="Master data" title="GSTIN Registry" count={data.length}
+      action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="gstin-new-button"><Plus size={15} /> New GSTIN</button>}>
+      <Feedback error={error} ok={ok} />
+      {canEdit && open && (
+        <div className="card section-card" data-testid="gstin-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">{form.id ? "Edit GSTIN" : "Create GSTIN"}</h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="gstin-editor-close"><X size={14} /> Close</button>
+          </div>
+          <div className="form-grid wide-form">
+            <input className="input" placeholder="GSTIN (15 chars)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} data-testid="gstin-number-input" />
+            <input className="input" placeholder="State code (e.g. 10)" value={form.state_code} onChange={(e) => setForm({ ...form, state_code: e.target.value })} data-testid="gstin-state-code-input" />
+            <input className="input" placeholder="State name" value={form.state_name} onChange={(e) => setForm({ ...form, state_name: e.target.value })} data-testid="gstin-state-name-input" />
+            <select className="select" value={form.legal_entity} onChange={(e) => setForm({ ...form, legal_entity: Number(e.target.value) })} data-testid="gstin-entity-select">
+              <option value={0}>Select legal entity…</option>
+              {entities.map((en) => <option key={en.id} value={en.id}>{en.name}</option>)}
+            </select>
+            <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="gstin-active-checkbox" /> Active</label>
+            <button className="btn btn-cta" onClick={save} disabled={!form.gstin || !form.state_code || !form.state_name || !form.legal_entity} data-testid="gstin-save-button"><Save size={15} /> Save GSTIN</button>
+          </div>
+        </div>
+      )}
       <div className="table-wrap">
         <table className="data" data-testid="gstins-table">
-          <thead>
-            <tr>
-              <th>GSTIN</th>
-              <th>State</th>
-              <th>State code</th>
-              <th>Legal entity</th>
-            </tr>
-          </thead>
+          <thead><tr><th>GSTIN</th><th>State</th><th>State code</th><th>Legal entity</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {data.map((g) => (
+            {loading ? <tr><td colSpan={6}>Loading…</td></tr> : data.map((g) => (
               <tr key={g.id} data-testid={`gstin-row-${g.state_code}`}>
                 <td className="mono"><b>{g.gstin}</b></td>
                 <td><span className={`chip chip-${g.state_name === "Bihar" ? "amber" : "blue"}`}>{g.state_name}</span></td>
                 <td className="mono">{g.state_code}</td>
                 <td>{g.legal_entity_name}</td>
+                <td><span className={`chip chip-${g.is_active ? "green" : "red"}`}>{g.is_active ? "Active" : "Inactive"}</span></td>
+                {canEdit && <td><button className="btn btn-sm" onClick={() => edit(g)} data-testid={`edit-gstin-${g.state_code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>
             ))}
           </tbody>
@@ -200,6 +379,8 @@ export function GstinsPage() {
     </Screen>
   );
 }
+
+// ---------------------------------------------------------- Users & Roles
 
 type AdminRole = ApiSchemas["AdminRole"];
 type AdminUser = ApiSchemas["AdminUser"];
