@@ -95,13 +95,18 @@ def extract(content: bytes, content_type: str, system: str, prompt: str) -> dict
     """Run a Gemini extraction on a document blob, returning parsed JSON.
 
     Raises on API/parse failure so the caller can surface 'upload a clearer
-    photo' instead of saving a bad draft.
+    photo' instead of saving a bad draft. Callers interpolate the exception
+    text into a user-facing reply, so gateway/SDK errors are re-raised as a
+    clean, generic message — provider internals must never leak to the UI
+    (the original cause is kept on ``__cause__`` for server-side logs only).
     """
     if not EMERGENT_LLM_KEY:
-        raise RuntimeError("EMERGENT_LLM_KEY is not configured.")
+        raise RuntimeError("The document reader is not configured.")
     path, mime = _spool(content, content_type)
     try:
         raw = asyncio.run(_ask(system, prompt, path, mime))
+    except Exception as exc:  # noqa: BLE001 - never surface provider/gateway internals to the UI
+        raise RuntimeError("The document reader is temporarily unavailable.") from exc
     finally:
         try:
             os.remove(path)
