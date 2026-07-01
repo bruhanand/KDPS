@@ -7,6 +7,7 @@ import {
   Download,
   FileSpreadsheet,
   FileUp,
+  Filter,
   ListChecks,
   Lock,
   Pencil,
@@ -15,10 +16,12 @@ import {
   Save,
   Send,
   Undo2,
+  Wand2,
   X,
 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { Combobox } from "../components/Combobox";
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import "./Booking.css";
@@ -30,6 +33,33 @@ const KDPS_COLUMNS = [
   "INPUT TAX", "OUTPUT TAX", "NAG", "MARGIN", "SUGGESTED SUB CATEGORY", "SUGGESTED TYPE",
 ];
 const NUM_COLS = ["QTY", "MRP", "BASIC", "P RATE", "INPUT TAX", "OUTPUT TAX", "NAG", "MARGIN"];
+
+// KDPS column → ControlledValue dimension: these cells edit as a Master-Sheet
+// dropdown, never free text (the Excel data-validation behaviour).
+const COL_DIM: Record<string, string> = {
+  SEASON: "season", BRAND: "brand", COLOR: "color", GENDER: "gender",
+  "SUB CATEGORY": "sub_category", TYPE: "type", ITEM: "item", FIT: "fit", SIZE: "size",
+  "INPUT TAX": "gst", "OUTPUT TAX": "gst",
+};
+// Derived / engine-suggestion columns — recomputed server-side, not hand-edited.
+const READONLY_COLS = new Set(["NAG", "MARGIN", "SUGGESTED SUB CATEGORY", "SUGGESTED TYPE"]);
+// Provenance → glance level: alias/rule/inferred = a judgement worth a look (amber),
+// manual = a human decision (blue); direct/derived are trusted (no mark).
+const GLANCE_PROV = new Set(["alias", "rule", "inferred"]);
+
+interface VocabT {
+  dimensions: Record<string, string[]>;
+  item_taxonomy: Record<string, { sub_category: string; type: string }>;
+}
+const EMPTY_VOCAB: VocabT = { dimensions: {}, item_taxonomy: {} };
+
+function useVocab(): VocabT {
+  const [vocab, setVocab] = useState<VocabT>(EMPTY_VOCAB);
+  useEffect(() => {
+    api.get("/ptmapper/controlled").then((r) => setVocab(r.data)).catch(() => {});
+  }, []);
+  return vocab;
+}
 
 const FILE_TONE: Record<string, string> = { ready: "green", needs_review: "amber", failed: "red" };
 const STAGE_TONE: Record<string, string> = { mapping: "blue", sent: "amber", posted: "green" };
@@ -62,14 +92,19 @@ export function PtMapperPage() {
   const navigate = useNavigate();
   const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files");
   const { data: reviews } = useList<any>("/ptmapper/review?status=open");
+  const vocab = useVocab();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [ctxBrand, setCtxBrand] = useState("");
+  const [ctxDate, setCtxDate] = useState("");
 
   async function handleFile(file: File) {
     setUploading(true);
     setError("");
     const form = new FormData();
     form.append("file", file);
+    if (ctxBrand) form.append("brand", ctxBrand);
+    if (ctxDate) form.append("invoice_date", ctxDate);
     try {
       const { data } = await api.post("/ptmapper/files", form);
       reload();
@@ -103,6 +138,28 @@ export function PtMapperPage() {
           anything the tables don't yet cover lands in the unmapped queue for a one-time human decision.
           Review &amp; edit the result, then send it to Patna to post into the system.
         </p>
+        <div className="upload-context" data-testid="pt-upload-context">
+          <div className="upload-context-field">
+            <label className="upload-context-label">Brand (if the file names none)</label>
+            <Combobox
+              value={ctxBrand}
+              options={vocab.dimensions.brand ?? []}
+              onChange={setCtxBrand}
+              placeholder="Optional — Master brand…"
+              testId="pt-upload-brand"
+            />
+          </div>
+          <div className="upload-context-field">
+            <label className="upload-context-label">Invoice date (if the file has none)</label>
+            <input
+              type="date"
+              className="input"
+              value={ctxDate}
+              onChange={(e) => setCtxDate(e.target.value)}
+              data-testid="pt-upload-date"
+            />
+          </div>
+        </div>
         <label className="dropzone" data-testid="pt-upload-dropzone">
           <input type="file" hidden accept=".xlsx,.xls,.xlsb,.csv" onChange={(e) => e.target.files && handleFile(e.target.files[0])} />
           {uploading ? (
@@ -167,9 +224,14 @@ interface PtRowT {
   line_no: number;
   data: Record<string, any>;
   blanks: string[];
+  provenance: Record<string, string>;
 }
 interface PtFileDetailT extends PtFileT {
-  meta: { sheet?: string; header_row?: number; source_rows?: number; headers?: string[]; truncated?: boolean; row_limit?: number };
+  meta: {
+    sheet?: string; header_row?: number; source_rows?: number; headers?: string[];
+    truncated?: boolean; row_limit?: number;
+    context?: { brand?: string; invoice_date?: string };
+  };
   rows: PtRowT[];
 }
 
@@ -208,10 +270,22 @@ export function PtFileDetailPage() {
   const [error, setError] = useState("");
   const [bookings, setBookings] = useState<{ id: number; number: string; brand_name?: string }[]>([]);
   const [selectedBooking, setSelectedBooking] = useState("");
+  const vocab = useVocab();
+  const [blanksOnly, setBlanksOnly] = useState(false);
+  const [bulkCol, setBulkCol] = useState("");
+  const [bulkValue, setBulkValue] = useState("");
+  const [bulkScope, setBulkScope] = useState<"blank" | "all">("blank");
+  const [ctxBrand, setCtxBrand] = useState("");
+  const [ctxDate, setCtxDate] = useState("");
+  const [showRerun, setShowRerun] = useState(false);
 
   function load() {
     setLoading(true);
-    api.get(`/ptmapper/files/${id}`).then((r) => setFile(r.data)).finally(() => setLoading(false));
+    api.get(`/ptmapper/files/${id}`).then((r) => {
+      setFile(r.data);
+      setCtxBrand(r.data?.meta?.context?.brand ?? "");
+      setCtxDate(r.data?.meta?.context?.invoice_date ?? "");
+    }).finally(() => setLoading(false));
   }
   useEffect(load, [id]);
 
@@ -239,7 +313,57 @@ export function PtFileDetailPage() {
   }
 
   function editCell(rowId: number, col: string, value: string) {
+    // Picking an ITEM auto-fills SUB CATEGORY + TYPE from the Master helper
+    // columns (both stay editable afterwards).
+    if (col === "ITEM" && value && vocab.item_taxonomy[value]) {
+      const t = vocab.item_taxonomy[value];
+      setDraft((d) => ({
+        ...d,
+        [rowId]: {
+          ...(d[rowId] ?? {}),
+          ITEM: value,
+          ...(t.sub_category ? { "SUB CATEGORY": t.sub_category } : {}),
+          ...(t.type ? { TYPE: t.type } : {}),
+        },
+      }));
+      return;
+    }
     setDraft((d) => ({ ...d, [rowId]: { ...(d[rowId] ?? {}), [col]: value } }));
+  }
+
+  async function applyBulkFill() {
+    if (!bulkCol) return;
+    setBusy(true);
+    setError("");
+    try {
+      const { data } = await api.patch(`/ptmapper/files/${id}/rows`, {
+        fills: [{ column: bulkCol, value: bulkValue, scope: bulkScope }],
+      });
+      setFile(data);
+      setBulkCol("");
+      setBulkValue("");
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rerunWithContext() {
+    setBusy(true);
+    setError("");
+    try {
+      const { data } = await api.post(`/ptmapper/files/${id}/rerun`, {
+        brand: ctxBrand,
+        invoice_date: ctxDate,
+      });
+      setFile(data);
+      setShowRerun(false);
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function saveEdits() {
@@ -279,8 +403,22 @@ export function PtFileDetailPage() {
   }
 
   const VISIBLE_CAP = 1000;
-  const visibleRows = useMemo(() => file?.rows.slice(0, VISIBLE_CAP) ?? [], [file]);
-  const truncated = (file?.rows.length ?? 0) > VISIBLE_CAP;
+  const blankCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const r of file?.rows ?? []) for (const c of r.blanks) counts[c] = (counts[c] ?? 0) + 1;
+    return counts;
+  }, [file]);
+  const rowsWithBlanks = useMemo(
+    () => (file?.rows ?? []).filter((r) => r.blanks.length > 0).length,
+    [file],
+  );
+  const visibleRows = useMemo(() => {
+    const rows = file?.rows ?? [];
+    const filtered = blanksOnly ? rows.filter((r) => r.blanks.length > 0) : rows;
+    return filtered.slice(0, VISIBLE_CAP);
+  }, [file, blanksOnly]);
+  const truncated =
+    (blanksOnly ? rowsWithBlanks : (file?.rows.length ?? 0)) > VISIBLE_CAP;
 
   if (loading || !file) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
@@ -316,7 +454,8 @@ export function PtFileDetailPage() {
         <div className="spacer" />
         {canEdit && !editMode && (
           <>
-            <button className="btn" onClick={() => action("rerun")} disabled={busy} data-testid="ptfile-rerun"><RefreshCw size={15} className={busy ? "spin" : ""} /> Re-run</button>
+            <button className="btn" onClick={rerunWithContext} disabled={busy} data-testid="ptfile-rerun"><RefreshCw size={15} className={busy ? "spin" : ""} /> Re-run</button>
+            <button className="btn" onClick={() => setShowRerun((s) => !s)} data-testid="ptfile-context-toggle" title="Brand / invoice date the file itself doesn't carry">Context{(ctxBrand || ctxDate) ? " ·" : ""}</button>
             <button className="btn" onClick={() => setEditMode(true)} data-testid="ptfile-edit"><Pencil size={15} /> Edit table</button>
             <button className="btn btn-cta" onClick={() => action("send")} disabled={busy} data-testid="ptfile-send"><Send size={15} /> Send to Patna</button>
           </>
@@ -346,6 +485,31 @@ export function PtFileDetailPage() {
         )}
       </div>
 
+      {showRerun && canEdit && !editMode && (
+        <div className="card section-card ctx-panel" data-testid="ptfile-context-panel">
+          <p className="eyebrow">Mapping context — used only where the file itself is silent</p>
+          <div className="upload-context">
+            <div className="upload-context-field">
+              <label className="upload-context-label">Brand</label>
+              <Combobox
+                value={ctxBrand}
+                options={vocab.dimensions.brand ?? []}
+                onChange={setCtxBrand}
+                placeholder="Master brand…"
+                testId="ptfile-context-brand"
+              />
+            </div>
+            <div className="upload-context-field">
+              <label className="upload-context-label">Invoice date</label>
+              <input type="date" className="input" value={ctxDate} onChange={(e) => setCtxDate(e.target.value)} data-testid="ptfile-context-date" />
+            </div>
+            <button className="btn btn-cta" onClick={rerunWithContext} disabled={busy} data-testid="ptfile-context-rerun">
+              <RefreshCw size={15} className={busy ? "spin" : ""} /> Re-run with context
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <div className="warn-note" data-testid="ptfile-action-error">{error}</div>}
 
       {file.status === "failed" ? (
@@ -369,49 +533,122 @@ export function PtFileDetailPage() {
       )}
 
       {file.rows.length > 0 && (
-        <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
-          {truncated && (
-            <div className="ai-note" data-testid="ptfile-truncated-banner" style={{ marginBottom: 10 }}>
-              <AlertTriangle size={14} /> Showing the first {VISIBLE_CAP} of {file.rows.length} rows for performance. Download the Excel/CSV for the complete set.
+        <>
+          <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
+            <button
+              className={`btn ${blanksOnly ? "btn-cta" : ""}`}
+              onClick={() => setBlanksOnly((b) => !b)}
+              data-testid="ptfile-blanks-filter"
+            >
+              <Filter size={14} /> Only rows with blanks ({rowsWithBlanks})
+            </button>
+            <div className="spacer" />
+            <div className="prov-legend" data-testid="ptfile-prov-legend">
+              <span><i className="prov-swatch glance" /> mapped by judgement — glance</span>
+              <span><i className="prov-swatch manual" /> hand-edited</span>
+              <span><i className="prov-swatch blank" /> blank — needs a value</span>
+            </div>
+          </div>
+
+          {editMode && (
+            <div className="bulk-bar" data-testid="ptfile-bulk-bar">
+              <Wand2 size={14} />
+              <span className="bulk-label">Fill a whole column:</span>
+              <select className="select" value={bulkCol} onChange={(e) => { setBulkCol(e.target.value); setBulkValue(""); }} data-testid="ptfile-bulk-col">
+                <option value="">Column…</option>
+                {Object.keys(COL_DIM).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {bulkCol && (
+                <>
+                  <div style={{ width: 230 }}>
+                    <Combobox
+                      value={bulkValue}
+                      options={vocab.dimensions[COL_DIM[bulkCol]] ?? []}
+                      onChange={setBulkValue}
+                      placeholder={`Master ${bulkCol.toLowerCase()}…`}
+                      testId="ptfile-bulk-value"
+                    />
+                  </div>
+                  <select className="select" value={bulkScope} onChange={(e) => setBulkScope(e.target.value as "blank" | "all")} data-testid="ptfile-bulk-scope">
+                    <option value="blank">only blank rows{blankCounts[bulkCol] ? ` (${blankCounts[bulkCol]})` : ""}</option>
+                    <option value="all">all {file.rows.length} rows</option>
+                  </select>
+                  <button className="btn btn-cta btn-sm" onClick={applyBulkFill} disabled={busy || !bulkValue} data-testid="ptfile-bulk-apply">Apply</button>
+                </>
+              )}
             </div>
           )}
-          <table className="data kdps-table" data-testid="ptfile-rows-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                {KDPS_COLUMNS.map((c) => <th key={c} className={NUM_COLS.includes(c) ? "num" : ""}>{c}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {visibleRows.map((r) => (
-                <tr key={r.id}>
-                  <td className="mono" style={{ color: "var(--muted)" }}>{r.line_no}</td>
-                  {KDPS_COLUMNS.map((c) => {
-                    const current = draft[r.id]?.[c] ?? (r.data[c] === null || r.data[c] === undefined ? "" : String(r.data[c]));
-                    const isBlank = r.blanks.includes(c);
-                    if (editMode) {
+
+          <div className="table-wrap kdps-scroll" style={{ marginTop: 10 }}>
+            {truncated && (
+              <div className="ai-note" data-testid="ptfile-truncated-banner" style={{ marginBottom: 10 }}>
+                <AlertTriangle size={14} /> Showing the first {VISIBLE_CAP} of {blanksOnly ? rowsWithBlanks : file.rows.length} rows for performance. Download the Excel/CSV for the complete set.
+              </div>
+            )}
+            <table className="data kdps-table" data-testid="ptfile-rows-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  {KDPS_COLUMNS.map((c) => (
+                    <th key={c} className={NUM_COLS.includes(c) ? "num" : ""}>
+                      {c}
+                      {blankCounts[c] ? <span className="blank-count" title={`${blankCounts[c]} blank`}>{blankCounts[c]}</span> : null}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((r) => (
+                  <tr key={r.id}>
+                    <td className="mono" style={{ color: "var(--muted)" }}>{r.line_no}</td>
+                    {KDPS_COLUMNS.map((c) => {
+                      const current = draft[r.id]?.[c] ?? (r.data[c] === null || r.data[c] === undefined ? "" : String(r.data[c]));
+                      const isBlank = r.blanks.includes(c) && !draft[r.id]?.[c];
+                      const prov = draft[r.id]?.[c] !== undefined ? "manual" : (r.provenance?.[c] ?? "");
+                      const dim = COL_DIM[c];
+                      if (editMode && READONLY_COLS.has(c)) {
+                        return <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}cell-readonly`}>{current}</td>;
+                      }
+                      if (editMode && dim) {
+                        return (
+                          <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-edit-cell" : ""}`}>
+                            <Combobox
+                              value={current}
+                              options={vocab.dimensions[dim] ?? []}
+                              onChange={(v) => editCell(r.id, c, v)}
+                              placeholder="—"
+                              size="cell"
+                              testId={`pt-cell-${r.id}-${c.replace(/\s+/g, "_")}`}
+                            />
+                          </td>
+                        );
+                      }
+                      if (editMode) {
+                        return (
+                          <td key={c} className={NUM_COLS.includes(c) ? "num" : ""}>
+                            <input
+                              className="cell-input"
+                              value={current}
+                              onChange={(e) => editCell(r.id, c, e.target.value)}
+                              data-testid={`pt-cell-${r.id}-${c.replace(/\s+/g, "_")}`}
+                            />
+                          </td>
+                        );
+                      }
+                      const glance = !isBlank && current !== "" && GLANCE_PROV.has(prov);
+                      const manual = !isBlank && current !== "" && prov === "manual";
                       return (
-                        <td key={c} className={NUM_COLS.includes(c) ? "num" : ""}>
-                          <input
-                            className="cell-input"
-                            value={current}
-                            onChange={(e) => editCell(r.id, c, e.target.value)}
-                            data-testid={`pt-cell-${r.id}-${c.replace(/\s+/g, "_")}`}
-                          />
+                        <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-cell" : ""}${glance ? "prov-glance" : ""}${manual ? "prov-manual" : ""}`}>
+                          {current === "" ? (isBlank ? "—" : "") : current}
                         </td>
                       );
-                    }
-                    return (
-                      <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-cell" : ""}`}>
-                        {current === "" ? (isBlank ? "—" : "") : current}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

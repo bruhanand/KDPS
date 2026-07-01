@@ -20,9 +20,18 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from files.models import StoredFile, UploadTooLarge
-from ptmapper.engine import UnsupportedFormat, norm, run_mapping
+from ptmapper.engine import (
+    UnsupportedFormat,
+    _margin,
+    _quantity_out,
+    norm,
+    num,
+    parse_date,
+    run_mapping,
+)
 from ptmapper.models import (
     ControlledValue,
+    ItemTaxonomy,
     Lookup,
     PtFile,
     PtRow,
@@ -41,6 +50,67 @@ from vendors.models import Booking
 
 SINGLE_DIMS = {"color", "size", "brand", "season", "fit"}
 KDPS_COLUMN_SET = set(KDPS_COLUMNS)
+
+# Hand-editable columns that are vocabulary-controlled: the 9 Master-Sheet columns
+# plus the two tax columns (validated against the Master 'gst' dimension).
+GST_COLUMNS = {"INPUT TAX", "OUTPUT TAX"}
+
+
+def _column_dimension(col: str) -> str | None:
+    if col in CONTROLLED_COLS:
+        return CONTROLLED_COLS[col]
+    if col in GST_COLUMNS:
+        return "gst"
+    return None
+
+
+def _gst_str(v: Any) -> str:
+    """'5.0' / 5.0 → '5', so a numeric tax cell compares against the Master '5'."""
+    s = str(v).strip()
+    if s.endswith(".0") and s[:-2].isdigit():
+        return s[:-2]
+    return s
+
+
+def _valid_values() -> dict[str, set[str]]:
+    valid: dict[str, set[str]] = {}
+    for cv in ControlledValue.objects.all():
+        valid.setdefault(cv.dimension, set()).add(cv.value)
+    return valid
+
+
+def _cell_error(col: str, val: Any, valid: dict[str, set[str]]) -> str:
+    """'' when the value is allowed in this column; else a human reason. Blank is
+    always allowed (clearing a cell keeps it in the blank-count workflow)."""
+    dim = _column_dimension(col)
+    if dim is None:
+        return ""  # uncontrolled column (BARCODE, QTY, MRP…) — free entry
+    s = _gst_str(val) if dim == "gst" else str(val).strip()
+    if not s or s in valid.get(dim, set()):
+        return ""
+    return f"'{s}' is not an allowed Master-Sheet {dim} value."
+
+
+def _parse_context(data: Any) -> tuple[dict, Response | None]:
+    """Optional operator context on upload/re-run: brand (a Master brand, matched
+    case-insensitively to its canonical spelling) + invoice date."""
+    ctx: dict[str, str] = {}
+    brand = str(data.get("brand") or "").strip()
+    if brand:
+        master = ControlledValue.objects.filter(dimension="brand", value__iexact=brand).first()
+        if not master:
+            return {}, Response({"detail": f"'{brand}' is not a Master-Sheet brand."}, status=400)
+        ctx["brand"] = master.value
+    inv_date = str(data.get("invoice_date") or "").strip()
+    if inv_date:
+        d = parse_date(inv_date)
+        if not d:
+            return {}, Response(
+                {"detail": "invoice_date must be a valid date (YYYY-MM-DD)."}, status=400
+            )
+        ctx["invoice_date"] = d.isoformat()
+    return ctx, None
+
 
 # Pushing a PT into the system (post) and reversing it write the stock ledger and
 # raise vendor liability — a Patna/HO accounts action, never the warehouse. Resolving
@@ -90,8 +160,11 @@ def process_file(pt: PtFile) -> PtFile:
     if not pt.stored_file:
         return _fail_file(pt, "The uploaded file is no longer available.")
     content = bytes(pt.stored_file.content)
+    context = (pt.meta or {}).get("context") or {}
     try:
-        result = run_mapping(content, pt.original_filename, pt.stored_file.content_type)
+        result = run_mapping(
+            content, pt.original_filename, pt.stored_file.content_type, context or None
+        )
     except UnsupportedFormat as exc:
         return _fail_file(pt, str(exc), reset_counts=True)
     except Exception as exc:  # noqa: BLE001
@@ -105,6 +178,7 @@ def process_file(pt: PtFile) -> PtFile:
                 data=r["data"],
                 blanks=r["blanks"],
                 provenance=r.get("provenance", {}),
+                raw=r.get("raw", {}),
             )
             for r in result["rows"]
         ]
@@ -115,7 +189,11 @@ def process_file(pt: PtFile) -> PtFile:
     pt.profile_name = result["profile_name"]
     pt.archetype = result["archetype"]
     pt.brand_guess = result["brand_guess"]
-    pt.meta = {**result["meta"], "low_confidence_cells": result.get("low_confidence_cells", 0)}
+    pt.meta = {
+        **result["meta"],
+        "low_confidence_cells": result.get("low_confidence_cells", 0),
+        **({"context": context} if context else {}),
+    }
     pt.row_count = len(result["rows"])
     pt.blank_cell_count = result["blank_cells"]
     pt.unresolved_count = open_count
@@ -142,6 +220,9 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         upload = request.FILES.get("file")
         if not upload:
             return Response({"detail": "A file is required."}, status=400)
+        context, err = _parse_context(request.data)
+        if err is not None:
+            return err
         try:
             stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
         except UploadTooLarge as exc:
@@ -149,6 +230,7 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         pt = PtFile.objects.create(
             stored_file=stored,
             original_filename=stored.filename,
+            meta={"context": context} if context else {},
             created_by=request.user if getattr(request.user, "is_authenticated", False) else None,
         )
         process_file(pt)
@@ -182,6 +264,18 @@ class PtFileRerunView(APIView):
             return Response({"detail": "Not found."}, status=404)
         if pt.stage != PtFile.Stage.MAPPING:
             return Response({"detail": "Only files still in mapping can be re-run."}, status=409)
+        if "brand" in request.data or "invoice_date" in request.data:
+            # The re-run form always sends both fields, so the payload replaces the
+            # whole stored context (blank fields clear it).
+            context, err = _parse_context(request.data)
+            if err is not None:
+                return err
+            meta = {**(pt.meta or {})}
+            meta.pop("context", None)
+            if context:
+                meta["context"] = context
+            pt.meta = meta
+            pt.save(update_fields=["meta", "updated_at"])
         pt.manually_edited = False
         process_file(pt)
         return Response(PtFileDetailSerializer(pt).data)
@@ -205,8 +299,45 @@ def _recompute_counts(pt: PtFile) -> None:
     )
 
 
+def _apply_cell(row: PtRow, col: str, val: Any, changed: dict[int, set[str]]) -> None:
+    row.data = {**row.data, col: val}
+    row.provenance = {**(row.provenance or {}), col: "manual"}  # a human set it → trusted
+    changed.setdefault(row.id, set()).add(col)
+
+
+def _recompute_derived(row: PtRow, changed_cols: set[str]) -> None:
+    """NAG mirrors QTY; MARGIN re-derives from MRP / P RATE — never hand-entered."""
+    new_prov = {**(row.provenance or {})}
+    new_data = {**row.data}
+    if "QTY" in changed_cols:
+        new_data["NAG"] = _quantity_out(num(row.data.get("QTY")))
+        new_prov["NAG"] = "derived"
+    if changed_cols & {"MRP", "P RATE"}:
+        new_data["MARGIN"] = _margin(num(row.data.get("MRP")), num(row.data.get("P RATE")))
+        new_prov["MARGIN"] = "derived"
+    row.data = new_data
+    row.provenance = new_prov
+
+
+def _fill_applies(row: PtRow, col: str, scope: Any) -> bool:
+    if scope == "all":
+        return True
+    if scope == "blank":
+        return not str(row.data.get(col) or "").strip()
+    if isinstance(scope, dict) and "match_raw" in scope:
+        return (row.raw or {}).get(col, "") == scope["match_raw"]
+    return False
+
+
 class PtRowsUpdateView(APIView):
-    """Warehouse hand-edits the mapped KDPS rows before sending to Patna."""
+    """Warehouse hand-edits the mapped KDPS rows before sending to Patna.
+
+    Body: ``{"rows": [{"id", "data": {col: val}}], "fills": [{"column", "value",
+    "scope": "blank" | "all" | {"match_raw": <raw>}}]}`` — both optional. Every
+    edited controlled cell (the 9 Master columns + the two tax columns) must hold
+    an allowed Master-Sheet value or be blank; anything else is a 400 with
+    per-cell errors and nothing is written. Fills run first, then row edits.
+    """
 
     permission_classes = [IsAuthenticated]
 
@@ -217,18 +348,58 @@ class PtRowsUpdateView(APIView):
             return Response({"detail": "Not found."}, status=404)
         if pt.stage in (PtFile.Stage.POSTED, PtFile.Stage.REVERSED):
             return Response({"detail": "Posted/reversed files are locked."}, status=409)
+
         edits = {int(e["id"]): e.get("data", {}) for e in request.data.get("rows", []) if "id" in e}
-        rows = list(pt.rows.filter(id__in=edits.keys()))
-        for r in rows:
-            new_data = {**r.data}
-            new_prov = {**(r.provenance or {})}
-            for col, val in edits[r.id].items():
+        fills = request.data.get("fills", [])
+
+        valid = _valid_values()
+        errors: list[dict] = []
+        for rid, data in edits.items():
+            for col, val in data.items():
+                if col not in KDPS_COLUMN_SET:
+                    continue
+                reason = _cell_error(col, val, valid)
+                if reason:
+                    errors.append({"row_id": rid, "column": col, "value": val, "detail": reason})
+        clean_fills: list[tuple[str, Any, Any]] = []
+        for f in fills:
+            col = f.get("column", "")
+            val = f.get("value", "")
+            scope = f.get("scope", "blank")
+            if col not in KDPS_COLUMN_SET:
+                errors.append({"column": col, "detail": f"Unknown column {col!r}."})
+                continue
+            reason = _cell_error(col, val, valid)
+            if reason:
+                errors.append({"column": col, "value": val, "detail": reason})
+                continue
+            clean_fills.append((col, val, scope))
+        if errors:
+            return Response(
+                {"detail": "Some values are not allowed Master-Sheet values.", "errors": errors},
+                status=400,
+            )
+
+        rows = list(pt.rows.all()) if clean_fills else list(pt.rows.filter(id__in=edits.keys()))
+        by_id = {r.id: r for r in rows}
+        changed: dict[int, set[str]] = {}
+
+        for col, val, scope in clean_fills:
+            for r in rows:
+                if _fill_applies(r, col, scope):
+                    _apply_cell(r, col, val, changed)
+        for rid, data in edits.items():
+            r = by_id.get(rid)
+            if r is None:
+                continue
+            for col, val in data.items():
                 if col in KDPS_COLUMN_SET:
-                    new_data[col] = val
-                    new_prov[col] = "manual"  # a human set it → trusted, no longer flagged
-            r.data = new_data
-            r.provenance = new_prov
-        PtRow.objects.bulk_update(rows, ["data", "provenance"])
+                    _apply_cell(r, col, val, changed)
+
+        touched = [by_id[rid] for rid in changed]
+        for r in touched:
+            _recompute_derived(r, changed[r.id])
+        PtRow.objects.bulk_update(touched, ["data", "provenance"])
         pt.manually_edited = True
         _recompute_counts(pt)
         pt.save()
@@ -472,15 +643,26 @@ class ReviewResolveView(APIView):
 
 
 class ControlledValuesView(APIView):
+    """The Master-Sheet vocabulary. ``?dimension=<dim>`` → one dimension's values
+    (the original form); no param → every dimension + the ITEM → (SUB CATEGORY,
+    TYPE) helper map, so the editor loads its dropdowns in one request."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
         dim = request.query_params.get("dimension")
-        if not dim:
-            return Response({"detail": "dimension is required."}, status=400)
-        values = list(
-            ControlledValue.objects.filter(dimension=dim)
-            .order_by("value")
-            .values_list("value", flat=True)
-        )
-        return Response({"dimension": dim, "values": values})
+        if dim:
+            values = list(
+                ControlledValue.objects.filter(dimension=dim)
+                .order_by("value")
+                .values_list("value", flat=True)
+            )
+            return Response({"dimension": dim, "values": values})
+        dimensions: dict[str, list[str]] = {}
+        for cv in ControlledValue.objects.order_by("dimension", "value"):
+            dimensions.setdefault(cv.dimension, []).append(cv.value)
+        item_taxonomy = {
+            t.item: {"sub_category": t.sub_category, "type": t.type}
+            for t in ItemTaxonomy.objects.all()
+        }
+        return Response({"dimensions": dimensions, "item_taxonomy": item_taxonomy})

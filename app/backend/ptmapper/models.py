@@ -182,6 +182,10 @@ class PtRow(TimeStampedModel):
     # derived/manual). Lets the UI flag low-confidence cells so a wrong auto-mapping is
     # visible to a steward instead of silent. See engine.LOW_CONFIDENCE_SOURCES.
     provenance = models.JSONField(default=dict, blank=True)
+    # {controlled column: raw source value the engine read} — lets a hand-edit be
+    # bulk-applied to every row that carried the same raw value (and, later, be
+    # learned into a Lookup). See engine._raw_sources.
+    raw = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["line_no"]

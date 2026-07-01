@@ -15,12 +15,14 @@ Every alias is written only if its target is a real Master-Sheet value.
 from __future__ import annotations
 
 import re
+from datetime import date
 from pathlib import Path
 
 import openpyxl
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
+from ptmapper.engine import season_label
 from ptmapper.models import ControlledValue, ItemTaxonomy, Lookup, TaxonomyRule
 
 DIM_COLS = {
@@ -35,6 +37,25 @@ DIM_COLS = {
     8: "size",
     9: "gst",
 }
+
+SEASON_WINDOW_START = date(2025, 1, 1)
+SEASON_WINDOW_MONTHS_AHEAD = 18
+
+
+def rolling_season_values(today: date) -> set[str]:
+    """Every month-season label from Jan-25 through ~18 months past `today`, so a
+    season derived from any plausible invoice date always validates (the Master
+    Sheet's own season column stops at Oct-26 and is unioned in separately)."""
+    out: set[str] = set()
+    y, m = SEASON_WINDOW_START.year, SEASON_WINDOW_START.month
+    end_y, end_m = today.year, today.month
+    end_m += SEASON_WINDOW_MONTHS_AHEAD
+    end_y, end_m = end_y + (end_m - 1) // 12, (end_m - 1) % 12 + 1
+    while (y, m) <= (end_y, end_m):
+        out.add(season_label(date(y, m, 1)))
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    return out
+
 
 BRAND_ALIASES = {
     "FM": "FLYING MACHINE",
@@ -364,6 +385,19 @@ SIZE_ALIASES = {
     "STANDARD": "FREE SIZE",
 }
 
+# Brand-level default GENDER, used only as the LAST fallback when a row has no
+# gender column, no gender word in the description, and no rule default (see
+# engine._map_taxonomy). Seed only brands that are unambiguously single-gender in
+# KDPS's assortment; mixed brands (Allen Solly, Van Heusen, USPA, Jockey…) stay
+# unseeded so a wrong default is never silently applied.
+BRAND_GENDER = {
+    "PETER ENGLAND": "MALE",
+    "LOUIS PHILIPPE": "MALE",
+    "BLACKBERRYS": "MALE",
+    "MUFTI": "MALE",
+    "GOCOLORS": "FEMALE",
+}
+
 # Brand fit-column value → KDPS master FIT.
 FIT_ALIASES = {
     "SLIM FIT": "SLIM",
@@ -383,6 +417,12 @@ FIT_ALIASES = {
     "CREW": "CREW NECK",
     "ROUND": "ROUND NECK",
     "POLO": "POLO NECK",
+    # Peter England / ABFRL coded FIT TYPE ("PJ RG OCTANEMIDSTR"): token 2 is the
+    # fit family — RG = Regular, SL = Slim (see engine.fit_code_candidates).
+    # NB: no "SNUG" alias — the Master FIT list has no SNUG and rows carrying it
+    # ("PC SL Snug") already resolve via the SL token; mapping it would be a guess.
+    "RG": "REGULAR",
+    "SL": "SLIM",
     # NB: no "V NECK" alias — the Master FIT list has no V-neck, and mapping it to
     # ROUND NECK would be deterministically wrong. Leave it for the review queue.
 }
@@ -658,6 +698,10 @@ def _seed_lookups(dim_values: dict[str, set[str]]) -> None:
     for alias, target in GENDER_MAP.items():
         if target in dim_values["gender"]:
             _add_lookup("gender", alias, target)
+    # brand → default gender (an engine fallback dimension, not a Master column)
+    for brand, gender in BRAND_GENDER.items():
+        if brand in dim_values["brand"] and gender in dim_values["gender"]:
+            _add_lookup("brand_gender", brand, gender)
 
 
 # Per-rule SUB CATEGORY override, for items that span categories so the single
@@ -696,30 +740,71 @@ def _seed_rules(dim_values: dict[str, set[str]]) -> int:
     return made_rules
 
 
+def _merge_vocabularies(
+    sources: list[tuple[Path, dict[str, set[str]], dict[str, tuple[str, str]]]],
+) -> tuple[dict[str, set[str]], dict[str, tuple[str, str]]]:
+    """Union the dimension values of every Master Sheet read; for the ITEM →
+    (SUB CATEGORY, TYPE) helper the FIRST source (the canonical file) wins."""
+    dim_values: dict[str, set[str]] = {d: set() for d in DIM_COLS.values()}
+    item_rows: dict[str, tuple[str, str]] = {}
+    for _, dims, items in sources:
+        for d, vals in dims.items():
+            dim_values[d] |= vals
+        for item, helper in items.items():
+            item_rows.setdefault(item, helper)
+    return dim_values, item_rows
+
+
 class Command(BaseCommand):
     help = "Seed PT-mapper controlled vocabulary + lookup tables from the Master Sheet."
 
     def add_arguments(self, parser) -> None:
         repo_root = Path(settings.BASE_DIR).parent.parent
-        default = repo_root / "docs" / "data-from-kdps" / "KDPS PT FILE SHEET.xlsx"
-        parser.add_argument("--path", default=str(default))
+        data = repo_root / "docs" / "data-from-kdps"
+        # Canonical first (its Master Sheet carries the Excel data-validation
+        # dropdowns the UI replicates); the legacy sheet is unioned in so nothing
+        # already seeded from it ever disappears.
+        parser.add_argument(
+            "--path", default=str(data / "05-reference-data" / "pt-file-format.xlsx")
+        )
+        parser.add_argument("--extra-path", default=str(data / "KDPS PT FILE SHEET.xlsx"))
 
     def handle(self, *args, **opts) -> None:
-        path = Path(opts["path"])
-        if not path.exists():
-            self.stderr.write(f"Master Sheet not found at {path}")
+        paths = [Path(opts["path"]), Path(opts["extra_path"])]
+        sources = []
+        for p in paths:
+            if not p.exists():
+                self.stderr.write(f"Master Sheet not found at {p} — skipped.")
+                continue
+            dims, items = _extract_vocabulary(_load_master_sheet(p))
+            sources.append((p, dims, items))
+        if not sources:
+            self.stderr.write("No Master Sheet found — nothing seeded.")
             return
-        rows = _load_master_sheet(path)
-        dim_values, item_rows = _extract_vocabulary(rows)
+        dim_values, item_rows = _merge_vocabularies(sources)
+        if len(sources) == 2:
+            for dim in DIM_COLS.values():
+                a, b = sources[0][1].get(dim, set()), sources[1][1].get(dim, set())
+                if a != b:
+                    self.stdout.write(
+                        f"  [{dim}] master sheets differ: "
+                        f"only-canonical={sorted(a - b)!r} only-legacy={sorted(b - a)!r}"
+                    )
+
+        # Season is date-derived at map time, so the vocabulary must always cover a
+        # rolling window (the sheets' own season column ends at a fixed month).
+        dim_values["season"] |= rolling_season_values(date.today())
+
         _seed_controlled(dim_values, item_rows)
         _seed_lookups(dim_values)
         made_rules = _seed_rules(dim_values)
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Seeded controlled values ({sum(len(v) for v in dim_values.values())}), "
-                f"item taxonomy ({len(item_rows)}), lookups "
+                f"Seeded controlled values ({sum(len(v) for v in dim_values.values())}) "
+                f"from {len(sources)} sheet(s), item taxonomy ({len(item_rows)}), lookups "
                 f"(brand +{len(BRAND_ALIASES)}, color +{len(COLOR_ALIASES)}, "
-                f"fit +{len(FIT_ALIASES)} aliases), taxonomy rules ({made_rules})."
+                f"fit +{len(FIT_ALIASES)}, brand_gender +{len(BRAND_GENDER)} aliases), "
+                f"taxonomy rules ({made_rules})."
             )
         )
