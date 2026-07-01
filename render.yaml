@@ -35,7 +35,8 @@ services:
       uv sync --frozen &&
       uv run python manage.py collectstatic --noinput &&
       uv run python manage.py migrate &&
-      uv run python manage.py seed_foundation
+      uv run python manage.py seed_foundation &&
+      uv run python manage.py seed_ptmapper
     startCommand: uv run uvicorn server:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
