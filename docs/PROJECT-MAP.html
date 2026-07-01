@@ -64,7 +64,7 @@
   <div>
     <h1>KDPS — Project Map</h1>
     <p class="sub">Open this file first. It tells you what every folder is, what every file is for, where the project stands, and where new things go.</p>
-    <p class="updated">Last organized: 25 June 2026</p>
+    <p class="updated">Last organized: 2 July 2026</p>
   </div>
 </header>
 
@@ -77,7 +77,7 @@
 </div>
 
 <h2><span class="num">⊙</span>Where the project stands right now</h2>
-<p class="sub" style="margin-bottom:4px">All module designs (D1–D8) are done, <b>reviewed, and reconciled</b> — a 16-decision Q&amp;A (25 Jun) locked every open seam and the <b>stack is ratified (ADR-0001: Django + React/TS + PostgreSQL)</b>. The canonical doc set is now in order (constitution → design-of-record → glossary / ERD / posting-catalog / lifecycles / contracts → ADR chain → D1–D8 appendices → build companion). Next: <b>build the foundation</b> (repo, DB, login, roles) → then one verified vertical slice at a time. <b>Five money-critical items await a CA ruling</b> before the money slices. <b>Deferred</b> (before go-live): D9 migration, the deep roles/access model, Attendance &amp; Payroll.</p>
+<p class="sub" style="margin-bottom:4px">All module designs (D1–D8) are done, reviewed, and reconciled, and the <b>foundation plus the first business layer are now BUILT and merged to <code>main</code></b> (the Emergent build, PRs #31/#33/#34/#35) — deployed to a <b>Render alpha</b> (Postgres 16 + Django API + React PWA). Ten Django apps (kernel <code>core</code> + masters/accounts/files/vendors/inbound/ptmapper/stockledger/finledger/aiagents) + a React/TS PWA (~12 wired screens + ~20 "coming soon" stubs). The 30-Jun code review's money-path defects were <b>remediated</b> (Phases A–F: P-RATE valuation, commercial-model liability, GRN/PtFile on the Document FSM, Books-Health/trial-balance). Active dev moved <b>Emergent → Claude Code</b>. <b>Next slices:</b> selling/POS → offers → payments → transfers → Tally → analytics. <b>Five money-critical items await a CA ruling</b> before live money. <b>Deferred</b> (before go-live): D9 migration, the deep roles/access model, Attendance &amp; Payroll. Build detail: root <code>CONTEXT.md</code> / <code>README.md</code> / <code>DEPLOY.md</code> + <code>memory/PRD.md</code>.</p>
 <div class="status-grid">
   <div class="status"><span class="pill done">Designed</span><b>D1 · Vendor management &amp; booking</b><span>Brands/vendors, commercial terms (Outright / Correction / SOR / Consignment), bookings.</span></div>
   <div class="status"><span class="pill done">Designed</span><b>D2 · Inbound</b><span>Arrival → GRN → PT → priced stock-in → store split → POS push.</span></div>
@@ -89,8 +89,9 @@
   <div class="status"><span class="pill done">Designed</span><b>D8 · Master-data &amp; users consolidation</b><span>Every registry in one owned place: edit-rights grid, season calendar, GST slab, configurable roles. Locked 21 Jun 2026.</span></div>
   <div class="status"><span class="pill done">Done 25 Jun</span><b>Review · 16 decisions · reconciliation</b><span>Full design review + India retail-ERP research → 16 locked decisions → canonical doc set in order (build artifacts + ratified ADR chain). Stack ratified (ADR-0001).</span></div>
   <div class="status"><span class="pill paused">Deferred</span><b>D9 · Migration &amp; rollout</b><span>Masters import, opening stock, store-by-store go-live, parallel Tally run. Designed later, before go-live (decided 23 Jun).</span></div>
-  <div class="status"><span class="pill next">Next</span><b>Foundation build → slices</b><span>Stack ratified — build the foundation (repo, DB, login, roles) → then one verified vertical slice at a time; data model + posting entries grow per slice.</span></div>
-  <div class="status"><span class="pill paused">Paused</span><b>Invoice → PT code</b><span>code/pdf-to-pt. Resumes once D3–D4 lock the documents it feeds.</span></div>
+  <div class="status"><span class="pill done">Built · alpha</span><b>Foundation + money layer</b><span>10 Django apps (kernel + masters/inbound/ptmapper/stock+vendor+cash ledgers) + React PWA, merged to <code>main</code>, deployed on a Render alpha. Money path remediated (Phases A–F). Next: selling/POS → offers → payments.</span></div>
+  <div class="status"><span class="pill done">Built</span><b>PT-mapper (in-app)</b><span>app/backend/ptmapper — 9 brand profiles + review queue, fed &amp; hardened, seeded on Render. (Standalone code/pdf-to-pt is regenerated weekly.)</span></div>
+  <div class="status"><span class="pill ongoing">Every month</span><b>Store dashboards</b><span>Per-store 16-measure business dashboard via the <code>store-dashboard</code> skill (first run: JSL, 2 Jul). See data-from-kdps/store-analysis/.</span></div>
   <div class="status"><span class="pill ongoing">Every month</span><b>Month-start brand reports</b><span>Sale/SOH reports in the 1st week of each month (data-from-kdps/monthly-reports…).</span></div>
   <div class="status"><span class="pill dead">Cancelled</span><b>Phase-1 plan</b><span>The pressured 3-month plan. Dropped — now in __archive.</span></div>
 </div>
@@ -163,7 +164,7 @@
     <li><b>Q&amp;A-req-recieved/</b> — <span>answers to our questions: LIST OF ALL STORES, SUPPLIER BRAND DETAILS, BRAND OFFERS, ~25 brand PT files (PT FILE/), SALE &amp; SOH report formats, MOM_S.</span></li>
     <li><b>bank-statement/</b> — <span>Bank statement.xlsx + Vaishnavi DSR — source for the cash/bank-audit track.</span></li>
     <li class="star"><b>monthly-reports-april-may-2026/</b> — <span>the month-start report duty: 2026-04 &amp; 2026-05 data, KDPS-DIRECTION.xlsx (the worked example to copy), FORMAT_SALES_VOUCHERS.xlsx (blank template).</span></li>
-    <li><b>store-analysis/</b> — <span>Vaishnavi Deoghar deep-dive: analysis + data-quality reports, dead-stock worklist, SOH error list — the stock-aging / data-quality track.</span></li>
+    <li><b>store-analysis/</b> — <span>per-store deep-dives: Vaishnavi Deoghar (data-quality, dead-stock, SOH errors) + <b>jsl/</b> (JSL business analysis + 16-measure dashboard, HTML+PDF, produced 2 Jul via the <code>store-dashboard</code> skill).</span></li>
     <li><b>KDPS DEBIT &amp; CREDIT NOTE DETAILS.xlsx · KDPS INVOICE &amp; OFFER DETAILS.xlsx</b> — <span>client-provided transaction detail.</span></li>
   </ul>
   <div class="note-red" style="margin-top:12px"><b>Watch:</b> the finished Flying Machine April-2026 report (<i>List of Sales Vouchers FM (Apr-26).xlsx</i>) was lost on 10 June and may still be missing from <code>monthly-reports-april-may-2026/2026-04/</code>. It was already sent out — restore it from WhatsApp/sent files if needed.</div>
@@ -181,9 +182,20 @@
   </ul>
 </div>
 
-<h2><span class="num">code</span>code — the tools being built</h2>
+<h2><span class="num">app</span>app — the built system (on main, deployed to a Render alpha)</h2>
 <div class="folder">
-  <div class="folder-head"><code>code/</code><span class="purpose">Code. Paused until the design is complete, then work resumes here.</span></div>
+  <div class="folder-head"><code>app/</code><span class="purpose">The KDPS Operating System itself — the Emergent build, merged to <code>main</code>, auto-deployed to a Render alpha. Django + React monorepo.</span></div>
+  <ul class="files">
+    <li class="star"><b>backend/</b> — <span>Django. Kernel <code>core</code> (paise money, append-only ledgers + DB triggers, docstatus FSM + gap-free numbering, value GL + balanced <code>post_entries</code>, Indian FY) + 9 apps: masters · accounts (RBAC) · files · vendors (booking) · inbound (GRN) · ptmapper · stockledger · finledger · aiagents (Gemini reader).</span></li>
+    <li class="star"><b>frontend/</b> — <span>React + TypeScript PWA (Vite): ~12 wired screens (Bookings, Inbound/GRN, PT-Mapper, Stock/Vendor/Cash ledgers, Master Data) + ~20 "coming soon" stubs; INR Lakh/Crore from paise.</span></li>
+    <li><b>root build files:</b> <span>CONTEXT.md (build-context) · README.md (run) · DEPLOY.md (Render steps + seeded logins) · render.yaml · DASHBOARD.html (command centre) · memory/PRD.md (build log) · .github/workflows/ci.yml (pytest on real Postgres).</span></li>
+  </ul>
+  <div class="rule"><b>Money-critical rules live in</b> <code>CONTEXT.md</code> (kernel contracts + the 12 rules + CA-gated items). Build history: <code>memory/PRD.md</code>.</div>
+</div>
+
+<h2><span class="num">code</span>code — the standalone tools</h2>
+<div class="folder">
+  <div class="folder-head"><code>code/</code><span class="purpose">Standalone helpers, separate from the built <code>app/</code>. The in-app PT-mapper now lives in <code>app/backend/ptmapper</code>.</span></div>
   <ul class="files">
     <li class="star"><b>pdf-to-pt/</b> — <span>the Invoice → PT file maker. BLUEPRINT.md explains the AI-reader → checker → Excel-writer pipeline. ~150 real invoices in document/ for testing.</span></li>
     <li><b>scripts/generate-pdf.mjs</b> — <span>turns a workflow/design HTML page into a polished A4 PDF.</span></li>
@@ -205,6 +217,9 @@
   <ul class="files" style="margin-top:0">
     <li class="star"><b>MOU-KDPS-Anand.pdf</b> — <span>the signed engagement / scope agreement.</span></li>
     <li><b>CLAUDE.md</b> — <span>instructions for Claude Code in this repo (kept in sync with this map).</span></li>
+    <li class="star"><b>CONTEXT.md</b> — <span>the build-context briefing every coding agent loads: domain language, the 12 rules, kernel contracts, money-critical + CA-gated decisions.</span></li>
+    <li><b>README.md</b> — <span>how to run the app (Node/Python/uv + Postgres, <code>npm run ci</code>).</span> <b>· DEPLOY.md</b> — <span>Render alpha deploy steps + seeded logins.</span> <b>· render.yaml</b> — <span>the Render Blueprint.</span></li>
+    <li><b>DASHBOARD.html</b> — <span>the project command-centre snapshot.</span> <b>· memory/PRD.md · memory/test_credentials.md</b> — <span>the build log + seeded test logins.</span></li>
     <li><b>PROJECT-MAP.html</b> — <span>this file.</span></li>
   </ul>
 </div>
@@ -216,7 +231,7 @@
 <div class="rule"><b>New client deliverable?</b> <code>04-client-docs/</code>. When superseded, move the old one to <code>__archive/</code>.</div>
 <div class="rule"><b>Something stale?</b> Never delete — move it into <code>__archive/</code> so the active folders stay clean.</div>
 
-<footer>KDPS project · updated 25 June 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
+<footer>KDPS project · updated 2 July 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
 </div>
 </body>
 </html>

@@ -37,7 +37,7 @@ KDPS Lifestyle Pvt Ltd — a multi-brand Indian fashion retailer (Bihar + Jharkh
 
 ## The kernel — engine + spine (the frozen core everything rides on)
 
-Built K0→K9. **K0 (scaffold + CI gate) is DONE and merged.** K1–K9 are the supervised heart, still ahead.
+**Build status (2 Jul 2026).** K0 (scaffold + CI gate), K1 (money + append-only ledger), K2 (document FSM + gap-free numbering) — plus the value GL, the `post_entries` posting engine and the Indian-FY helper — are **built and on `main`** (the Emergent build, PRs #31/#33/#34/#35). The **inbound → PT → vendor/stock money slices are built and remediated** (Phases A–F of the 30-Jun review: P-RATE valuation, commercial-model liability branching, GRN/PtFile on the Document FSM, a Books-Health/trial-balance endpoint). Still ahead (supervised): selling → offers → payments → Tally → analytics, and the deeper roles/access model. **Known alpha limitation:** the `finledger` vendor-payable + cash ledgers are single-entry running-balance tables that do **not** post through `post_entries`/the value GL — so only the PT-inward path is true double-entry inside the Σ=0 trial balance; standalone vendor bills, payments and cash movements are not (a slice to fix). Deployed to a Render alpha, Singapore region. As-built detail: `memory/PRD.md` + the `emergent-build-on-main` memory; run/deploy: `README.md` / `DEPLOY.md`.
 
 **Engine primitives** (in `core`; ADR-0004/0006):
 - **Money = integer paise** (`*_paise bigint`); rates/margins/GST% = `NUMERIC`; GST in `Decimal`, rounded half-up with a rounding line. Unit cost = the vendor's purchase rate directly — **never ÷ (1+slab)**.

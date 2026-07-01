@@ -19,7 +19,10 @@ alpha/demo setup — not hardened for production money handling yet.
 2. **New → Blueprint.** Pick the `KDPS` repo and the `main` branch. Render reads
    `render.yaml` and shows the 3 resources. Click **Apply**.
 3. Render generates `DJANGO_SECRET_KEY`, provisions Postgres, wires
-   `DATABASE_URL`, runs migrations, and seeds demo data automatically.
+   `DATABASE_URL`, runs `collectstatic` + migrations, and seeds both
+   **foundation data** (`seed_foundation` — roles, masters, demo users) and
+   **PT-mapper master data** (`seed_ptmapper` — brands/colours/sizes/taxonomy
+   lookups) automatically.
 4. **First-deploy URL check (the one manual bit).** After the services exist,
    open each and confirm the hostname. If they are **not** exactly
    `kdps-erp-api` / `kdps-erp-web` (because someone already took that subdomain),
@@ -32,13 +35,19 @@ alpha/demo setup — not hardened for production money handling yet.
 
 ## Seeded logins (demo — change before production)
 
-| Username | Password | Role |
-|---|---|---|
-| `owner` | `Owner@123` | Owner / Director |
-| `admin` | `Admin@123` | IT Admin |
-| `accounts1` | `Acct@123` | Accountant (Patna) |
-| `wh.patna` | `Wh@123` | Warehouse |
-| `deo.manager` | `Store@123` | Store Manager (Deoghar) |
+Created by `seed_foundation` (full list also in `memory/test_credentials.md`).
+`admin` is the Django superuser (also reaches `/admin`).
+
+| Username | Password | Role | Scope |
+|---|---|---|---|
+| `admin` | `Admin@123` | it_admin | all |
+| `owner` | `Owner@123` | owner | all |
+| `ops1` | `Ops@123` | ho_ops | all |
+| `accounts1` | `Acct@123` | accounts | all |
+| `wh.patna` | `Wh@123` | warehouse | all |
+| `steward` | `Steward@123` | data_steward | all |
+| `deo.manager` | `Store@123` | store_manager | store (DEO) |
+| `deo.cashier` | `Store@123` | store_staff | store (DEO) |
 
 ## Things to know (free tier)
 
@@ -52,7 +61,7 @@ alpha/demo setup — not hardened for production money handling yet.
 
 ## Not done yet (before real use)
 
-- 54 `ruff` lint findings + `mypy` strict not run in CI on this export.
+- Cloud CI (`.github/workflows/ci.yml`) gates only **pytest + the frontend build**; `ruff` / `mypy` strict / `import-linter` run only in pre-commit + local `npm run ci` (not in the cloud), so this alpha carries ~54 `ruff` findings + un-run `mypy` strict. Green cloud CI ≠ green `npm run ci`.
 - Production hardening: refresh tokens still in `localStorage`; review HTTPS /
   secure-cookie posture; rotate the demo passwords.
 - The money slices and GST CA-rulings are still pending — this alpha is for

@@ -2,8 +2,10 @@
 
 A deterministic retail ERP for KDPS Lifestyle Pvt Ltd. Monorepo:
 
-- `app/backend` — Django kernel (`core`), Python 3.12 via `uv`.
-- `app/frontend` — React + TypeScript PWA shell (Vite).
+- `app/backend` — Django: kernel `core` + 9 domain apps (masters, accounts, files, vendors, inbound, ptmapper, stockledger, finledger, aiagents), Python 3.12 via `uv`.
+- `app/frontend` — React + TypeScript PWA (Vite): ~12 wired screens + stubs.
+
+**Status (2 Jul 2026):** the foundation + first business layer are built, merged to `main`, and auto-deploy to a **Render alpha** — see `DEPLOY.md`. Build history + current state: `memory/PRD.md`; domain/kernel contracts: `CONTEXT.md`.
 
 The design corpus lives in `docs/my-understanding/system-design/`. The build
 process is `docs/my-understanding/system-design/build-operating-manual.html`.
@@ -45,4 +47,6 @@ createdb kdps_dev
 npm run ci        # ruff · mypy (strict) · migration check · import-linter · pytest · tsc
 ```
 
-All green = the build is sound. This is the acceptance gate for every slice.
+All green = the build is sound. `npm run ci` is the **local acceptance gate for every slice**.
+
+**Two gates, not one.** The cloud CI (`.github/workflows/ci.yml`) runs only **pytest** (kernel anti-cheat + API regression, on real Postgres) **+ the frontend build** — *not* ruff / mypy strict / import-linter (those run in pre-commit and local `npm run ci`). So a green cloud run is **not** a green `npm run ci`: the deployed **Render alpha** currently carries ~54 ruff findings + un-gated mypy strict. Deploy steps + seeded logins: `DEPLOY.md`.

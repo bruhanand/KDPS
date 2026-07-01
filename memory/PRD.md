@@ -8,6 +8,18 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
+## Current state — 2 July 2026 (read this first)
+The foundation **and** the first business layer are **built and merged to `main`**, auto-deploying to a **Render alpha** (Postgres 16 + Django API + React PWA). Everything below this section is a **chronological build log**: the earliest (28 Jun) entries describe superseded money mechanics (stock value + auto-bill at **BASIC×qty**); those were **rebuilt to P RATE + commercial-model liability** in the 30-Jun Phase C/E remediation. Treat this section as the source of truth for status.
+
+- **Landed (git):** PR #31 merged the Emergent export to `main`; PR #33 + #34 merged the `harden/green-and-security` sprint (money-path + security + CI green); PR #35 seeded the PT-mapper master data on Render. `main` is the alpha of record; `emergent` (exports) and `dev` (hand changes) PR into it (3-branch model). *(Corrects the "Deployment readiness check (28 Jun)" section below — deployment is live on Render, not blocked on MongoDB / a missing git remote.)*
+- **Built on `main`:** kernel `core` + 9 apps (`masters` `accounts` `files` `vendors` `inbound` `ptmapper` `stockledger` `finledger` `aiagents`); React/TS PWA with ~12 wired screens + ~20 "coming soon" stubs.
+- **Money path — remediated (Phases A–F of the 30-Jun review, all on `main`):** P RATE valuation (not BASIC), commercial-model liability branching (owned → bill at PT; SOR/consignment → never a payable at PT; direct → GRNI), a balanced value voucher on every PT inward via `post_entries`, GRN + PtFile reparented onto `core.Document`, Books-Health/trial-balance endpoint (`GET /api/finledger/health`). Full backend suite green on real Postgres.
+- **Active dev moved Emergent → Claude Code (30 Jun)** — Emergent parked, not cut; repo kept portable.
+- **PT-mapper fed + hardened (1 Jul, PR #34):** 9 brand profiles + normalisers + big seed; seeded on Render (PR #35). Fill rates ≈ BRAND 86% / SIZE 87% / SEASON 67% / COLOR 47%. MUFTI COLOR gap resolved.
+- **Store analysis (2 Jul, commit 9b50b30):** JSL store deep-dive (business analysis + 16-measure dashboard, HTML+PDF) + a reusable `store-dashboard` skill under `.claude/skills/`.
+- **Known alpha caveats:** (1) `finledger` vendor/cash ledgers are still single-entry running balances — only the PT-inward path is true double-entry / in the Σ=0 trial balance; (2) two security items **deferred by decision** — demo creds seeded on the public Render alpha, JWT/refresh in `localStorage`. Five money-critical GST items still await a CA ruling before live money.
+- **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
+
 ## Architecture (locked by ADRs)
 - **Backend:** Python 3.12 + Django 5.1 + Django REST Framework + drf-spectacular, **PostgreSQL** only.
   Kernel in `app/backend/core` (money-as-paise, append-only ledger w/ DB triggers, docstatus FSM,
@@ -56,7 +68,8 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Auth type hints:** added explicit signature typing for cookie/header JWT authentication and removed unused import after tester feedback.
 - **Tested:** testing_agent iteration_11 passed backend regression. Additional self-checks: Python lint clean, Django check clean, `tests/test_refactor_regression.py` 6/6, `tests/test_iteration9_rbac_vendor_inbound.py` 8/8, and `tests/test_iteration11_pt_posting_regression.py` 3/3.
 
-## Deployment readiness check (28 Jun 2026) ⚠️
+## Deployment readiness check (28 Jun 2026) ⚠️ — SUPERSEDED
+> **SUPERSEDED (see "Current state — 2 July 2026" at top).** This blocker is resolved: the app now deploys to a **Render alpha** (Postgres 16, from `render.yaml` on `main`) — it was never migrated to MongoDB, and a GitHub remote with merged PRs now exists. Kept below as history.
 - **Deployment agent status:** FAIL for Emergent managed deployment because KDPS intentionally requires **PostgreSQL**, while the target managed platform health check expects MongoDB-only managed database support. This is architectural, not a runtime regression.
 - **Checks passed:** supervisor config exists; frontend build passes; Django system check passes; ports are correct; CORS/CSRF settings are present; secrets/URLs are environment-driven; no mocked API layer.
 - **Hardening applied:** frontend `REACT_APP_BACKEND_URL` now fails fast when missing; backend `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `DATABASE_URL` now fail fast when missing.
