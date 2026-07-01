@@ -306,6 +306,10 @@ PROFILES = [
             "DATE_SRC": "INV DATE",
             "DESC_SRC": ["PRODUCT TYPE", "CATEGORY", "PRODUCT", "MATERIAL DESCRIPTION"],
         },
+        "flags": {
+            # FIT TYPE is coded ("PJ RG OCTANEMIDSTR") — token 2 = fit family (RG/SL).
+            "fit_code_tokens": True,
+        },
     },
     {
         "code": "blackberry",

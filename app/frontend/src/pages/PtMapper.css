@@ -17,6 +17,46 @@
 .kdps-table td { white-space: nowrap; }
 .kdps-table td.blank-cell { background: var(--amber-bg); color: var(--amber); text-align: center; font-weight: 700; }
 
+/* per-column blank counter in the header */
+.blank-count {
+  display: inline-block; margin-left: 5px; padding: 0 5px; border-radius: 999px;
+  background: var(--amber-bg, #fdf3e3); color: var(--amber, #b07818);
+  font-size: 10px; font-weight: 800; vertical-align: 1px;
+}
+
+/* provenance marks: alias/rule/inferred = amber dot (judgement — glance),
+   manual = blue dot (a human decided). direct/derived carry no mark. */
+.kdps-table td.prov-glance, .kdps-table td.prov-manual { position: relative; }
+.kdps-table td.prov-glance::after, .kdps-table td.prov-manual::after {
+  content: ""; position: absolute; top: 4px; right: 4px;
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.kdps-table td.prov-glance::after { background: var(--amber, #d99a2b); }
+.kdps-table td.prov-manual::after { background: var(--navy, #1f2d4d); }
+.prov-legend { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.prov-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.prov-swatch { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+.prov-swatch.glance { background: var(--amber, #d99a2b); }
+.prov-swatch.manual { background: var(--navy, #1f2d4d); }
+.prov-swatch.blank { background: var(--amber-bg, #fdf3e3); border: 1px solid var(--amber, #d99a2b); }
+
+/* edit-mode extras */
+.kdps-table td.blank-edit-cell { background: var(--amber-bg, #fdf3e3); }
+.kdps-table td.cell-readonly { color: var(--muted); }
+.bulk-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 10px; padding: 10px 14px; border: 1px dashed var(--rule, #e7dfd3);
+  border-radius: 10px; background: var(--surface, #fffdfb); color: var(--muted);
+}
+.bulk-bar .select { max-width: 220px; }
+.bulk-label { font-size: 12.5px; font-weight: 700; }
+
+/* operator context (upload + re-run) */
+.upload-context { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 12px; }
+.upload-context-field { display: flex; flex-direction: column; gap: 4px; min-width: 230px; }
+.upload-context-label { font-size: 11.5px; font-weight: 700; color: var(--muted); letter-spacing: .2px; }
+.ctx-panel { margin-top: 10px; }
+
 /* review queue */
 .review-list { display: flex; flex-direction: column; gap: 12px; }
 .review-item { padding: 16px 18px; }

@@ -303,6 +303,32 @@ def gender_from_text(text: str) -> str:
     return ""
 
 
+_FIT_CODE_TOKEN = re.compile(r"^[A-Z]{2,3}$")
+
+
+def fit_code_candidates(raw: Any) -> list[str]:
+    """Candidates for a coded FIT TYPE column (profile flag ``fit_code_tokens``).
+
+    Peter England / ABFRL encode fit as '<line> <family> <style…>' — e.g.
+    'PJ RG OCTANEMIDSTR', 'PC SL Snug', 'PC RG Regular': token 2 is the fit
+    family (RG = Regular, SL = Slim). Order: the full value first (a plain
+    'SLIM FIT' still hits the normal lookup), then token 2, then a trailing
+    word ('Regular'/'Slim'). Unknown codes resolve to nothing → review queue.
+    """
+    s = norm(raw)
+    if not s:
+        return []
+    candidates = [s]
+    tokens = s.split()
+    # The coded form always has ≥3 tokens — a plain 2-word fit ("SLIM FIT")
+    # must stay a single candidate for the normal lookup.
+    if len(tokens) >= 3 and _FIT_CODE_TOKEN.fullmatch(tokens[1]):
+        candidates.append(tokens[1])
+    if len(tokens) >= 3 and tokens[-1].isalpha():
+        candidates.append(tokens[-1])
+    return candidates
+
+
 # ----------------------------------------------------------------------------- reading
 def _read_xlsx(content: bytes) -> list[tuple[str, list[list]]]:
     wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
@@ -559,8 +585,28 @@ class Resolver:
     def size(self, raw_value: Any, ctx=None) -> tuple:
         return self._resolve("size", normalize_size(raw_value), ctx)
 
-    def fit(self, raw_value: str, ctx=None) -> tuple:
-        return self._resolve("fit", raw_value, ctx)
+    def fit(self, raw_value: str, ctx=None, candidates: list[str] | None = None) -> tuple:
+        if not candidates:
+            return self._resolve("fit", raw_value, ctx)
+        # Coded fit column: try each candidate silently; one miss (the original raw)
+        # only when every candidate fails — a partial code must not clutter the queue.
+        for i, cand in enumerate(candidates):
+            key = norm(cand)
+            if not key:
+                continue
+            exact = self.controlled_exact.get("fit", {}).get(key)
+            if exact:
+                return exact, ("direct" if i == 0 else "alias")
+            hit = self.lookups.get("fit", {}).get(key)
+            if hit:
+                return hit, "alias"
+        self._miss("fit", raw_str(raw_value), ctx)
+        return None, ""
+
+    def brand_gender(self, brand: str) -> str:
+        """Brand-level default gender (seeded for unambiguous single-gender brands);
+        the LAST gender fallback — see _map_taxonomy."""
+        return self.lookups.get("brand_gender", {}).get(norm(brand), "")
 
     def gender(self, raw_value: str) -> tuple:
         key = norm(raw_value)
@@ -679,11 +725,12 @@ def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields
     return PriceFields(prate=prate, basic=basic, input_tax=input_tax)
 
 
-def _map_season(resolver: Resolver, g, ctx: dict) -> tuple:
+def _map_season(resolver: Resolver, g, ctx: dict, ctx_date: date | None = None) -> tuple:
     """SEASON → ``(value, source)``. The explicit season code wins ('alias') — a season
-    is a NAME, never a date; the invoice date is the fallback ('derived'). A single miss
-    is recorded only when *both* a code and a date fail (an unknown code alone shouldn't
-    clutter the queue when the date resolves it)."""
+    is a NAME, never a date; the invoice date is the fallback ('derived'), then the
+    operator-supplied invoice date from upload context ('derived'). A single miss is
+    recorded only when *everything* fails (an unknown code alone shouldn't clutter the
+    queue when a date resolves it)."""
     code = raw_str(g("SEASON_SRC"))
     season = resolver.season_from_code(code)
     if season:
@@ -693,19 +740,32 @@ def _map_season(resolver: Resolver, g, ctx: dict) -> tuple:
         season = resolver.season_from_date(d)
         if season:
             return season, "derived"
+    if ctx_date:
+        season = resolver.season_from_date(ctx_date)
+        if season:
+            return season, "derived"
     subject = code or (d.isoformat() if d else "")
     if subject:
         resolver._miss("season", subject, ctx)
     return None, ""
 
 
-def _map_taxonomy(resolver: Resolver, desc: str, g, ctx: dict, prov: dict) -> dict:
+def _map_taxonomy(
+    resolver: Resolver,
+    desc: str,
+    g,
+    ctx: dict,
+    prov: dict,
+    profile: dict | None = None,
+    brand: str | None = None,
+) -> dict:
     """The 5-axis merchandising grid (+ ITEM-suggested sub/type) for one row, recording
     each axis's provenance in ``prov``.
 
     GENDER: a gender column wins ('direct'/'alias'), then a gender word in the
-    description ('inferred'), then a rule's default ('rule'). FIT: an explicit fit
-    column ('direct'/'alias') beats a rule's fit ('rule'). ITEM / SUB CATEGORY / TYPE
+    description ('inferred'), then a rule's default ('rule'), then the resolved
+    brand's seeded default gender ('inferred'). FIT: an explicit fit column
+    ('direct'/'alias') beats a rule's fit ('rule'). ITEM / SUB CATEGORY / TYPE
     come from the matched rule + ITEM→helper ('rule').
     """
     tax = resolver.taxonomy(desc, ctx)
@@ -716,12 +776,20 @@ def _map_taxonomy(resolver: Resolver, desc: str, g, ctx: dict, prov: dict) -> di
             gender, g_src = from_text, "inferred"
         elif tax.get("gender"):
             gender, g_src = tax["gender"], "rule"
+        elif brand:
+            from_brand = resolver.brand_gender(brand)
+            if from_brand:
+                gender, g_src = from_brand, "inferred"
     prov["GENDER"] = g_src if gender else ""
 
     item = tax.get("item", "")
     prov["ITEM"] = "rule" if item else ""
 
-    fit, fit_src = resolver.fit(raw_str(g("FIT_SRC")))
+    fit_raw = raw_str(g("FIT_SRC"))
+    candidates = None
+    if profile and profile.get("flags", {}).get("fit_code_tokens"):
+        candidates = fit_code_candidates(fit_raw)
+    fit, fit_src = resolver.fit(fit_raw, ctx, candidates=candidates)
     if not fit and tax.get("fit"):
         fit, fit_src = tax["fit"], "rule"
     prov["FIT"] = fit_src if fit else ""
@@ -769,12 +837,18 @@ def _resolve_fields(
     base: BaseMappedFields,
     profile: dict,
     prov: dict,
+    ctx_brand: str = "",
+    ctx_date: date | None = None,
 ) -> ResolvedFields:
     ctx = {"brand": base.raw_brand, "desc": base.desc}
     brand_v, brand_s = resolver.brand(base.raw_brand, ctx)
+    if not brand_v and ctx_brand:
+        # Operator context at upload — the structural fix for brand-less files
+        # (Madura/Jockey/printed invoices). Deterministic, so 'derived'.
+        brand_v, brand_s = ctx_brand, "derived"
     color_v, color_s = resolver.color(_color_src(g, profile), ctx)
     size_v, size_s = resolver.size(g("SIZE_SRC"), ctx)
-    season_v, season_s = _map_season(resolver, g, ctx)
+    season_v, season_s = _map_season(resolver, g, ctx, ctx_date)
     prov["BRAND"] = brand_s if brand_v else ""
     prov["COLOR"] = color_s if color_v else ""
     prov["SIZE"] = size_s if size_v else ""
@@ -784,7 +858,7 @@ def _resolve_fields(
         color=color_v,
         size=size_v,
         season=season_v,
-        taxonomy=_map_taxonomy(resolver, base.desc, g, ctx, prov),
+        taxonomy=_map_taxonomy(resolver, base.desc, g, ctx, prov, profile, brand_v),
     )
 
 
@@ -834,22 +908,52 @@ def _blank_controlled_columns(row: dict) -> list:
     return [column for column in CONTROLLED if not row[column]]
 
 
+def _raw_sources(base: BaseMappedFields, g: Callable[[str], Any], profile: dict) -> dict:
+    """The raw source value behind each controlled column (what map_record read),
+    stored per row so an editor can bulk-apply a fix to 'every row with this raw
+    value' and a future 'learn this edit' can seed a Lookup from it."""
+    desc = base.desc[:300]
+    fit_raw = raw_str(g("FIT_SRC"))
+    return {
+        "SEASON": (raw_str(g("SEASON_SRC")) or raw_str(g("DATE_SRC")))[:300],
+        "BRAND": base.raw_brand[:300],
+        "COLOR": _color_src(g, profile)[:300],
+        "GENDER": (raw_str(g("GENDER_SRC")) or desc)[:300],
+        "SUB CATEGORY": desc,
+        "TYPE": desc,
+        "ITEM": desc,
+        "FIT": (fit_raw or desc)[:300],
+        "SIZE": raw_str(g("SIZE_SRC"))[:300],
+    }
+
+
 def map_record(
-    rec: dict, profile: dict, resolver: Resolver, brand_default: str
-) -> tuple[dict, list, dict] | None:
+    rec: dict,
+    profile: dict,
+    resolver: Resolver,
+    brand_default: str,
+    ctx_brand: str = "",
+    ctx_date: date | None = None,
+) -> tuple[dict, list, dict, dict] | None:
     g = _getter(rec, profile)
     base = _extract_base_fields(rec, profile, g, brand_default)
     if not _has_mappable_payload(base):
         return None
     prov: dict[str, str] = {}
     prices = _price_fields(rec, profile, g, base.qty)
-    resolved = _resolve_fields(resolver, g, base, profile, prov)
+    resolved = _resolve_fields(resolver, g, base, profile, prov, ctx_brand, ctx_date)
     row = _build_kdps_row(base, prices, resolved, g)
-    return row, _blank_controlled_columns(row), prov
+    return row, _blank_controlled_columns(row), prov, _raw_sources(base, g, profile)
 
 
-def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
-    """Map a brand file into KDPS rows + review misses. Pure read (no DB writes)."""
+def run_mapping(
+    content: bytes, filename: str, content_type: str, context: dict | None = None
+) -> dict:
+    """Map a brand file into KDPS rows + review misses. Pure read (no DB writes).
+
+    ``context`` is optional operator input from upload time — ``{"brand": <Master
+    brand>, "invoice_date": <ISO date>}`` — used only as fallbacks when the file
+    itself yields no brand / no date (provenance 'derived')."""
     sheets = read_sheets(content, filename, content_type)
     sheet_name, rows = choose_sheet(sheets)
     if not any(any(raw_str(c) for c in r) for r in rows):
@@ -860,9 +964,16 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
     header_set = {h for h in headers if h}
     profile = identify_profile(filename, header_set, sheet_name)
 
-    # brand fallback from the filename (alpha words only) for files lacking a brand column
+    ctx_brand = raw_str((context or {}).get("brand"))
+    ctx_date = parse_date((context or {}).get("invoice_date"))
+
+    # brand fallback from the filename (alpha words only) for files lacking a brand
+    # column — skipped when the operator supplied the brand (context wins over a
+    # filename guess, and the guess's inevitable miss would only clutter the queue).
     stem = (filename or "").rsplit(".", 1)[0]
-    brand_default = norm(" ".join(t for t in re.split(r"[ _\-]+", stem) if t.isalpha()))
+    brand_default = (
+        "" if ctx_brand else norm(" ".join(t for t in re.split(r"[ _\-]+", stem) if t.isalpha()))
+    )
 
     resolver = Resolver()
     records = build_records(rows, header_idx)
@@ -871,14 +982,16 @@ def run_mapping(content: bytes, filename: str, content_type: str) -> dict:
     blank_cells = 0
     low_confidence_cells = 0
     for rec in records:
-        mapped = map_record(rec, profile, resolver, brand_default)
+        mapped = map_record(rec, profile, resolver, brand_default, ctx_brand, ctx_date)
         if mapped is None:
             continue
         line_no += 1
-        row, blanks, prov = mapped
+        row, blanks, prov, raw = mapped
         blank_cells += len(blanks)
         low_confidence_cells += sum(1 for s in prov.values() if s in LOW_CONFIDENCE_SOURCES)
-        kdps_rows.append({"line_no": line_no, "data": row, "blanks": blanks, "provenance": prov})
+        kdps_rows.append(
+            {"line_no": line_no, "data": row, "blanks": blanks, "provenance": prov, "raw": raw}
+        )
 
     reviews = list(resolver.misses.values())
     return {
