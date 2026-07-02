@@ -59,6 +59,27 @@ Created by `seed_foundation` (full list also in `memory/test_credentials.md`).
   in-India data residency would need DigitalOcean Bangalore / AWS Mumbai / Fly
   Mumbai instead.
 
+## PT-mapper self-improvement (daily learning loop)
+
+The `render.yaml` includes a **`kdps-ptmap-learn` cron** that runs once a day:
+
+```
+python manage.py ptmap_mine            # correction log → staged learning proposals
+python manage.py ptmap_learning_report # corrections-per-file KPI + rule precision
+```
+
+`ptmap_mine` only *proposes* (Rule 8) — it groups the human corrections on files
+that reached Patna (SENT) and stages a `LookupProposal` when a mapping is
+well-supported (≥3 corrections across ≥2 files for a brand rule, or ≥2 agreeing
+brands for a global one). A **steward** (e.g. the seeded `steward` login) then
+approves each proposal in the app (**PT Mapper → Proposals**); only approval writes
+a live `Lookup`. Both commands are idempotent and read-mostly, safe to re-run.
+
+> **Free tier:** Render cron jobs need a paid plan. If you keep the stack on free,
+> the cron is skipped — run the two commands by hand from the API service **Shell**
+> tab (or locally against the same `DATABASE_URL`) whenever you want to fold the
+> week's corrections back in. Nothing else depends on the cron.
+
 ## Not done yet (before real use)
 
 - Cloud CI (`.github/workflows/ci.yml`) gates only **pytest + the frontend build**; `ruff` / `mypy` strict / `import-linter` run only in pre-commit + local `npm run ci` (not in the cloud), so this alpha carries ~54 `ruff` findings + un-run `mypy` strict. Green cloud CI ≠ green `npm run ci`.

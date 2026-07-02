@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Save,
   Send,
+  Sparkles,
   Undo2,
   Wand2,
   X,
@@ -43,6 +44,9 @@ const COL_DIM: Record<string, string> = {
 };
 // Derived / engine-suggestion columns — recomputed server-side, not hand-edited.
 const READONLY_COLS = new Set(["NAG", "MARGIN", "SUGGESTED SUB CATEGORY", "SUGGESTED TYPE"]);
+// Dimensions that resolve through a Lookup — so a fix on them can be "remembered"
+// as a brand-scoped rule (matches learning.LEARNABLE_DIMS on the backend).
+const LEARNABLE_DIMS = new Set(["season", "brand", "color", "gender", "fit", "size"]);
 // Provenance → glance level: alias/rule/inferred = a judgement worth a look (amber),
 // manual = a human decision (blue); direct/derived are trusted (no mark).
 const GLANCE_PROV = new Set(["alias", "rule", "inferred"]);
@@ -59,6 +63,25 @@ function useVocab(): VocabT {
     api.get("/ptmapper/controlled").then((r) => setVocab(r.data)).catch(() => {});
   }, []);
   return vocab;
+}
+
+// Deterministic pre-fill suggestions (pg_trgm + exact lookups) for a raw value —
+// Master values only, floated to the top of the dropdown; never auto-committed.
+function useSuggestions(dimension: string, q: string, brand = ""): string[] {
+  const [vals, setVals] = useState<string[]>([]);
+  useEffect(() => {
+    if (!dimension || !q) {
+      setVals([]);
+      return;
+    }
+    const params = new URLSearchParams({ dimension, q });
+    if (brand) params.set("brand", brand);
+    api
+      .get(`/ptmapper/suggest?${params.toString()}`)
+      .then((r) => setVals((r.data.suggestions ?? []).map((s: any) => s.value)))
+      .catch(() => setVals([]));
+  }, [dimension, q, brand]);
+  return vals;
 }
 
 const FILE_TONE: Record<string, string> = { ready: "green", needs_review: "amber", failed: "red" };
@@ -92,6 +115,7 @@ export function PtMapperPage() {
   const navigate = useNavigate();
   const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files");
   const { data: reviews } = useList<any>("/ptmapper/review?status=open");
+  const { data: proposals } = useList<any>("/ptmapper/proposals?status=proposed");
   const vocab = useVocab();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -124,6 +148,10 @@ export function PtMapperPage() {
           <h1 className="h1 h2-rust">PT File Mapper</h1>
         </div>
         <div className="spacer" />
+        <Link className="btn" to="/documents/pt-mapper/proposals" data-testid="proposals-link">
+          <Sparkles size={16} /> Learning proposals
+          {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
+        </Link>
         <Link className="btn" to="/documents/pt-mapper/review" data-testid="review-queue-link">
           <ListChecks size={16} /> Unmapped queue
           {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
@@ -225,11 +253,15 @@ interface PtRowT {
   data: Record<string, any>;
   blanks: string[];
   provenance: Record<string, string>;
+  // {controlled column → raw source value the engine read}. Shown as a tooltip /
+  // hint so a steward can see what the file actually said behind a mapped cell.
+  raw: Record<string, any>;
 }
 interface PtFileDetailT extends PtFileT {
   meta: {
     sheet?: string; header_row?: number; source_rows?: number; headers?: string[];
     truncated?: boolean; row_limit?: number;
+    manual_cells_dropped?: number;
     context?: { brand?: string; invoice_date?: string };
   };
   rows: PtRowT[];
@@ -267,6 +299,10 @@ export function PtFileDetailPage() {
   const [busy, setBusy] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [draft, setDraft] = useState<Record<number, Record<string, string>>>({});
+  // {`${rowId}|${col}`: true} — cells the operator ticked "remember" (learn on send).
+  const [rememberSet, setRememberSet] = useState<Record<string, boolean>>({});
+  // {`${dim}|${raw}|${brand}`: Master values} — pre-fill hints for blank cells.
+  const [cellSuggest, setCellSuggest] = useState<Record<string, string[]>>({});
   const [error, setError] = useState("");
   const [bookings, setBookings] = useState<{ id: number; number: string; brand_name?: string }[]>([]);
   const [selectedBooking, setSelectedBooking] = useState("");
@@ -292,6 +328,40 @@ export function PtFileDetailPage() {
   useEffect(() => {
     if (isPatna) api.get("/bookings").then((r) => setBookings(r.data)).catch(() => {});
   }, [isPatna]);
+
+  // On entering edit mode, fetch pre-fill suggestions for each distinct blank
+  // (dimension, raw, brand) — bounded by distinct raw values, not by cells.
+  useEffect(() => {
+    if (!editMode || !file) return;
+    const pairs = new Map<string, { dim: string; q: string; brand: string }>();
+    for (const r of file.rows) {
+      for (const c of r.blanks) {
+        const dim = COL_DIM[c];
+        if (!dim || !LEARNABLE_DIMS.has(dim)) continue;
+        const raw = r.raw?.[c] != null ? String(r.raw[c]) : "";
+        if (!raw) continue;
+        const brand = r.data.BRAND ? String(r.data.BRAND) : "";
+        pairs.set(`${dim}|${raw}|${brand}`, { dim, q: raw, brand });
+      }
+    }
+    let alive = true;
+    const entries = [...pairs.entries()].slice(0, 40);
+    Promise.all(
+      entries.map(async ([k, p]) => {
+        const params = new URLSearchParams({ dimension: p.dim, q: p.q });
+        if (p.brand) params.set("brand", p.brand);
+        try {
+          const r = await api.get(`/ptmapper/suggest?${params.toString()}`);
+          return [k, (r.data.suggestions ?? []).map((s: any) => s.value)] as const;
+        } catch {
+          return [k, [] as string[]] as const;
+        }
+      }),
+    ).then((res) => alive && setCellSuggest(Object.fromEntries(res)));
+    return () => {
+      alive = false;
+    };
+  }, [editMode, file]);
 
   const stage = file?.stage ?? "mapping";
   const canEdit = isWarehouse && stage === "mapping";
@@ -368,16 +438,25 @@ export function PtFileDetailPage() {
 
   async function saveEdits() {
     const rows = Object.entries(draft).map(([rid, data]) => ({ id: Number(rid), data }));
-    if (rows.length === 0) {
+    const remember = Object.entries(rememberSet)
+      .filter(([, on]) => on)
+      .map(([k]) => {
+        const sep = k.indexOf("|");
+        return { row_id: Number(k.slice(0, sep)), column: k.slice(sep + 1) };
+      });
+    if (rows.length === 0 && remember.length === 0) {
       setEditMode(false);
       return;
     }
     setBusy(true);
     setError("");
     try {
-      const { data } = await api.patch(`/ptmapper/files/${id}/rows`, { rows });
+      const body: any = { rows };
+      if (remember.length) body.remember = remember;
+      const { data } = await api.patch(`/ptmapper/files/${id}/rows`, body);
       setFile(data);
       setDraft({});
+      setRememberSet({});
       setEditMode(false);
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -388,6 +467,7 @@ export function PtFileDetailPage() {
 
   function cancelEdit() {
     setDraft({});
+    setRememberSet({});
     setEditMode(false);
   }
 
@@ -445,6 +525,12 @@ export function PtFileDetailPage() {
       {file.meta?.truncated && (
         <div className="warn-note" data-testid="ptfile-source-truncated-banner" style={{ marginTop: 10 }}>
           <AlertTriangle size={14} /> This source file exceeds the {file.meta.row_limit ?? 8000}-row import cap — only the first {file.meta.row_limit ?? 8000} rows were read. Split the file and re-upload to map the remainder.
+        </div>
+      )}
+
+      {(file.meta?.manual_cells_dropped ?? 0) > 0 && (
+        <div className="warn-note" data-testid="ptfile-dropped-cells-banner" style={{ marginTop: 10 }}>
+          <AlertTriangle size={14} /> {file.meta.manual_cells_dropped} hand-edited cell(s) couldn't be re-applied after the last re-map (their row moved or disappeared). Review the table and re-enter them if needed.
         </div>
       )}
 
@@ -576,6 +662,10 @@ export function PtFileDetailPage() {
                   <button className="btn btn-cta btn-sm" onClick={applyBulkFill} disabled={busy || !bulkValue} data-testid="ptfile-bulk-apply">Apply</button>
                 </>
               )}
+              <div className="spacer" />
+              <span className="remember-caption" data-testid="ptfile-remember-caption">
+                <Sparkles size={12} /> Tick <b>remember</b> on a fix to teach the mapper — it learns when this PT is sent to Patna.
+              </span>
             </div>
           )}
 
@@ -606,10 +696,16 @@ export function PtFileDetailPage() {
                       const isBlank = r.blanks.includes(c) && !draft[r.id]?.[c];
                       const prov = draft[r.id]?.[c] !== undefined ? "manual" : (r.provenance?.[c] ?? "");
                       const dim = COL_DIM[c];
+                      const rawVal = r.raw?.[c] === null || r.raw?.[c] === undefined ? "" : String(r.raw[c]);
+                      const showRaw = rawVal !== "" && rawVal !== current;
                       if (editMode && READONLY_COLS.has(c)) {
                         return <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}cell-readonly`}>{current}</td>;
                       }
                       if (editMode && dim) {
+                        const rememberable = LEARNABLE_DIMS.has(dim) && rawVal !== "";
+                        const rkey = `${r.id}|${c}`;
+                        const brandScope = r.data.BRAND ? String(r.data.BRAND) : "";
+                        const suggested = isBlank && rememberable ? cellSuggest[`${dim}|${rawVal}|${brandScope}`] : undefined;
                         return (
                           <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-edit-cell" : ""}`}>
                             <Combobox
@@ -618,8 +714,24 @@ export function PtFileDetailPage() {
                               onChange={(v) => editCell(r.id, c, v)}
                               placeholder="—"
                               size="cell"
+                              suggested={suggested}
                               testId={`pt-cell-${r.id}-${c.replace(/\s+/g, "_")}`}
                             />
+                            {showRaw && <div className="raw-hint" title={`Source value the engine read: ${rawVal}`}>raw: {rawVal}</div>}
+                            {rememberable && (
+                              <label
+                                className="remember-toggle"
+                                title={`Learn ${rawVal} → this value for ${brandScope || "all brands"} when this PT is sent to Patna`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={!!rememberSet[rkey]}
+                                  onChange={(e) => setRememberSet((s) => ({ ...s, [rkey]: e.target.checked }))}
+                                  data-testid={`pt-remember-${r.id}-${c.replace(/\s+/g, "_")}`}
+                                />
+                                remember{brandScope ? ` · ${brandScope}` : ""}
+                              </label>
+                            )}
                           </td>
                         );
                       }
@@ -638,7 +750,11 @@ export function PtFileDetailPage() {
                       const glance = !isBlank && current !== "" && GLANCE_PROV.has(prov);
                       const manual = !isBlank && current !== "" && prov === "manual";
                       return (
-                        <td key={c} className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-cell" : ""}${glance ? "prov-glance" : ""}${manual ? "prov-manual" : ""}`}>
+                        <td
+                          key={c}
+                          className={`${NUM_COLS.includes(c) ? "num " : ""}${isBlank ? "blank-cell" : ""}${glance ? "prov-glance" : ""}${manual ? "prov-manual" : ""}`}
+                          title={showRaw ? `raw: ${rawVal}` : undefined}
+                        >
                           {current === "" ? (isBlank ? "—" : "") : current}
                         </td>
                       );
@@ -655,15 +771,15 @@ export function PtFileDetailPage() {
 }
 
 const DIM_LABEL: Record<string, string> = {
-  color: "Colour", size: "Size", brand: "Brand", season: "Season", taxonomy: "Taxonomy",
+  color: "Colour", size: "Size", brand: "Brand", season: "Season", fit: "Fit", taxonomy: "Taxonomy",
 };
-const SINGLE_DIMS = ["color", "size", "brand", "season"];
+const SINGLE_DIMS = ["color", "size", "brand", "season", "fit"];
 
 interface ReviewT {
   id: number;
   dimension: string;
   raw_value: string;
-  context: { samples?: string[] };
+  context: { samples?: string[]; brands?: string[] };
   occurrences: number;
 }
 
@@ -710,6 +826,13 @@ function ReviewRow({ item, vocab, onDone }: { item: ReviewT; vocab: Record<strin
   const [error, setError] = useState("");
 
   const samples = useMemo(() => (item.context?.samples ?? []).slice(0, 2), [item]);
+  // Scope the suggestion to a brand only when the resolution will be brand-scoped too
+  // (the backend defaults a multi-brand item to a global rule); otherwise a brand-only
+  // lookup could be suggested and then saved globally.
+  const itemBrands = item.context?.brands ?? [];
+  const itemBrand = itemBrands.length === 1 ? itemBrands[0] : "";
+  const suggestions = useSuggestions(isSingle ? item.dimension : "", item.raw_value, itemBrand);
+  const suggestedSet = useMemo(() => new Set(suggestions), [suggestions]);
 
   async function resolve() {
     setSaving(true);
@@ -748,7 +871,12 @@ function ReviewRow({ item, vocab, onDone }: { item: ReviewT; vocab: Record<strin
           <>
             <select className="select" value={target} onChange={(e) => setTarget(e.target.value)} data-testid={`review-target-${item.id}`}>
               <option value="">Map to KDPS {DIM_LABEL[item.dimension]}…</option>
-              {(vocab[item.dimension] ?? []).map((v) => <option key={v} value={v}>{v}</option>)}
+              {suggestions.length > 0 && (
+                <optgroup label="Suggested">
+                  {suggestions.map((v) => <option key={`s-${v}`} value={v}>★ {v}</option>)}
+                </optgroup>
+              )}
+              {(vocab[item.dimension] ?? []).filter((v) => !suggestedSet.has(v)).map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
             <button className="btn btn-primary" disabled={saving || !target} onClick={resolve} data-testid={`review-resolve-${item.id}`}>Resolve</button>
           </>

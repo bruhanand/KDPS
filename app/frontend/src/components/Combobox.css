@@ -38,4 +38,5 @@
 }
 .cbx-option.active { background: var(--inner, #f4efe7); }
 .cbx-option.selected { font-weight: 700; color: var(--rust, #c4623f); }
+.cbx-option.suggested { color: var(--rust, #b45309); }
 .cbx-empty, .cbx-more { padding: 6px 9px; color: var(--muted, #8a8177); font-size: 12px; }

@@ -631,9 +631,11 @@ def _pick_valid(cell: str, valid: set[str]) -> str:
 
 
 def _add_lookup(dim: str, key: str, target: str) -> None:
+    # Seed rows are global (brand=""); brand-scoped rules are learned from corrections.
     Lookup.objects.update_or_create(
         dimension=dim,
         source_key=key.upper().strip(),
+        brand="",
         defaults={"target_value": target},
     )
 

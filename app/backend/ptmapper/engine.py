@@ -536,9 +536,11 @@ class Resolver:
         for cv in ControlledValue.objects.all():
             self.controlled.setdefault(cv.dimension, set()).add(cv.value)
             self.controlled_exact.setdefault(cv.dimension, {})[norm(cv.value)] = cv.value
-        self.lookups: dict[str, dict[str, str]] = {}
+        # keyed by (dimension, brand): a brand-scoped rule ("" = global) so the
+        # resolver can prefer a Peter England / Zilu rule over the global fallback.
+        self.lookups: dict[tuple[str, str], dict[str, str]] = {}
         for lk in Lookup.objects.all():
-            self.lookups.setdefault(lk.dimension, {})[lk.source_key] = lk.target_value
+            self.lookups.setdefault((lk.dimension, lk.brand), {})[lk.source_key] = lk.target_value
         self.item_taxonomy = {
             it.item: (it.sub_category, it.type) for it in ItemTaxonomy.objects.all()
         }
@@ -551,45 +553,64 @@ class Resolver:
             return
         rec = self.misses.setdefault(
             dimension + "|" + raw,
-            {"dimension": dimension, "raw": raw, "occurrences": 0, "samples": []},
+            {"dimension": dimension, "raw": raw, "occurrences": 0, "samples": [], "brands": []},
         )
         rec["occurrences"] += 1
-        if ctx and len(rec["samples"]) < 5:
-            sample = ctx.get("desc") or ctx.get("brand") or ""
-            if sample and sample not in rec["samples"]:
-                rec["samples"].append(sample[:120])
+        if ctx:
+            if len(rec["samples"]) < 5:
+                sample = ctx.get("desc") or ctx.get("brand") or ""
+                if sample and sample not in rec["samples"]:
+                    rec["samples"].append(sample[:120])
+            # the row's *resolved* brand(s): lets a review resolution default to
+            # brand scope when a miss came from exactly one brand (D4).
+            sb = ctx.get("scope_brand") or ""
+            if sb and sb not in rec["brands"]:
+                rec["brands"].append(sb)
 
-    def _resolve(self, dimension: str, candidate: Any, ctx: dict | None = None) -> tuple:
-        """Layered resolve → ``(value, source)``. source is 'direct' (the normalised
-        candidate IS a Master value — high confidence), 'alias' (a lookup-table/seed
-        mapping — review-able judgement), or '' (a miss, recorded for the queue under
-        the normalised candidate so a human resolution re-maps the file on re-run)."""
+    def _resolve(
+        self, dimension: str, candidate: Any, ctx: dict | None = None, brand: str = ""
+    ) -> tuple:
+        """Layered resolve → ``(value, source)``. Order: normalise → direct Master hit
+        ('direct', high confidence) → brand-scoped alias → global alias ('alias', a
+        review-able judgement) → '' (a miss, recorded for the queue). A brand-scoped
+        rule wins over a global one so a per-brand fix never leaks to other brands."""
         key = norm(candidate)
         if not key:
             return None, ""
         exact = self.controlled_exact.get(dimension, {}).get(key)
         if exact:
             return exact, "direct"
-        hit = self.lookups.get(dimension, {}).get(key)
+        if brand:
+            hit = self.lookups.get((dimension, brand), {}).get(key)
+            if hit:
+                return hit, "alias"
+        hit = self.lookups.get((dimension, ""), {}).get(key)
         if hit:
             return hit, "alias"
         self._miss(dimension, str(candidate), ctx)
         return None, ""
 
     def brand(self, raw_value: str, ctx=None) -> tuple:
-        return self._resolve("brand", raw_value, ctx)
+        return self._resolve("brand", raw_value, ctx)  # the brand dimension is global-only
 
-    def color(self, raw_value: str, ctx=None) -> tuple:
-        return self._resolve("color", normalize_color(raw_value), ctx)
+    def color(self, raw_value: str, ctx=None, brand: str = "") -> tuple:
+        return self._resolve("color", normalize_color(raw_value), ctx, brand)
 
-    def size(self, raw_value: Any, ctx=None) -> tuple:
-        return self._resolve("size", normalize_size(raw_value), ctx)
+    def size(self, raw_value: Any, ctx=None, brand: str = "") -> tuple:
+        return self._resolve("size", normalize_size(raw_value), ctx, brand)
 
-    def fit(self, raw_value: str, ctx=None, candidates: list[str] | None = None) -> tuple:
+    def fit(
+        self,
+        raw_value: str,
+        ctx=None,
+        candidates: list[str] | None = None,
+        brand: str = "",
+    ) -> tuple:
         if not candidates:
-            return self._resolve("fit", raw_value, ctx)
-        # Coded fit column: try each candidate silently; one miss (the original raw)
-        # only when every candidate fails — a partial code must not clutter the queue.
+            return self._resolve("fit", raw_value, ctx, brand)
+        # Coded fit column: try each candidate silently (brand-scoped alias before
+        # global); one miss (the original raw) only when every candidate fails — a
+        # partial code must not clutter the queue.
         for i, cand in enumerate(candidates):
             key = norm(cand)
             if not key:
@@ -597,7 +618,11 @@ class Resolver:
             exact = self.controlled_exact.get("fit", {}).get(key)
             if exact:
                 return exact, ("direct" if i == 0 else "alias")
-            hit = self.lookups.get("fit", {}).get(key)
+            if brand:
+                hit = self.lookups.get(("fit", brand), {}).get(key)
+                if hit:
+                    return hit, "alias"
+            hit = self.lookups.get(("fit", ""), {}).get(key)
             if hit:
                 return hit, "alias"
         self._miss("fit", raw_str(raw_value), ctx)
@@ -605,8 +630,9 @@ class Resolver:
 
     def brand_gender(self, brand: str) -> str:
         """Brand-level default gender (seeded for unambiguous single-gender brands);
-        the LAST gender fallback — see _map_taxonomy."""
-        return self.lookups.get("brand_gender", {}).get(norm(brand), "")
+        the LAST gender fallback — see _map_taxonomy. Keyed by the brand as its
+        source_key, so it stays a global ("") lookup row."""
+        return self.lookups.get(("brand_gender", ""), {}).get(norm(brand), "")
 
     def gender(self, raw_value: str) -> tuple:
         key = norm(raw_value)
@@ -615,7 +641,7 @@ class Resolver:
         exact = self.controlled_exact.get("gender", {}).get(key)
         if exact:  # a real Master gender ("MALE") is high-confidence, not an alias
             return exact, "direct"
-        hit = self.lookups.get("gender", {}).get(key)
+        hit = self.lookups.get(("gender", ""), {}).get(key)  # gender aliases are global
         if hit:  # an alias ("MEN"→MALE, "GIRLS"→KIDS FEMALE)
             return hit, "alias"
         return "", ""
@@ -626,14 +652,18 @@ class Resolver:
             return label
         return None
 
-    def season_from_code(self, code: str, ctx=None):
-        """Resolve an explicit brand season code via the lookup table only.
-        Returns None (without recording a miss) when unknown — the caller decides
-        whether to fall back to the invoice date before logging a single miss."""
+    def season_from_code(self, code: str, brand: str = ""):
+        """Resolve an explicit brand season code via the lookup table only (brand-scoped
+        alias before global). Returns None (without recording a miss) when unknown — the
+        caller decides whether to fall back to the invoice date before logging a miss."""
         key = norm(code)
         if not key:
             return None
-        return self.lookups.get("season", {}).get(key)
+        if brand:
+            hit = self.lookups.get(("season", brand), {}).get(key)
+            if hit:
+                return hit
+        return self.lookups.get(("season", ""), {}).get(key)
 
     def taxonomy(self, desc: str, ctx=None) -> dict:
         # Whole-word/phrase match for every pattern ("PANT" hits "TRACK PANT" but never
@@ -725,14 +755,16 @@ def _price_fields(rec: dict, profile: dict, g, qty: float | None) -> PriceFields
     return PriceFields(prate=prate, basic=basic, input_tax=input_tax)
 
 
-def _map_season(resolver: Resolver, g, ctx: dict, ctx_date: date | None = None) -> tuple:
+def _map_season(
+    resolver: Resolver, g, ctx: dict, ctx_date: date | None = None, brand: str = ""
+) -> tuple:
     """SEASON → ``(value, source)``. The explicit season code wins ('alias') — a season
     is a NAME, never a date; the invoice date is the fallback ('derived'), then the
     operator-supplied invoice date from upload context ('derived'). A single miss is
     recorded only when *everything* fails (an unknown code alone shouldn't clutter the
     queue when a date resolves it)."""
     code = raw_str(g("SEASON_SRC"))
-    season = resolver.season_from_code(code)
+    season = resolver.season_from_code(code, brand)
     if season:
         return season, "alias"
     d = parse_date(g("DATE_SRC"))
@@ -789,7 +821,7 @@ def _map_taxonomy(
     candidates = None
     if profile and profile.get("flags", {}).get("fit_code_tokens"):
         candidates = fit_code_candidates(fit_raw)
-    fit, fit_src = resolver.fit(fit_raw, ctx, candidates=candidates)
+    fit, fit_src = resolver.fit(fit_raw, ctx, candidates=candidates, brand=brand or "")
     if not fit and tax.get("fit"):
         fit, fit_src = tax["fit"], "rule"
     prov["FIT"] = fit_src if fit else ""
@@ -846,9 +878,14 @@ def _resolve_fields(
         # Operator context at upload — the structural fix for brand-less files
         # (Madura/Jockey/printed invoices). Deterministic, so 'derived'.
         brand_v, brand_s = ctx_brand, "derived"
-    color_v, color_s = resolver.color(_color_src(g, profile), ctx)
-    size_v, size_s = resolver.size(g("SIZE_SRC"), ctx)
-    season_v, season_s = _map_season(resolver, g, ctx, ctx_date)
+    # Scope for the other dimensions = this row's resolved BRAND (D4). Multi-brand
+    # files (Madura AS-VH-LP, Arvind) therefore scope each row independently. Threaded
+    # into the miss ctx so a review resolution can default to the right brand.
+    scope_brand = brand_v or ctx_brand or ""
+    sctx = {**ctx, "scope_brand": scope_brand}
+    color_v, color_s = resolver.color(_color_src(g, profile), sctx, brand=scope_brand)
+    size_v, size_s = resolver.size(g("SIZE_SRC"), sctx, brand=scope_brand)
+    season_v, season_s = _map_season(resolver, g, sctx, ctx_date, brand=scope_brand)
     prov["BRAND"] = brand_s if brand_v else ""
     prov["COLOR"] = color_s if color_v else ""
     prov["SIZE"] = size_s if size_v else ""
@@ -858,7 +895,7 @@ def _resolve_fields(
         color=color_v,
         size=size_v,
         season=season_v,
-        taxonomy=_map_taxonomy(resolver, base.desc, g, ctx, prov, profile, brand_v),
+        taxonomy=_map_taxonomy(resolver, base.desc, g, sctx, prov, profile, scope_brand),
     )
 
 

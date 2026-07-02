@@ -20,6 +20,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from files.models import StoredFile, UploadTooLarge
+from ptmapper import learning
 from ptmapper.engine import (
     UnsupportedFormat,
     _margin,
@@ -29,10 +30,13 @@ from ptmapper.engine import (
     parse_date,
     run_mapping,
 )
+from ptmapper.learning import LEARNABLE_DIMS
 from ptmapper.models import (
     ControlledValue,
+    CorrectionEvent,
     ItemTaxonomy,
     Lookup,
+    LookupProposal,
     PtFile,
     PtRow,
     ReviewItem,
@@ -41,6 +45,7 @@ from ptmapper.models import (
 from ptmapper.profiles import CONTROLLED as CONTROLLED_COLS
 from ptmapper.profiles import KDPS_COLUMNS
 from ptmapper.serializers import (
+    LookupProposalSerializer,
     PtFileDetailSerializer,
     PtFileListSerializer,
     ReviewItemSerializer,
@@ -128,18 +133,33 @@ def _forbidden(detail: str) -> Response:
 
 
 def _sync_review_items(reviews: list[dict]) -> int:
-    """Upsert each engine miss into the review queue; return the open count."""
+    """Upsert each engine miss into the review queue; return the open count.
+
+    A fresh miss for a raw whose item is already RESOLVED means the earlier
+    resolution was brand-scoped (D4) and does not cover this row's brand — the engine
+    records a miss only when neither a brand nor a global lookup fired, so the value is
+    genuinely still unmapped here. The item is re-opened (its stale ``resolved_value``
+    cleared) and re-scoped to the brand(s) that still miss, so it can't be silently
+    swallowed for another brand. An IGNORED item stays ignored — a steward's decision
+    that a value is noise must survive every re-map."""
     open_count = 0
     for m in reviews:
+        # `brands` = the resolved brand(s) this miss came from → a review resolution
+        # can default to brand scope when there is exactly one (D4).
+        context = {"samples": m["samples"], "brands": m.get("brands", [])}
         obj, created = ReviewItem.objects.get_or_create(
             dimension=m["dimension"],
             raw_value=m["raw"][:300],
-            defaults={"occurrences": m["occurrences"], "context": {"samples": m["samples"]}},
+            defaults={"occurrences": m["occurrences"], "context": context},
         )
-        if not created and obj.status == ReviewItem.Status.OPEN:
+        if not created and obj.status != ReviewItem.Status.IGNORED:
+            obj.status = ReviewItem.Status.OPEN
             obj.occurrences = m["occurrences"]
-            obj.context = {"samples": m["samples"]}
-            obj.save(update_fields=["occurrences", "context", "updated_at"])
+            obj.context = context
+            obj.resolved_value = ""
+            obj.save(
+                update_fields=["status", "occurrences", "context", "resolved_value", "updated_at"]
+            )
         if obj.status == ReviewItem.Status.OPEN:
             open_count += 1
     return open_count
@@ -154,8 +174,70 @@ def _fail_file(pt: PtFile, error: str, reset_counts: bool = False) -> PtFile:
     return pt
 
 
-def process_file(pt: PtFile) -> PtFile:
-    """Run the engine over the stored bytes and (re)build rows + review items."""
+def _snapshot_manual(pt: PtFile) -> dict[int, dict[str, Any]]:
+    """{line_no: {col: value}} of every cell a human set (provenance 'manual'), taken
+    before the rows are wiped so a re-map can re-apply them (D2: preserve-by-default)."""
+    snap: dict[int, dict[str, Any]] = {}
+    for r in pt.rows.all():
+        prov = r.provenance or {}
+        cells = {c: v for c, v in (r.data or {}).items() if prov.get(c) == "manual"}
+        if cells:
+            snap[r.line_no] = cells
+    return snap
+
+
+def _reapply_manual(pt: PtFile, snapshot: dict[int, dict[str, Any]], blank_cells: int) -> tuple:
+    """Re-stamp the snapshotted manual cells onto the freshly-mapped rows (matched by
+    ``line_no``; the engine is deterministic over the same bytes, so line_no is stable).
+    Returns ``(blank_cells, applied_count, dropped_count)`` — a cell whose row vanished
+    (profile detection changed) is dropped and reported, never silently lost."""
+    rebuilt = {r.line_no: r for r in pt.rows.all()}
+    touched: list[PtRow] = []
+    applied = dropped = 0
+    for line_no, cells in snapshot.items():
+        r = rebuilt.get(line_no)
+        if r is None:
+            dropped += len(cells)
+            continue
+        new_data = {**r.data}
+        new_prov = {**(r.provenance or {})}
+        new_blanks = list(r.blanks)
+        recompute: set[str] = set()
+        for c, v in cells.items():
+            if c not in KDPS_COLUMN_SET:
+                dropped += 1
+                continue
+            new_data[c] = v
+            new_prov[c] = "manual"  # a human set it → stays trusted through the re-map
+            recompute.add(c)
+            applied += 1
+            # Keep blank tracking honest in both directions: a manual value fills a
+            # blank; a manual clear of a controlled cell re-opens one — otherwise a
+            # deliberately-cleared cell reads as filled when the engine had filled it.
+            if c in CONTROLLED_COLS:
+                if str(v or "").strip():
+                    if c in new_blanks:
+                        new_blanks.remove(c)
+                        blank_cells -= 1
+                elif c not in new_blanks:
+                    new_blanks.append(c)
+                    blank_cells += 1
+        r.data, r.provenance, r.blanks = new_data, new_prov, new_blanks
+        _recompute_derived(r, recompute)
+        touched.append(r)
+    if touched:
+        PtRow.objects.bulk_update(touched, ["data", "provenance", "blanks"])
+    return blank_cells, applied, dropped
+
+
+def process_file(pt: PtFile, preserve_manual: bool = True) -> PtFile:
+    """Run the engine over the stored bytes and (re)build rows + review items.
+
+    ``preserve_manual`` (default, D2): a human's hand-edited cells are snapshotted and
+    re-applied after the rebuild, so a re-map (a learned rule landing, a re-run) fills
+    the remaining blanks without ever clobbering a manual cell. Pass ``False`` for the
+    explicit full-wipe re-run."""
+    snapshot = _snapshot_manual(pt) if preserve_manual else {}
     pt.rows.all().delete()
     if not pt.stored_file:
         return _fail_file(pt, "The uploaded file is no longer available.")
@@ -183,6 +265,10 @@ def process_file(pt: PtFile) -> PtFile:
             for r in result["rows"]
         ]
     )
+    blank_cells = result["blank_cells"]
+    applied = dropped = 0
+    if snapshot:
+        blank_cells, applied, dropped = _reapply_manual(pt, snapshot, blank_cells)
     open_count = _sync_review_items(result["reviews"])
 
     pt.profile_code = result["profile_code"]
@@ -193,10 +279,12 @@ def process_file(pt: PtFile) -> PtFile:
         **result["meta"],
         "low_confidence_cells": result.get("low_confidence_cells", 0),
         **({"context": context} if context else {}),
+        **({"manual_cells_dropped": dropped} if dropped else {}),
     }
     pt.row_count = len(result["rows"])
-    pt.blank_cell_count = result["blank_cells"]
+    pt.blank_cell_count = blank_cells
     pt.unresolved_count = open_count
+    pt.manually_edited = applied > 0  # keeps the flag only while manual cells survive
     pt.status = (
         PtFile.Status.READY
         if (pt.row_count > 0 and open_count == 0)
@@ -256,6 +344,11 @@ class PtFileDetailView(generics.RetrieveDestroyAPIView):
 
 
 class PtFileRerunView(APIView):
+    """Re-map a mapping-stage file. By default (D2) hand-edited cells are **preserved**
+    — the engine re-runs and the human's manual cells are re-applied on top, so a fresh
+    seed/rule fills the remaining blanks without clobbering a manual fix. Passing
+    ``{"discard_edits": true}`` is the explicit full wipe (today's behaviour)."""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
@@ -276,8 +369,8 @@ class PtFileRerunView(APIView):
                 meta["context"] = context
             pt.meta = meta
             pt.save(update_fields=["meta", "updated_at"])
-        pt.manually_edited = False
-        process_file(pt)
+        discard = bool(request.data.get("discard_edits"))
+        process_file(pt, preserve_manual=not discard)
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -299,10 +392,93 @@ def _recompute_counts(pt: PtFile) -> None:
     )
 
 
-def _apply_cell(row: PtRow, col: str, val: Any, changed: dict[int, set[str]]) -> None:
+def _cell_changed(old: Any, new: Any) -> bool:
+    """True when a hand-edit actually alters the cell (blank/None/number-vs-string
+    are compared as trimmed strings, so re-entering the same value is a no-op)."""
+    return str("" if old is None else old).strip() != str("" if new is None else new).strip()
+
+
+def _apply_cell(
+    row: PtRow,
+    col: str,
+    val: Any,
+    changed: dict[int, set[str]],
+    *,
+    events: list[CorrectionEvent],
+    actor: Any,
+    kind: str,
+    pt: PtFile,
+) -> None:
+    """Apply one hand-edit and, *only when the value truly changes*, append an
+    unsaved CorrectionEvent (the learning signal + Rule-10 actor trail). The event
+    captures the raw source value and prior provenance so a mined rule keeps its
+    provenance even after the PtRow dies on the next re-map."""
+    old = row.data.get(col)
+    if not _cell_changed(old, val):
+        return
+    prov_before = str((row.provenance or {}).get(col, ""))
+    raw_value = str((row.raw or {}).get(col, ""))
     row.data = {**row.data, col: val}
     row.provenance = {**(row.provenance or {}), col: "manual"}  # a human set it → trusted
     changed.setdefault(row.id, set()).add(col)
+    events.append(
+        CorrectionEvent(
+            pt_file=pt,
+            pt_row=row,
+            file_name=pt.original_filename[:255],
+            line_no=row.line_no,
+            brand=str(row.data.get("BRAND") or "")[:160],  # resolved BRAND post-edit
+            column=col,
+            dimension=_column_dimension(col) or "",
+            raw_value=raw_value[:300],
+            old_value=str("" if old is None else old)[:300],
+            new_value=str("" if val is None else val)[:300],
+            provenance_before=prov_before,
+            edit_kind=kind,
+            actor=actor if getattr(actor, "is_authenticated", False) else None,
+        )
+    )
+
+
+def _fill_kind(scope: Any) -> str:
+    if scope == "all":
+        return CorrectionEvent.EditKind.FILL_ALL
+    if isinstance(scope, dict) and "match_raw" in scope:
+        return CorrectionEvent.EditKind.FILL_MATCH_RAW
+    return CorrectionEvent.EditKind.FILL_BLANK
+
+
+def _plan_remembers(
+    remember: list[dict], by_id: dict[int, PtRow]
+) -> tuple[list[tuple[int, str, str, str, str, str]], list[dict]]:
+    """Validate each ``{"row_id","column"}`` remember tick against its post-edit row and
+    return ``(plan, errors)``. A plan entry is ``(row_id, column, dimension, source_key,
+    target, brand)`` — a learnable column with a non-empty raw source and a non-blank
+    value; the rule is scoped to the row's resolved BRAND (D4)."""
+    plan: list[tuple[int, str, str, str, str, str]] = []
+    errors: list[dict] = []
+    for spec in remember:
+        rid = spec.get("row_id")
+        col = spec.get("column", "")
+        r = by_id.get(int(rid)) if rid is not None else None
+        if r is None:
+            errors.append({"detail": f"remember: row {rid} is not in this file."})
+            continue
+        dim = _column_dimension(col)
+        if dim not in LEARNABLE_DIMS:
+            errors.append({"column": col, "detail": f"'{col}' isn't a learnable column."})
+            continue
+        raw_val = str((r.raw or {}).get(col, "")).strip()
+        target = str(r.data.get(col) or "").strip()
+        if not raw_val:
+            errors.append({"column": col, "detail": f"'{col}' has no raw source value to learn."})
+            continue
+        if not target:
+            errors.append({"column": col, "detail": f"'{col}' is blank — nothing to remember."})
+            continue
+        brand = str(r.data.get("BRAND") or "").strip()
+        plan.append((r.id, col, dim, norm(raw_val), target, brand))
+    return plan, errors
 
 
 def _recompute_derived(row: PtRow, changed_cols: set[str]) -> None:
@@ -333,10 +509,13 @@ class PtRowsUpdateView(APIView):
     """Warehouse hand-edits the mapped KDPS rows before sending to Patna.
 
     Body: ``{"rows": [{"id", "data": {col: val}}], "fills": [{"column", "value",
-    "scope": "blank" | "all" | {"match_raw": <raw>}}]}`` — both optional. Every
-    edited controlled cell (the 9 Master columns + the two tax columns) must hold
-    an allowed Master-Sheet value or be blank; anything else is a 400 with
-    per-cell errors and nothing is written. Fills run first, then row edits.
+    "scope": "blank" | "all" | {"match_raw": <raw>}}], "remember": [{"row_id",
+    "column"}]}`` — all optional. Every edited controlled cell (the 9 Master columns
+    + the two tax columns) must hold an allowed Master-Sheet value or be blank;
+    anything else is a 400 with per-cell errors and nothing is written. Fills run
+    first, then row edits. A ``remember`` entry stages a brand-scoped learning
+    proposal from that cell's raw source → its (post-edit) value (D1: it promotes to
+    a live rule when the file is sent to Patna, or immediately if it is already sent).
     """
 
     permission_classes = [IsAuthenticated]
@@ -351,6 +530,7 @@ class PtRowsUpdateView(APIView):
 
         edits = {int(e["id"]): e.get("data", {}) for e in request.data.get("rows", []) if "id" in e}
         fills = request.data.get("fills", [])
+        remember = request.data.get("remember", [])
 
         valid = _valid_values()
         errors: list[dict] = []
@@ -380,26 +560,70 @@ class PtRowsUpdateView(APIView):
                 status=400,
             )
 
-        rows = list(pt.rows.all()) if clean_fills else list(pt.rows.filter(id__in=edits.keys()))
+        remember_ids = {int(s["row_id"]) for s in remember if "row_id" in s}
+        if clean_fills:
+            rows = list(pt.rows.all())
+        else:
+            rows = list(pt.rows.filter(id__in=set(edits.keys()) | remember_ids))
         by_id = {r.id: r for r in rows}
         changed: dict[int, set[str]] = {}
+        events: list[CorrectionEvent] = []
+        actor = request.user
 
         for col, val, scope in clean_fills:
+            kind = _fill_kind(scope)
             for r in rows:
                 if _fill_applies(r, col, scope):
-                    _apply_cell(r, col, val, changed)
+                    _apply_cell(r, col, val, changed, events=events, actor=actor, kind=kind, pt=pt)
         for rid, data in edits.items():
             r = by_id.get(rid)
             if r is None:
                 continue
             for col, val in data.items():
                 if col in KDPS_COLUMN_SET:
-                    _apply_cell(r, col, val, changed)
+                    _apply_cell(
+                        r,
+                        col,
+                        val,
+                        changed,
+                        events=events,
+                        actor=actor,
+                        kind=CorrectionEvent.EditKind.CELL,
+                        pt=pt,
+                    )
+
+        # Plan the remember-proposals off the *post-edit* in-memory rows; a bad remember
+        # is a 400 with nothing written (validation runs before any DB write below).
+        remember_plan, rem_errors = _plan_remembers(remember, by_id)
+        if rem_errors:
+            return Response(
+                {"detail": "Some cells can't be remembered.", "errors": rem_errors}, status=400
+            )
 
         touched = [by_id[rid] for rid in changed]
         for r in touched:
             _recompute_derived(r, changed[r.id])
         PtRow.objects.bulk_update(touched, ["data", "provenance"])
+        remember_cells = {(rid, col) for rid, col, *_ in remember_plan}
+        for e in events:
+            if (e.pt_row_id, e.column) in remember_cells:
+                e.remember = True
+        CorrectionEvent.objects.bulk_create(events)  # append-only; rejected PATCH wrote nothing
+
+        already_sent = pt.draft_stage == PtFile.DraftStage.SENT
+        for _rid, _col, dim, source_key, target, brand in remember_plan:
+            proposal = learning.propose(
+                dimension=dim,
+                source_key=source_key,
+                target_value=target,
+                brand=brand,
+                origin=LookupProposal.Origin.REMEMBER,
+                proposed_by=actor if getattr(actor, "is_authenticated", False) else None,
+                evidence={"files": [pt.pk], "brands": [brand] if brand else []},
+            )
+            if already_sent:  # D1: edits on an already-sent file promote immediately
+                learning.approve(proposal, actor)
+
         pt.manually_edited = True
         _recompute_counts(pt)
         pt.save()
@@ -411,6 +635,7 @@ class PtFileSendView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
@@ -422,6 +647,8 @@ class PtFileSendView(APIView):
         pt.draft_stage = PtFile.DraftStage.SENT
         pt.sent_at = timezone.now()
         pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
+        # D1: sending to Patna is the trust gate — promote this file's remember-ticks.
+        learning.promote_file_remembers(pt, request.user)
         return Response(PtFileDetailSerializer(pt).data)
 
 
@@ -552,12 +779,32 @@ class ReviewListView(generics.ListAPIView):
 
 
 class ReviewResolveView(APIView):
-    """Resolve one queue item → write a lookup row / taxonomy rule, then re-map
-    every file still needing review (the resolution is remembered forever)."""
+    """Resolve one queue item → stage + promote a lookup row (via ``learning``, the one
+    write-path) or write a taxonomy rule, then re-map every file still needing review.
+
+    A single-dimension resolution routes through ``learning.propose(origin="review") +
+    approve`` — the steward's decision *is* the gate, so it is shadow-checked on the way
+    in (a conflict with a human-confirmed cell returns 409 and writes nothing). It
+    defaults to **brand scope** when the miss came from exactly one resolved brand (D4);
+    ``brand`` in the payload overrides (``""`` = explicit global)."""
 
     permission_classes = [IsAuthenticated]
 
-    def _resolve_single(self, item: ReviewItem, data: dict) -> Response | None:
+    def _scope_brand(self, item: ReviewItem, data: dict) -> tuple[str, Response | None]:
+        """Brand to scope this resolution to. Explicit ``brand`` wins (validated Master
+        brand, or ``""`` for global); else the item's single resolved brand; else global."""
+        if "brand" in data:
+            brand = str(data.get("brand") or "").strip()
+            known = ControlledValue.objects.filter(dimension="brand", value=brand).exists()
+            if brand and not known:
+                return "", Response(
+                    {"detail": f"'{brand}' is not a Master-Sheet brand."}, status=400
+                )
+            return brand, None
+        brands = [b for b in (item.context or {}).get("brands", []) if b]
+        return (brands[0] if len(brands) == 1 else ""), None
+
+    def _resolve_single(self, item: ReviewItem, data: dict, actor: Any) -> Response | None:
         target = (data.get("target_value") or "").strip()
         if not target:
             return Response({"detail": "target_value is required."}, status=400)
@@ -569,11 +816,27 @@ class ReviewResolveView(APIView):
                 {"detail": f"'{target}' is not an allowed {item.dimension} value."},
                 status=400,
             )
-        Lookup.objects.update_or_create(
+        brand, err = self._scope_brand(item, data)
+        if err is not None:
+            return err
+        proposal = learning.propose(
             dimension=item.dimension,
             source_key=norm(item.raw_value),
-            defaults={"target_value": target},
+            target_value=target,
+            brand=brand,
+            origin=LookupProposal.Origin.REVIEW,
+            proposed_by=actor if getattr(actor, "is_authenticated", False) else None,
+            evidence={"brands": brand and [brand] or [], "occurrences": item.occurrences},
         )
+        proposal = learning.approve(proposal, actor)
+        if proposal.status != LookupProposal.Status.APPROVED:
+            return Response(
+                {
+                    "detail": "This resolution conflicts with a human-confirmed cell/correction.",
+                    "validation": proposal.validation,
+                },
+                status=409,
+            )
         item.resolved_value = target
         return None
 
@@ -601,16 +864,6 @@ class ReviewResolveView(APIView):
         item.resolved_value = grid.get("item") or pattern
         return None
 
-    def _repropagate(self) -> None:
-        """Re-map every file still in mapping & not hand-edited so the fix
-        propagates everywhere without clobbering manual edits / sent files."""
-        for pt in PtFile.objects.filter(
-            status=PtFile.Status.NEEDS_REVIEW,
-            draft_stage=PtFile.DraftStage.MAPPING,
-            manually_edited=False,
-        ):
-            process_file(pt)
-
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
         if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
@@ -628,7 +881,8 @@ class ReviewResolveView(APIView):
             return Response(ReviewItemSerializer(item).data)
 
         if item.dimension in SINGLE_DIMS:
-            err = self._resolve_single(item, data)
+            # learning.approve() repropagates on success — don't double-map below.
+            err = self._resolve_single(item, data, request.user)
         elif item.dimension == "taxonomy":
             err = self._resolve_taxonomy(item, data)
         else:
@@ -638,8 +892,101 @@ class ReviewResolveView(APIView):
 
         item.status = ReviewItem.Status.RESOLVED
         item.save(update_fields=["status", "resolved_value", "updated_at"])
-        self._repropagate()
+        if item.dimension == "taxonomy":
+            learning.repropagate()  # the single-dim path already repropagated via approve()
         return Response(ReviewItemSerializer(item).data)
+
+
+class LookupProposalListView(generics.ListAPIView):
+    """The staged-learning queue. ``?status=`` (default ``proposed``) filters by status;
+    ``all`` returns every proposal, newest first."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = LookupProposalSerializer
+
+    def get_queryset(self) -> Any:
+        qs = LookupProposal.objects.all()
+        st = self.request.query_params.get("status", "proposed")
+        if st != "all":
+            qs = qs.filter(status=st)
+        return qs
+
+
+class LookupProposalDecideView(APIView):
+    """Approve (promote to a live ``Lookup`` via the one write-path) or reject a staged
+    proposal — a mapping-steward action (Rule 8: only a human decision reaches a live
+    rule). Approve runs the shadow check; a conflict returns 409 with the detail."""
+
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+            return _forbidden("Only mapping stewards can decide learning proposals.")
+        proposal = LookupProposal.objects.filter(pk=pk).first()
+        if not proposal:
+            return Response({"detail": "Not found."}, status=404)
+        action = request.data.get("action")
+        if action == "approve":
+            proposal = learning.approve(proposal, request.user)
+            if proposal.status != LookupProposal.Status.APPROVED:
+                return Response(
+                    {
+                        "detail": "The shadow check blocked this promotion.",
+                        "validation": proposal.validation,
+                        "proposal": LookupProposalSerializer(proposal).data,
+                    },
+                    status=409,
+                )
+        elif action == "reject":
+            proposal = learning.reject(proposal, request.user)
+        else:
+            return Response({"detail": "action must be 'approve' or 'reject'."}, status=400)
+        return Response(LookupProposalSerializer(proposal).data)
+
+
+class SuggestView(APIView):
+    """Deterministic pre-fill suggestions for a raw value (no LLM). Exact ``Lookup``
+    hits (brand-scoped first, then global) rank above Master values by trigram
+    similarity (``>= 0.25``, top 5). Pure read — it only pre-fills a dropdown; a human
+    still picks and only the review/edit write-path commits anything (Rule 8).
+
+    ``GET /ptmapper/suggest?dimension=<dim>&q=<raw>&brand=<brand>``"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        from django.contrib.postgres.search import TrigramSimilarity
+
+        dimension = request.query_params.get("dimension", "")
+        q = (request.query_params.get("q") or "").strip()
+        brand = (request.query_params.get("brand") or "").strip()
+        if not dimension or not q:
+            return Response({"dimension": dimension, "q": q, "suggestions": []})
+
+        key = norm(q)
+        suggestions: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        # 1) exact lookup hits, brand-scoped before global (highest confidence)
+        for scope in [brand, ""] if brand else [""]:
+            hit = Lookup.objects.filter(dimension=dimension, source_key=key, brand=scope).first()
+            if hit and hit.target_value not in seen:
+                suggestions.append({"value": hit.target_value, "reason": "lookup", "score": 1.0})
+                seen.add(hit.target_value)
+        # 2) fuzzy Master values by trigram similarity (Master vocabulary only)
+        fuzzy = (
+            ControlledValue.objects.filter(dimension=dimension)
+            .annotate(sim=TrigramSimilarity("value", q))
+            .filter(sim__gte=0.25)
+            .order_by("-sim")[:5]
+        )
+        for cv in fuzzy:
+            if cv.value not in seen:
+                suggestions.append(
+                    {"value": cv.value, "reason": "similar", "score": round(cv.sim, 3)}
+                )
+                seen.add(cv.value)
+        return Response({"dimension": dimension, "q": q, "suggestions": suggestions[:5]})
 
 
 class ControlledValuesView(APIView):

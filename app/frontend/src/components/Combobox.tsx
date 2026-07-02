@@ -18,6 +18,7 @@ export function Combobox({
   allowClear = true,
   size = "field",
   testId,
+  suggested,
 }: {
   value: string;
   options: string[];
@@ -26,6 +27,9 @@ export function Combobox({
   allowClear?: boolean;
   size?: "field" | "cell";
   testId?: string;
+  // Master values to float to the top of the list (deterministic pre-fill hints);
+  // marked with a ★. Never restricts the list — every option stays selectable.
+  suggested?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -35,11 +39,18 @@ export function Combobox({
   const listRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
 
+  const suggestedSet = useMemo(() => new Set(suggested ?? []), [suggested]);
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase();
     const hits = q ? options.filter((o) => o.toUpperCase().includes(q)) : options;
+    if (suggestedSet.size) {
+      // stable partition: suggested matches first (order preserved), then the rest
+      const top = hits.filter((o) => suggestedSet.has(o));
+      const rest = hits.filter((o) => !suggestedSet.has(o));
+      return [...top, ...rest].slice(0, MAX_VISIBLE);
+    }
     return hits.slice(0, MAX_VISIBLE);
-  }, [options, query]);
+  }, [options, query, suggestedSet]);
   const overflow = useMemo(() => {
     const q = query.trim().toUpperCase();
     const n = q ? options.filter((o) => o.toUpperCase().includes(q)).length : options.length;
@@ -177,14 +188,14 @@ export function Combobox({
             <div
               key={o}
               data-idx={i}
-              className={`cbx-option ${i === active ? "active" : ""} ${o === value ? "selected" : ""}`}
+              className={`cbx-option ${i === active ? "active" : ""} ${o === value ? "selected" : ""} ${suggestedSet.has(o) ? "suggested" : ""}`}
               onMouseEnter={() => setActive(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
                 commit(o);
               }}
             >
-              {o}
+              {suggestedSet.has(o) ? `★ ${o}` : o}
             </div>
           ))}
           {overflow > 0 && <div className="cbx-more">+{overflow} more — type to narrow</div>}
