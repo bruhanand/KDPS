@@ -64,6 +64,38 @@ services:
       - key: JWT_COOKIE_SAMESITE
         value: "None"           # API and web are different onrender.com sites
 
+  # --- PT-mapper self-improvement cron ---------------------------------------
+  # Daily: mine the human-correction log into staged learning proposals, then
+  # print the corrections-per-file KPI. The miner only proposes (Rule 8) — a
+  # steward still approves each proposal in the app, so this never writes a live
+  # rule on its own. NOTE: Render cron jobs are not on the free tier; if you keep
+  # the stack on free, run these two commands by hand from a shell instead (see
+  # DEPLOY.md). Both are idempotent and safe to re-run.
+  - type: cron
+    name: kdps-ptmap-learn
+    runtime: python
+    plan: starter
+    schedule: "0 20 * * *"     # 20:00 UTC daily (~01:30 IST, low traffic)
+    region: singapore
+    rootDir: app/backend
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: >-
+      uv run python manage.py ptmap_mine &&
+      uv run python manage.py ptmap_learning_report
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true    # a management command signs nothing — any secret is fine
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kdps-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+
   # --- React PWA (static) ----------------------------------------------------
   - type: web
     name: kdps-erp-web

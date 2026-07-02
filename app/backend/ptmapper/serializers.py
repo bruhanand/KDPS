@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from ptmapper.models import PtFile, PtRow, ReviewItem
+from ptmapper.models import LookupProposal, PtFile, PtRow, ReviewItem
 
 
 class PtRowSerializer(serializers.ModelSerializer):
     class Meta:
         model = PtRow
-        fields = ["id", "line_no", "data", "blanks", "provenance"]
+        fields = ["id", "line_no", "data", "blanks", "provenance", "raw"]
 
 
 class ReviewItemSerializer(serializers.ModelSerializer):
@@ -27,6 +27,43 @@ class ReviewItemSerializer(serializers.ModelSerializer):
             "occurrences",
             "updated_at",
         ]
+
+
+class LookupProposalSerializer(serializers.ModelSerializer):
+    origin_label = serializers.CharField(source="get_origin_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+    proposed_by_name = serializers.CharField(
+        source="proposed_by.username", read_only=True, default=""
+    )
+    decided_by_name = serializers.CharField(
+        source="decided_by.username", read_only=True, default=""
+    )
+    scope = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LookupProposal
+        fields = [
+            "id",
+            "dimension",
+            "source_key",
+            "target_value",
+            "brand",
+            "scope",
+            "origin",
+            "origin_label",
+            "status",
+            "status_label",
+            "evidence",
+            "validation",
+            "proposed_by_name",
+            "decided_by_name",
+            "decided_at",
+            "applied_at",
+            "created_at",
+        ]
+
+    def get_scope(self, obj: LookupProposal) -> str:
+        return obj.brand or "GLOBAL"
 
 
 class PtFileListSerializer(serializers.ModelSerializer):

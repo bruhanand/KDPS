@@ -8,6 +8,8 @@ in code (`ptmapper/profiles.py`) because they are engine config, not business da
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 
 from core.base import TimeStampedModel
@@ -50,18 +52,28 @@ class ItemTaxonomy(TimeStampedModel):
 
 
 class Lookup(TimeStampedModel):
-    """Single-value normaliser: a brand's raw value → a KDPS controlled value."""
+    """Single-value normaliser: a brand's raw value → a KDPS controlled value.
 
-    dimension = models.CharField(max_length=20)  # color | size | brand | season | gender
+    ``brand`` scopes the rule (D4): a non-empty brand (a Master brand value) applies
+    only to rows whose *resolved* BRAND matches; ``brand=""`` is a global rule. The
+    resolver prefers a brand-scoped row over a global one, so a Peter England
+    fit-code or a Zilu shade can be learned without polluting other brands. Existing
+    rows default ``brand=""`` (global) — behaviour is unchanged until a scoped row
+    is added beside one.
+    """
+
+    dimension = models.CharField(max_length=20)  # color | size | brand | season | gender | fit
     source_key = models.CharField(max_length=240)  # normalised raw (upper, trimmed)
     target_value = models.CharField(max_length=160)
+    brand = models.CharField(max_length=160, blank=True, default="")  # "" = global
 
     class Meta:
-        unique_together = [("dimension", "source_key")]
-        ordering = ["dimension", "source_key"]
+        unique_together = [("dimension", "source_key", "brand")]
+        ordering = ["dimension", "brand", "source_key"]
 
     def __str__(self) -> str:
-        return f"{self.dimension}:{self.source_key}→{self.target_value}"
+        scope = f"[{self.brand}]" if self.brand else ""
+        return f"{self.dimension}{scope}:{self.source_key}→{self.target_value}"
 
 
 class TaxonomyRule(TimeStampedModel):
@@ -213,3 +225,115 @@ class ReviewItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.dimension}:{self.raw_value} [{self.status}]"
+
+
+class CorrectionEvent(models.Model):
+    """Append-only log of one human cell-correction — the training signal for the
+    self-improving mapper and the Rule-10 actor trail (who fixed what, when).
+
+    Rows outlive the ``PtRow`` they described (rows die on every re-map, so the FKs
+    are ``SET_NULL``); ``file_name`` / ``line_no`` / ``brand`` / ``raw_value`` are
+    denormalised so a mined proposal keeps its provenance after the row is gone.
+    ``brand`` is the row's *resolved* BRAND at edit time — the mining scope key.
+    Never updated: ``save()`` refuses a second write (append-only, code-enforced).
+    """
+
+    class EditKind(models.TextChoices):
+        CELL = "cell", "Cell edit"
+        FILL_BLANK = "fill_blank", "Fill blank cells"
+        FILL_ALL = "fill_all", "Fill all cells"
+        FILL_MATCH_RAW = "fill_match_raw", "Fill cells matching a raw value"
+
+    pt_file = models.ForeignKey(
+        PtFile, null=True, blank=True, on_delete=models.SET_NULL, related_name="correction_events"
+    )
+    pt_row = models.ForeignKey(
+        PtRow, null=True, blank=True, on_delete=models.SET_NULL, related_name="correction_events"
+    )
+    file_name = models.CharField(max_length=255, blank=True, default="")
+    line_no = models.IntegerField(default=0)
+    brand = models.CharField(max_length=160, blank=True, default="")  # resolved BRAND (scope key)
+    column = models.CharField(max_length=40)  # the KDPS column edited
+    dimension = models.CharField(max_length=20, blank=True, default="")  # its controlled dimension
+    raw_value = models.CharField(max_length=300, blank=True, default="")  # raw the engine read
+    old_value = models.CharField(max_length=300, blank=True, default="")
+    new_value = models.CharField(max_length=300, blank=True, default="")
+    provenance_before = models.CharField(max_length=20, blank=True, default="")
+    edit_kind = models.CharField(max_length=16, choices=EditKind.choices, default=EditKind.CELL)
+    remember = models.BooleanField(default=False)  # D1: operator asked to learn this
+    actor = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["dimension", "raw_value"]),
+            models.Index(fields=["brand", "dimension"]),
+            models.Index(fields=["created_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.column}: {self.old_value!r}→{self.new_value!r}"
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        # `_state.adding` is True only for a never-persisted instance; anything else
+        # is an UPDATE in disguise. A correction is a fact — refuse to rewrite it.
+        if not self._state.adding:
+            raise ValueError("CorrectionEvent is append-only; it cannot be updated.")
+        super().save(*args, **kwargs)
+
+
+class LookupProposal(TimeStampedModel):
+    """A staged ``(dimension, source_key, brand → target_value)`` mapping awaiting a
+    human decision — the only gate between a learned suggestion and a live ``Lookup``
+    (Rule 8: miners suggest; a human decides). ``origin`` records where it came from
+    (a steward's review resolution, an operator's remember-tick, or the deterministic
+    miner); ``evidence`` carries the supporting corrections/files; ``validation`` holds
+    the last shadow-check. A partial-unique index keeps at most one *open* (proposed)
+    proposal per identity, so the miner is idempotent / cron-safe.
+    """
+
+    class Origin(models.TextChoices):
+        REVIEW = "review", "Review resolution"
+        REMEMBER = "remember", "Remember this"
+        MINED = "mined", "Deterministic miner"
+        LLM = "llm", "LLM miner"  # reserved — deferred slice
+
+    class Status(models.TextChoices):
+        PROPOSED = "proposed", "Proposed"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        AUTO_REJECTED = "auto_rejected", "Auto-rejected (shadow conflict)"
+
+    dimension = models.CharField(max_length=20)
+    source_key = models.CharField(max_length=240)  # normalised raw
+    target_value = models.CharField(max_length=160)
+    brand = models.CharField(max_length=160, blank=True, default="")  # "" = global
+    origin = models.CharField(max_length=12, choices=Origin.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROPOSED)
+    evidence = models.JSONField(default=dict, blank=True)  # {correction_event_ids, files, brands}
+    validation = models.JSONField(default=dict, blank=True)  # last shadow_check result
+    proposed_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["dimension", "source_key", "brand"],
+                condition=models.Q(status="proposed"),
+                name="uniq_open_lookup_proposal",
+            )
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        scope = f"[{self.brand}]" if self.brand else ""
+        return f"{self.dimension}{scope}:{self.source_key}→{self.target_value} ({self.status})"

@@ -4,6 +4,8 @@ from django.urls import path
 
 from ptmapper.views import (
     ControlledValuesView,
+    LookupProposalDecideView,
+    LookupProposalListView,
     PtFileDetailView,
     PtFileExportView,
     PtFileExportXlsxView,
@@ -16,6 +18,7 @@ from ptmapper.views import (
     PtRowsUpdateView,
     ReviewListView,
     ReviewResolveView,
+    SuggestView,
 )
 
 urlpatterns = [
@@ -31,5 +34,12 @@ urlpatterns = [
     path("files/<int:pk>/export.xlsx", PtFileExportXlsxView.as_view(), name="pt-file-export-xlsx"),
     path("review", ReviewListView.as_view(), name="pt-review-list"),
     path("review/<int:pk>/resolve", ReviewResolveView.as_view(), name="pt-review-resolve"),
+    path("proposals", LookupProposalListView.as_view(), name="pt-proposal-list"),
+    path(
+        "proposals/<int:pk>/decide",
+        LookupProposalDecideView.as_view(),
+        name="pt-proposal-decide",
+    ),
+    path("suggest", SuggestView.as_view(), name="pt-suggest"),
     path("controlled", ControlledValuesView.as_view(), name="pt-controlled"),
 ]

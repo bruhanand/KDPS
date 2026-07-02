@@ -9,6 +9,7 @@ import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage } from 
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
+import { PtProposalsPage } from "./pages/PtProposals";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
 import VendorLedger from "./pages/VendorLedger";
@@ -33,6 +34,7 @@ export function App() {
             <Route path="/inbound/:id" element={<GrnDetailPage />} />
             <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
             <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
+            <Route path="/documents/pt-mapper/proposals" element={<PtProposalsPage />} />
             <Route path="/documents/pt-mapper/:id" element={<PtFileDetailPage />} />
             <Route path="/ledgers/stock" element={<StockLedger />} />
             <Route path="/ledgers/stock-on-hand" element={<StockOnHand />} />
