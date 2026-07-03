@@ -1,9 +1,11 @@
 """Iteration 13 regression: CORS/CSRF env-driven config change.
 
 Goal: verify the deploy-readiness config change (env-driven CORS_ALLOWED_ORIGINS
-and CSRF_TRUSTED_ORIGINS default of `https://*.emergentagent.com`) did NOT
-break auth or core authenticated reads, and that the preview origin still
-passes CORS preflight via the regex allow-list.
+and CSRF_TRUSTED_ORIGINS) did NOT break auth or core authenticated reads, and
+that an allowed origin still passes CORS preflight via the regex allow-list. The
+CORS tests are marked ``local_backend``: they hit the Django layer directly via
+``{API}`` because a public ingress overwrites CORS headers (`*`) at the proxy,
+so they are only meaningful against this checkout's locally-booted uvicorn.
 """
 
 from __future__ import annotations
@@ -16,7 +18,11 @@ import requests
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
-PREVIEW_ORIGIN = "https://ledger-kernel-v2.preview.emergentagent.com"
+
+# localhost:3000 matches the DEBUG CORS regex `^http://localhost:\d+$`
+# (config/settings.py); CI runs DJANGO_DEBUG=1, so the allowlist + credentials
+# mechanism is exercised identically without the retired preview origin.
+CORS_TEST_ORIGIN = os.environ.get("KDPS_TEST_CORS_ORIGIN", "http://localhost:3000")
 
 
 # --- shared helpers ---------------------------------------------------------
@@ -99,36 +105,38 @@ def test_owner_stockledger_entries_returns_json(session: requests.Session, owner
 # --- CORS preflight: preview origin must be echoed back --------------------
 
 
-def test_cors_preflight_echoes_preview_origin_with_credentials():
-    """Django CORS layer must echo the preview origin and allow credentials.
+@pytest.mark.local_backend
+def test_cors_preflight_echoes_allowed_origin_with_credentials():
+    """Django CORS layer must echo an allowed origin and allow credentials.
 
-    Hit the internal uvicorn directly because the public ingress overwrites
-    CORS headers (`*`) at the proxy layer. The settings.py change only
-    controls the Django-emitted headers.
+    Hitting the Django layer directly (rather than a public proxy that rewrites
+    CORS headers to `*`) is guaranteed by the `local_backend` marker. The
+    settings.py change only controls the Django-emitted headers.
     """
     r = requests.options(
-        "http://localhost:8001/api/auth/login",
+        f"{API}/auth/login",
         headers={
-            "Origin": PREVIEW_ORIGIN,
+            "Origin": CORS_TEST_ORIGIN,
             "Access-Control-Request-Method": "POST",
             "Access-Control-Request-Headers": "content-type",
         },
         timeout=30,
     )
     assert r.status_code in (200, 204), r.text[:300]
-    assert r.headers.get("access-control-allow-origin") == PREVIEW_ORIGIN, dict(r.headers)
+    assert r.headers.get("access-control-allow-origin") == CORS_TEST_ORIGIN, dict(r.headers)
     assert r.headers.get("access-control-allow-credentials") == "true", dict(r.headers)
 
 
+@pytest.mark.local_backend
 def test_cors_actual_post_includes_allow_origin_header():
-    """Login POST from preview origin should also carry the echoed CORS header
+    """Login POST from an allowed origin should also carry the echoed CORS header
     at the Django layer."""
     r = requests.post(
-        "http://localhost:8001/api/auth/login",
+        f"{API}/auth/login",
         json={"username": "owner", "password": "Owner@123"},
-        headers={"Origin": PREVIEW_ORIGIN, "Content-Type": "application/json"},
+        headers={"Origin": CORS_TEST_ORIGIN, "Content-Type": "application/json"},
         timeout=30,
     )
     assert r.status_code == 200, r.text[:300]
-    assert r.headers.get("access-control-allow-origin") == PREVIEW_ORIGIN
+    assert r.headers.get("access-control-allow-origin") == CORS_TEST_ORIGIN
     assert r.headers.get("access-control-allow-credentials") == "true"

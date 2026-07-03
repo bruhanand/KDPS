@@ -8,23 +8,11 @@ Covers:
 
 import os
 import uuid
-from pathlib import Path
 
 import pytest
 import requests
 
-
-def _read_frontend_env():
-    env_path = str(Path(__file__).resolve().parents[3] / "app/frontend/.env")
-    if os.path.exists(env_path):
-        with open(env_path) as f:
-            for line in f:
-                if line.startswith("REACT_APP_BACKEND_URL="):
-                    return line.split("=", 1)[1].strip()
-    return os.environ.get("REACT_APP_BACKEND_URL", "")
-
-
-BASE_URL = _read_frontend_env().rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL missing"
 API = f"{BASE_URL}/api"
 
@@ -102,6 +90,15 @@ class TestStockOnHand:
 
 # ───── Masters stewardship CRUD ────────────────────────────────────────
 class TestMastersSteward:
+    """Creates ZZ-prefixed masters (store/brand/season/gstin) over HTTP.
+
+    There is deliberately no teardown: masters expose no DELETE endpoint
+    (deactivate-by-design) and ``Season`` has no ``is_active`` field, so cleanup
+    could never be complete — it would be theater. Instead these writes are
+    confined to disposable DBs by the conftest remote-target gate (issue #41):
+    against any non-local target they are skipped unless KDPS_TEST_ALLOW_REMOTE=1.
+    """
+
     UNIQUE = uuid.uuid4().hex[:6].upper()
 
     def _first_gstin_id(self, token):
