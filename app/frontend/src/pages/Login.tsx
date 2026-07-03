@@ -22,18 +22,22 @@ export function Login() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doLogin(u: string, p: string) {
     setError("");
     setBusy(true);
     try {
-      await login(username.trim(), password);
+      await login(u, p);
       navigate("/");
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
       setBusy(false);
     }
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    void doLogin(username.trim(), password);
   }
 
   return (
@@ -91,9 +95,11 @@ export function Login() {
                   key={d.username}
                   type="button"
                   className="chip chip-navy"
+                  disabled={busy}
                   onClick={() => {
                     setUsername(d.username);
                     setPassword(d.password);
+                    void doLogin(d.username, d.password);
                   }}
                   data-testid={`demo-${d.username}`}
                 >
