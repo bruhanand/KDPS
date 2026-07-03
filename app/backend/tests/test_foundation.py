@@ -1,24 +1,36 @@
 """KDPS Foundation backend tests — auth, scope isolation, masters."""
 
 import os
-from pathlib import Path
 
 import pytest
 import requests
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
-if not BASE_URL:
-    # fallback to frontend .env (CI env may not propagate)
-    try:
-        with open(Path(__file__).resolve().parents[3] / "app/frontend/.env") as f:
-            for line in f:
-                if line.startswith("REACT_APP_BACKEND_URL="):
-                    BASE_URL = line.split("=", 1)[1].strip().rstrip("/")
-    except Exception:
-        pass
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 
 API = f"{BASE_URL}/api"
+
+# Seeded masters (accounts/management/commands/seed_foundation.py). These suites
+# run against a shared DB that other live suites (and past QA runs) add rows to,
+# so assert the seeded set is a SUBSET of what the API returns, never an exact
+# count — exact counts broke the moment junk ``ZZ*`` rows landed (issue #41).
+SEEDED_BRAND_CODES = frozenset(
+    {
+        "louis-philippe",
+        "van-heusen",
+        "allen-solly",
+        "peter-england",
+        "mufti",
+        "blackberry",
+        "jockey",
+        "us-polo",
+        "spykar",
+        "killer",
+    }
+)
+SEEDED_STORE_CODES = frozenset({"DEO", "BKR", "HZB", "DUM", "BANKA"})
+SEEDED_SEASON_CODES = frozenset({"SS26", "AW25", "SS25"})
+SEEDED_GSTIN_STATE_CODES = frozenset({"10", "20"})
 
 
 @pytest.fixture(scope="session")
@@ -118,15 +130,18 @@ def test_scope_isolation_stores_and_summary(s):
     o_data = o_stores.json()
     # Could be list or paginated dict
     o_list = o_data if isinstance(o_data, list) else o_data.get("results", o_data.get("items", []))
-    assert len(o_list) == 6, f"owner should see 6 stores, saw {len(o_list)}"
+    owner_codes = {store.get("code") for store in o_list}
+    assert SEEDED_STORE_CODES <= owner_codes, (
+        f"owner should see the seeded stores, missing {SEEDED_STORE_CODES - owner_codes}"
+    )
 
     o_summary = s.get(
         f"{API}/masters/summary", headers={"Authorization": f"Bearer {owner_token}"}, timeout=15
     )
     assert o_summary.status_code == 200
     osd = o_summary.json()
-    assert osd.get("stores") == 6
-    assert osd.get("warehouses") == 1
+    assert osd.get("stores") >= 6
+    assert osd.get("warehouses") >= 1
 
     # deo.cashier - store scoped
     r2 = _login(s, "deo.cashier", "Store@123")
@@ -163,14 +178,23 @@ def test_masters_seeded(s):
         return body if isinstance(body, list) else body.get("results", body.get("items", []))
 
     brands = get_list("/masters/brands")
-    assert len(brands) == 10, f"expected 10 brands, got {len(brands)}"
+    brand_codes = {b.get("code") for b in brands}
+    assert SEEDED_BRAND_CODES <= brand_codes, (
+        f"missing seeded brands {SEEDED_BRAND_CODES - brand_codes}"
+    )
     assert any("commercial_label" in b for b in brands)
 
     seasons = get_list("/masters/seasons")
-    assert len(seasons) == 3
+    season_codes = {s.get("code") for s in seasons}
+    assert SEEDED_SEASON_CODES <= season_codes, (
+        f"missing seeded seasons {SEEDED_SEASON_CODES - season_codes}"
+    )
 
     gstins = get_list("/masters/gstins")
-    assert len(gstins) == 2
+    gstin_states = {g.get("state_code") for g in gstins}
+    assert SEEDED_GSTIN_STATE_CODES <= gstin_states, (
+        f"missing seeded gstin state codes {SEEDED_GSTIN_STATE_CODES - gstin_states}"
+    )
 
     entities = get_list("/masters/entities")
-    assert len(entities) == 1
+    assert any(e.get("code") == "kdps" for e in entities), "seeded 'kdps' entity missing"

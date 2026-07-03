@@ -96,6 +96,7 @@ def test_bruteforce_lockout_after_five_failed_logins():
     assert 429 in statuses
 
 
+@pytest.mark.local_backend
 def test_password_hash_contains_bcrypt_2b_prefix_for_owner_record():
     backend_dir = Path(__file__).resolve().parents[1]
     cmd = (
@@ -117,6 +118,7 @@ def test_password_hash_contains_bcrypt_2b_prefix_for_owner_record():
     assert "$2b$" in stored
 
 
+@pytest.mark.local_backend
 def test_seed_does_not_overwrite_existing_user_password():
     """Security fix (review C/§seed): re-running the seed must NOT revert an
     operator-changed password. `set_password` runs only on user CREATE, never on an
@@ -170,10 +172,11 @@ def test_seed_does_not_overwrite_existing_user_password():
         )
 
 
+@pytest.mark.local_backend
 def test_cors_preflight_allows_credentials_and_explicit_origin():
     origin = BASE_URL
     r = requests.options(
-        "http://localhost:8001/api/auth/login",
+        f"{API}/auth/login",
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "POST",

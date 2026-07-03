@@ -5,7 +5,8 @@
 - inbound.views GrnListCreateView.create() helpers
   (_resolve_receiving_store / _build_grn / _add_grn_line)
 
-These hit the LIVE preview env via REACT_APP_BACKEND_URL.
+These hit the live, seeded API server via REACT_APP_BACKEND_URL (populated by
+conftest before test modules import).
 """
 
 import os
@@ -15,10 +16,8 @@ from pathlib import Path
 import pytest
 import requests
 
-BASE_URL = os.environ.get(
-    "REACT_APP_BACKEND_URL",
-    "https://ledger-kernel-v2.preview.emergentagent.com",
-).rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
+assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 
 # Repo-relative so fixtures resolve in Claude Code, Emergent (/app) and CI alike.
 PT_DIR = str(Path(__file__).resolve().parents[3] / "docs/data-from-kdps/Q&A-req-recieved/PT FILE")

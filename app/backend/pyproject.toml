@@ -77,7 +77,10 @@ django_settings_module = "config.settings"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings"
 python_files = ["test_*.py"]
-addopts = "-q"
+addopts = "-q --strict-markers"
+markers = [
+    "local_backend: only valid against this checkout's own locally-booted uvicorn (shared DATABASE_URL, no CORS-rewriting proxy)",
+]
 
 # --- Architecture boundaries -------------------------------------------------
 # The kernel (`core`) must never depend on the project wiring layer (`config`).

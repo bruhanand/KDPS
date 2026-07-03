@@ -15,6 +15,11 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
 API = f"{BASE_URL}/api"
 
+# localhost:3000 matches the DEBUG CORS regex `^http://localhost:\d+$`
+# (config/settings.py); CI runs DJANGO_DEBUG=1, so the allowlist + credentials
+# mechanism is exercised identically without the retired preview origin.
+CORS_TEST_ORIGIN = os.environ.get("KDPS_TEST_CORS_ORIGIN", "http://localhost:3000")
+
 
 def _json_login(session: requests.Session, username: str, password: str) -> requests.Response:
     return session.post(
@@ -111,10 +116,11 @@ def test_bruteforce_lockout_after_five_failures_still_active():
 # --- CORS check (internal Django app endpoint) ------------------------------
 
 
+@pytest.mark.local_backend
 def test_internal_django_cors_allows_explicit_origin_and_credentials():
-    origin = "https://ledger-kernel-v2.preview.emergentagent.com"
+    origin = CORS_TEST_ORIGIN
     r = requests.options(
-        "http://localhost:8001/api/auth/login",
+        f"{API}/auth/login",
         headers={
             "Origin": origin,
             "Access-Control-Request-Method": "POST",
@@ -130,6 +136,7 @@ def test_internal_django_cors_allows_explicit_origin_and_credentials():
 # --- Password hasher + seed_admin idempotency -------------------------------
 
 
+@pytest.mark.local_backend
 def test_seed_admin_is_idempotent_and_does_not_overwrite_password():
     backend_dir = Path(__file__).resolve().parents[1]
 
