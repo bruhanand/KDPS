@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "ci": "tsc --noEmit"
+    "test": "vitest run",
+    "ci": "tsc --noEmit && vitest run"
   },
   "dependencies": {
     "axios": "^1.18.1",
@@ -23,6 +24,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.6.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^2"
   }
 }
