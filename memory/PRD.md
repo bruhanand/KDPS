@@ -115,8 +115,7 @@ Fifth slice of the inbound overhaul — the four defects Codex flagged on the br
   unaffected; a NULL-grn legacy upload has no store → out of scope for restricted users.
 - **#3 race → lock** (`ptmapper/views.py` `create()`) — the GRN-link + one-live-PT check + `PtFile`
   create are now wrapped in `transaction.atomic()` with `Grn.objects.select_for_update(of=("self",))`,
-  mirroring the from-GRN path (file storage moved before the lock; the slow engine `process_file` runs
-  after commit, never under the lock).
+  mirroring the from-GRN path (the slow engine `process_file` runs after commit, never under the lock).
 - **#3 constraint** (`ptmapper/models.py` + migration `0013`) — a partial `UniqueConstraint(fields=
   ["grn"], condition=~Q(docstatus=CANCELLED), name="uniq_live_pt_per_grn")` (spread alongside the
   inherited Document check-constraints) is the backstop so no code path or bulk script can leave a GRN

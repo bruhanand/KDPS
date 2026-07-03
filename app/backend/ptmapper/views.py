@@ -337,10 +337,6 @@ class PtFileListCreateView(generics.ListCreateAPIView):
                 grn_pk = int(grn_id)
             except (TypeError, ValueError):
                 return Response({"detail": "grn must be a GRN id."}, status=400)
-        try:
-            stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
-        except UploadTooLarge as exc:
-            return Response({"detail": str(exc)}, status=413)
         # Optional link to the received arrival (D3): a brand PT is mapped *for* a
         # specific invoice/GRN. This is a reference link only — no posting — so the
         # warehouse-only restriction that guards the from-grn authoring path does NOT
@@ -348,37 +344,41 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         # caller's store scope (fail-closed, Codex #2) and the link + one-live-PT check +
         # create must be atomic under a GRN row lock so two concurrent uploads can't both
         # slip past the check (Codex #3) — mirroring the from-grn path.
-        with transaction.atomic():
-            grn = None
-            if grn_pk is not None:
-                grn = (
-                    scope_by_store(
-                        Grn.objects.select_for_update(of=("self",)), request.user, "store_id"
+        try:
+            with transaction.atomic():
+                grn = None
+                if grn_pk is not None:
+                    grn = (
+                        scope_by_store(
+                            Grn.objects.select_for_update(of=("self",)), request.user, "store_id"
+                        )
+                        .filter(pk=grn_pk)
+                        .first()
                     )
-                    .filter(pk=grn_pk)
-                    .first()
+                    if not grn:
+                        return Response({"detail": "GRN not found."}, status=404)
+                    live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
+                    if live:
+                        return Response(
+                            {
+                                "detail": f"This GRN already has a PT in progress "
+                                f"({live.stage_label}).",
+                                "pt_file_id": live.id,
+                            },
+                            status=status.HTTP_409_CONFLICT,
+                        )
+                stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
+                pt = PtFile.objects.create(
+                    stored_file=stored,
+                    original_filename=stored.filename,
+                    grn=grn,
+                    meta={"context": context} if context else {},
+                    created_by=request.user
+                    if getattr(request.user, "is_authenticated", False)
+                    else None,
                 )
-                if not grn:
-                    return Response({"detail": "GRN not found."}, status=404)
-                live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
-                if live:
-                    return Response(
-                        {
-                            "detail": f"This GRN already has a PT in progress "
-                            f"({live.stage_label}).",
-                            "pt_file_id": live.id,
-                        },
-                        status=status.HTTP_409_CONFLICT,
-                    )
-            pt = PtFile.objects.create(
-                stored_file=stored,
-                original_filename=stored.filename,
-                grn=grn,
-                meta={"context": context} if context else {},
-                created_by=request.user
-                if getattr(request.user, "is_authenticated", False)
-                else None,
-            )
+        except UploadTooLarge as exc:
+            return Response({"detail": str(exc)}, status=413)
         process_file(pt)
         return Response(PtFileDetailSerializer(pt).data, status=status.HTTP_201_CREATED)
 

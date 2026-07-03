@@ -21,6 +21,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
 from core.documents import VoucherSeries
+from files.models import StoredFile
 from inbound.models import Grn, GrnLine
 from masters.models import Gstin, LegalEntity, Store
 from ptmapper.models import ControlledValue, Lookup, PtFile
@@ -118,6 +119,7 @@ def test_scoped_user_cannot_link_pt_to_out_of_scope_grn(world, vocab):
     r = _upload_brand_pt(client, grn.id)
     assert r.status_code == 404, r.content
     assert not PtFile.objects.filter(grn=grn).exists()
+    assert not StoredFile.objects.exists()
 
 
 def test_scoped_user_can_link_pt_to_in_scope_grn(world, vocab):
@@ -133,6 +135,16 @@ def test_unrestricted_user_can_link_any_grn(world, vocab):
     client = _client(_user("boss", "owner", scope=ScopeType.ALL))
     r = _upload_brand_pt(client, grn.id)
     assert r.status_code == 201, r.content
+
+
+def test_duplicate_grn_link_does_not_store_orphaned_file(world, vocab):
+    grn = _grn(world["wh1"])
+    existing = PtFile.objects.create(original_filename="first.csv", grn=grn)
+    client = _client(_user("wh1-op", "warehouse", scope=ScopeType.STORE, stores=[world["wh1"]]))
+    r = _upload_brand_pt(client, grn.id)
+    assert r.status_code == 409, r.content
+    assert r.json()["pt_file_id"] == existing.id
+    assert not StoredFile.objects.exists()
 
 
 # ---------------------------------------------------------- PT-list scoping (Codex #2)
