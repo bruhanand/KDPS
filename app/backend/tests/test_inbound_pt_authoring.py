@@ -26,9 +26,10 @@ from accounts.models import Role, User
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.models import Grn, GrnLine
-from masters.models import Gstin, LegalEntity, Store
+from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from ptmapper.models import ControlledValue, Lookup, PtFile
 from stockledger.posting import financial_year
+from vendors.models import Booking, Vendor
 
 # ---------------------------------------------------------------- fixtures
 
@@ -98,10 +99,13 @@ def store_client(db):
     return c
 
 
-def _grn(world, *, lines, invoice_file=None, vendor_name="Localwear Traders") -> Grn:
+def _grn(
+    world, *, lines, invoice_file=None, vendor_name="Localwear Traders", kind=Grn.Kind.NON_BRANDED
+) -> Grn:
     grn = Grn.objects.create(
         store=world["wh"],
         received_at=Grn.ReceivedAt.WAREHOUSE,
+        kind=kind,
         is_direct=True,
         vendor_name_raw=vendor_name,
         invoice_number="INV-77",
@@ -384,3 +388,118 @@ def test_grn_status_walks_the_d2_lifecycle(world, vocab, warehouse_client, patna
     assert q["counts"]["awaiting_pt"] == 1
     again = warehouse_client.post(f"/api/ptmapper/files/from-grn/{grn.id}")
     assert again.status_code == 201
+
+
+# ------------------------------------------------- kind discriminator (branded/non-branded, #44)
+
+
+@pytest.fixture
+def store(world):
+    """A selling store (not a warehouse) — where branded goods land."""
+    s = Store.objects.create(
+        code="DEO-01", name="Deoghar", store_type=Store.StoreType.STORE, gstin=world["wh"].gstin
+    )
+    VoucherSeries.objects.get_or_create(
+        fy=financial_year(date.today()), store_code=s.code, doc_type="GRN"
+    )
+    return s
+
+
+def _create_grn(client: APIClient, *, store: Store, kind: str):
+    return client.post(
+        "/api/inbound/grns",
+        {
+            "store_id": store.id,
+            "kind": kind,
+            "invoice_number": "INV-K",
+            "lines": [{"style_code": "TEE-1", "size": "M", "color": "Blue", "received_qty": 3}],
+        },
+        format="json",
+    )
+
+
+def test_kind_roundtrips_on_create_and_read(world, store, warehouse_client):
+    r = _create_grn(warehouse_client, store=store, kind=Grn.Kind.BRANDED)
+    assert r.status_code == 201, r.content
+    assert r.json()["kind"] == "branded"
+    detail = warehouse_client.get(f"/api/inbound/grns/{r.json()['id']}").json()
+    assert detail["kind"] == "branded"
+
+
+def test_kind_defaults_to_branded_when_omitted(world, store, warehouse_client):
+    r = warehouse_client.post(
+        "/api/inbound/grns",
+        {"store_id": store.id, "lines": [{"style_code": "T", "received_qty": 1}]},
+        format="json",
+    )
+    assert r.status_code == 201, r.content
+    assert r.json()["kind"] == "branded"
+
+
+def test_non_branded_create_rejected_at_non_warehouse(world, store, warehouse_client):
+    r = _create_grn(warehouse_client, store=store, kind=Grn.Kind.NON_BRANDED)
+    assert r.status_code == 400
+    assert "warehouse" in r.json()["detail"].lower()
+
+
+def test_non_branded_create_allowed_at_any_warehouse(world, warehouse_client):
+    other = Store.objects.create(
+        code="PAT-WH",
+        name="Patna WH",
+        store_type=Store.StoreType.WAREHOUSE,
+        gstin=world["wh"].gstin,
+    )
+    VoucherSeries.objects.get_or_create(
+        fy=financial_year(date.today()), store_code=other.code, doc_type="GRN"
+    )
+    r = _create_grn(warehouse_client, store=other, kind=Grn.Kind.NON_BRANDED)
+    assert r.status_code == 201, r.content
+    assert r.json()["kind"] == "non_branded"
+
+
+def test_grn_list_filters_by_kind(world, store, warehouse_client):
+    _create_grn(warehouse_client, store=store, kind=Grn.Kind.BRANDED)
+    _create_grn(warehouse_client, store=world["wh"], kind=Grn.Kind.NON_BRANDED)
+    branded = warehouse_client.get("/api/inbound/grns?kind=branded").json()
+    assert branded and {g["kind"] for g in branded} == {"branded"}
+    non_branded = warehouse_client.get("/api/inbound/grns?kind=non_branded").json()
+    assert non_branded and {g["kind"] for g in non_branded} == {"non_branded"}
+    assert len(warehouse_client.get("/api/inbound/grns").json()) == 2  # no filter → all visible
+
+
+def test_awaiting_pt_queue_excludes_branded(world, store, vocab, warehouse_client):
+    _create_grn(warehouse_client, store=store, kind=Grn.Kind.BRANDED)
+    nb = _create_grn(warehouse_client, store=world["wh"], kind=Grn.Kind.NON_BRANDED).json()
+    q = warehouse_client.get("/api/inbound/queue").json()
+    assert q["counts"]["awaiting_pt"] == 1  # the branded store arrival is NOT in this bucket
+    assert [g["id"] for g in q["awaiting_pt"]] == [nb["id"]]
+
+
+def test_backfill_keys_off_is_direct_not_booking(world):
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    vendor = Vendor.objects.create(code="v1", name="V1")
+    brand = Brand.objects.create(code="b1", name="B1")
+    season = Season.objects.create(code="SS26", name="SS26")
+    booking = Booking.objects.create(number="BK-1", vendor=vendor, brand=brand, season=season)
+    # simulate pre-migration rows (everything defaulted to branded)
+    linked = Grn.objects.create(
+        store=world["wh"], booking=booking, is_direct=False, kind=Grn.Kind.BRANDED
+    )
+    direct = Grn.objects.create(store=world["wh"], is_direct=True, kind=Grn.Kind.BRANDED)
+    # a branded receipt whose booking was later deleted (SET_NULL): booking is now null
+    # but is_direct stays False — it must NOT be reclassified as non-branded.
+    deleted_booking = Grn.objects.create(
+        store=world["wh"], booking=None, is_direct=False, kind=Grn.Kind.BRANDED
+    )
+
+    mod = importlib.import_module("inbound.migrations.0005_grn_kind")
+    mod.backfill_kind(django_apps, None)
+
+    for grn in (linked, direct, deleted_booking):
+        grn.refresh_from_db()
+    assert linked.kind == Grn.Kind.BRANDED  # booking-linked → branded
+    assert direct.kind == Grn.Kind.NON_BRANDED  # direct receipt → non-branded
+    assert deleted_booking.kind == Grn.Kind.BRANDED  # null booking but not direct → stays branded

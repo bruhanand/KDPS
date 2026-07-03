@@ -99,7 +99,20 @@ def _ensure_grn_series(store: Store) -> None:
     )
 
 
-def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
+def _resolve_kind(data: dict, store: Store) -> tuple[Any, Response | None]:
+    """Validate the branded/non-branded discriminator + its fail-closed location rule:
+    non-branded goods are received only at a warehouse (any warehouse — no hardcode)."""
+    kind = data.get("kind", Grn.Kind.BRANDED)
+    if kind not in Grn.Kind.values:
+        return None, Response({"detail": f"Invalid kind '{kind}'."}, status=400)
+    if kind == Grn.Kind.NON_BRANDED and store.store_type != Store.StoreType.WAREHOUSE:
+        return None, Response(
+            {"detail": "Non-branded goods are received only at a warehouse."}, status=400
+        )
+    return kind, None
+
+
+def _build_grn(data: dict, store: Any, booking: Any, kind: str, user: Any) -> Grn:
     """Create the GRN as a DRAFT (no number yet); `post()` mints it after lines land."""
     received_at = (
         Grn.ReceivedAt.WAREHOUSE
@@ -112,6 +125,7 @@ def _build_grn(data: dict, store: Any, booking: Any, user: Any) -> Grn:
         vendor_name_raw=data.get("vendor_name", "") if not booking else "",
         store=store,
         received_at=received_at,
+        kind=kind,
         is_direct=booking is None,
         invoice_number=data.get("invoice_number", ""),
         invoice_file_id=data.get("invoice_file_id"),
@@ -184,7 +198,11 @@ class GrnListCreateView(generics.ListCreateAPIView):
         qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related(
             "lines", "pt_files"
         )
-        return scope_by_store(qs, self.request.user, "store_id")
+        qs = scope_by_store(qs, self.request.user, "store_id")
+        kind = self.request.query_params.get("kind")
+        if kind in Grn.Kind.values:  # honour ?kind=branded|non_branded (else unfiltered)
+            qs = qs.filter(kind=kind)
+        return qs
 
     @transaction.atomic
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -197,7 +215,11 @@ class GrnListCreateView(generics.ListCreateAPIView):
         if err is not None:
             return err
 
-        grn = _build_grn(data, store, booking, request.user)
+        kind, err = _resolve_kind(data, store)
+        if err is not None:
+            return err
+
+        grn = _build_grn(data, store, booking, kind, request.user)
         for raw in data.get("lines", []):
             _add_grn_line(grn, raw, booking)
         _ensure_grn_series(store)
@@ -241,7 +263,9 @@ class InboundQueueView(APIView):
         from ptmapper.models import PtFile
 
         awaiting = (
-            Grn.objects.filter(docstatus=DocStatus.SUBMITTED)
+            # Only non-branded arrivals await an authored PT here; branded arrivals
+            # wait for the brand's PT via the Mapper instead (D2 split).
+            Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
             .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
             .select_related("store", "booking", "vendor")
             .prefetch_related("lines", "pt_files")

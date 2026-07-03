@@ -63,6 +63,7 @@ class GrnSerializer(serializers.ModelSerializer):
             "store_code",
             "store_name",
             "received_at",
+            "kind",
             "status",
             "status_label",
             "is_direct",

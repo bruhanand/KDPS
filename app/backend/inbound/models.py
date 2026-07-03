@@ -34,6 +34,15 @@ class Grn(Document):
         STORE = "store", "Store"
         WAREHOUSE = "warehouse", "Warehouse"
 
+    class Kind(models.TextChoices):
+        """Branded vs non-branded — a stored discriminator (unlike ``status``, which is
+        derived). Branded goods land at a *store* and the brand supplies the PT (the
+        warehouse maps it); non-branded goods land at a *warehouse* and we author the PT
+        ourselves (PT Making). Drives the receiving tab split and the PT-tab routing."""
+
+        BRANDED = "branded", "Branded"
+        NON_BRANDED = "non_branded", "Non-branded"
+
     booking = models.ForeignKey(
         "vendors.Booking", null=True, blank=True, on_delete=models.SET_NULL, related_name="grns"
     )
@@ -45,6 +54,7 @@ class Grn(Document):
     received_at = models.CharField(
         max_length=12, choices=ReceivedAt.choices, default=ReceivedAt.STORE
     )
+    kind = models.CharField(max_length=12, choices=Kind.choices, default=Kind.BRANDED)
     is_direct = models.BooleanField(default=False)  # booking-less receipt
     invoice_number = models.CharField(max_length=80, blank=True, default="")
     invoice_file = models.ForeignKey(
