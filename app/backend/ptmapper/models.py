@@ -99,8 +99,9 @@ class PtFile(Document):
 
     A document (ADR-0004): while a DRAFT it walks the warehouse sub-stages
     `mapping → sent` (freely editable). `post()` (Patna "push into system") mints its
-    gap-free `{FY}/RAN-WH/PT/{n}` number — the inward voucher — and freezes it
-    (SUBMITTED). "Reverse posting" is a `cancel()` (reversal-as-cancel): the file is
+    gap-free `{FY}/{store}/PT/{n}` number — the inward voucher, numbered under the
+    GRN's receiving location — and freezes it (SUBMITTED). "Reverse posting" is a
+    `cancel()` (reversal-as-cancel): the file is
     frozen forever and the stock/GL/payable reversals are appended; you re-upload to
     re-post, never edit a posted fact.
     """
@@ -179,7 +180,13 @@ class PtFile(Document):
         ordering = ["-created_at"]
 
     def series_lookup(self) -> tuple[str, str, str]:
-        return financial_year(), "RAN-WH", "PT"
+        # Per-location, gap-free PT numbering: a PT is numbered under the store its
+        # GRN was received at (branded → the selling store, non-branded → the
+        # warehouse). Legacy grn-less uploads keep RAN-WH. Must return the SAME key
+        # `post_pt_inward` allocates its voucher under, or numbering and posting drift.
+        grn = self.grn
+        store_code = grn.store.code if grn is not None else "RAN-WH"
+        return financial_year(), store_code, "PT"
 
     @property
     def stage(self) -> str:
