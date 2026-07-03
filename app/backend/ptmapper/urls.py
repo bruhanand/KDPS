@@ -9,8 +9,10 @@ from ptmapper.views import (
     PtFileDetailView,
     PtFileExportView,
     PtFileExportXlsxView,
+    PtFileFromGrnView,
     PtFileListCreateView,
     PtFilePostView,
+    PtFilePriceView,
     PtFileRecallView,
     PtFileRerunView,
     PtFileReverseView,
@@ -23,7 +25,9 @@ from ptmapper.views import (
 
 urlpatterns = [
     path("files", PtFileListCreateView.as_view(), name="pt-file-list"),
+    path("files/from-grn/<int:grn_id>", PtFileFromGrnView.as_view(), name="pt-file-from-grn"),
     path("files/<int:pk>", PtFileDetailView.as_view(), name="pt-file-detail"),
+    path("files/<int:pk>/price", PtFilePriceView.as_view(), name="pt-file-price"),
     path("files/<int:pk>/rerun", PtFileRerunView.as_view(), name="pt-file-rerun"),
     path("files/<int:pk>/rows", PtRowsUpdateView.as_view(), name="pt-file-rows"),
     path("files/<int:pk>/send", PtFileSendView.as_view(), name="pt-file-send"),

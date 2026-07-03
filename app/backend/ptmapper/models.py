@@ -110,6 +110,15 @@ class PtFile(Document):
         READY = "ready", "Ready"
         FAILED = "failed", "Failed"
 
+    class Source(models.TextChoices):
+        """Where the rows came from. ``brand_file`` = the deterministic mapper over an
+        uploaded brand PT (the original path, untouched). ``invoice`` = *authored* from
+        a GRN's counted lines (the non-brand path, D2 Q4/Q7/Q8) — same object, same
+        editor, same send→post pipeline; only the way rows are born differs."""
+
+        BRAND_FILE = "brand_file", "Brand PT file"
+        INVOICE = "invoice", "Authored from GRN / invoice"
+
     class DraftStage(models.TextChoices):  # the stored pre-post sub-stage
         MAPPING = "mapping", "Mapping (Warehouse)"
         SENT = "sent", "Sent to Patna"
@@ -129,6 +138,13 @@ class PtFile(Document):
 
     stored_file = models.ForeignKey(
         "files.StoredFile", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    source = models.CharField(max_length=12, choices=Source.choices, default=Source.BRAND_FILE)
+    # The arrival this PT converts (Q22/Q33 linkage — the GRN is the pragmatic arrival
+    # anchor; no separate Shipment). Always set for invoice-sourced PTs; a brand PT can
+    # be linked later. String FK: ptmapper must not import inbound at module level.
+    grn = models.ForeignKey(
+        "inbound.Grn", null=True, blank=True, on_delete=models.SET_NULL, related_name="pt_files"
     )
     original_filename = models.CharField(max_length=255)
     brand_guess = models.CharField(max_length=160, blank=True, default="")

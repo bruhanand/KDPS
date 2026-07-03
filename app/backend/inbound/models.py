@@ -21,6 +21,11 @@ class Grn(Document):
     immutable fact; corrections are new documents, never edits."""
 
     class Status(models.TextChoices):
+        """The D2 receiving lifecycle (received → sent_to_ho → inwarded). NOT a stored
+        column: a GRN is posted (frozen) the moment it exists, and the docstatus FSM
+        forbids updating a submitted row — so where the arrival sits in the process is
+        *derived* from its linked PT files (see ``effective_status``), never written."""
+
         RECEIVED = "received", "Received"
         SENT_TO_HO = "sent_to_ho", "Sent to HO (Patna)"
         INWARDED = "inwarded", "Inwarded"
@@ -40,7 +45,6 @@ class Grn(Document):
     received_at = models.CharField(
         max_length=12, choices=ReceivedAt.choices, default=ReceivedAt.STORE
     )
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RECEIVED)
     is_direct = models.BooleanField(default=False)  # booking-less receipt
     invoice_number = models.CharField(max_length=80, blank=True, default="")
     invoice_file = models.ForeignKey(
@@ -57,6 +61,24 @@ class Grn(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         return financial_year(), self.store.code, "GRN"
+
+    @property
+    def effective_status(self) -> str:
+        """Where this arrival sits in the D2 flow, derived from its live (non-reversed)
+        PT files: one posted → ``inwarded``; one sent to Patna → ``sent_to_ho``; else
+        ``received`` (a recalled or reversed PT rolls the arrival straight back).
+        Duck-types on ``PtFile.stage`` so inbound never imports ptmapper. Callers
+        should ``prefetch_related("pt_files")``."""
+        stages = {p.stage for p in self.pt_files.all()}
+        if "posted" in stages:
+            return self.Status.INWARDED
+        if "sent" in stages:
+            return self.Status.SENT_TO_HO
+        return self.Status.RECEIVED
+
+    @property
+    def effective_status_label(self) -> str:
+        return self.Status(self.effective_status).label
 
     def __str__(self) -> str:
         return self.doc_number or f"GRN draft #{self.pk}"

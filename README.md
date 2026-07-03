@@ -31,7 +31,7 @@ Pick one path:
 
 ```bash
 docker compose up -d db
-export DATABASE_URL=postgres://kdps:kdps@localhost:5433/kdps_dev
+export DATABASE_URL=postgres://kdps:kdps@localhost:55432/kdps_dev
 ```
 
 **B · Local Postgres (e.g. Homebrew)**

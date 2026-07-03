@@ -72,12 +72,14 @@ class PtFileListSerializer(serializers.ModelSerializer):
     stage_label = serializers.ReadOnlyField()
     inward_doc_number = serializers.SerializerMethodField()
     booking_number = serializers.CharField(source="booking.number", read_only=True, default="")
+    grn_number = serializers.CharField(source="grn.doc_number", read_only=True, default="")
 
     class Meta:
         model = PtFile
         fields = [
             "id",
             "original_filename",
+            "source",
             "brand_guess",
             "profile_code",
             "profile_name",
@@ -93,6 +95,8 @@ class PtFileListSerializer(serializers.ModelSerializer):
             "inward_doc_number",
             "booking",
             "booking_number",
+            "grn",
+            "grn_number",
             "row_count",
             "blank_cell_count",
             "unresolved_count",

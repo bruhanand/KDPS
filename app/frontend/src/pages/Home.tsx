@@ -298,15 +298,23 @@ function QuickActions({ items }: { items: { label: string; icon: React.ReactNode
   );
 }
 
+interface QueueCounts {
+  awaiting_pt: number;
+  pt_in_progress: number;
+}
+
 export function Home() {
   const { user, activeStore } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState<DashboardCard | null>(null);
   const [dragCard, setDragCard] = useState<CardId | null>(null);
 
   useEffect(() => {
     api.get("/masters/summary").then((r) => setSummary(r.data)).catch(() => undefined);
+    // The inbound work queue badge (Q9) — 403 for store roles is fine, card stays generic.
+    api.get("/inbound/queue").then((r) => setQueueCounts(r.data.counts)).catch(() => undefined);
   }, []);
 
   const variant = user?.landing_page ?? "owner";
@@ -315,8 +323,8 @@ export function Home() {
     { id: "receiving", icon: <PackageCheck size={18} />, label: "Items to receive", value: "3 shipments", sub: "GRN workflow is live", purpose: "Opens receiving workload and GRN progress.", built: true, points: [2, 3, 4, 1, 3, 2, 3] },
     { id: "cycle_count", icon: <ClipboardList size={18} />, label: "Cycle count due", value: "1 bin", sub: "Stock-count screen coming soon", purpose: "Will show cycle-count tasks and ageing bins.", built: false, points: [1, 2, 1, 1, 3, 1, 1] },
   ] : variant === "warehouse" ? [
-    { id: "receiving", icon: <PackageCheck size={18} />, label: "Inbound queue", value: "7 shipments", sub: "GRN and PT mapper workflows are live", purpose: "Shows receiving workload and GRN/PT status.", built: true, points: [4, 6, 7, 5, 8, 6, 7] },
-    { id: "pt_files", icon: <ClipboardList size={18} />, label: "PTs to convert", value: "4", sub: "PT Mapper is live", purpose: "Tracks PT conversion files awaiting review.", built: true, points: [2, 3, 2, 5, 4, 3, 4] },
+    { id: "receiving", icon: <PackageCheck size={18} />, label: "Arrivals awaiting PT", value: queueCounts ? `${queueCounts.awaiting_pt}` : "—", sub: queueCounts ? "Live from the inbound work queue — make the PT to clear" : "GRN and PT mapper workflows are live", purpose: "Arrivals (GRNs) with no PT yet — goods are sellable only after their PT posts.", built: true, points: [4, 6, 7, 5, 8, 6, 7] },
+    { id: "pt_files", icon: <ClipboardList size={18} />, label: "PTs in progress", value: queueCounts ? `${queueCounts.pt_in_progress}` : "—", sub: queueCounts ? "Mapping or awaiting Patna posting" : "PT File Operation is live", purpose: "PT files linked to an arrival, still being mapped or awaiting Patna.", built: true, points: [2, 3, 2, 5, 4, 3, 4] },
     { id: "barcode", icon: <AlertTriangle size={18} />, label: "Barcode clashes", value: "2", sub: "Controls screen coming soon", purpose: "Will highlight barcode exceptions needing resolution.", built: false, points: [1, 1, 0, 2, 1, 3, 2] },
   ] : [
     { id: "net_sales", icon: <TrendingUp size={18} />, label: "Net sales today", value: <Money paise={1842000_00} short />, sub: "POS ingest coming soon", purpose: "Shows network sales once selling floor data is connected.", built: false, points: [18, 22, 21, 24, 26, 23, 29] },

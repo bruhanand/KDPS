@@ -148,6 +148,26 @@ class GstSlab(TimeStampedModel):
         return f"{self.name} (from {self.effective_from})"
 
 
+class CategoryMargin(TimeStampedModel):
+    """Default retail margin per merchandising ITEM (Master-Sheet item value), with
+    the allowed operator band — the data behind deterministic non-brand pricing
+    (D2 Q7, Rule 12: variation is data, not code). ``item=""`` is the global
+    fallback row. Seeded at 33% (band 30–35) — per-category numbers are still
+    awaited from KDPS; a steward edits rows, never code."""
+
+    item = models.CharField(max_length=160, unique=True, blank=True, default="")
+    margin_pct = models.DecimalField(max_digits=5, decimal_places=2, default=33)
+    band_min_pct = models.DecimalField(max_digits=5, decimal_places=2, default=30)
+    band_max_pct = models.DecimalField(max_digits=5, decimal_places=2, default=35)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["item"]
+
+    def __str__(self) -> str:
+        return f"{self.item or 'DEFAULT'} @ {self.margin_pct}%"
+
+
 class Sku(TimeStampedModel):
     """Canonical product identity — the barcode IS the SKU (D-grain). Registered /
     refreshed whenever a PT posts; the queryable home of the unit's MRP and its

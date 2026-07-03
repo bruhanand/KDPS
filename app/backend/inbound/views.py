@@ -16,7 +16,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.documents import VoucherSeries
+from core.documents import DocStatus, VoucherSeries
 from files.models import StoredFile, UploadTooLarge
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
@@ -181,7 +181,9 @@ class GrnListCreateView(generics.ListCreateAPIView):
     serializer_class = GrnSerializer
 
     def get_queryset(self) -> Any:
-        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related("lines")
+        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related(
+            "lines", "pt_files"
+        )
         return scope_by_store(qs, self.request.user, "store_id")
 
     @transaction.atomic
@@ -210,5 +212,69 @@ class GrnDetailView(generics.RetrieveAPIView):
     serializer_class = GrnSerializer
 
     def get_queryset(self) -> Any:
-        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related("lines")
+        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related(
+            "lines", "pt_files"
+        )
         return scope_by_store(qs, self.request.user, "store_id")
+
+
+# The queue serves the people who act on arrivals: the warehouse (makes the PT) and
+# Patna/HO (reviews & posts). Store roles have no queue duty — fail-closed 403.
+QUEUE_ROLES = {"warehouse", "data_steward", "ho_ops", "accounts", "owner", "it_admin"}
+
+
+class InboundQueueView(APIView):
+    """The inbound work queue (Q9: in-app is the system of record; WhatsApp nudge is
+    a later phase). Derived, never stored: an arrival is *awaiting* while it has no
+    live PT (a reversed PT re-opens it); a PT in the warehouse/Patna pipeline shows
+    as in-progress. GET only."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        role = getattr(getattr(request.user, "role", None), "code", "")
+        if not (getattr(request.user, "is_superuser", False) or role in QUEUE_ROLES):
+            return Response(
+                {"detail": "The inbound queue is a warehouse/HO screen."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        from ptmapper.models import PtFile
+
+        awaiting = (
+            Grn.objects.filter(docstatus=DocStatus.SUBMITTED)
+            .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
+            .select_related("store", "booking", "vendor")
+            .prefetch_related("lines", "pt_files")
+            .order_by("created_at")  # oldest arrival first — it has waited longest
+        )
+        in_progress = (
+            PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
+            .select_related("grn")
+            .order_by("created_at")
+        )
+        progress_rows = [
+            {
+                "id": p.id,
+                "original_filename": p.original_filename,
+                "source": p.source,
+                "stage": p.stage,
+                "stage_label": p.stage_label,
+                "grn_id": p.grn_id,
+                "grn_number": p.grn.doc_number if p.grn else None,
+                "row_count": p.row_count,
+                "blank_cell_count": p.blank_cell_count,
+                "created_at": p.created_at,
+            }
+            for p in in_progress
+        ]
+        awaiting_rows = GrnSerializer(awaiting, many=True).data
+        return Response(
+            {
+                "awaiting_pt": awaiting_rows,
+                "pt_in_progress": progress_rows,
+                "counts": {
+                    "awaiting_pt": len(awaiting_rows),
+                    "pt_in_progress": len(progress_rows),
+                },
+            }
+        )

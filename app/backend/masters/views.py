@@ -15,7 +15,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from masters.models import Brand, Gstin, LegalEntity, Season, Store
+from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store
 from masters.scoping import scoped_stores
 from masters.serializers import (
     BrandSerializer,
@@ -112,6 +112,45 @@ class LegalEntityListView(generics.ListAPIView):
     serializer_class = LegalEntitySerializer
     permission_classes = [IsAuthenticated]
     queryset = LegalEntity.objects.filter(is_active=True)
+
+
+class SkuLookupView(APIView):
+    """Registry reuse at authoring time (D2 Q16/Q41): has this vendor+style+size been
+    seen before? Exact-match filters over the SKU master; the PT editor shows "seen
+    before — reusing barcode X" and copies barcode/colour/HSN/MRP from the registry
+    instead of minting a duplicate identity. Pure read.
+
+    ``GET /masters/skus/lookup?design=&size=&brand=&barcode=`` — at least one of
+    ``design``/``barcode`` is required (never dump the registry)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        params = {
+            key: (request.query_params.get(key) or "").strip()
+            for key in ("design", "size", "brand", "barcode")
+        }
+        if not (params["design"] or params["barcode"]):
+            return Response({"detail": "Pass design= or barcode= to look up."}, status=400)
+        qs = Sku.objects.filter(is_active=True)
+        for field in ("design", "size", "brand", "barcode"):
+            if params[field]:
+                qs = qs.filter(**{f"{field}__iexact": params[field]})
+        matches = [
+            {
+                "barcode": s.barcode,
+                "design": s.design,
+                "color": s.color,
+                "size": s.size,
+                "brand": s.brand,
+                "item": s.item,
+                "hsn": s.hsn,
+                "mrp": (s.mrp_paise / 100) if s.mrp_paise is not None else None,
+                "first_doc_number": s.first_doc_number,
+            }
+            for s in qs.order_by("-updated_at")[:10]
+        ]
+        return Response({"matches": matches, "count": len(matches)})
 
 
 class SummaryView(APIView):

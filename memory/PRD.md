@@ -17,8 +17,52 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **Active dev moved Emergent → Claude Code (30 Jun)** — Emergent parked, not cut; repo kept portable.
 - **PT-mapper fed + hardened (1 Jul, PR #34):** 9 brand profiles + normalisers + big seed; seeded on Render (PR #35). Fill rates ≈ BRAND 86% / SIZE 87% / SEASON 67% / COLOR 47%. MUFTI COLOR gap resolved.
 - **Store analysis (2 Jul, commit 9b50b30):** JSL store deep-dive (business analysis + 16-measure dashboard, HTML+PDF) + a reusable `store-dashboard` skill under `.claude/skills/`.
+- **Inbound UX restructure (3 Jul, branch `implement-inbound-plan`, not merged):** "Inbound" → **Stock Receive** (receiving only) and "PT Mapper" → **PT File Operation** (two sub-tabs: PT File Mapper + PT File Making). Brand PTs now link to a received invoice/GRN at upload. See the dated section below.
 - **Known alpha caveats:** (1) `finledger` vendor/cash ledgers are still single-entry running balances — only the PT-inward path is true double-entry / in the Σ=0 trial balance; (2) two security items **deferred by decision** — demo creds seeded on the public Render alpha, JWT/refresh in `localStorage`. Five money-critical GST items still await a CA ruling before live money.
 - **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
+
+## Implemented — Inbound experience restructure: Stock Receive + PT File Operation (3 Jul 2026) ✅
+UX reorganisation (step 1 of a larger UX overhaul — deeper simplification is a later session).
+Decisions D1–D4 confirmed with Anand; scope is **UI reconstruction + renaming + wiring the
+invoice↔PT link only** — no change to receiving/posting behaviour or the money path. Branch
+`implement-inbound-plan` (not merged).
+
+**Renames (cosmetic):**
+- **"Inbound" → "Stock Receive"** (nav + page). It is *purely receiving*: per-store pending
+  bookings, receive-against-a-booking, direct (booking-less) receipt, and the company invoice
+  upload. `navConfig.ts` (Store Ops "Receive"→"Stock Receive", Documents "Inbound (GRN / PT)"→
+  "Stock Receive"), `Inbound.tsx` heading + back-links; routes unchanged (`/inbound`,
+  `/store/receive` still resolve to `InboundPage`).
+- **"PT Mapper" → "PT File Operation"** (`navConfig.ts`, `PtMapper.tsx` header + the two detail/
+  queue back-links; `Home.tsx` warehouse card sub-copy).
+
+**Stock Receive = receiving only:** the warehouse work queue ("arrivals awaiting PT" + "Make PT
+file") was **removed** from this page. Lifted `InboundQueueCard` + `useInboundQueue` + `useMakePt`
+out of `Inbound.tsx` into a shared `components/InboundQueueCard.tsx` (GRN detail still uses
+`useMakePt`).
+
+**PT File Operation = two sub-tabs on one page** (D1=A; internal state synced to `?tab=mapper|making`,
+default `mapper`):
+- **PT File Mapper** (branded) — **invoice-first entry (D3):** pick the received invoice (from
+  `GET /inbound/grns`, filtered to rows with an `invoice_number`) → enter mapping mode → upload the
+  brand PT, which is linked to that GRN. Escape hatch "Map without an invoice" preserves the old
+  behaviour. File list filtered to `source !== "invoice"`. Keeps the Learning-proposals +
+  Unmapped-queue header links.
+- **PT File Making** (non-branded) — hosts the **moved** work queue + "Make PT file". File list
+  filtered to `source === "invoice"`.
+
+**Backend (small, additive):** `PtFileListCreateView.create()` accepts an optional `grn` id and sets
+`pt.grn` on the created file, guarded by the **one-live-PT-per-GRN** check (409 with `pt_file_id` if a
+non-cancelled PT already exists; 404 if the GRN is missing). The RAN-WH posting restriction is **not**
+applied here — linking a brand PT to a store-received GRN is a reference, not a posting, and branded
+goods legitimately land at stores. No serializer/model/migration change (`grn`/`grn_number` already
+exposed; the PT detail page already renders the `GRN {n}` chip).
+
+**Tests:** `tests/test_inbound_pt_authoring.py` extended — brand PT links at upload
+(`pt.grn == grn`), a second link on a live-PT GRN → 409 (points at the existing PT), upload without
+`grn` still works, missing GRN → 404. **Verified:** `pytest` link + ptmapper/inbound suites green on
+real Postgres; `makemigrations --check` clean; frontend `tsc --noEmit` + `vite build` green.
+*(The pre-existing `test_iteration9/10/13` live-`:8001`-server failures are environmental, unrelated.)*
 
 ## Architecture (locked by ADRs)
 - **Backend:** Python 3.12 + Django 5.1 + Django REST Framework + drf-spectacular, **PostgreSQL** only.
