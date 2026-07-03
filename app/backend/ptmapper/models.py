@@ -178,6 +178,18 @@ class PtFile(Document):
     class Meta(Document.Meta):
         db_table = "ptmapper_ptfile"
         ordering = ["-created_at"]
+        constraints = [
+            *Document.Meta.constraints,
+            # One live (non-cancelled) PT per GRN — the DB backstop behind the code's
+            # row-locked check, so no code path or bulk script can leave a GRN carrying
+            # two competing PTs. NULL grn (legacy grn-less uploads) is exempt (Postgres
+            # treats NULLs as distinct in a partial unique index).
+            models.UniqueConstraint(
+                fields=["grn"],
+                condition=~models.Q(docstatus=DocStatus.CANCELLED),
+                name="uniq_live_pt_per_grn",
+            ),
+        ]
 
     def series_lookup(self) -> tuple[str, str, str]:
         # Per-location, gap-free PT numbering: a PT is numbered under the store its
