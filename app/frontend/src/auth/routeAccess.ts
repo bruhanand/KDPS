@@ -45,7 +45,11 @@ function matches(pathname: string, prefix: string): boolean {
 // routes default-allow (harmless "coming soon" stubs stay reachable).
 export function canAccess(pathname: string, user: User): boolean {
   if (user.is_superuser) return true;
-  const rule = RULES.find((r) => matches(pathname, r.prefix));
+  // React Router matches route paths case-insensitively, but our rule prefixes
+  // are lowercase — lowercase the path so mixed-case URLs (e.g. /LEDGERS/VENDOR)
+  // can't slip past a rule into the default-allow branch.
+  const normalized = pathname.toLowerCase();
+  const rule = RULES.find((r) => matches(normalized, r.prefix));
   if (!rule) return true;
   if (rule.groups && !rule.groups.some((g) => user.nav_groups.includes(g))) return false;
   if (rule.roles && !rule.roles.includes(user.role?.code ?? "")) return false;

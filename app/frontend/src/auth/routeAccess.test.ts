@@ -91,4 +91,12 @@ describe("canAccess", () => {
     expect(canAccess("/masters/stores", hoOps)).toBe(true);
     expect(canAccess("/masters/users", hoOps)).toBe(false);
   });
+
+  it("mixed-case URLs are guarded too (React Router matches case-insensitively)", () => {
+    expect(canAccess("/LEDGERS/VENDOR", cashier)).toBe(false);
+    expect(canAccess("/Masters/Users", cashier)).toBe(false);
+    expect(canAccess("/Edges/Rbac", cashier)).toBe(false);
+    expect(canAccess("/Ledgers/Vendor", manager)).toBe(false);
+    expect(canAccess("/Ledgers/Vendor", accounts)).toBe(true);
+  });
 });
