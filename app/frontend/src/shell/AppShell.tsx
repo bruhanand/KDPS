@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Search } from "lucide-react";
+import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Search, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import type { Store } from "../auth/AuthContext";
@@ -146,7 +146,17 @@ function orderedItems(group: NavGroup, order: NavOrder): NavItem[] {
   ];
 }
 
-function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: React.PointerEvent<HTMLDivElement>) => void }) {
+function Sidebar({
+  width,
+  onResizeStart,
+  mobileOpen,
+  onNavigate,
+}: {
+  width: number;
+  onResizeStart: (e: React.PointerEvent<HTMLDivElement>) => void;
+  mobileOpen: boolean;
+  onNavigate: () => void;
+}) {
   const { user } = useAuth();
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
   const [dragged, setDragged] = useState<DraggedItem>(null);
@@ -168,7 +178,7 @@ function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: R
   }
 
   return (
-    <aside className="sidebar" style={{ width }} data-testid="app-sidebar">
+    <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
         <span className="brand-mark">K</span>
         <span className="brand-text">
@@ -191,6 +201,7 @@ function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: R
                   <NavLink
                     to={items[0].to}
                     end
+                    onClick={onNavigate}
                     className={({ isActive }) => `nav-grouplink ${isActive ? "active" : ""}`}
                     data-testid={`nav-${g.key}`}
                   >
@@ -214,6 +225,7 @@ function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: R
                         e.preventDefault();
                         moveItem(g, it.to);
                       }}
+                      onClick={onNavigate}
                       className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
                       data-testid={`nav-${g.key}-${it.to.split("/").pop()}`}
                     >
@@ -232,6 +244,7 @@ function Sidebar({ width, onResizeStart }: { width: number; onResizeStart: (e: R
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
     return Number.isFinite(saved) && saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 258;
@@ -260,9 +273,25 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="shell">
-      <Sidebar width={sidebarWidth} onResizeStart={startResize} />
+      <Sidebar
+        width={sidebarWidth}
+        onResizeStart={startResize}
+        mobileOpen={mobileNavOpen}
+        onNavigate={() => setMobileNavOpen(false)}
+      />
+      {mobileNavOpen && (
+        <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} data-testid="sidebar-backdrop" />
+      )}
       <div className="main">
         <header className="topbar">
+          <button
+            className="icon-btn menu-btn"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            data-testid="mobile-nav-toggle"
+          >
+            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
           <StoreSwitcher />
           <div className="topbar-search">
             <Search size={15} />
