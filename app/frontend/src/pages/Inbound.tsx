@@ -90,8 +90,19 @@ function fmtDate(iso: string): string {
 }
 
 export function InboundPage() {
-  const { data: grns, loading } = useList<GrnListItemT>("/inbound/grns");
+  const [params, setParams] = useSearchParams();
+  const tab = params.get("tab") === "nonbranded" ? "nonbranded" : "branded";
+  const kind = tab === "nonbranded" ? "non_branded" : "branded";
+
+  const { data: grns, loading } = useList<GrnListItemT>(`/inbound/grns?kind=${kind}`);
   const { data: pending } = useList<PendingBookingT>("/inbound/pending");
+
+  function setTab(next: "branded" | "nonbranded") {
+    setParams((p) => {
+      p.set("tab", next);
+      return p;
+    });
+  }
 
   return (
     <div className="page-pad">
@@ -101,12 +112,35 @@ export function InboundPage() {
           <h1 className="h1 h2-rust">Stock Receive</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/inbound/new" data-testid="new-receipt-btn">
+        <Link
+          className="btn btn-cta"
+          to={`/inbound/new?kind=${tab}`}
+          data-testid="new-receipt-btn"
+        >
           <Plus size={16} /> New receipt
         </Link>
       </div>
 
-      {pending.length > 0 && (
+      <div className="mode-toggle" data-testid="receive-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
+        <button
+          type="button"
+          className={`mode-btn ${tab === "branded" ? "active" : ""}`}
+          onClick={() => setTab("branded")}
+          data-testid="receive-tab-branded"
+        >
+          <StoreIcon size={16} /> Branded (at store)
+        </button>
+        <button
+          type="button"
+          className={`mode-btn ${tab === "nonbranded" ? "active" : ""}`}
+          onClick={() => setTab("nonbranded")}
+          data-testid="receive-tab-nonbranded"
+        >
+          <Boxes size={16} /> Non-branded (at warehouse)
+        </button>
+      </div>
+
+      {tab === "branded" && pending.length > 0 && (
         <div className="section-card card">
           <p className="eyebrow">Awaiting receipt</p>
           <h3 className="h3" style={{ marginBottom: 12 }}>Pending bookings</h3>
@@ -141,7 +175,9 @@ export function InboundPage() {
         <p className="lead">Loading…</p>
       ) : grns.length === 0 ? (
         <div className="card section-card" data-testid="grn-empty">
-          No goods received yet. Start a new receipt against a booking, or a direct receipt.
+          {tab === "branded"
+            ? "No branded goods received yet. Start a new receipt against a booking."
+            : "No non-branded goods received yet. Start a direct receipt at a warehouse."}
         </div>
       ) : (
         <div className="table-wrap">
@@ -236,10 +272,19 @@ export function InboundNewPage() {
   const { data: pending } = useList<PendingBookingT>("/inbound/pending");
   const { data: stores } = useList<StoreT>("/masters/stores");
 
+  // Non-branded goods are received directly at a warehouse — no booking, warehouse-only.
+  const isNonBranded = params.get("kind") === "nonbranded";
+  const storeOptions = useMemo(
+    () => (isNonBranded ? stores.filter((s) => s.store_type === "warehouse") : stores),
+    [stores, isNonBranded],
+  );
+
   const storeLocked = user?.scope_type === "store" && (user?.stores?.length ?? 0) >= 1;
   const lockedStore = storeLocked ? user!.stores[0] : null;
 
-  const [mode, setMode] = useState<"booking" | "direct">(params.get("booking") ? "booking" : "direct");
+  const [mode, setMode] = useState<"booking" | "direct">(
+    isNonBranded ? "direct" : params.get("booking") ? "booking" : "direct",
+  );
   const [bookingId, setBookingId] = useState(params.get("booking") ?? "");
   const [storeId, setStoreId] = useState<string>(lockedStore ? String(lockedStore.id) : "");
   const [vendorName, setVendorName] = useState("");
@@ -375,6 +420,7 @@ export function InboundNewPage() {
     try {
       const { data } = await api.post("/inbound/grns", {
         store_id: Number(storeId),
+        kind: isNonBranded ? "non_branded" : "branded",
         booking_id: mode === "booking" && bookingId ? Number(bookingId) : null,
         vendor_name: mode === "direct" ? vendorName : "",
         invoice_number: invoiceNumber,
@@ -391,31 +437,43 @@ export function InboundNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/inbound" className="btn" style={{ marginBottom: 16 }} data-testid="receive-back-link">
+      <Link
+        to={`/inbound?tab=${isNonBranded ? "nonbranded" : "branded"}`}
+        className="btn"
+        style={{ marginBottom: 16 }}
+        data-testid="receive-back-link"
+      >
         <ArrowLeft size={15} /> Stock Receive
       </Link>
-      <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New receipt</h1>
+      <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>
+        New {isNonBranded ? "non-branded" : "branded"} receipt
+      </h1>
 
       <div className="card section-card">
-        <p className="eyebrow">Step 1 · What are you receiving?</p>
-        <div className="mode-toggle" data-testid="receipt-mode-toggle">
-          <button
-            type="button"
-            className={`mode-btn ${mode === "booking" ? "active" : ""}`}
-            onClick={() => switchMode("booking")}
-            data-testid="mode-booking"
-          >
-            <Boxes size={16} /> Against a booking
-          </button>
-          <button
-            type="button"
-            className={`mode-btn ${mode === "direct" ? "active" : ""}`}
-            onClick={() => switchMode("direct")}
-            data-testid="mode-direct"
-          >
-            <PackageCheck size={16} /> Direct receipt (no booking)
-          </button>
-        </div>
+        <p className="eyebrow">
+          Step 1 · What are you receiving?
+          {isNonBranded && <span className="chip chip-navy" style={{ marginLeft: 8 }}>Non-branded · warehouse</span>}
+        </p>
+        {!isNonBranded && (
+          <div className="mode-toggle" data-testid="receipt-mode-toggle">
+            <button
+              type="button"
+              className={`mode-btn ${mode === "booking" ? "active" : ""}`}
+              onClick={() => switchMode("booking")}
+              data-testid="mode-booking"
+            >
+              <Boxes size={16} /> Against a booking
+            </button>
+            <button
+              type="button"
+              className={`mode-btn ${mode === "direct" ? "active" : ""}`}
+              onClick={() => switchMode("direct")}
+              data-testid="mode-direct"
+            >
+              <PackageCheck size={16} /> Direct receipt (no booking)
+            </button>
+          </div>
+        )}
 
         {mode === "booking" ? (
           <div className="field" style={{ marginTop: 14, maxWidth: 480 }}>
@@ -469,8 +527,8 @@ export function InboundNewPage() {
                 onChange={(e) => setStoreId(e.target.value)}
                 data-testid="receive-store-select"
               >
-                <option value="">Select store / warehouse…</option>
-                {stores.map((s) => (
+                <option value="">{isNonBranded ? "Select warehouse…" : "Select store / warehouse…"}</option>
+                {storeOptions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.code} · {s.name} {s.store_type === "warehouse" ? "(WH)" : ""}
                   </option>
