@@ -475,7 +475,7 @@ def test_awaiting_pt_queue_excludes_branded(world, store, vocab, warehouse_clien
     assert [g["id"] for g in q["awaiting_pt"]] == [nb["id"]]
 
 
-def test_backfill_sets_kind_by_booking(world):
+def test_backfill_keys_off_is_direct_not_booking(world):
     import importlib
 
     from django.apps import apps as django_apps
@@ -485,13 +485,21 @@ def test_backfill_sets_kind_by_booking(world):
     season = Season.objects.create(code="SS26", name="SS26")
     booking = Booking.objects.create(number="BK-1", vendor=vendor, brand=brand, season=season)
     # simulate pre-migration rows (everything defaulted to branded)
-    linked = Grn.objects.create(store=world["wh"], booking=booking, kind=Grn.Kind.BRANDED)
+    linked = Grn.objects.create(
+        store=world["wh"], booking=booking, is_direct=False, kind=Grn.Kind.BRANDED
+    )
     direct = Grn.objects.create(store=world["wh"], is_direct=True, kind=Grn.Kind.BRANDED)
+    # a branded receipt whose booking was later deleted (SET_NULL): booking is now null
+    # but is_direct stays False — it must NOT be reclassified as non-branded.
+    deleted_booking = Grn.objects.create(
+        store=world["wh"], booking=None, is_direct=False, kind=Grn.Kind.BRANDED
+    )
 
     mod = importlib.import_module("inbound.migrations.0005_grn_kind")
     mod.backfill_kind(django_apps, None)
 
-    linked.refresh_from_db()
-    direct.refresh_from_db()
+    for grn in (linked, direct, deleted_booking):
+        grn.refresh_from_db()
     assert linked.kind == Grn.Kind.BRANDED  # booking-linked → branded
-    assert direct.kind == Grn.Kind.NON_BRANDED  # booking-less direct receipt → non-branded
+    assert direct.kind == Grn.Kind.NON_BRANDED  # direct receipt → non-branded
+    assert deleted_booking.kind == Grn.Kind.BRANDED  # null booking but not direct → stays branded
