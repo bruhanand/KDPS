@@ -282,9 +282,17 @@ export function InboundNewPage() {
   const storeLocked = user?.scope_type === "store" && (user?.stores?.length ?? 0) >= 1;
   const lockedStore = storeLocked ? user!.stores[0] : null;
 
-  const [mode, setMode] = useState<"booking" | "direct">(
-    isNonBranded ? "direct" : params.get("booking") ? "booking" : "direct",
-  );
+  // Non-branded intake is warehouse-only (the backend fail-closes on it). A store-scoped
+  // user is pinned to their own store, which may not be a warehouse — spot it here so they
+  // get a clear message instead of a raw 400 on submit.
+  const nonBrandedStoreInvalid =
+    isNonBranded && !!lockedStore && lockedStore.store_type !== "warehouse";
+
+  // Non-branded is always a direct receipt; branded opens in booking mode only when a
+  // booking id was passed in the URL.
+  let initialMode: "booking" | "direct" = "direct";
+  if (!isNonBranded && params.get("booking")) initialMode = "booking";
+  const [mode, setMode] = useState<"booking" | "direct">(initialMode);
   const [bookingId, setBookingId] = useState(params.get("booking") ?? "");
   const [storeId, setStoreId] = useState<string>(lockedStore ? String(lockedStore.id) : "");
   const [vendorName, setVendorName] = useState("");
@@ -391,6 +399,10 @@ export function InboundNewPage() {
 
   async function save() {
     setError("");
+    if (nonBrandedStoreInvalid) {
+      setError("Non-branded goods can only be received at a warehouse. Use the branded tab, or have an admin receive this at a warehouse.");
+      return;
+    }
     if (!storeId) {
       setError("Pick the store/warehouse where goods were received.");
       return;
@@ -517,9 +529,16 @@ export function InboundNewPage() {
           <div className="field">
             <label>Receiving store / warehouse</label>
             {storeLocked && lockedStore ? (
-              <div className="store-lock" data-testid="receive-store-locked">
-                <Lock size={14} /> {lockedStore.code} · {lockedStore.name}
-              </div>
+              <>
+                <div className="store-lock" data-testid="receive-store-locked">
+                  <Lock size={14} /> {lockedStore.code} · {lockedStore.name}
+                </div>
+                {nonBrandedStoreInvalid && (
+                  <p className="warn-note" style={{ marginTop: 6 }} data-testid="nonbranded-store-warn">
+                    Non-branded goods are received only at a warehouse — this store can't be used here.
+                  </p>
+                )}
+              </>
             ) : (
               <select
                 className="select"
@@ -613,7 +632,7 @@ export function InboundNewPage() {
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="receive-error">{error}</div>}
-      <button className="btn btn-primary btn-lg" disabled={saving} onClick={save} data-testid="confirm-grn">
+      <button className="btn btn-primary btn-lg" disabled={saving || nonBrandedStoreInvalid} onClick={save} data-testid="confirm-grn">
         <StoreIcon size={16} /> {saving ? "Saving…" : "Confirm receipt (GRN)"}
       </button>
     </div>
