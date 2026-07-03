@@ -24,6 +24,15 @@ docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" up -d db || true
 # so only one workspace should run the app/tests at a time.
 run_mode = "nonconcurrent"
 
+# On archive, reclaim only THIS workspace's regenerable, gitignored artifacts
+# (each git worktree has its own node_modules / .venv / build output; `npm run
+# setup` recreates them). Deliberately does NOT stop or remove the shared Docker
+# Postgres — the root checkout and other workspaces depend on it. `|| true`
+# keeps archiving from failing when a path is already absent.
+archive = """
+rm -rf node_modules app/frontend/node_modules app/frontend/dist app/backend/.venv || true
+"""
+
 # One click: ensures the Docker Postgres is up AND accepting connections, then
 # runs the Django backend (on CONDUCTOR_PORT+1) and the Vite frontend (on
 # CONDUCTOR_PORT) together in a single process group via `concurrently` (-k kills
