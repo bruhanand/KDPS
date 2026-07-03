@@ -103,6 +103,36 @@ stock under the store's own GSTIN is money-critical (a go-live gate, the alpha i
 construction); every store & warehouse must have a `gstin` set for posting to succeed; manual E2E
 click-through on seeded dev (branded store→Mapper→post-at-store; non-branded warehouse→Making→inward).
 
+## Implemented — Codex correctness fixes: PT-file scoping, GRN-link race, one-live-PT constraint (issue #48) (3 Jul 2026) ✅
+Fifth slice of the inbound overhaul — the four defects Codex flagged on the branded/PT work.
+**Fail-closed scoping + a DB backstop, test-first.**
+
+- **#2 store scoping** (`ptmapper/views.py`) — the brand-PT upload path fetched the linked GRN
+  unscoped and the PT-file list returned `PtFile.objects.all()`, both bypassing the `visible_store_ids`
+  scoping `/inbound/grns` already enforces. Fixed: `create()` fetches the GRN through
+  `scope_by_store(Grn.objects…, "store_id")` (a GRN outside the caller's scope → 404, fail-closed) and
+  `get_queryset()` scopes the list by `grn__store_id`. Unrestricted (`scope=all`/superuser) users are
+  unaffected; a NULL-grn legacy upload has no store → out of scope for restricted users.
+- **#3 race → lock** (`ptmapper/views.py` `create()`) — the GRN-link + one-live-PT check + `PtFile`
+  create are now wrapped in `transaction.atomic()` with `Grn.objects.select_for_update(of=("self",))`,
+  mirroring the from-GRN path (file storage moved before the lock; the slow engine `process_file` runs
+  after commit, never under the lock).
+- **#3 constraint** (`ptmapper/models.py` + migration `0013`) — a partial `UniqueConstraint(fields=
+  ["grn"], condition=~Q(docstatus=CANCELLED), name="uniq_live_pt_per_grn")` (spread alongside the
+  inherited Document check-constraints) is the backstop so no code path or bulk script can leave a GRN
+  with two live PTs; NULL grns exempt (Postgres). The migration **pre-checks** (`RunPython`) that no
+  existing GRN already carries two live PTs and raises with the offenders if so, before the DDL.
+- **#4 lockfile** — the stray `app/frontend/package-lock.json` deleted (yarn-only); `yarn.lock` already
+  carries all-platform esbuild entries, so `yarn install --frozen-lockfile` is green on Linux CI.
+
+**Tests:** `tests/test_ptmapper_scoping_race.py` (new) — a store-scoped user can't GRN-link or list
+another store's PT (404 / empty), an unrestricted user is unaffected, a second live PT for one GRN
+raises `IntegrityError`, NULL grns are exempt. **Verified:** the full hermetic backend suite green on
+real Postgres (201 tests); `makemigrations --check` clean; `ruff` clean on touched source (migrations
+excluded by config); `mypy` at baseline (254→253, no new errors); `yarn install --frozen-lockfile` +
+`vite build` green. *(The pre-existing `test_iteration9/10/11/12/14/15` + `test_refactor_regression`
+live-`:8001`-server failures are environmental, unrelated — confirmed identical on a clean baseline.)*
+
 ## Architecture (locked by ADRs)
 - **Backend:** Python 3.12 + Django 5.1 + Django REST Framework + drf-spectacular, **PostgreSQL** only.
   Kernel in `app/backend/core` (money-as-paise, append-only ledger w/ DB triggers, docstatus FSM,

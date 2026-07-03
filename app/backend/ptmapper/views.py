@@ -25,6 +25,7 @@ from core.documents import DocStatus
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
 from masters.models import CategoryMargin, GstSlab, Store
+from masters.scoping import scope_by_store
 from ptmapper import learning
 from ptmapper.authoring import build_pt_from_grn, enrich_from_invoice
 from ptmapper.engine import (
@@ -314,7 +315,10 @@ class PtFileListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self) -> Any:
-        return PtFile.objects.all()
+        # Fail-closed store scoping by the linked GRN's store, mirroring /inbound/grns.
+        # An unrestricted user (scope=all) is unaffected; a scoped user never sees
+        # another store's PT (a NULL-grn legacy upload has no store → out of scope).
+        return scope_by_store(PtFile.objects.all(), self.request.user, "grn__store_id")
 
     def get_serializer_class(self):
         return PtFileListSerializer
@@ -326,41 +330,55 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         context, err = _parse_context(request.data)
         if err is not None:
             return err
-        # Optional link to the received arrival (D3): a brand PT is mapped *for* a
-        # specific invoice/GRN. This is a reference link only — no posting — so the
-        # warehouse-only restriction that guards the from-grn authoring path does NOT
-        # apply (branded goods legitimately land at stores). The one-live-PT-per-GRN rule
-        # still holds so a GRN never carries two competing PTs.
-        grn = None
+        grn_pk = None
         grn_id = request.data.get("grn")
         if grn_id not in (None, ""):
             try:
                 grn_pk = int(grn_id)
             except (TypeError, ValueError):
                 return Response({"detail": "grn must be a GRN id."}, status=400)
-            grn = Grn.objects.filter(pk=grn_pk).first()
-            if not grn:
-                return Response({"detail": "GRN not found."}, status=404)
-            live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
-            if live:
-                return Response(
-                    {
-                        "detail": f"This GRN already has a PT in progress ({live.stage_label}).",
-                        "pt_file_id": live.id,
-                    },
-                    status=status.HTTP_409_CONFLICT,
-                )
         try:
             stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
         except UploadTooLarge as exc:
             return Response({"detail": str(exc)}, status=413)
-        pt = PtFile.objects.create(
-            stored_file=stored,
-            original_filename=stored.filename,
-            grn=grn,
-            meta={"context": context} if context else {},
-            created_by=request.user if getattr(request.user, "is_authenticated", False) else None,
-        )
+        # Optional link to the received arrival (D3): a brand PT is mapped *for* a
+        # specific invoice/GRN. This is a reference link only — no posting — so the
+        # warehouse-only restriction that guards the from-grn authoring path does NOT
+        # apply (branded goods legitimately land at stores). But the GRN must be in the
+        # caller's store scope (fail-closed, Codex #2) and the link + one-live-PT check +
+        # create must be atomic under a GRN row lock so two concurrent uploads can't both
+        # slip past the check (Codex #3) — mirroring the from-grn path.
+        with transaction.atomic():
+            grn = None
+            if grn_pk is not None:
+                grn = (
+                    scope_by_store(
+                        Grn.objects.select_for_update(of=("self",)), request.user, "store_id"
+                    )
+                    .filter(pk=grn_pk)
+                    .first()
+                )
+                if not grn:
+                    return Response({"detail": "GRN not found."}, status=404)
+                live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
+                if live:
+                    return Response(
+                        {
+                            "detail": f"This GRN already has a PT in progress "
+                            f"({live.stage_label}).",
+                            "pt_file_id": live.id,
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
+            pt = PtFile.objects.create(
+                stored_file=stored,
+                original_filename=stored.filename,
+                grn=grn,
+                meta={"context": context} if context else {},
+                created_by=request.user
+                if getattr(request.user, "is_authenticated", False)
+                else None,
+            )
         process_file(pt)
         return Response(PtFileDetailSerializer(pt).data, status=status.HTTP_201_CREATED)
 
