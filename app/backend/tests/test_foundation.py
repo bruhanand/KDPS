@@ -28,7 +28,7 @@ SEEDED_BRAND_CODES = frozenset(
         "killer",
     }
 )
-SEEDED_STORE_CODES = frozenset({"DEO", "BKR", "HZB", "DUM", "BANKA"})
+SEEDED_STORE_CODES = frozenset({"DEO", "BKR", "HZB", "DUM", "BANKA", "RAN-WH"})
 SEEDED_SEASON_CODES = frozenset({"SS26", "AW25", "SS25"})
 SEEDED_GSTIN_STATE_CODES = frozenset({"10", "20"})
 
@@ -140,7 +140,7 @@ def test_scope_isolation_stores_and_summary(s):
     )
     assert o_summary.status_code == 200
     osd = o_summary.json()
-    assert osd.get("stores") >= 6
+    assert osd.get("stores") >= len(SEEDED_STORE_CODES)
     assert osd.get("warehouses") >= 1
 
     # deo.cashier - store scoped
