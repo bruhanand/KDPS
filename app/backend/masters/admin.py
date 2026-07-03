@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from masters.models import Brand, Gstin, LegalEntity, Season, Store
+from masters.models import Brand, CategoryMargin, Gstin, LegalEntity, Season, Store
 
 
 @admin.register(LegalEntity)
@@ -36,3 +36,9 @@ class BrandAdmin(admin.ModelAdmin):
     list_display = ["name", "code", "ownership", "return_terms", "commercial_label", "is_active"]
     list_filter = ["ownership", "return_terms", "is_active"]
     search_fields = ["name", "code"]
+
+
+@admin.register(CategoryMargin)
+class CategoryMarginAdmin(admin.ModelAdmin):
+    list_display = ["item", "margin_pct", "band_min_pct", "band_max_pct", "is_active"]
+    search_fields = ["item"]

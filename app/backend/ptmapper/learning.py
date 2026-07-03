@@ -213,13 +213,19 @@ def promote_file_remembers(pt: PtFile, actor: Any) -> int:
 
 # ---------------------------------------------------------------- repropagation
 def repropagate() -> None:
-    """Re-map **every** mapping-stage draft so a newly-approved rule fills its blanks
-    everywhere. Preserve-manual (D2) makes even a hand-edited draft safe to re-map — the
-    learned rule fills the remaining blanks while every manual cell is re-applied on top.
-    Sent/posted files are frozen (the FSM freeze stands — never re-mapped). The
+    """Re-map **every** mapping-stage *brand* draft so a newly-approved rule fills its
+    blanks everywhere. Preserve-manual (D2) makes even a hand-edited draft safe to re-map
+    — the learned rule fills the remaining blanks while every manual cell is re-applied on
+    top. Sent/posted files are frozen (the FSM freeze stands — never re-mapped). The
     ``learning.approve`` and the review/taxonomy resolution paths all share this one
-    function."""
+    function.
+
+    Authored (invoice-source) drafts are **excluded**: their stored file is the invoice
+    photo, not a brand workbook, so ``process_file`` would delete the authored rows and
+    fail. They are enriched from the invoice once, at creation, and never re-mapped."""
     from ptmapper.views import process_file  # lazy import: break the views→learning cycle
 
-    for pt in PtFile.objects.filter(draft_stage=PtFile.DraftStage.MAPPING):
+    for pt in PtFile.objects.filter(
+        draft_stage=PtFile.DraftStage.MAPPING, source=PtFile.Source.BRAND_FILE
+    ):
         process_file(pt, preserve_manual=True)

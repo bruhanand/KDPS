@@ -1,12 +1,14 @@
 """PT Mapper API — upload a brand file, map it deterministically, review the
 unmapped queue, resolve a value (which grows the lookup tables), and export KDPS
-rows. No AI anywhere in this module.
+rows. The mapping engine has no AI; the only AI is the *authored* (from-GRN)
+path's invoice prefill, which is reviewable and never final (Rule 8).
 """
 
 from __future__ import annotations
 
 import csv
 import io
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import openpyxl
@@ -19,8 +21,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.documents import DocStatus
 from files.models import StoredFile, UploadTooLarge
+from inbound.models import Grn
+from masters.models import CategoryMargin, GstSlab
 from ptmapper import learning
+from ptmapper.authoring import build_pt_from_grn, enrich_from_invoice
 from ptmapper.engine import (
     UnsupportedFormat,
     _margin,
@@ -42,6 +48,7 @@ from ptmapper.models import (
     ReviewItem,
     TaxonomyRule,
 )
+from ptmapper.pricing import Slab, price_from_rate
 from ptmapper.profiles import CONTROLLED as CONTROLLED_COLS
 from ptmapper.profiles import KDPS_COLUMNS
 from ptmapper.serializers import (
@@ -50,7 +57,12 @@ from ptmapper.serializers import (
     PtFileListSerializer,
     ReviewItemSerializer,
 )
-from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
+from stockledger.posting import (
+    WAREHOUSE_CODE,
+    PtPostingError,
+    post_pt_inward,
+    reverse_pt_inward,
+)
 from vendors.models import Booking
 
 SINGLE_DIMS = {"color", "size", "brand", "season", "fit"}
@@ -237,6 +249,10 @@ def process_file(pt: PtFile, preserve_manual: bool = True) -> PtFile:
     re-applied after the rebuild, so a re-map (a learned rule landing, a re-run) fills
     the remaining blanks without ever clobbering a manual cell. Pass ``False`` for the
     explicit full-wipe re-run."""
+    if pt.source == PtFile.Source.INVOICE:
+        # An authored PT has no brand workbook — its stored file is the invoice photo.
+        # Re-mapping it would delete the authored rows and fail the file. Never here.
+        return pt
     snapshot = _snapshot_manual(pt) if preserve_manual else {}
     pt.rows.all().delete()
     if not pt.stored_file:
@@ -311,6 +327,30 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         context, err = _parse_context(request.data)
         if err is not None:
             return err
+        # Optional link to the received arrival (D3): a brand PT is mapped *for* a
+        # specific invoice/GRN. This is a reference link only — no posting — so the
+        # RAN-WH restriction that guards the from-grn posting path does NOT apply
+        # (branded goods legitimately land at stores). The one-live-PT-per-GRN rule
+        # still holds so a GRN never carries two competing PTs.
+        grn = None
+        grn_id = request.data.get("grn")
+        if grn_id not in (None, ""):
+            try:
+                grn_pk = int(grn_id)
+            except (TypeError, ValueError):
+                return Response({"detail": "grn must be a GRN id."}, status=400)
+            grn = Grn.objects.filter(pk=grn_pk).first()
+            if not grn:
+                return Response({"detail": "GRN not found."}, status=404)
+            live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
+            if live:
+                return Response(
+                    {
+                        "detail": f"This GRN already has a PT in progress ({live.stage_label}).",
+                        "pt_file_id": live.id,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
         try:
             stored = StoredFile.from_upload(upload, StoredFile.Kind.PT_FILE, request.user)
         except UploadTooLarge as exc:
@@ -318,10 +358,65 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         pt = PtFile.objects.create(
             stored_file=stored,
             original_filename=stored.filename,
+            grn=grn,
             meta={"context": context} if context else {},
             created_by=request.user if getattr(request.user, "is_authenticated", False) else None,
         )
         process_file(pt)
+        return Response(PtFileDetailSerializer(pt).data, status=status.HTTP_201_CREATED)
+
+
+class PtFileFromGrnView(APIView):
+    """Start the non-brand PT for an arrival: seed a DRAFT ``PtFile(source=invoice)``
+    from the GRN's counted lines, then best-effort AI-prefill money cells from the
+    stored invoice. One live PT per GRN — a second call returns 409 pointing at it
+    (a reversed PT frees the slot; you author again, never edit)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, grn_id: int) -> Response:
+        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+            return _forbidden("Only warehouse/HO mapping stewards can make a PT from a GRN.")
+        with transaction.atomic():
+            # The row lock serialises concurrent make-PT clicks on one arrival
+            # (of=("self",): lock only the GRN row — vendor/invoice_file join NULLable).
+            grn = (
+                Grn.objects.select_for_update(of=("self",))
+                .select_related("vendor", "invoice_file")
+                .filter(pk=grn_id)
+                .first()
+            )
+            if not grn:
+                return Response({"detail": "GRN not found."}, status=404)
+            if grn.docstatus != DocStatus.SUBMITTED:
+                return Response({"detail": "Only a posted receipt can become a PT."}, status=409)
+            if grn.store.code != WAREHOUSE_CODE:
+                # post_pt_inward books stock + GL under a single hardcoded warehouse
+                # (RAN-WH / Jharkhand). Authoring a store-received GRN would post it under
+                # the wrong "distinct person" and GSTIN — block until multi-site posting
+                # exists rather than book stock in the wrong state.
+                return Response(
+                    {
+                        "detail": "Authoring is available only for the Ranchi warehouse "
+                        "(RAN-WH) for now — store-received arrivals will be supported once "
+                        "multi-site posting exists."
+                    },
+                    status=409,
+                )
+            live = grn.pt_files.exclude(docstatus=DocStatus.CANCELLED).first()
+            if live:
+                return Response(
+                    {
+                        "detail": f"This GRN already has a PT in progress ({live.stage_label}).",
+                        "pt_file_id": live.id,
+                    },
+                    status=409,
+                )
+            pt = build_pt_from_grn(grn, request.user)
+        # Outside the transaction: the AI read can take seconds and must never hold
+        # the GRN lock or roll back the authored file — failure only annotates it.
+        enrich_from_invoice(pt, grn)
+        pt.refresh_from_db()
         return Response(PtFileDetailSerializer(pt).data, status=status.HTTP_201_CREATED)
 
 
@@ -355,6 +450,12 @@ class PtFileRerunView(APIView):
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
+        if pt.source == PtFile.Source.INVOICE:
+            # The stored file behind an authored PT is the invoice photo/PDF, not a
+            # brand sheet — re-mapping it would wipe the authored rows for nothing.
+            return Response(
+                {"detail": "An authored (from-GRN) PT has no brand file to re-map."}, status=409
+            )
         if pt.stage != PtFile.Stage.MAPPING:
             return Response({"detail": "Only files still in mapping can be re-run."}, status=409)
         if "brand" in request.data or "invoice_date" in request.data:
@@ -630,6 +731,20 @@ class PtRowsUpdateView(APIView):
         return Response(PtFileDetailSerializer(pt).data)
 
 
+def _invoice_send_blocks(pt: PtFile) -> list[dict]:
+    """The hard gates before an authored PT may leave the warehouse (invoice source
+    only — the brand path is untouched): every row needs a BARCODE (keep-if-present;
+    else the warehouse generates in POS and types it — manual v1, Ten Software API
+    pending) and a SEASON (the canonical-season block, Q39 — the editor already
+    restricts the cell to Master-Sheet seasons, this refuses blanks)."""
+    problems: list[dict] = []
+    for row in pt.rows.all():
+        missing = [c for c in ("BARCODE", "SEASON") if not str(row.data.get(c) or "").strip()]
+        if missing:
+            problems.append({"line_no": row.line_no, "missing": missing})
+    return problems
+
+
 class PtFileSendView(APIView):
     """Warehouse → Patna: hand the mapped draft over for review/posting."""
 
@@ -644,6 +759,17 @@ class PtFileSendView(APIView):
             return Response({"detail": "This file is not in the mapping stage."}, status=409)
         if pt.row_count == 0:
             return Response({"detail": "Nothing to send — the file has no rows."}, status=409)
+        if pt.source == PtFile.Source.INVOICE:
+            problems = _invoice_send_blocks(pt)
+            if problems:
+                return Response(
+                    {
+                        "detail": "Every row needs a barcode and a season before this "
+                        "authored PT can go to Patna.",
+                        "rows": problems,
+                    },
+                    status=409,
+                )
         pt.draft_stage = PtFile.DraftStage.SENT
         pt.sent_at = timezone.now()
         pt.save(update_fields=["draft_stage", "sent_at", "updated_at"])
@@ -689,6 +815,20 @@ class PtFilePostView(APIView):
             booking = Booking.objects.filter(pk=booking_id).first()
             if not booking:
                 return Response({"detail": "Booking not found."}, status=400)
+        # The GRN's own booking is the source of truth for the commercial model: a booked
+        # SOR/consignment arrival must post against it (Dr INVENTORY / Cr the vendor
+        # payable), not fall through to "Direct receipt" because the request omitted it.
+        grn_booking = pt.grn.booking if pt.grn_id else None
+        if grn_booking is not None:
+            if booking is not None and booking.pk != grn_booking.pk:
+                return Response(
+                    {
+                        "detail": "This PT's GRN is booked against a different booking — "
+                        "post it against its own booking or send none."
+                    },
+                    status=409,
+                )
+            booking = grn_booking
         try:
             result = post_pt_inward(pt, request.user, booking=booking)
         except PtPostingError as exc:
@@ -716,6 +856,132 @@ class PtFileReverseView(APIView):
         result = reverse_pt_inward(pt, request.user)
         data = PtFileDetailSerializer(pt).data
         data["reverse_result"] = result
+        return Response(data)
+
+
+def _price_decimal(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        d = Decimal(str(value).replace(",", "").strip())
+    except (InvalidOperation, ValueError):
+        return None
+    # ``Decimal("inf")``/``Decimal("nan")`` parse cleanly but poison every downstream
+    # comparison and gross-up — a free-entry "inf" P RATE or margin must read as invalid.
+    return d if d.is_finite() else None
+
+
+def _gst_cell(pct: Decimal) -> int | float:
+    """A GST-percent cell: whole values collapse to int (5 not 5.0) so it compares clean
+    against the Master '5'/'18', fractional slabs keep their decimal."""
+    return int(pct) if pct == int(pct) else float(pct)
+
+
+class PtFilePriceView(APIView):
+    """Price the blank rows of an authored PT deterministically (D2 Q7): for every
+    row with a purchase rate but no MRP, derive MRP / taxes / margin via
+    ``ptmapper.pricing`` — margin from the ``CategoryMargin`` master (row ITEM,
+    falling back to the global default), GST from the date-effective ``GstSlab``.
+    ``{"margin_pct": …}`` overrides the margin, validated server-side against each
+    priced row's category band; one out-of-band row rejects the whole call.
+    Written cells carry provenance ``derived``. Source-gated: never a brand file."""
+
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request: Request, pk: int) -> Response:
+        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+            return _forbidden("Only warehouse/HO mapping stewards can price an authored PT.")
+        pt = PtFile.objects.filter(pk=pk).first()
+        if not pt:
+            return Response({"detail": "Not found."}, status=404)
+        if pt.source != PtFile.Source.INVOICE:
+            return Response(
+                {
+                    "detail": "Only authored (from-GRN) PTs are priced here — brand files "
+                    "carry the brand's own MRP."
+                },
+                status=409,
+            )
+        if pt.stage in (PtFile.Stage.POSTED, PtFile.Stage.REVERSED):
+            return Response({"detail": "Posted/reversed files are locked."}, status=409)
+
+        slab_row = GstSlab.objects.filter(effective_from__lte=timezone.now().date()).first()
+        if slab_row is None:
+            return Response({"detail": "No GST slab is effective — seed masters first."}, 422)
+        slab = Slab(
+            threshold=Decimal(slab_row.threshold_paise) / 100,
+            rate_below=Decimal(slab_row.rate_below),
+            rate_above=Decimal(slab_row.rate_above),
+        )
+        margins = {m.item: m for m in CategoryMargin.objects.filter(is_active=True)}
+        default_margin = margins.get("")
+        if default_margin is None:
+            return Response(
+                {"detail": "No default category margin is seeded — add one in masters."},
+                status=422,
+            )
+
+        override = _price_decimal(request.data.get("margin_pct"))
+        if request.data.get("margin_pct") not in (None, "") and override is None:
+            return Response({"detail": "margin_pct must be a number."}, status=400)
+
+        priced = 0
+        skipped: list[dict] = []
+        errors: list[dict] = []
+        touched: list[PtRow] = []
+        for row in pt.rows.all():
+            if str(row.data.get("MRP") or "").strip():
+                continue  # already priced / brand-known MRP — never overwrite
+            rate = _price_decimal(row.data.get("P RATE")) or _price_decimal(row.data.get("BASIC"))
+            if rate is None or rate <= 0:
+                skipped.append({"line_no": row.line_no, "reason": "no purchase rate"})
+                continue
+            cat = margins.get(str(row.data.get("ITEM") or "").strip(), default_margin)
+            margin_pct = override if override is not None else Decimal(cat.margin_pct)
+            if not Decimal(cat.band_min_pct) <= margin_pct <= Decimal(cat.band_max_pct):
+                errors.append(
+                    {
+                        "line_no": row.line_no,
+                        "detail": f"margin {margin_pct}% is outside the "
+                        f"{cat.item or 'default'} band "
+                        f"{cat.band_min_pct}–{cat.band_max_pct}%",
+                    }
+                )
+                continue
+            result = price_from_rate(rate, margin_pct, slab)
+            # MRP was blank (checked above) so it is always written; the tax/margin cells
+            # may already carry an AI-read or human-typed value (INPUT/OUTPUT TAX from the
+            # real invoice, a hand-entered MARGIN) — pricing fills only the *blank* ones,
+            # never clobbering a value the row already asserts.
+            priced_cells = {
+                "MRP": int(result.mrp),
+                "INPUT TAX": _gst_cell(result.input_tax),
+                "OUTPUT TAX": _gst_cell(result.output_tax),
+                "MARGIN": float(result.margin_pct),
+            }
+            data = {**row.data}
+            prov = {**(row.provenance or {})}
+            for col, val in priced_cells.items():
+                if col != "MRP" and str(data.get(col) or "").strip():
+                    continue  # keep the invoice/human value on this cell
+                data[col] = val
+                prov[col] = "derived"
+            row.data = data
+            row.provenance = prov
+            touched.append(row)
+            priced += 1
+        if errors:
+            return Response(
+                {"detail": "The margin override falls outside a category band.", "errors": errors},
+                status=400,
+            )
+        if touched:
+            PtRow.objects.bulk_update(touched, ["data", "provenance"])
+            _recompute_counts(pt)
+            pt.save()
+        data = PtFileDetailSerializer(pt).data
+        data["price_result"] = {"priced": priced, "skipped": skipped}
         return Response(data)
 
 

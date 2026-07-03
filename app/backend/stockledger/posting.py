@@ -306,6 +306,15 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     """
     from django.utils import timezone
 
+    # This path books stock + GL under the single warehouse (RAN-WH / Jharkhand). A GRN
+    # received at a store in another state is a different "distinct person" (own GSTIN) —
+    # posting it here would book under the wrong store. Refuse until multi-site posting
+    # lands (the from-GRN authoring view blocks it too; this is the money-path backstop).
+    if pt.grn_id and pt.grn.store.code != WAREHOUSE_CODE:
+        raise PtPostingError(
+            f"This PT's GRN was received at {pt.grn.store.code}, not the {WAREHOUSE_CODE} "
+            "warehouse — store-received arrivals cannot be posted yet."
+        )
     store = Store.objects.get(code=WAREHOUSE_CODE)
     # Record booking + posted_at on the draft, then post() to mint the gap-free PT
     # voucher number and freeze the document (one source of numbering — the kernel).

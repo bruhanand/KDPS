@@ -38,7 +38,7 @@ export const NAV: NavGroup[] = [
     layer: "store",
     items: [
       { label: "Sell", to: "/store/sell" },
-      { label: "Receive", to: "/inbound" },
+      { label: "Stock Receive", to: "/inbound" },
       { label: "Count", to: "/store/count" },
       { label: "Transfer", to: "/store/transfer" },
     ],
@@ -50,8 +50,8 @@ export const NAV: NavGroup[] = [
     layer: "documents",
     items: [
       { label: "Bookings", to: "/documents/bookings" },
-      { label: "Inbound (GRN / PT)", to: "/inbound" },
-      { label: "PT Mapper", to: "/documents/pt-mapper" },
+      { label: "Stock Receive", to: "/inbound" },
+      { label: "PT File Operation", to: "/documents/pt-mapper" },
       { label: "Sales", to: "/documents/sales" },
       { label: "Transfers", to: "/documents/transfers" },
       { label: "Returns", to: "/documents/returns" },

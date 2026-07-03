@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
   Boxes,
+  FileSpreadsheet,
   FileUp,
   Lock,
   PackageCheck,
@@ -15,6 +16,7 @@ import {
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
+import { useMakePt } from "../components/InboundQueueCard";
 import "./Booking.css";
 
 const GRN_TONE: Record<string, string> = {
@@ -23,8 +25,22 @@ const GRN_TONE: Record<string, string> = {
   inwarded: "blue",
 };
 
+// Who may start a PT from an arrival — mirrors the backend MAPPING_STEWARD_ROLES.
+const PT_MAKER_ROLES = new Set(["warehouse", "data_steward", "ho_ops", "owner", "it_admin"]);
+
 function GrnPill({ status, label }: { status: string; label?: string }) {
   return <span className={`chip chip-${GRN_TONE[status] ?? "grey"} status-pill`}>{label ?? status}</span>;
+}
+
+interface GrnPtFileT {
+  id: number;
+  original_filename: string;
+  source: string;
+  stage: string;
+  stage_label: string;
+  doc_number: string | null;
+  blank_cell_count: number;
+  row_count: number;
 }
 
 interface StoreT {
@@ -81,8 +97,8 @@ export function InboundPage() {
     <div className="page-pad">
       <div className="toolbar">
         <div>
-          <p className="eyebrow">Documents · Receiving</p>
-          <h1 className="h1 h2-rust">Inbound (GRN)</h1>
+          <p className="eyebrow">Store Ops · Receiving</p>
+          <h1 className="h1 h2-rust">Stock Receive</h1>
         </div>
         <div className="spacer" />
         <Link className="btn btn-cta" to="/inbound/new" data-testid="new-receipt-btn">
@@ -376,7 +392,7 @@ export function InboundNewPage() {
   return (
     <div className="page-pad">
       <Link to="/inbound" className="btn" style={{ marginBottom: 16 }} data-testid="receive-back-link">
-        <ArrowLeft size={15} /> Inbound
+        <ArrowLeft size={15} /> Stock Receive
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New receipt</h1>
 
@@ -561,6 +577,7 @@ interface GrnDetailT {
   notes: string;
   received_total: number;
   created_at: string;
+  pt_files: GrnPtFileT[];
   lines: {
     id: number;
     style_code: string;
@@ -574,14 +591,25 @@ interface GrnDetailT {
   }[];
 }
 
+const PT_STAGE_TONE: Record<string, string> = {
+  mapping: "blue",
+  sent: "amber",
+  posted: "green",
+  reversed: "grey",
+};
+
 export function GrnDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: g, loading } = useDoc<GrnDetailT>(`/inbound/grns/${id}`);
+  const { makePt, makingId, error: makeError } = useMakePt();
   if (loading || !g) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+  const canMakePt = PT_MAKER_ROLES.has(user?.role?.code ?? "");
+  const livePt = (g.pt_files ?? []).find((p) => p.stage !== "reversed") ?? null;
   return (
     <div className="page-pad">
       <Link to="/inbound" className="btn" style={{ marginBottom: 16 }} data-testid="grn-detail-back-link">
-        <ArrowLeft size={15} /> Inbound
+        <ArrowLeft size={15} /> Stock Receive
       </Link>
       <div className="toolbar">
         <div>
@@ -596,7 +624,38 @@ export function GrnDetailPage() {
         <div className="spacer" />
         {g.is_direct && <span className="chip chip-purple">Direct</span>}
         <GrnPill status={g.status} label={g.status_label} />
+        {canMakePt && !livePt && (
+          <button
+            type="button"
+            className="btn btn-cta"
+            disabled={makingId === g.id}
+            onClick={() => makePt(g.id)}
+            data-testid="grn-make-pt"
+          >
+            <FileSpreadsheet size={15} /> {makingId === g.id ? "Making…" : "Make PT file"}
+          </button>
+        )}
       </div>
+      {makeError && <div className="warn-note" data-testid="grn-make-pt-error">{makeError}</div>}
+
+      {(g.pt_files ?? []).length > 0 && (
+        <div className="card section-card" data-testid="grn-pt-files">
+          <p className="eyebrow">PT files for this arrival</p>
+          {g.pt_files.map((p) => (
+            <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0" }}>
+              <FileSpreadsheet size={14} style={{ color: "var(--rust)" }} />
+              <Link to={`/documents/pt-mapper/${p.id}`} className="link-cell" data-testid={`grn-pt-link-${p.id}`}>
+                <b>{p.original_filename}</b>
+              </Link>
+              {p.doc_number && <span className="mono" style={{ fontSize: 12.5 }}>{p.doc_number}</span>}
+              <span className={`chip chip-${PT_STAGE_TONE[p.stage] ?? "grey"}`}>{p.stage_label}</span>
+              {p.stage !== "posted" && p.blank_cell_count > 0 && (
+                <span className="chip chip-grey">{p.blank_cell_count} blank cells</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="form-row" style={{ marginBottom: 18 }}>
         <div className="card section-card"><p className="eyebrow">Received at</p><h3 className="h3" style={{ textTransform: "capitalize" }}>{g.received_at}</h3></div>

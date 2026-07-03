@@ -10,12 +10,14 @@ from masters.views import (
     LegalEntityListView,
     SeasonDetailView,
     SeasonListView,
+    SkuLookupView,
     StoreDetailView,
     StoreListView,
     SummaryView,
 )
 
 urlpatterns = [
+    path("skus/lookup", SkuLookupView.as_view(), name="sku-lookup"),
     path("stores", StoreListView.as_view(), name="store-list"),
     path("stores/<int:pk>", StoreDetailView.as_view(), name="store-detail"),
     path("brands", BrandListView.as_view(), name="brand-list"),
