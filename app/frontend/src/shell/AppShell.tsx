@@ -5,6 +5,7 @@ import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Search, X } from "lucide
 
 import { useAuth } from "../auth/AuthContext";
 import type { Store } from "../auth/AuthContext";
+import { ThemeToggle } from "../theme/ThemeToggle";
 import { NAV } from "./navConfig";
 import type { NavGroup, NavItem } from "./navConfig";
 import "./AppShell.css";
@@ -110,6 +111,10 @@ function UserMenu() {
           <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
           <div className="dropdown dropdown-right" data-testid="user-menu-dropdown">
             <div className="dropdown-head">{user.username} · {user.scope_label}</div>
+            <div className="dropdown-theme" onClick={(e) => e.stopPropagation()}>
+              <span>Theme</span>
+              <ThemeToggle />
+            </div>
             <button
               className="dropdown-item"
               onClick={() => {

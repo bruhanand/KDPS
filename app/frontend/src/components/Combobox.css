@@ -3,10 +3,10 @@
 
 .cbx-control {
   display: flex; align-items: center; gap: 4px; cursor: pointer;
-  border: 1px solid var(--rule, #e7dfd3); border-radius: 6px; background: #fff;
+  border: 1px solid var(--rule, #e7dfd3); border-radius: 6px; background: var(--field-bg);
   padding: 0 6px; box-sizing: border-box; width: 100%;
 }
-.cbx-control.open { border-color: var(--rust, #c4623f); box-shadow: 0 0 0 2px rgba(196,98,63,.15); }
+.cbx-control.open { border-color: var(--rust, #c4623f); box-shadow: 0 0 0 2px rgba(var(--rust-rgb), .15); }
 .cbx-field .cbx-control { min-height: 38px; font-size: 13.5px; }
 .cbx-cell .cbx-control { min-height: 26px; font-size: 12px; min-width: 96px; }
 
@@ -29,7 +29,7 @@
 
 .cbx-list {
   position: fixed; z-index: 60; max-height: 230px; overflow-y: auto;
-  background: #fff; border: 1px solid var(--rule, #e7dfd3); border-radius: 8px;
+  background: var(--field-bg); border: 1px solid var(--rule, #e7dfd3); border-radius: 8px;
   box-shadow: 0 8px 24px rgba(31,45,77,.14); padding: 4px; font-size: 12.5px;
 }
 .cbx-option {

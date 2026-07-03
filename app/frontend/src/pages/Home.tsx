@@ -160,8 +160,8 @@ function TrialBalancePanel() {
         style={{
           display: "flex", gap: 12, alignItems: "center", padding: "12px 14px",
           borderRadius: 12, marginBottom: 12,
-          background: balanced ? "rgba(31,122,77,0.08)" : "rgba(196,98,63,0.10)",
-          color: balanced ? "#1f7a4d" : "var(--rust)",
+          background: balanced ? "rgba(var(--green-rgb), 0.08)" : "rgba(var(--rust-rgb), 0.10)",
+          color: balanced ? "var(--green)" : "var(--rust)",
         }}
       >
         {balanced ? <CheckCircle2 size={20} /> : <AlertTriangle size={20} />}

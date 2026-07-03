@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
+import { ThemeToggle } from "../theme/ThemeToggle";
 import "./Login.css";
 
 const DEMO: { label: string; username: string; password: string }[] = [
@@ -50,6 +51,9 @@ export function Login() {
       </aside>
 
       <main className="login-panel">
+        <div className="login-theme">
+          <ThemeToggle compact />
+        </div>
         <form className="login-card" onSubmit={submit} data-testid="login-form">
           <p className="eyebrow">Sign in</p>
           <h2 className="h2" style={{ marginBottom: 18 }}>Welcome back</h2>

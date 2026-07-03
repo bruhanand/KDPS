@@ -13,7 +13,7 @@
 .sidebar-resizer {
   position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 5;
 }
-.sidebar-resizer:hover { background: rgba(196, 98, 63, .16); }
+.sidebar-resizer:hover { background: rgba(var(--rust-rgb), .16); }
 body.sidebar-resizing { cursor: col-resize; user-select: none; }
 .brand {
   display: flex; align-items: center; gap: 11px;
@@ -49,8 +49,8 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 }
 .nav-item[draggable="true"] { cursor: grab; }
 .nav-item[draggable="true"]:active { cursor: grabbing; }
-.nav-item:hover { background: rgba(196, 98, 63, .08); color: var(--ink); }
-.nav-item.active { background: rgba(196, 98, 63, .14); color: var(--rust); font-weight: 700; }
+.nav-item:hover { background: rgba(var(--rust-rgb), .08); color: var(--ink); }
+.nav-item.active { background: rgba(var(--rust-rgb), .14); color: var(--rust); font-weight: 700; }
 .nav-item.active::before {
   content: ""; position: absolute; left: -2px; top: 7px; bottom: 7px; width: 3px;
   background: var(--rust); border-radius: 2px;
@@ -91,7 +91,7 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   border: 1px solid var(--hairline); border-radius: 999px; padding: 7px 13px; cursor: pointer;
   font-size: 13.5px; font-weight: 600; color: var(--navy); transition: background-color .15s;
 }
-.switcher-btn:hover { background: #f0e9e0; }
+.switcher-btn:hover { background: var(--inner-hover); }
 .switcher-btn.locked { cursor: default; color: var(--muted); }
 .switcher-btn.locked:hover { background: var(--inner); }
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -102,7 +102,7 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 }
 .user-btn:hover { background: var(--inner); }
 .avatar {
-  width: 34px; height: 34px; border-radius: 10px; background: var(--navy); color: #fff;
+  width: 34px; height: 34px; border-radius: 10px; background: var(--navy-fill); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex: none;
 }
 .user-meta { display: flex; flex-direction: column; line-height: 1.2; text-align: left; }
@@ -126,12 +126,33 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   font-size: 13.5px; color: var(--ink); text-align: left; transition: background-color .12s;
 }
 .dropdown-item:hover { background: var(--inner); }
-.dropdown-item.active { background: rgba(196, 98, 63, .12); color: var(--rust); font-weight: 700; }
+.dropdown-item.active { background: rgba(var(--rust-rgb), .12); color: var(--rust); font-weight: 700; }
+
+/* theme toggle — three-segment pill (Light / Dark / System) */
+.dropdown-theme {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px 10px;
+}
+.dropdown-theme > span {
+  font-size: 13.5px; color: var(--muted); font-weight: 600;
+}
+.theme-seg {
+  display: inline-flex; gap: 2px; padding: 3px; background: var(--inner);
+  border: 1px solid var(--hairline); border-radius: 999px;
+}
+.theme-seg-btn {
+  display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent;
+  background: transparent; color: var(--muted); border-radius: 999px; padding: 5px 10px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: background-color .12s, color .12s;
+}
+.theme-seg-btn:hover { color: var(--ink); }
+.theme-seg-btn.active { background: var(--surface); border-color: var(--hairline); color: var(--ink); }
+.theme-seg-compact .theme-seg-btn { padding: 6px; }
 
 /* ---------- mobile (off-canvas drawer) ---------- */
 .menu-btn { display: none; }
 .sidebar-backdrop {
-  display: none; position: fixed; inset: 0; z-index: 55; background: rgba(31, 41, 55, .42);
+  display: none; position: fixed; inset: 0; z-index: 55; background: var(--scrim-nav);
 }
 
 @media (max-width: 768px) {
@@ -143,7 +164,7 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
   }
-  .sidebar.mobile-open { transform: translateX(0); box-shadow: 0 12px 40px rgba(31, 41, 55, .28); }
+  .sidebar.mobile-open { transform: translateX(0); box-shadow: var(--drawer-shadow); }
   .sidebar-resizer { display: none; }
 
   .topbar { padding: 0 12px; gap: 10px; }
