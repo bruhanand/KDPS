@@ -145,7 +145,7 @@ export default function StockLedger() {
                   <td>{e.size}</td>
                   <td>{e.item}</td>
                   <td>{e.season}</td>
-                  <td className="num" style={{ color: e.qty < 0 ? "var(--red, #c0392b)" : "inherit", fontWeight: 700 }}>{e.qty}</td>
+                  <td className="num" style={{ color: e.qty < 0 ? "var(--red)" : "inherit", fontWeight: 700 }}>{e.qty}</td>
                   <td className="num mono">{e.value_rupees}</td>
                   <td>{e.booking_number || "—"}</td>
                 </tr>
