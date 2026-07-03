@@ -189,7 +189,9 @@ function Sidebar({
       <nav className="nav" data-testid="sidebar-nav">
         {groups.map((g) => {
           const Icon = g.icon;
-          const items = orderedItems(g, navOrder);
+          const items = orderedItems(g, navOrder).filter(
+            (it) => !it.roles || user.is_superuser || it.roles.includes(user.role?.code ?? ""),
+          );
           const single = items.length === 1;
           return (
             <div className="nav-group" key={g.key}>

@@ -10,9 +10,15 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { FINANCE_ROLES, RBAC_ADMIN_ROLES } from "../auth/routeAccess";
+
 export interface NavItem {
   label: string;
   to: string;
+  // Optional finer gate: only these role codes see this item (mirrors a
+  // backend permission tighter than the group). Omitted → group access is
+  // enough. Kept in sync with the route guard in auth/routeAccess.ts.
+  roles?: string[];
 }
 
 export interface NavGroup {
@@ -68,7 +74,7 @@ export const NAV: NavGroup[] = [
       { label: "Brands", to: "/masters/brands" },
       { label: "Seasons", to: "/masters/seasons" },
       { label: "GSTINs", to: "/masters/gstins" },
-      { label: "Users & Roles", to: "/masters/users" },
+      { label: "Users & Roles", to: "/masters/users", roles: RBAC_ADMIN_ROLES },
     ],
   },
   {
@@ -79,8 +85,8 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Stock Ledger", to: "/ledgers/stock" },
       { label: "Stock on Hand", to: "/ledgers/stock-on-hand" },
-      { label: "Vendor Ledger", to: "/ledgers/vendor" },
-      { label: "Cash Ledger", to: "/ledgers/cash" },
+      { label: "Vendor Ledger", to: "/ledgers/vendor", roles: FINANCE_ROLES },
+      { label: "Cash Ledger", to: "/ledgers/cash", roles: FINANCE_ROLES },
     ],
   },
   {
@@ -115,7 +121,7 @@ export const NAV: NavGroup[] = [
     layer: "edges",
     items: [
       { label: "Integrations", to: "/edges/integrations" },
-      { label: "Users & RBAC", to: "/edges/rbac" },
+      { label: "Users & RBAC", to: "/edges/rbac", roles: RBAC_ADMIN_ROLES },
       { label: "Tally Bridge", to: "/edges/tally" },
       { label: "POS Sources", to: "/edges/pos" },
       { label: "Config", to: "/edges/config" },

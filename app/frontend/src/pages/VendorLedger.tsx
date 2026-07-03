@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerReset, Users, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { FINANCE_ROLES } from "../auth/routeAccess";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -49,7 +50,7 @@ type Mode = "bill" | "payment" | null;
 
 export default function VendorLedger() {
   const { user } = useAuth();
-  const isFinance = ["accounts", "owner", "it_admin"].includes(user?.role?.code ?? "");
+  const isFinance = FINANCE_ROLES.includes(user?.role?.code ?? "");
 
   const [balances, setBalances] = useState<{ total_payable_rupees: string; vendors_with_dues: number; rows: BalanceT[] }>();
   const [ageing, setAgeing] = useState<AgeingT>();

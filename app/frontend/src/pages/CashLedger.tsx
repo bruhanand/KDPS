@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { FINANCE_ROLES } from "../auth/routeAccess";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -26,7 +27,7 @@ interface EntryT {
 
 export default function CashLedger() {
   const { user } = useAuth();
-  const isFinance = ["accounts", "owner", "it_admin"].includes(user?.role?.code ?? "");
+  const isFinance = FINANCE_ROLES.includes(user?.role?.code ?? "");
 
   const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);
