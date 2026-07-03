@@ -19,7 +19,59 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **Store analysis (2 Jul, commit 9b50b30):** JSL store deep-dive (business analysis + 16-measure dashboard, HTML+PDF) + a reusable `store-dashboard` skill under `.claude/skills/`.
 - **Inbound UX restructure (3 Jul, branch `implement-inbound-plan`, not merged):** "Inbound" → **Stock Receive** (receiving only) and "PT Mapper" → **PT File Operation** (two sub-tabs: PT File Mapper + PT File Making). Brand PTs now link to a received invoice/GRN at upload. See the dated section below.
 - **Known alpha caveats:** (1) `finledger` vendor/cash ledgers are still single-entry running balances — only the PT-inward path is true double-entry / in the Σ=0 trial balance; (2) two security items **deferred by decision** — demo creds seeded on the public Render alpha, JWT/refresh in `localStorage`. Five money-critical GST items still await a CA ruling before live money.
+- **Dark mode (4 Jul, branch `dark-mode-project-plan`, PR #61, not merged):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). See the dated section below.
 - **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
+
+## Implemented — Dark mode for the PWA (4 July 2026) ✅
+Whole-PWA dark mode. Scope confirmed with Anand: **PWA only** (all wired screens + shell +
+Login); `docs/` HTML + `DASHBOARD.html` + Django admin out of scope; **no backend work**.
+Branch `dark-mode-project-plan`, PR #61 (onto `main`, not merged).
+
+**Hard constraint (honoured): the light theme did not change by a single byte.** The locked
+"Warm" palette stays; dark is a pure override layer. Every swept literal was replaced by a
+bridge token whose *light* value is byte-identical to the old literal.
+
+**Mechanism (no React Context):** a tiny `src/theme/theme.ts` + `useSyncExternalStore` hook.
+The theme lives on `document.documentElement[data-theme]` (a global), applied before React
+mounts. Preference (`light|dark|system`) persists in `localStorage` under **`kdps-theme`**
+(matches the other alpha prefs `kdps-sidebar-width` / `kdps-nav-item-order`). Default =
+**follow device**, live-updating via a `matchMedia("(prefers-color-scheme: dark)")` listener;
+a `storage` listener gives multi-tab sync. The store snapshot is a composite
+`preference|resolved` string so `useTheme().resolved` re-renders on an OS flip under the
+"system" preference (a preference-only snapshot stays `"system"` and React's Object.is bailout
+would leave it stale — this was a review finding, fixed).
+
+**No-FOUC:** an inline IIFE in `index.html` sets `data-theme` + the `theme-color` meta from
+localStorage/matchMedia before the CSS `<link>` loads (verified in the prod build's head order).
+`color-scheme: light|dark` so native controls (scrollbars, date inputs, selects) follow.
+
+**CSS:** dark palette is a single `html[data-theme="dark"] { … }` block in `index.css` (warm
+charcoal, hue ~35–40°, never blue-black). Bridge tokens added to `:root`. Two gotchas encoded:
+(1) **`--navy` is dual-use** — split into `--navy` (text role, becomes light periwinkle in dark)
+vs `--navy-fill`/`--navy-fill-hover` (solid fill under white text, stays dark) so white text
+never lands on a near-white fill; (2) **`--rule`** was referenced ~8× but never defined (only
+the fallback rendered) — now defined, fixing a latent hairline bug in dark.
+
+**Toggle UI:** `src/theme/ThemeToggle.tsx` (lucide Sun/Moon/Monitor) — full form in the user-menu
+dropdown (non-closing row) + a compact icon-only form top-right of Login (Login renders outside
+AppShell, so dark must be reachable before sign-in). `--hero-navy` is theme-invariant (login
+brand panel stays deep navy in both themes).
+
+**Tests:** `src/theme/theme.test.ts` — pure `resolveTheme` + node-env side-effect tests (stubbed
+`window`/`document`/`localStorage`/`matchMedia`, per-test module reset) covering persistence,
+data-theme/theme-color mutation, the system-flip snapshot change, explicit-preference-ignores-OS,
+and cross-tab storage sync. Frontend suite 11 → 17 passing.
+
+**Files:** new `src/theme/{theme.ts,theme.test.ts,ThemeToggle.tsx}`; modified `index.html`,
+`src/main.tsx`, `src/index.css`, `src/shell/{AppShell.tsx,AppShell.css}`,
+`src/components/Combobox.css`, `src/pages/{Login,Home,Booking,PtMapper}.css`,
+`src/pages/{Login,Home,StockLedger}.tsx`. **Verified:** `app/frontend` `npm run ci`
+(tsc + vitest) + `npm run build` green; no backend changes.
+
+**Follow-ons (out of scope, noted):** backend `theme_preference` on the User model once a
+settings surface exists; a PWA `manifest.json` (none exists today — unrelated gap this surfaced).
+**New rule for future work:** every color must be a token; dark overrides live in the single
+`html[data-theme="dark"]` block — an inline hex will silently break dark.
 
 ## Implemented — Inbound experience restructure: Stock Receive + PT File Operation (3 Jul 2026) ✅
 UX reorganisation (step 1 of a larger UX overhaul — deeper simplification is a later session).
