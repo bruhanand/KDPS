@@ -24,7 +24,7 @@ from rest_framework.views import APIView
 from core.documents import DocStatus
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
-from masters.models import CategoryMargin, GstSlab
+from masters.models import CategoryMargin, GstSlab, Store
 from ptmapper import learning
 from ptmapper.authoring import build_pt_from_grn, enrich_from_invoice
 from ptmapper.engine import (
@@ -58,7 +58,6 @@ from ptmapper.serializers import (
     ReviewItemSerializer,
 )
 from stockledger.posting import (
-    WAREHOUSE_CODE,
     PtPostingError,
     post_pt_inward,
     reverse_pt_inward,
@@ -329,8 +328,8 @@ class PtFileListCreateView(generics.ListCreateAPIView):
             return err
         # Optional link to the received arrival (D3): a brand PT is mapped *for* a
         # specific invoice/GRN. This is a reference link only — no posting — so the
-        # RAN-WH restriction that guards the from-grn posting path does NOT apply
-        # (branded goods legitimately land at stores). The one-live-PT-per-GRN rule
+        # warehouse-only restriction that guards the from-grn authoring path does NOT
+        # apply (branded goods legitimately land at stores). The one-live-PT-per-GRN rule
         # still holds so a GRN never carries two competing PTs.
         grn = None
         grn_id = request.data.get("grn")
@@ -390,16 +389,15 @@ class PtFileFromGrnView(APIView):
                 return Response({"detail": "GRN not found."}, status=404)
             if grn.docstatus != DocStatus.SUBMITTED:
                 return Response({"detail": "Only a posted receipt can become a PT."}, status=409)
-            if grn.store.code != WAREHOUSE_CODE:
-                # post_pt_inward books stock + GL under a single hardcoded warehouse
-                # (RAN-WH / Jharkhand). Authoring a store-received GRN would post it under
-                # the wrong "distinct person" and GSTIN — block until multi-site posting
-                # exists rather than book stock in the wrong state.
+            if grn.store.store_type != Store.StoreType.WAREHOUSE:
+                # Non-branded authoring is a warehouse activity: goods land at a warehouse,
+                # get counted, and a KDPS PT is authored from the count. A store-received
+                # arrival is the *branded* path (the Mapper uploads the brand PT), never
+                # authored here — the two paths must not cross.
                 return Response(
                     {
-                        "detail": "Authoring is available only for the Ranchi warehouse "
-                        "(RAN-WH) for now — store-received arrivals will be supported once "
-                        "multi-site posting exists."
+                        "detail": "Authoring a PT from a receipt is available only at a "
+                        "warehouse — store-received arrivals are the branded (Mapper) path."
                     },
                     status=409,
                 )

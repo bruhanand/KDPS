@@ -1,7 +1,9 @@
 """Post / reverse a mapped PT file into the append-only stock ledger AND the value
 general ledger (ADR-0006 — one event, two books).
 
-Patna "Push into system" mints a gap-free `PT` voucher for the Ranchi warehouse and:
+Patna "Push into system" mints a gap-free `PT` voucher under the GRN's receiving
+location (branded → the selling store, non-branded → the warehouse; grn-less legacy
+uploads keep RAN-WH) and:
   * writes one inward `StockLedgerEntry` per KDPS row (quantity + value),
   * **values stock at P RATE** — the locked unit cost frozen at the PT, never the
     ex-GST BASIC — and refuses any row where P RATE > MRP or the cost is unreadable
@@ -98,10 +100,10 @@ def _norm(s) -> str:
     return " ".join(str(s or "").split()).upper()
 
 
-def _allocate_number() -> str:
+def _allocate_number(store_code: str) -> str:
     fy = financial_year(date.today())
-    VoucherSeries.objects.get_or_create(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
-    _, number = VoucherSeries.allocate(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=store_code, doc_type=DOC_TYPE)
+    _, number = VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=DOC_TYPE)
     return number
 
 
@@ -306,20 +308,17 @@ def post_pt_inward(pt, user, booking=None) -> dict:
     """
     from django.utils import timezone
 
-    # This path books stock + GL under the single warehouse (RAN-WH / Jharkhand). A GRN
-    # received at a store in another state is a different "distinct person" (own GSTIN) —
-    # posting it here would book under the wrong store. Refuse until multi-site posting
-    # lands (the from-GRN authoring view blocks it too; this is the money-path backstop).
-    if pt.grn_id and pt.grn.store.code != WAREHOUSE_CODE:
-        raise PtPostingError(
-            f"This PT's GRN was received at {pt.grn.store.code}, not the {WAREHOUSE_CODE} "
-            "warehouse — store-received arrivals cannot be posted yet."
-        )
-    store = Store.objects.get(code=WAREHOUSE_CODE)
+    # Location-aware inward: stock + GL book under the GRN's *receiving* store — a
+    # branded arrival at a Bihar selling store posts under that store's own GSTIN, a
+    # non-branded one at its warehouse. Its GSTIN follows the store automatically
+    # (`store.gstin` flows into every stock/GL row). Legacy grn-less uploads keep the
+    # RAN-WH warehouse. The series is keyed on this store so numbering matches
+    # `PtFile.series_lookup()` — the one source of the gap-free PT number (the kernel).
+    store = pt.grn.store if pt.grn_id else Store.objects.get(code=WAREHOUSE_CODE)
     # Record booking + posted_at on the draft, then post() to mint the gap-free PT
     # voucher number and freeze the document (one source of numbering — the kernel).
     fy = financial_year(date.today())
-    VoucherSeries.objects.get_or_create(fy=fy, store_code=WAREHOUSE_CODE, doc_type=DOC_TYPE)
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=store.code, doc_type=DOC_TYPE)
     pt.booking = booking
     pt.posted_at = timezone.now()
     pt.save(update_fields=["booking", "posted_at", "updated_at"])
@@ -380,8 +379,6 @@ def reverse_pt_inward(pt, user) -> dict:
     """Append the negative mirror of every live inward row + value voucher + vendor
     bill, then `cancel()` the file (reversal-as-cancel — a posted fact is frozen, the
     correction is a new append, never an edit)."""
-    store = Store.objects.get(code=WAREHOUSE_CODE)
-    number = _allocate_number()
     originals = list(
         StockLedgerEntry.objects.filter(
             pt_file=pt,
@@ -389,6 +386,15 @@ def reverse_pt_inward(pt, user) -> dict:
             kind=StockLedgerEntry.Kind.PT_INWARD,
         )
     )
+    # The reversal mirrors the original posting: same store → same GSTIN and same PT
+    # series. Prefer the original rows' store; fall back to the GRN's store (or RAN-WH
+    # for a legacy grn-less upload) when nothing was valued.
+    store = (
+        originals[0].store
+        if originals
+        else (pt.grn.store if pt.grn_id else Store.objects.get(code=WAREHOUSE_CODE))
+    )
+    number = _allocate_number(store.code)
     reversals = [
         StockLedgerEntry(
             store=o.store,

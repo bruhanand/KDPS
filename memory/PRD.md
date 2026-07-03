@@ -64,6 +64,45 @@ exposed; the PT detail page already renders the `GRN {n}` chip).
 real Postgres; `makemigrations --check` clean; frontend `tsc --noEmit` + `vite build` green.
 *(The pre-existing `test_iteration9/10/13` live-`:8001`-server failures are environmental, unrelated.)*
 
+## Implemented — Location-aware inward posting (money path, issue #47) (3 Jul 2026) ✅
+Fourth slice of the inbound branded-vs-non-branded overhaul (after #44 kind, #45 Stock-Receive
+tabs, #46 PT-Operation wiring). **Money-path change, test-first.** Inward posting no longer books
+every PT under the single hardcoded RAN-WH warehouse — **stock + value GL post at the GRN's actual
+receiving location**, and the GSTIN follows the store automatically (`store.gstin` flows into every
+stock row and the value voucher).
+
+**Decision (D2/D5=B):** the target store is `pt.grn.store` when a GRN is linked, else RAN-WH
+(back-compat for legacy grn-less uploads). Branded arrivals land at a **selling store** and post
+under **that store's own GSTIN** (a Bihar store is a different "distinct person" from the Jharkhand
+warehouse); non-branded arrivals post at their **warehouse** (any `store_type=warehouse`, not only
+RAN-WH).
+
+**Backend (no model/migration change):**
+- `stockledger/posting.py` — `post_pt_inward` derives `store = pt.grn.store if pt.grn_id else
+  RAN-WH`, keys the `VoucherSeries` on `store.code`; the old branded-blocking guard (refused any
+  non-RAN-WH GRN) is **removed**. `reverse_pt_inward` mirrors under the **original** posting's store
+  (`originals[0].store`) → same GSTIN + same PT series; `_allocate_number(store_code)` now takes the
+  store. The booking-driven GL branch (owned → INVENTORY/VENDOR_PAYABLE; SOR/consignment →
+  SOR_STOCK/SOR_CONTRA; direct → INVENTORY/GRNI) is **unchanged**.
+- `ptmapper/models.py` — `PtFile.series_lookup()` returns the GRN's store code (per-location,
+  gap-free PT numbering, `{FY}/{store}/PT/{n}`), matching the key the post uses.
+- `ptmapper/views.py` — `PtFileFromGrnView` guard changed from "must be RAN-WH" to "must be a
+  **warehouse**": from-GRN authoring is allowed at any warehouse, still blocked at a store (a
+  store receipt is the branded/Mapper path, never authored).
+
+**Tests:** `tests/test_location_aware_posting.py` (new) — branded PT on a store GRN posts at the
+store under its Bihar GSTIN with a per-store PT number, value GL balances, on-hand lands at the
+store; non-branded PT at a second warehouse (PAT-WH) posts under the warehouse GSTIN/series; a
+grn-less upload still posts at RAN-WH; reversal mirrors the original store/GSTIN/series and flattens
+on-hand; from-GRN authoring allowed at a second warehouse, blocked at a store. **Verified:** the
+location-aware + inbound + ptmapper + phase-E/F + core suites green on real Postgres (167 tests);
+`makemigrations --check` clean; `ruff` + `lint-imports` clean; `mypy` at baseline (no new errors).
+
+**Go-live gates (not build blockers — tracked on #47):** ⚠️ **CA confirmation** for posting branded
+stock under the store's own GSTIN is money-critical (a go-live gate, the alpha is correct-by-
+construction); every store & warehouse must have a `gstin` set for posting to succeed; manual E2E
+click-through on seeded dev (branded store→Mapper→post-at-store; non-branded warehouse→Making→inward).
+
 ## Architecture (locked by ADRs)
 - **Backend:** Python 3.12 + Django 5.1 + Django REST Framework + drf-spectacular, **PostgreSQL** only.
   Kernel in `app/backend/core` (money-as-paise, append-only ledger w/ DB triggers, docstatus FSM,
