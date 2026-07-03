@@ -101,16 +101,23 @@ function subscribe(cb: () => void): () => void {
   };
 }
 
+/* The store snapshot combines preference + resolved theme so the hook
+   re-renders when the OS theme flips under the "system" preference — not only
+   when the preference itself changes. (A preference-only snapshot stays
+   "system" across a system flip, so React's Object.is bailout would skip the
+   re-render and leave `resolved` stale.) Strings compare by value, so building
+   a fresh one each call is referentially safe for useSyncExternalStore. */
+export function getThemeSnapshot(): string {
+  const pref = getThemePreference();
+  return `${pref}|${resolveTheme(pref, systemPrefersDark())}`;
+}
+
 export function useTheme(): {
   preference: ThemePreference;
   resolved: ResolvedTheme;
   setPreference: (p: ThemePreference) => void;
 } {
-  const preference = useSyncExternalStore<ThemePreference>(
-    subscribe,
-    getThemePreference,
-    () => "system",
-  );
-  const resolved = resolveTheme(preference, systemPrefersDark());
+  const snapshot = useSyncExternalStore(subscribe, getThemeSnapshot, () => "system|light");
+  const [preference, resolved] = snapshot.split("|") as [ThemePreference, ResolvedTheme];
   return { preference, resolved, setPreference: setThemePreference };
 }
