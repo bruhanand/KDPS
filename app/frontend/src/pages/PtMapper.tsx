@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import {
   AlertTriangle,
   ArrowLeft,
+  Barcode,
   CheckCircle2,
   Download,
   FileSpreadsheet,
@@ -116,8 +117,8 @@ interface PtFileT {
   created_at: string;
 }
 
-// A received GRN as the invoice-first picker needs it (D3): only arrivals that
-// carry an invoice can anchor a brand PT.
+// A received GRN as the invoice-first picker needs it (D3): only branded arrivals
+// that carry an invoice and don't yet have a live PT can anchor a brand PT.
 interface GrnPickT {
   id: number;
   number: string;
@@ -125,6 +126,7 @@ interface GrnPickT {
   store_code: string;
   invoice_number: string;
   created_at: string;
+  pt_files: { stage: string }[];
 }
 
 function PtFileTable({ files, empty }: { files: PtFileT[]; empty: string }) {
@@ -182,7 +184,7 @@ function fmtDate(iso: string): string {
  *  received invoice, then upload the brand PT so it is linked to that GRN. */
 function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) {
   const navigate = useNavigate();
-  const { data: grns } = useList<GrnPickT>("/inbound/grns");
+  const { data: grns } = useList<GrnPickT>("/inbound/grns?kind=branded");
   const vocab = useVocab();
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
@@ -192,8 +194,15 @@ function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) 
   // otherwise the chosen GRN id. Non-empty → the section is in mapping mode.
   const [selectedGrn, setSelectedGrn] = useState("");
 
+  // Branded arrivals awaiting a brand PT: carry an invoice and have no live PT yet
+  // (a reversed PT re-opens the arrival, so only non-reversed stages count as live).
   const invoiceGrns = useMemo(
-    () => grns.filter((g) => (g.invoice_number || "").trim() !== ""),
+    () =>
+      grns.filter(
+        (g) =>
+          (g.invoice_number || "").trim() !== "" &&
+          !(g.pt_files ?? []).some((p) => p.stage !== "reversed"),
+      ),
     [grns],
   );
   const mapping = selectedGrn !== "";
@@ -540,6 +549,14 @@ function AuthoringPanel({
             data-testid="pt-quickfill-freesize"
           >
             Free Size
+          </button>
+          <button
+            className="btn btn-sm"
+            disabled
+            title="Barcode generation is coming soon (design Q8)"
+            data-testid="pt-add-barcode"
+          >
+            <Barcode size={14} /> Add barcode — coming soon
           </button>
           <span style={{ width: 12 }} />
           <span className="bulk-label">Price {missing.MRP} unpriced row(s):</span>
