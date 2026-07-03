@@ -1,6 +1,5 @@
 import axios from "axios";
 import type { AxiosRequestConfig } from "axios";
-import createClient from "openapi-fetch";
 
 import type { components, paths } from "./api-schema";
 
@@ -8,7 +7,6 @@ const BASE = import.meta.env.REACT_APP_BACKEND_URL as string;
 if (!BASE) throw new Error("REACT_APP_BACKEND_URL is required");
 
 export const api = axios.create({ baseURL: `${BASE}/api`, withCredentials: true });
-export const openApiClient = createClient<paths>({ baseUrl: BASE, credentials: "include" });
 
 const ACCESS_KEY = "kdps_access";
 const REFRESH_KEY = "kdps_refresh";
@@ -36,6 +34,27 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Single-flight refresh: N simultaneous 401s share one /auth/refresh call, so a
+// rotating refresh token is spent exactly once (the backend blacklists after rotation).
+let refreshPromise: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  refreshPromise ??= axios
+    .post(
+      `${BASE}/api/auth/refresh`,
+      { refresh: tokens.refresh },
+      { withCredentials: true },
+    )
+    .then(({ data }) => {
+      tokens.set({ access: data.access, refresh: data.refresh });
+      return data.access as string;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+  return refreshPromise;
+}
+
 // Refresh the access token once on a 401, then replay the request.
 api.interceptors.response.use(
   (r) => r,
@@ -43,15 +62,18 @@ api.interceptors.response.use(
     const original = error.config;
     if (error.response?.status === 401 && original && !original._retry && tokens.refresh) {
       original._retry = true;
+      const staleRefresh = tokens.refresh;
       try {
-        const { data } = await axios.post(`${BASE}/api/auth/refresh`, {
-          refresh: tokens.refresh,
-        });
-        tokens.set({ access: data.access, refresh: data.refresh });
-        original.headers.Authorization = `Bearer ${data.access}`;
+        const access = await refreshAccessToken();
+        original.headers.Authorization = `Bearer ${access}`;
         return api(original);
       } catch {
-        tokens.clear();
+        // Only wipe tokens if a newer login hasn't already replaced them — a
+        // losing racer must never clear the fresh session's credentials.
+        if (tokens.refresh === staleRefresh) {
+          tokens.clear();
+          window.dispatchEvent(new Event("kdps:session-expired"));
+        }
       }
     }
     return Promise.reject(error);
@@ -62,7 +84,17 @@ export const authApi = {
   login: (username: string, password: string) =>
     api.post("/auth/login", { username, password }),
   me: () => api.get("/auth/me"),
-  logout: () => api.post("/auth/logout", { refresh: tokens.refresh }),
+  // Read tokens at call time and pass the header explicitly so logout survives
+  // the request-interceptor microtask even after tokens.clear() runs.
+  logout: () => {
+    const refresh = tokens.refresh;
+    const access = tokens.access;
+    return api.post(
+      "/auth/logout",
+      { refresh },
+      { headers: access ? { Authorization: `Bearer ${access}` } : {} },
+    );
+  },
 };
 
 export type ApiSchemas = components["schemas"];

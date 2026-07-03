@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { authApi, tokens } from "../lib/api";
@@ -64,6 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeStore, setActiveStoreState] = useState<Store | null>(null);
+  // Bumped on every login/logout/forced-expiry; a slow prior-session bootstrap
+  // that resolves after the epoch changed must not clobber the new session.
+  const sessionEpoch = useRef(0);
 
   function setActiveStore(s: Store | null) {
     setActiveStoreState(s);
@@ -72,21 +75,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let cancelled = false;
+    const epoch = sessionEpoch.current;
     (async () => {
       if (tokens.access) {
         try {
           const { data } = await authApi.me();
-          setUser(data);
-          setActiveStoreState(pickDefaultStore(data));
+          if (!cancelled && sessionEpoch.current === epoch) {
+            setUser(data);
+            setActiveStoreState(pickDefaultStore(data));
+          }
         } catch {
-          tokens.clear();
+          if (!cancelled && sessionEpoch.current === epoch) tokens.clear();
         }
       }
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function onExpired() {
+      sessionEpoch.current += 1;
+      setUser(null);
+      setActiveStoreState(null);
+    }
+    window.addEventListener("kdps:session-expired", onExpired);
+    return () => window.removeEventListener("kdps:session-expired", onExpired);
   }, []);
 
   async function login(username: string, password: string) {
+    sessionEpoch.current += 1;
     const { data } = await authApi.login(username, password);
     tokens.set({ access: data.access, refresh: data.refresh });
     setUser(data.user);
@@ -94,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    sessionEpoch.current += 1;
     authApi.logout().catch(() => undefined);
     tokens.clear();
     setUser(null);
