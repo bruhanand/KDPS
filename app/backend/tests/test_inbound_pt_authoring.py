@@ -479,6 +479,7 @@ def test_backfill_keys_off_is_direct_not_booking(world):
     import importlib
 
     from django.apps import apps as django_apps
+    from django.db import connection
 
     vendor = Vendor.objects.create(code="v1", name="V1")
     brand = Brand.objects.create(code="b1", name="B1")
@@ -494,12 +495,20 @@ def test_backfill_keys_off_is_direct_not_booking(world):
     deleted_booking = Grn.objects.create(
         store=world["wh"], booking=None, is_direct=False, kind=Grn.Kind.BRANDED
     )
+    # A SUBMITTED direct receipt — the real shape on the deployed alpha (rows created via
+    # the API, which posts them). The kernel FSM trigger forbids updating a submitted row,
+    # so the backfill must neutralise it; this row is the regression for the Render
+    # "may only move to cancelled" build failure that the draft rows above never exercised.
+    submitted = _grn(world, lines=LINES, kind=Grn.Kind.BRANDED)
+    assert submitted.docstatus == 1  # SUBMITTED — the state the FSM guard locks down
 
     mod = importlib.import_module("inbound.migrations.0005_grn_kind")
-    mod.backfill_kind(django_apps, None)
+    with connection.schema_editor(atomic=False) as schema_editor:
+        mod.backfill_kind(django_apps, schema_editor)  # must not raise the FSM ProgrammingError
 
-    for grn in (linked, direct, deleted_booking):
+    for grn in (linked, direct, deleted_booking, submitted):
         grn.refresh_from_db()
     assert linked.kind == Grn.Kind.BRANDED  # booking-linked → branded
     assert direct.kind == Grn.Kind.NON_BRANDED  # direct receipt → non-branded
     assert deleted_booking.kind == Grn.Kind.BRANDED  # null booking but not direct → stays branded
+    assert submitted.kind == Grn.Kind.NON_BRANDED  # submitted direct receipt flips despite the FSM
