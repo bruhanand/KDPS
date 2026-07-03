@@ -20,13 +20,46 @@ unaffected.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 import requests
 
+_BACKEND_URL_ENV = "REACT_APP_BACKEND_URL"
 _DEFAULT_BASE_URL = "https://ledger-kernel-v2.preview.emergentagent.com"
+_ROOT = Path(__file__).resolve().parents[2]
+_ENV_FILES = (
+    _ROOT / "backend/.env",
+    _ROOT / "frontend/.env",
+)
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", _DEFAULT_BASE_URL).rstrip("/")
+
+def _read_env_file(path: Path) -> str | None:
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        key, separator, value = line.partition("=")
+        if separator and key == _BACKEND_URL_ENV:
+            return value.strip().rstrip("/") or None
+    return None
+
+
+def _resolve_base_url() -> str:
+    env_url = os.environ.get(_BACKEND_URL_ENV, "").strip().rstrip("/")
+    if env_url:
+        return env_url
+    for env_file in _ENV_FILES:
+        file_url = _read_env_file(env_file)
+        if file_url:
+            return file_url
+    return _DEFAULT_BASE_URL
+
+
+BASE_URL = _resolve_base_url()
+if not os.environ.get(_BACKEND_URL_ENV, "").strip():
+    os.environ[_BACKEND_URL_ENV] = BASE_URL
 
 
 def _live_api_unready_reason() -> str | None:
