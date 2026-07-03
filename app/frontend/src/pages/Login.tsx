@@ -10,6 +10,7 @@ const DEMO: { label: string; username: string; password: string }[] = [
   { label: "HO Ops", username: "ops1", password: "Ops@123" },
   { label: "Accounts", username: "accounts1", password: "Acct@123" },
   { label: "Warehouse", username: "wh.patna", password: "Wh@123" },
+  { label: "Store manager", username: "deo.manager", password: "Store@123" },
   { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
 ];
 
