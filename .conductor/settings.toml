@@ -1,0 +1,53 @@
+#:schema https://conductor.build/schemas/settings.repo.schema.json
+
+# Shared Conductor config for the KDPS monorepo (app/backend = Django via uv,
+# app/frontend = React/TS PWA via Vite). See README.md + DEPLOY.md.
+
+# The Django backend needs DATABASE_URL (settings.py reads os.environ["DATABASE_URL"]).
+# Point every workspace at the shared local Docker Postgres from docker-compose.yml
+# (host port 55432 — a KDPS-specific port that dodges other projects on 5432/5433).
+[environment_variables]
+DATABASE_URL = "postgres://kdps:kdps@localhost:55432/kdps_dev"
+
+[scripts]
+# Install backend (uv) + frontend (npm) deps, bring up the shared dev Postgres,
+# and fast-forward the root checkout so new workspaces start current.
+setup = """
+git -C "$CONDUCTOR_ROOT_PATH" fetch --prune origin && git -C "$CONDUCTOR_ROOT_PATH" pull --ff-only || true
+npm run setup
+# Shared KDPS dev Postgres (docker-compose service `db`, host port 55432).
+# `up -d` is idempotent: it reuses the running container or starts it if absent.
+docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" up -d db || true
+"""
+
+# One shared local Postgres (fixed host port 55432) + shared migrations/seed state,
+# so only one workspace should run the app/tests at a time.
+run_mode = "nonconcurrent"
+
+# One click: ensures the Docker Postgres is up AND accepting connections, then
+# runs the Django backend (on CONDUCTOR_PORT+1) and the Vite frontend (on
+# CONDUCTOR_PORT) together in a single process group via `concurrently` (-k kills
+# both when one exits), so Conductor can stop them cleanly. `npx -y` fetches
+# concurrently if it's missing.
+[scripts.run.dev]
+command = """
+docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" up -d db
+until docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" exec -T db pg_isready -U kdps -d kdps_dev >/dev/null 2>&1; do echo "waiting for postgres..."; sleep 1; done
+npx -y concurrently -k -n api,web -c blue,green \
+  "cd app/backend && uv run python manage.py migrate --noinput && uv run python manage.py runserver 0.0.0.0:$((CONDUCTOR_PORT+1))" \
+  "REACT_APP_BACKEND_URL=http://localhost:$((CONDUCTOR_PORT+1)) npm --prefix app/frontend run dev -- --port $CONDUCTOR_PORT --host"
+"""
+default = true
+icon = "rocket"
+
+[scripts.run.frontend]
+command = "REACT_APP_BACKEND_URL=http://localhost:$((CONDUCTOR_PORT+1)) npm --prefix app/frontend run dev -- --port $CONDUCTOR_PORT --host"
+icon = "globe"
+
+[scripts.run.backend]
+command = "cd app/backend && uv run python manage.py migrate --noinput && uv run python manage.py runserver 0.0.0.0:$((CONDUCTOR_PORT+1))"
+icon = "server"
+
+[scripts.run.test]
+command = "npm run ci"
+icon = "test-tube"
