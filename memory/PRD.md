@@ -23,6 +23,20 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **Dark mode — merged on `main` (4 Jul, PR #61):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). This is `HEAD` of `main`. See the dated section below.
 - **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
 
+
+## Phase 0 — Emergent environment bring-up: DONE (Emergent session) ✅
+The app now RUNS in the Emergent container (previously down: no Django in venv + no Postgres). Actions taken:
+- Installed PostgreSQL 15 (apt) and made it **supervisor-managed** via new `/etc/supervisor/conf.d/postgresql.conf` (autostart, survives restarts). Created role `kdps` (SUPERUSER) + db `kdps_dev` matching `DATABASE_URL`.
+- Installed Django 5.1 + psycopg + DRF + simplejwt + drf-spectacular + cors + whitenoise + openpyxl/xlrd/pyxlsb into the served venv `/root/.venv` (py3.11). `aiagents` is NOT in INSTALLED_APPS so litellm/emergentintegrations (already present) aren't needed at boot.
+- Ran `migrate` (incl. pg_trgm) + `seed_foundation` + `seed_ptmapper`. Restarted backend.
+- **Verified:** local + external login → 200 (JWT); external authed `/api/masters/stores` returns seeded Bihar/Jharkhand stores; frontend renders; CORS clean; console shows only Vite connect.
+- App URL: `https://kdps-delivery-check.preview.emergentagent.com` (also reachable via APP_URL host `4c10e8e1-…`). Both route to this backend. Frontend `.env` REACT_APP_BACKEND_URL left as-is (`kdps-delivery-check…`, confirmed routing to this container).
+- One-command re-provision script: `/app/scripts/dev-bootstrap.sh` (idempotent).
+- NOTE: this container uses PostgreSQL for KDPS; MongoDB also runs (platform default) but is unused by the app.
+
+## Phase 1 — re-scoped to the BRANDED flow (Anand steer, Emergent session)
+User clarified the canonical branded flow (non-branded deferred): brand↔supplier (one brand can have many suppliers); **one booking can span multiple stores** for one brand (goods go to stores); receive at store (branded) or warehouse (branded+non-branded); brand sends PT file → mapped to KDPS format → sent to Patna → Patna inwards ("data becomes true") → item scanned into POS at store → sold (scan on sale) → return/defect per policy. Re-planned Phase 1 = harden this branded spine end-to-end: F1 (unify GL+vendor/cash), F2 (GRN qty rule), F3 (audit log), PLUS model-gap decisions: **multi-store booking** (today Booking has a single `destination_store`; BookingLine has no store — GAP), **brand↔multi-supplier** (Vendor↔Brand M2M exists; booking/UI assume one), and starting the **return-window/allowance policy clock** (commercial model is snapshotted, but window/allowance/30-15-7 alerts are NOT built). Return/defect EXECUTION (exchanges, GR return, SOR season-end, V-flip) stays Phase 3 (Outbound). Vision confirmed by user: full ERP + POS + analytics + accounting/finance/money-flow, Tally as one-way outer edge, bank integration for payments, plus an HR/payroll layer later.
+
 ## Review — Emergent session (June 2026): planned-vs-built + phased plan (READ)
 A full planned-vs-built reconciliation was produced this session, focused on the **rules of the process / data-flow correctness** (user's priority = harden & stabilise before new modules; build continues on Emergent). Deliverable: `docs/implementation-plan/KDPS-Review-and-Phased-Plan.html` (HTML, house style). Key findings:
 - **Built & correct:** kernel (paise, append-only triggers, doc FSM, gap-free series, balanced `post_entries`, value GL), auth/RBAC, masters, PT-mapper, stock ledger + on-hand. The document→stock→value-GL path is immutable and self-balancing.

@@ -195,21 +195,30 @@
 <p class="lead">Your stated priority — <strong>harden and stabilise what exists before adding new modules</strong> — is honoured: Phases 0–2 are stabilisation; new modules start at Phase 3, in the architecture's own build order (selling → offers → payments → Tally → controls → analytics). Each phase notes <strong>FREE</strong> (AI writes, human reviews after) vs <strong>SUPERVISED</strong> (money/ledger/GST — every line read, golden-file tested).</p>
 
 <div class="phase hard">
-  <span class="phase-tag">Phase 0</span><strong>Environment bring-up on Emergent</strong> · <span class="lead">FREE · prerequisite</span>
+  <span class="phase-tag">Phase 0</span><strong>Environment bring-up on Emergent</strong> · <span class="pill p-live">DONE</span>
   <ul>
-    <li>Install PostgreSQL 16; create <code>kdps_dev</code> + role; install backend deps into the served venv; migrate + <code>seed_foundation</code>; confirm the frontend API base URL; restart supervisor and verify login → dashboard end-to-end.</li>
-    <li><strong>Exit:</strong> the existing app runs green in this container; screenshot of a working dashboard.</li>
+    <li>PostgreSQL 15 installed + <strong>supervisor-managed</strong> (survives restarts); role/db <code>kdps</code>/<code>kdps_dev</code> created; Django + deps installed into the served venv; migrations + <code>seed_foundation</code> + <code>seed_ptmapper</code> applied.</li>
+    <li>Verified end-to-end: login 200, authenticated API returns seeded masters, frontend renders, CORS clean, no console errors. Re-provision in one command: <code>scripts/dev-bootstrap.sh</code>.</li>
+    <li><strong>App:</strong> <code>https://kdps-delivery-check.preview.emergentagent.com</code> · demo logins in <code>memory/test_credentials.md</code>.</li>
   </ul>
 </div>
 
 <div class="phase hard">
-  <span class="phase-tag">Phase 1</span><strong>Hardening &amp; correctness — the "rules of the process" pass</strong> · <span class="lead">SUPERVISED</span>
+  <span class="phase-tag">Phase 1</span><strong>Harden the BRANDED flow, end-to-end — the "rules of the process" pass</strong> · <span class="lead">SUPERVISED · non-branded deferred</span>
+  <p class="lead" style="margin-top:6px">Scope narrowed per Anand: prove the <em>branded</em> spine correct first. The flow to make watertight: <strong>Booking (multi-store, brand↔supplier) → receive (store or warehouse) → brand PT mapped → Patna inward (data becomes "true") → scanned into POS → sold → return/defect per policy.</strong> Non-branded interactive PT authoring is a later slice.</p>
   <ul>
-    <li><strong>F1</strong> — unify vendor/cash into the balanced GL via <code>post_entries</code>; end the double-booked payable; extend the Σ=0 trial balance to cover payments and cash.</li>
-    <li><strong>F2</strong> — lock the GRN-quantity rule (received-not-inwarded view or not) and implement the decision.</li>
-    <li><strong>F3</strong> — add the append-only <code>audit_log</code> + a shared write hook; back the Controls "Audit Trail" screen with it.</li>
-    <li>Tighten the RBAC boundary that's deferred to alpha; regression + new golden-file tests over the money paths.</li>
-    <li><strong>Exit:</strong> books tie across inbound <em>and</em> payments; every mutation is audited; full test suite green on Postgres.</li>
+    <li><strong>F1 (P0)</strong> — unify vendor/cash into the balanced GL via <code>post_entries</code>; end the double-booked payable; extend the Σ=0 trial balance to cover payments and cash. The books must tie beyond inbound.</li>
+    <li><strong>F2</strong> — lock the GRN-quantity rule (is PT the single truth, or do we need a received-not-inwarded view for the store window?) and implement it.</li>
+    <li><strong>F3</strong> — append-only <code>audit_log</code> + shared write hook (who/why/when/AI-vs-human); back the Controls "Audit Trail" screen.</li>
+    <li><strong>Model gaps vs the real branded flow (lock the rule, then fix):</strong>
+      <ul>
+        <li><strong>Multi-store booking</strong> — today a booking has a single <code>destination_store</code>; Anand's flow has <em>one booking spanning several stores</em> for the same brand. Decide: per-line store on the booking, or allocation-at-inward (the spec's model)? Then implement.</li>
+        <li><strong>Brand ↔ supplier</strong> — "one brand can have many suppliers." The data model allows it (Vendor↔Brand M2M) but the booking/UI assumes one; confirm and tidy.</li>
+        <li><strong>Return/defect policy per booking</strong> — the commercial model is snapshotted, but the <em>return-window + allowance tracking + 30/15/7 alerts</em> the specs promise aren't built. (Execution of returns is Phase 3; the <em>policy clock</em> starts here.)</li>
+      </ul>
+    </li>
+    <li>Tighten the RBAC boundary deferred at alpha; regression + new golden-file tests over the branded money path.</li>
+    <li><strong>Exit:</strong> a branded booking → receipt → PT → Patna inward → books-tie is provably correct and fully audited, with the multi-store rule settled; suite green on Postgres.</li>
   </ul>
 </div>
 
