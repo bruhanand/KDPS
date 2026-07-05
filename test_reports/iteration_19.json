@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 19 — BACKEND-ONLY regression verification for the ptmapper.processing module extraction (Code-review finding #1: killed views⇄learning circular import). Confirmed the extraction is behavior-preserving with (a) live-API HTTP tests exercising every path that reaches process_file and its helpers through the running preview backend, and (b) the full DB pytest suite. Result: PASS on both axes with no defects. AST check re-confirms one-directional imports (processing depends on neither views nor learning). ptmapper suite (45 tests) using the repointed imports (test_ptmapper_brand_scope.py→_sync_review_items, test_ptmapper_rerun.py→_reapply_manual) also fully green.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration19_ptmapper_processing_extract.py",
+    "/app/test_reports/pytest/iteration_19.xml"
+  ],
+  "action_items": [
+    "None. The refactor is verified non-regressing. process_file() and the moved helpers (_recompute_derived, _sync_review_items, _fail_file, _snapshot_manual, _reapply_manual) all still execute correctly through the HTTP layer, the review-queue is synced, manual cells survive a rerun (D2 preserve-by-default), from-GRN endpoint loads its module without ImportError, and the ptmapper suites that were repointed from ptmapper.views to ptmapper.processing continue to pass."
+  ],
+  "critical_code_review_comments": [
+    "AST-verified one-directional import graph after the refactor: views.py → {authoring, engine, learning, models, pricing, processing, profiles, serializers}; learning.py → {engine, models, processing}; processing.py → {engine, models, profiles} ONLY. The old views⇄learning cycle is gone and the previous lazy 'from ptmapper.views import process_file' workaround in learning.repropagate has been correctly replaced by a top-level import (learning.py:28).",
+    "ptmapper/views.py:48 imports exactly what's documented — `from ptmapper.processing import _recompute_derived, process_file` — and the three callers (PtFileListCreateView upload at line 211, PtFileRerunView at line 319, PtRowsUpdateView at line 537) still resolve. No dangling refs to the moved names.",
+    "processing.py is a clean 200-line module — every helper it contains is used by process_file() itself or by tests / views importers. No dead code, no leaked HTTP concerns (no request/response/exceptions.APIException/rest_framework symbols). The module docstring correctly names it as the only writer of the mapping-stage row/review sync.",
+    "Verified via live upload that process_file() still: (1) parses profile & archetype, (2) fills BRAND/COLOR/SEASON via derived provenance, (3) fills NAG from QTY (row1 NAG=3 for QTY=3), (4) computes row_count=3, blank_cell_count=16, unresolved_count=0, (5) writes status=READY. All exactly matches the pre-refactor contract.",
+    "Manual-cell preservation on rerun works end-to-end through HTTP: PATCH /rows sets COLOR to a chosen Master-Sheet value → POST /rerun re-runs process_file(preserve_manual=True) → the manually-set COLOR survives and its provenance is stamped 'manual' (proves _snapshot_manual + _reapply_manual + _recompute_derived are the ones running).",
+    "GET /api/ptmapper/review returned 200 → confirms learning.py's module-level `from ptmapper.processing import process_file` loads cleanly at server start (a genuine circular-import regression would 500 here on first hit because the URL router imports views→learning at process boot)."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration19_ptmapper_processing_extract.py (new — 6 live-API tests, KDPS_TEST_ALLOW_REMOTE-gated)",
+    "/app/test_reports/iteration_19.json",
+    "/app/test_reports/pytest/iteration_19.xml"
+  ],
+  "success_rate": {
+    "backend": "100% — live-API: 6/6 (import health, upload→process_file, detail, rerun→_snapshot+_reapply, review list, from-GRN endpoint reachable); full DB pytest: 296 passed, 95 skipped (all skips are live-API modules gated on KDPS_TEST_ALLOW_REMOTE=1, per project convention — includes the new 6-test file when unset)",
+    "frontend": "N/A — backend-only per review request"
+  },
+  "test_credentials": "owner/Owner@123 (all-scope, JWT under `access` of POST /api/auth/login) and wh.patna/Wh@123 (warehouse mapping-steward for the upload path). Both authenticated successfully.",
+  "seed_data_creation": "Uploaded one live brand CSV via POST /api/ptmapper/files (brand='24 STREET' — first Master-Sheet brand fetched from /controlled?dimension=brand). 3 rows, invoice_date=2026-01-15, status READY. File is cleaned up by test_cleanup_uploaded_file at the end of the run (DELETE succeeded for wh.patna). Uses idempotent-ish flow — a leftover from a prior run only inflates the file list by a few rows and does not affect assertions.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nested project (backend /app/app/backend, frontend /app/app/frontend, PostgreSQL 15). Live-API tests gated behind KDPS_TEST_ALLOW_REMOTE=1. Run the iteration-19 regression: `cd /app/app/backend && KDPS_TEST_ALLOW_REMOTE=1 python -m pytest tests/test_iteration19_ptmapper_processing_extract.py -v`. Key gotchas discovered: (1) upload validates brand against Master-Sheet — always fetch a real brand from /api/ptmapper/controlled?dimension=brand; (2) row PATCH also validates against Master values — fetch from /controlled?dimension=color; (3) PtFile.status is serialized as lowercase ('ready', 'needs_review') even though the model enum uses uppercase. (4) Rows update is via PATCH /files/<id>/rows with body {'rows':[{'id':...,'data':{...}}]}. (5) The refactor is complete — no further action needed on views⇄learning circular import.",
+  "rca of the issue": "No defect found. Refactor validation only. The module-extraction from ptmapper.views into ptmapper.processing correctly decouples the mapping pipeline from the HTTP layer, the previous cycle-break workaround (lazy in-function import) has been removed, and every HTTP path that reaches process_file (upload, rerun, review resolve via learning.approve→repropagate, from-GRN) continues to serve 2xx with the correct output shape. All 45 unit tests in the ptmapper suite that use the moved helpers pass with imports repointed to ptmapper.processing. Full DB pytest suite unchanged (296 passed). The one live-side observation worth flagging is cosmetic only — PtFile.status is serialized lowercased ('ready') at the API boundary while the source-code enum labels look uppercase (READY, NEEDS_REVIEW); pre-existing behavior, not introduced by this refactor."
+}

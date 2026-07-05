@@ -16,7 +16,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import Role, User
 from ptmapper.models import ControlledValue, LookupProposal, PtFile, PtRow
-from ptmapper.views import _reapply_manual
+from ptmapper.processing import _reapply_manual
 
 
 @pytest.fixture

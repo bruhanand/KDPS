@@ -17,7 +17,7 @@ from rest_framework.test import APIClient
 from accounts.models import Role, User
 from ptmapper.engine import Resolver, map_record
 from ptmapper.models import ControlledValue, Lookup, ReviewItem
-from ptmapper.views import _sync_review_items
+from ptmapper.processing import _sync_review_items
 
 GENERIC = {"code": "generic", "overrides": {}, "flags": {}}
 
