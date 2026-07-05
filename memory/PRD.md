@@ -700,6 +700,21 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **Deferred to Slice 2:** `.xls`/`.xlsb` readers (Jockey/Madura, archetypes D/E/F) — currently return a
   friendly "not yet supported" message.
 
+## Implemented — F1: Unified double-entry vendor/cash GL + reconciliation proof (Jun 2026) ✅
+- **F1 (P0):** vendor & cash subledgers are now unified into the single balanced value GL via
+  `core.post_entries`. Manual vendor bill → `Dr SUSPENSE / Cr VENDOR_PAYABLE`; vendor payment →
+  `Dr VENDOR_PAYABLE / Cr CASH` (one voucher, paired cash subledger row is detail only); standalone cash
+  movement → `Dr CASH / Cr SUSPENSE` (in) / reverse (out). PT auto-bill stays `gl=False` (PT inward already
+  books the payable) so the payable is booked exactly once — no double-booking. Reversals mirror the GL and
+  refuse a second reversal (HTTP 409). Books always tie: `trial_balance() == 0`.
+- **P1 — reconciliation proof:** `GET /api/finledger/health` now returns a `reconciliation` block asserting
+  GL `VENDOR_PAYABLE` control == vendor subledger sum and GL `CASH` control == cash subledger sum, each with
+  `reconciled` + `drift_paise`, plus a top-level `reconciled` flag. Finance/owner-only.
+- **Tests:** `tests/test_finledger_f1_gl_unification.py` (8 golden-file DB tests) + testing_agent iteration_16
+  (13 live-API tests) → all pass, 0 defects. Live flow verified: bill ₹1500 + payment ₹600 → payable ₹900,
+  cash −₹600, drift 0, balanced+reconciled true. `pytest-django` installed into venv (already in pyproject dev group).
+
+
 ## Implemented — Phase 1 Inbound: Booking + Receive (GRN) (28 Jun 2026) ✅
 - **Backend (Django apps):** `files` (DB blob storage), `vendors` (Vendor master + Booking + BookingLine,
   two-step human-in-the-loop draft→confirm), `inbound` (Grn + GrnLine, receive against a booking OR direct),
@@ -746,7 +761,8 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 Inbound D2 (branded + non-branded, `Grn.kind` + non-brand PT authoring + location-aware posting) landed on
 `main` across #43–#49; the PWA/security batch (#55–#60) + dark mode (#61) followed. The next frontiers:
 1. **D3 outbound / POS ingest** (selling floor, outbox/dead-letter) — the next business layer, still unbuilt.
-2. **Double-entry vendor/cash ledger** — close the alpha caveat: `finledger` vendor/cash are still single-entry
-   running balances (only the PT-inward path is in the Σ=0 trial balance).
+2. ~~**Double-entry vendor/cash ledger**~~ **DONE (Jun 2026, F1):** `finledger` vendor/cash now post balanced
+   Σ=0 vouchers through `core.post_entries`; GL control accounts tie to the subledgers, proven live on
+   `/api/finledger/health`. Alpha caveat closed.
 3. Run broader alpha QA over the current screens and capture issues from real users.
 4. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
