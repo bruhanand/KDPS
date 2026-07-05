@@ -1,0 +1,36 @@
+{
+  "summary": "Backend-only regression run after test-hygiene cleanup (deleted 4 scratch live-API test files, centralized TEST_PASSWORD, dropped `is True/False` in test_multistore_booking.py, added ptmapper import-linter contract). All checks green: 296 passed / 63 skipped, ruff clean, both import-linter contracts KEPT, and the 3 app smoke endpoints return 200 with expected shape.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/app/backend/tests/",
+    "/app/app/backend/tests/_creds.py",
+    "/app/app/backend/pyproject.toml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Cleanup is correctly scoped: no production code changes this round; only test files + pyproject config; policy against re-adding hardcoded-URL live scratch tests should be enforced going forward."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "owner / Owner@123 (from review request; /app/memory/test_credentials.md not required for backend pytest run since users are created inline with _creds.TEST_PASSWORD)",
+  "seed_data_creation": "None — pytest tests create their own DB fixtures; app smoke used existing owner user only for read-only GETs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run backend from /app/app/backend. Full suite: `python -m pytest` → expect 296 passed / 63 skipped (skips are gated live-API modules requiring KDPS_TEST_ALLOW_REMOTE=1). Lint: `ruff check .` → All checks passed. Contracts: `DJANGO_SETTINGS_MODULE=config.settings lint-imports` → 2 kept, 0 broken (core→config forbidden; ptmapper.processing/learning/engine/models/profiles → ptmapper.views forbidden). App smoke via REACT_APP_BACKEND_URL from /app/app/frontend/.env: login owner/Owner@123 → JWT under 'access' → GET /api/finledger/health (balanced=true, reconciliation.reconciled=true), GET /api/ptmapper/files (200), GET /api/bookings/1 (200, lines carry store + store_name). Do NOT recreate test_iteration16-19_*_live.py; DB-backed test_finledger_f1_gl_unification.py and test_multistore_booking.py already cover that ground.",
+  "raw_metrics": {
+    "pytest": "296 passed, 63 skipped in ~24s (exit 0)",
+    "ruff": "All checks passed! (exit 0)",
+    "lint_imports": "Contracts: 2 kept, 0 broken (exit 0)",
+    "smoke_finledger_health": "HTTP 200, balanced=true, reconciliation.reconciled=true",
+    "smoke_ptmapper_files": "HTTP 200",
+    "smoke_bookings_1": "HTTP 200, 4 lines, each carrying id/style_code/size/description/booked_qty/mrp_paise/received_qty/inwarded_qty/store/store_name"
+  }
+}

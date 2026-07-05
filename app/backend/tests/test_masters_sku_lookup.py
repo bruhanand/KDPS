@@ -4,6 +4,7 @@ reuse barcode X" source. Exact-match, never dumps the registry."""
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -12,7 +13,7 @@ from masters.models import Sku
 
 @pytest.fixture
 def client(db):
-    user = User.objects.create_user(username="lookup", password="x")
+    user = User.objects.create_user(username="lookup", password=TEST_PASSWORD)
     c = APIClient()
     c.force_authenticate(user)
     return c

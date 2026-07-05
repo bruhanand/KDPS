@@ -14,6 +14,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
@@ -75,7 +76,7 @@ def test_non_positive_rate_is_refused():
 @pytest.fixture
 def client(db):
     role, _ = Role.objects.get_or_create(code="warehouse", defaults={"name": "warehouse"})
-    user = User.objects.create_user(username="pricer", password="x", role=role)
+    user = User.objects.create_user(username="pricer", password=TEST_PASSWORD, role=role)
     c = APIClient()
     c.force_authenticate(user)
     return c

@@ -15,6 +15,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from _creds import TEST_PASSWORD
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from rest_framework.test import APIClient
@@ -63,7 +64,7 @@ def vocab(db):
 
 def _user(username: str, role_code: str, *, scope: str, stores: list[Store] | None = None) -> User:
     role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": role_code})
-    user = User.objects.create_user(username=username, password="x", role=role)
+    user = User.objects.create_user(username=username, password=TEST_PASSWORD, role=role)
     user.scope_type = scope
     user.save(update_fields=["scope_type"])
     if stores:

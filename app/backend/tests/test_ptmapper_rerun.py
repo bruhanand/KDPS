@@ -10,6 +10,7 @@ are frozen and never re-mapped. Cells whose row vanished are reported, never los
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -33,7 +34,7 @@ def vocab(db):
 @pytest.fixture
 def client(db):
     c = APIClient()
-    c.force_authenticate(User.objects.create_user(username="wh", password="x"))
+    c.force_authenticate(User.objects.create_user(username="wh", password=TEST_PASSWORD))
     return c
 
 
@@ -41,7 +42,9 @@ def client(db):
 def steward_client(db):
     role = Role.objects.create(code="data_steward", name="Data Steward")
     c = APIClient()
-    c.force_authenticate(User.objects.create_user(username="steward", password="x", role=role))
+    c.force_authenticate(
+        User.objects.create_user(username="steward", password=TEST_PASSWORD, role=role)
+    )
     return c
 
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
@@ -196,7 +197,7 @@ def test_reversal_mirrors_original_store_gstin_and_series(world):
 
 def _warehouse_client() -> APIClient:
     role, _ = Role.objects.get_or_create(code="warehouse", defaults={"name": "warehouse"})
-    user = User.objects.create_user(username="wh-op", password="x", role=role)
+    user = User.objects.create_user(username="wh-op", password=TEST_PASSWORD, role=role)
     user.scope_type = "all"
     user.save(update_fields=["scope_type"])
     c = APIClient()

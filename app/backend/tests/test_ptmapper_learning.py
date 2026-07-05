@@ -11,6 +11,7 @@ and role-gated; reject writes nothing.
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -44,7 +45,7 @@ def vocab(db):
 @pytest.fixture
 def steward(db):
     role = Role.objects.create(code="data_steward", name="Data Steward")
-    return User.objects.create_user(username="steward", password="x", role=role)
+    return User.objects.create_user(username="steward", password=TEST_PASSWORD, role=role)
 
 
 @pytest.fixture
@@ -191,7 +192,7 @@ def test_approve_is_idempotent_and_role_gated(client, steward, vocab):
     )
     # a non-steward can't decide
     plain = APIClient()
-    plain.force_authenticate(User.objects.create_user(username="nobody", password="x"))
+    plain.force_authenticate(User.objects.create_user(username="nobody", password=TEST_PASSWORD))
     denied = plain.post(f"/api/ptmapper/proposals/{prop.id}/decide", {"action": "approve"})
     assert denied.status_code == 403
 

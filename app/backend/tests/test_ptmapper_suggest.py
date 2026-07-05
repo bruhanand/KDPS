@@ -9,6 +9,7 @@ and the call writes nothing (Rule 8: it only pre-fills; a human still commits).
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -28,7 +29,7 @@ def vocab(db):
 @pytest.fixture
 def client(db):
     c = APIClient()
-    c.force_authenticate(User.objects.create_user(username="u", password="x"))
+    c.force_authenticate(User.objects.create_user(username="u", password=TEST_PASSWORD))
     return c
 
 

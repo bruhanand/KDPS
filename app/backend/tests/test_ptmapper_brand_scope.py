@@ -12,6 +12,7 @@ without ``MultipleObjectsReturned``.
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
@@ -102,7 +103,7 @@ def test_map_record_scopes_color_to_the_rows_brand(vocab):
 @pytest.fixture
 def steward_client(vocab):
     role = Role.objects.create(code="data_steward", name="Data Steward")
-    user = User.objects.create_user(username="steward", password="x")
+    user = User.objects.create_user(username="steward", password=TEST_PASSWORD)
     user.role = role
     user.save()
     c = APIClient()

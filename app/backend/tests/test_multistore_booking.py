@@ -69,11 +69,11 @@ def test_scope_sees_booking_when_any_line_lands_at_their_store(db):
     BookingLine.objects.create(booking=bk, store=bkr, style_code="S2", booked_qty=3)  # BKR
 
     # DEO-scoped: the inheriting line lands at DEO → visible.
-    assert _booking_touches_stores(bk, [deo.id]) is True
+    assert _booking_touches_stores(bk, [deo.id])
     # BKR-scoped: the override line lands at BKR → visible.
-    assert _booking_touches_stores(bk, [bkr.id]) is True
+    assert _booking_touches_stores(bk, [bkr.id])
     # HZB-scoped: no line lands there → fail-closed, not visible.
-    assert _booking_touches_stores(bk, [hzb.id]) is False
+    assert not _booking_touches_stores(bk, [hzb.id])
 
 
 def test_pending_query_filter_matches_touching_bookings_only(db):
@@ -101,7 +101,7 @@ def test_warehouse_bound_lines_are_invisible_to_store_scope(db):
     bk = _booking(vendor, brand, season, default_store=None)
     # store None + default None → warehouse/HO; invisible to any store scope
     BookingLine.objects.create(booking=bk, style_code="S1", booked_qty=5)
-    assert _booking_touches_stores(bk, [deo.id]) is False
+    assert not _booking_touches_stores(bk, [deo.id])
 
 
 def test_direct_receipt_without_booking_is_not_blocked_here(db):

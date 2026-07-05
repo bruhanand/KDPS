@@ -9,6 +9,7 @@ that deletes the rows leaves the events (pt_row → NULL); an event never update
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
@@ -36,7 +37,9 @@ def vocab(db):
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username="editor", password="x", full_name="Editor One")
+    return User.objects.create_user(
+        username="editor", password=TEST_PASSWORD, full_name="Editor One"
+    )
 
 
 @pytest.fixture

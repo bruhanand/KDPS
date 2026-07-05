@@ -86,10 +86,22 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core"]
+root_packages = ["config", "core", "ptmapper"]
 
 [[tool.importlinter.contracts]]
 name = "core (kernel) must not import the config/project layer"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["config"]
+
+[[tool.importlinter.contracts]]
+name = "ptmapper mapping/learning layer must not import the HTTP (views) layer"
+type = "forbidden"
+source_modules = [
+    "ptmapper.processing",
+    "ptmapper.learning",
+    "ptmapper.engine",
+    "ptmapper.models",
+    "ptmapper.profiles",
+]
+forbidden_modules = ["ptmapper.views"]

@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import User
@@ -75,7 +76,7 @@ def vocab(db):
 
 @pytest.fixture
 def client(db):
-    user = User.objects.create_user(username="editor", password="x")
+    user = User.objects.create_user(username="editor", password=TEST_PASSWORD)
     c = APIClient()
     c.force_authenticate(user)
     return c
