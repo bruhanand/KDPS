@@ -18,7 +18,6 @@ Live-API module — gated by KDPS_TEST_ALLOW_REMOTE=1 in conftest.py.
 
 from __future__ import annotations
 
-import os
 import uuid
 
 import pytest

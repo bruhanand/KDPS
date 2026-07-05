@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 18 — Backend-only regression confirmation after lint-only edits (import reorder in finledger/health.py; unused-import & long-line cleanup in three test files). Wrote /app/app/backend/tests/test_iteration18_lint_regression_live.py with 5 targeted live-API tests covering the exact scenarios in the review request (health shape/values, RBAC for owner/accounts/warehouse, vendor-bill still ties, and multi-store booking read on BK id=1). All 5 live tests PASS against the preview URL. Full DB pytest suite also green: 296 passed, 89 skipped (skipped = live-API modules that require KDPS_TEST_ALLOW_REMOTE=1, per project convention). No defects — lint edits confirmed non-regressing.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration18_lint_regression_live.py",
+    "/app/test_reports/pytest/iteration_18.xml"
+  ],
+  "action_items": [
+    "None. Lint-only changes did not regress /api/finledger/health (200, balanced=true, reconciliation.reconciled=true with both vendor+cash drift_paise=0), RBAC (owner=200, accounts1=200, wh.patna=403), the vendor-bill posting flow (health still ties after a live ₹100 bill), or the multi-store booking read (booking id=1 lines carry per-line store/store_name; destination_store_name=Deoghar with shirt lines inheriting the default and trouser line explicitly at Bokaro)."
+  ],
+  "critical_code_review_comments": [
+    "finledger/health.py imports are now correctly grouped by ruff isort convention: stdlib (__future__, typing) → third-party (django.db.models.Sum, rest_framework.*) → first-party (core.gl, core.money, finledger.models, finledger.views). Only cosmetic — BooksHealthView.get() body is byte-identical to the previous iteration and still returns the F1-reconciliation contract exactly (top-level `reconciliation` object with `reconciled`, `vendor` sub-block, `cash` sub-block, each carrying `reconciled/subledger_paise/gl_control_paise/drift_paise`).",
+    "The lazy import for the reported 'circular import' is intact (confirmed by `python manage.py check` clean plus live health call returning 200 — a real circular would have crashed the reverse route resolution at DRF import time).",
+    "'Hardcoded secrets' report finding are password='x' test fixtures in DB test modules — not runtime credentials. Correct to have declined the refactor.",
+    "Vendor bill live post (₹100.00) fanned into the balanced legs correctly: `trial_balance_paise` stayed at 0 pre/post, vendor.subledger_paise and vendor.gl_control_paise moved together (drift stayed 0). This directly re-verifies the F1 reconciliation invariant after the import-order edit.",
+    "Multi-store booking-1 read: `destination_store_name` remains 'Deoghar'; the shirt line comes back with `store=null`/`store_name=null` (inherited default — the UI resolves this to the booking default per BookingDetailPage:333), and the trouser line comes back with `store_name='Bokaro'` (explicit override). Prefetch chain on BookingDetailView.queryset ('lines', 'lines__store') still in place, so no N+1."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration18_lint_regression_live.py (new file)",
+    "/app/test_reports/iteration_18.json",
+    "/app/test_reports/pytest/iteration_18.xml"
+  ],
+  "success_rate": {
+    "backend": "100% — 5/5 live-API regression tests pass; full DB suite 296 passed, 89 skipped (live-API modules gated on KDPS_TEST_ALLOW_REMOTE=1 as designed)",
+    "frontend": "N/A — backend-only per review request"
+  },
+  "test_credentials": "Used from /app/memory/test_credentials.md / review request: owner/Owner@123 (finance,all-scope), accounts1/Acct@123 (finance), wh.patna/Wh@123 (warehouse — expected 403). All three login endpoints returned 200 with `access` JWT.",
+  "seed_data_creation": "Created 1 live vendor bill (₹100.00, description='lint-regression') against vendor_id from GET /api/vendors[0].id via POST /api/finledger/vendor/bill. Balanced GL posting — trial balance stayed at 0 paise, no data corruption. Append-only per the KDPS voucher model.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nested project: backend is /app/app/backend, frontend /app/app/frontend, PostgreSQL 15, money in integer paise. Live-API tests gated behind KDPS_TEST_ALLOW_REMOTE=1 env var. Run this iteration's regression: `cd /app/app/backend && KDPS_TEST_ALLOW_REMOTE=1 python -m pytest tests/test_iteration18_lint_regression_live.py -v`. GET /api/vendors returns a plain list (not paginated wrapper) — handled in the test with an isinstance(dict) fallback. /api/finledger/health surface: {balanced, trial_balance_paise, reconciliation:{reconciled, vendor:{reconciled,subledger_paise,gl_control_paise,drift_paise,...}, cash:{...}}, assets_*, liabilities_*, leg_count, voucher_count, accounts:[...]}.",
+  "rca of the issue": "No defects — this was a REGRESSION-CONFIRMATION run after lint-only edits, and the confirmation passed. finledger/health.py import reorder (django.db.models.Sum grouped with third-party) is byte-equivalent at runtime; BooksHealthView.get() logic is unchanged; the F1 subledger-vs-GL reconciliation contract (vendor + cash drift 0) is preserved; RBAC unchanged; multi-store booking read shape unchanged. Lint cleanup in the three test files (unused `os`, wrapped long lines) was cosmetic and did not alter any assertion."
+}

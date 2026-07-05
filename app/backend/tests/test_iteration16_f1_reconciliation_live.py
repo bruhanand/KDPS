@@ -14,7 +14,6 @@ described in the review request:
 
 from __future__ import annotations
 
-import os
 import time
 import uuid
 
@@ -71,7 +70,8 @@ def _health(tok: str) -> dict:
 def _assert_reconciled(h: dict) -> None:
     assert "reconciliation" in h, f"missing reconciliation block: keys={list(h)}"
     rec = h["reconciliation"]
-    assert h.get("balanced") is True, f"not balanced: trial_balance_paise={h.get('trial_balance_paise')}"
+    tb = h.get("trial_balance_paise")
+    assert h.get("balanced") is True, f"not balanced: trial_balance_paise={tb}"
     assert h["trial_balance_paise"] == 0, f"trial_balance_paise={h['trial_balance_paise']}"
     for side in ("vendor", "cash"):
         assert side in rec, f"reconciliation missing {side} block"
@@ -140,9 +140,8 @@ def test_vendor_bill_and_payment_keep_books_tied(owner_token: str, vendor_id: in
 
     mid = _health(owner_token)
     _assert_reconciled(mid)
-    assert mid["reconciliation"]["vendor"]["subledger_paise"] == ven0 + 100000, (
-        f"vendor payable delta wrong: {ven0} -> {mid['reconciliation']['vendor']['subledger_paise']}"
-    )
+    vend_mid = mid["reconciliation"]["vendor"]["subledger_paise"]
+    assert vend_mid == ven0 + 100000, f"vendor payable delta wrong: {ven0} -> {vend_mid}"
     assert mid["reconciliation"]["cash"]["subledger_paise"] == cash0, (
         "cash should be unchanged after a vendor bill"
     )
@@ -158,8 +157,9 @@ def test_vendor_bill_and_payment_keep_books_tied(owner_token: str, vendor_id: in
     after = _health(owner_token)
     _assert_reconciled(after)
     # Payment reduces payable by 40000 paise AND reduces cash by 40000 paise
-    assert after["reconciliation"]["vendor"]["subledger_paise"] == ven0 + 100000 - 40000, (
-        f"vendor payable after payment wrong: {after['reconciliation']['vendor']['subledger_paise']}"
+    vend_after = after["reconciliation"]["vendor"]["subledger_paise"]
+    assert vend_after == ven0 + 100000 - 40000, (
+        f"vendor payable after payment wrong: {vend_after}"
     )
     assert after["reconciliation"]["cash"]["subledger_paise"] == cash0 - 40000, (
         f"cash after payment wrong: {after['reconciliation']['cash']['subledger_paise']}"

@@ -11,12 +11,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db.models import Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
-from django.db.models import Sum
 
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.money import paise_to_rupees_str

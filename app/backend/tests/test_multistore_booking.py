@@ -99,7 +99,8 @@ def test_warehouse_bound_lines_are_invisible_to_store_scope(db):
     store-scoped user must never see it (None is never in their id set)."""
     _, deo, _, _, vendor, brand, season = _fixtures()
     bk = _booking(vendor, brand, season, default_store=None)
-    BookingLine.objects.create(booking=bk, style_code="S1", booked_qty=5)  # store None, default None
+    # store None + default None → warehouse/HO; invisible to any store scope
+    BookingLine.objects.create(booking=bk, style_code="S1", booked_qty=5)
     assert _booking_touches_stores(bk, [deo.id]) is False
 
 
