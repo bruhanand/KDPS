@@ -700,13 +700,20 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **Deferred to Slice 2:** `.xls`/`.xlsb` readers (Jockey/Madura, archetypes D/E/F) — currently return a
   friendly "not yet supported" message.
 
-## Code-review lint pass (Jun 2026) ✅
-Triage of a static-analysis report — fixed the 7 real ruff errors (import sort in `finledger/health.py`;
-unused imports + over-length lines in 3 test files). Confirmed the rest were false positives (ruff
-F632/F821 clean; "hardcoded secrets" are dummy `password="x"` test fixtures; the ptmapper circular import
-is already mitigated by a lazy import at `learning.py:226`) or declined (bulk refactors of just-verified
-financial code + an already-applied DB migration — regression risk, no functional gain). Verified: ruff
-clean, `manage.py check` clean, full suite green, testing_agent iteration_18 (5/5 live, 0 defects).
+## Code-review triage (Jun 2026) ✅
+- **#1 Circular import (ptmapper views⇄learning) — FIXED properly:** extracted the PT (re)mapping
+  pipeline `process_file()` + its pure helpers (`_recompute_derived`, `_sync_review_items`, `_fail_file`,
+  `_snapshot_manual`, `_reapply_manual`) into a new module `ptmapper/processing.py` that imports only
+  engine/models/profiles. `views` and `learning` now both depend on `processing` one-directionally; the
+  lazy-import workaround was removed. Verified: AST cycle-check clean, ruff clean, `manage.py check` clean,
+  full suite green, testing_agent iteration_19 (6/6 live + 296 DB tests, 0 defects).
+- **Lint:** fixed the 7 real ruff errors (import sort in `finledger/health.py`; unused imports + long lines
+  in test files). Ruff now reports **All checks passed**.
+- **Confirmed false positives (no change):** ruff F632/F821 clean → the "undefined vars" and "`is`
+  comparisons" are false alarms (`is None/True/False` are correct; `vendors/views.py:153` uses `in`);
+  the "hardcoded secrets" are dummy `password="x"` test fixtures.
+- **Declined (regression risk, no functional gain):** bulk complexity/length refactors of the just-verified
+  F1 posting engine + PT authoring, and editing the already-applied migration `masters/0002`.
 
 ## Implemented — Multi-store bookings: per-line `store` (Jun 2026) ✅
 - **Model:** `BookingLine.store` (nullable FK → masters.Store, `SET_NULL`; migration `0003_bookingline_store`).
