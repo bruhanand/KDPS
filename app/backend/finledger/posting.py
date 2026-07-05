@@ -1,8 +1,17 @@
-"""Posting services for the vendor & cash ledgers (the only writers of these tables).
+"""Posting services for the vendor & cash ledgers.
+
+These subledgers are append-only running balances *and* — since the F1 hardening —
+every event also posts a **balanced value voucher** through the single kernel
+posting engine (`core.post_entries`). So the value GL is the one book of record:
+its `VENDOR_PAYABLE` control account equals the vendor subledger sum, and its
+`CASH` control account equals the cash subledger sum. A vendor payment now clears
+the payable against cash (`Dr VENDOR_PAYABLE / Cr CASH`) in the GL, not just in the
+subledgers — the trial balance ties across inbound *and* money-out.
 
 Gap-free voucher numbers are minted from `core.VoucherSeries` under a synthetic
 store_code 'HO' (head office) — these ledgers are not store-scoped. Vendor doc_type
-'VEND', cash doc_type 'CASH'. Corrections are append-only reversing rows.
+'VEND', cash doc_type 'CASH'. Corrections are append-only reversing rows (subledger)
+plus the negated GL mirror.
 """
 
 from __future__ import annotations
@@ -13,6 +22,8 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from django.db import transaction
 
 from core.documents import VoucherSeries
+from core.gl import GLAccount, GLEntry
+from core.posting import Leg, PostingRef, cr, dr, post_entries
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from masters.models import Brand
 
@@ -52,6 +63,41 @@ def _user(user):
     return user if getattr(user, "is_authenticated", False) else None
 
 
+# --- GL bridge (F1: one balanced book of record) --------------------------
+
+
+def _post_gl(doc_type: str, doc_number: str, legs, user) -> None:
+    """Post one balanced GL voucher for a finledger event. Vendor/cash are HO-level,
+    so no store/gstin dims. Balanced-or-fail via the single kernel posting engine."""
+    ref = PostingRef(doc_type=doc_type, doc_number=doc_number, posted_by=_user(user))
+    post_entries(ref, legs, posted_by=_user(user))
+
+
+def _reverse_gl(orig_doc_number: str, rev_doc_number: str, doc_type: str, user) -> None:
+    """Append the negated mirror of a finledger event's GL voucher, if it had one.
+
+    A PT auto-bill has no GL leg on its VEND number (the PT path books the payable
+    itself, then reverses it), and a payment's paired cash row has no GL leg on its
+    CASH number (the GL cash leg lives on the vendor voucher) — in both cases there is
+    nothing to mirror here, so this is a safe no-op that never double-reverses."""
+    source = list(GLEntry.objects.filter(doc_number=orig_doc_number))
+    if not source:
+        return
+    ref = PostingRef(doc_type=doc_type, doc_number=rev_doc_number, posted_by=_user(user))
+    legs = [
+        Leg(
+            account=g.account,
+            amount=-g.amount,
+            party_type=g.party_type,
+            party_code=g.party_code,
+            against_voucher=g.against_voucher,
+            memo=f"reversal of {orig_doc_number}",
+        )
+        for g in source
+    ]
+    post_entries(ref, legs, posted_by=_user(user))
+
+
 # --- Vendor ledger ---------------------------------------------------------
 
 
@@ -65,9 +111,17 @@ def post_vendor_bill(
     pt_file=None,
     booking=None,
     reference: str = "",
+    gl: bool = True,
 ) -> VendorLedgerEntry:
-    """+amount: increases what we owe the vendor."""
-    return VendorLedgerEntry.objects.create(
+    """+amount: increases what we owe the vendor.
+
+    ``gl=True`` (manual bill) also books the balanced value voucher
+    Dr SUSPENSE / Cr VENDOR_PAYABLE, so the vendor subledger and the GL payable
+    control account stay equal. The PT inward path passes ``gl=False`` because it
+    books the payable itself (Dr INVENTORY / Cr VENDOR_PAYABLE); the finledger bill
+    is then subledger detail only, so the payable is never double-booked.
+    """
+    entry = VendorLedgerEntry.objects.create(
         vendor=vendor,
         amount=amount_paise,
         kind=VendorLedgerEntry.Kind.BILL,
@@ -78,6 +132,23 @@ def post_vendor_bill(
         booking=booking,
         posted_by=_user(user),
     )
+    if gl and amount_paise:
+        _post_gl(
+            VENDOR_DOC,
+            entry.doc_number,
+            [
+                dr(GLAccount.SUSPENSE, amount_paise, memo=description or "vendor bill"),
+                cr(
+                    GLAccount.VENDOR_PAYABLE,
+                    amount_paise,
+                    party_type="vendor",
+                    party_code=vendor.code,
+                    against_voucher=reference,
+                ),
+            ],
+            user,
+        )
+    return entry
 
 
 @transaction.atomic
@@ -91,7 +162,11 @@ def post_vendor_payment(
     account: str = "CASH",
     also_cash: bool = True,
 ) -> VendorLedgerEntry:
-    """−amount on the vendor ledger; optionally a paired cash-out on the cash ledger."""
+    """−amount on the vendor ledger; optionally a paired cash-out on the cash ledger.
+
+    Also books ONE balanced GL voucher Dr VENDOR_PAYABLE / Cr CASH (or Cr SUSPENSE if
+    the payment isn't paired to a cash movement). The paired cash subledger row is
+    detail only — the GL cash leg lives on this voucher, so cash is booked once."""
     entry = VendorLedgerEntry.objects.create(
         vendor=vendor,
         amount=-abs(amount_paise),
@@ -113,12 +188,33 @@ def post_vendor_payment(
             link_doc=entry.doc_number,
             posted_by=_user(user),
         )
+    if amount_paise:
+        credit_account = GLAccount.CASH if also_cash else GLAccount.SUSPENSE
+        _post_gl(
+            VENDOR_DOC,
+            entry.doc_number,
+            [
+                dr(
+                    GLAccount.VENDOR_PAYABLE,
+                    abs(amount_paise),
+                    party_type="vendor",
+                    party_code=vendor.code,
+                ),
+                cr(
+                    credit_account,
+                    abs(amount_paise),
+                    memo=description or f"Payment to {vendor.name}",
+                ),
+            ],
+            user,
+        )
     return entry
 
 
 @transaction.atomic
 def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
-    """Append a negative mirror; also reverse a paired cash-out if one exists.
+    """Append a negative mirror; also reverse a paired cash-out if one exists, and
+    append the negated GL mirror of the entry's value voucher.
 
     Refuses to reverse a reversal, or to reverse the same entry twice (a second
     reversal would over-credit the vendor)."""
@@ -155,6 +251,7 @@ def reverse_vendor_entry(entry: VendorLedgerEntry, user) -> VendorLedgerEntry:
             reverses=cash,
             posted_by=_user(user),
         )
+    _reverse_gl(entry.doc_number, number, VENDOR_DOC, user)
     return rev
 
 
@@ -162,7 +259,11 @@ def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedg
     """Auto vendor liability when a PT file is posted against a booking — but ONLY
     for KDPS-owned goods (Outright / Correction). Brand-owned models never raise a
     payable from the PT: SOR accrues liability on the *Sale*, Consignment never does
-    (CONTEXT.md commercial-model timing). The booking carries the snapshot."""
+    (CONTEXT.md commercial-model timing). The booking carries the snapshot.
+
+    ``gl=False``: the PT inward already booked the payable in the value GL
+    (Dr INVENTORY / Cr VENDOR_PAYABLE); this bill is the vendor subledger detail, so
+    the payable is booked exactly once."""
     if booking is None or total_value_paise <= 0:
         return None
     if booking.ownership != Brand.Ownership.OWNED:
@@ -175,6 +276,7 @@ def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedg
         pt_file=pt,
         booking=booking,
         reference=booking.number,
+        gl=False,
     )
 
 
@@ -204,7 +306,7 @@ def post_cash_movement(
     mode: str = "",
 ) -> CashLedgerEntry:
     is_in = direction == "in"
-    return CashLedgerEntry.objects.create(
+    entry = CashLedgerEntry.objects.create(
         account=account or "CASH",
         amount=abs(amount_paise) if is_in else -abs(amount_paise),
         kind=CashLedgerEntry.Kind.RECEIPT if is_in else CashLedgerEntry.Kind.PAYMENT,
@@ -213,6 +315,22 @@ def post_cash_movement(
         mode=mode,
         posted_by=_user(user),
     )
+    if amount_paise:
+        # Standalone cash movement books against SUSPENSE — a holding account until it
+        # is classified (to store collection / expense) in a later slice; keeps Σ=0.
+        legs = (
+            [
+                dr(GLAccount.CASH, abs(amount_paise), memo=description),
+                cr(GLAccount.SUSPENSE, abs(amount_paise), memo=description),
+            ]
+            if is_in
+            else [
+                dr(GLAccount.SUSPENSE, abs(amount_paise), memo=description),
+                cr(GLAccount.CASH, abs(amount_paise), memo=description),
+            ]
+        )
+        _post_gl(CASH_DOC, entry.doc_number, legs, user)
+    return entry
 
 
 @transaction.atomic
@@ -221,11 +339,12 @@ def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
         raise AlreadyReversedError("a reversal cannot itself be reversed")
     if CashLedgerEntry.objects.filter(reverses=entry).exists():
         raise AlreadyReversedError(f"{entry.doc_number} has already been reversed")
-    return CashLedgerEntry.objects.create(
+    number = _allocate(CASH_DOC)
+    rev = CashLedgerEntry.objects.create(
         account=entry.account,
         amount=-entry.amount,
         kind=CashLedgerEntry.Kind.REVERSAL,
-        doc_number=_allocate(CASH_DOC),
+        doc_number=number,
         description=f"Reversal of {entry.doc_number}",
         mode=entry.mode,
         vendor=entry.vendor,
@@ -233,3 +352,5 @@ def reverse_cash_entry(entry: CashLedgerEntry, user) -> CashLedgerEntry:
         reverses=entry,
         posted_by=_user(user),
     )
+    _reverse_gl(entry.doc_number, number, CASH_DOC, user)
+    return rev
