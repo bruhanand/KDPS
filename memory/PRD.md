@@ -8,7 +8,7 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
-## Current state — 2 July 2026 (read this first)
+## Current state — 5 July 2026 (read this first)
 The foundation **and** the first business layer are **built and merged to `main`**, auto-deploying to a **Render alpha** (Postgres 16 + Django API + React PWA). Everything below this section is a **chronological build log**: the earliest (28 Jun) entries describe superseded money mechanics (stock value + auto-bill at **BASIC×qty**); those were **rebuilt to P RATE + commercial-model liability** in the 30-Jun Phase C/E remediation. Treat this section as the source of truth for status.
 
 - **Landed (git):** PR #31 merged the Emergent export to `main`; PR #33 + #34 merged the `harden/green-and-security` sprint (money-path + security + CI green); PR #35 seeded the PT-mapper master data on Render. `main` is the alpha of record; `emergent` (exports) and `dev` (hand changes) PR into it (3-branch model). *(Corrects the "Deployment readiness check (28 Jun)" section below — deployment is live on Render, not blocked on MongoDB / a missing git remote.)*
@@ -17,15 +17,16 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **Active dev moved Emergent → Claude Code (30 Jun)** — Emergent parked, not cut; repo kept portable.
 - **PT-mapper fed + hardened (1 Jul, PR #34):** 9 brand profiles + normalisers + big seed; seeded on Render (PR #35). Fill rates ≈ BRAND 86% / SIZE 87% / SEASON 67% / COLOR 47%. MUFTI COLOR gap resolved.
 - **Store analysis (2 Jul, commit 9b50b30):** JSL store deep-dive (business analysis + 16-measure dashboard, HTML+PDF) + a reusable `store-dashboard` skill under `.claude/skills/`.
-- **Inbound UX restructure (3 Jul, branch `implement-inbound-plan`, not merged):** "Inbound" → **Stock Receive** (receiving only) and "PT Mapper" → **PT File Operation** (two sub-tabs: PT File Mapper + PT File Making). Brand PTs now link to a received invoice/GRN at upload. See the dated section below.
+- **Inbound overhaul batch — merged on `main` (3 Jul, #44–#49):** the whole branded-vs-non-branded inbound programme landed — `Grn.kind` discriminator (#44), non-brand PT authoring + GRN↔PT linkage backend (#49), the Stock-Receive / PT-File-Operation UI restructure (#45/#46), location-aware inward posting (#47), and the Codex correctness fixes (#48). Brand PTs now link to a received invoice/GRN at upload; non-branded arrivals are authored from a GRN. See the dated sections below.
+- **PWA / security batch — merged on `main` (3–4 Jul, #55–#60):** mobile off-canvas sidebar (#55), demo-login Store-manager chip + auto-submit (#56/#60), the 403 auth-race fix (#57), the live-API test-hygiene gate (#58), and role-guarded client routes (#59). #57/#59 improved the auth/route posture — #59 hides + guards finance/RBAC-admin shells client-side — though the two alpha caveats (demo creds on the public Render alpha, JWT/refresh in `localStorage`) still stand and the backend 403 remains the real boundary.
 - **Known alpha caveats:** (1) `finledger` vendor/cash ledgers are still single-entry running balances — only the PT-inward path is true double-entry / in the Σ=0 trial balance; (2) two security items **deferred by decision** — demo creds seeded on the public Render alpha, JWT/refresh in `localStorage`. Five money-critical GST items still await a CA ruling before live money.
-- **Dark mode (4 Jul, branch `dark-mode-project-plan`, PR #61, not merged):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). See the dated section below.
+- **Dark mode — merged on `main` (4 Jul, PR #61):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). This is `HEAD` of `main`. See the dated section below.
 - **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
 
 ## Implemented — Dark mode for the PWA (4 July 2026) ✅
 Whole-PWA dark mode. Scope confirmed with Anand: **PWA only** (all wired screens + shell +
 Login); `docs/` HTML + `DASHBOARD.html` + Django admin out of scope; **no backend work**.
-Branch `dark-mode-project-plan`, PR #61 (onto `main`, not merged).
+Branch `dark-mode-project-plan`, merged to `main` as PR #61 (this is `HEAD`).
 
 **Hard constraint (honoured): the light theme did not change by a single byte.** The locked
 "Warm" palette stays; dark is a pure override layer. Every swept literal was replaced by a
@@ -73,11 +74,120 @@ settings surface exists; a PWA `manifest.json` (none exists today — unrelated 
 **New rule for future work:** every color must be a token; dark overrides live in the single
 `html[data-theme="dark"]` block — an inline hex will silently break dark.
 
+## Implemented — Login demo-login fixes: Store-manager chip + auto-submit (3–4 July 2026, #56 + #60) ✅
+Two small `Login.tsx`-only fixes to the six demo-login quick-login chips, grouped here.
+
+**#56 — Store-manager chip (fixes #39 doc drift):** issue #39 reported DEPLOY.md documented
+a `deo.manager` store login that QA couldn't find. On investigation the premise was **stale** —
+both `deo.manager`/`store_manager` and `deo.cashier`/`store_staff` have **always** been seeded
+(`seed_foundation.py`, idempotent on every deploy), DEPLOY.md was already correct (e7643c2), and
+a live login against the Render alpha returned 200. The only real drift: the login page listed
+only `deo.cashier`. Added a "Store manager" demo entry so seed, DEPLOY.md and the login page all
+agree. No seed/DEPLOY.md change.
+
+**#60 — chips auto-submit (fixes #40):** the chips only called `setUsername`/`setPassword`, so a
+click filled the form and stopped (read as a broken button). Extracted the login into
+`doLogin(u, p)` called with the literal demo creds — one click now signs in, dodging the
+stale-state problem of submitting right after a `setState`. Chips still populate both fields
+(so the user sees which creds were used / can retry) and now carry `disabled={busy}` so a
+double-click / second chip mid-login can't fire a parallel request.
+
+**Files:** `app/frontend/src/pages/Login.tsx`. **Verified:** `app/frontend` `yarn ci`
+(tsc + vitest) + `npm run ci` green; manual UX verify (frontend has no DOM-test setup).
+
+## Implemented — Role-guard client routes so scoped users can't load finance/admin shells (3 July 2026, #59) ✅
+Any authenticated user could load any page shell by typing the URL — `ProtectedRoute` checked
+**authentication but not authorization**. This adds **defense-in-depth + honest UX**; the backend
+403 on the data stays the real security boundary (alpha stance).
+
+**Frontend:**
+- New **pure** guard `auth/routeAccess.ts` — a **longest-prefix** rule table mapping routes →
+  required nav_group(s) + an optional finer role gate, mirroring the backend constants
+  `FINANCE_ROLES` (finledger) and `RBAC_ADMIN_ROLES` (accounts). Superusers pass; unknown routes
+  **default-allow** (harmless "coming soon" stubs). A follow-up review fix lowercases the pathname
+  before matching (React Router matches case-insensitively, so `/LEDGERS/VENDOR` had bypassed the
+  guard into default-allow).
+- Denied routes render an `AccessDenied.tsx` card **inside** the AppShell (keeps the URL for support
+  screenshots) rather than a silent redirect.
+- Sidebar (`navConfig.ts`/`AppShell.tsx`) gains optional `roles` on `NavItem` and **hides** the
+  finance-only ledgers (Vendor/Cash) + RBAC-admin pages (Users & Roles, Users & RBAC) from roles
+  lacking access — so the guard doesn't turn an existing empty page into a surprise card.
+- `VendorLedger`/`CashLedger` deduped off their ad-hoc finance-role arrays onto `FINANCE_ROLES`.
+
+**Tests:** `auth/routeAccess.test.ts` — a role×route matrix over `canAccess` (incl. the mixed-case
+case), via a **new vitest runner** (the frontend had none) wired into `ci:frontend`. **Files:** new
+`auth/{routeAccess.ts,routeAccess.test.ts,AccessDenied.tsx}`; modified `auth/ProtectedRoute.tsx`,
+`shell/{navConfig.ts,AppShell.tsx}`, `pages/{VendorLedger,CashLedger}.tsx`, `package.json`/`yarn.lock`.
+
+## Implemented — Test hygiene: gate live-API suites off shared DBs, kill the dead Emergent origin (3 July 2026, #58) ✅
+The black-box HTTP suites under `app/backend/tests/` hardcoded the retired Emergent preview origin +
+`localhost:8001` and wrote **undeletable** rows (masters, documents, append-only ledger/GL posts) to
+whatever `REACT_APP_BACKEND_URL` pointed at. During 2-Jul QA that meant **6 false "failures"** and junk
+`ZZ*` brands left on the live Render demo, which then broke the next run's exact-count asserts.
+
+**Fixes:**
+- `tests/conftest.py` is now the single **wholesale remote-target gate** — it skips ALL live items when
+  the target is not localhost and not cloud CI, unless `KDPS_TEST_ALLOW_REMOTE=1` is set deliberately
+  (masters has no DELETE, Season has no `is_active` — teardown can never be complete, so confine the
+  writes instead).
+- New registered `local_backend` marker (`--strict-markers`) skips the manage.py-subprocess / direct-CORS
+  tests against any non-local target even under the opt-in.
+- Default base URL + every hardcoded origin → localhost; the Emergent host is gone from
+  conftest/iter10/12/13/refactor_regression.
+- `test_foundation` exact master counts → **seeded-subset** asserts (immune to accumulated junk);
+  scope-derived `deo.cashier` asserts stay exact.
+
+**Verified:** `npm run ci:backend` green (**285 passed, 63 skipped**); the full live suite booted against a
+throwaway seeded server and run **twice against the same DB** — green both times (the ZZ-junk failure mode
+is gone). **Ops follow-up (not code):** hand-clean the residual `ZZ*` junk already on the Render demo DB.
+
+## Implemented — Fix transient 403 auth race on rapid login→action (3 July 2026, #57) ✅
+QA of the Render alpha (issue #38): a fast login→immediate-action burst logged 403s on the first API
+calls. Root cause = **prior-session leftovers racing the new session**, not an unsettled cookie — three
+converging **frontend-only** defects (backend logout/blacklist/cookie-clear already work once logout is
+authenticated).
+
+**Fixes:**
+- **Single-flight `/auth/refresh`** — N concurrent 401s share one refresh call so the rotating refresh
+  token is spent once (the backend blacklists after rotation); `withCredentials` keeps rotated cookies.
+- **Guarded clear** — on refresh failure, only `tokens.clear()` if `tokens.refresh` still equals the
+  captured stale token (a losing racer can't wipe a fresh re-login); on real expiry it emits a
+  `kdps:session-expired` event for a clean logout instead of a broken page.
+- **Eager-capture logout** — reads access/refresh at call time and passes an explicit `Authorization`
+  header, surviving the request-interceptor microtask so logout actually blacklists + clears cookies.
+- **`AuthContext` session epoch** — login/logout/expiry bump a ref; the mount-time `/auth/me` bootstrap
+  is StrictMode-safe and only mutates state when its epoch is current, so a slow prior bootstrap can't
+  clobber a fresh login. A `kdps:session-expired` listener redirects to `/login` via `ProtectedRoute`.
+- Deleted the dead `openApiClient` (cookie-only, zero usages) and dropped `openapi-fetch` (kept the
+  `openapi-typescript` devDep that generates `api-schema.ts`).
+
+**Files:** `lib/api.ts`, `auth/AuthContext.tsx`, `package.json`/`yarn.lock`. **Verified:** `npm run
+ci:frontend` (tsc) + build green; manual in-browser repro per the plan's script (no vitest — this predates
+the #59 runner).
+
+## Implemented — Mobile off-canvas sidebar (3 July 2026, #55 + first cut of the live-API gate) ✅
+Phones run the system in the browser/PWA (CLAUDE.md), so a phone-width layout is a pre-real-use
+requirement (issue #36): at 375px the fixed 258px sidebar left ~117px for content, clipping the dashboard
+headings + KPI tiles.
+
+**Frontend (CSS-only, desktop markup unchanged):** a **768px** breakpoint below which the sidebar becomes a
+fixed **off-canvas drawer** (`width min(82vw, 300px)`, overriding the user-resizable inline width), toggled
+by a topbar **hamburger** and closed by tapping the backdrop or any nav link; the desktop resizer is hidden.
+Topbar compacted on mobile (search hidden, user name → avatar, store-switcher truncated; dropdowns become
+full-width fixed panels). **Files:** `shell/AppShell.tsx` (`mobileNavOpen` + hamburger/backdrop/close-on-nav),
+`shell/AppShell.css` (mobile media-query block).
+
+**Test infra (bundled in this PR):** the **first cut** of the live-API gate in `tests/conftest.py` — probes
+the target once per session with a real demo login; healthy → suites run, unreachable/unseeded → the live
+modules skip with an actionable reason; disabled under `CI` so cloud fails loudly. (Hardened into the
+wholesale remote-target gate by #58.) **Verified:** headless at 375×812 (drawer open/close, nav-tap closes)
++ 1280×720 (desktop unchanged); frontend gate (tsc) green.
+
 ## Implemented — Inbound experience restructure: Stock Receive + PT File Operation (3 Jul 2026) ✅
 UX reorganisation (step 1 of a larger UX overhaul — deeper simplification is a later session).
 Decisions D1–D4 confirmed with Anand; scope is **UI reconstruction + renaming + wiring the
 invoice↔PT link only** — no change to receiving/posting behaviour or the money path. Branch
-`implement-inbound-plan` (not merged).
+`implement-inbound-plan`, merged to `main` (PRs #45/#46).
 
 **Renames (cosmetic):**
 - **"Inbound" → "Stock Receive"** (nav + page). It is *purely receiving*: per-store pending
@@ -184,6 +294,90 @@ excluded by config); `mypy` at baseline (254→253, no new errors); `yarn instal
 `vite build` green. *(The pre-existing `test_iteration9/10/11/12/14/15` + `test_refactor_regression`
 live-`:8001`-server failures are environmental, unrelated — confirmed identical on a clean baseline.)*
 
+## Implemented — Render deploy fix: GRN-kind backfill vs the FSM trigger (3 July 2026, #44 regression) ⚠️→✅
+The #44 merge (`e8ec1aa`) broke the API deploy on Render. The `0005_grn_kind` data migration
+backfills `kind='non_branded'` on direct receipts with a bulk `Grn.objects.filter(is_direct=True)
+.update(...)`. Real GRNs are **SUBMITTED** documents, and the kernel FSM trigger (`kdps_document_fsm`)
+forbids any UPDATE to a submitted row except cancelling it — so on a database that already holds posted
+receipts (the deployed alpha) the migration raised a `ProgrammingError`. It passed CI/tests only because
+a fresh test DB has no submitted rows, so the UPDATE matched zero rows and the trigger never fired.
+
+**Fix:** a `kind` backfill is schema evolution, not a change to a posted business fact — so the migration
+temporarily **swaps the FSM trigger *function* body** for a pass-through, runs the UPDATE, then restores
+the real guard in a `finally`. Swapping the function (not `ALTER TABLE … DISABLE TRIGGER`) needs **no table
+lock**, so it works even when the table already has pending trigger events, and is fully transactional (a
+rollback restores the guard). `DISABLE TRIGGER` was rejected: it raises "cannot ALTER TABLE … because it has
+pending trigger events" whenever the table was written earlier in the transaction, which also made it
+untestable. The guard is restored from `core.documents.document_fsm_function_sql()` (single source of truth).
+
+**Test:** `tests/test_inbound_pt_authoring.py` extended with a SUBMITTED direct GRN in the backfill test —
+reproduces the exact FSM `ProgrammingError` without the fix (verified red), passes with it. **Verified:**
+kernel FSM anti-cheat + **263** non-live-server tests green, so the guard is provably restored. **Files:**
+`inbound/migrations/0005_grn_kind.py`, `tests/test_inbound_pt_authoring.py`.
+
+## Implemented — Grn.kind discriminator: branded vs non-branded (3 July 2026, #44) ✅
+Makes the branded/non-branded split **first-class on goods receipts** (D2, plan Phase 1 + the backend
+halves of Phases 2 & 3). Branded goods land at a store and the brand supplies the PT (warehouse maps it);
+non-branded land at a warehouse and we author the PT ourselves.
+
+**Decisions:**
+- `kind` is a **STORED** field (unlike `status`, which the kernel forbids storing and keeps **derived**
+  from linked PT files); default `branded`.
+- **Backfill keys off `is_direct=True`, not booking presence** — `booking` is a `SET_NULL` FK, so a branded
+  GRN whose booking was later deleted has a null booking yet `is_direct=False`; keying off
+  `booking__isnull` would wrongly reclassify it. `is_direct` is the immutable receipt marker set at creation
+  and matches the issue's "direct receipts → non_branded" wording (this was a Codex-review correction to the
+  first cut).
+- **Fail-closed guard:** a non-branded GRN whose target store is not a warehouse → **400** (any warehouse —
+  no single-warehouse hardcode).
+- `awaiting_pt` queue now lists **only** non-branded arrivals; branded arrivals wait for the brand PT via the
+  Mapper (`GET /inbound/grns?kind=branded`). `?kind=` filters the GRN list atop the existing store scoping.
+
+**Files:** `inbound/models.py` (`Grn.Kind` TextChoices + field), `inbound/migrations/0005_grn_kind.py`
+(AddField + backfill RunPython), `serializers.py`, `views.py` (`_resolve_kind` guard + `?kind=` filter).
+**Tests:** `tests/test_inbound_pt_authoring.py` — kind roundtrip/default, warehouse guard, filter, queue
+exclusion, backfill incl. the deleted-booking case that must stay branded. **Verified:** **22 passed** +
+pricing/sku suites green on real Postgres; `makemigrations --check` clean; `ruff` clean on touched files.
+
+## Implemented — Non-brand PT authoring + GRN↔PT flow linkage (D2 backend) (3 July 2026, #49) ✅
+The **backend** of D2's biggest v1 feature (complements — does not replace — the UI "Inbound experience
+restructure" section above, which the same PR's UI half also carried). Connects the two previously
+disconnected inbound islands (GRN fire-and-forget; the standalone PT-Mapper) and builds the non-brand PT path.
+
+**Backend:**
+- `GET /inbound/queue` surfaces **arrived GRNs awaiting a PT**.
+- **Author a PT from a GRN** — `POST /ptmapper/files/from-grn/<id>` → `ptmapper/authoring.py`
+  (`build_pt_from_grn` + invoice enrichment); `PtFile` gains `source` (`brand_file|invoice`) + a `grn` FK
+  (`ptmapper/0011`, and `ptmapper/0012` seeds authoring vocabulary).
+- **Auto-price authored lines** — `POST /ptmapper/files/<id>/price` via the pure, golden-tested
+  `ptmapper/pricing.py` and a new `masters.CategoryMargin` master (`masters/0003`; `item=""` = **global 33%**
+  default).
+- `GET /masters/skus/lookup` for authoring.
+- **Key deviation:** `Grn.status` is now **derived** (`Grn.effective_status`), not stored — the kernel
+  docstatus FSM forbids UPDATE on a submitted document; the dead column is dropped (`inbound/0004`), same API
+  keys, never stale. **Posting code (`post_pt_inward`) untouched.**
+
+**Tests:** `tests/test_inbound_pt_authoring.py`, `tests/test_ptmapper_pricing.py`,
+`tests/test_masters_sku_lookup.py`. **Open items** (tracked): MRP-formula confirmation vs a worked KDPS
+example; per-category margins awaited from the client (global 33% until then); season-registry unification;
+money follow-ons A/B deferred.
+
+## Implemented — Self-improving PT-mapper: learn from human corrections (2 July 2026, #43) ✅
+Every operator cell-correction becomes durable, auditable engine knowledge: **corrections → mine →
+propose → human-approve → Lookup**. (Logged here as the 2-Jul-evening slice that preceded the 3-Jul inbound
+overhaul above.)
+
+**Models:** `CorrectionEvent` + `LookupProposal` (`ptmapper/0007`–`0010`, incl. the `pg_trgm` trigram
+migration for fuzzy mining). **Engine:** `ptmapper/learning.py` — logs corrections, mines them into lookup
+proposals, and is the writer that turns an **approved** proposal into a `Lookup` (a human-approval queue
+gates every promotion). **Commands:** `ptmap_mine` + `ptmap_learning_report`, wired to a **daily Render
+cron** (`render.yaml`, documented in `DEPLOY.md`). **API:** brand-scoped `suggest` + `rerun` endpoints.
+**Frontend:** a `PtProposals` review screen + suggestion wiring into the `Combobox`.
+
+**Decisions:** SENT = the trust gate (only trusted stages feed learning); re-run **preserves** manual edits;
+**deterministic-only** mining for now (an LLM miner is deferred); suggestions are **brand-scoped by default**.
+**Tests:** `test_ptmapper_{corrections,learning,mining,rerun,suggest,brand_scope}.py`.
+
 ## Architecture (locked by ADRs)
 - **Backend:** Python 3.12 + Django 5.1 + Django REST Framework + drf-spectacular, **PostgreSQL** only.
   Kernel in `app/backend/core` (money-as-paise, append-only ledger w/ DB triggers, docstatus FSM,
@@ -192,7 +386,10 @@ live-`:8001`-server failures are environmental, unrelated — confirmed identica
 - **Auth:** custom JWT (djangorestframework-simplejwt), username/password, role + data-scope claims.
 - **Modular monolith:** `core` < `masters` < domain apps (one Django app per module).
 
-## Environment bridge (Emergent container)
+## Environment bridge (Emergent container — historical)
+> **Historical.** Active dev moved Emergent → Claude Code (30 Jun) and deploy is the **Render alpha**;
+> nothing references port 8001 any more. Current runtime: **Render** (deploy, per `DEPLOY.md`) + local
+> `docker-compose` Postgres / `npm run ci` (dev, per `README.md`). Kept below as a record of the old container.
 - Platform process manager (read-only supervisor) runs `uvicorn server:app` (→ `app/backend/server.py`
   re-exports the Django ASGI app, port 8001) and `yarn start` (→ Vite, port 3000).
 - `/app/backend` & `/app/frontend` are **symlinks** to `/app/app/backend` & `/app/app/frontend`.
@@ -233,7 +430,7 @@ radius. Tokens centralised in `frontend/src/index.css`. Brand red #e53e35 reserv
 - **Tested:** testing_agent iteration_11 passed backend regression. Additional self-checks: Python lint clean, Django check clean, `tests/test_refactor_regression.py` 6/6, `tests/test_iteration9_rbac_vendor_inbound.py` 8/8, and `tests/test_iteration11_pt_posting_regression.py` 3/3.
 
 ## Deployment readiness check (28 Jun 2026) ⚠️ — SUPERSEDED
-> **SUPERSEDED (see "Current state — 2 July 2026" at top).** This blocker is resolved: the app now deploys to a **Render alpha** (Postgres 16, from `render.yaml` on `main`) — it was never migrated to MongoDB, and a GitHub remote with merged PRs now exists. Kept below as history.
+> **SUPERSEDED (see the "Current state" section at top).** This blocker is resolved: the app now deploys to a **Render alpha** (Postgres 16, from `render.yaml` on `main`) — it was never migrated to MongoDB, and a GitHub remote with merged PRs now exists. Kept below as history.
 - **Deployment agent status:** FAIL for Emergent managed deployment because KDPS intentionally requires **PostgreSQL**, while the target managed platform health check expects MongoDB-only managed database support. This is architectural, not a runtime regression.
 - **Checks passed:** supervisor config exists; frontend build passes; Django system check passes; ports are correct; CORS/CSRF settings are present; secrets/URLs are environment-driven; no mocked API layer.
 - **Hardening applied:** frontend `REACT_APP_BACKEND_URL` now fails fast when missing; backend `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, and `DATABASE_URL` now fail fast when missing.
@@ -506,9 +703,11 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
   `app/backend/tests/test_foundation.py`.
 
 ## Backlog (prioritised)
-- **P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes:** `ambreli`/USPOLO style files read OK
-  but produce 0 KDPS rows (no generic header match → need profiles D/E/F). Build those profiles when needed.
-- **P1:** Master Data stewardship UI (create/edit master data with stewardship controls).
+- ~~**P0 / Phase D Slice 3 — printed-invoice/anchored-header archetypes**~~ **DONE (1 Jul, PR #34):**
+  archetypes **D/E/F** shipped (`ptmapper/profiles.py`), so `ambreli`/USPOLO/Madura/Jockey-style files now map;
+  the PT-mapper feed/harden pass also added normalisers + a big seed. See the "Current state" PT-mapper bullet.
+- ~~**P1:** Master Data stewardship UI~~ **DONE (30 Jun)** — steward-gated CRUD (`masters.IsMasterSteward`)
+  + `MasterPages.tsx` New/Edit editors; see the "(c) Master Data stewardship UI" entry above.
 - **P1:** Continue replacing legacy page calls with `openApiClient` / generated schema types as pages are touched.
 - **P1 — Phase 2:** Selling floor / POS ingest (outbox/dead-letter).
 - **P2 — Phase 3+:** Money-in (collection & 3-rail bank audit), Transfers, Payments/vendor settlement,
@@ -517,7 +716,10 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **P2 — Production hardening:** External ingress/proxy CORS policy alignment, reduce localStorage token reliance now that httpOnly cookies exist, HTTPS/secure-cookie review, Django+Postgres deploy path validation.
 
 ## Next action items
-1. Run broader alpha QA over the current screens and capture issues from real users.
-2. Build Master Data stewardship UI for create/edit of mutable masters.
-3. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
-4. Continue POS ingest / selling floor planning after current P1 review.
+Inbound D2 (branded + non-branded, `Grn.kind` + non-brand PT authoring + location-aware posting) landed on
+`main` across #43–#49; the PWA/security batch (#55–#60) + dark mode (#61) followed. The next frontiers:
+1. **D3 outbound / POS ingest** (selling floor, outbox/dead-letter) — the next business layer, still unbuilt.
+2. **Double-entry vendor/cash ledger** — close the alpha caveat: `finledger` vendor/cash are still single-entry
+   running balances (only the PT-inward path is in the Σ=0 trial balance).
+3. Run broader alpha QA over the current screens and capture issues from real users.
+4. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
