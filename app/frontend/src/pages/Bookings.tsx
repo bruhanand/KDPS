@@ -47,6 +47,8 @@ interface BookingLineT {
   mrp_paise: number | null;
   received_qty: number;
   inwarded_qty: number;
+  store: number | null;
+  store_name: string | null;
 }
 
 export function BookingsPage() {
@@ -98,8 +100,9 @@ interface DraftLine {
   description: string;
   booked_qty: number | string;
   mrp: number | string;
+  store: string;
 }
-const emptyLine = (): DraftLine => ({ style_code: "", size: "", description: "", booked_qty: "", mrp: "" });
+const emptyLine = (): DraftLine => ({ style_code: "", size: "", description: "", booked_qty: "", mrp: "", store: "" });
 
 export function BookingNewPage() {
   const navigate = useNavigate();
@@ -142,6 +145,7 @@ export function BookingNewPage() {
         description: l.description || "",
         booked_qty: l.quantity ?? "",
         mrp: l.mrp ?? "",
+        store: "",
       }));
       if (got.length) setLines(got);
       // best-effort prefill
@@ -177,6 +181,7 @@ export function BookingNewPage() {
         description: l.description,
         booked_qty: Number(l.booked_qty),
         mrp: l.mrp === "" ? null : Number(l.mrp),
+        store: l.store === "" ? null : Number(l.store),
       }));
     if (!payloadLines.length) {
       setError("Add at least one line with a style and quantity.");
@@ -242,7 +247,7 @@ export function BookingNewPage() {
               {seasons.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div className="field"><label>Destination store (optional)</label>
+          <div className="field"><label>Default destination store (optional)</label>
             <select className="select" value={destId} onChange={(e) => setDestId(e.target.value)} data-testid="booking-dest">
               <option value="">Warehouse / unspecified</option>
               {stores.map((s: any) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
@@ -259,8 +264,9 @@ export function BookingNewPage() {
           <div><p className="eyebrow">Step 3 · Lines</p><h3 className="h3">Style · size · quantity</h3></div>
           <button className="btn" onClick={() => setLines((l) => [...l, emptyLine()])} data-testid="add-line"><Plus size={15} /> Add line</button>
         </div>
+        <p className="hint" style={{ marginBottom: 10 }}>Leave a line's store blank to send it to the booking default destination.</p>
         <table className="lines-table" data-testid="booking-lines">
-          <thead><tr><th style={{ width: "26%" }}>Style code</th><th>Size</th><th style={{ width: "28%" }}>Description</th><th>Qty</th><th>MRP ₹</th><th /></tr></thead>
+          <thead><tr><th style={{ width: "22%" }}>Style code</th><th>Size</th><th style={{ width: "22%" }}>Description</th><th>Qty</th><th>MRP ₹</th><th style={{ width: "20%" }}>Store</th><th /></tr></thead>
           <tbody>
             {lines.map((l, i) => (
               <tr key={i}>
@@ -269,6 +275,12 @@ export function BookingNewPage() {
                 <td><input value={l.description} onChange={(e) => setLine(i, "description", e.target.value)} /></td>
                 <td><input className="num" value={l.booked_qty} onChange={(e) => setLine(i, "booked_qty", e.target.value)} /></td>
                 <td><input className="num" value={l.mrp} onChange={(e) => setLine(i, "mrp", e.target.value)} /></td>
+                <td>
+                  <select className="select" value={l.store} onChange={(e) => setLine(i, "store", e.target.value)} data-testid={`booking-line-store-${i}`}>
+                    <option value="">Default</option>
+                    {stores.map((s: any) => <option key={s.id} value={s.id}>{s.code}</option>)}
+                  </select>
+                </td>
                 <td><button className="line-del" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}><Trash2 size={15} /></button></td>
               </tr>
             ))}
@@ -311,13 +323,14 @@ export function BookingDetailPage() {
 
       <div className="table-wrap">
         <table className="data" data-testid="booking-detail-lines">
-          <thead><tr><th>Style</th><th>Size</th><th>Description</th><th className="num">Booked</th><th className="num">Received</th><th className="num">Inwarded</th><th className="num">MRP</th></tr></thead>
+          <thead><tr><th>Style</th><th>Size</th><th>Description</th><th>Destination</th><th className="num">Booked</th><th className="num">Received</th><th className="num">Inwarded</th><th className="num">MRP</th></tr></thead>
           <tbody>
             {b.lines.map((l) => (
               <tr key={l.id}>
                 <td><b className="mono">{l.style_code}</b></td>
                 <td>{l.size}</td>
                 <td>{l.description || "—"}</td>
+                <td>{l.store_name ?? b.destination_store_name ?? "Warehouse"}</td>
                 <td className="num">{l.booked_qty}</td>
                 <td className="num">{l.received_qty}</td>
                 <td className="num">{l.inwarded_qty}</td>

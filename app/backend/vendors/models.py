@@ -96,6 +96,15 @@ class Booking(TimeStampedModel):
 
 class BookingLine(TimeStampedModel):
     booking = models.ForeignKey(Booking, on_delete=models.CASCADE, related_name="lines")
+    store = models.ForeignKey(
+        "masters.Store",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="booking_lines",
+        help_text="Destination store for this line (multi-store booking). "
+        "Null = use the booking's default destination_store (else warehouse/HO).",
+    )
     style_code = models.CharField(max_length=80)
     size = models.CharField(max_length=24, blank=True, default="")
     description = models.CharField(max_length=200, blank=True, default="")

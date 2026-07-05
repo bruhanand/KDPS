@@ -10,6 +10,7 @@ from datetime import date
 from typing import Any
 
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -49,9 +50,16 @@ class PendingBookingsView(APIView):
             "vendor", "brand", "season", "destination_store"
         ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
         ids = visible_store_ids(request.user)
-        if ids is not None:  # store-scoped user → only their store's deliveries
-            qs = qs.filter(destination_store_id__in=ids)
-        return Response(BookingSerializer(qs.prefetch_related("lines"), many=True).data)
+        if ids is not None:  # store-scoped user → bookings with a line landing at their store
+            # A booking spans several stores: a line's effective destination is its own
+            # store, or (if unset) the booking's default. Visible if ANY line lands here.
+            qs = qs.filter(
+                Q(lines__store_id__in=ids)
+                | Q(lines__store__isnull=True, destination_store_id__in=ids)
+            ).distinct()
+        return Response(
+            BookingSerializer(qs.prefetch_related("lines", "lines__store"), many=True).data
+        )
 
 
 class InvoiceDraftView(APIView):
@@ -185,9 +193,22 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
     if booking is None:
         return None, Response({"detail": "Booking not found."}, status=400)
     ids = visible_store_ids(user)
-    if ids is not None and booking.destination_store_id not in ids:
+    if ids is not None and not _booking_touches_stores(booking, ids):
         return None, Response({"detail": "You may not receive against this booking."}, status=403)
     return booking, None
+
+
+def _booking_touches_stores(booking: Any, ids: list[int]) -> bool:
+    """True if any line's effective destination (own store, else the booking default)
+    is one of `ids`. A store-scoped user may receive against such a booking (ADR-0003)."""
+    id_set = set(ids)
+    lines = list(booking.lines.all())
+    effective = (
+        {(line.store_id or booking.destination_store_id) for line in lines}
+        if lines
+        else {booking.destination_store_id}
+    )
+    return bool(effective & id_set)
 
 
 class GrnListCreateView(generics.ListCreateAPIView):

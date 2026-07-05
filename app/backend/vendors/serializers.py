@@ -29,6 +29,8 @@ class VendorSerializer(serializers.ModelSerializer):
 
 
 class BookingLineSerializer(serializers.ModelSerializer):
+    store_name = serializers.CharField(source="store.name", read_only=True, default=None)
+
     class Meta:
         model = BookingLine
         fields = [
@@ -40,6 +42,8 @@ class BookingLineSerializer(serializers.ModelSerializer):
             "mrp_paise",
             "received_qty",
             "inwarded_qty",
+            "store",
+            "store_name",
         ]
 
 

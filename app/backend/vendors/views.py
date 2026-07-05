@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from core.documents import VoucherSeries
 from files.models import StoredFile
-from masters.models import Brand, Season
+from masters.models import Brand, Season, Store
 from vendors.agents import read_booking_receipt
 from vendors.models import Booking, BookingLine, Vendor
 from vendors.serializers import (
@@ -37,6 +37,13 @@ def _rupees_to_paise(value: Any) -> int | None:
         return int(round(float(value) * 100))
     except (TypeError, ValueError):
         return None
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _financial_year(d: date) -> str:
@@ -95,7 +102,7 @@ class BookingListCreateView(generics.ListCreateAPIView):
     def get_queryset(self) -> Any:
         qs = Booking.objects.select_related(
             "vendor", "brand", "season", "destination_store"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "lines__store")
         params = self.request.query_params
         if params.get("status"):
             qs = qs.filter(status=params["status"])
@@ -131,13 +138,25 @@ class BookingListCreateView(generics.ListCreateAPIView):
             created_by=request.user,
         )
         est = 0
+        # A booking can span several stores: each line may name its own destination
+        # store; a line with none inherits the booking's default (destination_store).
+        # Validate requested per-line stores once (fail-safe: unknown id → default).
+        requested = {_safe_int(r.get("store")) for r in data["lines"] if _safe_int(r.get("store"))}
+        valid_store_ids = (
+            set(Store.objects.filter(pk__in=requested).values_list("id", flat=True))
+            if requested
+            else set()
+        )
         for raw in data["lines"]:
             qty = int(raw.get("booked_qty") or raw.get("quantity") or 0)
             mrp = raw.get("mrp_paise")
             if mrp is None:
                 mrp = _rupees_to_paise(raw.get("mrp"))
+            line_store = _safe_int(raw.get("store"))
+            line_store_id = line_store if line_store in valid_store_ids else None
             BookingLine.objects.create(
                 booking=booking,
+                store_id=line_store_id,
                 style_code=str(raw.get("style_code", "")).strip(),
                 size=str(raw.get("size") or "").strip(),
                 description=str(raw.get("description") or "").strip(),
@@ -157,4 +176,4 @@ class BookingDetailView(generics.RetrieveAPIView):
     serializer_class = BookingSerializer
     queryset = Booking.objects.select_related(
         "vendor", "brand", "season", "destination_store"
-    ).prefetch_related("lines")
+    ).prefetch_related("lines", "lines__store")

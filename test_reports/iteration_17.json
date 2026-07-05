@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 17 — Multi-store bookings (Phase 1 Branded Flow Hardening) verified end-to-end. Ran the golden-file DB suite (5/5 pass), wrote /app/app/backend/tests/test_iteration17_multistore_booking_live.py (8 live-API tests, 8/8 pass against preview) covering booking create with per-line store + default-inherit + invalid-id fail-safe, pending scope any-line-in-scope for deo.cashier, GRN _resolve_booking 403 on out-of-scope booking + 201 for owner, and direct-receipt (no booking) scoping still intact. Frontend Playwright: owner logged in, /documents/bookings/new form filled with default DEO + line0=Default/line1=BKR → saved → detail page renders 'Destination' column with X1=Deoghar (inherited) and X2=Bokaro (override). Seeded BK-SS26-0001 detail also shows shirts→Deoghar (inherited) and trousers→Bokaro (override) as specified.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration17_multistore_booking_live.py",
+    "/app/app/backend/tests/test_multistore_booking.py",
+    "/app/test_reports/pytest/iteration_17.xml"
+  ],
+  "action_items": [
+    "None. Multi-store booking feature (per-line store override, any-line-in-scope receive scope, direct-receipt unaffected) is behaving exactly as specified in the review request."
+  ],
+  "critical_code_review_comments": [
+    "BookingLineSerializer correctly exposes `store` (raw FK id, nullable) and `store_name` (from store.name, default None) — inherited-default lines round-trip as store=null/store_name=null; the UI falls back to booking.destination_store_name (BookingDetailPage line 333: `l.store_name ?? b.destination_store_name ?? 'Warehouse'`).",
+    "BookingListCreateView.create validates per-line store ids against Store.objects in a single set query, then falls back to None for unknown ids (line 156). Confirmed live: POST with `store: 999999` → 201 and the line comes back with store=null (fail-safe, not an error). No N+1: `Store.objects.filter(pk__in=requested).values_list('id', flat=True)` runs once regardless of line count.",
+    "PendingBookingsView store filter is exactly the any-line-in-scope contract: `Q(lines__store_id__in=ids) | Q(lines__store__isnull=True, destination_store_id__in=ids)` with .distinct() to avoid multi-line duplicates. Fail-closed for warehouse/HO-bound lines (both store_id AND destination_store_id null → never in any ids set).",
+    "_booking_touches_stores() computes the effective destination per line (own store OR booking default) and set-intersects with the user's visible stores — matches the review request wording exactly. _resolve_booking short-circuits when booking_id is absent, so direct receipts keep GrnListCreateView's own scope path (scope_by_store + _resolve_receiving_store) untouched — confirmed live (deo.cashier direct GRN into DEO=201, into BKR=403).",
+    "Booking querysets are correctly prefetch-optimised — `.prefetch_related('lines', 'lines__store')` on both BookingListCreateView.get_queryset and BookingDetailView.queryset, so per-line store_name resolves without an N+1 on lines. PendingBookingsView applies the same prefetch after the distinct() filter.",
+    "Frontend Bookings.tsx per-line Store select is clean: value='' → 'Default' (empty string round-trips to backend as no store → inherit), and each real store shown as `code` only (compact for tables). The detail view's Destination column falls back to booking default name for inherited lines — matches the UX contract that a blank line should never look 'unassigned'.",
+    "Booking number allocation went through VoucherSeries.allocate (gap-free per FY/season) — the new booking created by the Playwright run was 26-27/SS26/BK/3, confirming the count()+1 race fix noted in vendors/views.py:54-61 is in effect."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration17_multistore_booking_live.py",
+    "/app/test_reports/iteration_17.json",
+    "/app/test_reports/pytest/iteration_17.xml"
+  ],
+  "success_rate": {
+    "backend": "100% — 5/5 DB golden tests + 8/8 live-API tests pass (13/13 total)",
+    "frontend": "100% — new-booking form + save + detail Destination column verified on both a fresh booking and the seeded BK-SS26-0001"
+  },
+  "test_credentials": "From /app/memory/test_credentials.md — owner/Owner@123 (all scope), deo.cashier/Store@123 (store scope, stores=[DEO]). JWT under 'access' of POST /api/auth/login.",
+  "seed_data_creation": "Created ~3 test bookings during the live-API run (all with vendor_ref prefix MS-/NO-DEO-/NO-DEO2-) plus 1 UI-created booking (26-27/SS26/BK/3) plus 1 direct GRN into DEO (variance line). These are append-only per the KDPS doc model — Booking has no DELETE endpoint by design (booking numbers must remain gap-free). Left behind for the shared preview DB, will not affect subsequent runs (no uniqueness on style_code).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Nested project: backend is /app/app/backend (Django+PG15), frontend /app/app/frontend. Multi-store bookings live: BookingLine.store is nullable FK; null = inherit Booking.destination_store; if both null → warehouse/HO-bound. Any-line-in-scope is implemented in inbound.views._booking_touches_stores + the PendingBookingsView Q filter. Direct receipts (no booking_id) still use scope_by_store on GRN.store — unchanged. To run live: `cd /app/app/backend && KDPS_TEST_ALLOW_REMOTE=1 python -m pytest tests/test_iteration17_multistore_booking_live.py -v`. Seeded store IDs: DEO=1, BKR=2, HZB=3, DUM=4, BANKA=5, RAN-WH=6. Seeded vendor abfrl=1 has brand Allen Solly=3, season SS26=1. Seeded booking BK-SS26-0001 has id=1 with shirts inheriting DEO default + trousers explicitly at BKR.",
+  "rca of the issue": "No defects found. All 6 test scenarios from the review request (booking create + shape, pending-scope visibility for deo.cashier, pending-scope hiding of no-DEO booking, GRN _resolve_booking 403 vs owner-any-store, direct-receipt-DEO 201 vs direct-receipt-other-store 403, both frontend flows) are behaving exactly as specified. Fail-safe on unknown store id (X3 with store=999999 → line.store=null) also works as coded in vendors/views.py:145-156."
+}

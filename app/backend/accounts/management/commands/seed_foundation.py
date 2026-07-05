@@ -306,14 +306,18 @@ class Command(BaseCommand):
             },
         )
         if created:
-            for style, size, qty, mrp in [
-                ("PE-FSHIRT-001", "39", 12, 1799_00),
-                ("PE-FSHIRT-001", "40", 18, 1799_00),
-                ("PE-TROUSER-100", "32", 10, 2499_00),
-                ("PE-TROUSER-100", "34", 8, 2499_00),
+            # A multi-store booking: shirts inherit the booking default (DEO), the
+            # trousers are explicitly routed to a second store (BKR) — demonstrating
+            # the "default destination, override per line" rule.
+            for style, size, qty, mrp, store_code in [
+                ("PE-FSHIRT-001", "39", 12, 1799_00, None),
+                ("PE-FSHIRT-001", "40", 18, 1799_00, None),
+                ("PE-TROUSER-100", "32", 10, 2499_00, "BKR"),
+                ("PE-TROUSER-100", "34", 8, 2499_00, "BKR"),
             ]:
                 BookingLine.objects.create(
                     booking=booking,
+                    store=stores.get(store_code) if store_code else None,
                     style_code=style,
                     size=size,
                     booked_qty=qty,
