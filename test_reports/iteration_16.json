@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 16: Live-API verification of F1 (unified double-entry GL) and P1 (subledger-reconciliation proof on /api/finledger/health). Wrote /app/app/backend/tests/test_iteration16_f1_reconciliation_live.py — 13 pytest tests, ALL 13 PASS against the preview host (KDPS_TEST_ALLOW_REMOTE=1). Also re-ran the golden-file suites test_finledger_f1_gl_unification.py + test_finledger_reversal.py → 8/8 pass. Live /api/finledger/health returns balanced=true, trial_balance_paise=0, reconciliation.reconciled=true and both vendor+cash drift_paise=0 both baseline and after every mutation exercised by this iteration.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/app/backend/tests/test_iteration16_f1_reconciliation_live.py",
+    "/app/test_reports/pytest/iteration_16.xml"
+  ],
+  "action_items": [
+    "None. F1 double-entry unification and the /api/finledger/health reconciliation block are behaving exactly as specified in the review request."
+  ],
+  "critical_code_review_comments": [
+    "GET /api/finledger/health correctly exposes the F1 reconciliation contract: top-level 'reconciliation' object with 'reconciled' (bool), and per-side blocks 'vendor'/'cash' each carrying reconciled/subledger_paise/gl_control_paise/drift_paise. Vendor: subledger_paise == -gl_payable (credit-side inversion is folded inside the view — gl_control_paise is presented as +ve magnitude, matching the +ve subledger 'we owe' convention). Cash: subledger_paise == gl_cash directly (both debit-side). Trial balance = 0 across every mutation exercised (bill, payment, cash in/out, reversal, double-reverse-refusal).",
+    "F1 posting engine is tight: POST /api/finledger/vendor/bill (Dr SUSPENSE / Cr VENDOR_PAYABLE) increases vendor payable by ₹1000 and leaves cash untouched; POST /api/finledger/vendor/payment (Dr VENDOR_PAYABLE / Cr CASH) reduces payable AND cash by the same ₹400 in a single balanced voucher. After each write, trial_balance_paise stays 0 and drift_paise stays 0 on both sides — the value GL and the two subledgers move as one.",
+    "Reversal semantics are correct: /vendor/entries/<pk>/reverse and /cash/entries/<pk>/reverse both mirror the original GL voucher (first call 201) and refuse a second reversal with HTTP 409 (AlreadyReversedError). Both reversal paths preserve balanced=true and reconciled=true. Unknown pk returns 404 as expected.",
+    "RBAC on the finledger surface is clean: warehouse role (wh.patna) → 403 on GET /api/finledger/health, POST /api/finledger/vendor/bill, POST /api/finledger/cash/movement (permission classes = [IsAuthenticated, IsFinance]; FINANCE_ROLES = {accounts, owner, it_admin}). Both owner and accounts1 → 200/201 on every finance-only route tested. No leaks observed.",
+    "Auth: POST /api/auth/login with {username, password} returns JSON with 'access' (JWT) — the field name matches the review request. Header format 'Authorization: Bearer <access>' works on every subsequent finledger call.",
+    "Nested project layout: backend lives under /app/app/backend (not /app/backend). Existing tests/conftest.py has an explicit remote-target guard (issue #41) — live-API modules skip unless KDPS_TEST_ALLOW_REMOTE=1 is set. Recorded here for the next testing agent so they don't misread 13 skipped as a failure.",
+    "Non-blocking observation: after this iteration the shared preview DB shows vendor subledger = ₹1500 / cash subledger = -₹700 (leftover from prior sessions + the two bills this run left behind, matching the append-only rule). Reconciliation still holds (drift=0). If a future iteration expects a clean-slate zero baseline, seed_foundation would need to run before that iteration — finledger has no cleanup endpoint by design (append-only ledger, corrections happen via reverse)."
+  ],
+  "updated_files": [
+    "/app/app/backend/tests/test_iteration16_f1_reconciliation_live.py",
+    "/app/test_reports/iteration_16.json",
+    "/app/test_reports/pytest/iteration_16.xml"
+  ],
+  "success_rate": {
+    "backend": "100% — 13/13 live-API tests pass (+ 8/8 golden-file F1/reversal DB tests re-verified)",
+    "frontend": "N/A — backend-only task per review request"
+  },
+  "test_credentials": "From /app/memory/test_credentials.md — owner/Owner@123 (owner, finance), accounts1/Acct@123 (accounts, finance), wh.patna/Wh@123 (warehouse, expected 403). All three used as documented; JWT access token comes back under the 'access' key of POST /api/auth/login.",
+  "seed_data_creation": "Small append-only writes to the shared preview finledger (they cannot be deleted, by design): one ₹1000 bill + ₹400 payment (F1 integrity check), ₹500 cash in + ₹200 cash out (cash reconciliation check), ₹10 in + ₹10 out (accounts-role RBAC check, self-cancelling), and one ₹111 bill that was immediately reversed (reversal 201 → double-reverse 409). Also one ₹77 cash in that was reversed the same way. Every one of them left the books balanced and reconciled (drift_paise=0).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "To run these live tests locally against the preview: `cd /app/app/backend && KDPS_TEST_ALLOW_REMOTE=1 python -m pytest tests/test_iteration16_f1_reconciliation_live.py -v` (without the env var the module-level BASE_URL guard in tests/conftest.py skips all 13 as remote-write protection). BASE_URL is hard-coded to the preview host inside the test module to match the review request; if the preview URL changes, edit that constant. JWT field is 'access' (not 'token'). Finledger reconciliation invariant to assert: r['reconciliation']['reconciled'] is True AND r['reconciliation']['vendor']['drift_paise']==0 AND r['reconciliation']['cash']['drift_paise']==0 AND r['balanced'] is True AND r['trial_balance_paise']==0. Vendor sub sign convention: subledger_paise is +ve for 'we owe' and equals -gl_payable, but the view already flips gl_control_paise to +ve magnitude so a direct subledger_paise==gl_control_paise assertion works for both sides.",
+  "rca of the issue": "No defects found. Everything the review request called out — balanced double-entry via post_entries, VENDOR_PAYABLE control == vendor subledger sum, CASH control == cash subledger sum, live reconciliation block on /api/finledger/health, RBAC on the whole surface, and the reversal-then-refuse-second-reversal (409) contract — is behaving correctly under live black-box testing against the preview deployment."
+}

@@ -16,8 +16,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from django.db.models import Sum
+
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.money import paise_to_rupees_str
+from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from finledger.views import IsFinance
 
 ACCOUNTS = [
@@ -43,6 +46,37 @@ class BooksHealthView(APIView):
         assets = sum(balances[c] for c, _, side in ACCOUNTS if side == "asset")
         # liabilities/contra are credit-side (negative paise); present magnitude.
         liabilities = -sum(balances[c] for c, _, side in ACCOUNTS if side == "liability")
+
+        # F1 subledger-reconciliation proof: the single value GL is the book of
+        # record, so its control accounts MUST equal the subledger running sums.
+        # Vendor payable is credit-side (−paise) vs a +ve "we owe" subledger, so it
+        # ties when Σ(vendor rows) == −GL payable. Cash is an asset (debit +), same
+        # sign as its subledger.
+        vendor_sub = VendorLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
+        cash_sub = CashLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
+        gl_payable = balances[GLAccount.VENDOR_PAYABLE]
+        gl_cash = balances[GLAccount.CASH]
+        vendor_reconciled = vendor_sub == -gl_payable
+        cash_reconciled = cash_sub == gl_cash
+        reconciliation = {
+            "reconciled": vendor_reconciled and cash_reconciled,
+            "vendor": {
+                "reconciled": vendor_reconciled,
+                "subledger_paise": vendor_sub,
+                "subledger_rupees": paise_to_rupees_str(vendor_sub),
+                "gl_control_paise": -gl_payable,
+                "gl_control_rupees": paise_to_rupees_str(-gl_payable),
+                "drift_paise": vendor_sub + gl_payable,
+            },
+            "cash": {
+                "reconciled": cash_reconciled,
+                "subledger_paise": cash_sub,
+                "subledger_rupees": paise_to_rupees_str(cash_sub),
+                "gl_control_paise": gl_cash,
+                "gl_control_rupees": paise_to_rupees_str(gl_cash),
+                "drift_paise": cash_sub - gl_cash,
+            },
+        }
         accounts: list[dict[str, Any]] = [
             {
                 "code": code,
@@ -58,6 +92,7 @@ class BooksHealthView(APIView):
                 "balanced": tb == 0,
                 "trial_balance_paise": tb,
                 "trial_balance_rupees": paise_to_rupees_str(tb),
+                "reconciliation": reconciliation,
                 "assets_paise": assets,
                 "assets_rupees": paise_to_rupees_str(assets),
                 "liabilities_paise": liabilities,
