@@ -700,7 +700,23 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **Deferred to Slice 2:** `.xls`/`.xlsb` readers (Jockey/Madura, archetypes D/E/F) — currently return a
   friendly "not yet supported" message.
 
-## Implemented — F1: Unified double-entry vendor/cash GL + reconciliation proof (Jun 2026) ✅
+## Implemented — Multi-store bookings: per-line `store` (Jun 2026) ✅
+- **Model:** `BookingLine.store` (nullable FK → masters.Store, `SET_NULL`; migration `0003_bookingline_store`).
+  Null = inherit the booking's `destination_store` default; both null = warehouse/HO. Kept `Booking.destination_store`
+  as the booking-level DEFAULT (user choice: "default destination, override per line").
+- **API:** `BookingLineSerializer` exposes `store` + `store_name`; create validates per-line `store` against real
+  Store ids (unknown id → null, fail-safe). Querysets prefetch `lines__store` (no N+1).
+- **Scoping (fail-closed, ADR-0003):** switched to ANY-LINE-IN-SCOPE — a store user sees / may receive against a
+  booking if any line's effective destination (own store, else booking default) is in their visible stores
+  (`inbound.views._booking_touches_stores` + `PendingBookingsView` Q-filter). **Direct receipts (no booking) keep
+  their own GRN store-scoping — unchanged** (per user's explicit instruction).
+- **Frontend:** `Bookings.tsx` — per-line Store dropdown ("Default" = inherit) + "Default destination store" header
+  select; detail table gained a **Destination** column (inherited lines fall back to the default store name).
+- **Seed:** BK-SS26-0001 is now a multi-store demo (shirts→DEO default, trousers→BKR).
+- **Tests:** `tests/test_multistore_booking.py` (5 DB golden tests) + testing_agent iteration_17 (8 live-API + both
+  frontend flows) → all pass, 0 defects.
+
+
 - **F1 (P0):** vendor & cash subledgers are now unified into the single balanced value GL via
   `core.post_entries`. Manual vendor bill → `Dr SUSPENSE / Cr VENDOR_PAYABLE`; vendor payment →
   `Dr VENDOR_PAYABLE / Cr CASH` (one voucher, paired cash subledger row is detail only); standalone cash
