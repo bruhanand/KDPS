@@ -23,6 +23,19 @@ The foundation **and** the first business layer are **built and merged to `main`
 - **Dark mode — merged on `main` (4 Jul, PR #61):** three-way Light/Dark/System theme for the whole PWA; light theme unchanged byte-for-byte (dark is one CSS override layer). This is `HEAD` of `main`. See the dated section below.
 - **Not built:** selling/POS, offers, payments/settlement, transfers, returns, Tally sync, analytics, store open/close.
 
+## Review — Emergent session (June 2026): planned-vs-built + phased plan (READ)
+A full planned-vs-built reconciliation was produced this session, focused on the **rules of the process / data-flow correctness** (user's priority = harden & stabilise before new modules; build continues on Emergent). Deliverable: `docs/implementation-plan/KDPS-Review-and-Phased-Plan.html` (HTML, house style). Key findings:
+- **Built & correct:** kernel (paise, append-only triggers, doc FSM, gap-free series, balanced `post_entries`, value GL), auth/RBAC, masters, PT-mapper, stock ledger + on-hand. The document→stock→value-GL path is immutable and self-balancing.
+- **F1 (P0):** vendor/cash ledgers are single-entry, bypass `post_entries` — payments/cash never hit the value GL, and the payable is double-booked (GL leg + finledger BILL). Trial balance ties only on the inbound path. **Fix first.**
+- **F2 (rule to lock):** GRN writes NO ledger quantity — the "two-step inbound (GRN=qty, PT=value)" is effectively single-step at PT; received-not-inwarded stock is invisible to on-hand. Decide the rule.
+- **F3 (P1):** no append-only audit_log — Rule 10 only partially met (created_by/posted_by FKs, but no who/why/when/reason edit trail). Controls "Audit Trail" is a stub.
+- **F4 (P1, mitigated):** masters mutable, not SCD-2 (only GstSlab is date-effective); mitigated by doc snapshots.
+- **F5 (CA-gated):** GST not split/posted at inbound (no INPUT_GST leg); P RATE taken as cost directly.
+- **F6:** Booking sits outside the Document FSM (conscious) — pair with audit + close/cancel-with-remark.
+- **ENVIRONMENT BLOCKER:** this Emergent container runs **MongoDB, not PostgreSQL**; the served venv has **no Django** (backend down, :8001 dead; Vite :3000 up). KDPS requires Postgres. Building here needs a **Phase 0** bring-up (install PG16, create kdps_dev, install deps, migrate, seed, restart).
+- **Phased plan:** P0 env bring-up → P1 hardening (F1/F2/F3) → P2 close inbound loop → P3 outbound/selling → P4 offers → P5 payments/money-in → P6 Tally → P7 controls → P8 analytics/AI. Not built yet: outbound, offers, payments-workflow, analytics, Tally, POS integration, controls.
+
+
 ## Implemented — Dark mode for the PWA (4 July 2026) ✅
 Whole-PWA dark mode. Scope confirmed with Anand: **PWA only** (all wired screens + shell +
 Login); `docs/` HTML + `DASHBOARD.html` + Django admin out of scope; **no backend work**.

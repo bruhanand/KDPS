@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Planned vs Built Review & Phased Implementation Plan</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --ink:#26303d; --muted:#5b6573;
+    --line:#d8dce2; --bg:#fff; --head:#1f2d4d; --soft:#f4f6f8;
+    --green:#1f7a4d; --greensoft:#eef6f1; --amber:#9a6700; --ambersoft:#fdf3da;
+    --red:#b23b3b; --redsoft:#fbecec; --blue:#1e5fa8; --bluesoft:#e6f0fb;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; color:var(--ink); background:var(--bg);
+    font-family:"Helvetica Neue",Arial,sans-serif; font-size:11.3pt; line-height:1.55;}
+  .wrap{max-width:860px; margin:0 auto; padding:28px 6px 60px;}
+  header.hero{border-bottom:3px solid var(--rust); padding-bottom:16px; margin-bottom:12px;}
+  .eyebrow{color:var(--rust); font-size:9.5pt; letter-spacing:2px; font-weight:700; text-transform:uppercase; margin-bottom:6px;}
+  h1{margin:0 0 6px; font-size:25pt; color:var(--navy); letter-spacing:-.3px; line-height:1.12;}
+  .sub{margin:0; color:var(--muted); font-size:11.5pt; max-width:680px;}
+  h2{font-size:15pt; margin:30px 0 6px; color:var(--navy); padding-left:11px; border-left:4px solid var(--rust);}
+  h2 .num{color:var(--rust); font-weight:700; margin-right:6px;}
+  h3{font-size:11.8pt; margin:16px 0 4px; color:var(--navy2);}
+  p{margin:7px 0;} ul{margin:7px 0; padding-left:20px;} li{margin:4px 0;}
+  strong{color:var(--navy);}
+  table{width:100%; border-collapse:collapse; margin:12px 0; font-size:10.2pt; page-break-inside:avoid;}
+  th{background:var(--head); color:#fff; text-align:left; padding:7px 9px; font-weight:600; font-size:9.6pt;}
+  td{padding:7px 9px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:var(--soft);}
+  .pill{font-size:8.4pt; font-weight:700; letter-spacing:.5px; text-transform:uppercase; padding:2px 7px; border-radius:20px; white-space:nowrap;}
+  .p-live{background:var(--greensoft); color:var(--green); border:1px solid #bfe0cd;}
+  .p-part{background:var(--ambersoft); color:var(--amber); border:1px solid #e7d199;}
+  .p-no{background:var(--redsoft); color:var(--red); border:1px solid #e6b8b8;}
+  .callout{border:1px solid var(--line); border-left:4px solid var(--rust); background:var(--soft); border-radius:6px; padding:10px 15px; margin:14px 0; font-size:10.6pt;}
+  .callout.red{border-left-color:var(--red); background:var(--redsoft);}
+  .callout.amber{border-left-color:var(--amber); background:var(--ambersoft);}
+  .callout.blue{border-left-color:var(--blue); background:var(--bluesoft);}
+  .callout.green{border-left-color:var(--green); background:var(--greensoft);}
+  .flow{font-family:"Courier New",monospace; font-size:9.6pt; background:#0f1626; color:#dfe6f2; border-radius:8px; padding:14px 16px; margin:12px 0; white-space:pre; overflow-x:auto; line-height:1.5;}
+  .flow .k{color:#f0a878;} .flow .g{color:#8fd0a6;} .flow .r{color:#f28b82;} .flow .m{color:#8ab4f8;}
+  .finding{border:1px solid var(--line); border-radius:8px; padding:2px 16px 8px; margin:12px 0; page-break-inside:avoid;}
+  .finding h3{display:flex; align-items:center; gap:9px;}
+  .sev{font-size:8.4pt; font-weight:700; letter-spacing:.5px; padding:2px 8px; border-radius:5px; text-transform:uppercase;}
+  .sev-p0{background:var(--redsoft); color:var(--red); border:1px solid #e6b8b8;}
+  .sev-p1{background:var(--ambersoft); color:var(--amber); border:1px solid #e7d199;}
+  .sev-rule{background:var(--bluesoft); color:var(--blue); border:1px solid #bcd6f3;}
+  .sev-ca{background:#efeaf7; color:#5b3ea6; border:1px solid #cfc0ec;}
+  .phase{border:1px solid var(--line); border-radius:9px; padding:4px 18px 12px; margin:14px 0; page-break-inside:avoid;}
+  .phase.hard{border-top:4px solid var(--rust);}
+  .phase-tag{display:inline-block; font-size:9pt; font-weight:700; color:#fff; background:var(--navy); border-radius:6px; padding:2px 9px; margin-right:8px;}
+  .lead{color:var(--muted); font-size:10.4pt;}
+  code{background:#eef1f5; padding:1px 5px; border-radius:4px; font-size:9.6pt; color:#33415c;}
+  footer{margin-top:34px; padding-top:12px; border-top:1px solid var(--line); color:var(--muted); font-size:9pt;}
+  .toc{columns:2; font-size:10.4pt; margin:8px 0 0;}
+  .toc a{color:var(--navy2); text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">KDPS Lifestyle Pvt. Ltd. · Operating System · Internal Review</div>
+  <h1>Planned vs Built — Review &amp; Phased Implementation Plan</h1>
+  <p class="sub">A reconciliation of what was designed (the 12-rule constitution, 7 ADRs and the client module specs) against what is actually built in the codebase — with special focus on the <strong>rules of the process</strong>: where data is created, where it changes, and whether the end-to-end flow is correct. Ends with a phased plan that puts <strong>hardening first</strong>.</p>
+</header>
+
+<div class="callout blue">
+  <strong>How to read this.</strong> Section 1 is the scoreboard. Section 2 maps the live data lifecycle. Section 3 is the important one — the <strong>correctness findings in the data flow</strong> (what to fix before layering anything new). Section 4 is a hard environment blocker for building on Emergent. Section 5 is the phased plan. Section 6 is the short list of business/accounting rules we must lock to proceed.
+</div>
+
+<div class="toc">
+  <a href="#s1">1 · The build at a glance</a><br>
+  <a href="#s2">2 · The rules of the process (data lifecycle)</a><br>
+  <a href="#s3">3 · Data-flow correctness findings</a><br>
+  <a href="#s4">4 · Environment readiness on Emergent</a><br>
+  <a href="#s5">5 · The phased implementation plan</a><br>
+  <a href="#s6">6 · Decisions to lock before we proceed</a>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s1"><span class="num">1.</span>The build at a glance</h2>
+<p>The <strong>foundation and the inbound money-spine are genuinely built and well-architected</strong> — a proper deterministic kernel (money-as-paise, append-only ledgers enforced by DB triggers, a document state-machine, gap-free numbering, and a single balanced posting engine). The <strong>selling side and everything downstream of it is not built.</strong> Two data-flow issues (Section 3) should be closed before more is layered on.</p>
+
+<table>
+  <tr><th style="width:22%">Module</th><th style="width:11%">Status</th><th>What exists / what's missing</th></tr>
+  <tr><td><strong>Kernel</strong> (core)</td><td><span class="pill p-live">Built</span></td><td>Money=paise, append-only ledger (trigger + REVOKE), document FSM (draft→submitted→cancelled), gap-free voucher series, balanced <code>post_entries</code>, value GL, Indian-FY. Solid.</td></tr>
+  <tr><td><strong>Auth &amp; RBAC</strong></td><td><span class="pill p-live">Built</span></td><td>JWT login/refresh/logout, brute-force lockout, configurable Roles (nav-groups + landing), data-scope (all/entity/region/store-group/store), fail-closed store scoping. RBAC is intentionally <em>thin</em> (no approval hierarchy yet).</td></tr>
+  <tr><td><strong>Master data</strong></td><td><span class="pill p-live">Built</span></td><td>LegalEntity → GSTIN → Store, Season calendar, Brand (two-axis commercial model), date-effective GST slab, SKU/Cohort, CategoryMargin. Steward-gated CRUD UI. <em>Not SCD-2 versioned</em> yet (see F4).</td></tr>
+  <tr><td><strong>Vendor &amp; Booking</strong></td><td><span class="pill p-part">Partial</span></td><td>Vendor + Booking + lines, commercial-model snapshot, AI draft-from-document. Missing: return-window alerts (30/15/7d), Correction GR-allowance tracking, manual close/cancel-with-remark, non-branded vendors (v2).</td></tr>
+  <tr><td><strong>Goods Inward (GRN)</strong></td><td><span class="pill p-part">Partial</span></td><td>Branded + non-branded receipt, variance/over-receipt, invoice AI prefill. Missing: store-allocation/split UI, damage/quarantine flow, and the GRN-quantity question (F2).</td></tr>
+  <tr><td><strong>PT Mapper / PT Operation</strong></td><td><span class="pill p-live">Built</span></td><td>Deterministic brand-file → KDPS mapper (9 profiles), human review queue, self-learning lookups, non-brand PT authoring + auto-pricing. Strong.</td></tr>
+  <tr><td><strong>Stock ledger + On-hand</strong></td><td><span class="pill p-live">Built</span></td><td>Append-only stock ledger, materialised on-hand projection, P-RATE valuation at PT, reversal-as-append. Correct.</td></tr>
+  <tr><td><strong>Value GL (books-tie)</strong></td><td><span class="pill p-part">Partial</span></td><td>Balanced double-entry on the <em>PT-inward path only</em> (Σ=0 trial balance, Books-Health endpoint). Vendor/cash payments are outside it — see F1.</td></tr>
+  <tr><td><strong>Vendor &amp; Cash ledger</strong></td><td><span class="pill p-part">Partial</span></td><td>Append-only single-entry running balances, ageing, manual bill/payment/reversal. <strong>Bypass the balanced posting engine</strong> — the central correctness gap (F1).</td></tr>
+  <tr><td><strong>Outbound / Selling</strong></td><td><span class="pill p-no">Not built</span></td><td>Sale document, POS ingest, counter sale, exchange, store-to-store transfer, defective return, SOR season-end return, V-flip, EOSS, stock count. None built.</td></tr>
+  <tr><td><strong>Offers &amp; Discounts</strong></td><td><span class="pill p-no">Not built</span></td><td>The 8 discount types, item-level application, brand-vs-KDPS, combination rules, AMM do-not-discount, offer-from-photo. None built.</td></tr>
+  <tr><td><strong>Payments</strong></td><td><span class="pill p-no">Not built</span></td><td>Maker-checker + tiered approval, safety gate, multi-bill settlement, 3-rail bank reconciliation (cash/card/UPI), debit/credit notes. The finledger primitives exist; the workflow does not.</td></tr>
+  <tr><td><strong>Analytics &amp; AI</strong></td><td><span class="pill p-no">Not built</span></td><td>Clean-data mapping, 9 PM WhatsApp brief, role alerts, brand report-maker, brand/store margin, dead-stock, forecasting. (Only Gemini doc-extraction exists at the edge.)</td></tr>
+  <tr><td><strong>Tally sync</strong></td><td><span class="pill p-no">Not built</span></td><td>One-way voucher export + daily reconcile. Designed, not built.</td></tr>
+  <tr><td><strong>POS integration</strong> (Ten Software)</td><td><span class="pill p-no">Not built</span></td><td>Two-way adapter (push master/allocation/offers, read sales/SOH/collection). Blocked on the external API — has lead time.</td></tr>
+  <tr><td><strong>Controls layer</strong></td><td><span class="pill p-no">Not built</span></td><td>Exception inbox, reconciliations, approvals surface, audit trail. Nav stubs exist; no backend. Tied to F3.</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="s2"><span class="num">2.</span>The rules of the process — the data lifecycle</h2>
+<p>The design rests on a strong constitution (in <code>CONTEXT.md</code>): <em>every business event is a document; documents write append-only ledgers; ledgers are never hand-edited; masters are copied (snapshotted) onto documents; corrections are new reversing events, never edits; AI only reads and suggests.</em> The built kernel enforces the mechanical half of these at the database level. The question you raised — <strong>"is the whole flow correct?"</strong> — is really about the seams between documents and ledgers. Here is the flow <em>as actually built</em>:</p>
+
+<div class="flow"><span class="k">BOOKING</span> (order, mutable master)      <span class="k">GRN</span> (physical receipt)        <span class="k">PT FILE</span> (the priced stock-in)
+  vendor + brand + season      goods physically arrive       brand file mapped OR authored
+  style/size/qty, no colour  →  qty per line (GrnLine)     →  ~20-col KDPS row, cost frozen
+  status recomputed             docstatus: draft→submitted     docstatus: draft→submitted→cancelled
+  number: ad-hoc                <span class="r">writes NO ledger (F2)</span>          the ONLY writer of the ledgers ↓
+                                                             ┌─────────────────────────────────────┐
+                                                             │ on PT post() — one event, many books: │
+                                                             │  <span class="g">stock ledger</span>  += qty  (append-only)   │
+                                                             │  <span class="g">value GL</span>      Dr INVENTORY / Cr … │
+                                                             │  <span class="g">on-hand</span>       projection updated   │
+                                                             │  <span class="m">vendor ledger</span> += bill  <span class="r">(single-entry,</span> │
+                                                             │                            <span class="r">NOT via GL — F1)</span> │
+                                                             │  SKU + Cohort masters upserted        │
+                                                             └─────────────────────────────────────┘
+  <span class="k">PAYMENT / CASH</span> (manual)  →  <span class="m">vendor ledger −pay + cash ledger −out</span>   <span class="r">(single-entry, invisible to the GL — F1)</span></div>
+
+<h3>Where data is created and where it mutates</h3>
+<table>
+  <tr><th>Entity</th><th>Created</th><th>Mutates after?</th><th>Governed by</th></tr>
+  <tr><td>Booking / lines</td><td>Draft → confirm</td><td><strong>Yes</strong> — status, <code>inwarded_qty</code></td><td>Plain model (no FSM); relies on unbuilt audit rule</td></tr>
+  <tr><td>GRN / GrnLine</td><td>Receipt</td><td>No (frozen at submit)</td><td>Document FSM + DB trigger ✔</td></tr>
+  <tr><td>PT File / rows</td><td>Upload / author</td><td>Draft-only (mapping→sent); frozen at post</td><td>Document FSM + DB trigger ✔</td></tr>
+  <tr><td>Stock ledger</td><td>PT post / reverse</td><td><strong>Never</strong> (append-only)</td><td>Trigger + REVOKE + ORM ✔</td></tr>
+  <tr><td>Value GL</td><td>PT post / reverse</td><td><strong>Never</strong> (append-only, balanced)</td><td><code>post_entries</code> + trigger ✔</td></tr>
+  <tr><td>Vendor / Cash ledger</td><td>PT post + manual</td><td><strong>Never</strong> (append-only)</td><td>Trigger + ORM ✔ — but <span style="color:var(--red)">not balanced/GL-linked (F1)</span></td></tr>
+  <tr><td>On-hand</td><td>PT post / reverse</td><td>Yes — it's a rebuildable cache</td><td>Maintained in the posting txn ✔</td></tr>
+  <tr><td>Masters (Brand, GSTIN, Store…)</td><td>Steward CRUD</td><td><strong>Yes</strong>, in place</td><td>Snapshotted onto docs; <span style="color:var(--amber)">not versioned (F4)</span></td></tr>
+</table>
+
+<div class="callout green"><strong>Verdict on the flow.</strong> The <em>document → stock → value-GL</em> path is correct, immutable and self-balancing — this is the hard part and it is done right. The weaknesses are all at the <strong>money-out edge</strong> (vendor/cash never re-join the balanced books) and at the <strong>receipt edge</strong> (GRN carries no ledger quantity). Both are addressable in a focused hardening pass and are exactly what "get the rules right" should cover.</p></div>
+
+<!-- ============================================================ -->
+<h2 id="s3"><span class="num">3.</span>Data-flow correctness findings</h2>
+<p>Ranked. These are the "is the whole flow correct?" answers — divergences between the locked design and the build, or unresolved rules that will bite once selling is layered on.</p>
+
+<div class="finding">
+  <h3>F1 · Vendor &amp; cash ledgers bypass the balanced posting engine <span class="sev sev-p0">P0 · fix first</span></h3>
+  <p>The value GL is a proper double-entry book (Σ of every leg = 0). But the <strong>vendor payable and cash ledgers are separate single-entry running-balance tables</strong> written directly, never through <code>post_entries</code>. Consequences:</p>
+  <ul>
+    <li>A PT inward books <em>both</em> a GL leg <code>Cr VENDOR_PAYABLE</code> <em>and</em> a separate <code>VendorLedgerEntry</code> bill — the same liability lives in two unreconciled places.</li>
+    <li>A <strong>vendor payment</strong> reduces the vendor ledger and cash ledger, but <strong>touches the GL not at all</strong> — so GL <code>VENDOR_PAYABLE</code> only ever grows and never clears, and cash never appears in the trial balance. The "self-balancing books" claim holds <em>only</em> for the inbound slice.</li>
+  </ul>
+  <p><strong>Fix:</strong> make finledger post through <code>post_entries</code> so vendor/cash/inventory are one double-entry system (payment = <code>Dr VENDOR_PAYABLE / Cr CASH</code>), and stop double-booking the payable. This is the single most important step toward "the whole flow is correct" and is squarely a hardening task.</p>
+</div>
+
+<div class="finding">
+  <h3>F2 · GRN posts no ledger quantity — two-step inbound is effectively one-step <span class="sev sev-rule">Rule to lock</span></h3>
+  <p>The constitution says <em>"GRN posts quantity only; PT posts valuation."</em> In the build the <strong>stock ledger is only ever written at PT</strong> (kinds are <code>pt_inward</code>/<code>pt_reversal</code>); the GRN records quantities on <code>GrnLine</code> but writes nothing to the append-only ledger. So there is a <strong>blind window</strong>: goods physically received (and, for branded goods at a store, potentially already sellable after a POS scan) are invisible to on-hand until Patna inwards the PT.</p>
+  <p><strong>Decision needed:</strong> is that acceptable (PT = the single point of truth), or do we need a "received-not-inwarded" quantity view / a GRN quantity leg? This directly affects reconciliation against the POS. Lock the rule before selling is built.</p>
+</div>
+
+<div class="finding">
+  <h3>F3 · No audit log — Rule 10 only partially met <span class="sev sev-p1">P1</span></h3>
+  <p>Every client spec promises <em>"every edit needs a remark — who and why, full audit trail,"</em> and Rule 10 requires an actor on every action plus an AI-suggestion-vs-human-decision marker. Today there are <code>created_by</code>/<code>posted_by</code> FKs, but <strong>no dedicated append-only audit log</strong> capturing who changed what, when, and why (reason code) — especially for mutable bookings and for approvals. The Controls "Audit Trail" screen is a stub.</p>
+  <p><strong>Fix:</strong> a small append-only <code>audit_log</code> (actor, action, entity, before/after, reason, ai_vs_human) written by a shared hook. Needed before the approval/exception layer means anything.</p>
+</div>
+
+<div class="finding">
+  <h3>F4 · Masters are mutable, not SCD-2 versioned <span class="sev sev-p1">P1 · mitigated</span></h3>
+  <p>The design calls for effective-dated (SCD-2) masters where money depends on history (gstin, gst_slab, cost, price, brand-terms). Only <code>GstSlab</code> is date-effective; Brand/Store/GSTIN/Season are edited in place. <strong>Mitigated</strong> because documents snapshot the commercial model and cost at creation — so history isn't silently rewritten today. But a brand's ownership flip (e.g. the EOSS V-flip) has nowhere to live as a dated fact. Add versioning when the money slices need it (payments/SOR), not before.</p>
+</div>
+
+<div class="finding">
+  <h3>F5 · GST is carried but not recognised/posted at inbound <span class="sev sev-ca">CA-gated</span></h3>
+  <p>An <code>INPUT_GST</code> account exists but the PT value voucher is <code>Dr INVENTORY / Cr VENDOR_PAYABLE</code> at full P-RATE with <strong>no GST split leg</strong>. Cost is taken as P RATE directly (deliberate — never ÷(1+slab)). Whether any brand embeds GST in P RATE, and when SOR/consignment GST is recognised, are <strong>CA rulings</strong> already flagged in <code>CONTEXT.md</code>. Build the mechanism; hold the rate/rule as data pending the CA.</p>
+</div>
+
+<div class="finding">
+  <h3>F6 · Booking sits outside the document FSM <span class="sev sev-p1">P1 · by design, but</span></h3>
+  <p>Booking is a living, mutable master (numbered ad-hoc, not via the gap-free series) — a conscious call, because an order legitimately mutates through fulfilment. The risk: its edits are <strong>ungoverned</strong> (no immutability, no audit — see F3). Fine to keep it a master, but pair it with the audit log and a clear "close/cancel needs a remark" gate.</p>
+</div>
+
+<div class="callout amber">
+  <strong>Also still open (from <code>CONTEXT.md</code>, before live money):</strong> SOR/Consignment single GST recognition (F9), the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT handling, and the HSN/apparel-slab sign-off. All CA/Anand rulings — mechanisms exist, the numbers are pending.
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s4"><span class="num">4.</span>Environment readiness on Emergent</h2>
+<div class="callout red">
+  <strong>Hard blocker for building here.</strong> The backend is currently <strong>down</strong> in this Emergent container: the served Python environment has <strong>no Django installed</strong> (<code>ModuleNotFoundError: No module named 'django'</code>), and <strong>PostgreSQL is not installed</strong> (only MongoDB runs here) — yet the whole kernel <em>requires</em> Postgres (append-only triggers, isolation, gap-free numbering; SQLite is explicitly rejected). The frontend (Vite) is up on :3000; the API on :8001 is not.
+</div>
+<p>Building on Emergent going forward is fine, but it needs a one-time <strong>Phase 0 bring-up</strong>: install PostgreSQL 16 in the container, create the <code>kdps</code>/<code>kdps_dev</code> database, install backend deps into the served venv, run migrations + <code>seed_foundation</code>, wire the frontend's API base URL, and restart supervisor. After that, hot-reload dev works normally. (The Render alpha and the local <code>uv</code>/docker path are unaffected — this is purely about making this container a working dev box.)</p>
+
+<!-- ============================================================ -->
+<h2 id="s5"><span class="num">5.</span>The phased implementation plan</h2>
+<p class="lead">Your stated priority — <strong>harden and stabilise what exists before adding new modules</strong> — is honoured: Phases 0–2 are stabilisation; new modules start at Phase 3, in the architecture's own build order (selling → offers → payments → Tally → controls → analytics). Each phase notes <strong>FREE</strong> (AI writes, human reviews after) vs <strong>SUPERVISED</strong> (money/ledger/GST — every line read, golden-file tested).</p>
+
+<div class="phase hard">
+  <span class="phase-tag">Phase 0</span><strong>Environment bring-up on Emergent</strong> · <span class="lead">FREE · prerequisite</span>
+  <ul>
+    <li>Install PostgreSQL 16; create <code>kdps_dev</code> + role; install backend deps into the served venv; migrate + <code>seed_foundation</code>; confirm the frontend API base URL; restart supervisor and verify login → dashboard end-to-end.</li>
+    <li><strong>Exit:</strong> the existing app runs green in this container; screenshot of a working dashboard.</li>
+  </ul>
+</div>
+
+<div class="phase hard">
+  <span class="phase-tag">Phase 1</span><strong>Hardening &amp; correctness — the "rules of the process" pass</strong> · <span class="lead">SUPERVISED</span>
+  <ul>
+    <li><strong>F1</strong> — unify vendor/cash into the balanced GL via <code>post_entries</code>; end the double-booked payable; extend the Σ=0 trial balance to cover payments and cash.</li>
+    <li><strong>F2</strong> — lock the GRN-quantity rule (received-not-inwarded view or not) and implement the decision.</li>
+    <li><strong>F3</strong> — add the append-only <code>audit_log</code> + a shared write hook; back the Controls "Audit Trail" screen with it.</li>
+    <li>Tighten the RBAC boundary that's deferred to alpha; regression + new golden-file tests over the money paths.</li>
+    <li><strong>Exit:</strong> books tie across inbound <em>and</em> payments; every mutation is audited; full test suite green on Postgres.</li>
+  </ul>
+</div>
+
+<div class="phase hard">
+  <span class="phase-tag">Phase 2</span><strong>Close the inbound loop end-to-end</strong> · <span class="lead">SUPERVISED + FREE</span>
+  <ul>
+    <li>Store allocation / split (warehouse proposes, Patna confirms per store); damage/quarantine flow; booking close/cancel-with-remark; return-window alerts (30/15/7d) + Correction GR-allowance tracking.</li>
+    <li>Confirm the non-brand MRP formula against a worked KDPS example; resolve the GST-at-inbound decision (F5) with the CA.</li>
+    <li><strong>Exit:</strong> a booking can be tracked booked → received → inwarded → allocated → return-window, fully audited.</li>
+  </ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 3</span><strong>Outbound / Selling spine</strong> · <span class="lead">SUPERVISED · biggest new module</span>
+  <ul>
+    <li>The source-agnostic <strong>Sale</strong> document (posting logic on the Sale, not the adapter); stock-out posting to the ledger; SOR/consignment liability recognised <em>on the sale</em>.</li>
+    <li>Counter sale, customer exchange (against original bill), store-to-store transfer (hold + receive-scan), defective return, SOR season-end return, the V-flip, EOSS, stock count.</li>
+    <li>Depends on the <strong>Ten Software POS API</strong> — start that external conversation now (lead time); build reader-first behind a swappable adapter with offline-capable fallback.</li>
+  </ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 4</span><strong>Offers rulebook</strong> · <span class="lead">SUPERVISED</span>
+  <ul><li>The 8 discount types as data; item-level (not bill-level) application; brand-vs-KDPS tagging; combination rules (best brand offer + one store/coupon on top, never two brand offers); AMM do-not-discount list; offer-from-photo drafting; margin-cost reporting per brand.</li></ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 5</span><strong>Payments &amp; money-in</strong> · <span class="lead">SUPERVISED</span>
+  <ul><li>Maker-checker with tiered approval bands + auto-escalation; the safety gate (verified bank/GSTIN, inwarded, SOR-sold); multi-bill settlement + part-payments; 3-rail bank reconciliation (cash/card-minus-fee/UPI); debit/credit notes; bank-account-changed fraud flag.</li></ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 6</span><strong>Tally sync</strong> · <span class="lead">SUPERVISED</span>
+  <ul><li>One-way deterministic voucher export (Tally stays the statutory book), keyed on the gap-free doc-number; a daily reconcile check. Needs Tally/TaxOne access.</li></ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 7</span><strong>Controls layer</strong> · <span class="lead">FREE + SUPERVISED</span>
+  <ul><li>Exception inbox (flag-never-block, routed to the named owner), reconciliations surface, approvals surface, and the audit-trail UI over the Phase-1 log. This makes the "flag, never block" rule visible and actionable.</li></ul>
+</div>
+
+<div class="phase">
+  <span class="phase-tag">Phase 8</span><strong>Analytics &amp; AI (edges — read/suggest only)</strong> · <span class="lead">FREE</span>
+  <ul><li>Clean-data mapping (Supplier→Brand→Sub-brand + data-trust %); the one-click brand report-maker (Sale + SOH per brand/store); brand/store margin &amp; scorecard; dead-stock &amp; broken-size detection with price floors; 9 PM WhatsApp brief + role-scoped alerts with escalation; Hindi explanations. AI never writes stock/money.</li></ul>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="s6"><span class="num">6.</span>Decisions to lock before we proceed</h2>
+<p>Short answers unblock Phases 1–3. Many overlap the client questions already sent.</p>
+<table>
+  <tr><th style="width:34%">Decision</th><th>Why it matters / who answers</th></tr>
+  <tr><td><strong>Unify GL + vendor/cash (F1)</strong> — confirm we move payments/cash into the balanced double-entry books.</td><td>The core "is the flow correct" fix. Architecture call — recommend yes.</td></tr>
+  <tr><td><strong>GRN quantity rule (F2)</strong> — is PT the single point of truth, or do we need received-not-inwarded on-hand?</td><td>Affects POS reconciliation and the "sellable before inward" window. Anand + ops.</td></tr>
+  <tr><td><strong>Audit scope (F3)</strong> — which actions require a reason code (booking edits, close/cancel, approvals, reversals)?</td><td>Defines the audit-log hook. Anand.</td></tr>
+  <tr><td><strong>GST at inbound (F5)</strong> + the 5 CA-gated money items.</td><td>Money-critical. CA ruling; mechanisms are already built to hold the answer as data.</td></tr>
+  <tr><td><strong>Ten Software POS API</strong> — availability, auth, whether it can accept pending-inward and export line-item sales.</td><td>External dependency with lead time; gates Phase 3. Client to request from Ten Software.</td></tr>
+  <tr><td><strong>Master lists for go-live</strong> — final stores, brands, GST registrations; per-brand deal type / margin / return window.</td><td>Needed to seed a real (not demo) environment. Client.</td></tr>
+</table>
+
+<div class="callout blue">
+  <strong>Recommended immediate next step.</strong> Approve <strong>Phase 0</strong> (bring the app up on Emergent) and <strong>Phase 1</strong> (the F1/F2/F3 hardening pass). That gives a running system here and gets "the rules of the process" provably correct before any new module is added — which is exactly the sequencing you asked for.
+</div>
+
+<footer>
+  KDPS Operating System · Planned-vs-Built Review &amp; Phased Plan · prepared in the Emergent build environment · June 2026.<br>
+  Source basis: <code>CONTEXT.md</code> (12 rules · 7 ADRs · locked decisions), the seven client module specs in <code>docs/04-client-docs/</code>, and the live codebase (<code>app/backend</code> kernel + 9 apps, <code>app/frontend</code> PWA).
+</footer>
+
+</div>
+</body>
+</html>
