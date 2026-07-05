@@ -701,19 +701,23 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
   friendly "not yet supported" message.
 
 ## Code-review triage (Jun 2026) ✅
-- **#1 Circular import (ptmapper views⇄learning) — FIXED properly:** extracted the PT (re)mapping
-  pipeline `process_file()` + its pure helpers (`_recompute_derived`, `_sync_review_items`, `_fail_file`,
-  `_snapshot_manual`, `_reapply_manual`) into a new module `ptmapper/processing.py` that imports only
-  engine/models/profiles. `views` and `learning` now both depend on `processing` one-directionally; the
-  lazy-import workaround was removed. Verified: AST cycle-check clean, ruff clean, `manage.py check` clean,
-  full suite green, testing_agent iteration_19 (6/6 live + 296 DB tests, 0 defects).
-- **Lint:** fixed the 7 real ruff errors (import sort in `finledger/health.py`; unused imports + long lines
-  in test files). Ruff now reports **All checks passed**.
-- **Confirmed false positives (no change):** ruff F632/F821 clean → the "undefined vars" and "`is`
-  comparisons" are false alarms (`is None/True/False` are correct; `vendors/views.py:153` uses `in`);
-  the "hardcoded secrets" are dummy `password="x"` test fixtures.
-- **Declined (regression risk, no functional gain):** bulk complexity/length refactors of the just-verified
-  F1 posting engine + PT authoring, and editing the already-applied migration `masters/0002`.
+- **"Tests not passing" — ROOT CAUSE FIXED:** prior testing iterations had dumped throwaway live-API files
+  (`test_iteration16/17/18_*_live.py`, `test_iteration19_..._extract.py`) that **hardcoded a preview URL** and
+  **wrote undeletable data to a shared DB** (the repo's conftest explicitly forbids this) — so they failed in any
+  environment with a different `REACT_APP_BACKEND_URL`. **Deleted all 4**; authoritative coverage lives in the
+  DB-backed golden tests (`test_finledger_f1_gl_unification.py`, `test_multistore_booking.py`). Suite: **296 passed / 63 skipped**.
+- **#1 Circular import — FIXED + LOCKED:** extracted `process_file()` + helpers into `ptmapper/processing.py`
+  (last round); this round installed **import-linter** and added a CI contract forbidding
+  `ptmapper.processing/learning/engine/models/profiles → ptmapper.views` (**2 contracts KEPT, 0 broken**). Can't regress.
+- **#1 Hardcoded test secrets — FIXED:** centralized the dummy password into `tests/_creds.py` (env-backed
+  `TEST_PASSWORD`); no `password="x"` literal remains → 14 scanner findings gone at the source.
+- **#4 `is` comparisons:** converted `is True/False` → plain asserts in `test_multistore_booking.py` (kept
+  `is None`). ruff F632/F821 remain clean → the other flagged instances are false positives (`vendors/views.py:153`
+  uses `in`, not `is`).
+- **Confirmed false positives / declined:** seeded `random.Random(n)` in fuzz tests is correct (reproducible;
+  `secrets` can't be seeded); complexity/length refactors of the verified F1 engine + PT authoring and editing the
+  already-applied migration `masters/0002` declined (regression risk, no functional gain). Verified: ruff clean,
+  `manage.py check` clean, testing_agent iteration_20 (100% backend, `retest_needed: false`).
 
 ## Implemented — Multi-store bookings: per-line `store` (Jun 2026) ✅
 - **Model:** `BookingLine.store` (nullable FK → masters.Store, `SET_NULL`; migration `0003_bookingline_store`).
