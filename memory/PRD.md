@@ -700,6 +700,14 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **Deferred to Slice 2:** `.xls`/`.xlsb` readers (Jockey/Madura, archetypes D/E/F) — currently return a
   friendly "not yet supported" message.
 
+## Code-review lint pass (Jun 2026) ✅
+Triage of a static-analysis report — fixed the 7 real ruff errors (import sort in `finledger/health.py`;
+unused imports + over-length lines in 3 test files). Confirmed the rest were false positives (ruff
+F632/F821 clean; "hardcoded secrets" are dummy `password="x"` test fixtures; the ptmapper circular import
+is already mitigated by a lazy import at `learning.py:226`) or declined (bulk refactors of just-verified
+financial code + an already-applied DB migration — regression risk, no functional gain). Verified: ruff
+clean, `manage.py check` clean, full suite green, testing_agent iteration_18 (5/5 live, 0 defects).
+
 ## Implemented — Multi-store bookings: per-line `store` (Jun 2026) ✅
 - **Model:** `BookingLine.store` (nullable FK → masters.Store, `SET_NULL`; migration `0003_bookingline_store`).
   Null = inherit the booking's `destination_store` default; both null = warehouse/HO. Kept `Booking.destination_store`
