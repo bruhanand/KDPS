@@ -4,7 +4,9 @@ import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "luci
 
 import { useAuth } from "../auth/AuthContext";
 import { FINANCE_ROLES } from "../auth/routeAccess";
+import { Pager } from "../components/Pager";
 import { api, apiErrorMessage } from "../lib/api";
+import { usePagination } from "../lib/hooks";
 import "./Booking.css";
 import "./PtMapper.css";
 
@@ -31,24 +33,16 @@ export default function CashLedger() {
 
   const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);
-  const [page, setPage] = useState(1);
-  const [count, setCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const { page, count, hasNext, applyPage, searchParams, reset, next, prev } = usePagination();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ direction: "in", amount: "", account: "CASH", description: "" });
-  const PAGE_SIZE = 50;
 
   function loadAll() {
     api.get("/finledger/cash/summary").then((r) => setSummary(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/cash/entries?${q}`).then((r) => {
-      setEntries(r.data.results);
-      setCount(r.data.count);
-      setHasNext(Boolean(r.data.next));
-    });
+    api.get(`/finledger/cash/entries?${searchParams()}`).then((r) => setEntries(applyPage(r.data)));
   }
   useEffect(loadAll, [page]);
 
@@ -64,7 +58,7 @@ export default function CashLedger() {
       });
       setOpen(false);
       setForm({ direction: "in", amount: "", account: "CASH", description: "" });
-      setPage(1);
+      reset();
       loadAll();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -160,13 +154,16 @@ export default function CashLedger() {
               ))}
             </tbody>
           </table>
-          <div className="pager" data-testid="cl-pager">
-            <span className="pager-info">Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + entries.length} of {count}</span>
-            <div className="spacer" />
-            <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} data-testid="cl-prev">Prev</button>
-            <span className="pager-page">Page {page}</span>
-            <button className="btn btn-sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)} data-testid="cl-next">Next</button>
-          </div>
+          <Pager
+            page={page}
+            pageSize={50}
+            count={count}
+            shown={entries.length}
+            hasNext={hasNext}
+            onPrev={prev}
+            onNext={next}
+            testId="cl"
+          />
         </div>
       )}
       <Link to="/ledgers/vendor" className="btn" style={{ marginTop: 18 }}>← Vendor Ledger</Link>

@@ -4,7 +4,9 @@ import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerRe
 
 import { useAuth } from "../auth/AuthContext";
 import { FINANCE_ROLES } from "../auth/routeAccess";
+import { Pager } from "../components/Pager";
 import { api, apiErrorMessage } from "../lib/api";
+import { usePagination } from "../lib/hooks";
 import "./Booking.css";
 import "./PtMapper.css";
 
@@ -56,25 +58,17 @@ export default function VendorLedger() {
   const [ageing, setAgeing] = useState<AgeingT>();
   const [entries, setEntries] = useState<EntryT[]>([]);
   const [vendors, setVendors] = useState<{ id: number; name: string }[]>([]);
-  const [page, setPage] = useState(1);
-  const [count, setCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
+  const { page, count, hasNext, applyPage, searchParams, reset, next, prev } = usePagination();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const [mode, setMode] = useState<Mode>(null);
   const [form, setForm] = useState({ vendor_id: "", amount: "", description: "", reference: "", payMode: "cash" });
-  const PAGE_SIZE = 50;
 
   function loadAll() {
     api.get("/finledger/vendor/balances").then((r) => setBalances(r.data));
     api.get("/finledger/vendor/ageing").then((r) => setAgeing(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/vendor/entries?${q}`).then((r) => {
-      setEntries(r.data.results);
-      setCount(r.data.count);
-      setHasNext(Boolean(r.data.next));
-    });
+    api.get(`/finledger/vendor/entries?${searchParams()}`).then((r) => setEntries(applyPage(r.data)));
   }
   useEffect(loadAll, [page]);
   useEffect(() => { if (isFinance) api.get("/vendors").then((r) => setVendors(r.data)).catch(() => {}); }, [isFinance]);
@@ -93,7 +87,7 @@ export default function VendorLedger() {
       });
       setMode(null);
       setForm({ vendor_id: "", amount: "", description: "", reference: "", payMode: "cash" });
-      setPage(1);
+      reset();
       loadAll();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -238,13 +232,16 @@ export default function VendorLedger() {
               ))}
             </tbody>
           </table>
-          <div className="pager" data-testid="vl-pager">
-            <span className="pager-info">Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + entries.length} of {count}</span>
-            <div className="spacer" />
-            <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} data-testid="vl-prev">Prev</button>
-            <span className="pager-page">Page {page}</span>
-            <button className="btn btn-sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)} data-testid="vl-next">Next</button>
-          </div>
+          <Pager
+            page={page}
+            pageSize={50}
+            count={count}
+            shown={entries.length}
+            hasNext={hasNext}
+            onPrev={prev}
+            onNext={next}
+            testId="vl"
+          />
         </div>
       )}
       <Link to="/ledgers/cash" className="btn" style={{ marginTop: 18 }}>Cash Ledger →</Link>

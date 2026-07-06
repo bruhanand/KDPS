@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, IndianRupee, Layers, PackageCheck, ScrollText } from "lucide-react";
 
+import { Pager } from "../components/Pager";
 import { api } from "../lib/api";
+import { usePagination } from "../lib/hooks";
 import "./Booking.css";
 import "./PtMapper.css";
 
@@ -41,29 +43,21 @@ export default function StockLedger() {
   const [entries, setEntries] = useState<EntryT[]>([]);
   const [summary, setSummary] = useState<SummaryT | null>(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [count, setCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const PAGE_SIZE = 50;
+  const { page, count, hasNext, applyPage, searchParams, reset, next, prev } = usePagination();
 
-  useEffect(() => setPage(1), [docFilter, fileFilter]);
+  useEffect(reset, [docFilter, fileFilter, reset]);
 
   useEffect(() => {
     setLoading(true);
-    const q = new URLSearchParams();
-    if (fileFilter) q.set("pt_file", fileFilter);
-    else if (docFilter) q.set("doc_number", docFilter);
-    q.set("page", String(page));
-    q.set("page_size", String(PAGE_SIZE));
+    const filter: Record<string, string> = {};
+    if (fileFilter) filter.pt_file = fileFilter;
+    else if (docFilter) filter.doc_number = docFilter;
+    const q = searchParams(filter);
     Promise.all([
-      api.get(`/stockledger/entries?${q.toString()}`).then((r) => {
-        setEntries(r.data.results);
-        setCount(r.data.count);
-        setHasNext(Boolean(r.data.next));
-      }),
+      api.get(`/stockledger/entries?${q.toString()}`).then((r) => setEntries(applyPage(r.data))),
       api.get(`/stockledger/summary`).then((r) => setSummary(r.data)),
     ]).finally(() => setLoading(false));
-  }, [docFilter, fileFilter, page]);
+  }, [docFilter, fileFilter, searchParams, applyPage]);
 
   const cards = useMemo(
     () => [
@@ -152,15 +146,16 @@ export default function StockLedger() {
               ))}
             </tbody>
           </table>
-          <div className="pager" data-testid="stock-pager">
-            <span className="pager-info">
-              Showing {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + entries.length} of {count}
-            </span>
-            <div className="spacer" />
-            <button className="btn btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} data-testid="stock-prev">Prev</button>
-            <span className="pager-page">Page {page}</span>
-            <button className="btn btn-sm" disabled={!hasNext} onClick={() => setPage((p) => p + 1)} data-testid="stock-next">Next</button>
-          </div>
+          <Pager
+            page={page}
+            pageSize={50}
+            count={count}
+            shown={entries.length}
+            hasNext={hasNext}
+            onPrev={prev}
+            onNext={next}
+            testId="stock"
+          />
         </div>
       )}
     </div>
