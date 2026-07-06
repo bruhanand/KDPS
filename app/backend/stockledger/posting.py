@@ -22,6 +22,7 @@ any vendor bill, and un-bumps the booking — leaving the file back in 'sent'.
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -34,6 +35,8 @@ from core.posting import Leg, PostingRef, cr, dr, post_entries
 from finledger.posting import post_pt_vendor_bill, reverse_pt_vendor_bills
 from masters.models import Brand, Cohort, Sku, Store
 from stockledger.models import StockLedgerEntry, StockOnHand
+
+logger = logging.getLogger(__name__)
 
 WAREHOUSE_CODE = "RAN-WH"
 DOC_TYPE = "PT"
@@ -267,7 +270,18 @@ def _register_identity(pt, number: str) -> None:
         try:
             unit_paise = _unit_cost_paise(data, row.line_no)
             mrp = _decimal(data.get("MRP"))
-        except (PtPostingError, InvalidOperation, ValueError, ArithmeticError):
+        except (PtPostingError, InvalidOperation, ValueError, ArithmeticError) as exc:
+            # These rows were already P RATE-validated in `_build_inward_entries`, so a
+            # failure here means the registry silently diverges from the posted ledger
+            # (stock booked, no SKU identity). It should never happen — log loudly so
+            # the divergence is visible rather than a silent gap.
+            logger.warning(
+                "PT %s line %s barcode %s: skipped SKU registry upsert (%s)",
+                number,
+                row.line_no,
+                barcode,
+                exc,
+            )
             continue
         mrp_paise = _rupees_to_paise(mrp) if (mrp is not None and mrp > 0) else None
         sku, _ = Sku.objects.update_or_create(

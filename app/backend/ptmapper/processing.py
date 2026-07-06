@@ -9,12 +9,15 @@ dependency graph that removes the old ``views`` ⇄ ``learning`` import cycle.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ptmapper.engine import UnsupportedFormat, _margin, _quantity_out, num, run_mapping
 from ptmapper.models import PtFile, PtRow, ReviewItem
 from ptmapper.profiles import CONTROLLED as CONTROLLED_COLS
 from ptmapper.profiles import KDPS_COLUMNS
+
+logger = logging.getLogger(__name__)
 
 KDPS_COLUMN_SET = set(KDPS_COLUMNS)
 
@@ -155,6 +158,10 @@ def process_file(pt: PtFile, preserve_manual: bool = True) -> PtFile:
     except UnsupportedFormat as exc:
         return _fail_file(pt, str(exc), reset_counts=True)
     except Exception as exc:  # noqa: BLE001
+        # An unexpected failure (not a known bad-format) is a bug, not user error:
+        # record the traceback server-side so it is diagnosable, while still failing
+        # the file gracefully instead of leaving it stuck mid-remap.
+        logger.exception("PT mapping failed unexpectedly for file %s", pt.pk)
         return _fail_file(pt, f"Could not read this file: {exc}")
 
     PtRow.objects.bulk_create(

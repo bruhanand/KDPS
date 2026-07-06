@@ -130,9 +130,7 @@ def test_pt_auto_bill_does_not_double_book_the_payable(db):
         ],
     )
     # The finledger auto-bill for the same goods — MUST NOT post its own GL voucher.
-    entry = post_vendor_bill(
-        vendor, 90000, "PT inward auto-bill", None, reference="BK-1", gl=False
-    )
+    entry = post_vendor_bill(vendor, 90000, "PT inward auto-bill", None, reference="BK-1", gl=False)
     assert GLEntry.objects.filter(doc_number=entry.doc_number).count() == 0
 
     # Payable booked exactly once (−90000), inventory once (+90000), books tie,

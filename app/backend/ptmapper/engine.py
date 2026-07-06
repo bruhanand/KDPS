@@ -127,7 +127,7 @@ def parse_date(v: Any) -> date | None:
     if isinstance(v, (int, float)) and 20000 < float(v) < 80000:
         try:
             return (datetime(1899, 12, 30) + timedelta(days=int(v))).date()
-        except Exception:  # noqa: BLE001
+        except (OverflowError, ValueError):
             return None
     s = raw_str(v)
     if not s:
@@ -374,7 +374,9 @@ def _read_xls(content: bytes) -> list[tuple[str, list[list]]]:
                 if cell.ctype == xlrd.XL_CELL_DATE:
                     try:
                         v = xlrd.xldate_as_datetime(cell.value, book.datemode)
-                    except Exception:  # noqa: BLE001
+                    except xlrd.xldate.XLDateError:
+                        # An out-of-range/ambiguous Excel serial keeps its raw
+                        # numeric value; date coercion happens later in parse_date.
                         pass
                 row.append(v)
             rows.append(row)
