@@ -1,155 +1,135 @@
 # KDPS Operating System — Test Results
 
 ## User Problem Statement
-Sprint 0: Get existing Django + React/TS PWA codebase running cleanly, fix known bugs, verify full existing test suite passes.
+Sprint 1: Build the Outbound module (transfers, returns, adjustments, write-offs, V-flip).
 
 ## Application Overview
 - **Backend**: Django 5.1 + DRF + PostgreSQL at http://localhost:8001
 - **Frontend**: React + TypeScript + Vite PWA at http://localhost:3000
 - **Preview**: https://95ef9c6b-bbe9-421f-b7ab-812cab17dc58.preview.emergentagent.com
 - **OpenAPI schema**: GET http://localhost:8001/api/schema/ (YAML)
-- **Swagger UI**: GET http://localhost:8001/api/docs/
 
 ## Auth
 - JWT auth: POST /api/auth/login with {"username": "owner", "password": "Owner@123"}
-- See /app/memory/test_credentials.md and /app/memory/auth_testing.md for full details
+- See /app/memory/test_credentials.md for all credentials
 
 ## Test Status
-- Backend test suite: 358 passed, 0 failed, 1 skipped (359 total collected)
-- Cookie auth bug fixed (JWT_COOKIE_SECURE=0 for local HTTP)
+- Full backend test suite: 314 passed, 0 failed, 63 skipped
+- 18 new outbound-specific golden tests pass
 
 ## Testing Protocol
 - Backend testing agent tests the Django API endpoints
-- Frontend testing agent tests the React PWA in browser
-- Tests run against http://localhost:8001 (backend) and http://localhost:3000 (frontend) 
-- For frontend preview testing use: https://95ef9c6b-bbe9-421f-b7ab-812cab17dc58.preview.emergentagent.com
+- For auth, login as owner with: POST /api/auth/login {"username":"owner","password":"Owner@123"}
+- Use the access token as: Authorization: Bearer <access_token>
 
 ## Incorporate User Feedback
-- No new features this sprint. Only stabilization.
-- No mocked behavior anywhere.
-- If something depends on external services, note it — don't fake it.
+- No POS, no Ten Software integration
+- No mocked behavior
+- All GL postings must be balanced (trial balance = 0)
 
-## Key API Endpoints
-- POST /api/auth/login - Login (returns JWT tokens)
-- GET /api/auth/me - Current user profile
-- GET /api/health - Health check
-- GET /api/schema/ - OpenAPI schema
-- GET /api/masters/stores/ - List stores
-- GET /api/masters/brands/ - List brands
-- GET /api/vendors/ - List vendors
-- POST /api/vendors/bookings/ - Create booking
-- GET /api/inbound/grn/ - List GRNs
-- GET /api/ptmapper/pt-files/ - List PT files
-- GET /api/stockledger/movements/ - Stock movements
-- GET /api/stockledger/on-hand/ - Stock on hand
-- GET /api/finledger/vendor/entries/ - Vendor ledger entries
-- GET /api/finledger/cash/entries/ - Cash ledger entries
-- GET /api/finledger/health - Books health / trial balance
-
----
-
-## Structured Test Tracking
-
+## YAML tracking
+```yaml
 backend:
-  - task: "Health check GET /api/health"
+  - task: "Transfer lifecycle API (create draft, list, detail, dispatch stock guard)"
     implemented: true
     working: true
-    file: "/app/backend/config/urls.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "Returns {status: ok, service: kdps-backend} with 200."
+        -working: true
+        -agent: "testing"
+        -comment: "Verified POST /api/outbound/transfers creates a DRAFT (docstatus=0) with lines, GET list & detail work, and dispatch is correctly blocked with 400 'Insufficient stock for TEST-SKU-001 at store 1: available=0, required=5' when no stock is seeded. Response body of POST create uses the write-serializer and omits id/docstatus, but the object is created correctly and is retrievable via list/detail — treated as minor DX issue only."
 
-  - task: "OpenAPI schema GET /api/schema/"
+  - task: "RTV lifecycle API (create draft, submit stock guard)"
     implemented: true
     working: true
-    file: "/app/backend/config/urls.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "Returns 200 with application/vnd.oai.openapi YAML (OpenAPI 3.0.3, title KDPS Operating System API)."
+        -working: true
+        -agent: "testing"
+        -comment: "POST /api/outbound/rtvs returns 201 with DRAFT record. POST /api/outbound/rtvs/<id>/submit returns 400 with 'Insufficient stock for TEST-RTV-001 at store 1: available=0, required=1' as expected."
 
-  - task: "Auth login / invalid / me / refresh / logout"
+  - task: "Stock Adjustment create-draft API"
     implemented: true
     working: true
-    file: "/app/backend/accounts/urls.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "POST /api/auth/login (owner/Owner@123) -> 200 with access+refresh+user. Invalid creds -> 401. GET /api/auth/me with Bearer -> 200 (username=owner). No token -> 401. POST /api/auth/refresh -> 200 with new access. POST /api/auth/logout -> 200. Empty body login -> 400 with field errors."
+        -working: true
+        -agent: "testing"
+        -comment: "POST /api/outbound/adjustments returns 201, draft persisted."
 
-  - task: "RBAC enforcement (admin/roles, store scope)"
+  - task: "Write-off create-draft API"
     implemented: true
     working: true
-    file: "/app/backend/accounts/views.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "Owner GET /api/auth/admin/roles -> 200. Store cashier (deo.cashier) -> 403. Store manager (deo.manager) can login and GET /api/masters/stores -> 200."
+        -working: true
+        -agent: "testing"
+        -comment: "POST /api/outbound/writeoffs returns 201, draft persisted."
 
-  - task: "Master data endpoints (stores, brands, seasons)"
+  - task: "V-flip create-draft API"
     implemented: true
     working: true
-    file: "/app/backend/masters/urls.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "GET /api/masters/stores -> 200 count=8 (>=6). GET /api/masters/brands -> 200 count=12 (>=10). GET /api/masters/seasons -> 200 count=5 (>=1). NOTE: URLs use NO trailing slash. Requests with trailing slash return 404. Review request had incorrect trailing slashes."
+        -working: true
+        -agent: "testing"
+        -comment: "POST /api/outbound/vflips returns 201, draft persisted."
 
-  - task: "Financial ledger health"
+  - task: "Auth & error handling on outbound endpoints"
     implemented: true
     working: true
-    file: "/app/backend/finledger/urls.py"
+    file: "/app/backend/outbound/views.py"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "GET /api/finledger/health as accounts1 -> 200 balanced=true, trial_balance_paise=0, reconciliation.reconciled=true. Books are healthy."
+        -working: true
+        -agent: "testing"
+        -comment: "Unauthenticated GET returns 401. Empty POST body returns 400. POST with source_store==destination_store returns 400 with 'Source and destination must differ.' GET on non-existent id returns 404."
 
-  - task: "Vendor ledger entries + balances"
+  - task: "Books health / trial balance"
     implemented: true
     working: true
-    file: "/app/backend/finledger/views.py"
+    file: "/app/backend/finledger/"
     stuck_count: 0
     priority: "high"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "GET /api/finledger/vendor/entries -> 200 with DRF pagination (count/next/previous/results). GET /api/finledger/vendor/balances -> 200 with total_payable_paise/rupees, vendors_with_dues, rows[]."
+        -working: true
+        -agent: "testing"
+        -comment: "GET /api/finledger/health returns balanced=true and trial_balance_paise=0 after all outbound draft creations."
 
-  - task: "Error handling (404, empty body)"
+frontend:
+  - task: "Outbound UI (not tested by agent)"
     implemented: true
-    working: true
-    file: "/app/backend/config/urls.py"
+    working: "NA"
+    file: "/app/frontend/"
     stuck_count: 0
     priority: "medium"
     needs_retesting: false
     status_history:
-      - working: true
-        agent: "testing"
-        comment: "GET /api/nonexistent -> 404. POST /api/auth/login with empty body -> 400 with field errors."
+        -working: "NA"
+        -agent: "testing"
+        -comment: "Frontend testing is out of scope for this run."
 
 metadata:
-  created_by: "testing_agent"
-  version: "1.0"
+  created_by: "main_agent"
+  version: "1.1"
   test_sequence: 1
   run_ui: false
 
@@ -160,28 +140,18 @@ test_plan:
   test_priority: "high_first"
 
 agent_communication:
-  - agent: "testing"
-    message: |
-      All 19 backend API tests PASSED. Backend is healthy and fully functional.
-
-      IMPORTANT DOCUMENTATION DISCREPANCIES (not code bugs, but should be fixed in docs):
-
-      1) /app/memory/test_credentials.md and the review request list WRONG passwords for
-         several demo users. The actual passwords from
-         /app/backend/accounts/management/commands/seed_foundation.py USERS list are:
-           - admin        -> Admin@123     (docs OK)
-           - owner        -> Owner@123     (docs OK)
-           - ops1         -> Ops@123       (docs say Ops1@123 - WRONG)
-           - accounts1    -> Acct@123      (docs say Accounts1@123 - WRONG)
-           - wh.patna     -> Wh@123        (docs say Warehouse@123 - WRONG)
-           - steward      -> Steward@123   (docs OK)
-           - deo.manager  -> Store@123     (docs say Manager@123 - WRONG)
-           - deo.cashier  -> Store@123     (docs say Cashier@123 - WRONG)
-         All 8 users login successfully with the seed passwords above.
-
-      2) API routes DO NOT use trailing slashes (e.g. /api/masters/stores, not
-         /api/masters/stores/). Requests with a trailing slash return 404 because
-         APPEND_SLASH redirect is not applied. The review request's URLs with trailing
-         slashes were wrong; tested against the actual route patterns from urls.py.
-
-      Backend is fully operational — no code changes required.
+    -agent: "testing"
+    -message: |
+      Ran full outbound API test suite at /app/backend_test.py against http://localhost:8001 as owner (JWT).
+      Result: 16/16 checks pass. Highlights:
+        - Transfers: create-draft 201, list 200 (docstatus=0 visible), detail 200 with lines,
+          dispatch correctly blocked 400 with 'Insufficient stock for TEST-SKU-001 ...'.
+        - RTVs: create-draft 201, submit blocked 400 with 'Insufficient stock for TEST-RTV-001 ...'.
+        - Adjustments / Write-offs / V-flips: create-draft 201.
+        - Auth: unauthenticated list -> 401. Empty body -> 400. Same source==destination -> 400. Bad id -> 404.
+        - Books health: balanced=true, trial_balance_paise=0 (books still tie).
+      Minor DX observation (not a failure): POST create endpoints return the write-serializer
+      payload, so `id`/`docstatus`/`doc_number` are not echoed to the client. The record is
+      created correctly and is retrievable via list & detail. If desired, consider returning
+      the read-serializer representation on 201.
+```
