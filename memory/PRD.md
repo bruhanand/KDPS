@@ -1,85 +1,128 @@
 # KDPS Operating System — Product Requirements Document
 
-## Product Summary
+## Original Problem Statement
+Full-stack retail fashion ERP for 50+ stores (KDPS). Django 5.1 + React/TS Vite PWA. 
+Phase-by-phase execution plan covering Outbound, Offers, Analytics, HR, Controls, Tally Sync, POS Integration, and Payments.
 
-**KDPS Operating System** is a deterministic retail ERP for **KDPS Lifestyle Pvt Ltd**, a multi-brand Indian fashion/apparel retailer operating **50+ stores** across **Bihar & Jharkhand** (one PAN, two state GSTINs: Bihar state code 10, Jharkhand state code 20).
+## Core Architecture
+- **Backend**: Django 5.1, DRF, PostgreSQL
+- **Frontend**: React 18, TypeScript, Vite PWA
+- **Kernel**: Append-only ledgers, strict `post_entries` balanced engine, docstatus FSM (Draft→Submitted→Cancelled)
+- **Money**: Stored as paise (integer). Never floats.
+- **Documents**: Immutable once submitted (DB triggers enforce).
 
-### Key Facts
-- **Domain**: Multi-brand fashion retail (clothing, innerwear, accessories)
-- **Scale**: 50+ MBO stores + warehouses, 40+ brands, 20,000+ SKUs
-- **Currency**: INR (₹), money stored as integer paise
-- **Tax**: Indian GST (CGST+SGST intra-state, IGST cross-state)
-- **POS**: Ten Software (third-party billing counter at each store)
-- **Statutory books**: Tally (separate — ERP exports vouchers to Tally)
+## Sprint Status
 
-### Core Philosophy (12 Rules)
-1. Every business event is a document with a lifecycle
-2. Documents write ledgers; ledgers never hand-edited
-3. Master data lives in one place; documents snapshot it
-4. Every fact has exactly one owner
-5. Flag, never block (exceptions → queue, not halt)
-6. Calculated numbers are not typed by hand
-7. Outside systems need written rules + daily checks
-8. AI only reads and suggests
-9. Every line says exactly what item it is
-10. Every action has an actor
-11. Deadlines are data, not memory
-12. Business differences are data, not code
+### Sprint 0 — Local Dev Setup & Bug Fixes ✅ COMPLETE
+- Environment bootstrapped (Postgres, Python, Node)
+- Fixed JWT_COOKIE_SECURE bug
+- Validated finledger double-entry mechanism
+- Created auth/test documentation
+- Full test suite: 231 passed, 0 failures
 
-## Technology Stack (ADR-0001)
-- **Backend**: Python 3.12 + Django 5.1 + DRF + drf-spectacular + PostgreSQL 16
-- **Frontend**: React + TypeScript (Vite) PWA
-- **Auth**: JWT (djangorestframework-simplejwt) with cookie + header dual-path
-- **Deployment**: Render alpha (Singapore region) — auto-deploy from `main`
+### Sprint 1 — Outbound Module ✅ COMPLETE (6 Jul 2026)
 
-## Full Module List
+**Backend** (18 tests, all passing):
+- StoreTransfer (inter-store + store split) with TransferReceipt companion
+- ReturnToVendor (defective + seasonal)
+- StockAdjustment (shrinkage, miscount, damage, surplus)
+- WriteOff (dead stock, refused defectives)
+- VFlip (brand-owned → KDPS-owned ownership conversion)
+- Full posting engine integration (stock ledger + fin ledger entries)
+- API endpoints: 16 endpoints under `/api/outbound/`
 
-### Built & Functional
-1. **Core / Kernel** — Money-as-paise, append-only ledgers (DB triggers), docstatus FSM, gap-free voucher numbering, balanced posting engine, Indian FY
-2. **Accounts / Auth** — JWT auth, RBAC, user/role management, login brute-force guard, demo seed
-3. **Masters** — Stores, Brands, Seasons, GSTINs, GstSlabs (date-effective), SKUs, Categories, CategoryMargin
-4. **Vendors / Bookings** — Vendor management, multi-store booking orders, commercial models (Outright/Correction/SOR/Consignment)
-5. **Inbound / GRN** — Goods Receipt Notes, branded/non-branded `kind` discriminator
-6. **PT Mapper** — Brand PT file upload/parse/mapping (9 profiles), non-brand PT authoring, learning engine, pricing engine
-7. **Stock Ledger** — Stock movements, on-hand tracking, location-aware posting
-8. **Financial Ledger** — Value GL (balanced double-entry via kernel `post_entries`), vendor/cash subledgers unified with GL control accounts (F1 hardening), books health/trial balance
-9. **Files** — File upload support
-10. **AI Agents** — Gemini integration (stubbed, not active)
+**Frontend** (14 features, 100% pass rate):
+- Navigation: "OUTBOUND" sidebar group with 5 items (Transfers, RTV, Adjustments, Write-offs, V-Flip)
+- Transfers: List (with Inter-store / Store split tab toggle), Create (3-step form: locations + transport + lines), Detail (with Dispatch + Receive flows)
+- RTV: List (with Defective / Season-end tab toggle), Create (store + vendor + brand + type + logistics), Detail (with Submit)
+- Adjustments: List (with net variance display), Create (book vs counted auto-calc), Detail (with Submit)
+- Write-offs: List, Create (with reason + approved_by), Detail (with Submit)
+- V-Flip: List (with info banner), Create (store + brand + season), Detail (with "Flip ownership" confirm modal)
+- Cross-state transfer: E-way bill warning + required field validation
+- Role-guarded routes matching API guards
+- All data-testid attributes for testing
 
-### Not Yet Built
-11. **Selling / POS** — Sale document, POS integration (Ten Software adapter)
-12. **Outbound** — Transfers, returns to brands, EOSS/V-flip, write-offs
-13. **Offers / Discounts** — Offer rulebook, brand-specific discounts, markdown ladder
-14. **Payments / Settlement** — Vendor payment lifecycle, approval routing, bank reconciliation, cash audit
-15. **Tally Sync** — XML voucher export, nightly auto-sync
-16. **Analytics / Intelligence** — Dashboards, profitability, dead stock, forecasting
-17. **Controls** — Exception queue, reconciliation engine, approvals, audit trail
-18. **Stock Counting** — Count sessions, book vs counted
-19. **HR / Workforce (WAPCS)** — Attendance, payroll, employee management
+**Known Gaps Carried Forward:**
+- Settlement claim tracking → Sprint 8 (Payments)
+- EOSS pricing rules → Sprint 2 (Offers)
+- Full approval workflow (multi-tier) → Sprint 5 (Controls)
+- Non-branded PT AI OCR → Future sprint
+- Seasonal return window dashboard alerts → Enhancement (backend cron)
 
-## Sprint Plan (Locked Order)
+## Upcoming Sprints (Prioritized Backlog)
 
-| Sprint | Scope | Status |
-|--------|-------|--------|
-| **Sprint 0** | Bug fixes + local dev environment setup | **CURRENT** |
-| Sprint 1 | Outbound (transfers, returns) | Planned |
-| Sprint 2 | Offers / Discounts | Planned |
-| Sprint 3 | Analytics / Reports | Planned |
-| Sprint 4 | HR / Attendance | Planned |
-| Sprint 5 | Controls | Planned |
-| Sprint 6 | Tally Sync | Planned |
-| Sprint 7 | Selling + POS (combined; waiting on client design) | Planned |
-| Sprint 8 | Payments / Settlement | Planned |
+### Sprint 2 — Offers / Discounts (P1)
+- Brand-specific discount rules
+- EOSS (End of Season Sale) pricing
+- Coupon/voucher management
+- Offer application engine
 
-## Sprint 0 Status
-- [x] PostgreSQL 15 installed and running
-- [x] All Python deps installed (Django 5.1, DRF, etc.)
-- [x] Frontend deps installed (Vite, React, TypeScript)
-- [x] Migrations applied (67 migrations)
-- [x] Seed data loaded (foundation + PT mapper)
-- [x] Backend + frontend boot clean
-- [x] Full test suite: 358 passed, 0 failed, 1 skipped
-- [x] Cookie auth bug fixed (JWT_COOKIE_SECURE=0 for local HTTP)
-- [x] `/api/schema/` OpenAPI endpoint live (200 OK)
-- [x] Finledger double-entry verified working (F1 hardening was already complete)
-- [x] PRD.md, test_credentials.md, auth_testing.md written
+### Sprint 3 — Analytics / Reports (P1)
+- Sales dashboards
+- Stock movement reports
+- Vendor ledger aging
+- Financial summaries
+
+### Sprint 4 — HR / Attendance (P1)
+- Employee management
+- Attendance tracking
+- Leave management
+
+### Sprint 5 — Controls (P1)
+- Multi-tier approval workflows
+- Exception management
+- Audit trails
+
+### Sprint 6 — Tally Sync (P1)
+- Tally XML export
+- Voucher mapping
+- Reconciliation
+
+### Sprint 7 — Selling + POS (P1)
+- POS terminal integration
+- Bill generation
+- Returns/exchanges at POS
+
+### Sprint 8 — Payments / Settlement (P1)
+- Settlement claim tracking (V-flip, RTV)
+- Payment collection
+- Bank reconciliation
+
+## Future / Backlog (P2)
+- AI/OCR agent wiring (Gemini integration for invoice reading)
+- Mobile-specific PWA optimizations
+- Barcode scanning integration
+- Multi-company support
+
+## Test Counts
+- Backend: 231 passed, 63 skipped, 0 failures (as of Sprint 1 close)
+- Frontend: 14/14 features passing (testing agent iteration_21)
+
+## API Endpoints (Outbound)
+```
+api/outbound/transfers          (GET list, POST create)
+api/outbound/transfers/<pk>     (GET detail)
+api/outbound/transfers/<pk>/dispatch  (POST)
+api/outbound/transfers/<pk>/receive   (POST)
+api/outbound/rtvs               (GET list, POST create)
+api/outbound/rtvs/<pk>          (GET detail)
+api/outbound/rtvs/<pk>/submit   (POST)
+api/outbound/adjustments        (GET list, POST create)
+api/outbound/adjustments/<pk>   (GET detail)
+api/outbound/adjustments/<pk>/submit  (POST)
+api/outbound/writeoffs          (GET list, POST create)
+api/outbound/writeoffs/<pk>     (GET detail)
+api/outbound/writeoffs/<pk>/submit    (POST)
+api/outbound/vflips             (GET list, POST create)
+api/outbound/vflips/<pk>        (GET detail)
+api/outbound/vflips/<pk>/submit (POST)
+```
+
+## Frontend Files (Outbound)
+```
+src/pages/OutboundTransfers.tsx   — TransferListPage, TransferNewPage, TransferDetailPage
+src/pages/OutboundRTV.tsx         — RTVListPage, RTVNewPage, RTVDetailPage
+src/pages/OutboundAdjustments.tsx — AdjustmentListPage, AdjustmentNewPage, AdjustmentDetailPage
+src/pages/OutboundWriteoffs.tsx   — WriteOffListPage, WriteOffNewPage, WriteOffDetailPage
+src/pages/OutboundVflips.tsx      — VFlipListPage, VFlipNewPage, VFlipDetailPage
+```
