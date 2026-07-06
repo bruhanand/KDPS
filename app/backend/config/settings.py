@@ -105,7 +105,10 @@ if not _engine.endswith("postgresql"):
 AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 PASSWORD_HASHERS = [
@@ -157,14 +160,10 @@ CORS_ALLOWED_ORIGIN_REGEXES = (
 )
 # Exact origins for non-Emergent / production deployments (comma-separated env).
 CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o]
-CSRF_TRUSTED_ORIGINS = [
-    o
-    for o in os.environ.get(
-        "CSRF_TRUSTED_ORIGINS",
-        "https://*.emergentagent.com",
-    ).split(",")
-    if o
-]
+# No default wildcard — production must set CSRF_TRUSTED_ORIGINS explicitly.
+# The shared *.emergentagent.com preview domain is too broad to trust by default
+# (any tenant's subdomain could forge CSRF requests riding the cookie).
+CSRF_TRUSTED_ORIGINS = [o for o in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",") if o]
 
 JWT_COOKIE_SECURE = os.environ.get("JWT_COOKIE_SECURE", "1") == "1"
 JWT_COOKIE_SAMESITE = os.environ.get("JWT_COOKIE_SAMESITE", "Lax")

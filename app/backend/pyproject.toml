@@ -67,7 +67,7 @@ strict = true
 exclude = ['migrations/', 'tests/']
 
 [[tool.mypy.overrides]]
-module = ["dj_database_url"]
+module = ["dj_database_url", "rest_framework.*"]
 ignore_missing_imports = true
 
 [tool.django-stubs]

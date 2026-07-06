@@ -6,14 +6,20 @@ import { useAuth } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import "./Login.css";
 
-const DEMO: { label: string; username: string; password: string }[] = [
-  { label: "Owner", username: "owner", password: "Owner@123" },
-  { label: "HO Ops", username: "ops1", password: "Ops@123" },
-  { label: "Accounts", username: "accounts1", password: "Acct@123" },
-  { label: "Warehouse", username: "wh.patna", password: "Wh@123" },
-  { label: "Store manager", username: "deo.manager", password: "Store@123" },
-  { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
-];
+// Demo login chips are only available when REACT_APP_SHOW_DEMO_LOGINS=1 (preview/dev).
+// In production the env var is absent, so credentials are never shipped in the bundle.
+const SHOW_DEMO = import.meta.env.REACT_APP_SHOW_DEMO_LOGINS === "1";
+
+const DEMO: { label: string; username: string; password: string }[] = SHOW_DEMO
+  ? [
+      { label: "Owner", username: "owner", password: "Owner@123" },
+      { label: "HO Ops", username: "ops1", password: "Ops@123" },
+      { label: "Accounts", username: "accounts1", password: "Acct@123" },
+      { label: "Warehouse", username: "wh.patna", password: "Wh@123" },
+      { label: "Store manager", username: "deo.manager", password: "Store@123" },
+      { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
+    ]
+  : [];
 
 export function Login() {
   const { login } = useAuth();
@@ -91,27 +97,29 @@ export function Login() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
 
-          <div className="login-demo">
-            <span>Demo logins</span>
-            <div className="login-demo-chips">
-              {DEMO.map((d) => (
-                <button
-                  key={d.username}
-                  type="button"
-                  className="chip chip-navy"
-                  disabled={busy}
-                  onClick={() => {
-                    setUsername(d.username);
-                    setPassword(d.password);
-                    void doLogin(d.username, d.password);
-                  }}
-                  data-testid={`demo-${d.username}`}
-                >
-                  {d.label}
-                </button>
-              ))}
+          {DEMO.length > 0 && (
+            <div className="login-demo">
+              <span>Demo logins</span>
+              <div className="login-demo-chips">
+                {DEMO.map((d) => (
+                  <button
+                    key={d.username}
+                    type="button"
+                    className="chip chip-navy"
+                    disabled={busy}
+                    onClick={() => {
+                      setUsername(d.username);
+                      setPassword(d.password);
+                      void doLogin(d.username, d.password);
+                    }}
+                    data-testid={`demo-${d.username}`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </form>
       </main>
     </div>

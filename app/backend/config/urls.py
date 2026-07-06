@@ -14,6 +14,7 @@ from django.contrib import admin
 from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from rest_framework.permissions import IsAuthenticated
 
 
 def health(_request: HttpRequest) -> JsonResponse:
@@ -35,8 +36,16 @@ urlpatterns = [
     path("api/ptmapper/", include("ptmapper.urls")),
     path("api/stockledger/", include("stockledger.urls")),
     path("api/finledger/", include("finledger.urls")),
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+    path(
+        "api/schema/",
+        SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]),
+        name="schema",
+    ),
+    path(
+        "api/docs/",
+        SpectacularSwaggerView.as_view(url_name="schema", permission_classes=[IsAuthenticated]),
+        name="docs",
+    ),
 ]
 
 if _ENABLE_ADMIN:
