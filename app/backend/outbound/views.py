@@ -69,6 +69,15 @@ class TransferListCreateView(generics.ListCreateAPIView):
             return StoreTransferWriteSerializer
         return StoreTransferReadSerializer
 
+    def create(self, request, *args, **kwargs):
+        ser = StoreTransferWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        return Response(
+            StoreTransferReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class TransferDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -164,6 +173,15 @@ class RTVListCreateView(generics.ListCreateAPIView):
             return ReturnToVendorWriteSerializer
         return ReturnToVendorReadSerializer
 
+    def create(self, request, *args, **kwargs):
+        ser = ReturnToVendorWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        return Response(
+            ReturnToVendorReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class RTVDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -223,6 +241,15 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
             return StockAdjustmentWriteSerializer
         return StockAdjustmentReadSerializer
 
+    def create(self, request, *args, **kwargs):
+        ser = StockAdjustmentWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        return Response(
+            StockAdjustmentReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class AdjustmentDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -280,6 +307,15 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
             return WriteOffWriteSerializer
         return WriteOffReadSerializer
 
+    def create(self, request, *args, **kwargs):
+        ser = WriteOffWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        return Response(
+            WriteOffReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
 
 class WriteOffDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -336,6 +372,15 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         if self.request.method == "POST":
             return VFlipWriteSerializer
         return VFlipReadSerializer
+
+    def create(self, request, *args, **kwargs):
+        ser = VFlipWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        instance = ser.save()
+        return Response(
+            VFlipReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class VFlipDetailView(generics.RetrieveAPIView):
