@@ -10,6 +10,11 @@ import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Booking
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
+import { TransferListPage, TransferNewPage, TransferDetailPage } from "./pages/OutboundTransfers";
+import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
+import { AdjustmentListPage, AdjustmentNewPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
+import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/OutboundWriteoffs";
+import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
 import VendorLedger from "./pages/VendorLedger";
@@ -32,6 +37,22 @@ export function App() {
             <Route path="/inbound" element={<InboundPage />} />
             <Route path="/inbound/new" element={<InboundNewPage />} />
             <Route path="/inbound/:id" element={<GrnDetailPage />} />
+            {/* Outbound */}
+            <Route path="/outbound/transfers" element={<TransferListPage />} />
+            <Route path="/outbound/transfers/new" element={<TransferNewPage />} />
+            <Route path="/outbound/transfers/:id" element={<TransferDetailPage />} />
+            <Route path="/outbound/rtvs" element={<RTVListPage />} />
+            <Route path="/outbound/rtvs/new" element={<RTVNewPage />} />
+            <Route path="/outbound/rtvs/:id" element={<RTVDetailPage />} />
+            <Route path="/outbound/adjustments" element={<AdjustmentListPage />} />
+            <Route path="/outbound/adjustments/new" element={<AdjustmentNewPage />} />
+            <Route path="/outbound/adjustments/:id" element={<AdjustmentDetailPage />} />
+            <Route path="/outbound/writeoffs" element={<WriteOffListPage />} />
+            <Route path="/outbound/writeoffs/new" element={<WriteOffNewPage />} />
+            <Route path="/outbound/writeoffs/:id" element={<WriteOffDetailPage />} />
+            <Route path="/outbound/vflips" element={<VFlipListPage />} />
+            <Route path="/outbound/vflips/new" element={<VFlipNewPage />} />
+            <Route path="/outbound/vflips/:id" element={<VFlipDetailPage />} />
             <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
             <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
             <Route path="/documents/pt-mapper/proposals" element={<PtProposalsPage />} />

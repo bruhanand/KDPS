@@ -42,6 +42,7 @@
   --layer-edges: #1e5fa8;
   --layer-home: #c4623f;
   --layer-store: #1f7a4d;
+  --layer-outbound: #b44d2d;
 
   /* tinted band panels */
   --band-edge-bg: #eef3fb;   --band-edge-bd: #dce8f6;
@@ -128,6 +129,7 @@ html[data-theme="dark"] {
   --layer-edges: #6ba6e8;
   --layer-home: #e07b52;
   --layer-store: #5fc98d;
+  --layer-outbound: #e07b52;
 
   /* tinted band panels — dark tints */
   --band-edge-bg: #1e2530;   --band-edge-bd: #2c3a4e;

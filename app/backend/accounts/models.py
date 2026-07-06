@@ -31,6 +31,7 @@ NAV_GROUPS = [
     "intelligence",
     "edges_admin",
     "store_ops",
+    "outbound",
 ]
 
 
