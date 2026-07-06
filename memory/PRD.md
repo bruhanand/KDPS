@@ -95,12 +95,13 @@ Phase-by-phase execution plan covering Outbound, Offers, Analytics, HR, Controls
 - Multi-company support
 
 ## Test Counts
-- Backend: 231 passed, 63 skipped, 0 failures (before and after seed — no regression)
+- Backend: 233 passed, 72 skipped, 0 failures (20 outbound tests incl. 2 vendor subledger regression)
 - Frontend: 14/14 features passing (testing agent iteration_21)
+- Bug fix verification: 8/8 tests passed (testing agent iteration_22)
 - Demo stock seeded via real inbound pipeline (Booking → GRN → PT → post_pt_inward)
-- Owned RTV GL verified: Dr VENDOR_PAYABLE / Cr INVENTORY (balanced)
-- Brand-owned (SOR) RTV GL verified: No GL entries (correct — off-book)
-- Finledger health: balanced=true, 8 legs, 4 vouchers post-verification
+- Owned RTV GL verified: Dr VENDOR_PAYABLE / Cr INVENTORY (balanced) + VendorLedgerEntry mirror
+- Brand-owned (SOR) RTV GL verified: No GL entries, no vendor subledger (correct — off-book)
+- Finledger health: balanced=true, reconciliation.reconciled=true, vendor.drift=0, cash.drift=0
 
 ## API Endpoints (Outbound)
 ```
