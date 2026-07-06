@@ -17,6 +17,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
+import { canOutboundWrite } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -130,7 +131,9 @@ interface TransferT {
 
 export function TransferListPage() {
   const [params, setParams] = useSearchParams();
+  const { user } = useAuth();
   const tab = params.get("type") === "store_split" ? "store_split" : "inter_store";
+  const writable = canOutboundWrite(user?.role?.code);
 
   const { data, loading } = useList<TransferT>(`/outbound/transfers?type=${tab}`);
 
@@ -146,9 +149,11 @@ export function TransferListPage() {
           <h1 className="h1 h2-rust">Stock Transfers</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/outbound/transfers/new" data-testid="new-transfer-btn">
-          <Plus size={16} /> New transfer
-        </Link>
+        {writable && (
+          <Link className="btn btn-cta" to="/outbound/transfers/new" data-testid="new-transfer-btn">
+            <Plus size={16} /> New transfer
+          </Link>
+        )}
       </div>
 
       <div className="mode-toggle" data-testid="transfer-type-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
@@ -463,7 +468,9 @@ export function TransferNewPage() {
 
 export function TransferDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: t, loading } = useDoc<TransferT>(`/outbound/transfers/${id}`);
+  const writable = canOutboundWrite(user?.role?.code);
   const [dispatching, setDispatching] = useState(false);
   const [receiving, setReceiving] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
@@ -481,8 +488,8 @@ export function TransferDetailPage() {
 
   if (loading || !t) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
-  const canDispatch = t.docstatus === 0;
-  const canReceive = t.docstatus === 1 && !t.receipt;
+  const canDispatch = t.docstatus === 0 && writable;
+  const canReceive = t.docstatus === 1 && !t.receipt && writable;
 
   async function handleDispatch() {
     setError("");

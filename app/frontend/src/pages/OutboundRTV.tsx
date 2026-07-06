@@ -13,6 +13,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
+import { canOutboundWrite } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -89,8 +90,10 @@ interface BrandT { id: number; name: string; }
 
 export function RTVListPage() {
   const [params, setParams] = useSearchParams();
+  const { user } = useAuth();
   const tab = params.get("type") === "seasonal" ? "seasonal" : "defective";
   const { data, loading } = useList<RTVT>(`/outbound/rtvs?return_type=${tab}`);
+  const writable = canOutboundWrite(user?.role?.code);
 
   function setTab(next: string) {
     setParams((p) => { p.set("type", next); return p; });
@@ -104,9 +107,11 @@ export function RTVListPage() {
           <h1 className="h1 h2-rust">Return to Vendor</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/outbound/rtvs/new" data-testid="new-rtv-btn">
-          <Plus size={16} /> New RTV
-        </Link>
+        {writable && (
+          <Link className="btn btn-cta" to="/outbound/rtvs/new" data-testid="new-rtv-btn">
+            <Plus size={16} /> New RTV
+          </Link>
+        )}
       </div>
 
       <div className="mode-toggle" data-testid="rtv-type-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
@@ -378,14 +383,16 @@ export function RTVNewPage() {
 
 export function RTVDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: r, loading } = useDoc<RTVT>(`/outbound/rtvs/${id}`);
+  const writable = canOutboundWrite(user?.role?.code);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   if (loading || !r) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
   const totalQty = r.lines.reduce((s, l) => s + l.qty, 0);
-  const canSubmit = r.docstatus === 0;
+  const canSubmit = r.docstatus === 0 && writable;
 
   async function handleSubmit() {
     setError("");

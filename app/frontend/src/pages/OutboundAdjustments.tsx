@@ -12,6 +12,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
+import { canOutboundWrite } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -79,7 +80,9 @@ interface StoreT { id: number; code: string; name: string; store_type: string; }
 // ---------------------------------------------------------------------------
 
 export function AdjustmentListPage() {
+  const { user } = useAuth();
   const { data, loading } = useList<AdjT>("/outbound/adjustments");
+  const writable = canOutboundWrite(user?.role?.code);
 
   return (
     <div className="page-pad">
@@ -89,9 +92,11 @@ export function AdjustmentListPage() {
           <h1 className="h1 h2-rust">Stock Adjustments</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/outbound/adjustments/new" data-testid="new-adjustment-btn">
-          <Plus size={16} /> New adjustment
-        </Link>
+        {writable && (
+          <Link className="btn btn-cta" to="/outbound/adjustments/new" data-testid="new-adjustment-btn">
+            <Plus size={16} /> New adjustment
+          </Link>
+        )}
       </div>
 
       {loading ? (
@@ -310,14 +315,16 @@ export function AdjustmentNewPage() {
 
 export function AdjustmentDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: a, loading } = useDoc<AdjT>(`/outbound/adjustments/${id}`);
+  const writable = canOutboundWrite(user?.role?.code);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   if (loading || !a) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
   const netAdj = a.lines.reduce((s, l) => s + l.adj_qty, 0);
-  const canSubmit = a.docstatus === 0;
+  const canSubmit = a.docstatus === 0 && writable;
 
   async function handleSubmit() {
     setError("");

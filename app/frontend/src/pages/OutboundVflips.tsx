@@ -11,6 +11,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
+import { canOutboundAdmin } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +71,9 @@ interface BrandT { id: number; name: string; }
 // ---------------------------------------------------------------------------
 
 export function VFlipListPage() {
+  const { user } = useAuth();
   const { data, loading } = useList<VFlipT>("/outbound/vflips");
+  const writable = canOutboundAdmin(user?.role?.code);
 
   return (
     <div className="page-pad">
@@ -80,9 +83,11 @@ export function VFlipListPage() {
           <h1 className="h1 h2-rust">V-Flip</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/outbound/vflips/new" data-testid="new-vflip-btn">
-          <Plus size={16} /> New V-flip
-        </Link>
+        {writable && (
+          <Link className="btn btn-cta" to="/outbound/vflips/new" data-testid="new-vflip-btn">
+            <Plus size={16} /> New V-flip
+          </Link>
+        )}
       </div>
 
       <div className="card section-card" style={{ marginBottom: 18, padding: "14px 18px" }} data-testid="vflip-info-banner">
@@ -298,7 +303,9 @@ export function VFlipNewPage() {
 
 export function VFlipDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: v, loading } = useDoc<VFlipT>(`/outbound/vflips/${id}`);
+  const writable = canOutboundAdmin(user?.role?.code);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
@@ -307,7 +314,7 @@ export function VFlipDetailPage() {
 
   const totalQty = v.lines.reduce((s, l) => s + l.qty, 0);
   const totalValue = v.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
-  const canSubmit = v.docstatus === 0;
+  const canSubmit = v.docstatus === 0 && writable;
 
   async function handleSubmit() {
     setError("");

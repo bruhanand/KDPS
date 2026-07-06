@@ -12,6 +12,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
+import { canOutboundAdmin } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -68,7 +69,9 @@ interface StoreT { id: number; code: string; name: string; store_type: string; }
 // ---------------------------------------------------------------------------
 
 export function WriteOffListPage() {
+  const { user } = useAuth();
   const { data, loading } = useList<WOT>("/outbound/writeoffs");
+  const writable = canOutboundAdmin(user?.role?.code);
 
   return (
     <div className="page-pad">
@@ -78,9 +81,11 @@ export function WriteOffListPage() {
           <h1 className="h1 h2-rust">Write-offs</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/outbound/writeoffs/new" data-testid="new-writeoff-btn">
-          <Plus size={16} /> New write-off
-        </Link>
+        {writable && (
+          <Link className="btn btn-cta" to="/outbound/writeoffs/new" data-testid="new-writeoff-btn">
+            <Plus size={16} /> New write-off
+          </Link>
+        )}
       </div>
 
       {loading ? (
@@ -277,7 +282,9 @@ export function WriteOffNewPage() {
 
 export function WriteOffDetailPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { data: w, loading } = useDoc<WOT>(`/outbound/writeoffs/${id}`);
+  const writable = canOutboundAdmin(user?.role?.code);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -285,7 +292,7 @@ export function WriteOffDetailPage() {
 
   const totalQty = w.lines.reduce((s, l) => s + l.qty, 0);
   const totalValue = w.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
-  const canSubmit = w.docstatus === 0;
+  const canSubmit = w.docstatus === 0 && writable;
 
   async function handleSubmit() {
     setError("");
