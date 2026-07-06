@@ -5,6 +5,8 @@ Every endpoint requires authentication. RBAC:
   - Write (POST create/submit/dispatch/receive): OUTBOUND_WRITE_ROLES
   - Admin write (V-flip, write-off): OUTBOUND_ADMIN_ROLES
   - store_staff: READ ONLY on all outbound surfaces
+  - Store-scoped roles: may only write against their assigned stores
+    (enforced via ``enforce_store_scope`` on every write path)
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ from outbound.permissions import (
     IsOutboundAdmin,
     IsOutboundReader,
     IsOutboundWriter,
+    enforce_store_scope,
 )
 from outbound.posting import (
     OutboundPostingError,
@@ -80,6 +83,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         ser = StoreTransferWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
+        enforce_store_scope(request.user, ser.validated_data["source_store"].id)
         instance = ser.save()
         return Response(
             StoreTransferReadSerializer(instance).data,
@@ -109,6 +113,8 @@ class TransferDispatchView(APIView):
         except StoreTransfer.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        enforce_store_scope(request.user, transfer.source_store_id)
+
         if transfer.docstatus != DocStatus.DRAFT:
             return Response(
                 {"error": "Only drafts can be dispatched"},
@@ -135,6 +141,8 @@ class TransferReceiveView(APIView):
             ).prefetch_related("lines").get(pk=pk)
         except StoreTransfer.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, transfer.destination_store_id)
 
         if transfer.docstatus != DocStatus.SUBMITTED:
             return Response(
@@ -187,6 +195,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         ser = ReturnToVendorWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
+        enforce_store_scope(request.user, ser.validated_data["store"].id)
         instance = ser.save()
         return Response(
             ReturnToVendorReadSerializer(instance).data,
@@ -215,6 +224,8 @@ class RTVSubmitView(APIView):
             ).prefetch_related("lines").get(pk=pk)
         except ReturnToVendor.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, rtv.store_id)
 
         if rtv.docstatus != DocStatus.DRAFT:
             return Response(
@@ -258,6 +269,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         ser = StockAdjustmentWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
+        enforce_store_scope(request.user, ser.validated_data["store"].id)
         instance = ser.save()
         return Response(
             StockAdjustmentReadSerializer(instance).data,
@@ -284,6 +296,8 @@ class AdjustmentSubmitView(APIView):
             adj = StockAdjustment.objects.select_related("store").prefetch_related("lines").get(pk=pk)
         except StockAdjustment.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, adj.store_id)
 
         if adj.docstatus != DocStatus.DRAFT:
             return Response(
@@ -327,6 +341,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         ser = WriteOffWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
+        enforce_store_scope(request.user, ser.validated_data["store"].id)
         instance = ser.save()
         return Response(
             WriteOffReadSerializer(instance).data,
@@ -353,6 +368,8 @@ class WriteOffSubmitView(APIView):
             wo = WriteOff.objects.select_related("store").prefetch_related("lines").get(pk=pk)
         except WriteOff.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, wo.store_id)
 
         if wo.docstatus != DocStatus.DRAFT:
             return Response(
@@ -396,6 +413,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         ser = VFlipWriteSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
+        enforce_store_scope(request.user, ser.validated_data["store"].id)
         instance = ser.save()
         return Response(
             VFlipReadSerializer(instance).data,
@@ -424,6 +442,8 @@ class VFlipSubmitView(APIView):
             ).prefetch_related("lines").get(pk=pk)
         except VFlip.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, vflip.store_id)
 
         if vflip.docstatus != DocStatus.DRAFT:
             return Response(

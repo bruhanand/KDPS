@@ -841,3 +841,34 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
 
     with pytest.raises(OutboundPostingError, match="V-flipped stock"):
         post_rtv(rtv, user=s["user"])
+
+
+
+@pytest.mark.django_db(transaction=True)
+def test_vflip_empty_line_brand_uses_original_brand(_outbound_scaffold):
+    """V-flip with empty line.brand falls back to vflip.original_brand.name,
+    NOT 'KDPS'. This was a regression: the frontend may send brand='' on lines."""
+    s = _outbound_scaffold
+    vflip = VFlip.objects.create(
+        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
+        authorized_by=s["user"], created_by=s["user"],
+    )
+    VFlipLine.objects.create(
+        vflip=vflip, sku_code="SKU002",
+        design="Jeans", color="Black", size="L",
+        brand="",  # Empty — simulates frontend omission
+        season="SS26", item="jeans", hsn="6203",
+        qty=1, unit_cost_paise=200,
+    )
+    post_vflip(vflip, user=s["user"])
+
+    oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")
+    assert oh.brand == "V SORBrand", (
+        f"Expected 'V SORBrand' but got '{oh.brand}' — "
+        "empty line.brand should fall back to original_brand.name"
+    )
+
+    vflip_in = StockLedgerEntry.objects.filter(
+        doc_number=vflip.doc_number, kind="vflip_in",
+    )
+    assert vflip_in.first().brand == "V SORBrand"

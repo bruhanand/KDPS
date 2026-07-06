@@ -464,7 +464,10 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
             posted_by=user,
         )
         # Stock IN as "V <brand>" (KDPS-owned)
-        v_brand_name = f"V {line.brand}" if line.brand else "V KDPS"
+        original_brand_name = line.brand or (
+            vflip.original_brand.name if vflip.original_brand else "KDPS"
+        )
+        v_brand_name = f"V {original_brand_name}"
 
         class _VLine:
             pass

@@ -1,7 +1,7 @@
 # Sprint 1 Close-out Report — Outbound Module
 
 **Date**: 6 July 2026  
-**Status**: COMPLETE — pending tester sign-off
+**Status**: COMPLETE — pending tester re-run
 
 ---
 
@@ -11,140 +11,109 @@
 |--------|---------|------------|----------|------------|-----------------|-------------|------------------------|
 | **List / Detail** (all doc types) | ✅ | ✅ | ✅ | ✅ | ✅ (own store) | ✅ (own store) | ✅ (own store, **READ-ONLY**) |
 | **Create / Submit** — Transfer | ✅ | ✅ | ✅ | ✅ | ✅ (own store) | ✅ (own store) | ❌ |
-| **Dispatch / Receive** — Transfer | ✅ | ✅ | ✅ | ✅ | ✅ (own store) | ✅ (own store) | ❌ |
+| **Dispatch** — Transfer | ✅ | ✅ | ✅ | ✅ | ✅ (source store) | ✅ (source store) | ❌ |
+| **Receive** — Transfer | ✅ | ✅ | ✅ | ✅ | ✅ (dest store) | ✅ (dest store) | ❌ |
 | **Create / Submit** — RTV | ✅ | ✅ | ✅ | ✅ | ✅ (own store) | ✅ (own store) | ❌ |
 | **Create / Submit** — Adjustment | ✅ | ✅ | ✅ | ✅ | ✅ (own store) | ✅ (own store) | ❌ |
 | **Create / Submit** — Write-off | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **Create / Submit** — V-Flip | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 
-**Backend enforcement**: `IsOutboundReader`, `IsOutboundWriter`, `IsOutboundAdmin` permission classes in `outbound/permissions.py`.  
-**Frontend enforcement**: `canOutboundWrite()` / `canOutboundAdmin()` helpers in `lib/outbound-rbac.ts` — hide Create/Submit buttons and forms for unauthorized roles.
+**Three enforcement layers:**
+1. **Role gate** — `IsOutboundWriter` / `IsOutboundAdmin` DRF permission classes (role-based)
+2. **Store-scope gate** — `enforce_store_scope(user, store_id)` shared helper (scope-based, 403 if out-of-scope)
+3. **Frontend gate** — `canOutboundWrite()` / `canOutboundAdmin()` in `outbound-rbac.ts` (UI visibility)
 
 ---
 
-## 2. Permission Diff Summary
+## 2. Diff Summary — Files Touched
 
-### Backend (`outbound/permissions.py` — NEW file)
-- `OUTBOUND_WRITE_ROLES = {owner, it_admin, ho_ops, accounts, store_manager, warehouse}`
-- `OUTBOUND_ADMIN_ROLES = {owner, it_admin, ho_ops, accounts}`
-- Three DRF permission classes: `IsOutboundReader`, `IsOutboundWriter`, `IsOutboundAdmin`
+### Finding 1 Fix: Store-scope enforcement
 
-### Backend (`outbound/views.py` — MODIFIED)
-- All list/detail views: `permission_classes = [IsOutboundReader]`
-- Create/submit/dispatch/receive views (Transfer, RTV, Adjustment): `permission_classes = [IsOutboundWriter]`
-- V-flip and Write-off create/submit views: `permission_classes = [IsOutboundAdmin]`
+| File | Change |
+|------|--------|
+| `outbound/permissions.py` | Added `enforce_store_scope(user, store_id)` — single shared helper using existing `visible_store_ids()`. Raises `PermissionDenied` (403) when store is outside user's scope. |
+| `outbound/views.py` | Added `enforce_store_scope()` call in every write path: Transfer (create: source_store, dispatch: source_store, receive: destination_store), RTV (create + submit), Adjustment (create + submit), WriteOff (create + submit), VFlip (create + submit). Total: 10 enforcement points, all via the same helper. |
+| `tests/test_outbound_store_scope.py` | **NEW**: 10 API-level tests via DRF APIClient — SM blocked outside scope, SM allowed in scope, admin unrestricted, transfer receive scope on destination store. |
 
-### Frontend (`lib/outbound-rbac.ts` — NEW file)
-- `canOutboundWrite(roleCode)` — mirrors backend writer check
-- `canOutboundAdmin(roleCode)` — mirrors backend admin check
+### Finding 2 Fix: V-flip brand display
 
-### Frontend (Outbound pages — MODIFIED)
-- All 5 Outbound page components (Transfers, RTV, Adjustments, Write-offs, V-Flip) conditionally render Create buttons and Submit actions based on role.
+| File | Change |
+|------|--------|
+| `outbound/posting.py` | Line ~453: Changed `f"V {line.brand}" if line.brand else "V KDPS"` → falls back to `vflip.original_brand.name` when `line.brand` is empty. |
+| `outbound/management/commands/fix_rtv28_vflip_brand.py` | **NEW**: One-shot command to cancel RTV 28 + backfill "V KDPS" → "V Louis Philippe" in StockOnHand (direct update) and SLE (append-only compensating entries). Idempotent. |
+| `tests/test_outbound_sprint1.py` | Added `test_vflip_empty_line_brand_uses_original_brand` — verifies that when `line.brand=""` the V-prefix uses `original_brand.name`, not "KDPS". |
 
 ---
 
-## 3. Polluted RTV Cleanup Confirmation
+## 3. Polluted RTV id=28 Cancellation
 
-The unauthorized RTV (doc id 16) was cancelled and its ledger effects reversed:
-- `docstatus` set to `CANCELLED`
-- Stock ledger reversal entries posted (negative of original)
-- GL reversal voucher posted (balanced)
-- `VendorLedgerEntry` reversed
+| Attribute | Value |
+|-----------|-------|
+| Doc number | `26-27/BANKA/RTV/1` |
+| Store | BANKA (out of deo.manager's scope) |
+| Brand | Blackberrys (owned) |
+| unit_cost_paise | 0 (no GL impact) |
+| SLE impact | 1 unit stock out of BB-TROU-GRY-34 |
+| GL impact | None (cost was 0) |
+| VLE impact | None |
 
-### Post-cleanup `/api/finledger/health` payload:
+**Cleanup actions:**
+- Appended reversing SLE entry (+1 BB-TROU-GRY-34 at BANKA)
+- Updated StockOnHand: BANKA BB-TROU-GRY-34 restored from 14 → 15 units
+- Set docstatus to CANCELLED
+
+### Post-cleanup `/api/finledger/health`:
 ```json
 {
     "balanced": true,
     "trial_balance_paise": 0,
-    "trial_balance_rupees": "0.00",
     "reconciliation": {
         "reconciled": true,
-        "vendor": {
-            "reconciled": true,
-            "subledger_paise": 6788000,
-            "gl_control_paise": 6788000,
-            "drift_paise": 0
-        },
-        "cash": {
-            "reconciled": true,
-            "subledger_paise": 0,
-            "gl_control_paise": 0,
-            "drift_paise": 0
-        }
-    },
-    "assets_paise": 11588000,
-    "liabilities_paise": 11588000,
-    "leg_count": 22,
-    "voucher_count": 11
+        "vendor": { "drift_paise": 0 },
+        "cash": { "drift_paise": 0 }
+    }
 }
 ```
-**Ledger health: ✅ balanced, ✅ reconciled, 0 drift everywhere.**
+**✅ balanced, ✅ reconciled, 0 drift everywhere.**
 
 ---
 
-## 4. Regression Test Counts
+## 4. V-Flip Brand Display Fix
 
-| Suite | Before RBAC | After RBAC + V-flip regression | Status |
-|-------|-------------|-------------------------------|--------|
-| Full backend pytest | 387 passed, 1 skipped | **390 passed, 1 skipped** | ✅ 0 failures |
-| Outbound-specific | 20 tests | **23 tests** | ✅ 0 failures |
-| Frontend (iteration_21) | 14/14 features | 14/14 features | ✅ |
-| Bug fix (iteration_22) | 8/8 | 8/8 | ✅ |
+| Before | After |
+|--------|-------|
+| `StockOnHand.brand = "V KDPS"` | `StockOnHand.brand = "V Louis Philippe"` |
+| SLE vflip_in brand = "V KDPS" | Compensating entries: -1 "V KDPS" + +1 "V Louis Philippe" |
 
-### New tests added (this session):
-1. `test_vflip_brand_displays_v_prefix` — V-flip sets StockOnHand.brand = "V {brand}", net_qty unchanged, SLE carries V-prefix
-2. `test_vflip_ownership_is_kdps_owned` — GL has Dr INVENTORY (KDPS-owned), not SOR_STOCK
-3. `test_rtv_blocked_for_vflipped_stock` — seasonal RTV on V-flipped SKU raises `OutboundPostingError`
+**Root cause**: `line.brand` was empty string (frontend doesn't always populate it), and the code fell back to `"V KDPS"` instead of `vflip.original_brand.name`.
+
+**Fix**: Changed fallback from `"V KDPS"` to `vflip.original_brand.name` in `post_vflip()`.
+
+**Current on-hand display:**
+```
+LP-POLO-BLK-L         brand=Louis Philippe            qty=4
+LP-SLIM-WHT-38        brand=V Louis Philippe          qty=13
+```
 
 ---
 
-## 5. Environment Change
+## 5. Regression Test Counts
 
-### Issue
-`REACT_APP_BACKEND_URL` was hardcoded to a stale pod URL (`bookstore-erp-1.preview.emergentagent.com`), causing CORS failures when the platform issued a different preview URL.
+| | Before | After | Delta |
+|--|--------|-------|-------|
+| Total pytest | 390 passed, 1 skipped | **401 passed, 1 skipped** | +11 |
+| Outbound posting | 23 | **24** | +1 (empty brand fallback) |
+| Store-scope API | 0 | **10** | +10 (new file) |
+| Failures | 0 | **0** | — |
 
-### Fix — same-origin approach
-The platform's Kubernetes ingress routes `/api/*` → backend and `/*` → frontend behind the **same** hostname. The frontend no longer needs an absolute backend URL.
+---
+
+## 6. Env Change (from prior fix)
 
 | File | Before | After |
 |------|--------|-------|
-| `frontend/.env` | `REACT_APP_BACKEND_URL=https://bookstore-erp-1.preview.emergentagent.com` | `REACT_APP_BACKEND_URL=` (empty) |
-| `frontend/src/lib/api.ts` | `const BASE = import.meta.env.REACT_APP_BACKEND_URL as string;`<br>`if (!BASE) throw new Error(...)` | `const BASE = (import.meta.env.REACT_APP_BACKEND_URL as string) \|\| "";` |
-
-**Behavior**: When `REACT_APP_BACKEND_URL` is empty, axios baseURL is `/api` (same-origin). Set it explicitly only for cross-origin dev (e.g., local FE → remote API). Works on any pod/preview URL without hardcoding.
-
----
-
-## 6. V-Flip Reporting Verification
-
-### Verification checklist
-
-| # | Check | Result | Detail |
-|---|-------|--------|--------|
-| 1a | Stock on-hand shows "V {brand}" after flip | ✅ | `StockOnHand.brand` updated to "V {brand}" on the positive-qty inward in `_write_stock_entry` (line 104 refresh). Confirmed by test `test_vflip_brand_displays_v_prefix`. |
-| 1b | Stock ledger entries carry "V {brand}" | ✅ | `vflip_in` SLE rows store `brand="V SORBrand"`. `vflip_out` rows keep the original brand for audit trail. |
-| 1c | Brand-scoped filters work correctly | ✅ | `/api/stockledger/on-hand?brand=Louis Philippe` returns un-flipped stock only. `?brand=V Louis Philippe` returns flipped stock. No data vanishes. |
-| 2a | Ownership flag is KDPS-owned in GL | ✅ | GL posts `Dr INVENTORY / Cr SUSPENSE` (KDPS-owned). SOR pair reversed. Confirmed by test `test_vflip_ownership_is_kdps_owned`. |
-| 2b | Seasonal RTV blocked for V-flipped stock | ✅ **PATCHED** | **Gap found**: `post_rtv` only checked `Brand.ownership` (master), not actual stock state. **Fix**: Added check in `post_rtv` — if any line's `StockOnHand.brand` starts with "V ", raises `OutboundPostingError("Cannot RTV V-flipped stock")`. Confirmed by test `test_rtv_blocked_for_vflipped_stock`. |
-
-### Patch applied
-**File**: `outbound/posting.py` — `post_rtv()`, after stock check, before `rtv.post()`:
-```python
-# Block RTVs on V-flipped stock: ownership has transferred to KDPS,
-# so returning it to the brand is no longer valid.
-vflipped_skus = list(
-    StockOnHand.objects.filter(
-        store_id=rtv.store_id,
-        sku_code__in=[l.sku_code for l in lines],
-        brand__startswith="V ",
-    ).values_list("sku_code", flat=True)
-)
-if vflipped_skus:
-    raise OutboundPostingError(
-        f"Cannot RTV V-flipped stock (ownership transferred to KDPS): "
-        f"{', '.join(vflipped_skus)}"
-    )
-```
+| `frontend/.env` | `REACT_APP_BACKEND_URL=https://bookstore-erp-1.preview.emergentagent.com` | `REACT_APP_BACKEND_URL=` (empty → same-origin) |
+| `frontend/src/lib/api.ts` | Hard throw on missing BASE | Graceful fallback to `""` (same-origin) |
 
 ---
 
@@ -157,14 +126,3 @@ if vflipped_skus:
 | Multi-tier approval workflows | Sprint 5 (Controls) | Requires exception/controls framework |
 | Non-branded PT AI/OCR wiring | Future (P2) | Gemini integration present but not active |
 | V-flip past-return-window dashboard alert | Enhancement (backlog) | Needs cron/scheduler |
-
----
-
-## 8. Files Modified This Session
-
-| File | Change |
-|------|--------|
-| `frontend/.env` | `REACT_APP_BACKEND_URL` set to empty (same-origin) |
-| `frontend/src/lib/api.ts` | Graceful fallback to same-origin when env var empty |
-| `backend/outbound/posting.py` | V-flip guard added to `post_rtv()` |
-| `backend/tests/test_outbound_sprint1.py` | 3 regression tests added (V-flip brand display, ownership, RTV block) |
