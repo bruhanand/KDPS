@@ -95,8 +95,12 @@ Phase-by-phase execution plan covering Outbound, Offers, Analytics, HR, Controls
 - Multi-company support
 
 ## Test Counts
-- Backend: 231 passed, 63 skipped, 0 failures (as of Sprint 1 close)
+- Backend: 231 passed, 63 skipped, 0 failures (before and after seed — no regression)
 - Frontend: 14/14 features passing (testing agent iteration_21)
+- Demo stock seeded via real inbound pipeline (Booking → GRN → PT → post_pt_inward)
+- Owned RTV GL verified: Dr VENDOR_PAYABLE / Cr INVENTORY (balanced)
+- Brand-owned (SOR) RTV GL verified: No GL entries (correct — off-book)
+- Finledger health: balanced=true, 8 legs, 4 vouchers post-verification
 
 ## API Endpoints (Outbound)
 ```
