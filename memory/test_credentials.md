@@ -6,11 +6,15 @@
 |----------|----------|------|-------|
 | `admin` | `Admin@123` | Superuser | All stores |
 | `owner` | `Owner@123` | Owner | All stores |
-| `sm_de0` | `Sm@12345` | Store Manager | DEO (Deoghar) |
-| `cashier_de0` | `Cash@123` | Store Staff | DEO (Deoghar) |
-| `ho_ops` | `Ops@12345` | HO Ops | All stores |
+| `deo.sm` | `Store@123` | Store Manager | DEO (Deoghar) |
+| `deo.cashier` | `Store@123` | Store Staff | DEO (Deoghar) |
+| `ho_ops` | `Store@123` | HO Ops | All stores |
+| `accounts1` | `Store@123` | Accounts | All stores |
+| `it_admin1` | `Store@123` | IT Admin | All stores |
+| `wh.patna` | `Store@123` | Warehouse | All stores |
 
-`admin` is the Django superuser (also reaches `/admin`).
+`admin` is the Django superuser (also reaches `/admin`).  
+All demo users (except admin/owner) use password `Store@123`.
 
 ## Demo Stock Seed
 

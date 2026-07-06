@@ -274,6 +274,19 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
                memo=f"RTV {rtv.return_type}: stock returned"),
         ], posted_by=user)
 
+        # Vendor subledger mirror — reduces what we owe (negative amount).
+        # GL is already posted above via post_entries, so gl=False to avoid
+        # double-booking the payable (same pattern as post_pt_vendor_bill).
+        from finledger.posting import post_vendor_bill
+        post_vendor_bill(
+            rtv.vendor,
+            -total_value_paise,
+            f"RTV {rtv.return_type}: credit for {rtv.doc_number}",
+            user,
+            reference=rtv.doc_number,
+            gl=False,
+        )
+
     return entries
 
 

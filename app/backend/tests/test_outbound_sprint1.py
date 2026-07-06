@@ -43,6 +43,7 @@ from outbound.posting import (
 )
 from stockledger.models import StockLedgerEntry, StockOnHand
 from vendors.models import Vendor
+from finledger.models import VendorLedgerEntry
 
 
 @pytest.fixture()
@@ -117,6 +118,11 @@ def _outbound_scaffold(db):
                 prefix=f"{store_code}/{doc_type}/{fy}/",
                 next_seq=1,
             )
+    # Vendor subledger voucher series (headquarter-scoped, shared across stores)
+    VoucherSeries.objects.get_or_create(
+        fy=fy, store_code="HO", doc_type="VEND",
+        defaults={"prefix": f"HO/VEND/{fy}/", "next_seq": 1},
+    )
 
     return {
         "entity": entity,
@@ -332,6 +338,12 @@ def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
     assert dr_entry.amount == 200  # 2 × 100 paise
     assert cr_entry.amount == -200
 
+    # Vendor subledger must mirror GL VENDOR_PAYABLE (regression: was missing)
+    vle = VendorLedgerEntry.objects.filter(reference=rtv.doc_number)
+    assert vle.count() == 1
+    assert vle.first().amount == -200  # negative = reduces payable
+    assert vle.first().vendor == s["vendor"]
+
 
 @pytest.mark.django_db(transaction=True)
 def test_rtv_sor_brand_no_gl(_outbound_scaffold):
@@ -359,6 +371,9 @@ def test_rtv_sor_brand_no_gl(_outbound_scaffold):
     # No GL entries for brand-owned
     gl_count = GLEntry.objects.filter(doc_number=rtv.doc_number).count()
     assert gl_count == 0
+
+    # No vendor subledger entry for brand-owned RTV (off-book)
+    assert VendorLedgerEntry.objects.filter(reference=rtv.doc_number).count() == 0
 
 
 # ---------------------------------------------------------------------------
@@ -654,3 +669,77 @@ def test_rtv_credit_note_tracking(_outbound_scaffold):
     rtv.refresh_from_db()
     assert rtv.credit_note_received is True
     assert str(rtv.credit_note_date) == "2026-07-15"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_owned_rtv_vendor_subledger_in_sync(_outbound_scaffold):
+    """Regression: owned RTV must keep vendor subledger in sync with GL.
+
+    After posting an owned RTV:
+      GL:         Dr VENDOR_PAYABLE / Cr INVENTORY  (balanced)
+      Subledger:  VendorLedgerEntry.amount == -|GL VENDOR_PAYABLE dr|
+
+    The sum of VendorLedgerEntry.amount for this vendor must equal the total
+    GL VENDOR_PAYABLE balance for that vendor's reference.
+    """
+    from django.db.models import Sum
+
+    s = _outbound_scaffold
+    rtv = ReturnToVendor.objects.create(
+        store=s["store_a"],
+        vendor=s["vendor"],
+        brand=s["brand_owned"],
+        return_type="defective",
+        logistics_route="warehouse",
+        created_by=s["user"],
+    )
+    ReturnToVendorLine.objects.create(
+        rtv=rtv, sku_code="SKU001",
+        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
+        season="SS26", item="shirt", hsn="6205",
+        qty=3, unit_cost_paise=100,
+    )
+    post_rtv(rtv, user=s["user"])
+
+    # GL VENDOR_PAYABLE debit for this RTV
+    gl_payable_dr = GLEntry.objects.filter(
+        doc_number=rtv.doc_number, account=GLAccount.VENDOR_PAYABLE
+    ).aggregate(s=Sum("amount"))["s"] or 0
+
+    # Vendor subledger entries referencing this RTV
+    sub_amount = VendorLedgerEntry.objects.filter(
+        reference=rtv.doc_number
+    ).aggregate(s=Sum("amount"))["s"] or 0
+
+    # GL debit (positive) should equal negative of subledger (which is negative)
+    assert gl_payable_dr == -sub_amount, (
+        f"Vendor subledger drift! GL dr={gl_payable_dr}, sub={sub_amount}"
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_sor_rtv_no_vendor_subledger_entry(_outbound_scaffold):
+    """Brand-owned (SOR) RTV must NOT create vendor subledger entries.
+
+    SOR stock is off-book: brand owns the value, we only track physical
+    stock movement. No monetary claim is posted.
+    """
+    s = _outbound_scaffold
+    rtv = ReturnToVendor.objects.create(
+        store=s["store_a"],
+        vendor=s["vendor"],
+        brand=s["brand_sor"],
+        return_type="seasonal",
+        created_by=s["user"],
+    )
+    ReturnToVendorLine.objects.create(
+        rtv=rtv, sku_code="SKU002",
+        design="Jeans", color="Black", size="L", brand="SORBrand",
+        season="SS26", item="jeans", hsn="6203",
+        qty=2, unit_cost_paise=200,
+    )
+    post_rtv(rtv, user=s["user"])
+
+    # No GL, no vendor subledger
+    assert GLEntry.objects.filter(doc_number=rtv.doc_number).count() == 0
+    assert VendorLedgerEntry.objects.filter(reference=rtv.doc_number).count() == 0
