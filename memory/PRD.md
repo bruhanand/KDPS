@@ -49,6 +49,18 @@ Phase-by-phase execution plan covering Outbound, Offers, Analytics, HR, Controls
 - Non-branded PT AI OCR → Future sprint
 - Seasonal return window dashboard alerts → Enhancement (backend cron)
 
+**V-Flip Reporting Verification (6 Jul 2026):**
+- StockOnHand.brand correctly updates to "V {brand}" after flip ✅
+- SLE entries carry V-prefix for audit trail ✅
+- Brand filters correctly separate flipped vs un-flipped stock ✅
+- GL posts INVENTORY (KDPS-owned), not SOR_STOCK ✅
+- RTV blocked on V-flipped stock (patch applied to post_rtv) ✅
+- 3 regression tests added: brand display, ownership GL, RTV block
+
+**Env Fix (6 Jul 2026):**
+- REACT_APP_BACKEND_URL changed from hardcoded pod URL to empty (same-origin)
+- api.ts gracefully falls back to same-origin when env var empty
+
 ## Upcoming Sprints (Prioritized Backlog)
 
 ### Sprint 2 — Offers / Discounts (P1)
@@ -95,12 +107,13 @@ Phase-by-phase execution plan covering Outbound, Offers, Analytics, HR, Controls
 - Multi-company support
 
 ## Test Counts
-- Backend: 233 passed, 72 skipped, 0 failures (20 outbound tests incl. 2 vendor subledger regression)
+- Backend: 390 passed, 1 skipped, 0 failures (23 outbound tests incl. 3 V-flip regression)
 - Frontend: 14/14 features passing (testing agent iteration_21)
 - Bug fix verification: 8/8 tests passed (testing agent iteration_22)
 - Demo stock seeded via real inbound pipeline (Booking → GRN → PT → post_pt_inward)
 - Owned RTV GL verified: Dr VENDOR_PAYABLE / Cr INVENTORY (balanced) + VendorLedgerEntry mirror
 - Brand-owned (SOR) RTV GL verified: No GL entries, no vendor subledger (correct — off-book)
+- V-flip verified: brand → "V {brand}", INVENTORY GL, RTV blocked on V-flipped stock
 - Finledger health: balanced=true, reconciliation.reconciled=true, vendor.drift=0, cash.drift=0
 
 ## API Endpoints (Outbound)

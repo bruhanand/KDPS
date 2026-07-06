@@ -3,8 +3,9 @@ import type { AxiosRequestConfig } from "axios";
 
 import type { components, paths } from "./api-schema";
 
-const BASE = import.meta.env.REACT_APP_BACKEND_URL as string;
-if (!BASE) throw new Error("REACT_APP_BACKEND_URL is required");
+// Same-origin when unset (platform proxy routes /api → backend on same host).
+// Set REACT_APP_BACKEND_URL explicitly only for cross-origin dev (e.g. local FE → remote API).
+const BASE = (import.meta.env.REACT_APP_BACKEND_URL as string) || "";
 
 export const api = axios.create({ baseURL: `${BASE}/api`, withCredentials: true });
 

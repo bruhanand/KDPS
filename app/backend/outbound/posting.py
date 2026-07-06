@@ -232,6 +232,21 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
     for line in lines:
         _check_stock(rtv.store_id, line.sku_code, line.qty)
 
+    # Block RTVs on V-flipped stock: ownership has transferred to KDPS,
+    # so returning it to the brand is no longer valid.
+    vflipped_skus = list(
+        StockOnHand.objects.filter(
+            store_id=rtv.store_id,
+            sku_code__in=[l.sku_code for l in lines],
+            brand__startswith="V ",
+        ).values_list("sku_code", flat=True)
+    )
+    if vflipped_skus:
+        raise OutboundPostingError(
+            f"Cannot RTV V-flipped stock (ownership transferred to KDPS): "
+            f"{', '.join(vflipped_skus)}"
+        )
+
     rtv.post()
 
     entries = []

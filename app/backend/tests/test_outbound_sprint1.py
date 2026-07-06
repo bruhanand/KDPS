@@ -743,3 +743,101 @@ def test_sor_rtv_no_vendor_subledger_entry(_outbound_scaffold):
     # No GL, no vendor subledger
     assert GLEntry.objects.filter(doc_number=rtv.doc_number).count() == 0
     assert VendorLedgerEntry.objects.filter(reference=rtv.doc_number).count() == 0
+
+
+
+# ---------------------------------------------------------------------------
+# V-flip reporting / downstream regression tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.django_db(transaction=True)
+def test_vflip_brand_displays_v_prefix(_outbound_scaffold):
+    """After V-flip, StockOnHand.brand = 'V {brand}' and SLE entries carry it."""
+    s = _outbound_scaffold
+    vflip = VFlip.objects.create(
+        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
+        authorized_by=s["user"], created_by=s["user"],
+    )
+    VFlipLine.objects.create(
+        vflip=vflip, sku_code="SKU002",
+        design="Jeans", color="Black", size="L", brand="SORBrand",
+        season="SS26", item="jeans", hsn="6203",
+        qty=3, unit_cost_paise=200,
+    )
+    post_vflip(vflip, user=s["user"])
+
+    # (a) StockOnHand brand shows "V SORBrand"
+    oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")
+    assert oh.brand == "V SORBrand", f"Expected 'V SORBrand', got '{oh.brand}'"
+
+    # (b) Net qty unchanged (ownership change, not physical move)
+    assert oh.net_qty == 5
+
+    # (c) SLE vflip_in entry carries "V SORBrand"
+    vflip_in = StockLedgerEntry.objects.filter(
+        doc_number=vflip.doc_number, kind="vflip_in",
+    )
+    assert vflip_in.count() == 1
+    assert vflip_in.first().brand == "V SORBrand"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_vflip_ownership_is_kdps_owned(_outbound_scaffold):
+    """After V-flip, the stock is KDPS-owned in GL terms (INVENTORY, not SOR_STOCK)."""
+    s = _outbound_scaffold
+    vflip = VFlip.objects.create(
+        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
+        authorized_by=s["user"], created_by=s["user"],
+    )
+    VFlipLine.objects.create(
+        vflip=vflip, sku_code="SKU002",
+        design="Jeans", color="Black", size="L", brand="SORBrand",
+        season="SS26", item="jeans", hsn="6203",
+        qty=2, unit_cost_paise=200,
+    )
+    post_vflip(vflip, user=s["user"])
+
+    # GL must have Dr INVENTORY (now KDPS-owned) — confirms it's NOT SOR anymore
+    gl_inv = GLEntry.objects.filter(
+        doc_number=vflip.doc_number, account=GLAccount.INVENTORY,
+    )
+    assert gl_inv.exists()
+    assert gl_inv.first().amount > 0  # Debit = asset increase
+
+
+@pytest.mark.django_db(transaction=True)
+def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
+    """Cannot RTV stock that was V-flipped — ownership transferred to KDPS."""
+    s = _outbound_scaffold
+
+    # First: V-flip 3 units of SKU002 (SOR → KDPS-owned)
+    vflip = VFlip.objects.create(
+        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
+        authorized_by=s["user"], created_by=s["user"],
+    )
+    VFlipLine.objects.create(
+        vflip=vflip, sku_code="SKU002",
+        design="Jeans", color="Black", size="L", brand="SORBrand",
+        season="SS26", item="jeans", hsn="6203",
+        qty=3, unit_cost_paise=200,
+    )
+    post_vflip(vflip, user=s["user"])
+
+    # Confirm the stock is now "V SORBrand"
+    oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")
+    assert oh.brand.startswith("V ")
+
+    # Now attempt an RTV for the same SKU — must be blocked
+    rtv = ReturnToVendor.objects.create(
+        store=s["store_a"], vendor=s["vendor"], brand=s["brand_sor"],
+        return_type="seasonal", created_by=s["user"],
+    )
+    ReturnToVendorLine.objects.create(
+        rtv=rtv, sku_code="SKU002",
+        design="Jeans", color="Black", size="L", brand="SORBrand",
+        season="SS26", item="jeans", hsn="6203",
+        qty=2, unit_cost_paise=200,
+    )
+
+    with pytest.raises(OutboundPostingError, match="V-flipped stock"):
+        post_rtv(rtv, user=s["user"])
