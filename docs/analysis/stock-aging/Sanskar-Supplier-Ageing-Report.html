@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanskar — Supplier Outstanding &amp; Ageing Report</title>
+<style>
+  :root{
+    --ink:#16233d; --ink2:#33415c; --muted:#6b7488; --line:#e6e3dc;
+    --paper:#f7f6f2; --card:#ffffff; --gold:#b8860b; --gold-soft:#f3ead2;
+    --red:#b5341f; --red-soft:#fbeae6; --green:#1f7a4d; --green-soft:#e7f3ec;
+    --blue:#2b5b8c; --blue-soft:#e9f0f7; --amber:#b9791a; --amber-soft:#fbf0dd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  h1,h2,h3{line-height:1.2;margin:0}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  header{background:linear-gradient(135deg,#16233d 0%,#243a5e 100%);color:#fff;padding:46px 0 38px}
+  header .kick{letter-spacing:.18em;text-transform:uppercase;font-size:12px;color:#c7d2e2;font-weight:600}
+  header h1{font-size:32px;margin:10px 0 6px;font-weight:700}
+  header .sub{color:#cfd9e8;font-size:15px;max-width:820px}
+  header .meta{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px;font-size:12.5px}
+  header .meta span{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);padding:5px 11px;border-radius:20px;color:#e8eef6}
+  section{padding:34px 0;border-bottom:1px solid var(--line)}
+  .eyebrow{display:inline-block;letter-spacing:.13em;text-transform:uppercase;font-size:11.5px;font-weight:700;color:var(--gold);margin-bottom:8px}
+  h2{font-size:23px;margin-bottom:6px}
+  .lead{color:var(--ink2);font-size:15.5px;max-width:840px}
+  p{color:var(--ink2);font-size:14.5px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 16px 14px;box-shadow:0 1px 2px rgba(20,33,61,.04)}
+  .kpi .lab{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+  .kpi .big{font-size:25px;font-weight:700;margin-top:5px;letter-spacing:-.5px}
+  .kpi .note{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .kpi.good .big{color:var(--green)} .kpi.warn .big{color:var(--red)} .kpi.flag .big{color:var(--amber)}
+  .call{border-left:4px solid var(--blue);background:var(--blue-soft);border-radius:0 10px 10px 0;padding:14px 18px;margin:16px 0;font-size:14.5px;color:var(--ink)}
+  .call.red{border-color:var(--red);background:var(--red-soft)}
+  .call.green{border-color:var(--green);background:var(--green-soft)}
+  .call.gold{border-color:var(--gold);background:var(--gold-soft)}
+  .chart{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-top:16px}
+  .chart h3{font-size:15px;margin-bottom:3px}
+  .chart .cap{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+  .hbar{display:grid;grid-template-columns:230px 1fr 130px;align-items:center;gap:10px;margin:7px 0;font-size:13px}
+  .hbar .lbl{color:var(--ink2);font-weight:600;text-align:right;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .track{background:#eef0f3;border-radius:6px;height:20px;position:relative;overflow:hidden}
+  .fill{height:100%;border-radius:6px;background:linear-gradient(90deg,#2b5b8c,#3f78b0)}
+  .val{font-weight:700;text-align:left;font-size:12.5px;color:var(--ink)}
+  .months{display:flex;align-items:flex-end;gap:7px;height:230px;margin-top:8px;padding-top:10px}
+  .mcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+  .mcol .b{width:78%;border-radius:4px 4px 0 0;min-height:2px}
+  .mcol .ml{font-size:10px;color:var(--muted);margin-top:6px;white-space:nowrap}
+  .mcol .mv{font-size:9.5px;color:var(--ink2);font-weight:700;margin-bottom:3px;white-space:nowrap}
+  .mcol .mp{font-size:9px;font-weight:700;margin-top:2px;white-space:nowrap}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:13px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  td:nth-child(2){text-align:right}
+  table.lefty td:nth-child(2){text-align:left}
+  thead th{background:#f0eee8;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink2);font-weight:700}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even){background:#faf9f6}
+  tfoot td{font-weight:700;background:#f0eee8;border-top:2px solid #d8d3c8}
+  tr.grp td{background:#eef1f6;border-top:2px solid #d8dce6;text-align:right}
+  tr.grp td:first-child{text-align:left}
+  .tag{display:inline-block;padding:2px 8px;border-radius:11px;font-size:11px;font-weight:700;white-space:nowrap}
+  .tag.g{background:var(--green-soft);color:var(--green)} .tag.r{background:var(--red-soft);color:var(--red)}
+  .tag.a{background:var(--amber-soft);color:var(--amber)} .tag.b{background:var(--blue-soft);color:var(--blue)}
+  .pos{color:var(--green);font-weight:700} .neg{color:var(--red);font-weight:700}
+  .act{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:0 12px 12px 0;padding:16px 18px;margin:13px 0}
+  .act h3{font-size:16px;display:flex;align-items:center;gap:9px}
+  .act .pr{font-size:11px;font-weight:800;letter-spacing:.04em;color:#fff;background:var(--red);padding:2px 9px;border-radius:5px}
+  .act .pr.med{background:var(--amber)} .act .pr.low{background:var(--blue)}
+  .act p{margin:8px 0 0;font-size:13.5px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  ul.tight{margin:10px 0;padding-left:20px} ul.tight li{font-size:14px;color:var(--ink2);margin:6px 0}
+  .foot{padding:26px 0 60px;color:var(--muted);font-size:12px} .foot b{color:var(--ink2)}
+  details{margin-top:14px}
+  details summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--blue);padding:10px 0}
+  @page{size:A4;margin:9mm}
+  @media print{
+    body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .kpis{grid-template-columns:repeat(4,1fr)}
+    details summary{display:none}
+    .chart,.act,.call,.kpi{page-break-inside:avoid}
+    tr{page-break-inside:avoid}
+    thead{display:table-header-group}
+    section{padding:22px 0}
+  }
+  @media (max-width:760px){ .kpis{grid-template-columns:1fr 1fr} .two{grid-template-columns:1fr} .hbar{grid-template-columns:130px 1fr 110px} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="kick">KDPS Lifestyle · Accounts Payable</div>
+    <h1>Sanskar — Supplier Outstanding &amp; Ageing Report</h1>
+    <div class="sub">Party-wise dues and bill-level ageing for the Sanskar unit, from the supplier ledger and the T+30 ageing register. All ages are counted from the supplier's bill (document) date.</div>
+    <div class="meta">
+      <span>As on <b>5 July 2026</b></span>
+      <span>Payment terms: <b>bill date + 30 days</b></span>
+      <span>Source: <i>Suppliers Detials with ageing.xlsx</i></span>
+      <span>163 open bills · 66 suppliers with dues</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">At a glance</span>
+    <h2>The headline: ₹1.05 crore payable, and 95% of it is already past due</h2>
+    <p class="lead">Sanskar has bought <b>₹7.32 Cr</b> from ~230 suppliers and paid <b>₹6.30 Cr</b>, leaving a net payable of <b>₹1,02,33,631</b>. 131 suppliers are fully settled — the entire due sits with <b>66 suppliers across 163 bills</b>. Only ₹4,94,379 is still within the 30-day term; everything else has crossed it.</p>
+
+    <div class="kpis">
+      <div class="kpi warn"><div class="lab">Total outstanding</div><div class="big num">₹1,05,03,026</div><div class="note">66 suppliers · net ₹1,02,33,631 after −₹2.7L credits</div></div>
+      <div class="kpi warn"><div class="lab">Overdue (past T+30)</div><div class="big num">₹1,00,43,178</div><div class="note">154 of 163 bills · 95% of the book</div></div>
+      <div class="kpi warn"><div class="lab">Older than 180 days</div><div class="big num">₹22,38,060</div><div class="note">47 bills · 20 suppliers · GST ITC-reversal exposure</div></div>
+      <div class="kpi flag"><div class="lab">Crosses 180 days within 30 days</div><div class="big num">₹25,84,448</div><div class="note">27 bills now 151–180 days old</div></div>
+    </div>
+
+    <div class="call red"><b>The single most important number:</b> ₹22.4L of these bills are already more than 180 days old. Under GST Rule 37, input tax credit taken on a purchase must be reversed (with interest) if the supplier is not paid within 180 days of the invoice. Another ₹25.8L crosses that line within the next 30 days — paying those 27 bills first protects the credit before it is lost.</div>
+
+    <ul class="tight">
+      <li><b>This is not an old, forgotten book — it is a recent bulge.</b> 61% of the money (₹64.2L) sits in the 91–180-day band, almost all of it from heavy buying in <b>January and March 2026</b> (₹24.5L + ₹23.4L of those two months' bills are still unpaid).</li>
+      <li><b>Ten suppliers hold half the money.</b> The top 10 account for 50% of the outstanding — ten settlement conversations cover ~₹53.0L.</li>
+      <li><b>150 of 163 bills have had no payment at all</b> (₹95.1L); only 13 bills are part-paid.</li>
+      <li><b>₹2.7L of Sanskar's money is lying with 33 suppliers</b> as excess payment / credit balances — recover it or adjust it against fresh purchases.</li>
+      <li><b>The register needs housekeeping:</b> ~₹8.8L of part-payments are not mapped to bills (the ageing sheet overstates those parties), and 6 suppliers with ₹8.5L of ledger dues have no bills in the ageing sheet at all — led by Shree Garments (₹5.2L).</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Ageing profile</span>
+    <h2>Where the money sits, by age of bill</h2>
+    <p class="lead">Each bill is aged from its document date to 5 July 2026. The book is concentrated in the 91–180-day band — bills from the winter/spring 2026 buying that were never cleared.</p>
+
+    <div class="chart">
+      <h3>Outstanding by ageing bucket</h3>
+      <div class="cap">Darker = older. Everything right of the 90-day mark (₹86.6L, 82%) is seriously overdue; the last two buckets already carry GST ITC-reversal exposure.</div>
+      <div class="months" style="height:260px"><div class="mcol" title="0–30 days · ₹4,94,379 · 9 bills · 4.7%">
+      <div class="mv num">₹4.9L</div>
+      <div class="b" style="height:15px;background:#86b6ef"></div>
+      <div class="ml">0–30 d</div><div class="mp num" style="color:#6b7488">5% · 9 bills</div></div><div class="mcol" title="31–60 days · ₹5,14,443 · 11 bills · 4.9%">
+      <div class="mv num">₹5.1L</div>
+      <div class="b" style="height:15px;background:#5598e7"></div>
+      <div class="ml">31–60 d</div><div class="mp num" style="color:#6b7488">5% · 11 bills</div></div><div class="mcol" title="61–90 days · ₹8,72,385 · 17 bills · 8.3%">
+      <div class="mv num">₹8.7L</div>
+      <div class="b" style="height:26px;background:#2a78d6"></div>
+      <div class="ml">61–90 d</div><div class="mp num" style="color:#6b7488">8% · 17 bills</div></div><div class="mcol" title="91–180 days · ₹64,18,290 · 79 bills · 60.9%">
+      <div class="mv num">₹64.2L</div>
+      <div class="b" style="height:190px;background:#1c5cab"></div>
+      <div class="ml">91–180 d</div><div class="mp num" style="color:#6b7488">61% · 79 bills</div></div><div class="mcol" title="181–365 days · ₹17,43,078 · 35 bills · 16.5%">
+      <div class="mv num">₹17.4L</div>
+      <div class="b" style="height:52px;background:#104281"></div>
+      <div class="ml">181–365 d</div><div class="mp num" style="color:#6b7488">17% · 35 bills</div></div><div class="mcol" title="1 yr + days · ₹4,94,982 · 12 bills · 4.7%">
+      <div class="mv num">₹4.9L</div>
+      <div class="b" style="height:15px;background:#072142"></div>
+      <div class="ml">1 yr + d</div><div class="mp num" style="color:#6b7488">5% · 12 bills</div></div></div>
+    </div>
+
+    <table>
+      <thead><tr><th>Bucket (days since bill date)</th><th>Bills</th><th>Outstanding</th><th>Share</th></tr></thead>
+      <tbody><tr><td>0–30 days</td><td class="num">9</td>
+      <td class="num"><b>₹4,94,379</b></td><td class="num">4.7%</td></tr><tr><td>31–60 days</td><td class="num">11</td>
+      <td class="num"><b>₹5,14,443</b></td><td class="num">4.9%</td></tr><tr><td>61–90 days</td><td class="num">17</td>
+      <td class="num"><b>₹8,72,385</b></td><td class="num">8.3%</td></tr><tr><td>91–180 days</td><td class="num">79</td>
+      <td class="num"><b>₹64,18,290</b></td><td class="num">60.9%</td></tr><tr><td>181–365 days</td><td class="num">35</td>
+      <td class="num"><b>₹17,43,078</b></td><td class="num">16.5%</td></tr><tr><td>1 yr + days</td><td class="num">12</td>
+      <td class="num"><b>₹4,94,982</b></td><td class="num">4.7%</td></tr></tbody>
+      <tfoot><tr><td>Total</td><td class="num">163</td><td class="num">₹1,05,37,557</td><td class="num">100%</td></tr></tfoot>
+    </table>
+
+    <div class="chart">
+      <h3>Unpaid amount by month of purchase</h3>
+      <div class="cap">When the still-unpaid bills were raised. The January and March 2026 buying seasons dominate — ₹47.9L of today's outstanding comes from just those two months.</div>
+      <div class="months"><div class="mcol" title="Sep 24 · ₹61,825 still unpaid">
+      <div class="mv num">₹62k</div>
+      <div class="b" style="height:4px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Sep 24</div></div><div class="mcol" title="Jan 25 · ₹66,203 still unpaid">
+      <div class="mv num">₹66k</div>
+      <div class="b" style="height:4px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jan 25</div></div><div class="mcol" title="Mar 25 · ₹7,550 still unpaid">
+      <div class="mv num">₹8k</div>
+      <div class="b" style="height:3px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Mar 25</div></div><div class="mcol" title="Apr 25 · ₹2,58,151 still unpaid">
+      <div class="mv num">₹2.6L</div>
+      <div class="b" style="height:17px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Apr 25</div></div><div class="mcol" title="May 25 · ₹86,310 still unpaid">
+      <div class="mv num">₹86k</div>
+      <div class="b" style="height:6px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">May 25</div></div><div class="mcol" title="Jun 25 · ₹14,943 still unpaid">
+      <div class="mv num">₹15k</div>
+      <div class="b" style="height:3px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jun 25</div></div><div class="mcol" title="Jul 25 · ₹2,73,499 still unpaid">
+      <div class="mv num">₹2.7L</div>
+      <div class="b" style="height:18px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jul 25</div></div><div class="mcol" title="Aug 25 · ₹1,94,696 still unpaid">
+      <div class="mv num">₹1.9L</div>
+      <div class="b" style="height:13px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Aug 25</div></div><div class="mcol" title="Sep 25 · ₹7,78,766 still unpaid">
+      <div class="mv num">₹7.8L</div>
+      <div class="b" style="height:53px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Sep 25</div></div><div class="mcol" title="Oct 25 · ₹2,67,049 still unpaid">
+      <div class="mv num">₹2.7L</div>
+      <div class="b" style="height:18px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Oct 25</div></div><div class="mcol" title="Nov 25 · ₹2,29,068 still unpaid">
+      <div class="mv num">₹2.3L</div>
+      <div class="b" style="height:15px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Nov 25</div></div><div class="mcol" title="Jan 26 · ₹24,47,207 still unpaid">
+      <div class="mv num">₹24.5L</div>
+      <div class="b" style="height:165px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jan 26</div></div><div class="mcol" title="Feb 26 · ₹6,64,636 still unpaid">
+      <div class="mv num">₹6.6L</div>
+      <div class="b" style="height:45px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Feb 26</div></div><div class="mcol" title="Mar 26 · ₹23,41,216 still unpaid">
+      <div class="mv num">₹23.4L</div>
+      <div class="b" style="height:158px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Mar 26</div></div><div class="mcol" title="Apr 26 · ₹14,44,388 still unpaid">
+      <div class="mv num">₹14.4L</div>
+      <div class="b" style="height:97px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Apr 26</div></div><div class="mcol" title="May 26 · ₹8,58,275 still unpaid">
+      <div class="mv num">₹8.6L</div>
+      <div class="b" style="height:58px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">May 26</div></div><div class="mcol" title="Jun 26 · ₹3,97,075 still unpaid">
+      <div class="mv num">₹4.0L</div>
+      <div class="b" style="height:27px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jun 26</div></div><div class="mcol" title="Jul 26 · ₹1,46,700 still unpaid">
+      <div class="mv num">₹1.5L</div>
+      <div class="b" style="height:10px;background:linear-gradient(180deg,#3f78b0,#2b5b8c)"></div>
+      <div class="ml">Jul 26</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Concentration</span>
+    <h2>Top 15 suppliers — 61% of the book</h2>
+    <p class="lead">Ranked by bill-level outstanding. The running percentage shows how quickly the book concentrates: the top 10 alone cover 50%.</p>
+    <div class="chart">
+      <h3>Largest outstanding balances</h3>
+      <div class="cap">Bar = outstanding; the grey figure is the cumulative share of the total book.</div>
+      <div class="hbar" title="POOJA DESIGNERS · ₹8,35,510 · 9 bills · oldest 103 days">
+      <div class="lbl">Pooja Designers</div>
+      <div class="track"><div class="fill" style="width:100.0%"></div></div>
+      <div class="val num">₹8.4L <span style="color:#6b7488;font-weight:400">· 8%</span></div></div><div class="hbar" title="R CREATION · ₹8,25,953 · 6 bills · oldest 164 days">
+      <div class="lbl">R Creation</div>
+      <div class="track"><div class="fill" style="width:98.9%"></div></div>
+      <div class="val num">₹8.3L <span style="color:#6b7488;font-weight:400">· 16%</span></div></div><div class="hbar" title="SHREE BALAJI · ₹5,68,632 · 5 bills · oldest 95 days">
+      <div class="lbl">Shree Balaji</div>
+      <div class="track"><div class="fill" style="width:68.1%"></div></div>
+      <div class="val num">₹5.7L <span style="color:#6b7488;font-weight:400">· 21%</span></div></div><div class="hbar" title="VARIETY TEXTILES · ₹5,63,905 · 17 bills · oldest 95 days">
+      <div class="lbl">Variety Textiles</div>
+      <div class="track"><div class="fill" style="width:67.5%"></div></div>
+      <div class="val num">₹5.6L <span style="color:#6b7488;font-weight:400">· 27%</span></div></div><div class="hbar" title="SHIVALI ICONIC TRENDS PVT LTD · ₹4,48,331 · 4 bills · oldest 166 days">
+      <div class="lbl">Shivali Iconic Trends Pvt Ltd</div>
+      <div class="track"><div class="fill" style="width:53.7%"></div></div>
+      <div class="val num">₹4.5L <span style="color:#6b7488;font-weight:400">· 31%</span></div></div><div class="hbar" title="S K GARMENTS · ₹4,46,818 · 4 bills · oldest 137 days">
+      <div class="lbl">S K Garments</div>
+      <div class="track"><div class="fill" style="width:53.5%"></div></div>
+      <div class="val num">₹4.5L <span style="color:#6b7488;font-weight:400">· 35%</span></div></div><div class="hbar" title="DEV CREATION · ₹4,06,843 · 5 bills · oldest 115 days">
+      <div class="lbl">Dev Creation</div>
+      <div class="track"><div class="fill" style="width:48.7%"></div></div>
+      <div class="val num">₹4.1L <span style="color:#6b7488;font-weight:400">· 39%</span></div></div><div class="hbar" title="LAXMI NX · ₹4,04,634 · 3 bills · oldest 170 days">
+      <div class="lbl">Laxmi Nx</div>
+      <div class="track"><div class="fill" style="width:48.4%"></div></div>
+      <div class="val num">₹4.0L <span style="color:#6b7488;font-weight:400">· 43%</span></div></div><div class="hbar" title="FBC CLOTHING · ₹4,02,150 · 3 bills · oldest 234 days">
+      <div class="lbl">Fbc Clothing</div>
+      <div class="track"><div class="fill" style="width:48.1%"></div></div>
+      <div class="val num">₹4.0L <span style="color:#6b7488;font-weight:400">· 47%</span></div></div><div class="hbar" title="NAMAN FASHION · ₹3,97,625 · 6 bills · oldest 643 days">
+      <div class="lbl">Naman Fashion</div>
+      <div class="track"><div class="fill" style="width:47.6%"></div></div>
+      <div class="val num">₹4.0L <span style="color:#6b7488;font-weight:400">· 50%</span></div></div><div class="hbar" title="PRIYAM FASHION · ₹2,70,412 · 1 bills · oldest 170 days">
+      <div class="lbl">Priyam Fashion</div>
+      <div class="track"><div class="fill" style="width:32.4%"></div></div>
+      <div class="val num">₹2.7L <span style="color:#6b7488;font-weight:400">· 53%</span></div></div><div class="hbar" title="GURUKRIPA ENTERPRISES · ₹2,57,450 · 1 bills · oldest 114 days">
+      <div class="lbl">Gurukripa Enterprises</div>
+      <div class="track"><div class="fill" style="width:30.8%"></div></div>
+      <div class="val num">₹2.6L <span style="color:#6b7488;font-weight:400">· 55%</span></div></div><div class="hbar" title="THE APPAREL COMPANY · ₹2,29,614 · 3 bills · oldest 239 days">
+      <div class="lbl">The Apparel Company</div>
+      <div class="track"><div class="fill" style="width:27.5%"></div></div>
+      <div class="val num">₹2.3L <span style="color:#6b7488;font-weight:400">· 57%</span></div></div><div class="hbar" title="RANCHI HANDLOOM PRIVATE LIMITED · ₹2,11,569 · 3 bills · oldest 5 days">
+      <div class="lbl">Ranchi Handloom Private Limited</div>
+      <div class="track"><div class="fill" style="width:25.3%"></div></div>
+      <div class="val num">₹2.1L <span style="color:#6b7488;font-weight:400">· 59%</span></div></div><div class="hbar" title="PARSHVDEEP TEXTILE · ₹2,03,700 · 1 bills · oldest 353 days">
+      <div class="lbl">Parshvdeep Textile</div>
+      <div class="track"><div class="fill" style="width:24.4%"></div></div>
+      <div class="val num">₹2.0L <span style="color:#6b7488;font-weight:400">· 61%</span></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Risk flags</span>
+    <h2>Compliance and chronic accounts</h2>
+
+    <div class="call red"><b>GST ITC reversal (Rule 37 — the 180-day rule).</b> ₹22,38,060 across 47 bills / 20 suppliers is unpaid beyond 180 days from the invoice date. ITC availed on these purchases is liable to be reversed with interest until paid (it can be re-availed after payment). The table below is the clearance priority list.</div>
+
+    <div class="two">
+      <div>
+        <table>
+          <thead><tr><th>Supplier (&gt;180-day bills)</th><th>Bills</th><th>Amount</th><th>Oldest</th></tr></thead>
+          <tbody><tr><td>Naman Fashion</td><td class="num">6</td>
+      <td class="num"><b>₹3,97,625</b></td><td class="num">643 d</td></tr><tr><td>Parshvdeep Textile</td><td class="num">1</td>
+      <td class="num"><b>₹2,03,700</b></td><td class="num">353 d</td></tr><tr><td>Poonam Fashion</td><td class="num">2</td>
+      <td class="num"><b>₹2,02,309</b></td><td class="num">337 d</td></tr><tr><td>Julahaa Exclusive</td><td class="num">10</td>
+      <td class="num"><b>₹2,00,000</b></td><td class="num">300 d</td></tr><tr><td>Neel Madhav Creation Private Limited</td><td class="num">2</td>
+      <td class="num"><b>₹1,94,371</b></td><td class="num">304 d</td></tr><tr><td>Fbc Clothing</td><td class="num">1</td>
+      <td class="num"><b>₹1,34,594</b></td><td class="num">234 d</td></tr><tr><td>Saaksh Apparels</td><td class="num">1</td>
+      <td class="num"><b>₹1,33,693</b></td><td class="num">288 d</td></tr><tr><td>Kishan Lal Rishikesh</td><td class="num">2</td>
+      <td class="num"><b>₹1,26,187</b></td><td class="num">260 d</td></tr><tr><td>Rathod Saree Editions</td><td class="num">2</td>
+      <td class="num"><b>₹1,01,247</b></td><td class="num">346 d</td></tr><tr><td>Zaheda Silk Sarees</td><td class="num">2</td>
+      <td class="num"><b>₹93,860</b></td><td class="num">488 d</td></tr><tr><td>Overseas Enterprises</td><td class="num">4</td>
+      <td class="num"><b>₹88,708</b></td><td class="num">444 d</td></tr><tr><td>Shree Manoj Apparel</td><td class="num">5</td>
+      <td class="num"><b>₹73,625</b></td><td class="num">318 d</td></tr><tr><td>Bansal Trading Company</td><td class="num">1</td>
+      <td class="num"><b>₹66,203</b></td><td class="num">520 d</td></tr><tr><td>Rahul Textiles</td><td class="num">1</td>
+      <td class="num"><b>₹65,782</b></td><td class="num">263 d</td></tr><tr><td>The Apparel Company</td><td class="num">1</td>
+      <td class="num"><b>₹51,707</b></td><td class="num">239 d</td></tr><tr><td>Manoj Enterprises</td><td class="num">2</td>
+      <td class="num"><b>₹44,251</b></td><td class="num">282 d</td></tr><tr><td>Agam Creation</td><td class="num">1</td>
+      <td class="num"><b>₹28,581</b></td><td class="num">293 d</td></tr><tr><td>Aditya Prints</td><td class="num">1</td>
+      <td class="num"><b>₹19,455</b></td><td class="num">666 d</td></tr><tr><td>Romshay Fabrics</td><td class="num">1</td>
+      <td class="num"><b>₹7,467</b></td><td class="num">660 d</td></tr><tr><td>Roop Rangi</td><td class="num">1</td>
+      <td class="num"><b>₹4,695</b></td><td class="num">670 d</td></tr></tbody>
+          <tfoot><tr><td>Total exposure</td><td class="num">47</td><td class="num">₹22,38,060</td><td></td></tr></tfoot>
+        </table>
+      </div>
+      <div>
+        <div class="call gold" style="margin-top:14px"><b>MSME — Section 43B(h).</b> ₹99.9L (95% of the book) is older than 45 days. For suppliers registered as micro/small enterprises, payment beyond the 45-day statutory limit means the expense is disallowed for income tax in the year of accrual. <b>Action: get Udyam registration status for the top suppliers</b> — none is recorded in this register today.</div>
+        <div class="call"><b>Chronic accounts.</b> Naman Fashion (₹4.0L, oldest bill 643 days), Zaheda Silk Sarees (₹94k), Overseas Enterprises and Bansal Trading have bills from FY 2024-25 still open. If these are disputes or quality claims, record them as such — otherwise they read as simple non-payment approaching two years.</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:26px;font-size:16px">The twelve oldest open bills</h3>
+    <table>
+      <thead><tr><th>Supplier</th><th>Bill date</th><th>Bill no.</th><th>Age (days)</th><th>Outstanding</th><th>Status</th></tr></thead>
+      <tbody><tr><td>Roop Rangi</td>
+      <td class="num">03 Sep 2024</td>
+      <td>RR-826</td>
+      <td class="num"><b>670</b></td>
+      <td class="num">₹4,695</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Aditya Prints</td>
+      <td class="num">07 Sep 2024</td>
+      <td>AP-1852</td>
+      <td class="num"><b>666</b></td>
+      <td class="num">₹19,455</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Romshay Fabrics</td>
+      <td class="num">13 Sep 2024</td>
+      <td>RF-1333/G</td>
+      <td class="num"><b>660</b></td>
+      <td class="num">₹7,467</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Naman Fashion</td>
+      <td class="num">30 Sep 2024</td>
+      <td>NF-128</td>
+      <td class="num"><b>643</b></td>
+      <td class="num">₹30,208</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td>Bansal Trading Company</td>
+      <td class="num">31 Jan 2025</td>
+      <td>BTC-47087</td>
+      <td class="num"><b>520</b></td>
+      <td class="num">₹66,203</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Zaheda Silk Sarees</td>
+      <td class="num">04 Mar 2025</td>
+      <td>ZSS-36</td>
+      <td class="num"><b>488</b></td>
+      <td class="num">₹7,550</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Naman Fashion</td>
+      <td class="num">08 Apr 2025</td>
+      <td>NF-19</td>
+      <td class="num"><b>453</b></td>
+      <td class="num">₹23,897</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td>Overseas Enterprises</td>
+      <td class="num">17 Apr 2025</td>
+      <td>OE-91</td>
+      <td class="num"><b>444</b></td>
+      <td class="num">₹12,730</td>
+      <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td>Naman Fashion</td>
+      <td class="num">20 Apr 2025</td>
+      <td>NFK-47</td>
+      <td class="num"><b>441</b></td>
+      <td class="num">₹9,400</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td>Naman Fashion</td>
+      <td class="num">20 Apr 2025</td>
+      <td>NF-200425</td>
+      <td class="num"><b>441</b></td>
+      <td class="num">₹2,12,124</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td>Zaheda Silk Sarees</td>
+      <td class="num">16 May 2025</td>
+      <td>ZSS-2</td>
+      <td class="num"><b>415</b></td>
+      <td class="num">₹86,310</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td>Overseas Enterprises</td>
+      <td class="num">14 Jun 2025</td>
+      <td>OD-397</td>
+      <td class="num"><b>386</b></td>
+      <td class="num">₹14,943</td>
+      <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Housekeeping</span>
+    <h2>Money and records to clean up</h2>
+    <div class="two">
+      <div>
+        <h3 style="font-size:16px">Credit balances — ₹2.7L lying with 33 suppliers</h3>
+        <p style="font-size:13.5px">Sanskar has paid these parties more than it purchased. Recover the amount or adjust it against the next purchase.</p>
+        <table>
+          <thead><tr><th>Supplier</th><th>Purchases</th><th>Paid</th><th>Credit</th></tr></thead>
+          <tbody><tr><td>Prem Clothing</td>
+      <td class="num">₹3,46,306</td><td class="num">₹4,12,506</td>
+      <td class="num neg">−₹66,200</td></tr><tr><td>Siddharth Enterprises</td>
+      <td class="num">₹4,94,676</td><td class="num">₹5,53,450</td>
+      <td class="num neg">−₹58,774</td></tr><tr><td>Varnika Enterprises</td>
+      <td class="num">₹11,24,509</td><td class="num">₹11,57,071</td>
+      <td class="num neg">−₹32,562</td></tr><tr><td>Manish Handloom</td>
+      <td class="num">₹4,21,277</td><td class="num">₹4,49,783</td>
+      <td class="num neg">−₹28,506</td></tr><tr><td>Vallabhi Prints</td>
+      <td class="num">₹1,84,374</td><td class="num">₹1,93,634</td>
+      <td class="num neg">−₹9,260</td></tr><tr><td>Ruby Saree House Pvt Ltd</td>
+      <td class="num">₹1,65,449</td><td class="num">₹1,73,327</td>
+      <td class="num neg">−₹7,878</td></tr><tr><td>Devanshi Creation</td>
+      <td class="num">₹57,506</td><td class="num">₹64,058</td>
+      <td class="num neg">−₹6,552</td></tr><tr><td>Purva Associates</td>
+      <td class="num">₹1,60,910</td><td class="num">₹1,65,827</td>
+      <td class="num neg">−₹4,917</td></tr><tr><td>Ashmita Boutique Pvt. Ltd.</td>
+      <td class="num">₹14,64,063</td><td class="num">₹14,68,814</td>
+      <td class="num neg">−₹4,751</td></tr><tr><td>Sambhav Enterprises</td>
+      <td class="num">₹1,19,270</td><td class="num">₹1,23,950</td>
+      <td class="num neg">−₹4,680</td></tr><tr><td>Aura Attire</td>
+      <td class="num">₹6,27,401</td><td class="num">₹6,31,774</td>
+      <td class="num neg">−₹4,373</td></tr><tr><td>R R Fashion</td>
+      <td class="num">₹2,11,350</td><td class="num">₹2,15,545</td>
+      <td class="num neg">−₹4,195</td></tr><tr><td>Sampat Sachin Sarees</td>
+      <td class="num">₹9,12,246</td><td class="num">₹9,16,082</td>
+      <td class="num neg">−₹3,836</td></tr><tr><td>Roop Rashmi Udyog</td>
+      <td class="num">₹3,14,945</td><td class="num">₹3,18,466</td>
+      <td class="num neg">−₹3,521</td></tr><tr><td>Vrajgopi Creation</td>
+      <td class="num">₹2,29,808</td><td class="num">₹2,33,164</td>
+      <td class="num neg">−₹3,356</td></tr><tr><td>Hirawat</td>
+      <td class="num">₹3,49,585</td><td class="num">₹3,52,782</td>
+      <td class="num neg">−₹3,197</td></tr><tr><td>N R Garments</td>
+      <td class="num">₹1,72,323</td><td class="num">₹1,75,437</td>
+      <td class="num neg">−₹3,114</td></tr><tr><td>Aggarwal Textiles</td>
+      <td class="num">₹3,33,458</td><td class="num">₹3,35,960</td>
+      <td class="num neg">−₹2,502</td></tr><tr><td>Morvinandan</td>
+      <td class="num">₹1,57,677</td><td class="num">₹1,59,986</td>
+      <td class="num neg">−₹2,309</td></tr><tr><td>G K Textile</td>
+      <td class="num">₹4,38,589</td><td class="num">₹4,40,882</td>
+      <td class="num neg">−₹2,293</td></tr><tr><td>Tough Zone Knitwears</td>
+      <td class="num">₹1,52,424</td><td class="num">₹1,54,377</td>
+      <td class="num neg">−₹1,953</td></tr><tr><td>Jay Ambey Silk Mills</td>
+      <td class="num">₹59,197</td><td class="num">₹60,872</td>
+      <td class="num neg">−₹1,675</td></tr><tr><td>Jai Mata Di Fabrics</td>
+      <td class="num">₹1,54,235</td><td class="num">₹1,55,824</td>
+      <td class="num neg">−₹1,589</td></tr><tr><td>Garg Hosiery Works</td>
+      <td class="num">₹6,23,647</td><td class="num">₹6,25,044</td>
+      <td class="num neg">−₹1,397</td></tr><tr><td>Utsav Creation</td>
+      <td class="num">₹56,784</td><td class="num">₹57,908</td>
+      <td class="num neg">−₹1,124</td></tr><tr><td>Ganpati Fashion</td>
+      <td class="num">₹2,72,657</td><td class="num">₹2,73,655</td>
+      <td class="num neg">−₹998</td></tr><tr><td>Usha Textiles</td>
+      <td class="num">₹66,052</td><td class="num">₹66,948</td>
+      <td class="num neg">−₹896</td></tr><tr><td>Hardik Designer</td>
+      <td class="num">₹1,05,256</td><td class="num">₹1,06,091</td>
+      <td class="num neg">−₹835</td></tr><tr><td>Shring Apparels</td>
+      <td class="num">₹4,60,922</td><td class="num">₹4,61,660</td>
+      <td class="num neg">−₹738</td></tr><tr><td>S F Enterprises</td>
+      <td class="num">₹63,458</td><td class="num">₹64,114</td>
+      <td class="num neg">−₹656</td></tr><tr><td>Satyam Knitwears Regd.</td>
+      <td class="num">₹3,52,185</td><td class="num">₹3,52,799</td>
+      <td class="num neg">−₹614</td></tr><tr><td>S S Seth Saab</td>
+      <td class="num">₹43,971</td><td class="num">₹44,095</td>
+      <td class="num neg">−₹124</td></tr><tr><td>Amoha Trendz</td>
+      <td class="num">₹71,269</td><td class="num">₹71,289</td>
+      <td class="num neg">−₹20</td></tr></tbody>
+          <tfoot><tr><td>Total</td><td></td><td></td><td class="num">−₹2,69,395</td></tr></tfoot>
+        </table>
+      </div>
+      <div>
+        <h3 style="font-size:16px">Register gaps found during this analysis</h3>
+        <ul class="tight">
+          <li><b>~₹8,83,295 of part-payments are not mapped to bills.</b> For ~19 suppliers the bill-level outstanding is higher than the ledger balance (e.g. R Creation: bills say ₹8.3L, ledger says ₹6.1L). The money is paid — the ageing sheet just doesn't know which bills it cleared. Until mapped, bill-level ageing for these parties overstates.</li>
+          <li><b>6 suppliers with ledger dues are missing from the ageing sheet</b> — their age cannot be seen at all:</li>
+        </ul>
+        <table style="margin-top:4px">
+          <thead><tr><th>Supplier (no bill detail)</th><th>Ledger balance</th></tr></thead>
+          <tbody><tr><td>Shree Garments</td><td class="num"><b>₹5,20,235</b></td></tr><tr><td>Anushthan Silk Mills</td><td class="num"><b>₹2,00,000</b></td></tr><tr><td>Sreenidhi Nx</td><td class="num"><b>₹72,666</b></td></tr><tr><td>Usha Textiles Ranchi</td><td class="num"><b>₹30,360</b></td></tr><tr><td>Ek Omkar</td><td class="num"><b>₹25,021</b></td></tr><tr><td>Narvada Textiles</td><td class="num"><b>₹90</b></td></tr></tbody>
+          <tfoot><tr><td>Total invisible to ageing</td><td class="num">₹8,48,372</td></tr></tfoot>
+        </table>
+        <ul class="tight">
+          <li><b>Two bills had broken due-date formulas</b> (#VALUE! — Gaurav Synthetics, Sagar Textiles); their ages are recomputed from the bill date in this report.</li>
+          <li>Payment-status labels are inconsistent ("PARTIAL", "PARTIALPAID", "PARTIALLY PAID") — one value should be used.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">What to do</span>
+    <h2>Suggested action order</h2>
+
+    <div class="act"><h3><span class="pr">FIRST</span> Protect the ITC — clear the 151–180-day window</h3>
+      <p>27 bills worth <b>₹25,84,448</b> cross the 180-day GST line within the next 30 days. Paying these first prevents fresh ITC reversal. Then work through the ₹22.4L already past 180 days (20 suppliers above) — each payment allows the reversed credit to be re-availed.</p></div>
+
+    <div class="act"><h3><span class="pr">FIRST</span> Settle the top 10 — half the book in ten conversations</h3>
+      <p>The top 10 suppliers hold ~₹53.0L (50%). Agree a schedule with each — Pooja Designers, R Creation, Shree Balaji, Variety Textiles and Shivali Iconic alone cover ₹32.4L.</p></div>
+
+    <div class="act"><h3><span class="pr med">NEXT</span> Map part-payments to bills and fix the register</h3>
+      <p>Allocate the ~₹8.8L of unmapped payments to specific bills, add the 6 missing suppliers (₹8.5L) to the ageing sheet, and standardise the status labels. Without this the ageing register cannot be trusted for payment decisions.</p></div>
+
+    <div class="act"><h3><span class="pr med">NEXT</span> Recover the ₹2.7L in credit balances</h3>
+      <p>33 suppliers hold excess payments (Prem Clothing ₹66k, Siddharth Enterprises ₹59k, Varnika Enterprises ₹33k lead). Adjust against the next purchase or ask for refunds.</p></div>
+
+    <div class="act"><h3><span class="pr low">THEN</span> Close the two-year-old tail and check MSME status</h3>
+      <p>Resolve the FY 2024-25 bills (Naman Fashion, Zaheda, Overseas, Bansal, Roop Rangi, Aditya Prints, Romshay — ₹4.9L over one year old): pay, settle, or formally record the dispute. In parallel, collect Udyam/MSME registration numbers from suppliers to size the Section 43B(h) exposure properly.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Appendix</span>
+    <h2>Full detail</h2>
+
+    <h3 style="font-size:16px;margin-top:10px">All suppliers with dues (66)</h3>
+    <p style="font-size:13px">Balance payable is from the party-wise ledger (authoritative). "Bill-level outstanding" is the sum of open bills in the ageing sheet; a Δ tag means part-payments have not been mapped to bills.</p>
+    <table class="lefty">
+      <thead><tr><th style="text-align:right">#</th><th style="text-align:left">Supplier</th><th>Balance payable</th><th>Open bills</th><th>Bill-level outstanding</th><th>Oldest bill</th></tr></thead>
+      <tbody><tr><td class="num" style="text-align:right;color:#6b7488">1</td>
+      <td>Pooja Designers <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹20k</span></td>
+      <td class="num"><b>₹8,15,911</b></td>
+      <td class="num">9</td>
+      <td class="num">₹8,35,510</td>
+      <td style="text-align:center"><span class="tag a">103 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">2</td>
+      <td>R Creation <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹2.2L</span></td>
+      <td class="num"><b>₹6,08,937</b></td>
+      <td class="num">6</td>
+      <td class="num">₹8,25,953</td>
+      <td style="text-align:center"><span class="tag a">164 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">3</td>
+      <td>Shree Balaji</td>
+      <td class="num"><b>₹5,68,632</b></td>
+      <td class="num">5</td>
+      <td class="num">₹5,68,632</td>
+      <td style="text-align:center"><span class="tag a">95 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">4</td>
+      <td>Variety Textiles</td>
+      <td class="num"><b>₹5,63,905</b></td>
+      <td class="num">17</td>
+      <td class="num">₹5,63,905</td>
+      <td style="text-align:center"><span class="tag a">95 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">5</td>
+      <td>Shree Garments <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹5,20,235</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">6</td>
+      <td>Shivali Iconic Trends Pvt Ltd</td>
+      <td class="num"><b>₹4,48,331</b></td>
+      <td class="num">4</td>
+      <td class="num">₹4,48,331</td>
+      <td style="text-align:center"><span class="tag a">166 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">7</td>
+      <td>S K Garments</td>
+      <td class="num"><b>₹4,46,818</b></td>
+      <td class="num">4</td>
+      <td class="num">₹4,46,818</td>
+      <td style="text-align:center"><span class="tag a">137 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">8</td>
+      <td>Dev Creation</td>
+      <td class="num"><b>₹4,06,843</b></td>
+      <td class="num">5</td>
+      <td class="num">₹4,06,843</td>
+      <td style="text-align:center"><span class="tag a">115 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">9</td>
+      <td>Laxmi Nx</td>
+      <td class="num"><b>₹4,04,634</b></td>
+      <td class="num">3</td>
+      <td class="num">₹4,04,634</td>
+      <td style="text-align:center"><span class="tag a">170 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">10</td>
+      <td>Naman Fashion</td>
+      <td class="num"><b>₹3,97,625</b></td>
+      <td class="num">6</td>
+      <td class="num">₹3,97,625</td>
+      <td style="text-align:center"><span class="tag r">643 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">11</td>
+      <td>The Apparel Company</td>
+      <td class="num"><b>₹2,29,614</b></td>
+      <td class="num">3</td>
+      <td class="num">₹2,29,614</td>
+      <td style="text-align:center"><span class="tag r">239 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">12</td>
+      <td>Fbc Clothing <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹1.7L</span></td>
+      <td class="num"><b>₹2,27,168</b></td>
+      <td class="num">3</td>
+      <td class="num">₹4,02,150</td>
+      <td style="text-align:center"><span class="tag r">234 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">13</td>
+      <td>Ranchi Handloom Private Limited</td>
+      <td class="num"><b>₹2,11,569</b></td>
+      <td class="num">3</td>
+      <td class="num">₹2,11,569</td>
+      <td style="text-align:center"><span class="tag g">5 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">14</td>
+      <td>Anushthan Silk Mills <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹2,00,000</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">15</td>
+      <td>Julahaa Exclusive</td>
+      <td class="num"><b>₹2,00,000</b></td>
+      <td class="num">10</td>
+      <td class="num">₹2,00,000</td>
+      <td style="text-align:center"><span class="tag r">300 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">16</td>
+      <td>Parshvdeep Textile <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹7k</span></td>
+      <td class="num"><b>₹1,96,770</b></td>
+      <td class="num">1</td>
+      <td class="num">₹2,03,700</td>
+      <td style="text-align:center"><span class="tag r">353 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">17</td>
+      <td>Poonam Fashion <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹10k</span></td>
+      <td class="num"><b>₹1,91,993</b></td>
+      <td class="num">2</td>
+      <td class="num">₹2,02,309</td>
+      <td style="text-align:center"><span class="tag r">337 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">18</td>
+      <td>Kidcity Solutions Private Limited</td>
+      <td class="num"><b>₹1,91,674</b></td>
+      <td class="num">3</td>
+      <td class="num">₹1,91,674</td>
+      <td style="text-align:center"><span class="tag a">131 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">19</td>
+      <td>Neel Madhav Creation Private Limited <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹9k</span></td>
+      <td class="num"><b>₹1,85,052</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,94,371</td>
+      <td style="text-align:center"><span class="tag r">304 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">20</td>
+      <td>Priyam Fashion <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹1.0L</span></td>
+      <td class="num"><b>₹1,70,412</b></td>
+      <td class="num">1</td>
+      <td class="num">₹2,70,412</td>
+      <td style="text-align:center"><span class="tag a">170 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">21</td>
+      <td>P M Sons</td>
+      <td class="num"><b>₹1,63,594</b></td>
+      <td class="num">3</td>
+      <td class="num">₹1,63,594</td>
+      <td style="text-align:center"><span class="tag g">64 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">22</td>
+      <td>Jagdish Printco</td>
+      <td class="num"><b>₹1,59,121</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,59,121</td>
+      <td style="text-align:center"><span class="tag g">46 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">23</td>
+      <td>Vishal Marketing &amp; Company <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹23k</span></td>
+      <td class="num"><b>₹1,52,502</b></td>
+      <td class="num">3</td>
+      <td class="num">₹1,75,314</td>
+      <td style="text-align:center"><span class="tag a">128 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">24</td>
+      <td>Gaurav Synthetics</td>
+      <td class="num"><b>₹1,48,637</b></td>
+      <td class="num">4</td>
+      <td class="num">₹1,48,245</td>
+      <td style="text-align:center"><span class="tag a">141 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">25</td>
+      <td>Rohan Fabrics</td>
+      <td class="num"><b>₹1,43,362</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,43,362</td>
+      <td style="text-align:center"><span class="tag a">167 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">26</td>
+      <td>Saaksh Apparels</td>
+      <td class="num"><b>₹1,33,693</b></td>
+      <td class="num">1</td>
+      <td class="num">₹1,33,693</td>
+      <td style="text-align:center"><span class="tag r">288 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">27</td>
+      <td>Golden Enterprise</td>
+      <td class="num"><b>₹1,31,360</b></td>
+      <td class="num">1</td>
+      <td class="num">₹1,31,360</td>
+      <td style="text-align:center"><span class="tag a">167 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">28</td>
+      <td>Agam Creation</td>
+      <td class="num"><b>₹1,27,629</b></td>
+      <td class="num">4</td>
+      <td class="num">₹1,27,629</td>
+      <td style="text-align:center"><span class="tag r">293 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">29</td>
+      <td>Jain Adishwar Hosiery Works Llp <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹776</span></td>
+      <td class="num"><b>₹1,27,149</b></td>
+      <td class="num">3</td>
+      <td class="num">₹1,27,925</td>
+      <td style="text-align:center"><span class="tag a">92 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">30</td>
+      <td>Wilson Prints <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹3k</span></td>
+      <td class="num"><b>₹1,25,081</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,28,011</td>
+      <td style="text-align:center"><span class="tag a">167 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">31</td>
+      <td>K Nirav &amp; Co.</td>
+      <td class="num"><b>₹1,12,363</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,12,363</td>
+      <td style="text-align:center"><span class="tag a">166 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">32</td>
+      <td>Pawan Creation</td>
+      <td class="num"><b>₹1,08,696</b></td>
+      <td class="num">1</td>
+      <td class="num">₹1,08,696</td>
+      <td style="text-align:center"><span class="tag a">117 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">33</td>
+      <td>Shiv Shakti Textiles</td>
+      <td class="num"><b>₹1,02,652</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,02,652</td>
+      <td style="text-align:center"><span class="tag a">159 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">34</td>
+      <td>Kishan Lal Rishikesh <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹26k</span></td>
+      <td class="num"><b>₹1,00,000</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,26,187</td>
+      <td style="text-align:center"><span class="tag r">260 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">35</td>
+      <td>Rathod Saree Editions <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹2k</span></td>
+      <td class="num"><b>₹99,467</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,01,247</td>
+      <td style="text-align:center"><span class="tag r">346 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">36</td>
+      <td>Amarjyoti Creation</td>
+      <td class="num"><b>₹99,015</b></td>
+      <td class="num">1</td>
+      <td class="num">₹99,015</td>
+      <td style="text-align:center"><span class="tag a">169 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">37</td>
+      <td>V N Textiles</td>
+      <td class="num"><b>₹97,837</b></td>
+      <td class="num">1</td>
+      <td class="num">₹97,837</td>
+      <td style="text-align:center"><span class="tag g">55 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">38</td>
+      <td>Zaheda Silk Sarees</td>
+      <td class="num"><b>₹93,860</b></td>
+      <td class="num">2</td>
+      <td class="num">₹93,860</td>
+      <td style="text-align:center"><span class="tag r">488 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">39</td>
+      <td>Gurukripa Enterprises <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹1.6L</span></td>
+      <td class="num"><b>₹93,850</b></td>
+      <td class="num">1</td>
+      <td class="num">₹2,57,450</td>
+      <td style="text-align:center"><span class="tag a">114 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">40</td>
+      <td>Apple Lifestyle Industries Limited</td>
+      <td class="num"><b>₹84,682</b></td>
+      <td class="num">2</td>
+      <td class="num">₹84,682</td>
+      <td style="text-align:center"><span class="tag g">58 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">41</td>
+      <td>Overseas Enterprises <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹20k</span></td>
+      <td class="num"><b>₹84,310</b></td>
+      <td class="num">5</td>
+      <td class="num">₹1,04,124</td>
+      <td style="text-align:center"><span class="tag r">444 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">42</td>
+      <td>Bhagwati Impex <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹2k</span></td>
+      <td class="num"><b>₹77,423</b></td>
+      <td class="num">1</td>
+      <td class="num">₹79,013</td>
+      <td style="text-align:center"><span class="tag g">88 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">43</td>
+      <td>Shree Manoj Apparel</td>
+      <td class="num"><b>₹73,625</b></td>
+      <td class="num">5</td>
+      <td class="num">₹73,625</td>
+      <td style="text-align:center"><span class="tag r">318 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">44</td>
+      <td>Sreenidhi Nx <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹72,666</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">45</td>
+      <td>Shree Narayani Enterprises</td>
+      <td class="num"><b>₹66,523</b></td>
+      <td class="num">2</td>
+      <td class="num">₹66,523</td>
+      <td style="text-align:center"><span class="tag g">59 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">46</td>
+      <td>Rahul Textiles</td>
+      <td class="num"><b>₹65,782</b></td>
+      <td class="num">1</td>
+      <td class="num">₹65,782</td>
+      <td style="text-align:center"><span class="tag r">263 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">47</td>
+      <td>Varun Faishon</td>
+      <td class="num"><b>₹59,981</b></td>
+      <td class="num">1</td>
+      <td class="num">₹59,981</td>
+      <td style="text-align:center"><span class="tag g">80 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">48</td>
+      <td>Sitaram Creation Pvt Ltd <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹56k</span></td>
+      <td class="num"><b>₹55,598</b></td>
+      <td class="num">2</td>
+      <td class="num">₹1,11,196</td>
+      <td style="text-align:center"><span class="tag g">57 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">49</td>
+      <td>Manoj Enterprises</td>
+      <td class="num"><b>₹44,251</b></td>
+      <td class="num">2</td>
+      <td class="num">₹44,251</td>
+      <td style="text-align:center"><span class="tag r">282 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">50</td>
+      <td>Miss Art Garments Pvt. Ltd. <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹13k</span></td>
+      <td class="num"><b>₹42,358</b></td>
+      <td class="num">1</td>
+      <td class="num">₹55,188</td>
+      <td style="text-align:center"><span class="tag a">117 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">51</td>
+      <td>Bansal Trading Company <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹33k</span></td>
+      <td class="num"><b>₹33,218</b></td>
+      <td class="num">1</td>
+      <td class="num">₹66,203</td>
+      <td style="text-align:center"><span class="tag r">520 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">52</td>
+      <td>Usha Textiles Ranchi <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹30,360</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">53</td>
+      <td>Kishore Textiles</td>
+      <td class="num"><b>₹28,596</b></td>
+      <td class="num">2</td>
+      <td class="num">₹28,596</td>
+      <td style="text-align:center"><span class="tag a">138 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">54</td>
+      <td>Sagar Textiles</td>
+      <td class="num"><b>₹27,195</b></td>
+      <td class="num">1</td>
+      <td class="num">₹27,195</td>
+      <td style="text-align:center"><span class="tag a">121 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">55</td>
+      <td>Ruh Creation</td>
+      <td class="num"><b>₹25,568</b></td>
+      <td class="num">1</td>
+      <td class="num">₹25,568</td>
+      <td style="text-align:center"><span class="tag a">173 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">56</td>
+      <td>Ek Omkar <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹25,021</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">57</td>
+      <td>Murarka Textiles <span class="tag a" title="Bill-level outstanding differs from ledger balance — part-payments not mapped to bills">Δ ₹4k</span></td>
+      <td class="num"><b>₹20,143</b></td>
+      <td class="num">2</td>
+      <td class="num">₹24,374</td>
+      <td style="text-align:center"><span class="tag a">110 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">58</td>
+      <td>Aditya Prints</td>
+      <td class="num"><b>₹19,455</b></td>
+      <td class="num">1</td>
+      <td class="num">₹19,455</td>
+      <td style="text-align:center"><span class="tag r">666 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">59</td>
+      <td>Om Manglam Textiles</td>
+      <td class="num"><b>₹13,300</b></td>
+      <td class="num">1</td>
+      <td class="num">₹13,300</td>
+      <td style="text-align:center"><span class="tag a">97 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">60</td>
+      <td>Fancy Bag</td>
+      <td class="num"><b>₹10,670</b></td>
+      <td class="num">1</td>
+      <td class="num">₹10,670</td>
+      <td style="text-align:center"><span class="tag a">149 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">61</td>
+      <td>Variety Textiles (Readymade)</td>
+      <td class="num"><b>₹10,280</b></td>
+      <td class="num">1</td>
+      <td class="num">₹10,280</td>
+      <td style="text-align:center"><span class="tag g">61 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">62</td>
+      <td>Tarun Apparels</td>
+      <td class="num"><b>₹7,878</b></td>
+      <td class="num">1</td>
+      <td class="num">₹7,878</td>
+      <td style="text-align:center"><span class="tag g">12 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">63</td>
+      <td>Romshay Fabrics</td>
+      <td class="num"><b>₹7,467</b></td>
+      <td class="num">1</td>
+      <td class="num">₹7,467</td>
+      <td style="text-align:center"><span class="tag r">660 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">64</td>
+      <td>Triranga</td>
+      <td class="num"><b>₹5,900</b></td>
+      <td class="num">1</td>
+      <td class="num">₹5,900</td>
+      <td style="text-align:center"><span class="tag a">175 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">65</td>
+      <td>Roop Rangi</td>
+      <td class="num"><b>₹4,695</b></td>
+      <td class="num">1</td>
+      <td class="num">₹4,695</td>
+      <td style="text-align:center"><span class="tag r">670 d</span></td></tr><tr><td class="num" style="text-align:right;color:#6b7488">66</td>
+      <td>Narvada Textiles <span class="tag b" title="This supplier has a ledger balance but no bill rows in the Ageing sheet">not in ageing sheet</span></td>
+      <td class="num"><b>₹90</b></td>
+      <td class="num">—</td>
+      <td class="num">—</td>
+      <td style="text-align:center"><span class="tag b">no bill detail</span></td></tr></tbody>
+      <tfoot><tr><td></td><td>Total</td><td class="num">₹1,05,03,026</td><td class="num">163</td><td class="num">₹1,05,37,557</td><td></td></tr></tfoot>
+    </table>
+
+    <details open>
+      <summary>Bill-by-bill detail — 163 open bills grouped by supplier (click to collapse)</summary>
+      <table class="lefty">
+        <thead><tr><th></th><th>Bill date</th><th>Voucher no.</th><th>Bill no.</th><th>Bill amount</th><th>Paid</th><th>Outstanding</th><th>Age (d)</th><th>Status</th></tr></thead>
+        <tbody><tr class="grp"><td colspan="4"><b>Pooja Designers</b> <span style="color:#6b7488">· 9 bills</span></td>
+      <td class="num"><b>₹8,35,510</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹8,35,510</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-834</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19746</td>
+          <td class="num">₹72,657</td>
+          <td class="num">—</td>
+          <td class="num">₹72,657</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-835</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19753</td>
+          <td class="num">₹1,30,831</td>
+          <td class="num">—</td>
+          <td class="num">₹1,30,831</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-836</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19747</td>
+          <td class="num">₹98,410</td>
+          <td class="num">—</td>
+          <td class="num">₹98,410</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-837</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19745</td>
+          <td class="num">₹70,901</td>
+          <td class="num">—</td>
+          <td class="num">₹70,901</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-838</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19749</td>
+          <td class="num">₹98,375</td>
+          <td class="num">—</td>
+          <td class="num">₹98,375</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-839</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19751</td>
+          <td class="num">₹1,27,502</td>
+          <td class="num">—</td>
+          <td class="num">₹1,27,502</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-840</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PD-19754</td>
+          <td class="num">₹1,23,149</td>
+          <td class="num">—</td>
+          <td class="num">₹1,23,149</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU -01</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU -01</td>
+          <td class="num">₹79,333</td>
+          <td class="num">—</td>
+          <td class="num">₹79,333</td>
+          <td class="num">103</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">25-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-02</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-02</td>
+          <td class="num">₹34,352</td>
+          <td class="num">—</td>
+          <td class="num">₹34,352</td>
+          <td class="num">102</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>R Creation</b> <span style="color:#6b7488">· 6 bills</span></td>
+      <td class="num"><b>₹8,25,953</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹8,25,953</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-656</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-2593</td>
+          <td class="num">₹1,55,264</td>
+          <td class="num">—</td>
+          <td class="num">₹1,55,264</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-657</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-2595</td>
+          <td class="num">₹1,56,051</td>
+          <td class="num">—</td>
+          <td class="num">₹1,56,051</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-658</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-2596</td>
+          <td class="num">₹1,48,003</td>
+          <td class="num">—</td>
+          <td class="num">₹1,48,003</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-659</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RCC-2597</td>
+          <td class="num">₹1,13,432</td>
+          <td class="num">—</td>
+          <td class="num">₹1,13,432</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-660</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-2598</td>
+          <td class="num">₹1,38,700</td>
+          <td class="num">—</td>
+          <td class="num">₹1,38,700</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-661</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-2604</td>
+          <td class="num">₹1,14,503</td>
+          <td class="num">—</td>
+          <td class="num">₹1,14,503</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Shree Balaji</b> <span style="color:#6b7488">· 5 bills</span></td>
+      <td class="num"><b>₹5,68,632</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹5,68,632</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-018</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-018</td>
+          <td class="num">₹1,01,855</td>
+          <td class="num">—</td>
+          <td class="num">₹1,01,855</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-17</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-17</td>
+          <td class="num">₹1,20,766</td>
+          <td class="num">—</td>
+          <td class="num">₹1,20,766</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-16</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-16</td>
+          <td class="num">₹1,08,911</td>
+          <td class="num">—</td>
+          <td class="num">₹1,08,911</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-15</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-15</td>
+          <td class="num">₹1,20,120</td>
+          <td class="num">—</td>
+          <td class="num">₹1,20,120</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-14</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-14</td>
+          <td class="num">₹1,16,980</td>
+          <td class="num">—</td>
+          <td class="num">₹1,16,980</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Variety Textiles</b> <span style="color:#6b7488">· 17 bills</span></td>
+      <td class="num"><b>₹5,63,905</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹5,63,905</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-009-VT-237</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-009-VT-237</td>
+          <td class="num">₹53,747</td>
+          <td class="num">—</td>
+          <td class="num">₹53,747</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26/27/SAN/PU-004VT-400</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26/27/SAN/PU-004VT-400</td>
+          <td class="num">₹19,527</td>
+          <td class="num">—</td>
+          <td class="num">₹19,527</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-005VT-396</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-005VT-396</td>
+          <td class="num">₹26,159</td>
+          <td class="num">—</td>
+          <td class="num">₹26,159</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-006/VT-395</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-006/VT-395</td>
+          <td class="num">₹23,748</td>
+          <td class="num">—</td>
+          <td class="num">₹23,748</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-007VT-359</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-007VT-359</td>
+          <td class="num">₹39,420</td>
+          <td class="num">—</td>
+          <td class="num">₹39,420</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-008-VT-356</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-008-VT-356</td>
+          <td class="num">₹28,445</td>
+          <td class="num">—</td>
+          <td class="num">₹28,445</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-012-VT-401</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-012-VT-401</td>
+          <td class="num">₹24,526</td>
+          <td class="num">—</td>
+          <td class="num">₹24,526</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-013-VT-604</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-013-VT-604</td>
+          <td class="num">₹35,552</td>
+          <td class="num">—</td>
+          <td class="num">₹35,552</td>
+          <td class="num">94</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">03-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-020-VT-678</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-020-VT-678</td>
+          <td class="num">₹39,231</td>
+          <td class="num">—</td>
+          <td class="num">₹39,231</td>
+          <td class="num">93</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">03-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-021VT-758</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-021VT-758</td>
+          <td class="num">₹13,141</td>
+          <td class="num">—</td>
+          <td class="num">₹13,141</td>
+          <td class="num">93</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-71</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-71</td>
+          <td class="num">₹81,695</td>
+          <td class="num">—</td>
+          <td class="num">₹81,695</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-62</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-62</td>
+          <td class="num">₹66,552</td>
+          <td class="num">—</td>
+          <td class="num">₹66,552</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-63</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-63</td>
+          <td class="num">₹59,995</td>
+          <td class="num">—</td>
+          <td class="num">₹59,995</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-64</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-64</td>
+          <td class="num">₹15,409</td>
+          <td class="num">—</td>
+          <td class="num">₹15,409</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-61</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-61</td>
+          <td class="num">₹14,024</td>
+          <td class="num">—</td>
+          <td class="num">₹14,024</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-72</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-72</td>
+          <td class="num">₹13,785</td>
+          <td class="num">—</td>
+          <td class="num">₹13,785</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">11-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 82</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 82</td>
+          <td class="num">₹8,949</td>
+          <td class="num">—</td>
+          <td class="num">₹8,949</td>
+          <td class="num">55</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Shivali Iconic Trends Pvt Ltd</b> <span style="color:#6b7488">· 4 bills</span></td>
+      <td class="num"><b>₹4,48,331</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹4,48,331</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">20-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-654</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SHIVALI-22561</td>
+          <td class="num">₹1,13,098</td>
+          <td class="num">—</td>
+          <td class="num">₹1,13,098</td>
+          <td class="num">166</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">20-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-685</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SHIVALI-22673</td>
+          <td class="num">₹1,03,880</td>
+          <td class="num">—</td>
+          <td class="num">₹1,03,880</td>
+          <td class="num">166</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">21-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-667</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SHIVALI-22827</td>
+          <td class="num">₹1,16,193</td>
+          <td class="num">—</td>
+          <td class="num">₹1,16,193</td>
+          <td class="num">165</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">21-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-668</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SHIVALI-22781</td>
+          <td class="num">₹1,15,160</td>
+          <td class="num">—</td>
+          <td class="num">₹1,15,160</td>
+          <td class="num">165</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>S K Garments</b> <span style="color:#6b7488">· 4 bills</span></td>
+      <td class="num"><b>₹4,46,818</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹4,46,818</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">18-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-732</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SKG-1744</td>
+          <td class="num">₹74,026</td>
+          <td class="num">—</td>
+          <td class="num">₹74,026</td>
+          <td class="num">137</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">27-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-757</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SKG-1779</td>
+          <td class="num">₹57,438</td>
+          <td class="num">—</td>
+          <td class="num">₹57,438</td>
+          <td class="num">128</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">07-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-763</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SKG-1802</td>
+          <td class="num">₹1,89,654</td>
+          <td class="num">—</td>
+          <td class="num">₹1,89,654</td>
+          <td class="num">120</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">07-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-764</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SKG-1803</td>
+          <td class="num">₹1,25,700</td>
+          <td class="num">—</td>
+          <td class="num">₹1,25,700</td>
+          <td class="num">120</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Dev Creation</b> <span style="color:#6b7488">· 5 bills</span></td>
+      <td class="num"><b>₹4,06,843</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹4,06,843</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">12-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-822</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">DC-159</td>
+          <td class="num">₹1,27,451</td>
+          <td class="num">—</td>
+          <td class="num">₹1,27,451</td>
+          <td class="num">115</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">16-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-823</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">DC-162</td>
+          <td class="num">₹1,67,276</td>
+          <td class="num">—</td>
+          <td class="num">₹1,67,276</td>
+          <td class="num">111</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">17-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-824</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">DC-163</td>
+          <td class="num">₹66,088</td>
+          <td class="num">—</td>
+          <td class="num">₹66,088</td>
+          <td class="num">110</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-33 DC NGP 2</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-33 DC NGP 2</td>
+          <td class="num">₹13,855</td>
+          <td class="num">—</td>
+          <td class="num">₹13,855</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26/SAN/PU-32 DC-01</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26/SAN/PU-32 DC-01</td>
+          <td class="num">₹32,173</td>
+          <td class="num">—</td>
+          <td class="num">₹32,173</td>
+          <td class="num">95</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Laxmi Nx</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹4,04,634</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹4,04,634</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">16-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-666</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">LF-1924</td>
+          <td class="num">₹1,38,453</td>
+          <td class="num">—</td>
+          <td class="num">₹1,38,453</td>
+          <td class="num">170</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">07-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">132-26/27SAN/PU-35</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">132-26/27SAN/PU-35</td>
+          <td class="num">₹1,58,209</td>
+          <td class="num">—</td>
+          <td class="num">₹1,58,209</td>
+          <td class="num">89</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">07-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">134-26/27/SAN/PU-34</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">134-26/27/SAN/PU-34</td>
+          <td class="num">₹1,07,972</td>
+          <td class="num">—</td>
+          <td class="num">₹1,07,972</td>
+          <td class="num">89</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Fbc Clothing</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹4,02,150</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹4,02,150</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">13-Nov-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-583</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">FBC-303</td>
+          <td class="num">₹1,34,594</td>
+          <td class="num">—</td>
+          <td class="num">₹1,34,594</td>
+          <td class="num">234</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">02-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-11</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-11</td>
+          <td class="num">₹40,388</td>
+          <td class="num">—</td>
+          <td class="num">₹40,388</td>
+          <td class="num">125</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">25-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-10</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-10</td>
+          <td class="num">₹2,27,168</td>
+          <td class="num">—</td>
+          <td class="num">₹2,27,168</td>
+          <td class="num">102</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Naman Fashion</b> <span style="color:#6b7488">· 6 bills</span></td>
+      <td class="num"><b>₹3,97,625</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹3,97,625</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">30-Sep-24</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-116</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NF-128</td>
+          <td class="num">₹30,208</td>
+          <td class="num">—</td>
+          <td class="num">₹30,208</td>
+          <td class="num">643</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-Apr-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-329</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NF-19</td>
+          <td class="num">₹23,897</td>
+          <td class="num">—</td>
+          <td class="num">₹23,897</td>
+          <td class="num">453</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">20-Apr-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-021</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NFK-47</td>
+          <td class="num">₹9,400</td>
+          <td class="num">—</td>
+          <td class="num">₹9,400</td>
+          <td class="num">441</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">20-Apr-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-034</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NF-200425</td>
+          <td class="num">₹2,12,124</td>
+          <td class="num">—</td>
+          <td class="num">₹2,12,124</td>
+          <td class="num">441</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">27-Aug-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-200</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NF-270825</td>
+          <td class="num">₹76,790</td>
+          <td class="num">—</td>
+          <td class="num">₹76,790</td>
+          <td class="num">312</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-330</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NF-240925</td>
+          <td class="num">₹45,206</td>
+          <td class="num">—</td>
+          <td class="num">₹45,206</td>
+          <td class="num">284</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Priyam Fashion</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹2,70,412</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,70,412</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">16-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-653</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PF-2017</td>
+          <td class="num">₹2,70,412</td>
+          <td class="num">—</td>
+          <td class="num">₹2,70,412</td>
+          <td class="num">170</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>Gurukripa Enterprises</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹2,57,450</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,57,450</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">13-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-821</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">GE-11</td>
+          <td class="num">₹2,57,450</td>
+          <td class="num">—</td>
+          <td class="num">₹2,57,450</td>
+          <td class="num">114</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>The Apparel Company</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹2,29,614</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,29,614</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">08-Nov-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-490</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">TAC-2014</td>
+          <td class="num">₹51,707</td>
+          <td class="num">—</td>
+          <td class="num">₹51,707</td>
+          <td class="num">239</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">04-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-674</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">TAC-02467</td>
+          <td class="num">₹1,06,297</td>
+          <td class="num">—</td>
+          <td class="num">₹1,06,297</td>
+          <td class="num">151</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">19-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-733</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">TAC-02658</td>
+          <td class="num">₹71,610</td>
+          <td class="num">—</td>
+          <td class="num">₹71,610</td>
+          <td class="num">136</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Ranchi Handloom Private Limited</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹2,11,569</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,11,569</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">30-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-151</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-151</td>
+          <td class="num">₹64,869</td>
+          <td class="num">—</td>
+          <td class="num">₹64,869</td>
+          <td class="num">5</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Jul-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-148</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-148</td>
+          <td class="num">₹1,16,250</td>
+          <td class="num">—</td>
+          <td class="num">₹1,16,250</td>
+          <td class="num">4</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Jul-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-150</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-150</td>
+          <td class="num">₹30,450</td>
+          <td class="num">—</td>
+          <td class="num">₹30,450</td>
+          <td class="num">4</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Parshvdeep Textile</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹2,03,700</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,03,700</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">17-Jul-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-152</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PT-91</td>
+          <td class="num">₹2,03,700</td>
+          <td class="num">—</td>
+          <td class="num">₹2,03,700</td>
+          <td class="num">353</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Poonam Fashion</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹2,02,309</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹2,02,309</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">02-Aug-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-190</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PF-745</td>
+          <td class="num">₹70,009</td>
+          <td class="num">—</td>
+          <td class="num">₹70,009</td>
+          <td class="num">337</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">30-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-420</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PF-1418</td>
+          <td class="num">₹1,32,300</td>
+          <td class="num">—</td>
+          <td class="num">₹1,32,300</td>
+          <td class="num">278</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Julahaa Exclusive</b> <span style="color:#6b7488">· 10 bills</span></td>
+      <td class="num"><b>₹2,16,704</b></td><td class="num"><b>₹16,704</b></td>
+      <td class="num"><b>₹2,00,000</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">08-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-385</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273811</td>
+          <td class="num">₹27,917</td>
+          <td class="num">₹16,704</td>
+          <td class="num">₹11,213</td>
+          <td class="num">300</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">08-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-386</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273812</td>
+          <td class="num">₹21,735</td>
+          <td class="num">—</td>
+          <td class="num">₹21,735</td>
+          <td class="num">300</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-387</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273813</td>
+          <td class="num">₹8,669</td>
+          <td class="num">—</td>
+          <td class="num">₹8,669</td>
+          <td class="num">300</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-388</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273814</td>
+          <td class="num">₹13,768</td>
+          <td class="num">—</td>
+          <td class="num">₹13,768</td>
+          <td class="num">300</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-389</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273815</td>
+          <td class="num">₹13,768</td>
+          <td class="num">—</td>
+          <td class="num">₹13,768</td>
+          <td class="num">300</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">09-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-390</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273956</td>
+          <td class="num">₹21,735</td>
+          <td class="num">—</td>
+          <td class="num">₹21,735</td>
+          <td class="num">299</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">09-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-391</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-273957</td>
+          <td class="num">₹43,470</td>
+          <td class="num">—</td>
+          <td class="num">₹43,470</td>
+          <td class="num">299</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">06-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-452</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-275544</td>
+          <td class="num">₹17,825</td>
+          <td class="num">—</td>
+          <td class="num">₹17,825</td>
+          <td class="num">272</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">16-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-463</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-276560</td>
+          <td class="num">₹21,609</td>
+          <td class="num">—</td>
+          <td class="num">₹21,609</td>
+          <td class="num">262</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-451</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">JE-275482</td>
+          <td class="num">₹26,208</td>
+          <td class="num">—</td>
+          <td class="num">₹26,208</td>
+          <td class="num">256</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Neel Madhav Creation Private Limited</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,94,371</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,94,371</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">04-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-470</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NMC-13789</td>
+          <td class="num">₹1,13,216</td>
+          <td class="num">—</td>
+          <td class="num">₹1,13,216</td>
+          <td class="num">304</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">04-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-471</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">NMC-13790</td>
+          <td class="num">₹81,155</td>
+          <td class="num">—</td>
+          <td class="num">₹81,155</td>
+          <td class="num">304</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Kidcity Solutions Private Limited</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹1,91,674</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,91,674</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">24-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-774</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KSPL-1146</td>
+          <td class="num">₹81,313</td>
+          <td class="num">—</td>
+          <td class="num">₹81,313</td>
+          <td class="num">131</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-775</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KSPL-1147</td>
+          <td class="num">₹96,573</td>
+          <td class="num">—</td>
+          <td class="num">₹96,573</td>
+          <td class="num">131</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">24-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-801</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KSPL-1148</td>
+          <td class="num">₹13,788</td>
+          <td class="num">—</td>
+          <td class="num">₹13,788</td>
+          <td class="num">131</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Vishal Marketing &amp; Company</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹1,75,314</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,75,314</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">27-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-784</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">VMC-3305</td>
+          <td class="num">₹26,150</td>
+          <td class="num">—</td>
+          <td class="num">₹26,150</td>
+          <td class="num">128</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">26-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-843</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">VMC-3656</td>
+          <td class="num">₹95,048</td>
+          <td class="num">—</td>
+          <td class="num">₹95,048</td>
+          <td class="num">101</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">17-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-89</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-89</td>
+          <td class="num">₹54,116</td>
+          <td class="num">—</td>
+          <td class="num">₹54,116</td>
+          <td class="num">79</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>P M Sons</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹1,63,594</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,63,594</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-57</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-57</td>
+          <td class="num">₹21,592</td>
+          <td class="num">—</td>
+          <td class="num">₹21,592</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SANPU-56</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SANPU-56</td>
+          <td class="num">₹70,409</td>
+          <td class="num">—</td>
+          <td class="num">₹70,409</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">30-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/147</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/147</td>
+          <td class="num">₹71,593</td>
+          <td class="num">—</td>
+          <td class="num">₹71,593</td>
+          <td class="num">5</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Jagdish Printco</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,59,121</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,59,121</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">20-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-121</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-121</td>
+          <td class="num">₹26,651</td>
+          <td class="num">—</td>
+          <td class="num">₹26,651</td>
+          <td class="num">46</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">19-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-143</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-143</td>
+          <td class="num">₹1,32,470</td>
+          <td class="num">—</td>
+          <td class="num">₹1,32,470</td>
+          <td class="num">16</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Gaurav Synthetics</b> <span style="color:#6b7488">· 4 bills</span></td>
+      <td class="num"><b>₹1,48,245</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,48,245</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">14-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-730</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">GS-11962</td>
+          <td class="num">₹35,171</td>
+          <td class="num">—</td>
+          <td class="num">₹35,171</td>
+          <td class="num">141</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">06-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-31 GS-486</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-31 GS-486</td>
+          <td class="num">₹19,866</td>
+          <td class="num">—</td>
+          <td class="num">₹19,866</td>
+          <td class="num">90</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 86,87</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 86,87</td>
+          <td class="num">₹73,279</td>
+          <td class="num">—</td>
+          <td class="num">₹73,279</td>
+          <td class="num">58</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 85</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN PU 85</td>
+          <td class="num">₹19,929</td>
+          <td class="num">—</td>
+          <td class="num">₹19,929</td>
+          <td class="num">58</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Rohan Fabrics</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,43,362</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,43,362</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">19-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SN/PU-663</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RF-4098</td>
+          <td class="num">₹84,184</td>
+          <td class="num">—</td>
+          <td class="num">₹84,184</td>
+          <td class="num">167</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">22-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-687</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RF-4164</td>
+          <td class="num">₹59,178</td>
+          <td class="num">—</td>
+          <td class="num">₹59,178</td>
+          <td class="num">164</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Saaksh Apparels</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹1,33,693</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,33,693</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">20-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-319</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SA-69</td>
+          <td class="num">₹1,33,693</td>
+          <td class="num">—</td>
+          <td class="num">₹1,33,693</td>
+          <td class="num">288</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Golden Enterprise</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹1,31,360</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,31,360</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">19-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-651</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">GE-777</td>
+          <td class="num">₹1,31,360</td>
+          <td class="num">—</td>
+          <td class="num">₹1,31,360</td>
+          <td class="num">167</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Wilson Prints</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,28,011</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,28,011</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">19-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-635</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">WP-2620</td>
+          <td class="num">₹71,600</td>
+          <td class="num">—</td>
+          <td class="num">₹71,600</td>
+          <td class="num">167</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">19-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-636</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">WP-2619</td>
+          <td class="num">₹56,411</td>
+          <td class="num">—</td>
+          <td class="num">₹56,411</td>
+          <td class="num">167</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Jain Adishwar Hosiery Works Llp</b> <span style="color:#6b7488">· 3 bills</span></td>
+      <td class="num"><b>₹1,27,925</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,27,925</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">04-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-019</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-019</td>
+          <td class="num">₹47,075</td>
+          <td class="num">—</td>
+          <td class="num">₹47,075</td>
+          <td class="num">92</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">01-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-131</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-131</td>
+          <td class="num">₹49,396</td>
+          <td class="num">—</td>
+          <td class="num">₹49,396</td>
+          <td class="num">34</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">29-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-145</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-145</td>
+          <td class="num">₹31,454</td>
+          <td class="num">—</td>
+          <td class="num">₹31,454</td>
+          <td class="num">6</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Agam Creation</b> <span style="color:#6b7488">· 4 bills</span></td>
+      <td class="num"><b>₹1,27,629</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,27,629</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">15-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-483</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AC-1416</td>
+          <td class="num">₹28,581</td>
+          <td class="num">—</td>
+          <td class="num">₹28,581</td>
+          <td class="num">293</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">29-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-680</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AC-3649</td>
+          <td class="num">₹33,716</td>
+          <td class="num">—</td>
+          <td class="num">₹33,716</td>
+          <td class="num">157</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">29-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-681</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AC-3641</td>
+          <td class="num">₹34,388</td>
+          <td class="num">—</td>
+          <td class="num">₹34,388</td>
+          <td class="num">157</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">03-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-729</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AC-3736</td>
+          <td class="num">₹30,944</td>
+          <td class="num">—</td>
+          <td class="num">₹30,944</td>
+          <td class="num">152</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Kishan Lal Rishikesh</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,26,187</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,26,187</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">18-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-460</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KLR-496</td>
+          <td class="num">₹1,02,229</td>
+          <td class="num">—</td>
+          <td class="num">₹1,02,229</td>
+          <td class="num">260</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">30-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-472</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KLR-532</td>
+          <td class="num">₹23,958</td>
+          <td class="num">—</td>
+          <td class="num">₹23,958</td>
+          <td class="num">248</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>K Nirav &amp; Co.</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,12,363</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,12,363</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">20-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-684</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KNC-5382</td>
+          <td class="num">₹33,298</td>
+          <td class="num">—</td>
+          <td class="num">₹33,298</td>
+          <td class="num">166</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">20-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-688</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KNC-5381</td>
+          <td class="num">₹79,065</td>
+          <td class="num">—</td>
+          <td class="num">₹79,065</td>
+          <td class="num">166</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Sitaram Creation Pvt Ltd</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,11,196</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,11,196</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">09-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-101</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-101</td>
+          <td class="num">₹55,598</td>
+          <td class="num">—</td>
+          <td class="num">₹55,598</td>
+          <td class="num">57</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">09-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-101</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-101</td>
+          <td class="num">₹55,598</td>
+          <td class="num">—</td>
+          <td class="num">₹55,598</td>
+          <td class="num">57</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Pawan Creation</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹1,08,696</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,08,696</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">10-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-811</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">PC-3835</td>
+          <td class="num">₹1,08,696</td>
+          <td class="num">—</td>
+          <td class="num">₹1,08,696</td>
+          <td class="num">117</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Overseas Enterprises</b> <span style="color:#6b7488">· 5 bills</span></td>
+      <td class="num"><b>₹1,04,124</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,04,124</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">17-Apr-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-037</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">OE-91</td>
+          <td class="num">₹12,730</td>
+          <td class="num">—</td>
+          <td class="num">₹12,730</td>
+          <td class="num">444</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">14-Jun-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-102</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">OD-397</td>
+          <td class="num">₹14,943</td>
+          <td class="num">—</td>
+          <td class="num">₹14,943</td>
+          <td class="num">386</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">09-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-237</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">OE-831</td>
+          <td class="num">₹20,775</td>
+          <td class="num">—</td>
+          <td class="num">₹20,775</td>
+          <td class="num">299</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">15-Nov-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-562</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">OE-1361</td>
+          <td class="num">₹40,260</td>
+          <td class="num">—</td>
+          <td class="num">₹40,260</td>
+          <td class="num">232</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">06-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-136</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-136</td>
+          <td class="num">₹15,416</td>
+          <td class="num">—</td>
+          <td class="num">₹15,416</td>
+          <td class="num">29</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Shiv Shakti Textiles</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,02,652</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,02,652</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">27-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-715</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SST-3640</td>
+          <td class="num">₹50,375</td>
+          <td class="num">—</td>
+          <td class="num">₹50,375</td>
+          <td class="num">159</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">05-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-721</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SST-3838</td>
+          <td class="num">₹52,277</td>
+          <td class="num">—</td>
+          <td class="num">₹52,277</td>
+          <td class="num">150</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Rathod Saree Editions</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,01,247</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹1,01,247</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">24-Jul-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-170</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RSE-2080</td>
+          <td class="num">₹69,799</td>
+          <td class="num">—</td>
+          <td class="num">₹69,799</td>
+          <td class="num">346</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">14-Aug-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-201</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RSE-2623</td>
+          <td class="num">₹31,448</td>
+          <td class="num">—</td>
+          <td class="num">₹31,448</td>
+          <td class="num">325</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Amarjyoti Creation</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹99,015</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹99,015</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">17-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-642</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AC-554</td>
+          <td class="num">₹99,015</td>
+          <td class="num">—</td>
+          <td class="num">₹99,015</td>
+          <td class="num">169</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>V N Textiles</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹97,837</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹97,837</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">11-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-88</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-88</td>
+          <td class="num">₹97,837</td>
+          <td class="num">—</td>
+          <td class="num">₹97,837</td>
+          <td class="num">55</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Zaheda Silk Sarees</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹1,55,289</b></td><td class="num"><b>₹61,429</b></td>
+      <td class="num"><b>₹93,860</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">04-Mar-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-512</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">ZSS-36</td>
+          <td class="num">₹68,979</td>
+          <td class="num">₹61,429</td>
+          <td class="num">₹7,550</td>
+          <td class="num">488</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr><td></td>
+          <td class="num">16-May-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-081</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">ZSS-2</td>
+          <td class="num">₹86,310</td>
+          <td class="num">—</td>
+          <td class="num">₹86,310</td>
+          <td class="num">415</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Apple Lifestyle Industries Limited</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹84,682</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹84,682</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">08-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-103</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-103</td>
+          <td class="num">₹59,989</td>
+          <td class="num">—</td>
+          <td class="num">₹59,989</td>
+          <td class="num">58</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">08-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-102</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-102</td>
+          <td class="num">₹24,693</td>
+          <td class="num">—</td>
+          <td class="num">₹24,693</td>
+          <td class="num">58</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Bhagwati Impex</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹79,013</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹79,013</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">08-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU 36-BI 13</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU 36-BI 13</td>
+          <td class="num">₹79,013</td>
+          <td class="num">—</td>
+          <td class="num">₹79,013</td>
+          <td class="num">88</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Shree Manoj Apparel</b> <span style="color:#6b7488">· 5 bills</span></td>
+      <td class="num"><b>₹73,625</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹73,625</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">21-Aug-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-206</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SMA-106</td>
+          <td class="num">₹16,449</td>
+          <td class="num">—</td>
+          <td class="num">₹16,449</td>
+          <td class="num">318</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">26-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-344</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SMA-567</td>
+          <td class="num">₹47,852</td>
+          <td class="num">—</td>
+          <td class="num">₹47,852</td>
+          <td class="num">282</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">09-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-431</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SMA-142</td>
+          <td class="num">₹2,438</td>
+          <td class="num">—</td>
+          <td class="num">₹2,438</td>
+          <td class="num">269</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">18-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-554</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SMA-169</td>
+          <td class="num">₹4,379</td>
+          <td class="num">—</td>
+          <td class="num">₹4,379</td>
+          <td class="num">260</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">12-Nov-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-553</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SMA-216</td>
+          <td class="num">₹2,507</td>
+          <td class="num">—</td>
+          <td class="num">₹2,507</td>
+          <td class="num">235</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Shree Narayani Enterprises</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹66,523</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹66,523</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">07-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/68</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/68</td>
+          <td class="num">₹42,524</td>
+          <td class="num">—</td>
+          <td class="num">₹42,524</td>
+          <td class="num">59</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">20-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/137</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU/137</td>
+          <td class="num">₹23,999</td>
+          <td class="num">—</td>
+          <td class="num">₹23,999</td>
+          <td class="num">15</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Bansal Trading Company</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹66,203</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹66,203</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">31-Jan-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-436</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">BTC-47087</td>
+          <td class="num">₹66,203</td>
+          <td class="num">—</td>
+          <td class="num">₹66,203</td>
+          <td class="num">520</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>Rahul Textiles</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹65,782</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹65,782</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">15-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-469</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RT-137</td>
+          <td class="num">₹65,782</td>
+          <td class="num">—</td>
+          <td class="num">₹65,782</td>
+          <td class="num">263</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Varun Faishon</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹59,981</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹59,981</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">16-Apr-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-52</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-52</td>
+          <td class="num">₹59,981</td>
+          <td class="num">—</td>
+          <td class="num">₹59,981</td>
+          <td class="num">80</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Miss Art Garments Pvt. Ltd.</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹55,188</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹55,188</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">10-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-790</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">MAG-29257</td>
+          <td class="num">₹55,188</td>
+          <td class="num">—</td>
+          <td class="num">₹55,188</td>
+          <td class="num">117</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>Manoj Enterprises</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹44,251</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹44,251</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">26-Sep-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-345</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">ME-1846</td>
+          <td class="num">₹41,630</td>
+          <td class="num">—</td>
+          <td class="num">₹41,630</td>
+          <td class="num">282</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">11-Oct-25</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-378</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">ME-1954</td>
+          <td class="num">₹2,621</td>
+          <td class="num">—</td>
+          <td class="num">₹2,621</td>
+          <td class="num">267</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Kishore Textiles</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹28,596</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹28,596</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">17-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-731</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">KT-929</td>
+          <td class="num">₹8,379</td>
+          <td class="num">—</td>
+          <td class="num">₹8,379</td>
+          <td class="num">138</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-58,59</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-58,59</td>
+          <td class="num">₹20,217</td>
+          <td class="num">—</td>
+          <td class="num">₹20,217</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Sagar Textiles</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹27,195</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹27,195</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">06-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-782</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">ST-1287</td>
+          <td class="num">₹27,195</td>
+          <td class="num">—</td>
+          <td class="num">₹27,195</td>
+          <td class="num">121</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Ruh Creation</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹25,568</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹25,568</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">13-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-728</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RC-1303</td>
+          <td class="num">₹25,568</td>
+          <td class="num">—</td>
+          <td class="num">₹25,568</td>
+          <td class="num">173</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Murarka Textiles</b> <span style="color:#6b7488">· 2 bills</span></td>
+      <td class="num"><b>₹24,374</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹24,374</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">17-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-810</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">MT-4219</td>
+          <td class="num">₹5,104</td>
+          <td class="num">—</td>
+          <td class="num">₹5,104</td>
+          <td class="num">110</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr><td></td>
+          <td class="num">02-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SANPU-69,26-27/SAN/PU-70</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SANPU-67,26-27/SAN/PU-68</td>
+          <td class="num">₹19,270</td>
+          <td class="num">—</td>
+          <td class="num">₹19,270</td>
+          <td class="num">64</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Aditya Prints</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹1,50,749</b></td><td class="num"><b>₹1,31,294</b></td>
+      <td class="num"><b>₹19,455</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">07-Sep-24</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-055</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">AP-1852</td>
+          <td class="num">₹1,50,749</td>
+          <td class="num">₹1,31,294</td>
+          <td class="num">₹19,455</td>
+          <td class="num">666</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>Om Manglam Textiles</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹13,300</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹13,300</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">30-Mar-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-829</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">OMT-300326</td>
+          <td class="num">₹13,300</td>
+          <td class="num">—</td>
+          <td class="num">₹13,300</td>
+          <td class="num">97</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Fancy Bag</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹10,670</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹10,670</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">06-Feb-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-670</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">FB-17</td>
+          <td class="num">₹10,670</td>
+          <td class="num">—</td>
+          <td class="num">₹10,670</td>
+          <td class="num">149</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Variety Textiles (Readymade)</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹10,280</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹10,280</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">05-May-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-90</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27/SAN/PU-90</td>
+          <td class="num">₹10,280</td>
+          <td class="num">—</td>
+          <td class="num">₹10,280</td>
+          <td class="num">61</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Tarun Apparels</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹7,878</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹7,878</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">23-Jun-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27-SAN/PU-142</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">26-27-SAN/PU-142</td>
+          <td class="num">₹7,878</td>
+          <td class="num">—</td>
+          <td class="num">₹7,878</td>
+          <td class="num">12</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Romshay Fabrics</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹1,49,342</b></td><td class="num"><b>₹1,41,875</b></td>
+      <td class="num"><b>₹7,467</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">13-Sep-24</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-366</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RF-1333/G</td>
+          <td class="num">₹1,49,342</td>
+          <td class="num">₹1,41,875</td>
+          <td class="num">₹7,467</td>
+          <td class="num">660</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr><tr class="grp"><td colspan="4"><b>Triranga</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹5,900</b></td><td class="num"><b>₹0</b></td>
+      <td class="num"><b>₹5,900</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">11-Jan-26</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">25-26/SAN/PU-631</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">TIRANGA-1126</td>
+          <td class="num">₹5,900</td>
+          <td class="num">—</td>
+          <td class="num">₹5,900</td>
+          <td class="num">175</td>
+          <td style="text-align:center"><span class="tag r">Unpaid</span></td></tr><tr class="grp"><td colspan="4"><b>Roop Rangi</b> <span style="color:#6b7488">· 1 bill</span></td>
+      <td class="num"><b>₹49,431</b></td><td class="num"><b>₹44,736</b></td>
+      <td class="num"><b>₹4,695</b></td><td></td><td></td></tr><tr><td></td>
+          <td class="num">03-Sep-24</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">SAN/PU-096</td>
+          <td style="text-align:left;font-size:12px;color:#33415c">RR-826</td>
+          <td class="num">₹49,431</td>
+          <td class="num">₹44,736</td>
+          <td class="num">₹4,695</td>
+          <td class="num">670</td>
+          <td style="text-align:center"><span class="tag a">Partially Paid</span></td></tr></tbody>
+      </table>
+    </details>
+  </div>
+</section>
+
+<div class="wrap foot">
+  <b>Method notes.</b> Source workbook: <i>Suppliers Detials with ageing.xlsx</i> ("Ageing" + "Party wise Balance" sheets), analysed 6 July 2026. Age = days from the supplier's bill (document) date to 5 July 2026 (the as-of date implied by the workbook's own ageing column). Bill-level outstanding = bill credit amount − recorded payment against that bill; supplier balance = purchases − (payments + goods returns) from the party ledger. The two reconcile to within ₹35k overall; per-supplier differences are itemised above. GST Rule 37 (180-day ITC reversal) and Section 43B(h) (MSME 45-day) references are flags for the CA to confirm, not tax advice.
+</div>
+
+</body>
+</html>
