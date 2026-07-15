@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Alpha QA Test Report (11 July 2026)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  main{min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){ main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-pass{background:var(--green-bg); color:var(--green)}
+  .b-p1{background:var(--amber-bg); color:var(--amber)}
+  .b-p2{background:var(--grey-bg); color:#41506b}
+  .b-p0{background:var(--red-bg); color:var(--red)}
+  .b-obs{background:var(--blue-bg); color:var(--blue)}
+  .b-gap{background:var(--purple-bg); color:var(--purple)}
+  table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:14px 0; font-size:14.5px}
+  th{background:var(--grey-bg); text-align:left; padding:9px 12px; font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:#41506b}
+  td{padding:9px 12px; border-top:1px solid var(--line); vertical-align:top}
+  code{background:var(--grey-bg); padding:1px 6px; border-radius:5px; font-size:13.5px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:14px 0}
+  .verdict{border-left:5px solid var(--green); background:var(--green-bg)}
+  .verdict h3{margin-top:0; color:var(--green)}
+  ul{margin:8px 0; padding-left:22px}
+  li{margin:5px 0}
+  .small{font-size:13.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS Operating System · Alpha QA</div>
+  <h1>Whole-app browser test of the deployed alpha</h1>
+  <p class="sub">Run on <strong>11 July 2026</strong> against <a href="https://kdps-erp-web.onrender.com">kdps-erp-web.onrender.com</a> (Render alpha, main branch) from inside the Claude-app browser. Scope agreed with Anand: <strong>full writes</strong> (test data prefixed <code>QA-0711</code>) and <strong>owner pass + role spot-checks</strong> (ops1, accounts1, deo.cashier). Every claim below cites an observed value, voucher number, or API response from the session.</p>
+</header>
+
+<section>
+  <h2 class="sec">Verdict</h2>
+  <div class="card verdict">
+    <h3>PASS — the built slice works end-to-end, and the books stay balanced under load</h3>
+    <p>Every wired screen loads and functions. The full business spine — <strong>booking → GRN (both against-booking and booking-less direct) → PT authoring → warehouse mapping → send to Patna → post</strong> — completed without a single error, producing correct gap-free voucher numbers at every step. The money assertion held: <strong>trial balance was ₹0 before testing (2 vouchers / 4 legs) and ₹0 after all writes (8 vouchers / 16 legs), <code>balanced: true</code> both times</strong>. Stock was valued at P RATE exactly as locked (4 × ₹899 = ₹3,596). Role gating held on client <em>and</em> server (all probes 403). Zero console errors across the entire session, including a full mobile (375px) pass.</p>
+    <p><strong>No P0s found. 3 P1s, 4 P2s</strong>, plus coverage gaps that need a human tester (file uploads, downloads, 4 untested roles).</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">The money gate (hard evidence)</h2>
+  <table>
+    <tr><th>Check</th><th>Before writes</th><th>After all writes</th></tr>
+    <tr><td>Trial balance (<code>/api/finledger/health</code>)</td><td>₹0.00 · balanced · 2 vouchers / 4 legs</td><td>₹0.00 · balanced · 8 vouchers / 16 legs</td></tr>
+    <tr><td>Inventory (owned stock) GL</td><td>₹0</td><td>₹3,596 = 4 units × ₹899 <strong>P RATE</strong> (locked valuation rule holds)</td></tr>
+    <tr><td>Liability side of the PT post</td><td>—</td><td><strong>GRNI</strong> −₹3,596 (goods received, not invoiced) — correct for a direct receipt with no vendor bill yet; this is why the Vendor Ledger shows nothing for it</td></tr>
+    <tr><td>Cash subledger ↔ GL</td><td>reconciled (0 = 0)</td><td>reconciled (0 = 0)</td></tr>
+    <tr><td>Vendor subledger ↔ GL</td><td><strong>drift ₹1,50,000</strong> (legacy)</td><td><strong>drift still exactly ₹1,50,000</strong> — my new Credo bill/payment/reversal reconciled perfectly (GL control ₹2,500 = subledger net ₹2,500). The drift is only the old Arvind bill from a pre-fix session. <strong>New finance writes are true double-entry.</strong></td></tr>
+  </table>
+  <p class="small">Cross-ledger integration also verified: the vendor payment (<code>26-27/HO/VEND/5</code>) auto-created a cash movement (<code>26-27/HO/CASH/3</code>, −₹1,000), and reversing the vendor entry auto-created the cash reversal (<code>CASH/4</code>). Reversals are append-only; originals stay visible.</p>
+</section>
+
+<section>
+  <h2 class="sec">What was tested, phase by phase</h2>
+  <table>
+    <tr><th>Phase</th><th>Result</th><th>Key evidence</th></tr>
+    <tr><td>0–1 · Smoke + auth</td><td><span class="badge b-pass">PASS</span></td><td>API health <code>{"status":"ok"}</code> after ~50s cold start; login page + 6 demo chips; owner chip → dashboard; manual form login verified with ops1 (typed credentials); sign-out bounces to login.</td></tr>
+    <tr><td>2 · Dashboard + read screens</td><td><span class="badge b-pass">PASS</span></td><td>Owner tiles load (Owed to brands ₹42.60 L; Books tie ₹0). Stock Ledger: 194 append-only entries with full SKU dims (barcode/brand/design/colour/size/season). SOH group-by SKU/Brand/Store switches live. Bookings list with receipt %; Inbound queue with pending bookings + GRNs.</td></tr>
+    <tr><td>3 · Masters CRUD</td><td><span class="badge b-pass">PASS</span></td><td>Created <code>QA-0711 Test Brand</code> (owned + capped → derived label <strong>Correction</strong>), edited to uncapped → label recomputed to <strong>Outright</strong>. Two-axis model renders exactly per the locked decision. Stores show correct Bihar/Jharkhand GSTIN mapping. RBAC page lists 8 real users with roles + scopes.</td></tr>
+    <tr><td>4 · Booking → GRN → PT</td><td><span class="badge b-pass">PASS</span></td><td>Booking <code>26-27/SS26/BK/2</code> (Mufti, 8 pcs, est ₹15,992 = 8×1,999 ✓). GRN against it: <code>26-27/DEO/GRN/3</code> (lines pre-filled from booking). <strong>Domain guard confirmed:</strong> PT-from-receipt blocked at a store with a clear message — warehouse only. Direct booking-less receipt <code>26-27/RAN-WH/GRN/1</code> at RAN-WH → PT authored from it, send-guards enforced (barcode + season required), fill-rate chips, fill-whole-column tool, auto margin (40.03%), FSM walked Mapping → Sent to Patna → <strong>Posted as <code>26-27/RAN-WH/PT/3</code>, record locked</strong>. Review queue: resolved raw "Blackberrys" → ★BLACKBERRYS (starred suggestion). Proposals page renders (empty — mining cron is paid-tier, expected).</td></tr>
+    <tr><td>5 · Finance writes</td><td><span class="badge b-pass">PASS</span></td><td>Bill <code>VEND/4</code> ₹2,500 → payment <code>VEND/5</code> −₹1,000 (outstanding ₹1,500 ✓) → reversal <code>VEND/6</code> (back to ₹2,500, history intact). Cash receipt <code>CASH/5</code> +₹750 → reversal <code>CASH/6</code> (net ₹0). Ageing buckets update correctly.</td></tr>
+    <tr><td>6 · Roles</td><td><span class="badge b-pass">PASS</span></td><td><strong>ops1:</strong> no Books-Health on dashboard, no finance/RBAC nav, direct URL → clean "No access" page, API probes all <strong>403</strong> (reads and a write). <strong>accounts1:</strong> full finance access. <strong>deo.cashier:</strong> store-scoped dashboard ("your shift", DEO only, 1 store/0 warehouses), nav stripped to store ops + documents, <code>/edges/rbac</code> denied, RBAC + finance APIs 403, inbound queue API refused with "warehouse/HO screen".</td></tr>
+    <tr><td>7 · Stubs, mobile, console</td><td><span class="badge b-pass">PASS</span></td><td>Coming-soon stubs render placeholders (Sell, Payments). Mobile 375px: hamburger drawer, store chip, thumb-sized tiles, Lakh formatting — genuinely usable. <strong>Zero console errors for the entire session.</strong> Dark theme rendered correctly throughout; Light/Dark/System toggle present on login + user menu.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">Findings</h2>
+  <table>
+    <tr><th>Sev</th><th>Finding</th><th>Evidence & suggested fix</th></tr>
+    <tr><td><span class="badge b-p1">P1</span></td><td>Wrong password gives <strong>no visible feedback</strong> on the login form</td><td>Typed <code>owner</code> / wrong password twice (real keystrokes) — no error message, no visual change. The API itself returns a proper 401 ("No active account found…"), and the same form logs in fine with correct credentials, so this is a missing error display, not a broken form. A staff member will retype in confusion. Show the 401 message under the form.</td></tr>
+    <tr><td><span class="badge b-p1">P1</span></td><td>Dashboard "Books tie" is green while <strong>vendor subledger↔GL reconciliation is red</strong></td><td><code>/finledger/health</code> returns <code>reconciliation.reconciled: false</code> (drift ₹1,50,000, legacy Arvind data) yet the tile shows only the trial-balance tick. The equation-of-state box should surface the recon state too — "books tie" reads as an all-clear it isn't.</td></tr>
+    <tr><td><span class="badge b-p1">P1</span></td><td>Design-conformance question: <strong>GRN quantity never reaches the stock ledger</strong> — stock appears only at PT posting</td><td>After GRN <code>26-27/DEO/GRN/3</code> (8 pcs received) the stock ledger/SOH showed nothing; units appeared only when the PT posted. D2's decision is "GRN posts quantity / PT posts value + liability". Either the alpha diverges, or the decision has evolved (branded path: stock counted under barcode, which only exists post-mapping). Needs a deliberate ruling — if the alpha is right, update the posting catalog; if not, it's a real defect.</td></tr>
+    <tr><td><span class="badge b-p2">P2</span></td><td>Store names concatenated in the GRN table</td><td>Inbound list renders "BANKAstore" / "DEOstore" (code + type with no separator).</td></tr>
+    <tr><td><span class="badge b-p2">P2</span></td><td>Ledger tiles ignore Indian number formatting</td><td>Vendor/Cash tiles show raw <code>152500.00</code>; the dashboard correctly shows <code>₹42.60 L</code>. House norm is Lakh/Crore everywhere.</td></tr>
+    <tr><td><span class="badge b-p2">P2</span></td><td>Unknown routes render a generic "Coming soon" instead of a 404</td><td><code>/some/unknown/route-xyz</code> → placeholder card. Matches the known default-allow catch-all; fine for alpha, but a typo'd URL should say "page not found", not imply a future feature.</td></tr>
+    <tr><td><span class="badge b-p2">P2</span></td><td>Demo DB carries junk from earlier automated runs</td><td><code>Brand 21F801</code>, <code>ZZTEST21F801</code> store (city Ranchi but state Bihar — inconsistent), <code>Season 21F801</code>, <code>TEST AUTO USER EDITED</code>, and the ₹1.5L Arvind vendor entries with no GL counterpart (the source of the recon drift). Recommend a cleanup/reseed so Books-Health goes fully green and demos look clean.</td></tr>
+    <tr><td><span class="badge b-obs">OBS</span></td><td>Login page doesn't auto-redirect when valid tokens exist</td><td>Stale <code>kdps_access</code>/<code>kdps_refresh</code> from a morning session sat in localStorage while the login page rendered. Harmless (tokens were expired) but a session-restore redirect would be smoother. JWT-in-localStorage itself is the documented alpha deferral.</td></tr>
+    <tr><td><span class="badge b-obs">OBS</span></td><td>Demo chips omit <code>steward</code> and <code>admin</code></td><td>Six chips vs eight seeded users. If intentional (steward/admin are power roles), fine — just noting.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">What this run could not cover (needs a human)</h2>
+  <ul>
+    <li><span class="badge b-gap">GAP</span> <strong>File uploads</strong> — booking "upload &amp; let the agent draft it", GRN invoice prefill, PT-mapper brand-file upload. The agent browser can't attach local files. The AI-draft path (aiagents/Gemini) is therefore fully untested.</li>
+    <li><span class="badge b-gap">GAP</span> <strong>Downloads</strong> — Excel (KDPS)/CSV export buttons exist on the PT screen but weren't clicked (download policy). Verify the exported file shape once by hand.</li>
+    <li><span class="badge b-gap">GAP</span> <strong>Roles not exercised</strong> — wh.patna (warehouse), steward (proposals approval), deo.manager, admin (+ Django <code>/admin</code>).</li>
+    <li><span class="badge b-gap">GAP</span> <strong>PT send-back (recall) and reverse-posting</strong> — buttons present; not clicked, to leave the posted QA PT as inspectable evidence. The prior MUFTI.xlsx file shows a completed reverse (PT/1 → PT/2), so the path has worked before.</li>
+    <li><span class="badge b-gap">GAP</span> <strong>Partial receipt</strong> against a booking (received &lt; booked), pagination on long lists, and concurrent-user behaviour.</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="sec">QA-0711 records left in the demo DB</h2>
+  <table>
+    <tr><th>Record</th><th>Identifier</th><th>State</th></tr>
+    <tr><td>Brand master</td><td><code>QA-0711 Test Brand</code> (code QA0711)</td><td>Active · KDPS-owned · Uncapped → Outright</td></tr>
+    <tr><td>Booking</td><td><code>26-27/SS26/BK/2</code> · Mufti · QA-0711-PO-1</td><td>Received (8/8 pcs)</td></tr>
+    <tr><td>GRN (against booking)</td><td><code>26-27/DEO/GRN/3</code> · inv QA-0711-INV-1</td><td>Received at DEO</td></tr>
+    <tr><td>GRN (direct, booking-less)</td><td><code>26-27/RAN-WH/GRN/1</code> · inv QA-0711-INV-2 · "QA-0711 Direct Vendor"</td><td>Received at RAN-WH</td></tr>
+    <tr><td>PT file + stock voucher</td><td><code>26-27/RAN-WH/PT/3</code></td><td><strong>Posted &amp; locked</strong> — 4 units / ₹3,596 live in stock + GRNI (reverse it if you want a zero-stock demo state)</td></tr>
+    <tr><td>Vendor ledger</td><td><code>26-27/HO/VEND/4·5·6</code> (Credo)</td><td>Net outstanding ₹2,500 (bill − reversed payment) — reconciles with GL</td></tr>
+    <tr><td>Cash ledger</td><td><code>26-27/HO/CASH/5·6</code></td><td>Net ₹0 (receipt + reversal)</td></tr>
+    <tr><td>Mapper lookup rule</td><td>raw "Blackberrys" → BLACKBERRYS</td><td>Durable — future files self-map</td></tr>
+  </table>
+  <p class="small">Pre-existing junk from earlier sessions (21F801 records, TEST AUTO USER, the Arvind ₹1.5L entries) was <em>not</em> created by this run and is listed under findings for cleanup.</p>
+</section>
+
+<section>
+  <h2 class="sec">Method</h2>
+  <p class="small">Tested in the Claude-app browser pane against the live Render alpha. Interactions: real clicks/keystrokes plus accessibility-tree reads; API assertions made from the page's own session via <code>fetch</code> with the logged-in user's token (each role's probes used that role's token). Cold-start (~50s) and free-tier caveats from DEPLOY.md were treated as environment, not defects. Plan file: <code>~/.claude/plans/i-want-you-to-deep-fox.md</code>.</p>
+</section>
+
+</main>
+</body>
+</html>
