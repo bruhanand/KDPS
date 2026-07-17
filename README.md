@@ -28,8 +28,9 @@ re-run it any time. Open **http://localhost:3000** and sign in with a login from
 
 ```bash
 npm run dev:setup   # provision DB + deps + seed, start no servers
-npm run dev:reset   # destroy the local database and rebuild from scratch (~11s)
+npm run dev:reset   # destroy the local database and rebuild it from scratch (~11s), then exit
 ./scripts/dev.sh --api    # API only          --web   PWA only
+./scripts/dev.sh --reset  # rebuild the database AND run the stack
 ```
 
 **No secrets needed.** `scripts/dev.sh` generates `app/backend/.env` on first run.
