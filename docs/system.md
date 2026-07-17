@@ -116,32 +116,44 @@ Invoice is being uploaded.
 
 #### How a non-branded item arrives — tagged vs non-tagged
 
-Both come with an invoice.
-Invoices received has three things a GRN needs — style code, size, quantity — are already there, so the GRN can be made straight away. But the data is not generally very clear, so what happens is a draft GRN gets created when you upload the invoice. Manually, the data is corrected, and then the GRN is created.
+Non-branded arrives **at the warehouse only**. Both come with an invoice carrying the three things a GRN needs — style code, size, quantity. Invoice data is rarely clean, so upload makes a **draft GRN**; the person corrects it, then posts. GRN posts **quantity only** (no value).
 
-One bifurcation Whether the goods are **tagged** or **non-tagged**.
+**At GRN creation the person marks the consignment `tagged` or `not-tagged`.** That choice sets the flow.
 
-**Tagged**
+**Identity for non-tagged goods**
 
-- Carries a barcode, a printed MRP, and the SKU details — style code, colour, size, quantity.
-- KDPS reads the barcode, keeps the printed MRP (the tag caps it), and uploads. This is the closest to branded.
+- **Style code** — always present, final.
+- **Quantity** — always present, final.
+- **Size** — if not stated → `Free Size`.
+- **Colour** — usually not stated on non-tagged goods. In its place the item carries a **tier: Premium / Medium / Economy**. The tier *is* the colour slot, not an extra field.
+- SKU key = **style × size(or Free) × tier**. Many pieces can sit under one barcode — accepted, not a defect.
 
-**Non-tagged**
+**The two flows (both start from the GRN)**
 
-- Comes with the invoice only — no barcode, no printed MRP.
-- The invoice still carries style code, size(If no size is given, then it is a free size) and quantity — enough to make the GRN.
+A **draft PT** is built off the GRN; the warehouse person edits it and chases any missing detail from the vendor.
 
-KDPS decides the tag:
+- **Tagged** → vendor barcode + printed MRP kept (the tag caps the MRP). Barcode tab is **live**.
+- **Not-tagged** → barcode tab is **greyed out** — there is nothing to generate yet; it comes after the PT is done.
 
-- Current Process:
-  the POS (Ten Software) generates the barcode but we are making our own POS so Ten Software POS will be replaced, and the barcode generation will be done by the KDPs system only.
-  The POS we are gonna build will only be used as POS. inside the sell tab.
-  Currently, what happens is, remember, I told you that the PT file is sent to the patna office for inward in the current process, the PT file.
-  So, in the current process, when the pt file is inwarded then the barcord is generated, because items gets queued alright, so item barcode is generated in a sequence.
-  As the whole system will migrate to KDPS system, what we are buildING so the process for barcode generation can be done before the sending it to patna office.
-  recent meeting : /Users/anand/Code/KDPS/docs/meetings/2026-07-09-warehouse-priyo
+**PT-making chatbot (non-branded)**
 
-- What should be the new process?
+A chat assistant that knows the PT process. The person feeds it whatever he retrieves from the vendor; it fills the PT fields. Trained on real invoices + their converted PT files.
 
-- MRP Calculation Process
-  the warehouse calculates the MRP (base + ~1.1% transport + GST + per-category margin, 30–35%, overridable), and completes the PT.: ACCORDING TO THE GOODS: PRICE bracket AND supplier/Brand.
+**MRP (KDPS-set, non-tagged)**
+
+`Base + ~1.1% transport + GST + slab margin`, where the slab is chosen by **price bracket × supplier**. Stored as a versioned, date-effective table. MRP is **frozen onto the PT** — never recomputed later.
+*(Note: 30–35% here is markup on cost, not margin on price — state which. Plan says 20–25%; this number overrides it.)*
+
+**Barcode generation — one PT at a time, in sequence**
+
+When a completed PT enters the barcode step it **claims the counter, takes a contiguous block of numbers row-by-row, releases it** — then the next PT. Drafting is concurrent; only the barcode step is single-file. This is what keeps the sequence unbroken and makes duplicate barcodes impossible.
+
+**Review → Patna**
+
+Tags print → PT gets a **final review** → **Send to Patna**. Patna receives PTs **in sequence** and enters them (data entry, not re-checking — the real check happens at the warehouse). This is where system stock becomes true.
+
+**Ownership**
+
+Non-tagged non-branded is **Outright / KDPS-owned by default** — KDPS sets the MRP, prints the tag, and sells it. (Ownership follows the commercial model; for these goods that model is Outright.)
+
+> **Open — needs a legal-metrology consultant before go-live:** when KDPS prints its own MRP tag it becomes the declarer/brand-owner. The tag must carry name + address + country of origin, consumer-care email + phone, size, and MRP inclusive of taxes; MRP may only be reduced by sticker, never raised. Same sign-off gate as the pending CA rulings.
