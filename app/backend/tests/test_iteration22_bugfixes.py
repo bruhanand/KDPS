@@ -10,6 +10,7 @@ Tests for:
 """
 
 import os
+
 import pytest
 import requests
 
@@ -64,7 +65,7 @@ class TestBugFix2CashierLogin:
         assert r.status_code == 200, f"Cashier login failed: {r.status_code} - {r.text}"
         data = r.json()
         assert "access" in data, f"No access token: {data}"
-        print(f"✓ Cashier login successful, token received")
+        print("✓ Cashier login successful, token received")
 
     def test_cashier_can_access_transfers(self):
         """Cashier should be able to GET /api/outbound/transfers (store-scoped)."""
@@ -75,7 +76,7 @@ class TestBugFix2CashierLogin:
             timeout=30,
         )
         assert r.status_code == 200, f"Cashier cannot access transfers: {r.status_code} - {r.text}"
-        print(f"✓ Cashier can access transfers (store-scoped)")
+        print("✓ Cashier can access transfers (store-scoped)")
 
     def test_cashier_cannot_post_to_different_store(self):
         """Cashier (DEO) should NOT be able to POST transfer from BANKA (different store)."""
@@ -95,7 +96,9 @@ class TestBugFix2CashierLogin:
         )
         # Should get 403 or 400 (validation error for store scope)
         assert r.status_code in [400, 403], f"Expected 400/403, got {r.status_code}: {r.text}"
-        print(f"✓ Cashier correctly blocked from posting to different store (status={r.status_code})")
+        print(
+            f"✓ Cashier correctly blocked from posting to different store (status={r.status_code})"
+        )
 
 
 class TestFinledgerHealthBaseline:
@@ -111,22 +114,29 @@ class TestFinledgerHealthBaseline:
         )
         assert r.status_code == 200, f"Health check failed: {r.status_code} - {r.text}"
         data = r.json()
-        
+
         # Verify balanced
         assert data.get("balanced") is True, f"Books not balanced: {data}"
-        assert data.get("trial_balance_paise") == 0, f"Trial balance not zero: {data.get('trial_balance_paise')}"
-        
+        assert data.get("trial_balance_paise") == 0, (
+            f"Trial balance not zero: {data.get('trial_balance_paise')}"
+        )
+
         # Verify reconciliation
         recon = data.get("reconciliation", {})
         assert recon.get("reconciled") is True, f"Reconciliation failed: {recon}"
-        assert recon.get("vendor", {}).get("drift_paise") == 0, f"Vendor drift: {recon.get('vendor')}"
+        assert recon.get("vendor", {}).get("drift_paise") == 0, (
+            f"Vendor drift: {recon.get('vendor')}"
+        )
         assert recon.get("cash", {}).get("drift_paise") == 0, f"Cash drift: {recon.get('cash')}"
-        
+
         # Verify leg/voucher counts
         assert data.get("leg_count", 0) > 0, f"No GL legs: {data}"
         assert data.get("voucher_count", 0) > 0, f"No vouchers: {data}"
-        
-        print(f"✓ Finledger health: balanced={data['balanced']}, legs={data['leg_count']}, vouchers={data['voucher_count']}")
+
+        print(
+            f"✓ Finledger health: balanced={data['balanced']}, "
+            f"legs={data['leg_count']}, vouchers={data['voucher_count']}"
+        )
         print(f"  Vendor drift: {recon.get('vendor', {}).get('drift_paise')} paise")
         print(f"  Cash drift: {recon.get('cash', {}).get('drift_paise')} paise")
 
@@ -144,22 +154,22 @@ class TestStockOnHand:
         )
         assert r.status_code == 200, f"Stock on hand failed: {r.status_code} - {r.text}"
         data = r.json()
-        
+
         # Response has structure: {group_by, summary, rows}
         rows = data.get("rows", [])
         summary = data.get("summary", {})
-        
+
         # Should have stock data
         assert len(rows) > 0, "No stock on hand data"
         assert summary.get("units_on_hand", 0) > 0, "No units on hand"
-        
+
         # Check for expected SKUs at DEO
         deo_skus = [item for item in rows if item.get("store_code") == "DEO"]
         assert len(deo_skus) > 0, "No stock at DEO store"
-        
+
         # Check for expected SKUs at BANKA
         banka_skus = [item for item in rows if item.get("store_code") == "BANKA"]
-        
+
         print(f"✓ Stock on hand: {len(rows)} SKU rows, {summary.get('units_on_hand')} units total")
         print(f"  DEO: {len(deo_skus)} SKUs, BANKA: {len(banka_skus)} SKUs")
 
@@ -176,12 +186,16 @@ class TestBugFix1OwnedRTVVendorSubledger:
         """
         token = get_auth_token(**OWNER_CREDS)
         headers = auth_header(token)
-        
+
         # Step 1: Get initial health state
-        health_before = requests.get(f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30).json()
-        initial_vendor_drift = health_before.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
+        health_before = requests.get(
+            f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30
+        ).json()
+        initial_vendor_drift = (
+            health_before.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
+        )
         print(f"Initial vendor drift: {initial_vendor_drift} paise")
-        
+
         # Step 2: Create RTV draft for owned brand (Peter England)
         rtv_payload = {
             "store": DEO_STORE_ID,
@@ -204,31 +218,49 @@ class TestBugFix1OwnedRTVVendorSubledger:
                 },
             ],
         }
-        
-        r = requests.post(f"{BASE_URL}/api/outbound/rtvs", headers=headers, json=rtv_payload, timeout=30)
+
+        r = requests.post(
+            f"{BASE_URL}/api/outbound/rtvs", headers=headers, json=rtv_payload, timeout=30
+        )
         assert r.status_code == 201, f"RTV create failed: {r.status_code} - {r.text}"
         rtv_data = r.json()
         rtv_id = rtv_data["id"]
         print(f"✓ Created RTV draft: id={rtv_id}")
-        
+
         # Step 3: Submit the RTV
-        r = requests.post(f"{BASE_URL}/api/outbound/rtvs/{rtv_id}/submit", headers=headers, timeout=30)
+        r = requests.post(
+            f"{BASE_URL}/api/outbound/rtvs/{rtv_id}/submit", headers=headers, timeout=30
+        )
         assert r.status_code == 200, f"RTV submit failed: {r.status_code} - {r.text}"
         submitted_rtv = r.json()
         doc_number = submitted_rtv.get("doc_number")
         print(f"✓ Submitted RTV: doc_number={doc_number}")
-        
+
         # Step 4: Verify finledger health after RTV
-        health_after = requests.get(f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30).json()
-        
+        health_after = requests.get(
+            f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30
+        ).json()
+
         assert health_after.get("balanced") is True, f"Books not balanced after RTV: {health_after}"
-        assert health_after.get("reconciliation", {}).get("reconciled") is True, f"Not reconciled: {health_after}"
-        
-        vendor_drift_after = health_after.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
-        assert vendor_drift_after == 0, f"Vendor drift after RTV: {vendor_drift_after} paise (expected 0)"
-        
-        print(f"✓ After owned RTV: balanced={health_after['balanced']}, vendor_drift={vendor_drift_after}")
-        print(f"  GL legs: {health_after.get('leg_count')}, vouchers: {health_after.get('voucher_count')}")
+        assert health_after.get("reconciliation", {}).get("reconciled") is True, (
+            f"Not reconciled: {health_after}"
+        )
+
+        vendor_drift_after = (
+            health_after.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
+        )
+        assert vendor_drift_after == 0, (
+            f"Vendor drift after RTV: {vendor_drift_after} paise (expected 0)"
+        )
+
+        print(
+            f"✓ After owned RTV: balanced={health_after['balanced']}, "
+            f"vendor_drift={vendor_drift_after}"
+        )
+        print(
+            f"  GL legs: {health_after.get('leg_count')}, "
+            f"vouchers: {health_after.get('voucher_count')}"
+        )
 
 
 class TestBugFix1bSORRTVNoGL:
@@ -243,12 +275,14 @@ class TestBugFix1bSORRTVNoGL:
         """
         token = get_auth_token(**OWNER_CREDS)
         headers = auth_header(token)
-        
+
         # Step 1: Get initial health state
-        health_before = requests.get(f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30).json()
+        health_before = requests.get(
+            f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30
+        ).json()
         initial_leg_count = health_before.get("leg_count", 0)
         print(f"Initial GL leg count: {initial_leg_count}")
-        
+
         # Step 2: Create RTV draft for SOR brand (Louis Philippe)
         rtv_payload = {
             "store": DEO_STORE_ID,
@@ -271,34 +305,46 @@ class TestBugFix1bSORRTVNoGL:
                 },
             ],
         }
-        
-        r = requests.post(f"{BASE_URL}/api/outbound/rtvs", headers=headers, json=rtv_payload, timeout=30)
+
+        r = requests.post(
+            f"{BASE_URL}/api/outbound/rtvs", headers=headers, json=rtv_payload, timeout=30
+        )
         assert r.status_code == 201, f"SOR RTV create failed: {r.status_code} - {r.text}"
         rtv_data = r.json()
         rtv_id = rtv_data["id"]
         print(f"✓ Created SOR RTV draft: id={rtv_id}")
-        
+
         # Step 3: Submit the RTV
-        r = requests.post(f"{BASE_URL}/api/outbound/rtvs/{rtv_id}/submit", headers=headers, timeout=30)
+        r = requests.post(
+            f"{BASE_URL}/api/outbound/rtvs/{rtv_id}/submit", headers=headers, timeout=30
+        )
         assert r.status_code == 200, f"SOR RTV submit failed: {r.status_code} - {r.text}"
         submitted_rtv = r.json()
         doc_number = submitted_rtv.get("doc_number")
         print(f"✓ Submitted SOR RTV: doc_number={doc_number}")
-        
+
         # Step 4: Verify finledger health - should still be reconciled
-        health_after = requests.get(f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30).json()
-        
-        assert health_after.get("balanced") is True, f"Books not balanced after SOR RTV: {health_after}"
-        assert health_after.get("reconciliation", {}).get("reconciled") is True, f"Not reconciled: {health_after}"
-        
-        vendor_drift = health_after.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
+        health_after = requests.get(
+            f"{BASE_URL}/api/finledger/health", headers=headers, timeout=30
+        ).json()
+
+        assert health_after.get("balanced") is True, (
+            f"Books not balanced after SOR RTV: {health_after}"
+        )
+        assert health_after.get("reconciliation", {}).get("reconciled") is True, (
+            f"Not reconciled: {health_after}"
+        )
+
+        vendor_drift = (
+            health_after.get("reconciliation", {}).get("vendor", {}).get("drift_paise", 0)
+        )
         assert vendor_drift == 0, f"Vendor drift after SOR RTV: {vendor_drift} paise (expected 0)"
-        
+
         # GL leg count should NOT increase for SOR RTV (no GL posting)
         # Note: We can't directly query GL entries via API, but health check confirms no drift
-        
+
         print(f"✓ After SOR RTV: balanced={health_after['balanced']}, vendor_drift={vendor_drift}")
-        print(f"  (SOR RTV correctly did NOT create GL entries)")
+        print("  (SOR RTV correctly did NOT create GL entries)")
 
 
 class TestAdminLogin:
@@ -308,7 +354,7 @@ class TestAdminLogin:
         """Admin should be able to login."""
         token = get_auth_token(**ADMIN_CREDS)
         assert token, "Admin login failed"
-        print(f"✓ Admin login successful")
+        print("✓ Admin login successful")
 
 
 class TestOwnerLogin:
@@ -318,7 +364,7 @@ class TestOwnerLogin:
         """Owner should be able to login."""
         token = get_auth_token(**OWNER_CREDS)
         assert token, "Owner login failed"
-        print(f"✓ Owner login successful")
+        print("✓ Owner login successful")
 
 
 if __name__ == "__main__":

@@ -13,12 +13,11 @@ Fixture scaffold:
 from __future__ import annotations
 
 import pytest
-from django.test import TestCase
-from django.utils import timezone
 
-from accounts.models import User, Role
+from accounts.models import Role, User
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLAccount, GLEntry
+from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Gstin, LegalEntity, Store
 from outbound.models import (
     ReturnToVendor,
@@ -43,7 +42,6 @@ from outbound.posting import (
 )
 from stockledger.models import StockLedgerEntry, StockOnHand
 from vendors.models import Vendor
-from finledger.models import VendorLedgerEntry
 
 
 @pytest.fixture()
@@ -51,11 +49,15 @@ def _outbound_scaffold(db):
     """Create the minimal master data + seed stock for outbound tests."""
     entity = LegalEntity.objects.create(code="kdps-test", name="KDPS Test", pan="AAACK1234A")
     gstin_jh = Gstin.objects.create(
-        gstin="20AAACK1234A1ZP", state_code="20", state_name="Jharkhand",
+        gstin="20AAACK1234A1ZP",
+        state_code="20",
+        state_name="Jharkhand",
         legal_entity=entity,
     )
     gstin_bh = Gstin.objects.create(
-        gstin="10AAACK1234A1ZR", state_code="10", state_name="Bihar",
+        gstin="10AAACK1234A1ZR",
+        state_code="10",
+        state_name="Bihar",
         legal_entity=entity,
     )
     store_a = Store.objects.create(code="TST-A", name="Test Store A", gstin=gstin_jh)
@@ -65,12 +67,16 @@ def _outbound_scaffold(db):
         code="TST-WH", name="Test Warehouse", gstin=gstin_jh, store_type="warehouse"
     )
     brand_owned = Brand.objects.create(
-        code="ownbr", name="OwnedBrand",
-        ownership=Brand.Ownership.OWNED, return_terms=Brand.ReturnTerms.NONE,
+        code="ownbr",
+        name="OwnedBrand",
+        ownership=Brand.Ownership.OWNED,
+        return_terms=Brand.ReturnTerms.NONE,
     )
     brand_sor = Brand.objects.create(
-        code="sorbr", name="SORBrand",
-        ownership=Brand.Ownership.BRAND_OWNED, return_terms=Brand.ReturnTerms.UNCAPPED,
+        code="sorbr",
+        name="SORBrand",
+        ownership=Brand.Ownership.BRAND_OWNED,
+        return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(name="Test Vendor", code="tvnd")
     role = Role.objects.create(code="test-admin", name="Test Admin")
@@ -81,32 +87,68 @@ def _outbound_scaffold(db):
     # Seed stock: 10 units of SKU "SKU001" at store_a and warehouse, 100 paise/unit
     for s in [store_a, warehouse]:
         StockOnHand.objects.create(
-            store=s, gstin=gstin_jh, sku_code="SKU001",
-            design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-            season="SS26", item="shirt", hsn="6205",
-            net_qty=10, net_value_paise=10 * 100,
+            store=s,
+            gstin=gstin_jh,
+            sku_code="SKU001",
+            design="Shirt",
+            color="Blue",
+            size="M",
+            brand="OwnedBrand",
+            season="SS26",
+            item="shirt",
+            hsn="6205",
+            net_qty=10,
+            net_value_paise=10 * 100,
         )
         StockLedgerEntry.objects.create(
-            store=s, gstin=gstin_jh, sku_code="SKU001",
-            design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-            season="SS26", item="shirt", hsn="6205",
-            qty=10, amount=10 * 100, kind="pt_inward",
-            doc_number="SEED-001", line_no=1,
+            store=s,
+            gstin=gstin_jh,
+            sku_code="SKU001",
+            design="Shirt",
+            color="Blue",
+            size="M",
+            brand="OwnedBrand",
+            season="SS26",
+            item="shirt",
+            hsn="6205",
+            qty=10,
+            amount=10 * 100,
+            kind="pt_inward",
+            doc_number="SEED-001",
+            line_no=1,
         )
 
     # SOR stock at store_a: 5 units of SKU "SKU002"
     StockOnHand.objects.create(
-        store=store_a, gstin=gstin_jh, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        net_qty=5, net_value_paise=5 * 200,
+        store=store_a,
+        gstin=gstin_jh,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        net_qty=5,
+        net_value_paise=5 * 200,
     )
     StockLedgerEntry.objects.create(
-        store=store_a, gstin=gstin_jh, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=5, amount=5 * 200, kind="pt_inward",
-        doc_number="SEED-002", line_no=1,
+        store=store_a,
+        gstin=gstin_jh,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=5,
+        amount=5 * 200,
+        kind="pt_inward",
+        doc_number="SEED-002",
+        line_no=1,
     )
 
     # Seed VoucherSeries for all outbound doc types and test stores
@@ -114,13 +156,17 @@ def _outbound_scaffold(db):
     for store_code in ["TST-A", "TST-B", "TST-BH", "TST-WH"]:
         for doc_type in ["STO", "RTV", "ADJ", "WRO", "VFL"]:
             VoucherSeries.objects.create(
-                fy=fy, store_code=store_code, doc_type=doc_type,
+                fy=fy,
+                store_code=store_code,
+                doc_type=doc_type,
                 prefix=f"{store_code}/{doc_type}/{fy}/",
                 next_seq=1,
             )
     # Vendor subledger voucher series (headquarter-scoped, shared across stores)
     VoucherSeries.objects.get_or_create(
-        fy=fy, store_code="HO", doc_type="VEND",
+        fy=fy,
+        store_code="HO",
+        doc_type="VEND",
         defaults={"prefix": f"HO/VEND/{fy}/", "next_seq": 1},
     )
 
@@ -143,6 +189,7 @@ def _outbound_scaffold(db):
 # 1. Store Split (warehouse → store, same GSTIN, no GL)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db(transaction=True)
 def test_store_split_same_gstin_no_gl(_outbound_scaffold):
     """Store split: stock moves from warehouse to store, no GL posting."""
@@ -155,10 +202,17 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
         created_by=s["user"],
     )
     StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty_dispatched=3, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty_dispatched=3,
+        unit_cost_paise=100,
     )
 
     # Dispatch
@@ -175,6 +229,7 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
 
     # Check receipt companion record
     from outbound.models import TransferReceipt
+
     receipt = TransferReceipt.objects.get(transfer=transfer)
     assert receipt.receipt_status == "complete"
 
@@ -190,6 +245,7 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
 # ---------------------------------------------------------------------------
 # 2. Inter-store Transfer (same state + cross-state)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db(transaction=True)
 def test_inter_store_transfer_same_state(_outbound_scaffold):
@@ -207,10 +263,17 @@ def test_inter_store_transfer_same_state(_outbound_scaffold):
         created_by=s["user"],
     )
     StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty_dispatched=5, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty_dispatched=5,
+        unit_cost_paise=100,
     )
 
     post_transfer_dispatch(transfer, user=s["user"])
@@ -240,10 +303,17 @@ def test_cross_state_transfer_flagged(_outbound_scaffold):
         created_by=s["user"],
     )
     StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty_dispatched=2, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty_dispatched=2,
+        unit_cost_paise=100,
     )
 
     post_transfer_dispatch(transfer, user=s["user"])
@@ -262,14 +332,17 @@ def test_transfer_shortfall_flagged(_outbound_scaffold):
         created_by=s["user"],
     )
     line = StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        qty_dispatched=4, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        qty_dispatched=4,
+        unit_cost_paise=100,
     )
 
     post_transfer_dispatch(transfer, user=s["user"])
     post_transfer_receipt(transfer, {line.id: 3}, user=s["user"])
 
     from outbound.models import TransferReceipt
+
     receipt = TransferReceipt.objects.get(transfer=transfer)
     assert receipt.receipt_status == "shortfall"
     line.refresh_from_db()
@@ -286,8 +359,10 @@ def test_transfer_blocks_on_insufficient_stock(_outbound_scaffold):
         created_by=s["user"],
     )
     StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        qty_dispatched=999, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        qty_dispatched=999,
+        unit_cost_paise=100,
     )
 
     with pytest.raises(OutboundPostingError, match="Insufficient stock"):
@@ -297,6 +372,7 @@ def test_transfer_blocks_on_insufficient_stock(_outbound_scaffold):
 # ---------------------------------------------------------------------------
 # 3. RTV — Defective Return
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db(transaction=True)
 def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
@@ -311,10 +387,17 @@ def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty=2, unit_cost_paise=100,
+        rtv=rtv,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty=2,
+        unit_cost_paise=100,
     )
 
     post_rtv(rtv, user=s["user"])
@@ -357,10 +440,17 @@ def test_rtv_sor_brand_no_gl(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=1, unit_cost_paise=200,
+        rtv=rtv,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=1,
+        unit_cost_paise=200,
     )
 
     post_rtv(rtv, user=s["user"])
@@ -380,6 +470,7 @@ def test_rtv_sor_brand_no_gl(_outbound_scaffold):
 # 4. Seasonal Return
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db(transaction=True)
 def test_seasonal_return_sor(_outbound_scaffold):
     """Seasonal return for SOR: stock out, no GL."""
@@ -394,10 +485,17 @@ def test_seasonal_return_sor(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=3, unit_cost_paise=200,
+        rtv=rtv,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=3,
+        unit_cost_paise=200,
     )
 
     post_rtv(rtv, user=s["user"])
@@ -422,9 +520,14 @@ def test_seasonal_return_owned_posts_gl(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        qty=1, unit_cost_paise=100,
+        rtv=rtv,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        qty=1,
+        unit_cost_paise=100,
     )
 
     post_rtv(rtv, user=s["user"])
@@ -438,6 +541,7 @@ def test_seasonal_return_owned_posts_gl(_outbound_scaffold):
 # 5. Stock Adjustment
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db(transaction=True)
 def test_adjustment_shrinkage(_outbound_scaffold):
     """Shrinkage: counted < book → Dr SUSPENSE / Cr INVENTORY."""
@@ -449,10 +553,18 @@ def test_adjustment_shrinkage(_outbound_scaffold):
         created_by=s["user"],
     )
     StockAdjustmentLine.objects.create(
-        adjustment=adj, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        book_qty=10, counted_qty=8, adj_qty=-2,
+        adjustment=adj,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        book_qty=10,
+        counted_qty=8,
+        adj_qty=-2,
         unit_cost_paise=100,
     )
 
@@ -480,8 +592,11 @@ def test_adjustment_surplus(_outbound_scaffold):
         created_by=s["user"],
     )
     StockAdjustmentLine.objects.create(
-        adjustment=adj, sku_code="SKU001",
-        book_qty=10, counted_qty=12, adj_qty=2,
+        adjustment=adj,
+        sku_code="SKU001",
+        book_qty=10,
+        counted_qty=12,
+        adj_qty=2,
         unit_cost_paise=100,
     )
 
@@ -506,8 +621,11 @@ def test_adjustment_blocks_insufficient_stock(_outbound_scaffold):
         created_by=s["user"],
     )
     StockAdjustmentLine.objects.create(
-        adjustment=adj, sku_code="SKU001",
-        book_qty=10, counted_qty=0, adj_qty=-20,  # more than available
+        adjustment=adj,
+        sku_code="SKU001",
+        book_qty=10,
+        counted_qty=0,
+        adj_qty=-20,  # more than available
         unit_cost_paise=100,
     )
 
@@ -518,6 +636,7 @@ def test_adjustment_blocks_insufficient_stock(_outbound_scaffold):
 # ---------------------------------------------------------------------------
 # 6. Write-off
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db(transaction=True)
 def test_writeoff_posts_gl(_outbound_scaffold):
@@ -530,10 +649,17 @@ def test_writeoff_posts_gl(_outbound_scaffold):
         created_by=s["user"],
     )
     WriteOffLine.objects.create(
-        writeoff=wo, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty=1, unit_cost_paise=100,
+        writeoff=wo,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty=1,
+        unit_cost_paise=100,
     )
 
     post_writeoff(wo, user=s["user"])
@@ -556,7 +682,9 @@ def test_writeoff_blocks_insufficient(_outbound_scaffold):
     """Cannot write off more than available."""
     s = _outbound_scaffold
     wo = WriteOff.objects.create(
-        store=s["store_a"], approved_by=s["user"], created_by=s["user"],
+        store=s["store_a"],
+        approved_by=s["user"],
+        created_by=s["user"],
     )
     WriteOffLine.objects.create(writeoff=wo, sku_code="SKU001", qty=999, unit_cost_paise=100)
 
@@ -567,6 +695,7 @@ def test_writeoff_blocks_insufficient(_outbound_scaffold):
 # ---------------------------------------------------------------------------
 # 7. V-flip
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db(transaction=True)
 def test_vflip_ownership_change(_outbound_scaffold):
@@ -580,10 +709,17 @@ def test_vflip_ownership_change(_outbound_scaffold):
         created_by=s["user"],
     )
     VFlipLine.objects.create(
-        vflip=vflip, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=2, unit_cost_paise=200,
+        vflip=vflip,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=2,
+        unit_cost_paise=200,
     )
 
     post_vflip(vflip, user=s["user"])
@@ -601,9 +737,7 @@ def test_vflip_ownership_change(_outbound_scaffold):
     # Since StockOnHand key is (store, sku_code), the same entry is updated
     # The brand display change is tracked in the stock ledger audit trail
     # Let's check the stock ledger entries for the V-prefix
-    vflip_entries = StockLedgerEntry.objects.filter(
-        doc_number=vflip.doc_number, kind="vflip_in"
-    )
+    vflip_entries = StockLedgerEntry.objects.filter(doc_number=vflip.doc_number, kind="vflip_in")
     assert vflip_entries.count() == 1
     assert vflip_entries.first().brand == "V SORBrand"
 
@@ -624,6 +758,7 @@ def test_vflip_ownership_change(_outbound_scaffold):
 # 8. Integration: trial balance check after combined outbound operations
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.django_db(transaction=True)
 def test_trial_balance_zero_after_outbound(_outbound_scaffold):
     """The trial balance must be ₹0 after all outbound operations."""
@@ -642,8 +777,10 @@ def test_transfer_receive_idempotent(_outbound_scaffold):
         created_by=s["user"],
     )
     StoreTransferLine.objects.create(
-        transfer=transfer, sku_code="SKU001",
-        qty_dispatched=2, unit_cost_paise=100,
+        transfer=transfer,
+        sku_code="SKU001",
+        qty_dispatched=2,
+        unit_cost_paise=100,
     )
 
     post_transfer_dispatch(transfer, user=s["user"])
@@ -694,22 +831,33 @@ def test_owned_rtv_vendor_subledger_in_sync(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU001",
-        design="Shirt", color="Blue", size="M", brand="OwnedBrand",
-        season="SS26", item="shirt", hsn="6205",
-        qty=3, unit_cost_paise=100,
+        rtv=rtv,
+        sku_code="SKU001",
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="OwnedBrand",
+        season="SS26",
+        item="shirt",
+        hsn="6205",
+        qty=3,
+        unit_cost_paise=100,
     )
     post_rtv(rtv, user=s["user"])
 
     # GL VENDOR_PAYABLE debit for this RTV
-    gl_payable_dr = GLEntry.objects.filter(
-        doc_number=rtv.doc_number, account=GLAccount.VENDOR_PAYABLE
-    ).aggregate(s=Sum("amount"))["s"] or 0
+    gl_payable_dr = (
+        GLEntry.objects.filter(
+            doc_number=rtv.doc_number, account=GLAccount.VENDOR_PAYABLE
+        ).aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
 
     # Vendor subledger entries referencing this RTV
-    sub_amount = VendorLedgerEntry.objects.filter(
-        reference=rtv.doc_number
-    ).aggregate(s=Sum("amount"))["s"] or 0
+    sub_amount = (
+        VendorLedgerEntry.objects.filter(reference=rtv.doc_number).aggregate(s=Sum("amount"))["s"]
+        or 0
+    )
 
     # GL debit (positive) should equal negative of subledger (which is negative)
     assert gl_payable_dr == -sub_amount, (
@@ -733,10 +881,17 @@ def test_sor_rtv_no_vendor_subledger_entry(_outbound_scaffold):
         created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=2, unit_cost_paise=200,
+        rtv=rtv,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=2,
+        unit_cost_paise=200,
     )
     post_rtv(rtv, user=s["user"])
 
@@ -745,24 +900,34 @@ def test_sor_rtv_no_vendor_subledger_entry(_outbound_scaffold):
     assert VendorLedgerEntry.objects.filter(reference=rtv.doc_number).count() == 0
 
 
-
 # ---------------------------------------------------------------------------
 # V-flip reporting / downstream regression tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.django_db(transaction=True)
 def test_vflip_brand_displays_v_prefix(_outbound_scaffold):
     """After V-flip, StockOnHand.brand = 'V {brand}' and SLE entries carry it."""
     s = _outbound_scaffold
     vflip = VFlip.objects.create(
-        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
-        authorized_by=s["user"], created_by=s["user"],
+        store=s["store_a"],
+        original_brand=s["brand_sor"],
+        season="SS26",
+        authorized_by=s["user"],
+        created_by=s["user"],
     )
     VFlipLine.objects.create(
-        vflip=vflip, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=3, unit_cost_paise=200,
+        vflip=vflip,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=3,
+        unit_cost_paise=200,
     )
     post_vflip(vflip, user=s["user"])
 
@@ -775,7 +940,8 @@ def test_vflip_brand_displays_v_prefix(_outbound_scaffold):
 
     # (c) SLE vflip_in entry carries "V SORBrand"
     vflip_in = StockLedgerEntry.objects.filter(
-        doc_number=vflip.doc_number, kind="vflip_in",
+        doc_number=vflip.doc_number,
+        kind="vflip_in",
     )
     assert vflip_in.count() == 1
     assert vflip_in.first().brand == "V SORBrand"
@@ -786,20 +952,31 @@ def test_vflip_ownership_is_kdps_owned(_outbound_scaffold):
     """After V-flip, the stock is KDPS-owned in GL terms (INVENTORY, not SOR_STOCK)."""
     s = _outbound_scaffold
     vflip = VFlip.objects.create(
-        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
-        authorized_by=s["user"], created_by=s["user"],
+        store=s["store_a"],
+        original_brand=s["brand_sor"],
+        season="SS26",
+        authorized_by=s["user"],
+        created_by=s["user"],
     )
     VFlipLine.objects.create(
-        vflip=vflip, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=2, unit_cost_paise=200,
+        vflip=vflip,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=2,
+        unit_cost_paise=200,
     )
     post_vflip(vflip, user=s["user"])
 
     # GL must have Dr INVENTORY (now KDPS-owned) — confirms it's NOT SOR anymore
     gl_inv = GLEntry.objects.filter(
-        doc_number=vflip.doc_number, account=GLAccount.INVENTORY,
+        doc_number=vflip.doc_number,
+        account=GLAccount.INVENTORY,
     )
     assert gl_inv.exists()
     assert gl_inv.first().amount > 0  # Debit = asset increase
@@ -812,14 +989,24 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
 
     # First: V-flip 3 units of SKU002 (SOR → KDPS-owned)
     vflip = VFlip.objects.create(
-        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
-        authorized_by=s["user"], created_by=s["user"],
+        store=s["store_a"],
+        original_brand=s["brand_sor"],
+        season="SS26",
+        authorized_by=s["user"],
+        created_by=s["user"],
     )
     VFlipLine.objects.create(
-        vflip=vflip, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=3, unit_cost_paise=200,
+        vflip=vflip,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=3,
+        unit_cost_paise=200,
     )
     post_vflip(vflip, user=s["user"])
 
@@ -829,19 +1016,28 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
 
     # Now attempt an RTV for the same SKU — must be blocked
     rtv = ReturnToVendor.objects.create(
-        store=s["store_a"], vendor=s["vendor"], brand=s["brand_sor"],
-        return_type="seasonal", created_by=s["user"],
+        store=s["store_a"],
+        vendor=s["vendor"],
+        brand=s["brand_sor"],
+        return_type="seasonal",
+        created_by=s["user"],
     )
     ReturnToVendorLine.objects.create(
-        rtv=rtv, sku_code="SKU002",
-        design="Jeans", color="Black", size="L", brand="SORBrand",
-        season="SS26", item="jeans", hsn="6203",
-        qty=2, unit_cost_paise=200,
+        rtv=rtv,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
+        brand="SORBrand",
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=2,
+        unit_cost_paise=200,
     )
 
     with pytest.raises(OutboundPostingError, match="V-flipped stock"):
         post_rtv(rtv, user=s["user"])
-
 
 
 @pytest.mark.django_db(transaction=True)
@@ -850,15 +1046,24 @@ def test_vflip_empty_line_brand_uses_original_brand(_outbound_scaffold):
     NOT 'KDPS'. This was a regression: the frontend may send brand='' on lines."""
     s = _outbound_scaffold
     vflip = VFlip.objects.create(
-        store=s["store_a"], original_brand=s["brand_sor"], season="SS26",
-        authorized_by=s["user"], created_by=s["user"],
+        store=s["store_a"],
+        original_brand=s["brand_sor"],
+        season="SS26",
+        authorized_by=s["user"],
+        created_by=s["user"],
     )
     VFlipLine.objects.create(
-        vflip=vflip, sku_code="SKU002",
-        design="Jeans", color="Black", size="L",
+        vflip=vflip,
+        sku_code="SKU002",
+        design="Jeans",
+        color="Black",
+        size="L",
         brand="",  # Empty — simulates frontend omission
-        season="SS26", item="jeans", hsn="6203",
-        qty=1, unit_cost_paise=200,
+        season="SS26",
+        item="jeans",
+        hsn="6203",
+        qty=1,
+        unit_cost_paise=200,
     )
     post_vflip(vflip, user=s["user"])
 
@@ -869,6 +1074,7 @@ def test_vflip_empty_line_brand_uses_original_brand(_outbound_scaffold):
     )
 
     vflip_in = StockLedgerEntry.objects.filter(
-        doc_number=vflip.doc_number, kind="vflip_in",
+        doc_number=vflip.doc_number,
+        kind="vflip_in",
     )
     assert vflip_in.first().brand == "V SORBrand"

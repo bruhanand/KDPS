@@ -18,17 +18,26 @@ from outbound.models import (
     WriteOffLine,
 )
 
-
 # ---------------------------------------------------------------------------
 # Transfer
 # ---------------------------------------------------------------------------
+
 
 class StoreTransferLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreTransferLine
         fields = [
-            "id", "sku_code", "design", "color", "size", "brand",
-            "season", "item", "hsn", "qty_dispatched", "qty_received",
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty_dispatched",
+            "qty_received",
             "unit_cost_paise",
         ]
         read_only_fields = ["id", "qty_received"]
@@ -52,14 +61,30 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreTransfer
         fields = [
-            "id", "doc_number", "docstatus", "transfer_type", "is_cross_state",
-            "source_store", "source_store_code", "source_store_name",
-            "destination_store", "destination_store_code", "destination_store_name",
-            "reason", "transport_mode", "transport_ref", "dispatcher_name",
-            "expected_arrival_note", "eway_bill_number",
-            "dispatch_date", "dispatched_by",
-            "created_by", "created_at", "updated_at",
-            "lines", "receipt",
+            "id",
+            "doc_number",
+            "docstatus",
+            "transfer_type",
+            "is_cross_state",
+            "source_store",
+            "source_store_code",
+            "source_store_name",
+            "destination_store",
+            "destination_store_code",
+            "destination_store_name",
+            "reason",
+            "transport_mode",
+            "transport_ref",
+            "dispatcher_name",
+            "expected_arrival_note",
+            "eway_bill_number",
+            "dispatch_date",
+            "dispatched_by",
+            "created_by",
+            "created_at",
+            "updated_at",
+            "lines",
+            "receipt",
         ]
 
 
@@ -69,9 +94,16 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = StoreTransfer
         fields = [
-            "source_store", "destination_store", "transfer_type", "reason",
-            "transport_mode", "transport_ref", "dispatcher_name",
-            "expected_arrival_note", "eway_bill_number", "lines",
+            "source_store",
+            "destination_store",
+            "transfer_type",
+            "reason",
+            "transport_mode",
+            "transport_ref",
+            "dispatcher_name",
+            "expected_arrival_note",
+            "eway_bill_number",
+            "lines",
         ]
 
     def validate(self, data):
@@ -97,6 +129,7 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
 
 class TransferReceiptInputSerializer(serializers.Serializer):
     """For the receipt action: maps line_id -> qty_received."""
+
     received_quantities = serializers.DictField(
         child=serializers.IntegerField(min_value=0),
         help_text="Mapping of line_id (int) to qty_received (int).",
@@ -108,12 +141,22 @@ class TransferReceiptInputSerializer(serializers.Serializer):
 # RTV
 # ---------------------------------------------------------------------------
 
+
 class ReturnToVendorLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReturnToVendorLine
         fields = [
-            "id", "sku_code", "design", "color", "size", "brand",
-            "season", "item", "hsn", "qty", "unit_cost_paise",
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
         ]
         read_only_fields = ["id"]
 
@@ -126,10 +169,24 @@ class ReturnToVendorReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReturnToVendor
         fields = [
-            "id", "doc_number", "docstatus", "store", "store_code", "store_name",
-            "vendor", "brand", "return_type", "logistics_route", "season",
-            "return_window_date", "credit_note_received", "credit_note_date",
-            "notes", "created_by", "created_at", "updated_at",
+            "id",
+            "doc_number",
+            "docstatus",
+            "store",
+            "store_code",
+            "store_name",
+            "vendor",
+            "brand",
+            "return_type",
+            "logistics_route",
+            "season",
+            "return_window_date",
+            "credit_note_received",
+            "credit_note_date",
+            "notes",
+            "created_by",
+            "created_at",
+            "updated_at",
             "lines",
         ]
 
@@ -140,8 +197,15 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReturnToVendor
         fields = [
-            "store", "vendor", "brand", "return_type", "logistics_route",
-            "season", "return_window_date", "notes", "lines",
+            "store",
+            "vendor",
+            "brand",
+            "return_type",
+            "logistics_route",
+            "season",
+            "return_window_date",
+            "notes",
+            "lines",
         ]
 
     def validate(self, data):
@@ -165,13 +229,24 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
 # Stock Adjustment
 # ---------------------------------------------------------------------------
 
+
 class StockAdjustmentLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockAdjustmentLine
         fields = [
-            "id", "sku_code", "design", "color", "size", "brand",
-            "season", "item", "hsn", "book_qty", "counted_qty",
-            "adj_qty", "unit_cost_paise",
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "book_qty",
+            "counted_qty",
+            "adj_qty",
+            "unit_cost_paise",
         ]
         read_only_fields = ["id"]
 
@@ -184,9 +259,18 @@ class StockAdjustmentReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockAdjustment
         fields = [
-            "id", "doc_number", "docstatus", "store", "store_code", "store_name",
-            "reason", "approved_by", "notes",
-            "created_by", "created_at", "updated_at",
+            "id",
+            "doc_number",
+            "docstatus",
+            "store",
+            "store_code",
+            "store_name",
+            "reason",
+            "approved_by",
+            "notes",
+            "created_by",
+            "created_at",
+            "updated_at",
             "lines",
         ]
 
@@ -219,12 +303,22 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
 # Write-off
 # ---------------------------------------------------------------------------
 
+
 class WriteOffLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = WriteOffLine
         fields = [
-            "id", "sku_code", "design", "color", "size", "brand",
-            "season", "item", "hsn", "qty", "unit_cost_paise",
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
         ]
         read_only_fields = ["id"]
 
@@ -237,9 +331,17 @@ class WriteOffReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = WriteOff
         fields = [
-            "id", "doc_number", "docstatus", "store", "store_code", "store_name",
-            "reason", "approved_by",
-            "created_by", "created_at", "updated_at",
+            "id",
+            "doc_number",
+            "docstatus",
+            "store",
+            "store_code",
+            "store_name",
+            "reason",
+            "approved_by",
+            "created_by",
+            "created_at",
+            "updated_at",
             "lines",
         ]
 
@@ -272,12 +374,22 @@ class WriteOffWriteSerializer(serializers.ModelSerializer):
 # V-flip
 # ---------------------------------------------------------------------------
 
+
 class VFlipLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = VFlipLine
         fields = [
-            "id", "sku_code", "design", "color", "size", "brand",
-            "season", "item", "hsn", "qty", "unit_cost_paise",
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
         ]
         read_only_fields = ["id"]
 
@@ -291,10 +403,19 @@ class VFlipReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = VFlip
         fields = [
-            "id", "doc_number", "docstatus", "store", "store_code", "store_name",
-            "original_brand", "original_brand_name", "season",
+            "id",
+            "doc_number",
+            "docstatus",
+            "store",
+            "store_code",
+            "store_name",
+            "original_brand",
+            "original_brand_name",
+            "season",
             "authorized_by",
-            "created_by", "created_at", "updated_at",
+            "created_by",
+            "created_at",
+            "updated_at",
             "lines",
         ]
 

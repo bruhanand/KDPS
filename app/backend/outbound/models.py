@@ -6,6 +6,8 @@ numbering, immutability guards). Posting logic lives in `outbound.posting`.
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db import models
 from django.utils import timezone
 
@@ -14,10 +16,10 @@ from core.documents import Document
 from core.fiscal import financial_year
 from core.money import MoneyField
 
-
 # ---------------------------------------------------------------------------
 # Controlled-vocabulary choices
 # ---------------------------------------------------------------------------
+
 
 class TransferReason(models.TextChoices):
     SISTER_STORE_REQUEST = "sister_store_request", "Sister store request"
@@ -68,6 +70,7 @@ class LogisticsRoute(models.TextChoices):
 # 1. Store Transfer (store-split + inter-store, same- & cross-state)
 # ---------------------------------------------------------------------------
 
+
 class StoreTransfer(Document):
     """A stock transfer between two locations.
 
@@ -95,19 +98,26 @@ class StoreTransfer(Document):
         max_length=16, choices=TransportMode.choices, blank=True, default=""
     )
     transport_ref = models.CharField(
-        max_length=120, blank=True, default="",
+        max_length=120,
+        blank=True,
+        default="",
         help_text="Bus number / courier AWB / vehicle plate",
     )
     dispatcher_name = models.CharField(max_length=120, blank=True, default="")
     expected_arrival_note = models.CharField(max_length=240, blank=True, default="")
     eway_bill_number = models.CharField(
-        max_length=60, blank=True, default="",
+        max_length=60,
+        blank=True,
+        default="",
         help_text="Mandatory for cross-state (Bihar ↔ Jharkhand).",
     )
 
     # Dispatch & receipt tracking
     dispatched_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="transfers_dispatched",
     )
     dispatch_date = models.DateTimeField(null=True, blank=True)
@@ -116,7 +126,10 @@ class StoreTransfer(Document):
     # (submitted documents are DB-level immutable per kernel rule)
 
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="transfers_created",
     )
 
@@ -126,9 +139,13 @@ class StoreTransfer(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
-        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.source_store.code, "STO"
+        return (
+            financial_year(dt.date() if hasattr(dt, "date") else dt),
+            self.source_store.code,
+            "STO",
+        )
 
-    def save(self, *args, **kwargs):
+    def save(self, *args: Any, **kwargs: Any) -> None:
         # Auto-compute cross-state flag from GSTIN state codes
         if self.source_store_id and self.destination_store_id:
             src_gstin = self.source_store.gstin_id
@@ -170,11 +187,12 @@ class TransferReceipt(TimeStampedModel):
     Created when goods are received at the destination. One receipt per transfer.
     """
 
-    transfer = models.OneToOneField(
-        StoreTransfer, on_delete=models.CASCADE, related_name="receipt"
-    )
+    transfer = models.OneToOneField(StoreTransfer, on_delete=models.CASCADE, related_name="receipt")
     received_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="transfers_received",
     )
     receipt_date = models.DateTimeField(auto_now_add=True)
@@ -195,17 +213,17 @@ class TransferReceipt(TimeStampedModel):
 # 2. Return to Vendor (defective + seasonal)
 # ---------------------------------------------------------------------------
 
+
 class ReturnToVendor(Document):
     """RTV — stock going back to the brand (defective or seasonal return)."""
 
-    store = models.ForeignKey(
-        "masters.Store", on_delete=models.PROTECT, related_name="rtvs"
-    )
-    vendor = models.ForeignKey(
-        "vendors.Vendor", on_delete=models.PROTECT, related_name="rtvs"
-    )
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="rtvs")
+    vendor = models.ForeignKey("vendors.Vendor", on_delete=models.PROTECT, related_name="rtvs")
     brand = models.ForeignKey(
-        "masters.Brand", null=True, blank=True, on_delete=models.SET_NULL,
+        "masters.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="rtvs",
     )
     return_type = models.CharField(max_length=12, choices=ReturnType.choices)
@@ -214,7 +232,8 @@ class ReturnToVendor(Document):
     )
     season = models.CharField(max_length=120, blank=True, default="")
     return_window_date = models.DateField(
-        null=True, blank=True,
+        null=True,
+        blank=True,
         help_text="Deadline for seasonal return (alerts at 30/15/7 days).",
     )
 
@@ -224,7 +243,10 @@ class ReturnToVendor(Document):
 
     notes = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="rtvs_created",
     )
 
@@ -234,7 +256,7 @@ class ReturnToVendor(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
-        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "RTV"
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "RTV"
 
     def __str__(self) -> str:
         return self.doc_number or f"RTV(draft #{self.pk})"
@@ -267,21 +289,26 @@ class ReturnToVendorLine(TimeStampedModel):
 # 3. Stock Adjustment (stocktake variance)
 # ---------------------------------------------------------------------------
 
+
 class StockAdjustment(Document):
     """Corrects the ledger to match a physical count."""
 
-    store = models.ForeignKey(
-        "masters.Store", on_delete=models.PROTECT, related_name="adjustments"
-    )
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="adjustments")
     reason = models.CharField(max_length=16, choices=AdjustmentReason.choices)
     approved_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="adjustments_approved",
         help_text="Required for variances above tolerance.",
     )
     notes = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="adjustments_created",
     )
 
@@ -291,7 +318,7 @@ class StockAdjustment(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
-        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "ADJ"
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "ADJ"
 
     def __str__(self) -> str:
         return self.doc_number or f"Adjustment(draft #{self.pk})"
@@ -300,9 +327,7 @@ class StockAdjustment(Document):
 class StockAdjustmentLine(TimeStampedModel):
     """One SKU line on a stock adjustment."""
 
-    adjustment = models.ForeignKey(
-        StockAdjustment, on_delete=models.CASCADE, related_name="lines"
-    )
+    adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name="lines")
     sku_code = models.CharField(max_length=64)
     design = models.CharField(max_length=120, blank=True, default="")
     color = models.CharField(max_length=60, blank=True, default="")
@@ -328,18 +353,22 @@ class StockAdjustmentLine(TimeStampedModel):
 # 4. Write-off (dead stock exit)
 # ---------------------------------------------------------------------------
 
+
 class WriteOff(Document):
     """Owner-approved stock exit from the books (dead stock, refused defectives)."""
 
-    store = models.ForeignKey(
-        "masters.Store", on_delete=models.PROTECT, related_name="writeoffs"
-    )
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="writeoffs")
     reason = models.TextField(blank=True, default="")
     approved_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, related_name="writeoffs_approved",
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="writeoffs_approved",
     )
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="writeoffs_created",
     )
 
@@ -349,7 +378,7 @@ class WriteOff(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
-        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "WRO"
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "WRO"
 
     def __str__(self) -> str:
         return self.doc_number or f"WriteOff(draft #{self.pk})"
@@ -382,6 +411,7 @@ class WriteOffLine(TimeStampedModel):
 # 5. V-flip (brand-owned → KDPS-owned, partial — no settlement claim)
 # ---------------------------------------------------------------------------
 
+
 class VFlip(Document):
     """Ownership flip: brand-owned SOR/Consignment stock → KDPS-owned.
 
@@ -389,19 +419,24 @@ class VFlip(Document):
     Settlement claim tracking is Sprint 8 (Payments).
     """
 
-    store = models.ForeignKey(
-        "masters.Store", on_delete=models.PROTECT, related_name="vflips"
-    )
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="vflips")
     original_brand = models.ForeignKey(
-        "masters.Brand", on_delete=models.PROTECT, related_name="vflips",
+        "masters.Brand",
+        on_delete=models.PROTECT,
+        related_name="vflips",
     )
     season = models.CharField(max_length=120, blank=True, default="")
     authorized_by = models.ForeignKey(
-        "accounts.User", on_delete=models.PROTECT, related_name="vflips_authorized",
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="vflips_authorized",
         help_text="Owner or Finance role required.",
     )
     created_by = models.ForeignKey(
-        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
         related_name="vflips_created",
     )
 
@@ -411,7 +446,7 @@ class VFlip(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
-        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "VFL"
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "VFL"
 
     def __str__(self) -> str:
         return self.doc_number or f"VFlip(draft #{self.pk})"

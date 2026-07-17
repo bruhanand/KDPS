@@ -1,8 +1,8 @@
 """Idempotent foundation seed: roles, the masters spine, and demo users.
 
 Run: `python manage.py seed_foundation`. Safe to re-run — it upserts. It also
-(re)writes `/app/memory/test_credentials.md` so the testing/fork agents always
-have current logins.
+(re)writes `memory/test_credentials.md` in the checkout (override with
+`SEED_CREDENTIALS_PATH`) so the testing/fork agents always have current logins.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
@@ -64,7 +65,15 @@ ROLES: list[dict[str, Any]] = [
         "code": "ho_ops",
         "name": "HO Operations / Buyer",
         "landing_page": "ops",
-        "nav_groups": ["home", "master_data", "documents", "ledgers", "controls", "intelligence", "outbound"],
+        "nav_groups": [
+            "home",
+            "master_data",
+            "documents",
+            "ledgers",
+            "controls",
+            "intelligence",
+            "outbound",
+        ],
         "description": "HO operating core — bookings, transfers, offers, intelligence.",
     },
     {
@@ -371,8 +380,13 @@ class Command(BaseCommand):
         ]
         # Best-effort convenience dump of the demo logins. The data is already in
         # the DB, so never let a read-only or absent filesystem (e.g. Render's
-        # build container, where /app does not exist) fail the seed.
-        path = Path(os.environ.get("SEED_CREDENTIALS_PATH", "/app/memory/test_credentials.md"))
+        # build container) fail the seed.
+        #
+        # Resolved from the checkout, not hardcoded: the old "/app/memory/..."
+        # default was the Emergent container's layout, so on a dev machine every
+        # seed skipped the write against read-only "/app".
+        default_path = Path(settings.BASE_DIR).parent.parent / "memory" / "test_credentials.md"
+        path = Path(os.environ.get("SEED_CREDENTIALS_PATH", str(default_path)))
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("\n".join(lines), encoding="utf-8")

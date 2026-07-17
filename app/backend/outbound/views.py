@@ -11,7 +11,7 @@ Every endpoint requires authentication. RBAC:
 
 from __future__ import annotations
 
-from rest_framework import generics, permissions, status
+from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -52,10 +52,10 @@ from outbound.serializers import (
     WriteOffWriteSerializer,
 )
 
-
 # ---------------------------------------------------------------------------
 # Transfer views
 # ---------------------------------------------------------------------------
+
 
 class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
@@ -103,13 +103,16 @@ class TransferDetailView(generics.RetrieveAPIView):
 
 class TransferDispatchView(APIView):
     """POST: Dispatch a draft transfer (stock exits source)."""
+
     permission_classes = [IsOutboundWriter]
 
     def post(self, request, pk):
         try:
-            transfer = StoreTransfer.objects.select_related(
-                "source_store", "destination_store"
-            ).prefetch_related("lines").get(pk=pk)
+            transfer = (
+                StoreTransfer.objects.select_related("source_store", "destination_store")
+                .prefetch_related("lines")
+                .get(pk=pk)
+            )
         except StoreTransfer.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -132,13 +135,16 @@ class TransferDispatchView(APIView):
 
 class TransferReceiveView(APIView):
     """POST: Receive a dispatched transfer (stock enters destination)."""
+
     permission_classes = [IsOutboundWriter]
 
     def post(self, request, pk):
         try:
-            transfer = StoreTransfer.objects.select_related(
-                "source_store", "destination_store"
-            ).prefetch_related("lines").get(pk=pk)
+            transfer = (
+                StoreTransfer.objects.select_related("source_store", "destination_store")
+                .prefetch_related("lines")
+                .get(pk=pk)
+            )
         except StoreTransfer.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -168,6 +174,7 @@ class TransferReceiveView(APIView):
 # ---------------------------------------------------------------------------
 # RTV views
 # ---------------------------------------------------------------------------
+
 
 class RTVListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
@@ -215,13 +222,16 @@ class RTVDetailView(generics.RetrieveAPIView):
 
 class RTVSubmitView(APIView):
     """POST: Submit (post) a draft RTV — stock exits, GL posts."""
+
     permission_classes = [IsOutboundWriter]
 
     def post(self, request, pk):
         try:
-            rtv = ReturnToVendor.objects.select_related(
-                "store", "vendor", "brand"
-            ).prefetch_related("lines").get(pk=pk)
+            rtv = (
+                ReturnToVendor.objects.select_related("store", "vendor", "brand")
+                .prefetch_related("lines")
+                .get(pk=pk)
+            )
         except ReturnToVendor.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -245,6 +255,7 @@ class RTVSubmitView(APIView):
 # ---------------------------------------------------------------------------
 # Stock Adjustment views
 # ---------------------------------------------------------------------------
+
 
 class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
@@ -289,11 +300,14 @@ class AdjustmentDetailView(generics.RetrieveAPIView):
 
 class AdjustmentSubmitView(APIView):
     """POST: Submit (post) a draft stock adjustment."""
+
     permission_classes = [IsOutboundWriter]
 
     def post(self, request, pk):
         try:
-            adj = StockAdjustment.objects.select_related("store").prefetch_related("lines").get(pk=pk)
+            adj = (
+                StockAdjustment.objects.select_related("store").prefetch_related("lines").get(pk=pk)
+            )
         except StockAdjustment.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -318,6 +332,7 @@ class AdjustmentSubmitView(APIView):
 # Write-off views  (admin-only write)
 # ---------------------------------------------------------------------------
 
+
 class WriteOffListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -325,9 +340,9 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         return [IsOutboundReader()]
 
     def get_queryset(self):
-        qs = WriteOff.objects.select_related(
-            "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
+            "lines"
+        )
         ds = self.request.query_params.get("docstatus")
         if ds is not None:
             qs = qs.filter(docstatus=int(ds))
@@ -361,6 +376,7 @@ class WriteOffDetailView(generics.RetrieveAPIView):
 
 class WriteOffSubmitView(APIView):
     """POST: Submit (post) a draft write-off."""
+
     permission_classes = [IsOutboundAdmin]
 
     def post(self, request, pk):
@@ -389,6 +405,7 @@ class WriteOffSubmitView(APIView):
 # ---------------------------------------------------------------------------
 # V-flip views  (admin-only write)
 # ---------------------------------------------------------------------------
+
 
 class VFlipListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
@@ -433,13 +450,16 @@ class VFlipDetailView(generics.RetrieveAPIView):
 
 class VFlipSubmitView(APIView):
     """POST: Submit (post) a draft V-flip."""
+
     permission_classes = [IsOutboundAdmin]
 
     def post(self, request, pk):
         try:
-            vflip = VFlip.objects.select_related(
-                "store", "original_brand"
-            ).prefetch_related("lines").get(pk=pk)
+            vflip = (
+                VFlip.objects.select_related("store", "original_brand")
+                .prefetch_related("lines")
+                .get(pk=pk)
+            )
         except VFlip.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 

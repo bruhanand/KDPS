@@ -58,18 +58,18 @@ def _write_stock_entry(
     posted_by=None,
 ) -> StockLedgerEntry:
     """Create a single stock ledger entry and update StockOnHand."""
-    amount_paise = qty * (line.unit_cost_paise if hasattr(line, 'unit_cost_paise') else 0)
+    amount_paise = qty * (line.unit_cost_paise if hasattr(line, "unit_cost_paise") else 0)
     entry = StockLedgerEntry.objects.create(
         store=store,
         gstin=gstin,
         sku_code=line.sku_code,
-        design=getattr(line, 'design', ''),
-        color=getattr(line, 'color', ''),
-        size=getattr(line, 'size', ''),
-        brand=getattr(line, 'brand', ''),
-        season=getattr(line, 'season', ''),
-        item=getattr(line, 'item', ''),
-        hsn=getattr(line, 'hsn', ''),
+        design=getattr(line, "design", ""),
+        color=getattr(line, "color", ""),
+        size=getattr(line, "size", ""),
+        brand=getattr(line, "brand", ""),
+        season=getattr(line, "season", ""),
+        item=getattr(line, "item", ""),
+        hsn=getattr(line, "hsn", ""),
         qty=qty,
         amount=amount_paise,
         kind=kind,
@@ -83,13 +83,13 @@ def _write_stock_entry(
         sku_code=line.sku_code,
         defaults={
             "gstin": gstin,
-            "design": getattr(line, 'design', ''),
-            "color": getattr(line, 'color', ''),
-            "size": getattr(line, 'size', ''),
-            "brand": getattr(line, 'brand', ''),
-            "season": getattr(line, 'season', ''),
-            "item": getattr(line, 'item', ''),
-            "hsn": getattr(line, 'hsn', ''),
+            "design": getattr(line, "design", ""),
+            "color": getattr(line, "color", ""),
+            "size": getattr(line, "size", ""),
+            "brand": getattr(line, "brand", ""),
+            "season": getattr(line, "season", ""),
+            "item": getattr(line, "item", ""),
+            "hsn": getattr(line, "hsn", ""),
             "net_qty": 0,
             "net_value_paise": 0,
         },
@@ -98,13 +98,13 @@ def _write_stock_entry(
     obj.net_value_paise += amount_paise
     # Refresh descriptive fields on inward (positive qty)
     if qty > 0:
-        obj.design = getattr(line, 'design', '') or obj.design
-        obj.color = getattr(line, 'color', '') or obj.color
-        obj.size = getattr(line, 'size', '') or obj.size
-        obj.brand = getattr(line, 'brand', '') or obj.brand
-        obj.season = getattr(line, 'season', '') or obj.season
-        obj.item = getattr(line, 'item', '') or obj.item
-        obj.hsn = getattr(line, 'hsn', '') or obj.hsn
+        obj.design = getattr(line, "design", "") or obj.design
+        obj.color = getattr(line, "color", "") or obj.color
+        obj.size = getattr(line, "size", "") or obj.size
+        obj.brand = getattr(line, "brand", "") or obj.brand
+        obj.season = getattr(line, "season", "") or obj.season
+        obj.item = getattr(line, "item", "") or obj.item
+        obj.hsn = getattr(line, "hsn", "") or obj.hsn
         obj.gstin = gstin
     obj.save()
     return entry
@@ -113,6 +113,7 @@ def _write_stock_entry(
 # ---------------------------------------------------------------------------
 # 1. Store Transfer — dispatch (stock out at source)
 # ---------------------------------------------------------------------------
+
 
 @transaction.atomic
 def post_transfer_dispatch(transfer: StoreTransfer, user=None) -> list[StockLedgerEntry]:
@@ -169,7 +170,7 @@ def post_transfer_receipt(
 
     if transfer.docstatus != DocStatus.SUBMITTED:
         raise OutboundPostingError("Transfer must be dispatched (submitted) before receipt.")
-    if hasattr(transfer, 'receipt') and transfer.receipt is not None:
+    if hasattr(transfer, "receipt") and transfer.receipt is not None:
         raise OutboundPostingError("Transfer already received.")
     # Check if receipt already exists
     if TransferReceipt.objects.filter(transfer=transfer).exists():
@@ -204,9 +205,7 @@ def post_transfer_receipt(
     TransferReceipt.objects.create(
         transfer=transfer,
         received_by=user,
-        receipt_status=(
-            ReceiptStatus.SHORTFALL if has_shortfall else ReceiptStatus.COMPLETE
-        ),
+        receipt_status=(ReceiptStatus.SHORTFALL if has_shortfall else ReceiptStatus.COMPLETE),
     )
 
     return entries
@@ -215,6 +214,7 @@ def post_transfer_receipt(
 # ---------------------------------------------------------------------------
 # 2. Return to Vendor (RTV) — stock out + conditional GL
 # ---------------------------------------------------------------------------
+
 
 @transaction.atomic
 def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
@@ -237,7 +237,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
     vflipped_skus = list(
         StockOnHand.objects.filter(
             store_id=rtv.store_id,
-            sku_code__in=[l.sku_code for l in lines],
+            sku_code__in=[line.sku_code for line in lines],
             brand__startswith="V ",
         ).values_list("sku_code", flat=True)
     )
@@ -281,18 +281,30 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
             posted_by=user,
         )
         vendor_code = str(rtv.vendor_id) if rtv.vendor_id else ""
-        post_entries(doc_ref, [
-            dr(GLAccount.VENDOR_PAYABLE, total_value_paise,
-               party_type="vendor", party_code=vendor_code,
-               memo=f"RTV {rtv.return_type}: reduces payable"),
-            cr(GLAccount.INVENTORY, total_value_paise,
-               memo=f"RTV {rtv.return_type}: stock returned"),
-        ], posted_by=user)
+        post_entries(
+            doc_ref,
+            [
+                dr(
+                    GLAccount.VENDOR_PAYABLE,
+                    total_value_paise,
+                    party_type="vendor",
+                    party_code=vendor_code,
+                    memo=f"RTV {rtv.return_type}: reduces payable",
+                ),
+                cr(
+                    GLAccount.INVENTORY,
+                    total_value_paise,
+                    memo=f"RTV {rtv.return_type}: stock returned",
+                ),
+            ],
+            posted_by=user,
+        )
 
         # Vendor subledger mirror — reduces what we owe (negative amount).
         # GL is already posted above via post_entries, so gl=False to avoid
         # double-booking the payable (same pattern as post_pt_vendor_bill).
         from finledger.posting import post_vendor_bill
+
         post_vendor_bill(
             rtv.vendor,
             -total_value_paise,
@@ -308,6 +320,7 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
 # ---------------------------------------------------------------------------
 # 3. Stock Adjustment — count vs book
 # ---------------------------------------------------------------------------
+
 
 @transaction.atomic
 def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
@@ -365,7 +378,9 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
             # Shrinkage: Dr SUSPENSE / Cr INVENTORY
             legs = [
                 dr(GLAccount.SUSPENSE, abs(total_debit_paise), memo="Adjustment: shrinkage"),
-                cr(GLAccount.INVENTORY, abs(total_debit_paise), memo="Adjustment: shrinkage contra"),
+                cr(
+                    GLAccount.INVENTORY, abs(total_debit_paise), memo="Adjustment: shrinkage contra"
+                ),
             ]
         post_entries(doc_ref, legs, posted_by=user)
 
@@ -375,6 +390,7 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
 # ---------------------------------------------------------------------------
 # 4. Write-off — owner-approved stock exit
 # ---------------------------------------------------------------------------
+
 
 @transaction.atomic
 def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
@@ -416,10 +432,14 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
             gstin=wo.store.gstin,
             posted_by=user,
         )
-        post_entries(doc_ref, [
-            dr(GLAccount.SUSPENSE, total_value_paise, memo="Write-off: loss"),
-            cr(GLAccount.INVENTORY, total_value_paise, memo="Write-off: stock exit"),
-        ], posted_by=user)
+        post_entries(
+            doc_ref,
+            [
+                dr(GLAccount.SUSPENSE, total_value_paise, memo="Write-off: loss"),
+                cr(GLAccount.INVENTORY, total_value_paise, memo="Write-off: stock exit"),
+            ],
+            posted_by=user,
+        )
 
     return entries
 
@@ -427,6 +447,7 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
 # ---------------------------------------------------------------------------
 # 5. V-flip — brand-owned → KDPS-owned (GL reclass, no physical move)
 # ---------------------------------------------------------------------------
+
 
 @transaction.atomic
 def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
@@ -505,17 +526,21 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
             gstin=vflip.store.gstin,
             posted_by=user,
         )
-        post_entries(doc_ref, [
-            # Reverse the SOR memo pair
-            dr(GLAccount.SOR_CONTRA, total_value_paise,
-               memo="V-flip: reverse SOR contra"),
-            cr(GLAccount.SOR_STOCK, total_value_paise,
-               memo="V-flip: reverse SOR stock memo"),
-            # Book as KDPS-owned
-            dr(GLAccount.INVENTORY, total_value_paise,
-               memo="V-flip: now KDPS-owned"),
-            cr(GLAccount.SUSPENSE, total_value_paise,
-               memo="V-flip: settlement claim (Sprint 8)"),
-        ], posted_by=user)
+        post_entries(
+            doc_ref,
+            [
+                # Reverse the SOR memo pair
+                dr(GLAccount.SOR_CONTRA, total_value_paise, memo="V-flip: reverse SOR contra"),
+                cr(GLAccount.SOR_STOCK, total_value_paise, memo="V-flip: reverse SOR stock memo"),
+                # Book as KDPS-owned
+                dr(GLAccount.INVENTORY, total_value_paise, memo="V-flip: now KDPS-owned"),
+                cr(
+                    GLAccount.SUSPENSE,
+                    total_value_paise,
+                    memo="V-flip: settlement claim (Sprint 8)",
+                ),
+            ],
+            posted_by=user,
+        )
 
     return entries

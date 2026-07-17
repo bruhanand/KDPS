@@ -212,10 +212,8 @@ def _create_grn(
         received_by=user,
     )
     for sku in skus:
-        bl = booking.lines.filter(
-            style_code=sku["DESIGN"], size=sku["SIZE"]
-        ).first()
-        gl = GrnLine.objects.create(
+        bl = booking.lines.filter(style_code=sku["DESIGN"], size=sku["SIZE"]).first()
+        GrnLine.objects.create(
             grn=grn,
             booking_line=bl,
             style_code=sku["DESIGN"],
@@ -273,9 +271,11 @@ class Command(BaseCommand):
     @transaction.atomic
     def handle(self, *args, **options):
         if _already_seeded():
-            self.stdout.write(self.style.WARNING(
-                "Outbound demo stock already seeded (sentinel PtFiles found). Skipping."
-            ))
+            self.stdout.write(
+                self.style.WARNING(
+                    "Outbound demo stock already seeded (sentinel PtFiles found). Skipping."
+                )
+            )
             return
 
         user = User.objects.filter(is_superuser=True).first()
@@ -297,36 +297,50 @@ class Command(BaseCommand):
         pe_brand = Brand.objects.get(name="Peter England")
         abfrl = Vendor.objects.get(code="abfrl")
 
-        bk_pe_deo = _get_or_create_booking(abfrl, pe_brand, season, deo, OWNED_DEO_SKUS, "seed-pe-deo", user)
+        bk_pe_deo = _get_or_create_booking(
+            abfrl, pe_brand, season, deo, OWNED_DEO_SKUS, "seed-pe-deo", user
+        )
         grn_pe_deo = _create_grn(bk_pe_deo, deo, user, "pe-deo", OWNED_DEO_SKUS)
         res = _create_and_post_pt(grn_pe_deo, bk_pe_deo, deo, user, "pe-deo", OWNED_DEO_SKUS)
-        self.stdout.write(self.style.SUCCESS(
-            f"  Owned @ DEO: {res['doc_number']} — {res['entries']} entries, "
-            f"model={res['commercial_model']}, value=₹{res['stock_value_paise']/100:.2f}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  Owned @ DEO: {res['doc_number']} — {res['entries']} entries, "
+                f"model={res['commercial_model']}, value=₹{res['stock_value_paise'] / 100:.2f}"
+            )
+        )
 
         # ---------- 2. Owned @ BANKA (Blackberrys via Blackberrys Menswear) ----------
         bb_brand = Brand.objects.get(name="Blackberrys")
         bb_vendor = Vendor.objects.get(code="blackberrys")
 
-        bk_bb_banka = _get_or_create_booking(bb_vendor, bb_brand, season, banka, OWNED_BANKA_SKUS, "seed-bb-banka", user)
+        bk_bb_banka = _get_or_create_booking(
+            bb_vendor, bb_brand, season, banka, OWNED_BANKA_SKUS, "seed-bb-banka", user
+        )
         grn_bb_banka = _create_grn(bk_bb_banka, banka, user, "bb-banka", OWNED_BANKA_SKUS)
-        res = _create_and_post_pt(grn_bb_banka, bk_bb_banka, banka, user, "bb-banka", OWNED_BANKA_SKUS)
-        self.stdout.write(self.style.SUCCESS(
-            f"  Owned @ BANKA: {res['doc_number']} — {res['entries']} entries, "
-            f"model={res['commercial_model']}, value=₹{res['stock_value_paise']/100:.2f}"
-        ))
+        res = _create_and_post_pt(
+            grn_bb_banka, bk_bb_banka, banka, user, "bb-banka", OWNED_BANKA_SKUS
+        )
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  Owned @ BANKA: {res['doc_number']} — {res['entries']} entries, "
+                f"model={res['commercial_model']}, value=₹{res['stock_value_paise'] / 100:.2f}"
+            )
+        )
 
         # ---------- 3. SOR/consignment @ DEO (Louis Philippe via ABFRL) ----------
         lp_brand = Brand.objects.get(name="Louis Philippe")
 
-        bk_lp_deo = _get_or_create_booking(abfrl, lp_brand, season, deo, SOR_DEO_SKUS, "seed-lp-deo", user)
+        bk_lp_deo = _get_or_create_booking(
+            abfrl, lp_brand, season, deo, SOR_DEO_SKUS, "seed-lp-deo", user
+        )
         grn_lp_deo = _create_grn(bk_lp_deo, deo, user, "lp-deo", SOR_DEO_SKUS)
         res = _create_and_post_pt(grn_lp_deo, bk_lp_deo, deo, user, "lp-deo", SOR_DEO_SKUS)
-        self.stdout.write(self.style.SUCCESS(
-            f"  SOR @ DEO: {res['doc_number']} — {res['entries']} entries, "
-            f"model={res['commercial_model']}, value=₹{res['stock_value_paise']/100:.2f}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"  SOR @ DEO: {res['doc_number']} — {res['entries']} entries, "
+                f"model={res['commercial_model']}, value=₹{res['stock_value_paise'] / 100:.2f}"
+            )
+        )
 
         self.stdout.write(self.style.SUCCESS("\nOutbound demo stock seeded successfully."))
         self.stdout.write("  Verify: GET /api/stockledger/on-hand")

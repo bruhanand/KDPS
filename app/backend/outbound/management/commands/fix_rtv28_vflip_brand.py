@@ -53,7 +53,8 @@ class Command(BaseCommand):
                 # Restore StockOnHand
                 try:
                     oh = StockOnHand.objects.get(
-                        store=entry.store, sku_code=entry.sku_code,
+                        store=entry.store,
+                        sku_code=entry.sku_code,
                     )
                     oh.net_qty -= entry.qty
                     oh.net_value_paise -= entry.amount
@@ -64,8 +65,7 @@ class Command(BaseCommand):
                     )
                 except StockOnHand.DoesNotExist:
                     actions.append(
-                        f"WARNING: No StockOnHand for {entry.sku_code} "
-                        f"at {entry.store.code}"
+                        f"WARNING: No StockOnHand for {entry.sku_code} at {entry.store.code}"
                     )
 
             ReturnToVendor.objects.filter(pk=28).update(docstatus=DocStatus.CANCELLED)
@@ -91,11 +91,13 @@ class Command(BaseCommand):
             if already_fixed:
                 continue
 
-            wrong_sle = list(StockLedgerEntry.objects.filter(
-                doc_number=vf.doc_number,
-                kind="vflip_in",
-                brand="V KDPS",
-            ))
+            wrong_sle = list(
+                StockLedgerEntry.objects.filter(
+                    doc_number=vf.doc_number,
+                    kind="vflip_in",
+                    brand="V KDPS",
+                )
+            )
             for entry in wrong_sle:
                 # Reverse the wrong-brand entry
                 StockLedgerEntry.objects.create(

@@ -31,15 +31,26 @@ from rest_framework.permissions import BasePermission
 from masters.scoping import visible_store_ids
 
 # Roles that may create, submit, dispatch, receive outbound docs.
-OUTBOUND_WRITE_ROLES = frozenset({
-    "owner", "it_admin", "ho_ops", "accounts",
-    "store_manager", "warehouse",
-})
+OUTBOUND_WRITE_ROLES = frozenset(
+    {
+        "owner",
+        "it_admin",
+        "ho_ops",
+        "accounts",
+        "store_manager",
+        "warehouse",
+    }
+)
 
 # Roles that may perform V-flip (ownership conversion) and write-offs.
-OUTBOUND_ADMIN_ROLES = frozenset({
-    "owner", "it_admin", "ho_ops", "accounts",
-})
+OUTBOUND_ADMIN_ROLES = frozenset(
+    {
+        "owner",
+        "it_admin",
+        "ho_ops",
+        "accounts",
+    }
+)
 
 
 def _role_code(user) -> str:
@@ -56,9 +67,7 @@ def enforce_store_scope(user, store_id: int) -> None:
     if allowed is None:
         return  # unrestricted
     if store_id not in allowed:
-        raise PermissionDenied(
-            "You do not have permission to operate on this store."
-        )
+        raise PermissionDenied("You do not have permission to operate on this store.")
 
 
 class IsOutboundReader(BasePermission):
