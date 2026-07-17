@@ -91,3 +91,57 @@ Booking structure:
 3. The receipt soft copy (PDF/Image) is uploaded.
 4. The AI agent reads it and produces a DRAFT — it never books silently. The handler reviews the draft, completes anything missing, and confirms.
 5. On confirm, the booking is created and tagged BOOKED.
+
+## INBOUND:
+
+Starts with Shipment receiving at KDPS.
+Shipment may be received either at stores or at warehouse.
+At Store Only Branded
+At Warehouse branded (considered branded) + non-branded
+
+### Receiving of items:
+
+For branded:
+Shipment received at Store or Warehouse.
+At Store or warehouse (Shipment + Invoice):  
+Items are received and counted against the invoice.
+Invoice is uploaded for the particular booking.
+GRN is created.
+Person taking care of PT files received notification.
+
+For non-branded:
+Shipment received at warehouse only.
+Items are received and counted against the invoice.
+Invoice is being uploaded.
+
+#### How a non-branded item arrives — tagged vs non-tagged
+
+Both come with an invoice.
+Invoices received has three things a GRN needs — style code, size, quantity — are already there, so the GRN can be made straight away. But the data is not generally very clear, so what happens is a draft GRN gets created when you upload the invoice. Manually, the data is corrected, and then the GRN is created.
+
+One bifurcation Whether the goods are **tagged** or **non-tagged**.
+
+**Tagged**
+
+- Carries a barcode, a printed MRP, and the SKU details — style code, colour, size, quantity.
+- KDPS reads the barcode, keeps the printed MRP (the tag caps it), and uploads. This is the closest to branded.
+
+**Non-tagged**
+
+- Comes with the invoice only — no barcode, no printed MRP.
+- The invoice still carries style code, size(If no size is given, then it is a free size) and quantity — enough to make the GRN.
+
+KDPS decides the tag:
+
+- Current Process:
+  the POS (Ten Software) generates the barcode but we are making our own POS so Ten Software POS will be replaced, and the barcode generation will be done by the KDPs system only.
+  The POS we are gonna build will only be used as POS. inside the sell tab.
+  Currently, what happens is, remember, I told you that the PT file is sent to the patna office for inward in the current process, the PT file.
+  So, in the current process, when the pt file is inwarded then the barcord is generated, because items gets queued alright, so item barcode is generated in a sequence.
+  As the whole system will migrate to KDPS system, what we are buildING so the process for barcode generation can be done before the sending it to patna office.
+  recent meeting : /Users/anand/Code/KDPS/docs/meetings/2026-07-09-warehouse-priyo
+
+- What should be the new process?
+
+- MRP Calculation Process
+  the warehouse calculates the MRP (base + ~1.1% transport + GST + per-category margin, 30–35%, overridable), and completes the PT.: ACCORDING TO THE GOODS: PRICE bracket AND supplier/Brand.
