@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>P0 · Reading Code — Course Plan</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#161a22; --panel2:#1c222c; --ink:#e8ecf2; --muted:#9aa6b8;
+    --line:#2a3140; --accent:#5b9dff; --accent2:#7c5cff; --good:#3ecf8e; --warn:#ffb84d;
+    --bad:#ff6b6b; --chip:#232a36;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;font-size:16px}
+  a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{max-width:880px;margin:0 auto;padding:0 24px 80px}
+  header.hero{padding:48px 0 24px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .kicker{color:var(--accent2);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+  h1{font-size:32px;line-height:1.2;margin:10px 0 6px;letter-spacing:-.02em}
+  .meta{color:var(--muted);font-size:14px}
+  h2{font-size:22px;margin:38px 0 10px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+  h2 .num{color:var(--accent2);margin-right:8px;font-variant-numeric:tabular-nums}
+  p{margin:10px 0} ul,ol{margin:10px 0;padding-left:22px} li{margin:5px 0}
+  .lede{color:var(--muted);font-size:15px}
+  code{font-family:var(--mono);font-size:.86em;background:var(--chip);padding:1px 6px;border-radius:5px;border:1px solid var(--line)}
+  table{width:100%;border-collapse:collapse;margin:16px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:9px 11px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd6e5;font-weight:600}
+  tr:nth-child(even) td{background:#12161d}
+  .box{border:1px solid var(--line);border-left-width:4px;border-radius:10px;padding:14px 18px;margin:18px 0;background:var(--panel)}
+  .box .t{font-weight:700;margin-bottom:4px}
+  .box.tldr{border-left-color:var(--accent2);background:var(--panel2)} .box.tldr .t{color:#b6a4ff}
+  .box.keep{border-left-color:var(--good)} .box.keep .t{color:var(--good)}
+  .box.warn{border-left-color:var(--warn);background:#221c10} .box.warn .t{color:var(--warn)}
+  .box.info{border-left-color:var(--accent)} .box.info .t{color:var(--accent)}
+  /* lesson cards */
+  .lesson{border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:14px 0;overflow:hidden}
+  .lesson .head{display:flex;gap:12px;align-items:baseline;padding:13px 18px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .lesson .ln{font-family:var(--mono);font-weight:700;color:var(--accent2);font-size:12px;white-space:nowrap}
+  .lesson .lt{font-weight:700;font-size:16px}
+  .lesson .lm{margin-left:auto;color:var(--muted);font-size:12px;white-space:nowrap}
+  .lesson .body{padding:4px 18px 14px;font-size:14px}
+  .lesson .row{display:flex;gap:8px;margin:7px 0}
+  .lesson .k{flex:0 0 92px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding-top:2px}
+  .lesson .v{flex:1}
+  .anchor{font-family:var(--mono);font-size:12px;color:var(--accent)}
+  .status{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);vertical-align:middle;margin-left:8px}
+  .status.ready{color:var(--good);border-color:#245c45}
+  .status.locked{color:var(--muted)}
+  .btn{display:inline-block;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:700;padding:12px 26px;border-radius:10px;font-size:15px;margin:8px 0}
+  .btn:hover{text-decoration:none;filter:brightness(1.1)}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--muted);font-weight:600}
+  .biz{color:var(--warn)} .tech{color:var(--accent)}
+  footer{border-top:1px solid var(--line);margin-top:48px;padding-top:20px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+  <div class="kicker">KDPS Engineer Track · Phase P0 of P10</div>
+  <h1>P0 · Reading Code &amp; Navigating a Repo</h1>
+  <div class="meta">Course plan · 7 lessons · every lesson ends with a quiz · 8 Jul 2026 · <a href="stack-learning-roadmap.html">← back to the full roadmap</a></div>
+</header>
+
+<div class="box tldr">
+  <div class="t">Why P0 comes before everything</div>
+  <p>Every later phase — Python, SQL, Django, React, architecture, reviewing AI — starts with <b>opening a file and not being lost</b>. P0 gives you that. You will not write code in P0. You will learn to <b>read</b> it, <b>find</b> it, and <b>follow</b> it — inside the real KDPS app, nowhere else.</p>
+</div>
+
+<h2><span class="num">1</span>Goals — what you can do when P0 is done</h2>
+<ul>
+  <li>Open <b>any</b> of the backend apps (<code>vendors</code>, <code>inbound</code>, <code>stockledger</code>…) and say what it is for and where its data lands. <span class="lede">(This is the official P0 milestone from the roadmap.)</span></li>
+  <li>Trace one request end-to-end: browser → URL → view → serializer → model → Postgres → JSON → screen.</li>
+  <li>Answer "where is X defined? who uses X?" in under a minute, using search.</li>
+  <li>Read a git history and answer "why does this line exist?"</li>
+  <li>Read a real merged PR and say what changed — without running it.</li>
+  <li>Read a stack trace and walk straight to the guilty <code>file:line</code>.</li>
+</ul>
+
+<h2><span class="num">2</span>The 7 lessons — each one stands on the one before</h2>
+<p class="lede">One lesson = one skill = ~25–35 minutes. Each lesson starts with a 2-minute warm-up that <b>re-uses the previous lesson's skill on a new target</b> — that is the chain. Lesson 1 is built and ready; lessons 2–7 are built one at a time, after you finish the one before (so each is tuned to what you actually found hard).</p>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L1 · 0001</span><span class="lt">The Map of the Machine</span><span class="lm">~25 min <span class="status ready">READY</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">You learn</span><span class="v">The one shape of KDPS (screen → API → brain → database), what each of the 12 backend folders owns, and the repeating anatomy of a Django app (<code>urls / views / serializers / models / migrations</code>).</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Hear a plain-English change ("vendor list shows the wrong name") and point to the <b>file</b> where it lives.</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">8 "which file?" questions, instant feedback in the page.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">app/backend/* · app/frontend/src/*</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L2 · 0002</span><span class="lt">Reading One File, Top-Down</span><span class="lm">~30 min <span class="status locked">after L1</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">L1 told you <i>which</i> file. L2 teaches you how to open it and not drown: imports → classes → methods, skim first, detail second.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Open any Python file and give its one-line job; read <code>urls.py</code> as a switchboard and a small view class line by line.</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">"What does this real snippet do?" — 6 snippets from the repo, instant feedback.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">config/urls.py · masters/urls.py · one small view in masters/views.py</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L3 · 0003</span><span class="lt">The Golden Thread — one request, end to end</span><span class="lm">~35 min <span class="status locked">after L2</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">L1 gave the map, L2 gave file-reading. L3 walks ONE real request — the Stores list — through every station: React page → axios → <code>/api/masters/stores</code> → <code>StoreListView</code> → serializer → model → Postgres → JSON → back to the screen.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Hold the full round-trip in your head. This is the single most important lesson in P0.</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">Order-the-stations + "a bug appears at station X — which file?" scenarios.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">frontend/src/pages → config/urls.py → masters/{urls,views,serializers,models}.py</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L4 · 0004</span><span class="lt">Search Is How Engineers Navigate</span><span class="lm">~25 min <span class="status locked">after L3</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">In L3 you followed a thread I gave you. L4 teaches you to find <b>any</b> thread yourself with <code>grep</code>/<code>rg</code>: find a definition, find all users of it, find where an error message comes from.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Answer "where is X? who calls X?" in under a minute, anywhere in the repo.</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">A terminal scavenger hunt — 6 real questions you answer by searching, then check in the page.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">the whole repo · ripgrep guide</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L5 · 0005</span><span class="lt">Reading History — why does this line exist?</span><span class="lm">~30 min <span class="status locked">after L4</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">L4 found the line in space; L5 finds it in <b>time</b>. <code>git log</code>, <code>git blame</code>, <code>git show</code> on real KDPS lines — who wrote it, when, in which change, and what the message says about why.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Do code archaeology: from a suspicious line to the commit and PR that created it.</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">Archaeology hunt on the real repo history, answers checked in-page.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">git log / blame / show · Pro Git ch. 2</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L6 · 0006</span><span class="lt">Reading a Change — diffs and PRs</span><span class="lm">~30 min <span class="status locked">after L5</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">L5 read old changes; L6 reads a <b>proposed</b> change — the reviewer's posture. How to read a diff, what "what it quietly changed" means, reading a real merged KDPS PR without running it.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Look at a diff and say: what changed, what it touches, what could break. This is the seed of P10 (reviewing AI).</span></div>
+    <div class="row"><span class="k">Quiz</span><span class="v">A real small diff from the repo: answer "what does this change do / risk?" — graded in the page.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">git diff · a real merged PR from the repo history</span></span></div>
+  </div>
+</div>
+
+<div class="lesson">
+  <div class="head"><span class="ln">L7 · 0007</span><span class="lt">Reading a Failure — stack traces + the P0 exit exam</span><span class="lm">~35 min <span class="status locked">after L6</span></span></div>
+  <div class="body">
+    <div class="row"><span class="k">Builds on</span><span class="v">Everything. A stack trace is a map written backwards — L7 teaches you to read Python and browser tracebacks and walk to the guilty <code>file:line</code> using L1's map + L4's search.</span></div>
+    <div class="row"><span class="k">You can then</span><span class="v">Take an error you've never seen and locate it. Then: the <b>exit exam</b>.</span></div>
+    <div class="row"><span class="k">Exit exam</span><span class="v">In chat, I pick 2 backend apps you haven't studied. Cold, you tell me: what it's for, its endpoints, where its data lands, and you trace one request through it. Pass = P0 done, a learning record is written, P1 (Python) opens.</span></div>
+    <div class="row"><span class="k">Anchor</span><span class="v"><span class="anchor">a real traceback · any of the 11 backend apps</span></span></div>
+  </div>
+</div>
+
+<h2><span class="num">3</span>How every lesson works (the rules)</h2>
+<table>
+  <thead><tr><th>Part</th><th>What it is</th><th>Why</th></tr></thead>
+  <tbody>
+    <tr><td><b>Goals first</b></td><td>Every lesson opens with "after this you can…" — 3 concrete abilities.</td><td>You asked: goals first. You always know what the win is.</td></tr>
+    <tr><td><b>Warm-up</b></td><td>2 minutes using the <i>previous</i> lesson's skill on a new target.</td><td>This is the chain — nothing is learned once and dropped.</td></tr>
+    <tr><td><b>Teach</b></td><td>Short sections. Tables, not paragraphs. One everyday analogy + the KDPS version. 🟧 business term / 🟦 technical term.</td><td>Your stated style.</td></tr>
+    <tr><td><b>Hands-on</b></td><td>Real commands on the real repo, with "what to notice".</td><td>Skills come from doing, not reading.</td></tr>
+    <tr><td><b>Quiz</b></td><td>In-page, instant feedback, explanation for every answer, score at the end.</td><td>The feedback loop — you know immediately if it stuck.</td></tr>
+    <tr><td><b>Exit checklist</b></td><td>Tick-boxes: "I can now…". If any box is unticked, ask me in chat before moving on.</td><td>No silent gaps.</td></tr>
+  </tbody>
+</table>
+
+<div class="box warn">
+  <div class="t">Two honest rules</div>
+  <ul>
+    <li><b>The quiz is not the test — the repo is.</b> A lesson counts only when you've done its hands-on part in the terminal, not just read it.</li>
+    <li><b>Ask me anything, any time.</b> I'm your teacher in chat. "I didn't get section 3 of lesson 2" is a perfect message. Confusion reported early is cheap; confusion carried forward is expensive.</li>
+  </ul>
+</div>
+
+<h2><span class="num">4</span>Start</h2>
+<p><a class="btn" href="lessons/0001-the-map-of-the-machine.html">▶ Start Lesson 1 — The Map of the Machine</a></p>
+<p><a class="btn ghost" href="stack-learning-roadmap.html">← Back to the full P0–P10 roadmap</a></p>
+
+<footer>
+  KDPS Engineer Track · workspace <code>docs/learning/</code> · lessons in <code>docs/learning/lessons/</code> · fresh track started 8 Jul 2026 (old June track retired).
+</footer>
+</div>
+</body>
+</html>

@@ -3,6 +3,7 @@ import {
   Boxes,
   FileText,
   LayoutDashboard,
+  PackageMinus,
   Plug,
   ShieldCheck,
   ShoppingCart,
@@ -46,7 +47,19 @@ export const NAV: NavGroup[] = [
       { label: "Sell", to: "/store/sell" },
       { label: "Stock Receive", to: "/inbound" },
       { label: "Count", to: "/store/count" },
-      { label: "Transfer", to: "/store/transfer" },
+    ],
+  },
+  {
+    key: "outbound",
+    label: "Outbound",
+    icon: PackageMinus,
+    layer: "outbound",
+    items: [
+      { label: "Transfers", to: "/outbound/transfers" },
+      { label: "Return to Vendor", to: "/outbound/rtvs" },
+      { label: "Adjustments", to: "/outbound/adjustments" },
+      { label: "Write-offs", to: "/outbound/writeoffs" },
+      { label: "V-Flip", to: "/outbound/vflips" },
     ],
   },
   {

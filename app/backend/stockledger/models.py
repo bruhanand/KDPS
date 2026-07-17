@@ -21,6 +21,15 @@ class StockLedgerEntry(LedgerEntry):
     class Kind(models.TextChoices):
         PT_INWARD = "pt_inward", "PT inward"
         PT_REVERSAL = "pt_reversal", "PT reversal"
+        # Outbound kinds (Sprint 1)
+        TRANSFER_OUT = "transfer_out", "Transfer out"
+        TRANSFER_IN = "transfer_in", "Transfer in"
+        RTV_OUT = "rtv_out", "RTV out"
+        SEASONAL_RET = "seasonal_ret", "Seasonal return"
+        ADJUSTMENT = "adjustment", "Adjustment"
+        WRITE_OFF = "write_off", "Write-off"
+        VFLIP_OUT = "vflip_out", "V-flip out"
+        VFLIP_IN = "vflip_in", "V-flip in"
 
     store = models.ForeignKey(
         "masters.Store", on_delete=models.PROTECT, related_name="stock_entries"

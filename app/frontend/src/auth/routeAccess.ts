@@ -32,6 +32,7 @@ const RULES: AccessRule[] = [
   { prefix: "/documents", groups: ["documents"] },
   // /inbound is reachable from both Store Ops and Documents.
   { prefix: "/inbound", groups: ["store_ops", "documents"] },
+  { prefix: "/outbound", groups: ["outbound", "store_ops", "documents"] },
   { prefix: "/store", groups: ["store_ops"] },
   { prefix: "/controls", groups: ["controls"] },
   { prefix: "/intel", groups: ["intelligence"] },

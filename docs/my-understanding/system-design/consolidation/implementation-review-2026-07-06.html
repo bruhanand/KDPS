@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KDPS — Design-Conformance Review (6 Jul 2026)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --red:#a32a2a; --red-bg:#fde8e8; --maxw:1020px;
+  }
+  *{box-sizing:border-box} html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:flex; max-width:1340px; margin:0 auto}
+  nav.toc{position:sticky; top:0; align-self:flex-start; height:100vh; overflow:auto;
+    width:270px; flex:0 0 270px; padding:26px 16px; background:var(--navy); color:#dfe4ee;}
+  nav.toc h2{font-size:12.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--rust-soft); margin:20px 0 7px}
+  nav.toc h2:first-child{margin-top:0}
+  nav.toc a{display:block; color:#cdd4e2; padding:4px 10px; border-radius:7px; font-size:13.5px; line-height:1.32}
+  nav.toc a:hover{background:var(--navy2); text-decoration:none; color:#fff}
+  nav.toc a.crit{color:#f6b8b8}
+  main{flex:1 1 auto; min-width:0; padding:38px 46px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:960px){ nav.toc{display:none} main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:29px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:78ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:10px}
+  section{margin:36px 0; scroll-margin-top:14px}
+  h2.sec{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 12px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 7px}
+  h4{margin:0 0 5px; font-size:15px; color:var(--navy)}
+  p{margin:9px 0} .lead{font-size:15.5px}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 8px; border-radius:999px; vertical-align:middle; white-space:nowrap}
+  .b-crit{background:var(--red-bg); color:var(--red)} .b-high{background:var(--amber-bg); color:var(--amber)}
+  .b-med{background:var(--blue-bg); color:var(--blue)} .b-low{background:var(--grey-bg); color:var(--muted)}
+  .b-ok{background:var(--green-bg); color:var(--green)}
+  .grade{display:inline-block; font-weight:800; font-size:12px; padding:2px 9px; border-radius:7px}
+  .g-a{background:var(--green-bg); color:var(--green)} .g-c{background:var(--amber-bg); color:var(--amber)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 18px; margin:14px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .find{border-left:5px solid var(--line)}
+  .find.crit{border-left-color:var(--red)} .find.high{border-left-color:var(--amber)}
+  .find.med{border-left-color:var(--blue)} .find.low{border-left-color:#c6cbd4}
+  .find .top{display:flex; flex-wrap:wrap; align-items:baseline; gap:9px; margin-bottom:3px}
+  .find h4{font-size:15.5px}
+  .find .loc{font-size:12.5px; color:var(--muted); margin:6px 0}
+  .find dl{margin:8px 0 0} .find dt{font-weight:700; color:var(--navy2); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; margin-top:9px} .find dd{margin:2px 0 0; font-size:14px}
+  .tag{font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); background:var(--grey-bg); padding:1px 7px; border-radius:6px}
+  .conf{font-size:11px; color:var(--green); font-weight:700} .plaus{font-size:11px; color:var(--amber); font-weight:700}
+  table{border-collapse:collapse; width:100%; margin:12px 0; background:var(--card); font-size:13.5px}
+  th,td{border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top}
+  th{background:var(--grey-bg); color:var(--navy2); font-size:12px; letter-spacing:.04em; text-transform:uppercase}
+  .small{font-size:12.5px} code{background:var(--grey-bg); padding:1px 5px; border-radius:5px; font-size:12.5px; word-break:break-word}
+  .tablewrap{overflow-x:auto}
+  .callout{border-left:5px solid var(--rust); background:#fdf6f2; padding:12px 16px; border-radius:0 10px 10px 0; margin:14px 0}
+  .callout.red{border-left-color:var(--red); background:var(--red-bg)}
+  .callout.green{border-left-color:var(--green); background:var(--green-bg)}
+  ol.fix li{margin:8px 0}
+  ul.tight li{margin:7px 0; font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="toc">
+  <h2>Verdict</h2>
+  <a href="#verdict">Overall verdict</a>
+  <a href="#signoff">Sprint-1 sign-off table</a>
+  <a href="#suspense" class="crit">The SUSPENSE ruling</a>
+  <h2>Findings</h2>
+  <a href="#p0" class="crit">P0 — books wrong (2)</a>
+  <a href="#p1">P1 — must fix (12)</a>
+  <a href="#p2">P2 — deviations (17)</a>
+  <a href="#p3">P3 — minor (4)</a>
+  <h2>Conformance</h2>
+  <a href="#coverage">Coverage matrix</a>
+  <a href="#undesigned">Built-undesigned items</a>
+  <a href="#drift">Docs ↔ code drift</a>
+  <h2>Sidebar</h2>
+  <a href="#ia-problems">What's wrong today</a>
+  <a href="#ia-proposal">Proposed structure</a>
+  <h2>Close-out</h2>
+  <a href="#fixorder">Recommended fix order</a>
+  <a href="#notverified">What was NOT verified</a>
+  <a href="#method">Method &amp; rigor</a>
+</nav>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS Operating System · Review of record</div>
+  <h1>Design-Conformance Review — the built app vs the design-of-record</h1>
+  <p class="sub">The whole implementation on the <code>emergent</code> branch (everything on <code>main</code> + Sprint&nbsp;1 outbound) reviewed against
+  <code>docs/my-understanding/</code> (constitution · consolidated design · posting catalog · lifecycles · data model · ADRs · D1–D8 · 16 locked decisions)
+  with the ERPNext study + repo as the proven-pattern benchmark. Successor to the 30-Jun implementation review.</p>
+  <div class="stamp">6 July 2026 · 14 review tracks + adversarial verification (139 agents) · every finding cites design clause + code line · findings hand-verified at P0/P1 by the lead reviewer</div>
+</header>
+
+
+<section id="verdict">
+<h2 class="sec">Overall verdict</h2>
+<div class="card">
+<p class="lead"><strong>The architecture held; the money semantics on top of it did not.</strong>
+The kernel is genuinely conformant — money-as-paise with Decimal half-up, DB-trigger append-only ledgers, the docstatus FSM with race-safe gap-free numbering, and a real balanced value GL written only by <code>post_entries</code>. The 30-Jun remediation was largely real: GRN and PT sit on the kernel FSM, the two-axis commercial model branches liability correctly by <em>timing</em>, and Sprint-1's write-side RBAC and store scoping verified at all 10 write points.
+<span class="grade g-a" style="margin-left:6px">Kernel ≈ A−</span></p>
+<p class="lead">But the business posting layer deviates materially from the posting catalog:
+<strong>two P0 defects are writing wrong numbers today</strong> (the vendor payable is booked ex-GST with no Input-GST leg on every owned PT; every outbound document created through the PWA posts stock and GL at 0 paise), a cluster of locked-decision violations sits beneath them (no GRN quantity step, silent BASIC valuation fallback, uncapped seasonal RTV, ownership never persisted as data, no brand terms card), and a systematic <strong>fail-open read-scoping class</strong> (outbound reads, PT-file detail/delete, file download, vendor bookings) survives next to the solid write-side scoping.
+<span class="grade g-c" style="margin-left:6px">Money semantics &amp; read-scope ≈ C</span></p>
+<p><strong>Sign-off recommendation: do not sign off Sprint 1 as complete.</strong> Emergent's automated-surface claims are honest on the write side (see the claim table), but claim #13 — the SUSPENSE WARN being "by design per the posting catalog" — is <strong>false</strong>, and the review found the Sprint-1 outbound posting layer books zero-value and mis-branched money. Treat the RBAC/scoping work as accepted, the posting layer as needing rework per the fix order below. The alpha must not handle live money until the two P0s and the P1 money items are closed.</p>
+</div>
+<div class="callout red"><strong>Also note:</strong> the deployed Render alpha already contains wrong GL rows (every owned PT posted to date carries an ex-GST payable). Remediation must respect the append-only / no-reposting rule — compensating vouchers, never edits — and the ex-GST↔incl-GST correction interacts with the CA-gated Input-GST questions (Q4/Q5), so sequence the fix with the CA conversation.</div>
+</section>
+
+
+<section id="signoff">
+<h2 class="sec">Sprint-1 sign-off, claim by claim</h2>
+<p>Every claim in Emergent's sign-off message (plus the Phase A–F remediation claims and the documented caveats) was independently re-verified from code — not from Emergent's test report. <strong>Write-side RBAC/scoping is real and passes. The claims fail or degrade on the read side, on money semantics, and on the SUSPENSE justification.</strong></p>
+<div class="tablewrap"><table>
+<thead><tr><th style="width:34%">Claim</th><th>Verdict</th><th>Basis</th></tr></thead>
+<tbody><tr><td>Sprint-1 #1: Role matrix enforced across 7 roles × 7 actions (own-store only, store_staff read-only)</td><td><span class='badge b-high'>PARTIAL</span></td><td>C10 verified the WRITE side conforms in full (IsOutboundWriter/IsOutboundAdmin correct, store_staff excluded, write-off/V-flip admin-only on create and submit, no unguarded mutating action). But the READ side of the same matrix is unenforced: all outbound list/detail endpoints are unscoped and fail open (C10 finding, rank 11), so &#x27;store_manager own-store only&#x27; and &#x27;store_staff read-only [their store]&#x27; are false for reads.</td></tr><tr><td>Sprint-1 #2: Cashier (store_staff) RBAC → 403 on all 5 outbound POST endpoints</td><td><span class='badge b-ok'>PASS</span></td><td>C10 read permissions.py and the tests: store_staff is absent from OUTBOUND_WRITE_ROLES, so all 5 creates plus submit/dispatch/receive actions deny POST server-side (not just UI hiding); tests assert 403.</td></tr><tr><td>Sprint-1 #3: enforce_store_scope called at all 10 write points</td><td><span class='badge b-ok'>PASS</span></td><td>C10 verified each of the 10 call sites individually, including dispatch-on-source (views.py:116) and receive-on-destination (views.py:145); enforce_store_scope is fail-closed via visible_store_ids (empty list for a no-store user).</td></tr><tr><td>Sprint-1 #4: Cross-store 403 / own-store 201-200 proven by test_outbound_store_scope.py</td><td><span class='badge b-ok'>PASS</span></td><td>C10 read the test bodies: real stores via DRF APIClient, assertions on 403 (not 400/500) and 201/200, including the destination-receive case (:244-262). Caveat noted: the suite covers writes only and never exercises the read path, which is where the actual hole is.</td></tr><tr><td>Sprint-1 #5: Transfer-receive scope enforced on the destination store as a distinct assertion</td><td><span class='badge b-ok'>PASS</span></td><td>C10 confirmed the receive check runs on transfer.destination_store_id (views.py:145), distinct from dispatch&#x27;s source check, with its own test assertion.</td></tr><tr><td>#6: V-flip display uses original_brand.name instead of hardcoded &#x27;V KDPS&#x27; when line.brand is empty</td><td><span class='badge b-ok'>PASS</span></td><td>C3 coverage verified `line.brand or vflip.original_brand.name` → &#x27;V &lt;brand&gt;&#x27; (posting.py:467-470) plus the regression test; the only residual &#x27;V KDPS&#x27; permutation is both line.brand empty AND original_brand null. Note: the fix itself perpetuates the string-prefix-as-ownership anti-pattern (rank 6).</td></tr><tr><td>#7: fix_rtv28 backfill corrected the books append-only and idempotently</td><td><span class='badge b-high'>PARTIAL</span></td><td>Append-only holds for the stock ledger — C4 confirmed compensating SLE rows, no row mutation. But the cancellation bypassed the Document FSM via bulk .update(), used fabricated non-VoucherSeries doc numbers, and never reversed the RTV&#x27;s GL voucher or vendor-subledger credit (merged finding, rank 16). The idempotency claim was not verified by any reviewer (no double-run test).</td></tr><tr><td>#8: Seasonal RTV blocked on V-flipped stock via a post_rtv guard</td><td><span class='badge b-high'>PARTIAL</span></td><td>The guard exists and raises (posting.py:237-248, &#x27;Cannot RTV V-flipped stock&#x27;), positioned before the kind branch so it covers both defective and seasonal subtypes. But it is implemented as a brand__startswith(&#x27;V &#x27;) string heuristic — a fragile magic-value check that false-blocks any real brand starting &#x27;V &#x27; and depends on the unmodeled ownership state (rank 6) — not the owner-flag the locked design specifies.</td></tr><tr><td>#9: Books tie — /api/finledger/health balanced=true, trial_balance=0, vendor/cash drift=0 (contradicting 30-Jun C3)</td><td><span class='badge b-high'>PARTIAL</span></td><td>Not vacuous: C4 verified core.post_entries is real, the sole GL writer, Σ=0-enforced, append-only, with the F1 test asserting control-account==subledger-sum on 6 paths — so the numbers are genuine. But &#x27;balanced&#x27; is structurally incapable of being false (rank 19), a −₹1,400 SUSPENSE credit sits unlabeled under it, and the P0 ex-GST payable (rank 1) means the books tie while being wrong. balanced=true is real arithmetic, not proof of correct books.</td></tr><tr><td>#10: leg_count growing — GL legs exist and accumulate</td><td><span class='badge b-ok'>PASS</span></td><td>C4 confirmed GLEntry rows are real, written only via post_entries, append-only, and exercised by PT inward, vendor bills, cash movements and outbound postings; test_finledger_f1_gl_unification.py tests the unification substantively.</td></tr><tr><td>#11: Regression counts 390→401 passed, 1 skipped, matching test_result.md</td><td><span class='badge b-high'>PARTIAL</span></td><td>TOPUP-3 reproduced exactly &#x27;401 passed, 1 skipped&#x27; — but only after running the undocumented seed_outbound_demo; the documented boot sequence yields 3 failing money-path tests (corroborated by the branch&#x27;s own failing CI run). The 314/63 vs 401/1 discrepancy is explained (no-live-server vs full run), so the numbers are honest but not reproducible as documented.</td></tr><tr><td>#12: Env fix — no remaining bookstore-erp-1 / *.emergentagent.com reference; api.ts no longer hard-throws</td><td><span class='badge b-high'>PARTIAL</span></td><td>Q3 grepped all frontend SOURCE: zero hits for bookstore-erp-1/emergentagent; api.ts BASE defaults to same-origin. Q2 verified the credentialed CORS regex for *.emergentagent.com is now DEBUG-gated with prod on an explicit allowlist. However the register&#x27;s explicit requirement — grep the BUILT bundle/dist output — was not performed (no build artifacts present), so the claim is evidenced at source level only.</td></tr><tr><td>#13: V-flip −₹1,400 SUSPENSE parking is &#x27;by design per the posting catalog&#x27;</td><td><span class='badge b-crit'>FAIL</span></td><td>The catalog documents a pending claim in D4, recognised at the agreed amount, with the Tally journal posted when the claim is agreed — not a credit to generic SUSPENSE at frozen unit cost at flip time (rank 15 finding + refuter record). The deferral-to-D4 direction is designed; the specific SUSPENSE-at-cost treatment is not in the catalog. See suspense ruling.</td></tr><tr><td>#14: Deferred items (settlement tracking, EOSS, approvals, OCR wiring, V-flip window alert) are absent, not half-built</td><td><span class='badge b-low'>UNVERIFIED</span></td><td>Partially evidenced: C4 grep-verified the five CA-gated money items are NOT silently hard-coded (no deemed-supply/6-month/late-freight/sold-before-PT code), and settlement claim tracking is confirmed absent (its absence is what produced the SUSPENSE parking). EOSS pricing, multi-tier approvals, OCR wiring and the no-cron alert were not individually checked by any track.</td></tr><tr><td>Phase A-F / C1: Vendor liability now branches on the two-axis commercial model</td><td><span class='badge b-high'>PARTIAL</span></td><td>The branch is genuinely built and verified: SOR/Consignment PTs post NO payable (off-book SOR_STOCK/SOR_CONTRA), Outright/Correction post at PT, ownership snapshotted onto the booking (C2/C4 conform notes, per-model tests exist). But the payable AMOUNT is ex-GST (P0, rank 1), the return_terms axis is ignored downstream (seasonal RTV, rank 4), and booking-less direct receipts post as owned regardless of the brand&#x27;s real model (rank 6).</td></tr><tr><td>Phase A-F / C2: Stock valued at P RATE with unit_cost ≤ mrp CHECK</td><td><span class='badge b-high'>PARTIAL</span></td><td>P RATE is the primary valuation and the unit_cost≤mrp guard exists both at posting and as a Cohort DB CHECK (verified by C1/C2/C3 tracks). But a silent fallback to ex-GST BASIC survives when P RATE is missing (rank 5), reintroducing the original defect on that path against the module&#x27;s own docstring.</td></tr><tr><td>Phase A-F / C3: Balanced double-entry engine (post_entries + value GL) built</td><td><span class='badge b-ok'>PASS</span></td><td>Fully verified by C1 and C4: core.posting.post_entries enforces ≥2 legs, integer paise, Σ=0, atomic; GLEntry append-only via DB triggers; grep confirms it is the sole GL writer; F1 unification test is substantive and the vendor/cash subledgers now post balanced GL vouchers. The 30-Jun C3 is genuinely remediated (engine gaps like period-lock, rank 20, are separate findings).</td></tr><tr><td>Phase A-F: Security holes remediated (CORS wildcard, admin exposure, password auto-revert, fail-open reads, booking write scope)</td><td><span class='badge b-high'>PARTIAL</span></td><td>Q2 individually verified: CORS wildcard now DEBUG-gated with prod allowlist; /admin gated off in prod; seed password-revert fixed with an if-created guard; stockledger/finledger reads now scoped; secrets from required env vars; booking write/receive path fail-closed (C5/C10). But the fail-open-read CLASS persists in apps the original review didn&#x27;t name: outbound reads, ptmapper detail/mutations, vendors booking reads, and the file download endpoint (ranks 11-13, 26-27) — the named holes are closed, the pattern is not.</td></tr><tr><td>Documented caveat: vendor/cash ledgers are single-entry running balances (only PT-inward true double-entry)</td><td><span class='badge b-high'>PARTIAL</span></td><td>Largely superseded per C4: the F1 work unified vendor and cash into the value GL — each subledger write now posts a balanced GL voucher, and health proves control==subledger on 6 paths. Residual truth: classification is provisional (manual vendor bills and standalone cash moves balance against SUSPENSE, rank 19), so the caveat should be rewritten, not deleted.</td></tr></tbody>
+</table></div>
+</section>
+
+<section id="suspense">
+<h2 class="sec">The SUSPENSE ruling (Emergent's WARN item)</h2>
+
+<div class="callout red">
+<p><strong>Ruling: not by design — an invention, consciously labelled as interim.</strong> Emergent's claim that parking −₹1,400 in SUSPENSE is "by design per the posting catalog" is <strong>FAIL</strong>.</p>
+<p>What the catalog actually documents (verified verbatim by three independent refuters at <code>posting-catalog.html</code> §EOSS &amp; V-flip and <code>outbound.html</code> Q4): the V-flip settlement becomes <em>"a pending claim in D4"</em> that <em>"nets only when the brand agrees, at the agreed amount"</em>, with the Tally journal posted <em>"when the claim is agreed."</em> The build invents both the <strong>account</strong> (generic SUSPENSE rather than an identifiable brand-settlement claim) and the <strong>amount</strong> (frozen unit cost — which by the design's own definition cannot be "the agreed amount", because no agreement has happened).</p>
+<p>Nuances that keep this P2 rather than P1: the voucher is balanced (Σ=0 holds — books still tie), the memo and test self-label it a "Sprint 8 placeholder", and the proper home (D4 Payments) is legitimately unbuilt. But with no clearer in existence, the credit is a real, unlabelled brand liability at an invented value sitting under a green "balanced" badge. <strong>Correct treatment until D4 lands: either a recognisable pending-claim account (e.g. <code>BRAND_SETTLEMENT_CLAIM</code> per brand) — or no money leg at all at flip time.</strong> Related defect: the flip also posts the SOR-pair reversal with no check that the stock was ever brand-owned (finding #18).</p>
+</div>
+
+</section>
+
+<section id="p0">
+<h2 class="sec">P0 — the books are wrong today (2)</h2>
+<p>Both hand-verified in code and in the design docs by the lead reviewer after 3/3 adversarial refuters upheld each.</p>
+
+<div class="card find crit" id="f1">
+  <div class="top"><span class="badge b-crit">P0</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">books-wrong</span>
+    <h4>#1 · Owned-inward vendor payable booked ex-GST (P RATE × qty); Input GST never posted</h4></div>
+  <div class="loc"><code>02-inbound/inbound-ingestion-design.html Q37 + posting-catalog.html PT rows :: app/backend/stockledger/posting.py:176-186,332; finledger/posting.py:271-280; core/gl.py:33</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>For every Outright/Correction PT, both the VENDOR_PAYABLE control and the vendor subledger are credited at the ex-GST P RATE total instead of the design-mandated invoice-total-incl-GST, and the defined INPUT_GST account is never debited anywhere. KDPS&#x27;s books systematically understate what it owes vendors by the entire GST and recognise no ITC — paying vendors off this subledger would underpay them. This is the live, deployed PT-inward path (the alpha of record), so it outranks everything else. 3/3 refuters upheld.</dd></dl>
+</div>
+<div class="card find crit" id="f2">
+  <div class="top"><span class="badge b-crit">P0</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">books-wrong</span>
+    <h4>#2 · Outbound documents created via the PWA post stock and GL at 0 paise — inventory silently overstated, losses booked at zero</h4></div>
+  <div class="loc"><code>posting-catalog.html D3 Q13 + Rule 6 + Q5 :: app/backend/outbound/posting.py:61,268,347,409,497; outbound/serializers.py:222-268; app/frontend/src/pages/Outbound*.tsx payloadLines</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>unit_cost_paise is a client-writable field defaulting to 0; all five outbound PWA create payloads omit it and no server path derives it from the frozen cohort cost, so every UI-raised write-off/adjustment/RTV/V-flip/transfer decrements quantity at zero value and the &gt;0 guard skips the GL voucher entirely. The test suite masks it by hard-coding costs. Violates Rule 6 and the posting catalog&#x27;s valued-at-frozen-cost rule on every outbound stock exit. 3/3 refuters upheld P0.</dd></dl>
+</div>
+</section>
+
+<section id="p1">
+<h2 class="sec">P1 — rule / locked-decision violations &amp; scope holes (12)</h2>
+
+<div class="card find high" id="f3">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">locked-decision-violation</span>
+    <h4>#3 · GRN posts no quantity to the stock ledger — the locked two-step (GRN=qty, PT=value) is collapsed into one PT posting</h4></div>
+  <div class="loc"><code>02-inbound/inbound-ingestion-design.html Q37 (split 25 Jun) :: app/backend/inbound/views.py:243-250; stockledger/models.py:21-32</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>GRN creation writes no StockLedgerEntry (no GRN kind exists; qty and value both enter only at PT), so goods are invisible/unsellable between physical arrival and PT posting — the exact opposite of the 25-Jun locked &#x27;sellable day one&#x27; decision. GrnLine also lacks the season field the quantity movement must carry. Books-visibility wrong on a locked decision in a built path.</dd></dl>
+</div>
+<div class="card find high" id="f4">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">money-wrong</span>
+    <h4>#4 · Seasonal RTV posts full-value payable reduction on ownership alone — no 25-18-10 cap, no Outright block, no over-cap→V-flip</h4></div>
+  <div class="loc"><code>posting-catalog.html §Seasonal/allowance return (Outright N/A; Correction 25-18-10, D1 §8) :: app/backend/outbound/posting.py:254-305</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>post_rtv gates GL solely on ownership==OWNED, which covers both Outright (no seasonal-return right at all — should be rejected) and Correction (should net the payable only within the 25-18-10 GR allowance pool, over-cap routed to V-flip). Both models instead get an uncapped Dr VENDOR_PAYABLE / Cr INVENTORY at full frozen value, over-crediting the vendor. Test suite locks the wrong posting. Merged two tracks; kept the higher P1 grade since it writes wrong money on a live posting path. 5/5 refuters across both tracks upheld.</dd><dt>Merged from</dt><dd>C1-kernel &#x27;RTV seasonal-return posts flat full-value payable reduction&#x27; + C3-outbound &#x27;Seasonal RTV posts full-value payable reduction for owned brands&#x27;</dd></dl>
+</div>
+<div class="card find high" id="f5">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">money-valuation</span>
+    <h4>#5 · PT valuation silently falls back to ex-GST BASIC when P RATE is missing — the 30-Jun C2 defect survives as a fallback</h4></div>
+  <div class="loc"><code>posting-catalog.html Q5 (locked 25 Jun) :: app/backend/stockledger/posting.py:79 (docstring :8-9)</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>cost = prate if prate&gt;0 else basic (posting.py:79): a row with BASIC but no P RATE is valued (and, for owned models, raises vendor liability) ~16.7% low, contradicting locked Q5 and the module&#x27;s own &#x27;never the ex-GST BASIC&#x27; docstring. The PT-mapper send-gate does not check P RATE, so the path is reachable on real brand PTs with incomplete price mapping. Should be a blocking error, not a silent fallback.</dd></dl>
+</div>
+<div class="card find high" id="f6">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">data-model</span>
+    <h4>#6 · Ownership is never persisted as data on stock — no owned-flag on SLE/SOH/Cohort; V-flip encodes owner=KDPS as a &#x27;V &#x27; brand-name prefix</h4></div>
+  <div class="loc"><code>02-inbound Q37 owned-flag; 03-outbound Q4 (locked); Rules 3/12 :: app/backend/stockledger/models.py:34-66; masters/models.py:199-225; outbound/posting.py:237-248,467-470</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>The design requires a provisional-then-finalised owned-flag on the stock record (Q37) and, post-V-flip, owner=KDPS + status=liquidation as data with &#x27;V &lt;brand&gt;&#x27; display-only (Q4 locked). Neither exists: ownership lives only transiently in the GL branch and a nullable booking FK (absent for direct receipts, which then post as owned regardless of the brand&#x27;s real model — a refuter-verified live mis-posting risk), and the RTV guard keys on brand__startswith(&#x27;V &#x27;) — the display label used as the ownership flag. Merged the inbound and outbound halves of the same missing data model; upgraded to P1 per refuter evidence on direct receipts and Rule 3/12 violation.</dd><dt>Merged from</dt><dd>C2-inbound &#x27;Owned/not-owned flag is not persisted&#x27; + C3-outbound &#x27;Post-flip ownership state not modeled as data&#x27;</dd></dl>
+</div>
+<div class="card find high" id="f7">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">design-conformance</span>
+    <h4>#7 · Brand master has no D8 terms card — no margins, return window, correction allowance, steward, or draft→validated gate</h4></div>
+  <div class="loc"><code>08-master-data/master-data.html §5/§136/§266-267 :: app/backend/masters/models.py:95-130; seed_foundation.py; vendors/views.py:135-136</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Brand is just code/name/two-axis-enum/is_active; return windows (60–120 days, a never-violate domain fact) cannot be tracked, the 25-18-10 allowance basis has nowhere to live (root cause of the seasonal-RTV finding), and a freshly created brand defaulting to owned/none is immediately postable with no steward validation — the exact &#x27;unconfirmed model would corrupt the books&#x27; scenario D8 gates against. Re-graded P0→P1: it is a missing designed control and master, not an active wrong posting today; the two P0 slots are reserved for defects already writing wrong numbers.</dd></dl>
+</div>
+<div class="card find high" id="f8">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rule-violation</span>
+    <h4>#8 · SKU registry silently overwrites identity on barcode reuse — locked Q4 collision detection/internal-barcode minting unimplemented</h4></div>
+  <div class="loc"><code>08-master-data/master-data.html Q4 §282/§429-434 :: app/backend/stockledger/posting.py:273-285; masters/models.py:177</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>_register_identity runs update_or_create(barcode=…) unconditionally on every PT row with no compare against stored attributes; a true collision (different SKU sharing a vendor barcode) silently rewrites design/color/size/brand/hsn/mrp on the unique Sku row instead of being flagged and re-aliased to an internal KDPS barcode as Q4 (locked 21 Jun) requires. Corrupts the identity spine and the &#x27;seen before&#x27; authoring lookup.</dd></dl>
+</div>
+<div class="card find high" id="f9">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">idempotency</span>
+    <h4>#9 · GRN receipt has no idempotency dedupe — a retried POST mints a second GRN and double-increments received_qty</h4></div>
+  <div class="loc"><code>CONTEXT.md three-keys contract; core/documents.py:145-149 :: app/backend/inbound/views.py:130,182,243-247</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>The kernel ships Document.objects.idempotent_create for exactly this offline-retry case, but the GRN endpoint uses plain objects.create with a fresh uuid4 and unconditionally increments BookingLine.received_qty, then recomputes booking status on the doubled quantity. The 30-Jun &#x27;GRN retry double-counts&#x27; high finding stands unremediated on a live receiving path.</dd></dl>
+</div>
+<div class="card find high" id="f10">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">scope-hole</span>
+    <h4>#10 · Multi-store booking: store scope checked only at booking level — a store user can post receipts against another store&#x27;s BookingLine</h4></div>
+  <div class="loc"><code>ADR-0003 fail-closed; 01-vendor-management §4/§7 :: app/backend/inbound/views.py:151-183,186-211,92-100</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>_resolve_booking passes if ANY line touches the user&#x27;s store; _add_grn_line then increments any BookingLine of that booking by pk with no check that the line&#x27;s effective store matches the GRN&#x27;s receiving store. A DEO user on a DEO+BKR booking can satisfy BKR&#x27;s booked line with a DEO receipt — breaking the per-store booked-vs-received accounting this feature exists for, and a real fail-closed-scoping gap per ADR-0003. New gap introduced by the (itself undesigned) multi-store extension.</dd></dl>
+</div>
+<div class="card find high" id="f11">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rbac-scope</span>
+    <h4>#11 · Outbound READ endpoints (all 5 doc types, list+detail) are unscoped — cross-store reads and IDOR, fail-open</h4></div>
+  <div class="loc"><code>ADR-0003 &#x27;see nothing until scoped&#x27; :: app/backend/outbound/views.py:66-76…428-431; permissions.py:66-68; contrast inbound/views.py:222</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Every outbound get_queryset returns the whole table with no scope_by_store, while the permission docstring falsely claims queryset-level scoping; a store user reads every store&#x27;s transfers/RTVs/adjustments/write-offs/V-flips including cost values, and an unscoped user sees all rows instead of none. Directly contradicts Sprint-1&#x27;s &#x27;own-store only&#x27; role-matrix claim on the read side (write side is solid at all 10 points).</dd></dl>
+</div>
+<div class="card find high" id="f12">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rbac-scope</span>
+    <h4>#12 · ptmapper PtFileDetailView: any authenticated user can GET and DELETE any store&#x27;s mapping-stage PT file by ID</h4></div>
+  <div class="loc"><code>ADR-0003; Rule 10 :: app/backend/ptmapper/views.py:268-283 (contrast :146-150)</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>RetrieveDestroyAPIView with only IsAuthenticated and an unscoped queryset; destroy checks only stage!=MAPPING. A read-only store_staff from another store can read P RATE/MRP cells and delete an in-progress PT — an ungated cross-store destructive write contradicting the sibling list view&#x27;s own deliberate scoping and ADR-0003.</dd></dl>
+</div>
+<div class="card find high" id="f13">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">access-control</span>
+    <h4>#13 · File download endpoint has no store/entity scoping — any authenticated user reads any stored file by enumerable ID</h4></div>
+  <div class="loc"><code>CONTEXT.md:49; ADR-0003 :: app/backend/files/views.py:11-16; files/models.py</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>download() does a bare StoredFile.objects.get(pk) behind IsAuthenticated; StoredFile (booking receipts, vendor invoices, PT files) has no store/booking FK at all, so this is a structural gap, not a missing filter. Every sibling read path is fail-closed scoped; this is the one exception, on exactly the document class the rest of the system treats as store-confidential. Both refuters argued P1; upheld.</dd></dl>
+</div>
+<div class="card find high" id="f14">
+  <div class="top"><span class="badge b-high">P1</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rule-violation</span>
+    <h4>#14 · No actor recorded on any master-data edit — Rule 10 / D8 &#x27;every edit logged&#x27; unimplemented in masters</h4></div>
+  <div class="loc"><code>00-system-architecture Rule 10; master-data.html §251-298/§418 :: app/backend/core/base.py:14-19; masters/models.py; masters/views.py</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>TimeStampedModel is self-described &#x27;actor-agnostic&#x27;; no created_by/updated_by/audit-log exists anywhere in the masters app despite D8 requiring every SKU/season/brand/store/vendor-bank edit logged with who acted. Kept P1: vendors&#x27; bank/GSTIN and brand commercial-model edits are fraud- and money-sensitive, and refuters showed sibling apps (ptmapper, vendors, outbound) DO carry actor fields — an inconsistent omission, not a repo-wide deferral.</dd></dl>
+</div>
+</section>
+
+<section id="p2">
+<h2 class="sec">P2 — deviations with workarounds (17)</h2>
+
+<div class="card find med" id="f15">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="plaus">PLAUSIBLE</span>
+    <span class="tag">design-conformance</span>
+    <h4>#15 · V-flip parks the brand-settlement liability in generic SUSPENSE at unit cost, not a D4 pending claim at the agreed amount</h4></div>
+  <div class="loc"><code>posting-catalog.html §EOSS &amp; V-flip (Vendor + Tally rows); outbound.html Q4 :: app/backend/outbound/posting.py:508-519; test_outbound_sprint1.py:619-620</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Code credits SUSPENSE for Σ(qty×unit_cost) with a &#x27;Sprint 8&#x27; memo; the catalog says the settlement is a pending claim in D4 that nets only when the brand agrees, at the agreed amount (Tally journal on agreement). The −₹1,400 is a real, unlabeled liability with no clearer (Payments unbuilt), though Σ=0 still holds. Re-graded P1→P2 per two refuters: it is a conscious, test-locked interim placeholder on a path with no live money yet (POS/EOSS unbuilt); the defect is account selection + cost-as-amount, not silent imbalance. One refuter dissented outright (D4-unbuilt exemption); ruled against full refutation — see suspense ruling.</dd></dl>
+</div>
+<div class="card find med" id="f16">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">no-reposting</span>
+    <h4>#16 · fix_rtv28 backfill cancels a submitted RTV via bulk .update(), fabricates non-series doc numbers, and never reverses the GL/vendor legs</h4></div>
+  <div class="loc"><code>Rule 2; lifecycles.html cancel FSM; gap-free numbering :: app/backend/outbound/management/commands/fix_rtv28_vflip_brand.py:36-71,115; outbound/posting.py:284-303</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>The one-shot command flips docstatus with a raw queryset UPDATE (bypassing Document.cancel()), appends compensating SLE rows under hand-built &#x27;/REV&#x27; and &#x27;/BRAND-FIX&#x27; numbers never minted from VoucherSeries, and reverses only the stock ledger — the RTV&#x27;s Dr VENDOR_PAYABLE / Cr INVENTORY voucher and vendor-subledger credit stay live if RTV-28 was owned stock. SLE append-only itself was honoured (compensating rows, not edits). Merged two tracks; graded P2 (split P1/P3 suggestions): a one-shot script already run on live data, with harm conditional on RTV-28&#x27;s ownership, but a genuine no-reposting/Rule-2 breach pattern that must not recur.</dd><dt>Merged from</dt><dd>C3-outbound &#x27;One-shot fix command cancels a submitted RTV via bulk .update()&#x27; + C4-moneypath &#x27;fix_rtv28 backfill bypasses the Document FSM&#x27;</dd></dl>
+</div>
+<div class="card find med" id="f17">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">books-correctness</span>
+    <h4>#17 · Adjustment and write-off unconditionally hit INVENTORY — brand-owned (SOR/Consignment) shrinkage misstates the owned-stock control account</h4></div>
+  <div class="loc"><code>posting-catalog.html §Stocktake adjustment; stockledger/posting.py:187-191 :: app/backend/outbound/posting.py:358-370,419-422</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>post_adjustment/post_writeoff never read ownership; brand-owned value lives off-book in SOR_STOCK/SOR_CONTRA, so crediting INVENTORY for a brand-owned shrinkage drives the control account away from actual owned-stock value, and the catalog says brand-owned shrinkage is a D4 recon/claim, not a count-time posting. The line &#x27;brand&#x27; being free-text means ownership can&#x27;t even be determined at posting time — same root cause as the ownership-as-data finding.</dd></dl>
+</div>
+<div class="card find med" id="f18">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">correctness</span>
+    <h4>#18 · V-flip has no ownership guard — reverses a never-posted SOR memo pair and double-debits INVENTORY on already-owned stock</h4></div>
+  <div class="loc"><code>posting-catalog.html §EOSS &amp; V-flip (brand-owned only) :: app/backend/outbound/posting.py:499-519</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>post_vflip unconditionally posts dr(SOR_CONTRA)/cr(SOR_STOCK) + dr(INVENTORY)/cr(SUSPENSE) with no check that the stock is brand-owned; a flip raised on Outright/Correction stock leaves phantom SOR balances and double-counts inventory. Validity rests entirely on operator discipline; the sibling RTV path proves the ownership check exists in-codebase and was simply omitted.</dd></dl>
+</div>
+<div class="card find med" id="f19">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">books-tie-weakness</span>
+    <h4>#19 · Books-Health &#x27;balanced/trial_balance=0&#x27; is structurally incapable of being false — green while value misclassifies into SUSPENSE</h4></div>
+  <div class="loc"><code>finledger/health.py:3-7 self-description :: app/backend/finledger/health.py:91; core/gl.py:85-89; core/posting.py:93-95; finledger/posting.py:140,319-332</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>post_entries is the sole GL writer and rejects unbalanced vouchers on an append-only table, so Σ(amount)=0 always; the headline flag conveys no correctness signal while manual vendor bills, standalone cash moves and V-flips accumulate an unthresholded SUSPENSE balance under balanced=true. The vendor/cash subledger-vs-control reconciliation is real; the tautological headline is the defect. Directly qualifies Sprint-1 claim #9.</dd></dl>
+</div>
+<div class="card find med" id="f20">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">missing-designed-behaviour</span>
+    <h4>#20 · post_entries omits the ADR-0006 period-lock / freeze-date hard error</h4></div>
+  <div class="loc"><code>adr/0006-posting-engine.md period-lock clause :: app/backend/core/posting.py:75-128</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>The ratified engine contract lists three hard errors (balanced-or-fail, no-reposting, period-lock); the built engine enforces two and its docstring quietly says &#x27;the two laws&#x27;. No freeze-date table exists anywhere. Low current exploitability (no period-close flow yet sets freeze dates) keeps this P2, but a back-dated posting can today restate an already-reported month.</dd></dl>
+</div>
+<div class="card find med" id="f21">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">correction-completeness</span>
+    <h4>#21 · Outbound cancel does not mirror submit — no reverse_* path for 5 of 6 document types; inherited cancel() would orphan live ledger legs</h4></div>
+  <div class="loc"><code>erpnext study 02/03 (on_cancel mirrors on_submit) :: app/backend/core/documents.py:272-283; stockledger/posting.py:377; outbound/posting.py (no reverse_*)</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>PT built the full mirror (reverse_pt_inward negates stock+GL+vendor then cancels); StoreTransfer/RTV/Adjustment/WriteOff/VFlip have no reversal path and no cancel endpoint, so posted docs are uncorrectable, and Document.cancel() — if ever called via shell/admin/future wiring — flips docstatus while leaving every SLE and GL leg live. Latent (no endpoint calls it today), hence P2; the fix_rtv28 incident shows what happens when this gap is worked around by hand.</dd></dl>
+</div>
+<div class="card find med" id="f22">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">concurrency</span>
+    <h4>#22 · StockOnHand cache updated by non-atomic read-modify-write; oversell guard reads the racy cache</h4></div>
+  <div class="loc"><code>erpnext study 04 (locked Bin, re-read from last SLE) :: app/backend/stockledger/posting.py:229-251; outbound/posting.py:38-42,97-109</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Both inbound and outbound do get_or_create + Python += + save() with no select_for_update or F() expression; under READ COMMITTED two concurrent posts lose an update and the drifted net_qty feeds _check_stock, so paired dispatches/write-offs can pass checks that together drive real stock negative. Rebuildable via rebuild_stock_on_hand, which caps severity.</dd></dl>
+</div>
+<div class="card find med" id="f23">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">dimension-consistency</span>
+    <h4>#23 · RTV GL tags VENDOR_PAYABLE with the numeric vendor PK as party_code; every other path uses vendor.code — per-vendor payables fragment</h4></div>
+  <div class="loc"><code>erpnext study 03 (stable party identity); kernel dimension rubric :: app/backend/outbound/posting.py:283-286; contrast finledger/posting.py:145,201, stockledger/posting.py:183</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>RTV legs use str(rtv.vendor_id) while PT and finledger use the vendor slug code, so one vendor appears as two parties: RTV credits will never net against that vendor&#x27;s bills in any GROUP BY party_code payable/aging view or D4 settlement matching. Trial balance still ties. Graded P2 (over the P3 twin) because the wrong party key is being permanently baked into append-only GL rows now, correctable only by reversal. Merged identical findings from two tracks; one-line fix.</dd><dt>Merged from</dt><dd>C4-moneypath &#x27;RTV GL posts VENDOR_PAYABLE with numeric vendor PK&#x27; + C8-erpnext &#x27;RTV posts VENDOR_PAYABLE with the numeric vendor PK — fragments AR/AP-by-party&#x27;</dd></dl>
+</div>
+<div class="card find med" id="f24">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">float-money</span>
+    <h4>#24 · Money crosses Python float in the PT-mapper before being frozen as unit cost — float round() can shift a paisa vs the Decimal half-up contract</h4></div>
+  <div class="loc"><code>CONTEXT.md kernel contract (Decimal, ROUND_HALF_UP) :: app/backend/ptmapper/engine.py:93-95,747,934; stockledger/posting.py:61-68</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>engine.py&#x27;s money()/basic-from-taxable division compute and round in float before Decimal-ization; reproduced 1-paisa divergence (100.05/2 → 5002 vs 5003 paise half-up) then frozen onto Cohort.unit_cost_paise and GL. Narrow exposure (division branch / half-paisa boundaries) but a genuine kernel-contract deviation on the money path.</dd></dl>
+</div>
+<div class="card find med" id="f25">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">undocumented-scope-change</span>
+    <h4>#25 · Per-line multi-store booking (BookingLine.store) is an undesigned structural extension — absent from the entire design corpus</h4></div>
+  <div class="loc"><code>01-vendor-management §4; inbound Q38 :: app/backend/vendors/migrations/0003_bookingline_store.py; vendors/models.py:97-107</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>A booking fanning out to several destination stores per line changes the unit the booking-status and receiving/scoping model assumed (one booking = one place), yet exists only as a migration + code comments + a test file; corpus-wide grep for multi-store returns nothing in the design docs, and it shipped with the P1 line-scope gap a design pass would likely have caught. Write it into the design-of-record (short ADR) and close the scope gap in the same pass.</dd></dl>
+</div>
+<div class="card find med" id="f26">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rbac-scope</span>
+    <h4>#26 · ptmapper mutation endpoints (rows PATCH, send, recall, rerun) have neither store scope nor role gate</h4></div>
+  <div class="loc"><code>ADR-0003; Rule 10 :: app/backend/ptmapper/views.py:286-320,440-456,579-609,612-626 (contrast :224,:636,:724)</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Four write views are IsAuthenticated + pk-only while their siblings (from-GRN, price, post, reverse) are role-gated and the list is store-scoped — any authenticated user of any store can edit another store&#x27;s pre-posting money cells (P RATE/MRP/tax) or advance/recall its PT. Contained by the separately PATNA-gated posting step, hence P2.</dd></dl>
+</div>
+<div class="card find med" id="f27">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rbac-scope</span>
+    <h4>#27 · Vendor Booking list + detail reads are unscoped — every store&#x27;s procurement (vendor, quantities, values) visible to any store user</h4></div>
+  <div class="loc"><code>ADR-0003 :: app/backend/vendors/views.py:98-113,174-179 (contrast inbound/views.py:52-59)</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>BookingListCreateView/BookingDetailView expose the whole table behind IsAuthenticated, while the inbound receive path deliberately scopes the same Booking model fail-closed — an inconsistent read-confinement breach of ADR-0003. Decide store-scoped vs HO-network data and apply the PendingBookingsView filter if scoped.</dd></dl>
+</div>
+<div class="card find med" id="f28">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">input-validation</span>
+    <h4>#28 · File download serves attacker-controlled content_type inline with unsanitized filename — stored-XSS / header-injection vector</h4></div>
+  <div class="loc"><code>files/models.py&#x27;s own upload-abuse reasoning (not extended) :: app/backend/files/models.py:44-46; files/views.py:11-16</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>StoredFile persists client-supplied content_type and filename verbatim; download echoes both back with Content-Disposition: inline and raw f-string interpolation. An uploaded text/html blob served same-origin is a stored XSS against authenticated PWA sessions; a quote in the filename breaks the header. Combines badly with the unscoped download endpoint (rank 13). Whitelist types per Kind, force attachment, sanitize filename.</dd></dl>
+</div>
+<div class="card find med" id="f29">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rule-violation</span>
+    <h4>#29 · GstSlab (date-effective GST slab master) has no admin registration or API — a rate change needs a developer, not a steward</h4></div>
+  <div class="loc"><code>Rule 12; master-data.html §305/§502 :: app/backend/masters/admin.py:1-45; masters/urls.py:1-31</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>The slab is correctly modelled and consumed as data (Rule 12&#x27;s data half conforms; nothing hardcoded), but it is the one second-eye-gated master with no edit surface at all — unlike every sibling master — breaking the &#x27;trained admin adds without a release&#x27; promise. CategoryMargin shares the gap per coverage notes.</dd></dl>
+</div>
+<div class="card find med" id="f30">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">error-handling</span>
+    <h4>#30 · apiErrorMessage only reads response.data.detail — all outbound business-rule errors ({error:...}) collapse to a generic message</h4></div>
+  <div class="loc"><code>Track brief (c) :: app/frontend/src/lib/api.ts:125-130; app/backend/outbound/views.py:127,161,238,310,382,456</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Every OutboundPostingError 400 (V-flip RTV block, transfer-already-received, no-lines guards — all 6 catch sites use the &#x27;error&#x27; key) renders as &#x27;Something went wrong. Please try again.&#x27; instead of the specific server message; DRF &#x27;detail&#x27; responses (403s) display fine. Re-graded P1→P2: real and exactly the scenario the brief named, but it is error-surfacing UX with server enforcement intact — no money or scope impact. One-line client fix (also check .error) or standardize backends on detail.</dd></dl>
+</div>
+<div class="card find med" id="f31">
+  <div class="top"><span class="badge b-med">P2</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">rbac-consistency</span>
+    <h4>#31 · The 5 outbound *NewPage components have no client role gate — read-only/insufficient roles get a fully interactive form that 403s on submit</h4></div>
+  <div class="loc"><code>Track brief (b) :: app/frontend/src/pages/OutboundWriteoffs.tsx:153-277, OutboundVflips.tsx:164, +3 siblings; App.tsx:29</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>RBAC is enforced only by hiding the list page&#x27;s &#x27;New&#x27; link; direct navigation to any */new route renders the full form for store_staff or non-admin roles, and the eventual server 403 surfaces as the generic swallowed error (rank 30), compounding the confusion. Server-side enforcement is intact, so this is shown-but-403 UX, exactly what the brief flags as a bug.</dd></dl>
+</div>
+</section>
+
+<section id="p3">
+<h2 class="sec">P3 — minor (4)</h2>
+
+<div class="card find low" id="f32">
+  <div class="top"><span class="badge b-low">P3</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">immutability</span>
+    <h4>#32 · Transfer receipt writes qty_received onto the SUBMITTED transfer&#x27;s child lines, contradicting the model&#x27;s own immutability rationale</h4></div>
+  <div class="loc"><code>erpnext study 02 (freeze parent AND children) :: app/backend/outbound/posting.py:184-185; outbound/models.py:115-116</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>post_transfer_receipt mutates frozen dispatch lines while the model comment says receipt fields live on the companion TransferReceipt precisely because submitted docs are immutable; child lines escape the FSM trigger (parent-row only). Tracking metadata, not a ledger value — real but low-stakes immutability leak.</dd></dl>
+</div>
+<div class="card find low" id="f33">
+  <div class="top"><span class="badge b-low">P3</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">design-conformance</span>
+    <h4>#33 · Stock adjustment approver is optional and unenforced despite the catalog requiring a named approver above tolerance</h4></div>
+  <div class="loc"><code>posting-catalog.html §Stocktake adjustment :: app/backend/outbound/models.py:277-281; outbound/posting.py:312-370</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>approved_by is nullable with help_text &#x27;Required for variances above tolerance&#x27; but no tolerance is computed and posting never checks it — any writer can post unbounded shrinkage with no approval on record. Reasonable P3 given non-production status and the consciously thin roles model, but must land before live money.</dd></dl>
+</div>
+<div class="card find low" id="f34">
+  <div class="top"><span class="badge b-low">P3</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">reproducibility-gap</span>
+    <h4>#34 · &#x27;401 passed, 1 skipped&#x27; is only reproducible via the undocumented seed_outbound_demo; the documented boot yields 3 failing money-path tests</h4></div>
+  <div class="loc"><code>README run-the-gate; ci.yml; conftest skip message :: app/backend/tests/test_iteration22_bugfixes.py:1; outbound/management/commands/seed_outbound_demo.py</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Independently reproduced (and corroborated by the branch&#x27;s own failing CI run): documented steps → 3 hard failures in the owned-RTV/SOR-RTV golden tests; adding the unmentioned seed reconciles to exactly 401/1. Also cleanly explains the 314/63-vs-401/1 register discrepancy (no-live-server vs full run). A documentation/reproducibility gap on money-critical tests, not a code defect.</dd></dl>
+</div>
+<div class="card find low" id="f35">
+  <div class="top"><span class="badge b-low">P3</span>
+    <span class="conf">CONFIRMED</span>
+    <span class="tag">duplication</span>
+    <h4>#35 · fmtDate/DocPill/DS_TONE/DS_LABEL copy-pasted byte-for-byte across all 5 outbound pages</h4></div>
+  <div class="loc"><code>Track brief (f) :: app/frontend/src/pages/OutboundTransfers.tsx:27-36 + 4 siblings</code></div>
+  <dl><dt>What &amp; why it matters</dt><dd>Identical today, so no behavioral bug, but a future docstatus label/tone change will silently diverge unless all five files are edited by hand. Extract to a shared outbound-ui helper.</dd></dl>
+</div>
+</section>
+
+<section id="coverage">
+<h2 class="sec">Coverage matrix — designed vs built vs stubbed</h2>
+<p class="small" style="color:var(--muted)">Status definitions: <strong>built</strong> = designed capability with working API+UI · <strong>partial</strong> = exists but materially incomplete vs design · <strong>stub</strong> = nav/route with no backing API · <strong>missing</strong> = designed, no code (includes deferred-by-decision — not defects) · <strong>built-undesigned</strong> = code with no design-of-record anchor.</p>
+<div class="tablewrap"><table>
+<thead><tr><th>Capability</th><th>Designed in</th><th>Status</th><th>Evidence</th></tr></thead>
+<tbody><tr><td>Kernel: money-as-paise + append-only ledger (Rule 2, ADR-0004)</td><td class='small'>00-system-architecture.html; consolidation/glossary.html</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/core/ledger.py, core/gl.py — LedgerModel base forbids save()/delete() on existing rows</td></tr><tr><td>Kernel: balanced GL / post_entries (single writer, Σlegs=0)</td><td class='small'>consolidation/posting-catalog.html; 30-Jun review C3</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/core/posting.py:76 post_entries(doc, legs); core/gl.py GLEntry model — remediates 30-Jun C3 at kernel level</td></tr><tr><td>Kernel: Document FSM (docstatus draft→submitted→cancelled) + gap-free numbering</td><td class='small'>consolidation/lifecycles.html; ADR on numbering</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/core/documents.py:153 class Document; inherited by inbound.Grn, ptmapper.PtFile, outbound.StoreTransfer/ReturnToVendor/StockAdjustment/WriteOff/VFlip (all `class X(Document)` in respective models.py)</td></tr><tr><td>D1 — Vendor &amp; Booking document (docstatus/FSM)</td><td class='small'>01-vendor-management/</td><td><span class='badge b-high'>partial</span></td><td class='small'>app/backend/vendors/models.py:39 `class Booking(TimeStampedModel)` — NOT core.Document; no docstatus FSM/idempotency at model level, unlike every other document app (30-Jun &#x27;High findings NOT remediated&#x27; item still open for Booking specifically)</td></tr><tr><td>D2 — Two-step inbound: GRN (qty-only) + PT (valuation+liability)</td><td class='small'>02-inbound/inbound-ingestion-design.html; Q1/Q2/Q5</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/inbound/urls.py (grns, invoice-draft, queue); app/backend/ptmapper/urls.py (files, price, send, post, reverse) — Grn and PtFile both `class X(Document)`</td></tr><tr><td>D2 — Booking-less direct receipt (any brand)</td><td class='small'>Q9</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/inbound/views.py InboundQueueView / GrnListCreateView support GRN without a booking anchor (per PRD.md); StoreTransfer.TransferType.STORE_SPLIT (warehouse→store) present in models.py:52-55</td></tr><tr><td>PT-mapper (brand-PT→KDPS mapping, self-improving)</td><td class='small'>02-inbound + build-log/self-improving-pt-mapper</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/ptmapper/urls.py: suggest, proposals, review, controlled — 9 brand profiles per CLAUDE.md</td></tr><tr><td>AI reader agents (Booking Receiving Reader, invoice readers) — read-only, Rule 8</td><td class='small'>application-design (AI vs Software split), D1/D2</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/aiagents/gemini.py + vendors/agents.py (read_booking_receipt) + inbound/agents.py — extracts to a draft only, human confirms; consistent with Rule 8, not built-undesigned</td></tr><tr><td>D3 — Inter-store transfer (2-step dispatch/receive, cross-state IGST flag)</td><td class='small'>03-outbound/outbound.html §4</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/outbound/models.py:71 StoreTransfer (is_cross_state, eway_bill_number manual-entry field, transport_ref); urls.py transfers/dispatch/receive</td></tr><tr><td>D3 — RTV: defective/GR return + seasonal (SOR) return</td><td class='small'>03-outbound/outbound.html §5,§6</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/outbound/models.py:57 ReturnType.DEFECTIVE/SEASONAL on one ReturnToVendor doc, matching design&#x27;s &#x27;same engine as RTV but no quarantine&#x27; for seasonal</td></tr><tr><td>D3 — Stocktake / Adjustment (shrinkage/miscount/damage/surplus)</td><td class='small'>03-outbound/outbound.html §8</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/outbound/models.py:38 AdjustmentReason; StockAdjustment(Document)</td></tr><tr><td>D3 — EOSS discount + V-flip (brand-owned→KDPS-owned)</td><td class='small'>03-outbound/outbound.html §7</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/outbound/models.py:385 VFlip(Document); urls.py vflips/submit; per-claims-register a −₹1,400 SUSPENSE entry is reportedly posted pending Payments module — not independently verified this pass, flag for deeper posting.py read</td></tr><tr><td>D3 — Write-off (stock exit: dead stock / refused defectives)</td><td class='small'>NOT FOUND — no 9th event in outbound.html&#x27;s 8-event catalog; &#x27;write-off&#x27; elsewhere only means (a) informal name for Correction commercial model, (b) one closure-outcome option for an inbound discrepancy, per application-design/00-application-map.html and system-review-2026-06-24.html</td><td><span class='badge b-crit'>built-undesigned</span></td><td class='small'>app/backend/outbound/models.py:331 class WriteOff(Document) — full FSM doc, own posting + nav (/outbound/writeoffs); corpus-wide grep for write-off/writeoff turns up no standalone outbound write-off document design</td></tr><tr><td>D3 — Counter sale / manual-bill fallback / customer exchange (POS-sourced events)</td><td class='small'>03-outbound/outbound.html §1-3</td><td><span class='badge b-med'>missing</span></td><td class='small'>No POS integration code anywhere in app/backend; deferred by decision (Ten Software spike not yet wired), not a defect</td></tr><tr><td>D4 — Payments &amp; roles (maker≠checker≠payer settlement)</td><td class='small'>04-payments/payments.html</td><td><span class='badge b-med'>missing</span></td><td class='small'>No payments/settlement app in app/backend/*; nav item /documents/payments and /edges/pos route to ModulePage stub</td></tr><tr><td>D4 — RBAC roles/permissions (thin model, per-app enforcement)</td><td class='small'>consolidation ADRs; D4 left roles thin by decision</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/accounts/urls.py admin/roles, admin/users; app/backend/outbound/permissions.py IsOutboundWriter/IsOutboundAdmin + enforce_store_scope</td></tr><tr><td>D5 — Offer rulebook (slabs, B2G1, thresholds)</td><td class='small'>05-offers/offers.html</td><td><span class='badge b-med'>missing</span></td><td class='small'>No offers app/model anywhere in app/backend; deferred by decision</td></tr><tr><td>D6 — Tally sync (daily voucher export, GST book of record)</td><td class='small'>06-tally-sync/</td><td><span class='badge b-med'>missing</span></td><td class='small'>No tally integration code; nav /edges/tally routes to ModulePage stub</td></tr><tr><td>D7 — Analytics &amp; AI (profitability, dead-stock, forecast, dashboards)</td><td class='small'>07-analytics-ai/</td><td><span class='badge b-med'>missing</span></td><td class='small'>nav /intel/* (dashboards, profitability, dead-stock, forecast, reports) all route to ModulePage catch-all stub in App.tsx</td></tr><tr><td>D8 — Master data (stores, brands, seasons, GSTINs, SKU lookup)</td><td class='small'>08-master-data/</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/masters/urls.py: skus/lookup, stores, brands, seasons, gstins, entities, summary — all with detail views</td></tr><tr><td>Stock ledger + Stock-on-hand (append-only SLE, matrix stock)</td><td class='small'>consolidation/data-model.html</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/stockledger/urls.py entries/summary/on-hand</td></tr><tr><td>finledger vendor/cash ledgers (double-entry via GL)</td><td class='small'>consolidation/posting-catalog.html; kernel contract balanced GL</td><td><span class='badge b-high'>partial</span></td><td class='small'>app/backend/finledger/models.py VendorLedgerEntry/CashLedgerEntry are LedgerEntry subclasses, single-entry running-balance, NOT legs posted via core.posting.post_entries — documented, accepted alpha caveat per CLAUDE.md, still current (not superseded despite core.post_entries now existing for other flows)</td></tr><tr><td>Books-Health / trial-balance check</td><td class='small'>kernel contract (balanced-or-fail)</td><td><span class='badge b-ok'>built</span></td><td class='small'>app/backend/finledger/urls.py path(&#x27;health&#x27;, BooksHealthView) — per claims register reports balanced=true/drift=0; scope of check vs finledger&#x27;s non-GL ledgers not independently re-verified this pass</td></tr><tr><td>D9 — Migration &amp; rollout</td><td class='small'>09-migration/ (folder referenced, deferred)</td><td><span class='badge b-med'>missing</span></td><td class='small'>No 09-migration folder contents reviewed / no code; deferred by decision, revisit before go-live</td></tr><tr><td>Store open/close lifecycle</td><td class='small'>erp-coverage-and-completeness.html flags as the one TRUE GAP (not deferred-by-decision)</td><td><span class='badge b-med'>missing</span></td><td class='small'>No store-lifecycle model/endpoint in masters or elsewhere; coverage doc itself calls this the one undesigned-and-unbuilt true gap, distinct from the other deferred-by-decision items</td></tr><tr><td>Frontend stub pages (Controls: Exception Inbox/Reconciliations/Approvals/Audit Trail; Edges&amp;Admin: Integrations/Tally/POS/Config)</td><td class='small'>application-design UI map (as future screens)</td><td><span class='badge b-low'>stub</span></td><td class='small'>app/frontend/src/shell/navConfig.ts lists these; App.tsx has no matching &lt;Route&gt; so react-router&#x27;s catch-all path=&quot;*&quot; renders &lt;ModulePage /&gt; — matches CLAUDE.md&#x27;s &#x27;~20 coming-soon stubs&#x27;, not a fresh gap</td></tr></tbody>
+</table></div>
+</section>
+
+<section id="undesigned">
+<h2 class="sec">Built-undesigned — needs a design decision, not a bug fix</h2>
+
+<div class="card find crit">
+<div class="top"><span class="badge b-crit">built-undesigned</span><h4>WriteOff is a document type the design never defined</h4></div>
+<p style="font-size:14px">D3's outbound catalog defines exactly 8 events (counter sale, manual-bill, exchange, transfer, RTV, seasonal return, EOSS/V-flip, stocktake/adjustment). There is no 9th "write-off" event — a corpus-wide search finds "write-off" only as (a) an informal old name for the Correction 25-18-10 model and (b) one closure outcome of an inbound discrepancy. Yet <code>outbound.WriteOff</code> is a full document type with its own FSM, posting, endpoints and nav entry — and its posting unconditionally credits INVENTORY regardless of ownership (finding #17). <strong>Decision needed:</strong> either write it into the design-of-record (a short ADR: is owner-approved stock exit a real 9th event?) or fold it into StockAdjustment. Until decided, it is unanchored code on a money path.</p>
+</div>
+<div class="card find high">
+<div class="top"><span class="badge b-high">built-undesigned</span><h4>Per-line multi-store booking (BookingLine.store)</h4></div>
+<p style="font-size:14px">A booking fanning out to several stores per line changes the unit the booking/receiving/scoping model assumed (one booking = one place). It exists only as a migration + test — nothing in the design corpus — and it shipped with the P1 line-level scope gap (finding #10) that a design pass would likely have caught. Write the short ADR and close the scope gap in the same pass.</p>
+</div>
+<div class="card find high">
+<div class="top"><span class="badge b-high">partial</span><h4>vendors.Booking is still not a kernel Document</h4></div>
+<p style="font-size:14px">Every other transactional object (GRN, PtFile, all 5 outbound types) now inherits <code>core.Document</code>; Booking remains a plain TimeStampedModel — no docstatus FSM, no immutability, no idempotency at the model level. This is the one 30-Jun "high — not remediated" item still open on the document side.</p>
+</div>
+
+</section>
+
+<section id="drift">
+<h2 class="sec">Docs ↔ code drift</h2>
+
+<ul class="tight">
+<li><strong><code>.context/qa-decisions.md</code> does not exist.</strong> CLAUDE.md points to it as the log of the 16 locked decisions; the only record is <code>consolidation/system-review-2026-06-24.html</code>. Either restore the file or fix the pointer.</li>
+<li><strong>The "single-entry vendor/cash ledgers" caveat is stale — rewrite it, don't delete it.</strong> The F1 GL-unification work made every vendor/cash subledger write post a balanced GL voucher (control == subledger proven on 6 paths). Residual truth: classification is provisional — manual vendor bills and standalone cash moves balance against SUSPENSE (finding #19).</li>
+<li><strong>The corpus's chart-of-accounts vocabulary lags the code.</strong> The GL posts to SUSPENSE / SOR_STOCK / SOR_CONTRA / GRNI — accounts no design doc names. The posting catalog should name the working chart of accounts (this surfaced as a killed-but-true P3; the vocabulary gap is real even though the behaviour behind most of it conforms).</li>
+<li><strong>Undocumented reproduction path for the test suite.</strong> "401 passed, 1 skipped" requires the unmentioned <code>seed_outbound_demo</code>; the documented boot yields 3 failing money-path tests (finding #34). README/PRD must document the real sequence — or better, fix the fixtures.</li>
+<li><strong>WriteOff and multi-store booking</strong> (above) need design-of-record entries or removal.</li>
+</ul>
+
+</section>
+
+<section id="ia-problems">
+<h2 class="sec">Sidebar — what's wrong today</h2>
+<p>The current nav (<code>app/frontend/src/shell/navConfig.ts</code>) has 8 groups mixing two organizing principles: most groups are by business process, but <strong>“Documents” is a browse-by-artifact-type list that cuts across every process and audience</strong> — which is exactly where the duplicates, dead stubs and audience leaks accumulate.</p>
+<ul class="tight"><li>DUPLICATE LABEL, DIVERGENT FATE — &#x27;Transfers&#x27;: navConfig.ts has &#x27;Outbound &gt; Transfers&#x27; -&gt; /outbound/transfers (App.tsx line 41, live TransferListPage) and &#x27;Documents &gt; Transfers&#x27; -&gt; /documents/transfers (navConfig.ts line 75). App.tsx defines no route for /documents/transfers, so it falls through to the catch-all `&lt;Route path=&quot;*&quot; element={&lt;ModulePage /&gt;} /&gt;` (App.tsx line 71) and renders a permanent &#x27;Coming soon&#x27; stub (ModulePage.tsx PAGE_INTENT entry for &#x27;/documents/transfers&#x27;, line 11) even though the identical business object is fully live one click away in another group. A user with the &#x27;documents&#x27; nav_group (e.g. store_staff, warehouse, accounts, ho_ops — all granted &#x27;documents&#x27; in seed_foundation.py) sees two &#x27;Transfers&#x27; entries with no way to tell which is real without clicking both.</li><li>AUDIENCE LEAK VIA BROWSE-AXIS GROUP — the &#x27;documents&#x27; nav_group is granted to store_staff (cashier) in seed_foundation.py line 46 (`&quot;nav_groups&quot;: [&quot;home&quot;, &quot;store_ops&quot;, &quot;documents&quot;, &quot;outbound&quot;]`), and that group&#x27;s items (navConfig.ts lines 70-78) include &#x27;Bookings&#x27; (/documents/bookings, a vendor-booking/HO function) and &#x27;PT File Operation&#x27; (/documents/pt-mapper, a warehouse PT-mapping function) — both live pages (App.tsx lines 31,56) unrelated to a till cashier&#x27;s job. Because &#x27;Documents&#x27; is organized as a document-type list (a browse axis) rather than by task/audience, a cashier&#x27;s sidebar surfaces HO/warehouse screens that have nothing to do with running the till, contradicting the review brief&#x27;s own diagnosis that &#x27;Documents&#x27; duplicates operational groups.</li><li>SAME LIVE PAGE, TWO NAV IDENTITIES — &#x27;Users &amp; Roles&#x27; (Master Data group, navConfig.ts line 90, route /masters/users) and &#x27;Users &amp; RBAC&#x27; (Edges &amp; Admin group, navConfig.ts line 137, route /edges/rbac) both render the same component `UsersRolesPage` (App.tsx lines 69-70: `&lt;Route path=&quot;/masters/users&quot; element={&lt;UsersRolesPage /&gt;} /&gt;` and `&lt;Route path=&quot;/edges/rbac&quot; element={&lt;UsersRolesPage /&gt;} /&gt;`), both gated by the identical RBAC_ADMIN_ROLES role list. There is no single canonical place for an admin to find user/role administration — it appears twice under two different group labels for the same restricted audience, with no cross-reference between them.</li><li>NO VISUAL DISTINCTION LIVE vs STUB — Sidebar (AppShell.tsx lines 221-243) renders every nav_item identically as a plain NavLink regardless of whether its route resolves to a real page or to the wildcard ModulePage stub; there is no badge, dimming, or &#x27;coming soon&#x27; affordance in the sidebar itself (only after navigating does ModulePage.tsx show a &#x27;Coming soon&#x27; chip, line 73). Combined with the earlier duplicate-label findings, a user cannot tell from the sidebar alone which of two identically-labelled entries is real, and there is no single audit view of build status across ~32 nav items (12 live, ~20 stub) — the erpnext-reverse-engineering brief&#x27;s own conformance question (&#x27;is there a coherent single place to audit all screens&#x27;) is answered no.</li><li>&#x27;STOCK RECEIVE&#x27; LISTED TWICE TO THE SAME ROUTE — navConfig.ts line 48 (&#x27;Store Ops &gt; Stock Receive&#x27; -&gt; /inbound) and line 72 (&#x27;Documents &gt; Stock Receive&#x27; -&gt; /inbound) both point at the identical live route (InboundPage, App.tsx lines 37-39). Functionally harmless (no dead stub), but it is IA noise: the same task is presented as if it were two different destinations, and a role holding both &#x27;store_ops&#x27; and &#x27;documents&#x27; nav_groups (store_staff, warehouse per seed_foundation.py) sees the identical page twice in its sidebar with no indication they are the same screen.</li><li>DEAD STUB SIBLINGS UNDER &#x27;DOCUMENTS&#x27; — &#x27;Documents &gt; Sales&#x27; (/documents/sales) and &#x27;Documents &gt; Returns&#x27; (/documents/returns) have no route in App.tsx and resolve via the wildcard to ModulePage stubs (ModulePage.tsx PAGE_INTENT lines 10 and 12). These are legitimately unbuilt features (selling/POS, returns — both on the known-unbuilt list) so their existence as stubs is not itself a defect, but placing them inside a &#x27;Documents&#x27; group that also contains three fully-live pages (Bookings, Stock Receive, PT File Operation) with identical visual treatment means the group mixes live and 20%-stub content under one label with no differentiation, compounding finding 4.</li></ul>
+</section>
+
+<section id="ia-proposal">
+<h2 class="sec">Sidebar — proposed structure (6 groups, by operational scope + audience)</h2>
+
+<p><strong>Before:</strong> 8 groups (Home · Store Ops · Outbound · Documents · Master Data · Ledgers · Controls · Intelligence · Edges &amp; Admin) — process groups plus one artifact-type group. <strong>After:</strong> 6 groups organized by who does the work: <strong>Store Floor</strong> (cashier/manager daily ops) · <strong>Merchandising &amp; Inventory Control</strong> (warehouse/HO stock movement + bookings + PT) · <strong>Finance &amp; Books</strong> (ledgers, payments, Tally) · <strong>Controls &amp; Governance</strong> · <strong>Intelligence</strong> · <strong>Admin &amp; Setup</strong>. The "Documents" group is deleted (every live child gets a process home), "Users &amp; Roles" gets one canonical route, and every stub carries a visible "coming soon" mark in the sidebar itself. No new features — only regrouping, one route rename, and stub labelling.</p>
+
+<h4 style="margin-top:18px">Store Floor</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">store_staff (cashier), store_manager — daily till/floor operations, scoped to their own store</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Sell</td><td><code>/store/sell</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>store_staff, store_manager</td></tr><tr><td>Receive Stock</td><td><code>/inbound</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>store_staff, store_manager, warehouse</td></tr><tr><td>Count</td><td><code>/store/count</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>store_staff, store_manager</td></tr><tr><td>Transfers (send/receive)</td><td><code>/outbound/transfers</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>store_manager</td></tr></tbody></table><h4 style="margin-top:18px">Merchandising &amp; Inventory Control</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">warehouse, ho_ops, store_manager — style/size/color stock movement and vendor booking, not money-posting</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Vendor Bookings</td><td><code>/documents/bookings</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>ho_ops, warehouse</td></tr><tr><td>PT File Operation</td><td><code>/documents/pt-mapper</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>warehouse, ho_ops</td></tr><tr><td>Return to Vendor</td><td><code>/outbound/rtvs</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>warehouse, ho_ops</td></tr><tr><td>Adjustments</td><td><code>/outbound/adjustments</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>warehouse, ho_ops</td></tr><tr><td>Write-offs</td><td><code>/outbound/writeoffs</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>ho_ops</td></tr><tr><td>V-Flip</td><td><code>/outbound/vflips</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>warehouse, ho_ops</td></tr><tr><td>Stores / Brands / Seasons / GSTINs</td><td><code>/masters/*</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>ho_ops</td></tr></tbody></table><h4 style="margin-top:18px">Finance &amp; Books</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">accounts, owner, it_admin — money, GL, vendor liability, statutory bridge</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Vendor Ledger</td><td><code>/ledgers/vendor</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>accounts, owner, it_admin</td></tr><tr><td>Cash Ledger</td><td><code>/ledgers/cash</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>accounts, owner, it_admin</td></tr><tr><td>Stock Ledger</td><td><code>/ledgers/stock</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>accounts, warehouse, ho_ops, owner</td></tr><tr><td>Stock on Hand</td><td><code>/ledgers/stock-on-hand</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>accounts, warehouse, ho_ops, owner</td></tr><tr><td>Payments</td><td><code>/finance/payments</code></td><td><span class='badge b-med'>new-route</span></td><td class='small'>accounts, owner</td></tr><tr><td>Tally Bridge</td><td><code>/edges/tally</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>accounts, it_admin</td></tr></tbody></table><h4 style="margin-top:18px">Controls &amp; Governance</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">owner, accounts, ho_ops — cross-cutting exception handling, approvals, audit, matching Rule &#x27;flag-don&#x27;t-block&#x27;</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Exception Inbox</td><td><code>/controls/exceptions</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner, accounts, ho_ops</td></tr><tr><td>Reconciliations</td><td><code>/controls/recon</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>accounts, owner</td></tr><tr><td>Approvals</td><td><code>/controls/approvals</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner, store_manager</td></tr><tr><td>Audit Trail</td><td><code>/controls/audit</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner, it_admin</td></tr></tbody></table><h4 style="margin-top:18px">Intelligence</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">owner, ho_ops, accounts — the analytics/AI layer, all currently unbuilt</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Dashboards</td><td><code>/intel/dashboards</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner</td></tr><tr><td>Profitability</td><td><code>/intel/profitability</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner, ho_ops</td></tr><tr><td>Dead Stock</td><td><code>/intel/dead-stock</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>ho_ops, owner</td></tr><tr><td>Forecast</td><td><code>/intel/forecast</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>ho_ops</td></tr><tr><td>Report Maker</td><td><code>/intel/reports</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>owner, accounts</td></tr></tbody></table><h4 style="margin-top:18px">Admin &amp; Setup</h4>
+<p class="small" style="margin:2px 0 6px;color:var(--muted)">owner, it_admin only — system configuration, identity, integrations (renamed from &#x27;Edges &amp; Admin&#x27;)</p>
+<table><thead><tr><th>Item</th><th>Route</th><th>Status</th><th>Roles</th></tr></thead><tbody><tr><td>Users &amp; Roles (single canonical entry — retire the /masters/users duplicate)</td><td><code>/admin/users-roles</code></td><td><span class='badge b-ok'>live</span></td><td class='small'>owner, it_admin</td></tr><tr><td>Integrations</td><td><code>/edges/integrations</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>it_admin</td></tr><tr><td>POS Sources</td><td><code>/edges/pos</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>it_admin</td></tr><tr><td>System Config</td><td><code>/edges/config</code></td><td><span class='badge b-low'>stub</span></td><td class='small'>it_admin, owner</td></tr></tbody></table>
+<h3>Rationale</h3>
+<p class="small">The current 8-group nav mixes two incompatible organizing principles: some groups are by business process (Store Ops, Outbound) and one group (&#x27;Documents&#x27;) is by artifact type — a doctype-browse list that cuts across every process and every audience at once. Because backend nav_groups are additive per role (seed_foundation.py grants &#x27;documents&#x27; to store_staff, warehouse, accounts and ho_ops alike), that one group becomes the place where duplicate and dead-stub entries accumulate (Transfers, Stock Receive both appear a second time there; Sales/Returns/Payments are stub-only siblings sitting next to fully-live Bookings/PT-mapper) and where audience leakage happens (a cashier&#x27;s sidebar shows vendor Bookings and PT File Operation, which are HO/warehouse tasks). The fix is to delete &#x27;Documents&#x27; as a navigational group entirely — every one of its live children already has, or can move to, a home in a process-scoped group — and to reorganize the remaining seven groups by operational scope + audience (Store Floor / Merchandising &amp; Inventory Control / Finance &amp; Books / Controls &amp; Governance / Intelligence / Admin &amp; Setup), collapsing the Users&amp;Roles vs Users&amp;RBAC duplicate into one canonical admin route, folding &#x27;Outbound&#x27; jargon into the inventory-control audience group where store staff don&#x27;t need most of its items, and requiring every stub to carry a visible &#x27;coming soon&#x27; treatment in the sidebar itself (not just after navigating) so live and unbuilt screens are never visually interchangeable. No new features are invented — every item above already exists as a route/page in the current tree; only its group membership, canonical URL (Users&amp;Roles) and stub/live labelling change.</p>
+<h3>ERPNext precedent</h3>
+<p class="small">ERPNext groups screens by business process, not by artifact type or &quot;kind of screen&quot;: Stock module owns Purchase Receipt/Delivery Note/Stock Entry even though they are money-adjacent (13-doctype-catalog.html; confirmed via erpnext/stock/workspace/), Buying owns Purchase Order, Selling owns Sales Order, Accounts owns Sales Invoice/Payment Entry/Journal Entry — &quot;module = business-process grouping&quot; and there is no cross-cutting &quot;Documents&quot; module that lists every voucher type together. KDPS&#x27;s current &#x27;Documents&#x27; group is the anti-pattern ERPNext explicitly avoids. ERPNext also keeps settings/config (&quot;data not code&quot; tier — Item Tax Template, Pricing Rule, POS Profile) visually separate from transactional screens within a module, which motivates keeping stub/config items visually distinguished from live transactional ones rather than interleaved with no marker, and Role Profiles bundle roles into job-function sets (Inventory/Accounts/Sales/Purchase) that deliberately overlap only where the job genuinely needs it (Sales profile includes Stock User) — the KDPS &#x27;documents&#x27; nav_group instead over-shares by defaulting nearly every role into the same doctype-browse bucket regardless of job function.</p>
+</section>
+
+<section id="fixorder">
+<h2 class="sec">Recommended fix order</h2>
+
+<ol class="fix">
+<li><strong>Server-side outbound costing (P0 #2).</strong> Derive <code>unit_cost_paise</code> from the frozen cohort cost on the server for all 5 outbound types; make it read-only to clients; reject lines whose cost cannot be resolved. Re-point the tests at server-derived costs (they currently mask the hole by hard-coding).</li>
+<li><strong>Payable incl-GST + Input GST leg (P0 #1).</strong> Cr VENDOR_PAYABLE at invoice total incl. GST, Dr INPUT_GST for the tax — per the catalog's "stock carries cost ex-GST; the payable carries incl. GST." Sequence with the CA (Q4/Q5) since ITC treatment for SOR is CA-gated; correct the already-posted alpha rows by compensating vouchers, never edits.</li>
+<li><strong>Kill the BASIC fallback (P1 #5).</strong> Missing P RATE → blocking error at the PT-mapper send-gate and at posting. One-line change plus a test.</li>
+<li><strong>Brand terms card + seasonal RTV branching (P1 #7 + #4 together).</strong> The 25-18-10 allowance pool needs a home (brand terms) before post_rtv can cap Correction returns, block Outright, and route over-cap to V-flip.</li>
+<li><strong>Ownership as data (P1 #6).</strong> Persist the owned-flag on the stock cohort; replace the <code>brand.startswith("V ")</code> heuristic; gate V-flip on brand-owned (fixes #18) and branch adjustment/write-off postings (fixes #17); make direct receipts resolve the brand's real model instead of defaulting to owned.</li>
+<li><strong>GRN quantity step (P1 #3) + GRN idempotency (P1 #9).</strong> Add the GRN stock-ledger kind (qty at zero value, per the locked two-step) and switch the endpoint to the kernel's <code>idempotent_create</code>.</li>
+<li><strong>Close the read-scope class in one pass (P1 #10–13, P2 #26–27).</strong> One pattern everywhere: <code>scope_by_store</code> on every list/detail queryset (outbound, ptmapper detail + mutations, vendor bookings), store/booking linkage + scoping on StoredFile, and the multi-store line-level check. Add read-path tests — the suite currently tests writes only.</li>
+<li><strong>SKU collision handling (P1 #8), actor logging on masters (P1 #14), SUSPENSE → pending-claim account (#15), period-lock (#20), outbound reversal paths (#21).</strong></li>
+<li><strong>Design decisions, same week:</strong> WriteOff in-or-out, multi-store booking ADR, Booking onto core.Document, GstSlab edit surface (#29).</li>
+<li><strong>Sidebar reorg</strong> — independent of all money work; can ship any time.</li>
+</ol>
+
+</section>
+
+<section id="notverified">
+<h2 class="sec">What was NOT verified (honest limits)</h2>
+
+<ul class="tight">
+<li><strong>No runtime verification.</strong> Every track was static code review; nothing was exercised against a live server. The one dynamic check (test-suite reproduction) came from a top-up agent. The "books tie on Render" numbers rest on Emergent's self-report plus static verification that the arithmetic behind them is real.</li>
+<li><strong>Emergent's two browser visual checks remain undone</strong> (cashier sees no Create buttons; no bookstore-erp-1 request in DevTools). Source-level greps strongly support both, but the built-bundle/network check was not performed.</li>
+<li><strong><code>fix_rtv28</code> idempotency</strong> (run-twice safety) was never tested by anyone — including Emergent.</li>
+<li><strong>Absence-sweep partially done:</strong> the five CA-gated money items are grep-verified as not silently implemented; settlement-claim tracking confirmed absent; EOSS pricing, multi-tier approvals, OCR wiring and the V-flip window alert were not individually swept.</li>
+<li><strong>The one killed-on-scope finding to remember:</strong> a C4 twin of the SUSPENSE finding was refuted purely because outbound "isn't on main" — the surviving C3 version (#15) is the correct record.</li>
+</ul>
+
+</section>
+
+<section id="method">
+<h2 class="sec">Method &amp; rigor</h2>
+
+<p class="small">Process: 4 Sonnet context-distillers (design-of-record rubric · posting/data rubric · ERPNext rubric · claims register) → 14 reviewers (6 Opus on kernel/inbound/outbound/money-path/ERPNext-benchmark/RBAC, 8 Sonnet on vendors/masters/ptmapper/coverage/tests/security/frontend/sidebar) → pipelined adversarial verification (money findings: 2 Opus + 1 Sonnet refuters across code-truth / doc-fidelity / compensating-mechanism lenses, majority kills; others: 2 Sonnet) → Fable completeness critic (found 4 gaps → 4 targeted top-ups, one of which became P0 #2) → Fable severity/dedup judge → lead-reviewer hand-verification of both P0s and sampled P1s (#3, #5, #9, #11) against code and the posting catalog. 139 agents, ~7.2M tokens, 38 raw findings → 34 confirmed + 1 plausible after 3 kills. The test-adequacy reviewer died mid-run; the critic detected the hole and its top-ups covered the reproducibility claim (finding #34), but deep test-quality review remains thinner than the other tracks.</p>
+
+<h3>Findings killed by adversarial verification (3)</h3>
+<div class="tablewrap"><table>
+<thead><tr><th>Track</th><th>Sev</th><th>Claimed finding</th><th>Why it died / note</th></tr></thead>
+<tbody><tr><td>C1-kernel</td><td>P3</td><td>Value GL uses chart-of-accounts vocabulary (SUSPENSE / SOR_STOCK / SOR_CONTRA / GRNI) not present in the ledger-set design corpus; V-flip books settlement to SUSPENSE where the catalog specifies a pending D4 claim</td><td class='small'>uphold: Verified against code and design corpus. core/gl.py:28-35 defines a chart of accounts (INVENTORY, SOR_STOCK, SOR_CONTRA, VENDOR_PAYABLE, GRNI, INPUT_GST, CASH, SUSPENSE) and outbound/posting.py:517 credits SUSPENSE for the V-flip settlement claim. Grepping the ledger-set design docs (adr/0006-posting-engine.md, kernel-data-model.html, posting-catalog.html) returns zero occurrences of any o</td></tr><tr><td>C2-inbound</td><td>P2</td><td>Season canonical-value hard block only refuses blanks (not dates/free-text) and only on the invoice source — the design&#x27;s &quot;a date instead of a season is blocked&quot; ingest guard is not enforced server-side</td><td class='small'>REFUTE: The finding&#x27;s core claim (server accepts any non-blank string including a date as a season, canonicity delegated to the browser) is false. Every server-side write path to row.data[&quot;SEASON&quot;] enforces canonical-or-blank: (1) the engine only emits resolved.season, which season_from_date gates against self.controlled[&#x27;season&#x27;] and season_from_code draws from Lookups; (2) the PATCH editor valid</td></tr><tr><td>C4-moneypath</td><td>P2</td><td>V-flip parks the brand settlement in a SUSPENSE account that does not exist in the design corpus; catalog specifies a pending D4 claim</td><td class='small'>REFUTE: Factual claims verify (code credits GLAccount.SUSPENSE; catalog specifies a D4 pending claim; no SUSPENSE in the corpus), but the finding is refuted on scope. The outbound module is not on main and not part of the live alpha — it is Sprint-1 in-progress work on the emergent branch, and CLAUDE.md lists selling/EOSS/payments-settlement as explicitly unbuilt. The SUSPENSE credit is a self-doc</td></tr></tbody>
+</table></div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

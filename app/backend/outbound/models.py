@@ -1,0 +1,440 @@
+"""Outbound documents — every stock movement *out* of a location.
+
+Each document inherits the kernel's `Document` base (docstatus FSM, gap-free
+numbering, immutability guards). Posting logic lives in `outbound.posting`.
+"""
+
+from __future__ import annotations
+
+from django.db import models
+from django.utils import timezone
+
+from core.base import TimeStampedModel
+from core.documents import Document
+from core.fiscal import financial_year
+from core.money import MoneyField
+
+
+# ---------------------------------------------------------------------------
+# Controlled-vocabulary choices
+# ---------------------------------------------------------------------------
+
+class TransferReason(models.TextChoices):
+    SISTER_STORE_REQUEST = "sister_store_request", "Sister store request"
+    SLOW_MOVER = "slow_mover", "Slow mover"
+    SEASONAL_SWAP = "seasonal_swap", "Seasonal swap"
+    FREE_FLOOR_SPACE = "free_floor_space", "Free floor space"
+    CUSTOMER_WAITING = "customer_waiting", "Customer waiting"
+    OTHER = "other", "Other"
+
+
+class TransportMode(models.TextChoices):
+    PUBLIC_BUS = "public_bus", "Public bus"
+    COURIER = "courier", "Courier"
+    OWN_VEHICLE = "own_vehicle", "Own vehicle"
+    HAND_CARRIED = "hand_carried", "Hand-carried"
+
+
+class AdjustmentReason(models.TextChoices):
+    SHRINKAGE = "shrinkage", "Shrinkage"
+    MISCOUNT = "miscount", "Miscount"
+    DAMAGE = "damage", "Damage"
+    SURPLUS_FOUND = "surplus_found", "Surplus found"
+    OTHER = "other", "Other"
+
+
+class ReceiptStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    COMPLETE = "complete", "Complete"
+    SHORTFALL = "shortfall", "Shortfall"
+
+
+class TransferType(models.TextChoices):
+    STORE_SPLIT = "store_split", "Store split (warehouse → store)"
+    INTER_STORE = "inter_store", "Inter-store transfer"
+
+
+class ReturnType(models.TextChoices):
+    DEFECTIVE = "defective", "Defective / GR return"
+    SEASONAL = "seasonal", "Season-end return"
+
+
+class LogisticsRoute(models.TextChoices):
+    STORE_PICKUP = "store_pickup", "Brand collects from store (Madura)"
+    WAREHOUSE_CONSOLIDATION = "warehouse", "Consolidated at warehouse"
+
+
+# ---------------------------------------------------------------------------
+# 1. Store Transfer (store-split + inter-store, same- & cross-state)
+# ---------------------------------------------------------------------------
+
+class StoreTransfer(Document):
+    """A stock transfer between two locations.
+
+    Store-split (warehouse → store, same GSTIN, no GL) and inter-store
+    (MBO → MBO, optional cross-state flag) share the same document.
+    """
+
+    source_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="transfers_out"
+    )
+    destination_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="transfers_in"
+    )
+    transfer_type = models.CharField(
+        max_length=16, choices=TransferType.choices, default=TransferType.INTER_STORE
+    )
+    is_cross_state = models.BooleanField(
+        default=False,
+        help_text="Auto-set: True when source & destination GSTINs differ.",
+    )
+    reason = models.CharField(max_length=24, choices=TransferReason.choices, blank=True, default="")
+
+    # Transport tracking (first-class per user requirement)
+    transport_mode = models.CharField(
+        max_length=16, choices=TransportMode.choices, blank=True, default=""
+    )
+    transport_ref = models.CharField(
+        max_length=120, blank=True, default="",
+        help_text="Bus number / courier AWB / vehicle plate",
+    )
+    dispatcher_name = models.CharField(max_length=120, blank=True, default="")
+    expected_arrival_note = models.CharField(max_length=240, blank=True, default="")
+    eway_bill_number = models.CharField(
+        max_length=60, blank=True, default="",
+        help_text="Mandatory for cross-state (Bihar ↔ Jharkhand).",
+    )
+
+    # Dispatch & receipt tracking
+    dispatched_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="transfers_dispatched",
+    )
+    dispatch_date = models.DateTimeField(null=True, blank=True)
+
+    # Receipt fields are stored on the companion TransferReceipt model
+    # (submitted documents are DB-level immutable per kernel rule)
+
+    created_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="transfers_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_store_transfer"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.source_store.code, "STO"
+
+    def save(self, *args, **kwargs):
+        # Auto-compute cross-state flag from GSTIN state codes
+        if self.source_store_id and self.destination_store_id:
+            src_gstin = self.source_store.gstin_id
+            dst_gstin = self.destination_store.gstin_id
+            self.is_cross_state = src_gstin != dst_gstin
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return self.doc_number or f"Transfer(draft #{self.pk})"
+
+
+class StoreTransferLine(TimeStampedModel):
+    """One line on a store transfer — a (barcode × qty) being moved."""
+
+    transfer = models.ForeignKey(StoreTransfer, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty_dispatched = models.IntegerField()
+    qty_received = models.IntegerField(default=0)
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_store_transfer_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty_dispatched}"
+
+
+class TransferReceipt(TimeStampedModel):
+    """Companion record for transfer receipt (submitted transfers are immutable).
+
+    Created when goods are received at the destination. One receipt per transfer.
+    """
+
+    transfer = models.OneToOneField(
+        StoreTransfer, on_delete=models.CASCADE, related_name="receipt"
+    )
+    received_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="transfers_received",
+    )
+    receipt_date = models.DateTimeField(auto_now_add=True)
+    receipt_status = models.CharField(
+        max_length=12, choices=ReceiptStatus.choices, default=ReceiptStatus.COMPLETE
+    )
+    shortfall_notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "outbound_transfer_receipt"
+        ordering = ["-receipt_date"]
+
+    def __str__(self) -> str:
+        return f"Receipt for {self.transfer}"
+
+
+# ---------------------------------------------------------------------------
+# 2. Return to Vendor (defective + seasonal)
+# ---------------------------------------------------------------------------
+
+class ReturnToVendor(Document):
+    """RTV — stock going back to the brand (defective or seasonal return)."""
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="rtvs"
+    )
+    vendor = models.ForeignKey(
+        "vendors.Vendor", on_delete=models.PROTECT, related_name="rtvs"
+    )
+    brand = models.ForeignKey(
+        "masters.Brand", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="rtvs",
+    )
+    return_type = models.CharField(max_length=12, choices=ReturnType.choices)
+    logistics_route = models.CharField(
+        max_length=16, choices=LogisticsRoute.choices, blank=True, default=""
+    )
+    season = models.CharField(max_length=120, blank=True, default="")
+    return_window_date = models.DateField(
+        null=True, blank=True,
+        help_text="Deadline for seasonal return (alerts at 30/15/7 days).",
+    )
+
+    # Credit note tracking (full recon in Sprint 5)
+    credit_note_received = models.BooleanField(default=False)
+    credit_note_date = models.DateField(null=True, blank=True)
+
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="rtvs_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_return_to_vendor"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "RTV"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"RTV(draft #{self.pk})"
+
+
+class ReturnToVendorLine(TimeStampedModel):
+    """One line on an RTV document."""
+
+    rtv = models.ForeignKey(ReturnToVendor, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_return_to_vendor_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# 3. Stock Adjustment (stocktake variance)
+# ---------------------------------------------------------------------------
+
+class StockAdjustment(Document):
+    """Corrects the ledger to match a physical count."""
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="adjustments"
+    )
+    reason = models.CharField(max_length=16, choices=AdjustmentReason.choices)
+    approved_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="adjustments_approved",
+        help_text="Required for variances above tolerance.",
+    )
+    notes = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="adjustments_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_stock_adjustment"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "ADJ"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"Adjustment(draft #{self.pk})"
+
+
+class StockAdjustmentLine(TimeStampedModel):
+    """One SKU line on a stock adjustment."""
+
+    adjustment = models.ForeignKey(
+        StockAdjustment, on_delete=models.CASCADE, related_name="lines"
+    )
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    book_qty = models.IntegerField()
+    counted_qty = models.IntegerField()
+    adj_qty = models.IntegerField(help_text="counted − book; + surplus, − shrinkage")
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_stock_adjustment_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} book={self.book_qty} counted={self.counted_qty}"
+
+
+# ---------------------------------------------------------------------------
+# 4. Write-off (dead stock exit)
+# ---------------------------------------------------------------------------
+
+class WriteOff(Document):
+    """Owner-approved stock exit from the books (dead stock, refused defectives)."""
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="writeoffs"
+    )
+    reason = models.TextField(blank=True, default="")
+    approved_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="writeoffs_approved",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="writeoffs_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_write_off"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "WRO"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"WriteOff(draft #{self.pk})"
+
+
+class WriteOffLine(TimeStampedModel):
+    """One SKU line on a write-off."""
+
+    writeoff = models.ForeignKey(WriteOff, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_write_off_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# 5. V-flip (brand-owned → KDPS-owned, partial — no settlement claim)
+# ---------------------------------------------------------------------------
+
+class VFlip(Document):
+    """Ownership flip: brand-owned SOR/Consignment stock → KDPS-owned.
+
+    Physical stock stays on shelf. Brand display prefixed with "V ".
+    Settlement claim tracking is Sprint 8 (Payments).
+    """
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="vflips"
+    )
+    original_brand = models.ForeignKey(
+        "masters.Brand", on_delete=models.PROTECT, related_name="vflips",
+    )
+    season = models.CharField(max_length=120, blank=True, default="")
+    authorized_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="vflips_authorized",
+        help_text="Owner or Finance role required.",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="vflips_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_vflip"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, 'date') else dt), self.store.code, "VFL"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"VFlip(draft #{self.pk})"
+
+
+class VFlipLine(TimeStampedModel):
+    """One SKU line on a V-flip."""
+
+    vflip = models.ForeignKey(VFlip, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_vflip_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"

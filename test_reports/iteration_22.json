@@ -1,0 +1,74 @@
+{
+  "summary": "Iteration 22 - Bug Fix Verification Complete. All tests pass for: (1) Owned-RTV vendor subledger reconciliation fix, (2) SOR RTV correctly has no GL/vendor subledger, (3) Cashier login credentials fix (deo.cashier/Store@123). Frontend OUTBOUND navigation and cross-state transfer warning UI verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration22_bugfixes.py",
+    "/app/test_reports/pytest/iteration_22.xml",
+    "/app/app/backend/tests/test_outbound_sprint1.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "post_rtv() in outbound/posting.py correctly calls post_vendor_bill(gl=False) for owned-brand RTVs",
+    "VendorLedgerEntry is created with negative amount to reduce payable",
+    "SOR RTVs correctly skip both GL and vendor subledger entries",
+    "Finledger health endpoint correctly reports reconciliation.vendor.drift_paise=0"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration22_bugfixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 iteration22 tests + 20/20 outbound_sprint1 tests)",
+    "frontend": "100% (sidebar nav, transfers page, cross-state warning UI)"
+  },
+  "test_credentials": {
+    "admin": "admin / Admin@123",
+    "owner": "owner / Owner@123",
+    "cashier": "deo.cashier / Store@123 (BUG FIX 2 verified)"
+  },
+  "seed_data_creation": "Created 2 RTV test records during testing (1 owned-brand PE, 1 SOR LP)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bug fixes verified: (1) Owned-RTV now writes VendorLedgerEntry via post_vendor_bill(gl=False), keeping vendor subledger in sync with GL VENDOR_PAYABLE. (2) SOR RTVs correctly have no GL or vendor subledger entries. (3) Cashier credentials fixed to deo.cashier/Store@123. Finledger health shows balanced=true, reconciliation.reconciled=true, vendor.drift_paise=0, cash.drift_paise=0. All 20 outbound_sprint1 unit tests pass including 2 new regression tests.",
+  "features_tested": {
+    "bug_fix_1_owned_rtv_vendor_subledger": {
+      "status": "PASS",
+      "details": "POST owned-brand RTV (Peter England), submit, verify finledger health shows reconciled=true, vendor.drift_paise=0"
+    },
+    "bug_fix_1b_sor_rtv_no_gl": {
+      "status": "PASS",
+      "details": "POST SOR RTV (Louis Philippe), submit, verify no GL entries created, finledger health still reconciled"
+    },
+    "bug_fix_2_cashier_login": {
+      "status": "PASS",
+      "details": "POST /api/auth/login with deo.cashier/Store@123 returns 200 with access token"
+    },
+    "cashier_store_scope": {
+      "status": "PASS",
+      "details": "Cashier can GET /api/outbound/transfers (store-scoped), cannot POST to different store"
+    },
+    "finledger_health_baseline": {
+      "status": "PASS",
+      "details": "balanced=true, trial_balance_paise=0, reconciliation.reconciled=true, vendor.drift=0, cash.drift=0"
+    },
+    "stock_on_hand": {
+      "status": "PASS",
+      "details": "Non-zero balances at DEO (Peter England + Louis Philippe) and BANKA (Blackberrys)"
+    },
+    "sidebar_nav_outbound": {
+      "status": "PASS",
+      "details": "OUTBOUND group visible with 5 items: Transfers, Return to Vendor, Adjustments, Write-offs, V-Flip"
+    },
+    "cross_state_transfer_ui": {
+      "status": "PASS",
+      "details": "DEO→BANKA shows cross-state warning mentioning e-way bill requirement, e-way bill input field visible"
+    }
+  }
+}
