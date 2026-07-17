@@ -15,6 +15,36 @@ process is `docs/my-understanding/system-design/build-operating-manual.html`.
 - Node 22, Python 3.12, [uv](https://docs.astral.sh/uv/), and **either** Docker
   **or** a local PostgreSQL 16.
 
+## 0 · Just run it
+
+```bash
+npm run dev       # Postgres + Django API (:8001) + React PWA (:3000). Ctrl-C stops it.
+```
+
+One command, from a cold checkout: starts the Docker Postgres, installs
+dependencies, migrates, seeds demo data, and runs both servers. Idempotent —
+re-run it any time. Open **http://localhost:3000** and sign in with a login from
+`memory/test_credentials.md` (e.g. `owner` / `Owner@123`).
+
+```bash
+npm run dev:setup   # provision DB + deps + seed, start no servers
+npm run dev:reset   # destroy the local database and rebuild from scratch (~11s)
+./scripts/dev.sh --api    # API only          --web   PWA only
+```
+
+**No secrets needed.** `scripts/dev.sh` generates `app/backend/.env` on first run.
+Nothing from Render is required, and Render's values would actively break local dev
+(remote DB, `.onrender.com` hosts, `JWT_COOKIE_SECURE=1` — which silently drops the
+login cookie over plain http). The one real secret, `EMERGENT_LLM_KEY` (the Gemini
+invoice reader), is inert here: `aiagents` is not in `INSTALLED_APPS`.
+
+**Local database only.** The script refuses a non-localhost `DATABASE_URL`. It runs
+`migrate`, seeds, and its sibling gate creates and *drops* databases — none of which
+should ever be one typo away from the alpha's books. Use the Render dashboard for
+that (`DEPLOY.md`).
+
+Sections 1–3 below are the manual equivalent, and what the gate needs.
+
 ## 1 · Install dependencies
 
 ```bash

@@ -6,6 +6,9 @@
   "scripts": {
     "sandcastle": "tsx .sandcastle/main.mts",
     "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile",
+    "dev": "./scripts/dev.sh",
+    "dev:setup": "./scripts/dev.sh --setup-only",
+    "dev:reset": "./scripts/dev.sh --reset",
     "setup": "cd app/backend && uv sync && cd ../.. && npm --prefix app/frontend install",
     "ci": "npm run ci:backend && npm run ci:frontend",
     "ci:backend": "cd app/backend && uv run ruff format --check . && uv run ruff check . && uv run mypy core config && uv run python manage.py makemigrations --check --dry-run && uv run lint-imports && uv run pytest",
