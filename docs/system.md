@@ -223,11 +223,18 @@ Stock is held per **barcode + season + location**. What a location can sell = it
 ### Stock transfer (distribution)
 
 - Stock that arrives at a store **belongs to that store** — and the option to distribute onward (store → store) is always open.
-- **Warehouse → store is the main distribution.** A section predicts the store split for the stock (suggested by the system, adjusted manually — same as the inbound store split); the stock then moves to its assigned stores.
-- **Every transfer generates a PT file in the KDPS format.** The PT is the source of truth that the receiving location owns those stocks. No stock moves anywhere without its PT.
-- **Received = scanned.** When the physical goods arrive, every item is scanned and counted at the receiving place. Scanning at the warehouse (before dispatch) is an option too. A gap between sent and received is flagged on the open transfer.
+- **Two-part document.** Every transfer is a **transfer receipt** (the overview: from, to, transport, date, total pieces, status) plus its **PT file** (the item-level detail in the KDPS format). One transfer = one transfer receipt = one PT. The PT is never typed — it is generated from what was scanned, so the two can never disagree. The PT is the source of truth that the receiving location owns those stocks. No stock moves anywhere without its PT.
+- **Every item is scanned at every business unit — going out and coming in.** Dispatch = scan each piece against the plan; the PT is what was actually scanned out. Store → store = scan what you're sending, that becomes the PT. Receive = scan everything in. No unscanned mode in this version.
+- **In transit is a real bucket.** At dispatch the stock moves from the warehouse to *in transit under this transfer*; at receive it moves from in-transit to the store. Stock reports show three honest numbers — at warehouse, in transit, at store. The sender is answerable until the receiver scans in: the PT is entitlement, the scan is ownership. A transfer sitting in transit too long is flagged.
+- **Warehouse → store is the main distribution — the allocation grid.** Rows = styles (the size × colour breakup opens inside the row), columns = stores, each cell = pieces to send. The system pre-fills the suggested split (store performance + the size mix that sells at each store; last season's split for the brand is the strongest predictor), adjusted by hand. A **buffer** can be held back at the warehouse for fill-ups later. Confirm = one transfer receipt per store, in draft.
+- **Receiving has three exceptions**: **short** (sent 100, scanned 97 — the 3 stay in-transit, flagged on the open transfer), **extra / wrong item** (not silently swallowed — accepted in with a flag), **damaged on arrival** (scanned straight into quarantine, never to the shelf). Gaps close only at HO/warehouse, from a "transfers with gaps" list, by a senior with a reason — found later / lost in transit / wrongly scanned. The store cannot close its own gap.
+- **Stock request (pull).** A store can ask for stock — from the warehouse or from another store (a customer wants a size the store doesn't have, a fast-seller running out). Raise the request → it goes for approval at the standard levels of the hierarchy → the sender fulfils it; the request pre-fills the transfer, then the normal scan-dispatch → scan-receive flow runs. A request can be partly fulfilled or declined with a reason; the store sees the status honestly.
 - **Bihar ↔ Jharkhand:** the system just transfers the stock between the two states. The GST invoice + e-way bill are needed but are made **manually, outside the system** (already decided — see consolidation).
 - Stock transfer is available at **every user level** — anyone moving goods can raise it.
+
+### Damage
+
+**Damage is a global action, not a receive-time event.** Anywhere stock is visible — receiving, on the shelf, during counting, at billing — "mark damaged" moves the piece to quarantine there and then. Quarantine is a filter inside inventory (like the ownership filter), not a module of its own.
 
 ### Customer side (POS)
 
@@ -238,12 +245,34 @@ The POS is the main outbound — it sells to the customer and takes the customer
 ### Goods return to the brand
 
 - **Who returns:** SOR and Consignment (brand-owned — uncapped) and Correction (KDPS-owned, but with an allowed return amount — a **configurable percentage**, negotiated with the brand, brand by brand). Outright never returns.
-- **Return window to the brand** — configurable; the brand shares it, the warehouse team updates it in the system.
-- **Defective pieces** — found at the store, the piece goes **not-sellable (quarantine)** and returns by one of three routes: the brand collects from the store / KDPS sends it from the store to the brand / it travels store → warehouse and is returned from there.
+- **The return is never typed — it's built from the returnable pool.** Pick the brand → the screen shows everything returnable for it: the quarantine pieces (defective) plus, for SOR/Consignment/Correction, the season-end stock still inside the window. **Outright stock is invisible here** — it never appears in the pool, so the mistake can't start.
+- **Return window to the brand** — configurable; the brand shares it, the warehouse team updates it in the system. The countdown is on the screen ("window closes in 12 days"), with **30/15/7-day alerts** pushing it to the warehouse team before it's too late, not after.
+- **Correction cap live on screen** — allowed amount (the negotiated %) vs what this return uses; it warns as you approach the cap and flags when you cross it.
+- **Building the return = scanning**, same loop as everywhere else: scan the pieces going into the carton; anything not in the returnable pool beeps as wrong.
+- **Defective pieces** — found anywhere, the piece goes **not-sellable (quarantine)** and returns by one of three routes: the brand collects from the store / KDPS sends it from the store to the brand / it travels store → warehouse and is returned from there. The via-warehouse leg is just a normal store → warehouse transfer first.
+- **Credit note** — a status on the return (received yes/no + date). The money side lands in the payments discussion.
 
 ### Stock counting
 
-Counting is done by scanning — the items are scanned and the count is made that way. The book is corrected to the physical reality through a logged adjustment.
+- **A count is a session**: pick the location and the scope — whole store, one brand, or one section. Small scopes counted often beat one giant yearly count.
+- **Counting is blind.** The counter scans; the screen shows only what they've scanned — never the book number (a counter who can see "book says 12" stops counting at 12). The book appears only after submit.
+- **Several counters in parallel** — each takes a section as their own session; the sessions merge into one variance report.
+- **After submit — the variance report**: book vs counted, pieces and value, per line. Within a configurable tolerance → auto-adjust, logged, done. Above tolerance → **recount by a second person** (not the original counter) → the adjustment posts with a **reason** (theft / miscount / damage / found) and a **named approver**. Approval is value-banded: up to a configurable value the in-charge approves; above it, HO.
+- **Sales don't stop.** If a piece moves between scan and submit, the system detects it and asks before applying that line — never a blind overwrite.
+
+### Maker-checker & the approvals inbox
+
+- **No document is approved by the person who made it.** Write-offs, above-tolerance adjustments, V-flips, gap closures, stock requests, return-window overrides — every one needs a second, different person at the right level.
+- **One approvals inbox for the whole system** — a single "waiting for you" list with approve/reject, a reason required on reject. The senior person opens one screen each morning and clears it.
+- Every document shows its truth plainly: made by X, approved by Y, on date Z — forever.
+
+### The screens
+
+- **Warehouse side:** Distribution (the allocation grid) · Dispatch (scan-out against the plan, PT print) · Gaps (transfers with sent ≠ received) · Return to brand (the returnable pool).
+- **Store side:** Incoming (transfers on the way → scan-in) · Send stock (store → store / store → warehouse, scan-to-build) · Stock request · Count.
+- **Everywhere:** the Approvals inbox, and "mark damaged" as an action on any stock view. Quarantine and ownership (KDPS / per brand) are filters inside inventory; V-flip stays a small admin action there.
+- **Each role lands on its own work** — store users open to Incoming / Count / Requests; warehouse users open to Distribution / Dispatch / Gaps / Returns. Not a generic menu.
+- **The scan screens are phone-first**: full-screen scan target, big numbers, beep feedback (a different beep for a wrong item), one confirm button. Scanning 300 pieces should feel like rhythm, not form-filling.
 
 *Deferred to later discussions: sale / exchange / discount mechanics (POS), the money on returns and settlements (payments).*
 
