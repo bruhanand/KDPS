@@ -212,6 +212,41 @@ Goods are sellable off the GRN, but only through **manual billing, and only wher
 - Ordered-vs-received differences are a **soft flag — the flow never stops**. The discrepancy is logged with a structured outcome (credit note expected / brand acknowledged / write-off) and **stays open until explicitly closed** by the account manager.
 - At arrival the goods are just counted. Damage is caught later, at selling; if damage is spotted at arrival, the piece enters stock **quarantined — not sellable** — and routes to the defective-return flow.
 
+## OUTBOUND:
+
+Everything that happens after stock is sellable at a location: selling at the POS, customer returns, stock transfer, goods return to the brand, stock counting.
+
+Stock is held per **barcode + season + location**. What a location can sell = its physical stock minus whatever an open document is holding (a transfer on the road, a defective piece, a pending return). A piece's state is always derived from the document holding it — never set by hand.
+
+**Ownership tag.** Every stock carries who owns it — **KDPS or the brand**. In the UI this is a filter view inside inventory (stock owned by KDPS / stock owned per brand), not a separate module. **V-flip** = when sales are over-shown to the brand to reach a target, those pieces flip from brand-owned to KDPS-owned. That's all it is — an ownership flip inside inventory management.
+
+### Stock transfer (distribution)
+
+- Stock that arrives at a store **belongs to that store** — and the option to distribute onward (store → store) is always open.
+- **Warehouse → store is the main distribution.** A section predicts the store split for the stock (suggested by the system, adjusted manually — same as the inbound store split); the stock then moves to its assigned stores.
+- **Every transfer generates a PT file in the KDPS format.** The PT is the source of truth that the receiving location owns those stocks. No stock moves anywhere without its PT.
+- **Received = scanned.** When the physical goods arrive, every item is scanned and counted at the receiving place. Scanning at the warehouse (before dispatch) is an option too. A gap between sent and received is flagged on the open transfer.
+- **Bihar ↔ Jharkhand:** the system just transfers the stock between the two states. The GST invoice + e-way bill are needed but are made **manually, outside the system** (already decided — see consolidation).
+- Stock transfer is available at **every user level** — anyone moving goods can raise it.
+
+### Customer side (POS)
+
+The POS is the main outbound — it sells to the customer and takes the customer return/exchange. Customer dealings live at the POS. (The POS discussion comes later; only the functionality is fixed here.)
+
+- **Customer return window** — a configurable number of days, opens when the customer buys. The store can override it, but only with permission from a senior KDPS member and a valid reason.
+
+### Goods return to the brand
+
+- **Who returns:** SOR and Consignment (brand-owned — uncapped) and Correction (KDPS-owned, but with an allowed return amount — a **configurable percentage**, negotiated with the brand, brand by brand). Outright never returns.
+- **Return window to the brand** — configurable; the brand shares it, the warehouse team updates it in the system.
+- **Defective pieces** — found at the store, the piece goes **not-sellable (quarantine)** and returns by one of three routes: the brand collects from the store / KDPS sends it from the store to the brand / it travels store → warehouse and is returned from there.
+
+### Stock counting
+
+Counting is done by scanning — the items are scanned and the count is made that way. The book is corrected to the physical reality through a logged adjustment.
+
+*Deferred to later discussions: sale / exchange / discount mechanics (POS), the money on returns and settlements (payments).*
+
 ## Open questions
 
 Booking side:
