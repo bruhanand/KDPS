@@ -1,53 +1,126 @@
-# Context
+# TASK
 
-## Open issues
+Fix issue {{TASK_ID}}: {{ISSUE_TITLE}}
 
-!`gh issue list --state open --label Sandcastle --limit 100 --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
+Pull in the issue using `gh issue view {{TASK_ID}} -R bruhanand/KDPS --comments`.
+Every outbound slice has a parent PRD issue — pull that in too, and read the
+whole thing, not just the section that names your slice.
 
-The list above has already been filtered to issues ready for work and is the sole source of truth for what work exists. Do not run your own unfiltered query to find more issues — if the list is empty, there is nothing to do.
+Only work on the issue specified.
 
-## Recent KDPS build commits (last 10)
+Work on branch {{BRANCH}}. Make commits and run tests.
 
-!`git log --oneline --grep="KDPS:" -10`
+# CONTEXT
 
-# Task
+Here are the last 10 commits:
 
-You are the KDPS build agent — an autonomous coding agent working through issues one at a time.
+<recent-commits>
 
-## Priority order
+!`git log -n 10 --format="%H%n%ad%n%B---" --date=short`
 
-Work on issues in this order:
+</recent-commits>
 
-1. **Bug fixes** — broken behaviour affecting users
-2. **Tracer bullets** — thin end-to-end slices that prove an approach works
-3. **Polish** — improving existing functionality (error messages, UX, docs)
-4. **Refactors** — internal cleanups with no user-visible change
+# READ BEFORE YOU DESIGN ANYTHING
 
-Pick the highest-priority open issue that is not blocked by another open issue.
+This is a money system for a real retailer. Read these first, in this order:
 
-## Workflow
+1. **`CONTEXT.md`** at the repo root — the domain language, the 12 rules, the
+   kernel contracts, and the locked money decisions. This is the build briefing.
+2. **`docs/my-understanding/system-design/adr/`** — the ratified ADRs touching
+   the area you are about to change.
+3. The design folder for the module your slice belongs to, under
+   `docs/my-understanding/system-design/` (outbound work is `03-outbound/`).
 
-1. **Explore** — read the issue carefully. **First read `CONTEXT.md`** (the project glossary + the KDPS domain rules that must never be violated) and any ADRs the issue references. Pull in the parent PRD/spec if referenced. Read the relevant source files and tests before writing any code.
-2. **Plan** — decide what to change and why. Keep the change as small as possible.
-3. **Execute** — use RGR (Red → Green → Repeat → Refactor): write a failing test first, then write the implementation to pass it.
-4. **Verify** — run `npm run ci` (the single gate: tsc + mypy + ruff + import-linter + migration-check + pytest) before committing. Fix any failures before proceeding.
-5. **Commit** — make a single git commit. The message MUST:
-   - Start with `KDPS:` prefix
-   - Include the task completed and any PRD reference
-   - List key decisions made
-   - List files changed
-   - Note any blockers for the next iteration
-6. **Close** — close the issue with `gh issue close <ID> --comment "Completed by Sandcastle"` explaining what was done.
+Two hard rules that override anything you might infer from the code:
 
-## Rules
+- **A design that breaks one of the 12 rules must change the rule consciously
+  first**, on `docs/my-understanding/system-design/00-system-architecture.html`.
+  You are not authorised to do that. If your slice appears to require it, stop,
+  comment on the issue explaining the conflict, and make no further changes.
+- **If your change contradicts a ratified ADR, say so explicitly** in your issue
+  comment and in the commit body. Never override one silently.
 
-- Work on **one issue per iteration**. Do not attempt multiple issues in a single iteration.
-- Do not close an issue until you have committed the fix and verified tests pass.
-- Do not leave commented-out code or TODO comments in committed code.
-- If you are blocked (missing context, failing tests you cannot fix, external dependency), leave a comment on the issue and move on — do not close it.
+Use the vocabulary the glossary defines. If the concept you need has no term
+yet, that usually means you are inventing language the project doesn't use.
 
-# Done
+# EXPLORATION
 
-When all actionable issues are complete (or you are blocked on all remaining ones), or the open-issues block at the top of this prompt is empty, output the completion signal:
+Explore the repo and fill your context window with relevant information that will
+allow you to complete the task.
 
-<promise>COMPLETE</promise>
+Pay extra attention to test files that touch the relevant parts of the code, and
+to `app/backend/core` — the kernel — whose contracts your slice must go through
+rather than around.
+
+# EXECUTION
+
+If applicable, use RGR to complete the task.
+
+1. RED: write one test
+2. GREEN: write the implementation to pass that test
+3. REPEAT until done
+4. REFACTOR the code
+
+Model changes ship with their migration in the same commit. `makemigrations
+--check --dry-run` is part of the gate, so a missing migration fails the build.
+
+# FEEDBACK LOOPS
+
+The acceptance gate is:
+
+```
+npm run ci
+```
+
+That is the whole thing — backend (`ruff format --check`, `ruff check`, `mypy`
+strict on core+config, `makemigrations --check`, `lint-imports`, `pytest`) and
+frontend (`tsc --noEmit`, `vitest run`). Run it before every commit, and again
+before you declare the task complete.
+
+While iterating you can run the halves separately — `npm run ci:backend` and
+`npm run ci:frontend` — but the full gate has to be green at the end.
+
+Notes on this sandbox:
+
+- PostgreSQL is already running and `DATABASE_URL` is set. The kernel's
+  append-only ledgers and docstatus FSM are enforced by database triggers, so
+  never reach for SQLite or an in-memory database to make a test pass.
+- Backend commands go through `uv` from `app/backend` (e.g.
+  `uv run pytest core/tests -q`, `uv run python manage.py migrate`).
+- The frontend uses **yarn**, not npm. Never run `npm install` in `app/frontend`.
+- Nine suites under `app/backend/tests/` are black-box tests against a live API
+  and will report as *skipped* unless a server is running. That is expected and
+  correct — it is not a failure, and it is not something to "fix". If your slice
+  needs them, boot the server yourself:
+  `cd app/backend && uv run uvicorn server:app --host 0.0.0.0 --port 8001 &`
+
+Never weaken an assertion to make a suite green. If a kernel anti-cheat test
+starts failing, your change is wrong, not the test.
+
+# COMMIT
+
+Make a git commit. The commit message must:
+
+1. Use the repo's `scope: subject` form in the imperative — e.g.
+   `outbound: add in-transit stock bucket`. Scopes in use: `core`, `masters`,
+   `inbound`, `outbound`, `ptmapper`, `stockledger`, `finledger`, `frontend`,
+   `agents`, `docs`, `ci`.
+2. Reference the issue and its parent PRD.
+3. State the key decisions made, and any ADR or rule they lean on.
+4. Note blockers or anything left for the next iteration.
+
+Keep it concise. Skip the file list — git already has it.
+
+# THE ISSUE
+
+If the task is not complete, leave a comment on the issue with what was done,
+what is left, and anything a human needs to rule on:
+`gh issue comment {{TASK_ID}} -R bruhanand/KDPS --body "..."`
+
+Do not close the issue - this will be done later.
+
+Once complete, output <promise>COMPLETE</promise>.
+
+# FINAL RULES
+
+ONLY WORK ON A SINGLE TASK.
