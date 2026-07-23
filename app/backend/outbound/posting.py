@@ -33,9 +33,14 @@ class OutboundPostingError(Exception):
 
 
 def _check_stock(store_id: int, sku_code: str, required_qty: int) -> None:
-    """Block if insufficient stock at the source location."""
+    """Block if insufficient stock at the source location.
+
+    Row-locks the on-hand row (``select_for_update``) so two concurrent
+    dispatches of the same pieces serialize instead of both passing the check
+    and overselling — callers run inside ``transaction.atomic``.
+    """
     try:
-        on_hand = StockOnHand.objects.get(store_id=store_id, sku_code=sku_code)
+        on_hand = StockOnHand.objects.select_for_update().get(store_id=store_id, sku_code=sku_code)
         available = on_hand.net_qty
     except StockOnHand.DoesNotExist:
         available = 0
@@ -230,10 +235,17 @@ def post_transfer_dispatch(
 
     Stock move only, no GL (cross-state IGST invoice is manual by decision).
     """
-    from outbound.models import StoreTransferLine
+    from core.documents import DocStatus
+    from outbound.models import StoreTransfer, StoreTransferLine
 
     if not scans or any(q < 1 for q in scans.values()):
         raise OutboundPostingError("Dispatch needs scanned lines (barcode × qty ≥ 1).")
+
+    # Serialize on the transfer row: a concurrent dispatch of the same draft
+    # blocks here, then sees SUBMITTED and fails instead of double-posting.
+    locked = StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
+    if locked.docstatus != DocStatus.DRAFT:
+        raise OutboundPostingError("Transfer already dispatched.")
 
     plan_lines = {line.sku_code: line for line in transfer.lines.all()}
 
@@ -312,10 +324,13 @@ def post_transfer_receipt(
     companion record (submitted docs are immutable).
     """
     from core.documents import DocStatus
-    from outbound.models import ReceiptStatus, TransferReceipt
+    from outbound.models import ReceiptStatus, StoreTransfer, TransferReceipt
 
     if transfer.docstatus != DocStatus.SUBMITTED:
         raise OutboundPostingError("Transfer must be dispatched (submitted) before receipt.")
+    # Serialize on the transfer row: a concurrent receive of the same transfer
+    # blocks here, then the already-received check below sees the first receipt.
+    StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
     if TransferReceipt.objects.filter(transfer=transfer).exists():
         raise OutboundPostingError("Transfer already received.")
     if not scans or any(q < 1 for q in scans.values()):

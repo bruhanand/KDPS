@@ -192,6 +192,9 @@ class ScanLookupView(APIView):
     permission_classes = [IsOutboundReader]
 
     def get(self, request):
+        from masters.scoping import scope_by_store
+        from stockledger.models import StockOnHand
+
         store_id = request.query_params.get("store")
         barcode = (request.query_params.get("barcode") or "").strip()
         if not store_id or not barcode:
@@ -199,10 +202,11 @@ class ScanLookupView(APIView):
                 {"error": "Pass store= and barcode="}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        from stockledger.models import StockOnHand
-
+        # Fail-closed (ADR-0003): a store-scoped user can only probe stock at
+        # their own stores — an out-of-scope store looks identical to no stock.
+        visible = scope_by_store(StockOnHand.objects.all(), request.user, "store_id")
         try:
-            on_hand = StockOnHand.objects.get(store_id=int(store_id), sku_code=barcode)
+            on_hand = visible.get(store_id=int(store_id), sku_code=barcode)
         except (StockOnHand.DoesNotExist, ValueError):
             return Response(
                 {"error": f"No stock for {barcode} at this location"},

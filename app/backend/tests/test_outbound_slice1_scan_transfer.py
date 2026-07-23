@@ -516,3 +516,22 @@ def test_scan_lookup_returns_stock_identity(scan_scaffold):
 
     resp = c.get(f"/api/outbound/scan-lookup?store={s['warehouse'].id}&barcode=NOPE")
     assert resp.status_code == 404
+
+
+@pytest.mark.django_db(transaction=True)
+def test_scan_lookup_is_store_scoped_fail_closed(scan_scaffold):
+    """A store-scoped user cannot probe another store's stock — an
+    out-of-scope store looks identical to no stock (ADR-0003)."""
+    s = scan_scaffold
+    role = Role.objects.create(code="store_manager", name="SM (scan test)")
+    sm = User.objects.create_user(
+        username="scan_sm",
+        password="Test@123",
+        role=role,
+        scope_type=ScopeType.STORE,
+    )
+    sm.stores.add(s["store_a"])  # scoped to store A only — NOT the warehouse
+    c = _client(sm)
+
+    resp = c.get(f"/api/outbound/scan-lookup?store={s['warehouse'].id}&barcode=BC001")
+    assert resp.status_code == 404
