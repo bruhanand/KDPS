@@ -76,6 +76,20 @@ These are properties of the business, independent of any design choice:
 - When details are ambiguous, check `docs/my-understanding/workflow/KDPS-current-workflow.pdf` and meeting minutes rather than inventing.
 - Repo-level commands exist now. `npm run ci` (ruff · mypy strict · migration check · import-linter · pytest · tsc) is the **local acceptance gate**; `.github/workflows/ci.yml` runs pytest (kernel anti-cheat + API regression) on **real Postgres** + the frontend build on push; `docker-compose` gives a local Postgres and pre-commit hooks run ruff/mypy. See `README.md` (run) and `DEPLOY.md` (Render). Caveat: cloud CI runs only a subset (pytest + build), so the deployed alpha currently carries ~54 ruff findings + un-gated mypy strict — green cloud CI ≠ a green `npm run ci`.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five triage states map to existing repo labels, with `ready-for-agent` → **`Sandcastle`**. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+**Single-context**: one root `CONTEXT.md`, ADRs in `docs/my-understanding/system-design/adr/`. See `docs/agents/domain.md`.
+
 ## gstack
 
 Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
