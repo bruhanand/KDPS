@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand
+from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
 
 if TYPE_CHECKING:
     from outbound.models import (
@@ -128,6 +128,27 @@ def _write_stock_entry(
 # post. A scanned-vs-plan gap is flagged, never blocked (Rule 5); a barcode
 # outside the plan (or, at receive, outside the dispatched lines) is rejected.
 
+# line_no bands — one doc number carries all four leg types, so each type gets
+# its own band (dispatch writes OUT+TRANSIT_IN, receive TRANSIT_OUT+IN).
+LINE_NO_TRANSFER_OUT = 0
+LINE_NO_TRANSIT_IN = 500
+LINE_NO_TRANSFER_IN = 1000
+LINE_NO_TRANSIT_OUT = 1500
+
+
+def _validate_scans(scans: dict[str, int], allowed: set[str] | None, context: str) -> None:
+    """Shared scan-payload guard: non-empty, qty ≥ 1, and (when a line set is
+    given) every scanned barcode on it — the wrong-piece beep, server-side."""
+    if not scans or any(q < 1 for q in scans.values()):
+        raise OutboundPostingError(f"{context} needs scanned lines (barcode × qty ≥ 1).")
+    if allowed is not None:
+        unknown = sorted(set(scans) - allowed)
+        if unknown:
+            raise OutboundPostingError(
+                f"Not on this transfer: {', '.join(unknown)}. "
+                "Scanned pieces must match the transfer receipt."
+            )
+
 
 def _write_transit_entry(
     *,
@@ -149,13 +170,7 @@ def _write_transit_entry(
         store=transfer.source_store,
         gstin=transfer.source_store.gstin,
         sku_code=line.sku_code,
-        design=line.design,
-        color=line.color,
-        size=line.size,
-        brand=line.brand,
-        season=line.season,
-        item=line.item,
-        hsn=line.hsn,
+        **merch_dims(line),
         qty=qty,
         amount=amount_paise,
         kind=kind,
@@ -170,13 +185,7 @@ def _write_transit_entry(
             "source_store": transfer.source_store,
             "destination_store": transfer.destination_store,
             "gstin": transfer.source_store.gstin,
-            "design": line.design,
-            "color": line.color,
-            "size": line.size,
-            "brand": line.brand,
-            "season": line.season,
-            "item": line.item,
-            "hsn": line.hsn,
+            **merch_dims(line),
             "qty": 0,
             "value_paise": 0,
         },
@@ -184,6 +193,8 @@ def _write_transit_entry(
     bucket.qty += qty
     bucket.value_paise += amount_paise
     if bucket.qty == 0:
+        # A fully-received transfer leaves no bucket row — matching the rebuild
+        # command, which also emits no row for a zeroed (doc, sku) pair.
         bucket.delete()
     else:
         bucket.save()
@@ -210,16 +221,7 @@ def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     elif on_hand.net_qty > 0:
         unit_cost = int(on_hand.net_value_paise or 0) // on_hand.net_qty
 
-    return {
-        "design": on_hand.design,
-        "color": on_hand.color,
-        "size": on_hand.size,
-        "brand": on_hand.brand,
-        "season": on_hand.season,
-        "item": on_hand.item,
-        "hsn": on_hand.hsn,
-        "unit_cost_paise": unit_cost,
-    }
+    return {**merch_dims(on_hand), "unit_cost_paise": unit_cost}
 
 
 @transaction.atomic
@@ -238,9 +240,6 @@ def post_transfer_dispatch(
     from core.documents import DocStatus
     from outbound.models import StoreTransfer, StoreTransferLine
 
-    if not scans or any(q < 1 for q in scans.values()):
-        raise OutboundPostingError("Dispatch needs scanned lines (barcode × qty ≥ 1).")
-
     # Serialize on the transfer row: a concurrent dispatch of the same draft
     # blocks here, then sees SUBMITTED and fails instead of double-posting.
     locked = StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
@@ -248,14 +247,7 @@ def post_transfer_dispatch(
         raise OutboundPostingError("Transfer already dispatched.")
 
     plan_lines = {line.sku_code: line for line in transfer.lines.all()}
-
-    if plan_lines:
-        unknown = sorted(set(scans) - set(plan_lines))
-        if unknown:
-            raise OutboundPostingError(
-                f"Not on this transfer's plan: {', '.join(unknown)}. "
-                "Scanned pieces must match the transfer receipt."
-            )
+    _validate_scans(scans, set(plan_lines) if plan_lines else None, "Dispatch")
 
     # Validate stock + resolve identity/cost from the source location
     for barcode, qty in scans.items():
@@ -291,7 +283,7 @@ def post_transfer_dispatch(
                 qty=-line.qty_dispatched,
                 kind="transfer_out",
                 doc_number=transfer.doc_number,
-                line_no=i,
+                line_no=LINE_NO_TRANSFER_OUT + i,
                 posted_by=user,
             )
         )
@@ -302,7 +294,7 @@ def post_transfer_dispatch(
                 line=line,
                 qty=line.qty_dispatched,
                 kind="transit_in",
-                line_no=500 + i,
+                line_no=LINE_NO_TRANSIT_IN + i,
                 posted_by=user,
             )
         )
@@ -333,17 +325,10 @@ def post_transfer_receipt(
     StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
     if TransferReceipt.objects.filter(transfer=transfer).exists():
         raise OutboundPostingError("Transfer already received.")
-    if not scans or any(q < 1 for q in scans.values()):
-        raise OutboundPostingError("Receive needs scanned lines (barcode × qty ≥ 1).")
 
     lines = {line.sku_code: line for line in transfer.lines.all() if line.qty_dispatched > 0}
+    _validate_scans(scans, set(lines), "Receive")
 
-    unknown = sorted(set(scans) - set(lines))
-    if unknown:
-        raise OutboundPostingError(
-            f"Not on this transfer: {', '.join(unknown)}. "
-            "Scanned pieces must match the transfer receipt."
-        )
     for barcode, qty in scans.items():
         if qty > lines[barcode].qty_dispatched:
             raise OutboundPostingError(
@@ -371,7 +356,7 @@ def post_transfer_receipt(
                 line=line,
                 qty=-qty_recv,
                 kind="transit_out",
-                line_no=1500 + i,
+                line_no=LINE_NO_TRANSIT_OUT + i,
                 posted_by=user,
             )
         )
@@ -384,7 +369,7 @@ def post_transfer_receipt(
                 qty=qty_recv,
                 kind="transfer_in",
                 doc_number=transfer.doc_number,
-                line_no=1000 + i,
+                line_no=LINE_NO_TRANSFER_IN + i,
                 posted_by=user,
             )
         )

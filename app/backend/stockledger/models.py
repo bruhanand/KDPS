@@ -14,6 +14,16 @@ from django.db import models
 from core.ledger import LedgerEntry
 from core.money import MoneyField
 
+# The 7 merchandising dimensions every stock row carries (Rule 9: every line
+# says exactly what item it is). One bundle — copy it with `merch_dims`, never
+# by hand-listing the fields.
+MERCH_DIM_FIELDS = ("design", "color", "size", "brand", "season", "item", "hsn")
+
+
+def merch_dims(obj: object) -> dict[str, str]:
+    """The merchandising dims of any dim-carrying row/line, as one bundle."""
+    return {f: getattr(obj, f, "") or "" for f in MERCH_DIM_FIELDS}
+
 
 class StockLedgerEntry(LedgerEntry):
     """One signed stock movement (barcode × store), with value in paise (`amount`)."""

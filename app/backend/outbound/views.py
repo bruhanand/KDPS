@@ -193,7 +193,7 @@ class ScanLookupView(APIView):
 
     def get(self, request):
         from masters.scoping import scope_by_store
-        from stockledger.models import StockOnHand
+        from stockledger.models import StockOnHand, merch_dims
 
         store_id = request.query_params.get("store")
         barcode = (request.query_params.get("barcode") or "").strip()
@@ -216,13 +216,7 @@ class ScanLookupView(APIView):
         return Response(
             {
                 "barcode": on_hand.sku_code,
-                "design": on_hand.design,
-                "color": on_hand.color,
-                "size": on_hand.size,
-                "brand": on_hand.brand,
-                "season": on_hand.season,
-                "item": on_hand.item,
-                "hsn": on_hand.hsn,
+                **merch_dims(on_hand),
                 "available_qty": on_hand.net_qty,
             }
         )

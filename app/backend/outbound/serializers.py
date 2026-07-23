@@ -70,7 +70,9 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     def get_dispatch_mismatch(self, obj: StoreTransfer) -> bool:
         """Derived, never stored: a dispatched transfer whose scanned
         quantities differ from its plan (Rule 5 — flagged, not blocked)."""
-        if obj.docstatus == 0:  # draft — nothing scanned yet
+        from core.documents import DocStatus
+
+        if obj.docstatus == DocStatus.DRAFT:  # nothing scanned yet
             return False
         return any(
             line.qty_planned is not None and line.qty_planned != line.qty_dispatched

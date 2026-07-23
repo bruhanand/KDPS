@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
 from masters.scoping import scope_by_store
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand
+from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
 from stockledger.serializers import StockLedgerEntrySerializer
 
 
@@ -95,11 +95,7 @@ class InTransitView(APIView):
                 "source_store_code": o.source_store.code,
                 "destination_store_code": o.destination_store.code,
                 "sku_code": o.sku_code,
-                "design": o.design,
-                "color": o.color,
-                "size": o.size,
-                "brand": o.brand,
-                "season": o.season,
+                **merch_dims(o),
                 "qty": o.qty,
                 "value_paise": o.value_paise,
                 "value_rupees": paise_to_rupees_str(o.value_paise),

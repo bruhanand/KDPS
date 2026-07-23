@@ -18,7 +18,7 @@ from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand
+from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
 
 TRANSIT_KINDS = {StockLedgerEntry.Kind.TRANSIT_IN, StockLedgerEntry.Kind.TRANSIT_OUT}
 
@@ -43,13 +43,7 @@ class Command(BaseCommand):
                     transit_desc[tkey] = {
                         "source_store_id": e.store_id,
                         "gstin_id": e.gstin_id,
-                        "design": e.design,
-                        "color": e.color,
-                        "size": e.size,
-                        "brand": e.brand,
-                        "season": e.season,
-                        "item": e.item,
-                        "hsn": e.hsn,
+                        **merch_dims(e),
                     }
                 continue
 
