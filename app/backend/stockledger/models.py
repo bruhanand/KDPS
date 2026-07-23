@@ -39,6 +39,12 @@ class StockLedgerEntry(LedgerEntry):
         # transfer_in at the destination. Stock is never in no location.
         TRANSIT_IN = "transit_in", "Transit in"
         TRANSIT_OUT = "transit_out", "Transit out"
+        # Quarantine bucket (slice #69): mark-damaged posts damage_out at the
+        # store (free-to-sell drops) + quarantine_in into the quarantine bucket
+        # at the same store. The piece stays owned; it is just not sellable.
+        DAMAGE_OUT = "damage_out", "Damaged out of sellable"
+        QUARANTINE_IN = "quarantine_in", "Quarantine in"
+        QUARANTINE_OUT = "quarantine_out", "Quarantine out"
         RTV_OUT = "rtv_out", "RTV out"
         SEASONAL_RET = "seasonal_ret", "Seasonal return"
         ADJUSTMENT = "adjustment", "Adjustment"
@@ -181,3 +187,52 @@ class InTransitStock(models.Model):
 
     def __str__(self) -> str:
         return f"{self.transfer_doc_number}/{self.sku_code} = {self.qty}"
+
+
+class QuarantineStock(models.Model):
+    """Materialised quarantine position per (store × barcode) — damaged / held
+    stock that is NOT free-to-sell (issue #69). Like ``StockOnHand`` and
+    ``InTransitStock`` it is a fast projection of the append-only ledger
+    (``quarantine_in``/``quarantine_out`` legs), maintained inside each posting
+    transaction and fully rebuildable (`manage.py rebuild_stock_on_hand`). A
+    cache, never the source of truth: the ledger is.
+
+    Quarantine is a *stock state in the ledger*, not a boolean on a stock row —
+    entered from anywhere via the global mark-damaged action, and (a later slice)
+    the source of the returnable pool. ``marked_by`` / ``marked_at`` carry the
+    most-recent mark-damaged actor + time for the inventory quarantine filter
+    (Rule 10 — every action has an actor); the full per-event history lives in
+    the ledger and each MarkDamaged document.
+    """
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="quarantine")
+    gstin = models.ForeignKey(
+        "masters.Gstin",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="quarantine",
+    )
+    sku_code = models.CharField(max_length=64, db_index=True)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField(default=0)
+    value_paise = MoneyField(default=0)
+    marked_by = models.ForeignKey("accounts.User", null=True, blank=True, on_delete=models.SET_NULL)
+    marked_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "stockledger_quarantine"
+        ordering = ["store", "sku_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["store", "sku_code"], name="uq_quarantine_store_sku"),
+        ]
+
+    def __str__(self) -> str:
+        return f"quarantine {self.store_id}/{self.sku_code} = {self.qty}"

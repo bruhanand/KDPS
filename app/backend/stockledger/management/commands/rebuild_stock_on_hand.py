@@ -7,7 +7,11 @@ a backfill, a bulk import, or any doubt about drift. Idempotent.
 
 Transit legs (``transit_in``/``transit_out``) ride on the *source* store but
 are NOT at-location stock — they aggregate into `InTransitStock` keyed by the
-transfer's doc number, never into `StockOnHand`.
+transfer's doc number, never into `StockOnHand`. Quarantine legs
+(``quarantine_in``/``quarantine_out``) ride on their store but likewise are NOT
+free-to-sell — they aggregate into `QuarantineStock` keyed by (store × barcode).
+The matching ``damage_out`` leg IS an at-location leg and reduces `StockOnHand`
+normally.
 """
 
 from __future__ import annotations
@@ -18,9 +22,16 @@ from django.apps import apps
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
+from stockledger.models import (
+    InTransitStock,
+    QuarantineStock,
+    StockLedgerEntry,
+    StockOnHand,
+    merch_dims,
+)
 
 TRANSIT_KINDS = {StockLedgerEntry.Kind.TRANSIT_IN, StockLedgerEntry.Kind.TRANSIT_OUT}
+QUARANTINE_KINDS = {StockLedgerEntry.Kind.QUARANTINE_IN, StockLedgerEntry.Kind.QUARANTINE_OUT}
 
 
 class Command(BaseCommand):
@@ -32,6 +43,8 @@ class Command(BaseCommand):
         desc: dict[tuple[int, str], dict[str, Any]] = {}
         transit_agg: dict[tuple[str, str], list[int]] = {}
         transit_desc: dict[tuple[str, str], dict[str, Any]] = {}
+        quar_agg: dict[tuple[int, str], list[int]] = {}
+        quar_desc: dict[tuple[int, str], dict[str, Any]] = {}
 
         for e in StockLedgerEntry.objects.all().iterator():
             if e.kind in TRANSIT_KINDS:
@@ -45,6 +58,24 @@ class Command(BaseCommand):
                         "gstin_id": e.gstin_id,
                         **merch_dims(e),
                     }
+                continue
+
+            if e.kind in QUARANTINE_KINDS:
+                qkey = (e.store_id, e.sku_code)
+                q = quar_agg.setdefault(qkey, [0, 0])
+                q[0] += e.qty
+                q[1] += int(e.amount or 0)
+                if e.qty > 0:
+                    prev = quar_desc.get(qkey)
+                    # Latest positive quarantine leg wins for who/when.
+                    if prev is None or e.id > prev["id"]:
+                        quar_desc[qkey] = {
+                            "id": e.id,
+                            "gstin_id": e.gstin_id,
+                            "marked_by_id": e.posted_by_id,
+                            "marked_at": e.created_at,
+                            **merch_dims(e),
+                        }
                 continue
 
             key = (e.store_id, e.sku_code)
@@ -129,8 +160,36 @@ class Command(BaseCommand):
                 )
             )
         InTransitStock.objects.bulk_create(transit_rows)
+
+        # Quarantine bucket: keyed by (store × barcode), carrying who/when.
+        QuarantineStock.objects.all().delete()
+        quar_rows = []
+        for (store_id, sku_code), (q, v) in quar_agg.items():
+            if q == 0:
+                continue
+            d = quar_desc.get((store_id, sku_code), {})
+            quar_rows.append(
+                QuarantineStock(
+                    store_id=store_id,
+                    sku_code=sku_code,
+                    gstin_id=d.get("gstin_id"),
+                    design=d.get("design", "") or "",
+                    color=d.get("color", "") or "",
+                    size=d.get("size", "") or "",
+                    brand=d.get("brand", "") or "",
+                    season=d.get("season", "") or "",
+                    item=d.get("item", "") or "",
+                    hsn=d.get("hsn", "") or "",
+                    qty=q,
+                    value_paise=v,
+                    marked_by_id=d.get("marked_by_id"),
+                    marked_at=d.get("marked_at"),
+                )
+            )
+        QuarantineStock.objects.bulk_create(quar_rows)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Rebuilt {len(rows)} StockOnHand + {len(transit_rows)} InTransitStock rows."
+                f"Rebuilt {len(rows)} StockOnHand + {len(transit_rows)} InTransitStock "
+                f"+ {len(quar_rows)} QuarantineStock rows."
             )
         )

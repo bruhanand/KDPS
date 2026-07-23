@@ -14,7 +14,13 @@ from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
 from masters.scoping import scope_by_store
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
+from stockledger.models import (
+    InTransitStock,
+    QuarantineStock,
+    StockLedgerEntry,
+    StockOnHand,
+    merch_dims,
+)
 from stockledger.serializers import StockLedgerEntrySerializer
 
 
@@ -116,6 +122,53 @@ class InTransitView(APIView):
         )
 
 
+class QuarantineView(APIView):
+    """The quarantine filter inside inventory (issue #69) — damaged / held stock
+    that is NOT free-to-sell. Served from the materialised ``QuarantineStock``
+    projection, each row carrying who marked it and when (Rule 10). Scoped by
+    store, filterable by brand (the ownership filter) and store."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        qs = scope_by_store(
+            QuarantineStock.objects.filter(qty__gt=0).select_related("store", "marked_by"),
+            request.user,
+            "store_id",
+        )
+        if store := request.query_params.get("store"):
+            qs = qs.filter(store__code=store)
+        if brand := request.query_params.get("brand"):
+            qs = qs.filter(brand=brand)
+
+        totals = qs.aggregate(units=Sum("qty"), value=Sum("value_paise"))
+        rows = [
+            {
+                "store_code": o.store.code,
+                "store_name": o.store.name,
+                "sku_code": o.sku_code,
+                **merch_dims(o),
+                "qty": o.qty,
+                "value_paise": o.value_paise,
+                "value_rupees": paise_to_rupees_str(o.value_paise),
+                "marked_by": o.marked_by.username if o.marked_by else None,
+                "marked_at": o.marked_at,
+            }
+            for o in qs.order_by("store__code", "brand", "sku_code")
+        ]
+        return Response(
+            {
+                "summary": {
+                    "units_quarantined": totals["units"] or 0,
+                    "value_paise": totals["value"] or 0,
+                    "value_rupees": paise_to_rupees_str(totals["value"] or 0),
+                    "lines": len(rows),
+                },
+                "rows": rows,
+            }
+        )
+
+
 class StockOnHandView(APIView):
     """Net stock on hand (Σqty > 0) grouped by SKU / brand / store, served from the
     **materialised** `StockOnHand` projection (maintained inside each post/reverse,
@@ -166,6 +219,7 @@ class StockOnHandView(APIView):
             page = qs.order_by("brand", "-net_qty")[: self.MAX_LINES]
             rows = [
                 {
+                    "store_id": o.store_id,
                     "store_code": o.store.code,
                     "store_name": o.store.name,
                     "brand": o.brand,
