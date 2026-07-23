@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
   AlertTriangle,
   Boxes,
-  Check,
   PackageCheck,
   Plus,
   Send,
@@ -18,6 +17,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundWrite } from "../lib/outbound-rbac";
+import { ScanScreen, type ScanTarget } from "../components/ScanScreen";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -85,8 +85,10 @@ interface TransferLineT {
   season: string;
   item: string;
   hsn: string;
+  qty_planned: number | null;
   qty_dispatched: number;
   qty_received: number;
+  qty_in_transit: number;
   unit_cost_paise: number;
 }
 
@@ -121,6 +123,7 @@ interface TransferT {
   created_by: number | null;
   created_at: string;
   updated_at: string;
+  dispatch_mismatch: boolean;
   lines: TransferLineT[];
   receipt: ReceiptT | null;
 }
@@ -243,16 +246,11 @@ export function TransferListPage() {
 // Create
 // ---------------------------------------------------------------------------
 
-interface DraftTransferLine {
+interface DraftPlanLine {
   sku_code: string;
-  design: string;
-  size: string;
-  color: string;
-  qty_dispatched: number | string;
+  qty_planned: number | string;
 }
-const emptyLine = (): DraftTransferLine => ({
-  sku_code: "", design: "", size: "", color: "", qty_dispatched: "",
-});
+const emptyLine = (): DraftPlanLine => ({ sku_code: "", qty_planned: "" });
 
 export function TransferNewPage() {
   const navigate = useNavigate();
@@ -271,7 +269,7 @@ export function TransferNewPage() {
   const [dispatcherName, setDispatcherName] = useState("");
   const [expectedArrival, setExpectedArrival] = useState("");
   const [ewayBill, setEwayBill] = useState("");
-  const [lines, setLines] = useState<DraftTransferLine[]>([emptyLine()]);
+  const [lines, setLines] = useState<DraftPlanLine[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -284,7 +282,7 @@ export function TransferNewPage() {
     return src.gstin !== dst.gstin;
   }, [sourceId, destId, stores]);
 
-  function setLine(i: number, key: keyof DraftTransferLine, val: string) {
+  function setLine(i: number, key: keyof DraftPlanLine, val: string) {
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
   }
 
@@ -295,15 +293,12 @@ export function TransferNewPage() {
     if (sourceId === destId) { setError("Source and destination must differ."); return; }
     if (isCrossState && !ewayBill.trim()) { setError("E-way bill number is required for cross-state transfers."); return; }
     const payloadLines = lines
-      .filter((l) => l.sku_code && Number(l.qty_dispatched) > 0)
-      .map((l) => ({
-        sku_code: l.sku_code,
-        design: l.design,
-        size: l.size,
-        color: l.color,
-        qty_dispatched: Number(l.qty_dispatched),
-      }));
-    if (!payloadLines.length) { setError("Add at least one line with a SKU and quantity."); return; }
+      .filter((l) => l.sku_code && Number(l.qty_planned) > 0)
+      .map((l) => ({ sku_code: l.sku_code.trim(), qty_planned: Number(l.qty_planned) }));
+    if (lines.some((l) => l.sku_code && !(Number(l.qty_planned) > 0))) {
+      setError("Every plan line needs a quantity of at least 1.");
+      return;
+    }
     setSaving(true);
     try {
       const { data } = await api.post("/outbound/transfers", {
@@ -421,37 +416,38 @@ export function TransferNewPage() {
       <div className="card section-card">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div>
-            <p className="eyebrow">Step 3 · Items to transfer</p>
-            <h3 className="h3">Transfer lines</h3>
+            <p className="eyebrow">Step 3 · Plan (optional)</p>
+            <h3 className="h3">Planned lines</h3>
           </div>
           <button type="button" className="btn" onClick={() => setLines((l) => [...l, emptyLine()])} data-testid="add-transfer-line">
-            <Plus size={15} /> Add line
+            <Plus size={15} /> Add plan line
           </button>
         </div>
-        <table className="lines-table" data-testid="transfer-lines">
-          <thead>
-            <tr>
-              <th style={{ width: "24%" }}>SKU code</th>
-              <th>Design</th>
-              <th>Size</th>
-              <th>Colour</th>
-              <th className="num">Qty</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i}>
-                <td><input value={l.sku_code} onChange={(e) => setLine(i, "sku_code", e.target.value)} data-testid={`tl-sku-${i}`} /></td>
-                <td><input value={l.design} onChange={(e) => setLine(i, "design", e.target.value)} data-testid={`tl-design-${i}`} /></td>
-                <td><input value={l.size} onChange={(e) => setLine(i, "size", e.target.value)} data-testid={`tl-size-${i}`} /></td>
-                <td><input value={l.color} onChange={(e) => setLine(i, "color", e.target.value)} data-testid={`tl-color-${i}`} /></td>
-                <td><input className="num" value={l.qty_dispatched} onChange={(e) => setLine(i, "qty_dispatched", e.target.value)} data-testid={`tl-qty-${i}`} /></td>
-                <td><button type="button" className="line-del" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))} data-testid={`delete-tl-${i}`}><Trash2 size={15} /></button></td>
+        <p className="lead" style={{ marginBottom: 10 }}>
+          The plan is what dispatch scans <b>against</b> — the scanned pieces are the only
+          quantities that move stock. Leave it empty to build the transfer by scanning the
+          carton at dispatch (store → store).
+        </p>
+        {lines.length > 0 && (
+          <table className="lines-table" data-testid="transfer-lines">
+            <thead>
+              <tr>
+                <th style={{ width: "50%" }}>Barcode / SKU</th>
+                <th className="num">Planned qty</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i}>
+                  <td><input value={l.sku_code} onChange={(e) => setLine(i, "sku_code", e.target.value)} data-testid={`tl-sku-${i}`} /></td>
+                  <td><input className="num" value={l.qty_planned} onChange={(e) => setLine(i, "qty_planned", e.target.value)} data-testid={`tl-qty-${i}`} /></td>
+                  <td><button type="button" className="line-del" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))} data-testid={`delete-tl-${i}`}><Trash2 size={15} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 540 }} data-testid="transfer-create-error">{error}</div>}
@@ -466,65 +462,67 @@ export function TransferNewPage() {
 // Detail
 // ---------------------------------------------------------------------------
 
+function lineLabel(l: TransferLineT): string {
+  return [l.design, l.color, l.size].filter(Boolean).join(" · ") || l.brand || "—";
+}
+
 export function TransferDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: t, loading } = useDoc<TransferT>(`/outbound/transfers/${id}`);
   const writable = canOutboundWrite(user?.role?.code);
-  const [dispatching, setDispatching] = useState(false);
-  const [receiving, setReceiving] = useState(false);
-  const [showReceive, setShowReceive] = useState(false);
-  const [recvQtys, setRecvQtys] = useState<Record<number, string>>({});
-  const [shortfallNotes, setShortfallNotes] = useState("");
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (t?.lines) {
-      const defaults: Record<number, string> = {};
-      for (const l of t.lines) defaults[l.id] = String(l.qty_dispatched);
-      setRecvQtys(defaults);
-    }
-  }, [t]);
+  const [scanMode, setScanMode] = useState<"" | "dispatch" | "receive">("");
+  const [posting, setPosting] = useState(false);
+  const [scanError, setScanError] = useState("");
 
   if (loading || !t) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
   const canDispatch = t.docstatus === 0 && writable;
   const canReceive = t.docstatus === 1 && !t.receipt && writable;
+  const hasPlan = t.lines.some((l) => l.qty_planned != null);
 
-  async function handleDispatch() {
-    setError("");
-    setDispatching(true);
+  // Dispatch scans against the plan (or builds the lines when there is none);
+  // receive scans against what was sent. The scans are the only quantities.
+  const dispatchTargets: ScanTarget[] = t.lines
+    .filter((l) => l.qty_planned != null)
+    .map((l) => ({ barcode: l.sku_code, label: lineLabel(l), expected: l.qty_planned }));
+  const receiveTargets: ScanTarget[] = t.lines
+    .filter((l) => l.qty_dispatched > 0)
+    .map((l) => ({ barcode: l.sku_code, label: lineLabel(l), expected: l.qty_dispatched }));
+
+  async function lookupAtSource(barcode: string): Promise<ScanTarget | null> {
     try {
-      await api.post(`/outbound/transfers/${t!.id}/dispatch`);
-      window.location.reload();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    } finally {
-      setDispatching(false);
+      const { data } = await api.get(
+        `/outbound/scan-lookup?store=${t!.source_store}&barcode=${encodeURIComponent(barcode)}`,
+      );
+      return {
+        barcode: data.barcode,
+        label: [data.design, data.color, data.size].filter(Boolean).join(" · ") || data.brand,
+        expected: null,
+        available: data.available_qty,
+      };
+    } catch {
+      return null;
     }
   }
 
-  async function handleReceive() {
-    setError("");
-    setReceiving(true);
-    const received_quantities: Record<string, number> = {};
-    for (const [lineId, qty] of Object.entries(recvQtys)) {
-      received_quantities[lineId] = Number(qty) || 0;
-    }
+  async function postScans(action: "dispatch" | "receive", scans: Record<string, number>) {
+    setScanError("");
+    setPosting(true);
     try {
-      await api.post(`/outbound/transfers/${t!.id}/receive`, {
-        received_quantities,
+      await api.post(`/outbound/transfers/${t!.id}/${action}`, {
+        scans: Object.entries(scans).map(([barcode, qty]) => ({ barcode, qty })),
       });
       window.location.reload();
     } catch (e) {
-      setError(apiErrorMessage(e));
-    } finally {
-      setReceiving(false);
+      setScanError(apiErrorMessage(e));
+      setPosting(false);
     }
   }
 
   const totalDispatched = t.lines.reduce((s, l) => s + l.qty_dispatched, 0);
   const totalReceived = t.lines.reduce((s, l) => s + l.qty_received, 0);
+  const totalInTransit = t.docstatus === 1 ? totalDispatched - totalReceived : 0;
 
   return (
     <div className="page-pad">
@@ -544,28 +542,59 @@ export function TransferDetailPage() {
         <DocPill ds={t.docstatus} />
         {t.is_cross_state && <span className="chip chip-amber">Cross-state</span>}
         <span className="chip chip-navy">{TRANSFER_TYPE_LABEL[t.transfer_type] ?? t.transfer_type}</span>
+        {t.docstatus === 1 && t.dispatch_mismatch && (
+          <span className="chip chip-amber" data-testid="dispatch-mismatch-chip">Plan mismatch</span>
+        )}
         {canDispatch && (
           <button
             type="button"
             className="btn btn-cta"
-            disabled={dispatching}
-            onClick={handleDispatch}
+            onClick={() => { setScanError(""); setScanMode("dispatch"); }}
             data-testid="dispatch-transfer-btn"
           >
-            <Send size={15} /> {dispatching ? "Dispatching…" : "Dispatch"}
+            <Send size={15} /> Scan &amp; dispatch
           </button>
         )}
         {canReceive && (
           <button
             type="button"
             className="btn btn-cta"
-            onClick={() => setShowReceive(!showReceive)}
+            onClick={() => { setScanError(""); setScanMode("receive"); }}
             data-testid="receive-transfer-toggle"
           >
-            <PackageCheck size={15} /> Receive goods
+            <PackageCheck size={15} /> Scan &amp; receive
           </button>
         )}
       </div>
+
+      {scanMode === "dispatch" && (
+        <ScanScreen
+          mode="DISPATCH"
+          docLabel={t.doc_number || `Draft #${t.id}`}
+          routeLabel={`${t.source_store_code} → ${t.destination_store_code}`}
+          targets={dispatchTargets}
+          lookup={hasPlan ? undefined : lookupAtSource}
+          confirmLabel="Confirm dispatch"
+          busy={posting}
+          error={scanError}
+          onConfirm={(scans) => void postScans("dispatch", scans)}
+          onClose={() => setScanMode("")}
+        />
+      )}
+      {scanMode === "receive" && (
+        <ScanScreen
+          mode="RECEIVE"
+          docLabel={t.doc_number || `Draft #${t.id}`}
+          routeLabel={`${t.source_store_code} → ${t.destination_store_code}`}
+          targets={receiveTargets}
+          strictExpected
+          confirmLabel="Confirm receipt"
+          busy={posting}
+          error={scanError}
+          onConfirm={(scans) => void postScans("receive", scans)}
+          onClose={() => setScanMode("")}
+        />
+      )}
 
       {/* Stats row */}
       <div className="form-row" style={{ marginBottom: 18 }}>
@@ -582,6 +611,11 @@ export function TransferDetailPage() {
         <div className="card section-card">
           <p className="eyebrow">Dispatched / Received</p>
           <h3 className="h3">{totalDispatched} / {totalReceived} pcs</h3>
+          {totalInTransit > 0 && (
+            <p className="lead" style={{ marginTop: 4 }} data-testid="in-transit-count">
+              <b>{totalInTransit} pcs in transit</b>
+            </p>
+          )}
         </div>
         <div className="card section-card">
           <p className="eyebrow">Date</p>
@@ -610,64 +644,7 @@ export function TransferDetailPage() {
         </div>
       )}
 
-      {/* Receive form */}
-      {showReceive && canReceive && (
-        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="transfer-receive-form">
-          <p className="eyebrow">Receive — enter actual quantities</p>
-          <table className="lines-table" style={{ marginTop: 10 }}>
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Design</th>
-                <th>Size</th>
-                <th className="num">Dispatched</th>
-                <th className="num">Received</th>
-              </tr>
-            </thead>
-            <tbody>
-              {t.lines.map((l) => (
-                <tr key={l.id}>
-                  <td><b className="mono">{l.sku_code}</b></td>
-                  <td>{l.design || "—"}</td>
-                  <td>{l.size || "—"}</td>
-                  <td className="num">{l.qty_dispatched}</td>
-                  <td>
-                    <input
-                      className="num"
-                      value={recvQtys[l.id] ?? ""}
-                      onChange={(e) => setRecvQtys((q) => ({ ...q, [l.id]: e.target.value }))}
-                      data-testid={`recv-qty-${l.id}`}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="field" style={{ marginTop: 12, maxWidth: 480 }}>
-            <label>Shortfall notes (optional)</label>
-            <input
-              className="input"
-              value={shortfallNotes}
-              onChange={(e) => setShortfallNotes(e.target.value)}
-              placeholder="Describe any shortfall"
-              data-testid="recv-shortfall-notes"
-            />
-          </div>
-          <button
-            className="btn btn-primary btn-lg"
-            style={{ marginTop: 14 }}
-            disabled={receiving}
-            onClick={handleReceive}
-            data-testid="confirm-receive-btn"
-          >
-            <Check size={16} /> {receiving ? "Receiving…" : "Confirm receipt"}
-          </button>
-        </div>
-      )}
-
-      {error && <div className="login-error" style={{ maxWidth: 540 }} data-testid="transfer-detail-error">{error}</div>}
-
-      {/* Lines table */}
+      {/* Lines table — quantities are scan-derived, never typed */}
       <div className="table-wrap">
         <table className="data" data-testid="transfer-detail-lines">
           <thead>
@@ -677,8 +654,10 @@ export function TransferDetailPage() {
               <th>Size</th>
               <th>Colour</th>
               <th>Brand</th>
+              <th className="num">Planned</th>
               <th className="num">Dispatched</th>
               <th className="num">Received</th>
+              <th className="num">In transit</th>
               <th className="num">Cost</th>
             </tr>
           </thead>
@@ -690,11 +669,31 @@ export function TransferDetailPage() {
                 <td>{l.size || "—"}</td>
                 <td>{l.color || "—"}</td>
                 <td>{l.brand || "—"}</td>
-                <td className="num">{l.qty_dispatched}</td>
+                <td className="num">{l.qty_planned ?? "—"}</td>
+                <td className="num">
+                  {l.qty_dispatched}
+                  {t.docstatus === 1 && l.qty_planned != null && l.qty_planned !== l.qty_dispatched && (
+                    <span className="chip chip-amber" style={{ marginLeft: 6 }}>≠ plan</span>
+                  )}
+                </td>
                 <td className="num">{l.qty_received}</td>
+                <td className="num">
+                  {t.docstatus === 1 && l.qty_in_transit > 0 ? (
+                    <b data-testid={`line-in-transit-${l.id}`}>{l.qty_in_transit}</b>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td className="num">{l.unit_cost_paise ? <Money paise={l.unit_cost_paise} /> : "—"}</td>
               </tr>
             ))}
+            {t.lines.length === 0 && (
+              <tr>
+                <td colSpan={10} style={{ textAlign: "center", opacity: 0.7 }}>
+                  No lines yet — this transfer builds its lines by scanning at dispatch.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

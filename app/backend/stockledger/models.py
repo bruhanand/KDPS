@@ -14,6 +14,16 @@ from django.db import models
 from core.ledger import LedgerEntry
 from core.money import MoneyField
 
+# The 7 merchandising dimensions every stock row carries (Rule 9: every line
+# says exactly what item it is). One bundle — copy it with `merch_dims`, never
+# by hand-listing the fields.
+MERCH_DIM_FIELDS = ("design", "color", "size", "brand", "season", "item", "hsn")
+
+
+def merch_dims(obj: object) -> dict[str, str]:
+    """The merchandising dims of any dim-carrying row/line, as one bundle."""
+    return {f: getattr(obj, f, "") or "" for f in MERCH_DIM_FIELDS}
+
 
 class StockLedgerEntry(LedgerEntry):
     """One signed stock movement (barcode × store), with value in paise (`amount`)."""
@@ -24,6 +34,11 @@ class StockLedgerEntry(LedgerEntry):
         # Outbound kinds (Sprint 1)
         TRANSFER_OUT = "transfer_out", "Transfer out"
         TRANSFER_IN = "transfer_in", "Transfer in"
+        # In-transit bucket legs (slice #68): dispatch = transfer_out at the
+        # source + transit_in under the transfer; receive = transit_out +
+        # transfer_in at the destination. Stock is never in no location.
+        TRANSIT_IN = "transit_in", "Transit in"
+        TRANSIT_OUT = "transit_out", "Transit out"
         RTV_OUT = "rtv_out", "RTV out"
         SEASONAL_RET = "seasonal_ret", "Seasonal return"
         ADJUSTMENT = "adjustment", "Adjustment"
@@ -114,3 +129,55 @@ class StockOnHand(models.Model):
 
     def __str__(self) -> str:
         return f"{self.store_id}/{self.sku_code} = {self.net_qty}"
+
+
+class InTransitStock(models.Model):
+    """Materialised in-transit position per (transfer × barcode) — the third
+    honest stock number (at-warehouse / in-transit / at-store). Like
+    ``StockOnHand`` it is a fast projection of the append-only ledger
+    (``transit_in``/``transit_out`` legs, keyed by the transfer's doc number),
+    maintained inside each posting transaction and fully rebuildable
+    (`manage.py rebuild_stock_on_hand`). A cache, never the source of truth.
+
+    Keyed by ``transfer_doc_number`` (the ledger is self-describing) rather
+    than an FK so the generic ledger app stays ignorant of the outbound module.
+    """
+
+    transfer_doc_number = models.CharField(max_length=128, db_index=True)
+    source_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="in_transit_out"
+    )
+    destination_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="in_transit_in"
+    )
+    gstin = models.ForeignKey(
+        "masters.Gstin",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="in_transit",
+    )
+    sku_code = models.CharField(max_length=64, db_index=True)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField(default=0)
+    value_paise = MoneyField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "stockledger_in_transit"
+        ordering = ["transfer_doc_number", "sku_code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transfer_doc_number", "sku_code"],
+                name="uq_in_transit_doc_sku",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.transfer_doc_number}/{self.sku_code} = {self.qty}"

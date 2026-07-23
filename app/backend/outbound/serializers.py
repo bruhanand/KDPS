@@ -24,6 +24,12 @@ from outbound.models import (
 
 
 class StoreTransferLineSerializer(serializers.ModelSerializer):
+    """Read shape. Quantities are scan-derived: ``qty_planned`` is the plan,
+    ``qty_dispatched``/``qty_received`` are what was scanned, ``qty_in_transit``
+    is derived (dispatched − received), never stored."""
+
+    qty_in_transit = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = StoreTransferLine
         fields = [
@@ -36,11 +42,13 @@ class StoreTransferLineSerializer(serializers.ModelSerializer):
             "season",
             "item",
             "hsn",
+            "qty_planned",
             "qty_dispatched",
             "qty_received",
+            "qty_in_transit",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id", "qty_received"]
+        read_only_fields = ["id", "qty_dispatched", "qty_received", "unit_cost_paise"]
 
 
 class TransferReceiptSerializer(serializers.ModelSerializer):
@@ -57,6 +65,19 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     source_store_name = serializers.CharField(source="source_store.name", read_only=True)
     destination_store_code = serializers.CharField(source="destination_store.code", read_only=True)
     destination_store_name = serializers.CharField(source="destination_store.name", read_only=True)
+    dispatch_mismatch = serializers.SerializerMethodField()
+
+    def get_dispatch_mismatch(self, obj: StoreTransfer) -> bool:
+        """Derived, never stored: a dispatched transfer whose scanned
+        quantities differ from its plan (Rule 5 — flagged, not blocked)."""
+        from core.documents import DocStatus
+
+        if obj.docstatus == DocStatus.DRAFT:  # nothing scanned yet
+            return False
+        return any(
+            line.qty_planned is not None and line.qty_planned != line.qty_dispatched
+            for line in obj.lines.all()
+        )
 
     class Meta:
         model = StoreTransfer
@@ -83,13 +104,29 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
             "updated_at",
+            "dispatch_mismatch",
             "lines",
             "receipt",
         ]
 
 
+class StoreTransferPlanLineSerializer(serializers.ModelSerializer):
+    """Write shape for a draft's *plan* line. Only the plan quantity is
+    accepted — dispatched/received quantities come from scanning, never typing
+    (#68). Dims and cost are enriched from the source stock at dispatch."""
+
+    qty_planned = serializers.IntegerField(min_value=1)
+
+    class Meta:
+        model = StoreTransferLine
+        fields = ["sku_code", "qty_planned"]
+
+
 class StoreTransferWriteSerializer(serializers.ModelSerializer):
-    lines = StoreTransferLineSerializer(many=True)
+    """Creates a draft transfer. ``lines`` (the plan) is optional — a
+    store→store transfer builds its lines by scanning at dispatch."""
+
+    lines = StoreTransferPlanLineSerializer(many=True, required=False)
 
     class Meta:
         model = StoreTransfer
@@ -111,12 +148,10 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         dst = data.get("destination_store")
         if src and dst and src == dst:
             raise serializers.ValidationError("Source and destination must differ.")
-        if not data.get("lines"):
-            raise serializers.ValidationError("At least one line is required.")
         return data
 
     def create(self, validated_data):
-        lines_data = validated_data.pop("lines")
+        lines_data = validated_data.pop("lines", [])
         user = self.context.get("request", None)
         if user:
             user = user.user
@@ -127,14 +162,24 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         return transfer
 
 
-class TransferReceiptInputSerializer(serializers.Serializer):
-    """For the receipt action: maps line_id -> qty_received."""
+class ScanLineSerializer(serializers.Serializer):
+    """One scanned (barcode × count) pair from the scan screen."""
 
-    received_quantities = serializers.DictField(
-        child=serializers.IntegerField(min_value=0),
-        help_text="Mapping of line_id (int) to qty_received (int).",
-        required=False,
-    )
+    barcode = serializers.CharField(max_length=64)
+    qty = serializers.IntegerField(min_value=1)
+
+
+class TransferScanInputSerializer(serializers.Serializer):
+    """For dispatch/receive: the scanned lines are the only quantities."""
+
+    scans = ScanLineSerializer(many=True, allow_empty=False)
+
+    def scans_by_barcode(self) -> dict[str, int]:
+        """Aggregate scans into barcode → total qty (a barcode may repeat)."""
+        totals: dict[str, int] = {}
+        for scan in self.validated_data["scans"]:
+            totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
+        return totals
 
 
 # ---------------------------------------------------------------------------
