@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
-from stockledger.models import StockLedgerEntry, StockOnHand
+from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand
 
 if TYPE_CHECKING:
     from outbound.models import (
@@ -111,24 +111,155 @@ def _write_stock_entry(
 
 
 # ---------------------------------------------------------------------------
-# 1. Store Transfer — dispatch (stock out at source)
+# 1. Store Transfer — scanned dispatch / receive with an in-transit bucket
 # ---------------------------------------------------------------------------
+#
+# Dispatch: source −qty (transfer_out) + in-transit +qty (transit_in), both
+# under the transfer's doc number. Receive: in-transit −qty (transit_out) +
+# destination +qty (transfer_in). The pieces are never in no location, and
+# free-to-sell (StockOnHand) excludes in-transit throughout.
+#
+# Scan-is-truth (#68): the scanned quantities are the only quantities that
+# post. A scanned-vs-plan gap is flagged, never blocked (Rule 5); a barcode
+# outside the plan (or, at receive, outside the dispatched lines) is rejected.
+
+
+def _write_transit_entry(
+    *,
+    transfer: StoreTransfer,
+    line,
+    qty: int,
+    kind: str,
+    line_no: int,
+    posted_by=None,
+) -> StockLedgerEntry:
+    """One in-transit ledger leg + the InTransitStock projection update.
+
+    Transit legs ride on the *source* store (the sender is answerable until
+    the receiver scans in) and deliberately do NOT touch StockOnHand — the
+    bucket lives in InTransitStock, keyed to the transfer's doc number.
+    """
+    amount_paise = qty * line.unit_cost_paise
+    entry = StockLedgerEntry.objects.create(
+        store=transfer.source_store,
+        gstin=transfer.source_store.gstin,
+        sku_code=line.sku_code,
+        design=line.design,
+        color=line.color,
+        size=line.size,
+        brand=line.brand,
+        season=line.season,
+        item=line.item,
+        hsn=line.hsn,
+        qty=qty,
+        amount=amount_paise,
+        kind=kind,
+        doc_number=transfer.doc_number,
+        line_no=line_no,
+        posted_by=posted_by,
+    )
+    bucket, _ = InTransitStock.objects.get_or_create(
+        transfer_doc_number=transfer.doc_number,
+        sku_code=line.sku_code,
+        defaults={
+            "source_store": transfer.source_store,
+            "destination_store": transfer.destination_store,
+            "gstin": transfer.source_store.gstin,
+            "design": line.design,
+            "color": line.color,
+            "size": line.size,
+            "brand": line.brand,
+            "season": line.season,
+            "item": line.item,
+            "hsn": line.hsn,
+            "qty": 0,
+            "value_paise": 0,
+        },
+    )
+    bucket.qty += qty
+    bucket.value_paise += amount_paise
+    if bucket.qty == 0:
+        bucket.delete()
+    else:
+        bucket.save()
+    return entry
+
+
+def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
+    """Merchandising dims + unit cost for a scanned barcode, from the source
+    location's stock (the ledger is self-describing) and the cohort's frozen
+    P-RATE cost where one exists (falling back to the on-hand average)."""
+    from masters.models import Cohort
+
+    try:
+        on_hand = StockOnHand.objects.get(store_id=store_id, sku_code=barcode)
+    except StockOnHand.DoesNotExist:
+        raise OutboundPostingError(
+            f"Barcode {barcode} has no stock at the source location."
+        ) from None
+
+    unit_cost = 0
+    cohort = Cohort.objects.filter(barcode=barcode, season=on_hand.season).first()
+    if cohort is not None:
+        unit_cost = int(cohort.unit_cost_paise or 0)
+    elif on_hand.net_qty > 0:
+        unit_cost = int(on_hand.net_value_paise or 0) // on_hand.net_qty
+
+    return {
+        "design": on_hand.design,
+        "color": on_hand.color,
+        "size": on_hand.size,
+        "brand": on_hand.brand,
+        "season": on_hand.season,
+        "item": on_hand.item,
+        "hsn": on_hand.hsn,
+        "unit_cost_paise": unit_cost,
+    }
 
 
 @transaction.atomic
-def post_transfer_dispatch(transfer: StoreTransfer, user=None) -> list[StockLedgerEntry]:
-    """Post the dispatch side: stock exits source, enters in-transit.
+def post_transfer_dispatch(
+    transfer: StoreTransfer, scans: dict[str, int], user=None
+) -> list[StockLedgerEntry]:
+    """Post the dispatch side from scanned quantities only.
 
-    For same-state: stock move only, no GL.
-    For cross-state: stock move only (IGST invoice is manual).
+    ``scans`` maps barcode → scanned qty. With plan lines, every scanned
+    barcode must be on the plan (wrong-piece beep otherwise); a quantity gap
+    is flagged, never blocked. With no plan lines (store→store scan-to-build)
+    the scans *become* the lines, enriched from the source stock.
+
+    Stock move only, no GL (cross-state IGST invoice is manual by decision).
     """
-    lines = list(transfer.lines.all())
-    if not lines:
-        raise OutboundPostingError("Transfer has no lines.")
+    from outbound.models import StoreTransferLine
 
-    # Validate stock availability at source
-    for line in lines:
-        _check_stock(transfer.source_store_id, line.sku_code, line.qty_dispatched)
+    if not scans or any(q < 1 for q in scans.values()):
+        raise OutboundPostingError("Dispatch needs scanned lines (barcode × qty ≥ 1).")
+
+    plan_lines = {line.sku_code: line for line in transfer.lines.all()}
+
+    if plan_lines:
+        unknown = sorted(set(scans) - set(plan_lines))
+        if unknown:
+            raise OutboundPostingError(
+                f"Not on this transfer's plan: {', '.join(unknown)}. "
+                "Scanned pieces must match the transfer receipt."
+            )
+
+    # Validate stock + resolve identity/cost from the source location
+    for barcode, qty in scans.items():
+        _check_stock(transfer.source_store_id, barcode, qty)
+
+    dispatch_lines = []
+    for barcode, qty in sorted(scans.items()):
+        identity = _resolve_scan_identity(transfer.source_store_id, barcode)
+        line = plan_lines.get(barcode)
+        if line is None:
+            line = StoreTransferLine(transfer=transfer, sku_code=barcode, qty_planned=None)
+        line.qty_dispatched = qty
+        for field, value in identity.items():
+            setattr(line, field, value)
+        line.save()
+        dispatch_lines.append(line)
 
     # Set dispatch metadata BEFORE post() (submitted docs are DB-immutable)
     transfer.dispatch_date = timezone.now()
@@ -138,70 +269,113 @@ def post_transfer_dispatch(transfer: StoreTransfer, user=None) -> list[StockLedg
     transfer.post()
 
     entries = []
-    for i, line in enumerate(lines, start=1):
-        # Stock OUT at source
-        entry = _write_stock_entry(
-            store=transfer.source_store,
-            gstin=transfer.source_store.gstin,
-            line=line,
-            qty=-line.qty_dispatched,
-            kind="transfer_out",
-            doc_number=transfer.doc_number,
-            line_no=i,
-            posted_by=user,
+    for i, line in enumerate(dispatch_lines, start=1):
+        # Stock OUT at source (free-to-sell drops immediately)
+        entries.append(
+            _write_stock_entry(
+                store=transfer.source_store,
+                gstin=transfer.source_store.gstin,
+                line=line,
+                qty=-line.qty_dispatched,
+                kind="transfer_out",
+                doc_number=transfer.doc_number,
+                line_no=i,
+                posted_by=user,
+            )
         )
-        entries.append(entry)
+        # Stock INTO the in-transit bucket under this transfer
+        entries.append(
+            _write_transit_entry(
+                transfer=transfer,
+                line=line,
+                qty=line.qty_dispatched,
+                kind="transit_in",
+                line_no=500 + i,
+                posted_by=user,
+            )
+        )
 
     return entries
 
 
 @transaction.atomic
 def post_transfer_receipt(
-    transfer: StoreTransfer, received_quantities: dict[int, int], user=None
+    transfer: StoreTransfer, scans: dict[str, int], user=None
 ) -> list[StockLedgerEntry]:
-    """Post the receipt side: stock enters destination.
+    """Post the receive side from scanned quantities only.
 
-    `received_quantities` maps line.id → qty_received.
-    Shortfall (dispatched != received) is flagged, not blocked.
-    Creates a TransferReceipt companion record (submitted docs are immutable).
+    ``scans`` maps barcode → scanned-in qty. Each scanned piece moves from
+    the in-transit bucket to the destination. A short receive leaves the
+    remainder in-transit and flags the receipt (shortfall); scanning a
+    barcode that wasn't dispatched, or more than was sent, is rejected
+    (extra/damaged handling is a later slice). Creates a TransferReceipt
+    companion record (submitted docs are immutable).
     """
     from core.documents import DocStatus
     from outbound.models import ReceiptStatus, TransferReceipt
 
     if transfer.docstatus != DocStatus.SUBMITTED:
         raise OutboundPostingError("Transfer must be dispatched (submitted) before receipt.")
-    if hasattr(transfer, "receipt") and transfer.receipt is not None:
-        raise OutboundPostingError("Transfer already received.")
-    # Check if receipt already exists
     if TransferReceipt.objects.filter(transfer=transfer).exists():
         raise OutboundPostingError("Transfer already received.")
+    if not scans or any(q < 1 for q in scans.values()):
+        raise OutboundPostingError("Receive needs scanned lines (barcode × qty ≥ 1).")
 
-    lines = list(transfer.lines.all())
+    lines = {line.sku_code: line for line in transfer.lines.all() if line.qty_dispatched > 0}
+
+    unknown = sorted(set(scans) - set(lines))
+    if unknown:
+        raise OutboundPostingError(
+            f"Not on this transfer: {', '.join(unknown)}. "
+            "Scanned pieces must match the transfer receipt."
+        )
+    for barcode, qty in scans.items():
+        if qty > lines[barcode].qty_dispatched:
+            raise OutboundPostingError(
+                f"Scanned more than was sent for {barcode}: "
+                f"sent={lines[barcode].qty_dispatched}, scanned={qty}."
+            )
+
     entries = []
     has_shortfall = False
 
-    for i, line in enumerate(lines, start=1):
-        qty_recv = received_quantities.get(line.id, line.qty_dispatched)
+    for i, (barcode, line) in enumerate(sorted(lines.items()), start=1):
+        qty_recv = scans.get(barcode, 0)
         line.qty_received = qty_recv
         line.save(update_fields=["qty_received"])
 
         if qty_recv != line.qty_dispatched:
             has_shortfall = True
+        if qty_recv == 0:
+            continue
 
-        if qty_recv > 0:
-            entry = _write_stock_entry(
+        # OUT of the in-transit bucket…
+        entries.append(
+            _write_transit_entry(
+                transfer=transfer,
+                line=line,
+                qty=-qty_recv,
+                kind="transit_out",
+                line_no=1500 + i,
+                posted_by=user,
+            )
+        )
+        # …and INTO the destination (ready for sale)
+        entries.append(
+            _write_stock_entry(
                 store=transfer.destination_store,
                 gstin=transfer.destination_store.gstin,
                 line=line,
                 qty=qty_recv,
                 kind="transfer_in",
                 doc_number=transfer.doc_number,
-                line_no=1000 + i,  # offset to distinguish from dispatch entries
+                line_no=1000 + i,
                 posted_by=user,
             )
-            entries.append(entry)
+        )
 
-    # Create the receipt companion record
+    # Create the receipt companion record (short remainder stays in-transit,
+    # flagged; gap closure is a later slice)
     TransferReceipt.objects.create(
         transfer=transfer,
         received_by=user,

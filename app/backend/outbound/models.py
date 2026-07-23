@@ -158,7 +158,13 @@ class StoreTransfer(Document):
 
 
 class StoreTransferLine(TimeStampedModel):
-    """One line on a store transfer — a (barcode × qty) being moved."""
+    """One line on a store transfer — a (barcode × qty) being moved.
+
+    ``qty_planned`` is the plan (typed / grid-filled on the draft; NULL for
+    scan-to-build transfers). ``qty_dispatched`` is what was actually scanned
+    out — the only quantity that posts. A planned≠dispatched gap is flagged,
+    never blocked (Rule 5).
+    """
 
     transfer = models.ForeignKey(StoreTransfer, on_delete=models.CASCADE, related_name="lines")
     sku_code = models.CharField(max_length=64)
@@ -169,9 +175,15 @@ class StoreTransferLine(TimeStampedModel):
     season = models.CharField(max_length=120, blank=True, default="")
     item = models.CharField(max_length=120, blank=True, default="")
     hsn = models.CharField(max_length=24, blank=True, default="")
-    qty_dispatched = models.IntegerField()
+    qty_planned = models.IntegerField(null=True, blank=True)
+    qty_dispatched = models.IntegerField(default=0)
     qty_received = models.IntegerField(default=0)
     unit_cost_paise = MoneyField(default=0)
+
+    @property
+    def qty_in_transit(self) -> int:
+        """Derived, never stored: dispatched but not yet scanned in."""
+        return self.qty_dispatched - self.qty_received
 
     class Meta:
         db_table = "outbound_store_transfer_line"

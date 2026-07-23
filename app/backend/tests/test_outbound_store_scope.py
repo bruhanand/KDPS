@@ -291,7 +291,7 @@ def test_sm_cannot_create_transfer_from_outside_scope(scope_scaffold):
             "source_store": s["store_banka"].id,
             "destination_store": s["store_deo"].id,
             "transfer_type": "inter_store",
-            "lines": [{"sku_code": "SC-SKU1", "qty_dispatched": 1, "unit_cost_paise": 10000}],
+            "lines": [{"sku_code": "SC-SKU1", "qty_planned": 1}],
         },
         format="json",
     )
@@ -309,7 +309,7 @@ def test_sm_can_create_transfer_from_own_store(scope_scaffold):
             "source_store": s["store_deo"].id,
             "destination_store": s["store_banka"].id,
             "transfer_type": "inter_store",
-            "lines": [{"sku_code": "SC-SKU1", "qty_dispatched": 1, "unit_cost_paise": 10000}],
+            "lines": [{"sku_code": "SC-SKU1", "qty_planned": 1}],
         },
         format="json",
     )
@@ -330,17 +330,14 @@ def test_sm_cannot_receive_transfer_at_outside_store(scope_scaffold):
     StoreTransferLine.objects.create(
         transfer=transfer,
         sku_code="SC-SKU1",
-        qty_dispatched=1,
-        unit_cost_paise=10000,
+        qty_planned=1,
     )
-    post_transfer_dispatch(transfer, user=s["admin_user"])
+    post_transfer_dispatch(transfer, {"SC-SKU1": 1}, user=s["admin_user"])
 
     c = _client(s["sm_user"])
     resp = c.post(
         f"/api/outbound/transfers/{transfer.id}/receive",
-        {
-            "received_quantities": {},
-        },
+        {"scans": [{"barcode": "SC-SKU1", "qty": 1}]},
         format="json",
     )
     assert resp.status_code == 403

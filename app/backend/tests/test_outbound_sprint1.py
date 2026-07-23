@@ -211,12 +211,11 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
         season="SS26",
         item="shirt",
         hsn="6205",
-        qty_dispatched=3,
-        unit_cost_paise=100,
+        qty_planned=3,
     )
 
-    # Dispatch
-    post_transfer_dispatch(transfer, user=s["user"])
+    # Dispatch (scanned lines are the only quantities)
+    post_transfer_dispatch(transfer, {"SKU001": 3}, user=s["user"])
     assert transfer.docstatus == DocStatus.SUBMITTED
     assert transfer.doc_number is not None
 
@@ -224,8 +223,8 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
     wh_oh = StockOnHand.objects.get(store=s["warehouse"], sku_code="SKU001")
     assert wh_oh.net_qty == 7  # 10 - 3
 
-    # Receive (full)
-    post_transfer_receipt(transfer, {}, user=s["user"])
+    # Receive (full, scanned)
+    post_transfer_receipt(transfer, {"SKU001": 3}, user=s["user"])
 
     # Check receipt companion record
     from outbound.models import TransferReceipt
@@ -272,16 +271,15 @@ def test_inter_store_transfer_same_state(_outbound_scaffold):
         season="SS26",
         item="shirt",
         hsn="6205",
-        qty_dispatched=5,
-        unit_cost_paise=100,
+        qty_planned=5,
     )
 
-    post_transfer_dispatch(transfer, user=s["user"])
+    post_transfer_dispatch(transfer, {"SKU001": 5}, user=s["user"])
     assert transfer.is_cross_state is False
     assert transfer.dispatch_date is not None
 
     # Receive
-    post_transfer_receipt(transfer, {}, user=s["user"])
+    post_transfer_receipt(transfer, {"SKU001": 5}, user=s["user"])
 
     sa_oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU001")
     assert sa_oh.net_qty == 5  # 10 - 5
@@ -312,11 +310,10 @@ def test_cross_state_transfer_flagged(_outbound_scaffold):
         season="SS26",
         item="shirt",
         hsn="6205",
-        qty_dispatched=2,
-        unit_cost_paise=100,
+        qty_planned=2,
     )
 
-    post_transfer_dispatch(transfer, user=s["user"])
+    post_transfer_dispatch(transfer, {"SKU001": 2}, user=s["user"])
     assert transfer.is_cross_state is True
     assert transfer.eway_bill_number == "EWB-2026-001"
 
@@ -334,12 +331,11 @@ def test_transfer_shortfall_flagged(_outbound_scaffold):
     line = StoreTransferLine.objects.create(
         transfer=transfer,
         sku_code="SKU001",
-        qty_dispatched=4,
-        unit_cost_paise=100,
+        qty_planned=4,
     )
 
-    post_transfer_dispatch(transfer, user=s["user"])
-    post_transfer_receipt(transfer, {line.id: 3}, user=s["user"])
+    post_transfer_dispatch(transfer, {"SKU001": 4}, user=s["user"])
+    post_transfer_receipt(transfer, {"SKU001": 3}, user=s["user"])
 
     from outbound.models import TransferReceipt
 
@@ -361,12 +357,11 @@ def test_transfer_blocks_on_insufficient_stock(_outbound_scaffold):
     StoreTransferLine.objects.create(
         transfer=transfer,
         sku_code="SKU001",
-        qty_dispatched=999,
-        unit_cost_paise=100,
+        qty_planned=999,
     )
 
     with pytest.raises(OutboundPostingError, match="Insufficient stock"):
-        post_transfer_dispatch(transfer, user=s["user"])
+        post_transfer_dispatch(transfer, {"SKU001": 999}, user=s["user"])
 
 
 # ---------------------------------------------------------------------------
@@ -779,15 +774,14 @@ def test_transfer_receive_idempotent(_outbound_scaffold):
     StoreTransferLine.objects.create(
         transfer=transfer,
         sku_code="SKU001",
-        qty_dispatched=2,
-        unit_cost_paise=100,
+        qty_planned=2,
     )
 
-    post_transfer_dispatch(transfer, user=s["user"])
-    post_transfer_receipt(transfer, {}, user=s["user"])
+    post_transfer_dispatch(transfer, {"SKU001": 2}, user=s["user"])
+    post_transfer_receipt(transfer, {"SKU001": 2}, user=s["user"])
 
     with pytest.raises(OutboundPostingError, match="already received"):
-        post_transfer_receipt(transfer, {}, user=s["user"])
+        post_transfer_receipt(transfer, {"SKU001": 2}, user=s["user"])
 
 
 @pytest.mark.django_db(transaction=True)

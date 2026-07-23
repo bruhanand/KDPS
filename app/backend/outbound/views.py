@@ -45,7 +45,7 @@ from outbound.serializers import (
     StockAdjustmentWriteSerializer,
     StoreTransferReadSerializer,
     StoreTransferWriteSerializer,
-    TransferReceiptInputSerializer,
+    TransferScanInputSerializer,
     VFlipReadSerializer,
     VFlipWriteSerializer,
     WriteOffReadSerializer,
@@ -102,7 +102,12 @@ class TransferDetailView(generics.RetrieveAPIView):
 
 
 class TransferDispatchView(APIView):
-    """POST: Dispatch a draft transfer (stock exits source)."""
+    """POST: Dispatch a draft transfer from scanned lines only (#68).
+
+    Payload: ``{"scans": [{"barcode": ..., "qty": ...}, ...]}`` — the scanned
+    quantities are the only quantities; typed dispatch is gone. Stock moves
+    source → in-transit bucket under this transfer.
+    """
 
     permission_classes = [IsOutboundWriter]
 
@@ -124,8 +129,11 @@ class TransferDispatchView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        ser = TransferScanInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
         try:
-            post_transfer_dispatch(transfer, user=request.user)
+            post_transfer_dispatch(transfer, ser.scans_by_barcode(), user=request.user)
         except OutboundPostingError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -134,7 +142,12 @@ class TransferDispatchView(APIView):
 
 
 class TransferReceiveView(APIView):
-    """POST: Receive a dispatched transfer (stock enters destination)."""
+    """POST: Receive a dispatched transfer from scanned lines only (#68).
+
+    Payload: ``{"scans": [{"barcode": ..., "qty": ...}, ...]}``. Each scanned
+    piece moves in-transit → destination; a short receive leaves the remainder
+    in-transit and flags the receipt.
+    """
 
     permission_classes = [IsOutboundWriter]
 
@@ -156,19 +169,59 @@ class TransferReceiveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        ser = TransferReceiptInputSerializer(data=request.data)
+        ser = TransferScanInputSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
-        received_quantities = {}
-        for k, v in ser.validated_data.get("received_quantities", {}).items():
-            received_quantities[int(k)] = v
 
         try:
-            post_transfer_receipt(transfer, received_quantities, user=request.user)
+            post_transfer_receipt(transfer, ser.scans_by_barcode(), user=request.user)
         except OutboundPostingError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         transfer.refresh_from_db()
         return Response(StoreTransferReadSerializer(transfer).data)
+
+
+class ScanLookupView(APIView):
+    """GET ?store=&barcode= — per-scan validation for the scan screen.
+
+    Returns the piece's identity + available qty at the location (for the
+    right-piece beep and scan-to-build), 404 when the location holds no such
+    stock (the wrong-piece beep).
+    """
+
+    permission_classes = [IsOutboundReader]
+
+    def get(self, request):
+        store_id = request.query_params.get("store")
+        barcode = (request.query_params.get("barcode") or "").strip()
+        if not store_id or not barcode:
+            return Response(
+                {"error": "Pass store= and barcode="}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from stockledger.models import StockOnHand
+
+        try:
+            on_hand = StockOnHand.objects.get(store_id=int(store_id), sku_code=barcode)
+        except (StockOnHand.DoesNotExist, ValueError):
+            return Response(
+                {"error": f"No stock for {barcode} at this location"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "barcode": on_hand.sku_code,
+                "design": on_hand.design,
+                "color": on_hand.color,
+                "size": on_hand.size,
+                "brand": on_hand.brand,
+                "season": on_hand.season,
+                "item": on_hand.item,
+                "hsn": on_hand.hsn,
+                "available_qty": on_hand.net_qty,
+            }
+        )
 
 
 # ---------------------------------------------------------------------------

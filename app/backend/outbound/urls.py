@@ -9,6 +9,7 @@ from outbound.views import (
     RTVDetailView,
     RTVListCreateView,
     RTVSubmitView,
+    ScanLookupView,
     TransferDetailView,
     TransferDispatchView,
     TransferListCreateView,
@@ -27,6 +28,7 @@ urlpatterns = [
     path("transfers/<int:pk>", TransferDetailView.as_view(), name="transfer-detail"),
     path("transfers/<int:pk>/dispatch", TransferDispatchView.as_view(), name="transfer-dispatch"),
     path("transfers/<int:pk>/receive", TransferReceiveView.as_view(), name="transfer-receive"),
+    path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
     # Returns to Vendor (RTV)
     path("rtvs", RTVListCreateView.as_view(), name="rtv-list"),
     path("rtvs/<int:pk>", RTVDetailView.as_view(), name="rtv-detail"),

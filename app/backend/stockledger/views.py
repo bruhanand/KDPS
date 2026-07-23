@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
 from masters.scoping import scope_by_store
-from stockledger.models import StockLedgerEntry, StockOnHand
+from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand
 from stockledger.serializers import StockLedgerEntrySerializer
 
 
@@ -64,6 +64,58 @@ class StockLedgerSummaryView(APIView):
                 "net_value_rupees": paise_to_rupees_str(agg["net_value"] or 0),
                 "distinct_skus": distinct_skus,
                 "distinct_documents": distinct_docs,
+            }
+        )
+
+
+class InTransitView(APIView):
+    """The in-transit bucket — the third honest stock number (at-warehouse /
+    in-transit / at-store). Served from the materialised `InTransitStock`
+    projection; rows are keyed to the transfer holding the pieces. The sender
+    is answerable until the receiver scans in, so scoping rides on the
+    source store."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        qs = scope_by_store(
+            InTransitStock.objects.filter(qty__gt=0).select_related(
+                "source_store", "destination_store"
+            ),
+            request.user,
+            "source_store_id",
+        )
+        if doc := request.query_params.get("transfer"):
+            qs = qs.filter(transfer_doc_number=doc)
+
+        totals = qs.aggregate(units=Sum("qty"), value=Sum("value_paise"))
+        rows = [
+            {
+                "transfer_doc_number": o.transfer_doc_number,
+                "source_store_code": o.source_store.code,
+                "destination_store_code": o.destination_store.code,
+                "sku_code": o.sku_code,
+                "design": o.design,
+                "color": o.color,
+                "size": o.size,
+                "brand": o.brand,
+                "season": o.season,
+                "qty": o.qty,
+                "value_paise": o.value_paise,
+                "value_rupees": paise_to_rupees_str(o.value_paise),
+                "updated_at": o.updated_at,
+            }
+            for o in qs.order_by("transfer_doc_number", "sku_code")
+        ]
+        return Response(
+            {
+                "summary": {
+                    "units_in_transit": totals["units"] or 0,
+                    "value_paise": totals["value"] or 0,
+                    "value_rupees": paise_to_rupees_str(totals["value"] or 0),
+                    "transfers": qs.values("transfer_doc_number").distinct().count(),
+                },
+                "rows": rows,
             }
         )
 
