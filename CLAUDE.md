@@ -2,7 +2,7 @@
 
 Guidance for Claude Code when working in this repository.
 
-> **Before building any slice, read [`CONTEXT.md`](CONTEXT.md) (repo root)** — the single machine-read briefing: the domain language, the 12 rules, the kernel contracts, and the money-critical locked + CA-gated decisions. **It is the one build-context file** — skills (`/spec`, `/tdd`, `/review`, `/grill-with-docs`) read it; don't fork it. This `CLAUDE.md` is *workflow/project* guidance; `CONTEXT.md` is the *domain/kernel* context; `README.md` is how to run it.
+> **Before building any slice, read [`CONTEXT.md`](CONTEXT.md) (repo root)** — the single machine-read briefing: the domain language, the 12 rules, the kernel contracts, and the money-critical locked + CA-gated decisions. **It is the one build-context file** — skills (`/to-spec`, `/tdd`, `/code-review`, `/grill-with-docs`) read it; don't fork it. This `CLAUDE.md` is *workflow/project* guidance; `CONTEXT.md` is the *domain/kernel* context; `README.md` is how to run it.
 
 ## What this project is
 
