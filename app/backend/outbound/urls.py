@@ -6,6 +6,7 @@ from outbound.views import (
     AdjustmentDetailView,
     AdjustmentListCreateView,
     AdjustmentSubmitView,
+    MarkDamagedView,
     RTVDetailView,
     RTVListCreateView,
     RTVSubmitView,
@@ -29,6 +30,8 @@ urlpatterns = [
     path("transfers/<int:pk>/dispatch", TransferDispatchView.as_view(), name="transfer-dispatch"),
     path("transfers/<int:pk>/receive", TransferReceiveView.as_view(), name="transfer-receive"),
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
+    # Mark damaged (global action → quarantine)
+    path("mark-damaged", MarkDamagedView.as_view(), name="mark-damaged"),
     # Returns to Vendor (RTV)
     path("rtvs", RTVListCreateView.as_view(), name="rtv-list"),
     path("rtvs/<int:pk>", RTVDetailView.as_view(), name="rtv-detail"),

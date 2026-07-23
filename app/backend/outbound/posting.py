@@ -16,10 +16,17 @@ from django.utils import timezone
 
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
-from stockledger.models import InTransitStock, StockLedgerEntry, StockOnHand, merch_dims
+from stockledger.models import (
+    InTransitStock,
+    QuarantineStock,
+    StockLedgerEntry,
+    StockOnHand,
+    merch_dims,
+)
 
 if TYPE_CHECKING:
     from outbound.models import (
+        MarkDamaged,
         ReturnToVendor,
         StockAdjustment,
         StoreTransfer,
@@ -381,6 +388,145 @@ def post_transfer_receipt(
         received_by=user,
         receipt_status=(ReceiptStatus.SHORTFALL if has_shortfall else ReceiptStatus.COMPLETE),
     )
+
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# 1b. Mark damaged — global action moving a piece to quarantine
+# ---------------------------------------------------------------------------
+#
+# A mark-damaged document posts, under its own DMG voucher number, two legs at
+# the store: damage_out (−qty, drops free-to-sell in StockOnHand) + quarantine_in
+# (+qty, into the QuarantineStock bucket). The piece never leaves the store and
+# stays owned — it is just no longer sellable. No GL: the two legs net to zero,
+# so total inventory value is unchanged (the same shape as the in-transit pair).
+
+# line_no bands — one DMG doc number carries both leg types.
+LINE_NO_DAMAGE_OUT = 0
+LINE_NO_QUARANTINE_IN = 500
+
+
+def _write_quarantine_entry(
+    *,
+    store,
+    gstin,
+    line,
+    qty: int,
+    doc_number: str,
+    line_no: int,
+    posted_by=None,
+) -> StockLedgerEntry:
+    """One ``quarantine_in`` ledger leg + the QuarantineStock projection update.
+
+    Deliberately does NOT touch StockOnHand — the quarantine bucket lives in
+    QuarantineStock, keyed by (store × barcode). ``marked_by``/``marked_at`` on
+    the bucket record the most-recent mark-damaged actor + time for the
+    inventory quarantine filter.
+    """
+    amount_paise = qty * line.unit_cost_paise
+    entry = StockLedgerEntry.objects.create(
+        store=store,
+        gstin=gstin,
+        sku_code=line.sku_code,
+        **merch_dims(line),
+        qty=qty,
+        amount=amount_paise,
+        kind=StockLedgerEntry.Kind.QUARANTINE_IN,
+        doc_number=doc_number,
+        line_no=line_no,
+        posted_by=posted_by,
+    )
+    bucket, _ = QuarantineStock.objects.get_or_create(
+        store=store,
+        sku_code=line.sku_code,
+        defaults={
+            "gstin": gstin,
+            **merch_dims(line),
+            "qty": 0,
+            "value_paise": 0,
+        },
+    )
+    bucket.qty += qty
+    bucket.value_paise += amount_paise
+    bucket.marked_by = posted_by
+    bucket.marked_at = entry.created_at
+    if bucket.qty == 0:
+        # A fully-cleared quarantine (later slice: return / release) leaves no
+        # row — matching the rebuild command, which emits no zero-qty row.
+        bucket.delete()
+    else:
+        bucket.save()
+    return entry
+
+
+@transaction.atomic
+def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> MarkDamaged:
+    """The global mark-damaged action, end to end (Rule 1 — every event is a
+    document): create a DMG document, enrich each scanned piece from the store's
+    stock (dims + frozen cost, never typed), and post it — moving the pieces from
+    free-to-sell into quarantine at the store, all in one transaction so a bad
+    scan rolls the whole thing back (no orphan draft).
+    """
+    from outbound.models import MarkDamaged, MarkDamagedLine
+
+    if not scans:
+        raise OutboundPostingError("Mark-damaged needs scanned pieces.")
+
+    mark = MarkDamaged.objects.create(store=store, note=note, created_by=user)
+    for barcode, qty in sorted(scans.items()):
+        identity = _resolve_scan_identity(store.id, barcode)
+        MarkDamagedLine.objects.create(mark=mark, sku_code=barcode, qty=qty, **identity)
+    post_mark_damaged(mark, user=user)
+    return mark
+
+
+@transaction.atomic
+def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
+    """Post a mark-damaged document: move each line's pieces from free-to-sell
+    into quarantine at the store.
+
+    Blocks (Rule 5's dangerous-exception) if the store has too little sellable
+    stock of a piece — you cannot quarantine stock that isn't there. Stock move
+    only, no GL.
+    """
+    lines = list(mark.lines.all())
+    if not lines:
+        raise OutboundPostingError("Mark-damaged has no lines.")
+
+    # Row-lock + validate sellable stock at the store before minting a number.
+    for line in lines:
+        _check_stock(mark.store_id, line.sku_code, line.qty)
+
+    mark.post()
+
+    entries: list[StockLedgerEntry] = []
+    for i, line in enumerate(lines, start=1):
+        # Out of free-to-sell at the store…
+        entries.append(
+            _write_stock_entry(
+                store=mark.store,
+                gstin=mark.store.gstin,
+                line=line,
+                qty=-line.qty,
+                kind=StockLedgerEntry.Kind.DAMAGE_OUT,
+                doc_number=mark.doc_number,
+                line_no=LINE_NO_DAMAGE_OUT + i,
+                posted_by=user,
+            )
+        )
+        # …and into quarantine at the same store
+        entries.append(
+            _write_quarantine_entry(
+                store=mark.store,
+                gstin=mark.store.gstin,
+                line=line,
+                qty=line.qty,
+                doc_number=mark.doc_number,
+                line_no=LINE_NO_QUARANTINE_IN + i,
+                posted_by=user,
+            )
+        )
 
     return entries
 

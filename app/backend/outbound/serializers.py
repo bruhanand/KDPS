@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from masters.models import Store
 from outbound.models import (
+    MarkDamaged,
+    MarkDamagedLine,
     ReturnToVendor,
     ReturnToVendorLine,
     StockAdjustment,
@@ -176,6 +179,67 @@ class TransferScanInputSerializer(serializers.Serializer):
 
     def scans_by_barcode(self) -> dict[str, int]:
         """Aggregate scans into barcode → total qty (a barcode may repeat)."""
+        totals: dict[str, int] = {}
+        for scan in self.validated_data["scans"]:
+            totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
+        return totals
+
+
+# ---------------------------------------------------------------------------
+# Mark damaged (global action → quarantine)
+# ---------------------------------------------------------------------------
+
+
+class MarkDamagedLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarkDamagedLine
+        fields = [
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
+        ]
+        read_only_fields = fields
+
+
+class MarkDamagedReadSerializer(serializers.ModelSerializer):
+    lines = MarkDamagedLineSerializer(many=True, read_only=True)
+    store_code = serializers.CharField(source="store.code", read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
+
+    class Meta:
+        model = MarkDamaged
+        fields = [
+            "id",
+            "doc_number",
+            "docstatus",
+            "store",
+            "store_code",
+            "store_name",
+            "note",
+            "created_by",
+            "created_at",
+            "lines",
+        ]
+
+
+class MarkDamagedInputSerializer(serializers.Serializer):
+    """The global mark-damaged action: a store + scanned pieces (+ optional
+    note). Quantities are scanned, dims/cost enriched from the store's stock —
+    never typed."""
+
+    store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all())
+    scans = ScanLineSerializer(many=True, allow_empty=False)
+    note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+
+    def scans_by_barcode(self) -> dict[str, int]:
         totals: dict[str, int] = {}
         for scan in self.validated_data["scans"]:
             totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
