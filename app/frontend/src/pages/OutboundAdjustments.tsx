@@ -98,7 +98,7 @@ export function AdjustmentListPage() {
         </div>
         <div className="spacer" />
         {writable && (
-          <Link className="btn btn-cta" to="/outbound/adjustments/new" data-testid="new-adjustment-btn">
+          <Link className="btn btn-cta" to="/stock-count/adjustments/new" data-testid="new-adjustment-btn">
             <Plus size={16} /> New adjustment
           </Link>
         )}
@@ -130,7 +130,7 @@ export function AdjustmentListPage() {
                 return (
                   <tr key={a.id} data-testid={`adj-row-${a.id}`}>
                     <td>
-                      <Link to={`/outbound/adjustments/${a.id}`} className="link-cell mono" data-testid={`adj-link-${a.id}`}>
+                      <Link to={`/stock-count/adjustments/${a.id}`} className="link-cell mono" data-testid={`adj-link-${a.id}`}>
                         <b>{a.doc_number || `Draft #${a.id}`}</b>
                       </Link>
                     </td>
@@ -218,7 +218,7 @@ export function AdjustmentNewPage() {
         notes,
         lines: payloadLines,
       });
-      navigate(`/outbound/adjustments/${data.id}`);
+      navigate(`/stock-count/adjustments/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -228,7 +228,7 @@ export function AdjustmentNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/adjustments" className="btn" style={{ marginBottom: 16 }} data-testid="adj-back-link">
+      <Link to="/stock-count/adjustments" className="btn" style={{ marginBottom: 16 }} data-testid="adj-back-link">
         <ArrowLeft size={15} /> Adjustments
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New Stock Adjustment</h1>
@@ -347,7 +347,7 @@ export function AdjustmentDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/adjustments" className="btn" style={{ marginBottom: 16 }} data-testid="adj-detail-back">
+      <Link to="/stock-count/adjustments" className="btn" style={{ marginBottom: 16 }} data-testid="adj-detail-back">
         <ArrowLeft size={15} /> Adjustments
       </Link>
       <div className="toolbar">

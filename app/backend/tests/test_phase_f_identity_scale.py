@@ -17,6 +17,7 @@ from django.db import IntegrityError, transaction
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
+from accounts.rbac_matrix import section_access_for
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Season, Sku, Store
 from ptmapper import engine
 from ptmapper.models import PtFile, PtRow
@@ -91,7 +92,14 @@ def _pt(*, qty="3", prate="100", mrp="200", barcode="B1", season="SS26"):
 
 
 def _user(role_code: str, scope: str = "all") -> User:
-    role = Role.objects.create(code=role_code, name=role_code.title())
+    # Seed the role's section access from the RBAC matrix exactly as
+    # `seed_foundation` does — the API gates on `Role.section_access`, so a role
+    # built without it would be denied everything and prove nothing.
+    role = Role.objects.create(
+        code=role_code,
+        name=role_code.title(),
+        section_access=section_access_for(role_code),
+    )
     return User.objects.create(username=f"u_{role_code}", role=role, scope_type=scope)
 
 
@@ -176,6 +184,39 @@ def test_books_health_reports_balanced_books_after_post(world):
     assert r.data["balanced"] is True
     assert r.data["trial_balance_paise"] == 0
     assert r.data["assets_paise"] == 30000  # Dr INVENTORY 300.00
+
+
+@pytest.mark.parametrize(
+    "role_code",
+    [
+        # Admin is the regression: the RBAC matrix gives it_admin `money: none`
+        # (Sheet-1 note 2) and #87 hid Money from its sidebar, but the ledger API
+        # kept a role list with `it_admin` in it and served vendor payables to it.
+        "it_admin",
+        "warehouse",  # money: operate — books an expense, never opens the books
+        "store_manager",  # money: operate — same rung, same denial
+        "brand_manager",  # money: none
+    ],
+)
+def test_books_are_closed_to_everyone_without_money_manage(world, role_code):
+    client = APIClient()
+    client.force_authenticate(_user(role_code))
+    for endpoint in (
+        "/api/finledger/health",
+        "/api/finledger/vendor/balances",
+        "/api/finledger/vendor/entries",
+        "/api/finledger/vendor/ageing",
+        "/api/finledger/cash/summary",
+        "/api/finledger/cash/entries",
+    ):
+        assert client.get(endpoint).status_code == 403, f"{role_code} reached {endpoint}"
+
+
+def test_books_are_open_to_accounts(world):
+    """The other half of the gate: denying everyone would also pass the test above."""
+    client = APIClient()
+    client.force_authenticate(_user("accounts"))
+    assert client.get("/api/finledger/vendor/balances").status_code == 200
 
 
 def test_books_health_is_finance_gated(world):

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, ScrollText, ShieldAlert, X } from "lucide-react";
+import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, Repeat, ScrollText, ShieldAlert, X } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
@@ -66,7 +66,11 @@ export default function StockOnHand() {
   const skuFilter = params.get("sku") ?? "";
   const brandFilter = params.get("brand") ?? "";
   const deepFilter = skuFilter || brandFilter;
-  const [group, setGroup] = useState<Group>("sku");
+  // `?view=quarantine` is the deep link the Return to Brand section uses for
+  // Damage / Quarantine — the screen lives here, the menu entry lives there.
+  const [group, setGroup] = useState<Group>(
+    params.get("view") === "quarantine" ? "quarantine" : "sku",
+  );
   const [data, setData] = useState<OnHandT | null>(null);
   const [quar, setQuar] = useState<QuarT | null>(null);
   const [loading, setLoading] = useState(true);
@@ -196,11 +200,14 @@ export default function StockOnHand() {
     <div className="page-pad">
       <div className="toolbar">
         <div>
-          <p className="eyebrow">Ledgers · live net position from the stock ledger</p>
+          <p className="eyebrow">Stock · live net position from the stock ledger</p>
           <h1 className="h1 h2-rust">Stock on Hand</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn" to="/ledgers/stock" data-testid="stock-ledger-link"><ScrollText size={16} /> Stock Ledger</Link>
+        {/* V-flip is an ownership correction, not a daily job — so it is an
+            action here inside Stock rather than a line in the sidebar (#87). */}
+        <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
+        <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
       </div>
 
       <div className="seg" data-testid="onhand-tabs">

@@ -186,7 +186,7 @@ def test_scanned_barcode_resolves_to_cohorts_with_own_stock(scaffold):
     # The AW26 cohort has no stock anywhere the caller can see — say so plainly.
     aw26 = next(i for i in items if i["subtitle"].endswith("AW26"))
     assert aw26["meta"] == "No stock in your locations"
-    assert ss26["to"] == "/ledgers/stock-on-hand?sku=GS-BAR-001"
+    assert ss26["to"] == "/stock?sku=GS-BAR-001"
     assert ss26["mrp_paise"] == 199900
 
 
@@ -201,7 +201,7 @@ def test_free_text_finds_items_by_design_and_brand(scaffold):
     assert [b["title"] for b in brands] == ["ArrowSearch"]
     # "Search brand" on the store person's sketch means *show me this brand's
     # stock* — not the brand master, which they may not open at all.
-    assert brands[0]["to"] == "/ledgers/stock-on-hand?brand=ArrowSearch"
+    assert brands[0]["to"] == "/stock?brand=ArrowSearch"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -222,21 +222,21 @@ def test_voucher_number_finds_documents_across_types(scaffold):
 
     grn = scaffold["grn_deo"]
     hit = _results(owner.get(f"{SEARCH}?q={grn.doc_number}").json(), "documents")
-    assert [(h["title"], h["to"]) for h in hit] == [(grn.doc_number, f"/inbound/{grn.pk}")]
+    assert [(h["title"], h["to"]) for h in hit] == [(grn.doc_number, f"/receive/{grn.pk}")]
     assert hit[0]["subtitle"] == "Goods receipt · GS-DEO"
     assert hit[0]["exact"] is True
 
     transfer = scaffold["transfer"]
     hit = _results(owner.get(f"{SEARCH}?q={transfer.doc_number}").json(), "documents")
-    assert hit[0]["to"] == f"/outbound/transfers/{transfer.pk}"
+    assert hit[0]["to"] == f"/transfer/{transfer.pk}"
     assert hit[0]["subtitle"] == "Transfer · GS-BNK → GS-DEO"
 
     adj = scaffold["adj_bnk"]
     hit = _results(owner.get(f"{SEARCH}?q={adj.doc_number}").json(), "documents")
-    assert hit[0]["to"] == f"/outbound/adjustments/{adj.pk}"
+    assert hit[0]["to"] == f"/stock-count/adjustments/{adj.pk}"
 
     hit = _results(owner.get(f"{SEARCH}?q=GS-BK-0001").json(), "documents")
-    assert hit[0]["to"] == f"/documents/bookings/{scaffold['booking'].pk}"
+    assert hit[0]["to"] == f"/booking/{scaffold['booking'].pk}"
     assert hit[0]["subtitle"] == "Booking · ArrowSearch"
 
 

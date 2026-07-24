@@ -279,7 +279,7 @@ function DashboardConfigurator({
   );
 }
 
-function QuickActions({ items }: { items: { label: string; icon: React.ReactNode; cta?: boolean }[] }) {
+function QuickActions({ items }: { items: { label: string; to: string; icon: React.ReactNode; cta?: boolean }[] }) {
   const navigate = useNavigate();
   return (
     <div className="quick-grid">
@@ -287,7 +287,7 @@ function QuickActions({ items }: { items: { label: string; icon: React.ReactNode
         <button
           key={a.label}
           className={`quick-btn ${a.cta ? "quick-cta" : ""}`}
-          onClick={() => navigate("/store/" + a.label.toLowerCase())}
+          onClick={() => navigate(a.to)}
           data-testid={`quick-${a.label.toLowerCase()}`}
         >
           <span className="quick-ic">{a.icon}</span>
@@ -400,10 +400,10 @@ export function Home() {
         <>
           <QuickActions
             items={[
-              { label: "Sell", icon: <ShoppingCart size={20} />, cta: true },
-              { label: "Receive", icon: <PackageCheck size={20} /> },
-              { label: "Count", icon: <ClipboardList size={20} /> },
-              { label: "Transfer", icon: <ArrowLeftRight size={20} /> },
+              { label: "Sell", to: "/sell", icon: <ShoppingCart size={20} />, cta: true },
+              { label: "Receive", to: "/receive", icon: <PackageCheck size={20} /> },
+              { label: "Count", to: "/stock-count", icon: <ClipboardList size={20} /> },
+              { label: "Transfer", to: "/transfer", icon: <ArrowLeftRight size={20} /> },
             ]}
           />
           {renderDashboardCards()}
@@ -416,9 +416,9 @@ export function Home() {
         <>
           <QuickActions
             items={[
-              { label: "Receive", icon: <PackageCheck size={20} />, cta: true },
-              { label: "Count", icon: <ClipboardList size={20} /> },
-              { label: "Transfer", icon: <ArrowLeftRight size={20} /> },
+              { label: "Receive", to: "/receive", icon: <PackageCheck size={20} />, cta: true },
+              { label: "Count", to: "/stock-count", icon: <ClipboardList size={20} /> },
+              { label: "Transfer", to: "/transfer", icon: <ArrowLeftRight size={20} /> },
             ]}
           />
           {renderDashboardCards()}

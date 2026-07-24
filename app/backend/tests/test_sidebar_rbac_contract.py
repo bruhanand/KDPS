@@ -105,6 +105,11 @@ def test_sheet_specific_cells_are_honoured(db):
     # Only Owner and Accounts fully manage money.
     assert caps["owner"]["money"] == "manage"
     assert caps["accounts"]["money"] == "manage"
+    # Staff (#87, derived — no sheet row): the store person's daily attendance
+    # surface is real, and a brand manager — whose scope is brands, not people —
+    # has none.
+    assert caps["store_person"]["staff"] == "operate"
+    assert "staff" not in caps["brand_manager"]
 
 
 # --- Fail-closed ----------------------------------------------------------
@@ -175,7 +180,7 @@ def test_retuning_section_access_is_a_data_change(db):
 
 
 def test_seed_matrix_covers_every_canonical_role(db):
-    """Guardrail: every persona role resolves to a full 12-section map."""
+    """Guardrail: every persona role resolves to a map of every known section."""
     for role_code in ROLE_PERSONA:
         access = section_access_for(role_code)
         assert set(access) == set(SECTION_CODES), role_code

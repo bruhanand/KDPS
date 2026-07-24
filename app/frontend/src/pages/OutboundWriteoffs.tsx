@@ -87,7 +87,7 @@ export function WriteOffListPage() {
         </div>
         <div className="spacer" />
         {writable && (
-          <Link className="btn btn-cta" to="/outbound/writeoffs/new" data-testid="new-writeoff-btn">
+          <Link className="btn btn-cta" to="/stock-count/writeoffs/new" data-testid="new-writeoff-btn">
             <Plus size={16} /> New write-off
           </Link>
         )}
@@ -119,7 +119,7 @@ export function WriteOffListPage() {
                 return (
                   <tr key={w.id} data-testid={`wo-row-${w.id}`}>
                     <td>
-                      <Link to={`/outbound/writeoffs/${w.id}`} className="link-cell mono" data-testid={`wo-link-${w.id}`}>
+                      <Link to={`/stock-count/writeoffs/${w.id}`} className="link-cell mono" data-testid={`wo-link-${w.id}`}>
                         <b>{w.doc_number || `Draft #${w.id}`}</b>
                       </Link>
                     </td>
@@ -196,7 +196,7 @@ export function WriteOffNewPage() {
         reason,
         lines: payloadLines,
       });
-      navigate(`/outbound/writeoffs/${data.id}`);
+      navigate(`/stock-count/writeoffs/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -206,7 +206,7 @@ export function WriteOffNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/writeoffs" className="btn" style={{ marginBottom: 16 }} data-testid="wo-back-link">
+      <Link to="/stock-count/writeoffs" className="btn" style={{ marginBottom: 16 }} data-testid="wo-back-link">
         <ArrowLeft size={15} /> Write-offs
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New Write-off</h1>
@@ -319,7 +319,7 @@ export function WriteOffDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/writeoffs" className="btn" style={{ marginBottom: 16 }} data-testid="wo-detail-back">
+      <Link to="/stock-count/writeoffs" className="btn" style={{ marginBottom: 16 }} data-testid="wo-detail-back">
         <ArrowLeft size={15} /> Write-offs
       </Link>
       <div className="toolbar">

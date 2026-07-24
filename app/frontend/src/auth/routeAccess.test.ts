@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { User } from "./AuthContext";
+import type { NavSection, User } from "./AuthContext";
 import { canAccess } from "./routeAccess";
 
 function makeUser(over: Partial<User>): User {
@@ -20,99 +20,200 @@ function makeUser(over: Partial<User>): User {
   };
 }
 
-// Roles/groups mirror the seeded users (see DEPLOY.md / accounts fixtures).
-const cashier = makeUser({
-  role: { code: "store_cashier", name: "Cashier", landing_page: "/", nav_groups: ["home", "store_ops", "documents"] },
-  nav_groups: ["home", "store_ops", "documents"],
-});
-const manager = makeUser({
-  role: { code: "store_manager", name: "Manager", landing_page: "/", nav_groups: ["home", "store_ops", "documents", "ledgers"] },
-  nav_groups: ["home", "store_ops", "documents", "ledgers"],
-});
-const accounts = makeUser({
-  role: { code: "accounts", name: "Accounts", landing_page: "/", nav_groups: ["home", "ledgers", "documents"] },
-  nav_groups: ["home", "ledgers", "documents"],
-});
-const owner = makeUser({
-  role: { code: "owner", name: "Owner", landing_page: "/", nav_groups: ["home", "master_data", "ledgers", "edges_admin"] },
-  nav_groups: ["home", "master_data", "ledgers", "edges_admin"],
-});
-const hoOps = makeUser({
-  role: { code: "ho_ops", name: "HO Ops", landing_page: "/", nav_groups: ["home", "master_data"] },
-  nav_groups: ["home", "master_data"],
-});
+/** A user holding exactly these sections — the shape the server sends (#85). */
+function withSections(
+  caps: Record<string, NavSection["capability"]>,
+  over: Partial<User> = {},
+): User {
+  return makeUser({
+    capabilities: caps,
+    sections: Object.entries(caps).map(([code, capability], order) => ({
+      code,
+      label: code,
+      order,
+      capability,
+      scope_label: "",
+    })),
+    ...over,
+  });
+}
+
+const ROLE = (code: string) => ({ code, name: code, landing_page: "/", nav_groups: [] });
+
+// The six personas of the SIDEBAR RBAC matrix, at the capabilities the sheet
+// grants them (accounts/rbac_matrix.py). Absent section ⇒ the role has none.
+const storePerson = withSections(
+  {
+    home: "view",
+    sell: "operate",
+    receive_goods: "operate",
+    transfer: "operate",
+    stock_count: "operate",
+    return_to_brand: "operate",
+    stock: "view",
+    money: "operate",
+    offers_price: "view",
+    staff: "operate",
+    reports: "view",
+  },
+  { role: ROLE("store_staff") },
+);
+const warehouse = withSections(
+  {
+    home: "view",
+    booking: "operate",
+    receive_goods: "operate",
+    transfer: "operate",
+    stock_count: "operate",
+    return_to_brand: "operate",
+    stock: "manage",
+    money: "operate",
+    offers_price: "view",
+    staff: "operate",
+    reports: "view",
+    setup: "operate",
+  },
+  { role: ROLE("warehouse") },
+);
+const accounts = withSections(
+  {
+    home: "view",
+    money: "manage",
+    stock: "view",
+    reports: "view",
+    setup: "view",
+    // "View (payroll inputs)" — Accounts reads salary inputs without operating
+    // the floor's attendance, which is why it sits at `view` and not higher.
+    staff: "view",
+  },
+  { role: ROLE("accounts") },
+);
+const owner = withSections(
+  { home: "view", money: "manage", stock: "manage", setup: "manage", reports: "view" },
+  { role: ROLE("owner") },
+);
+// Admin runs the system but keeps no books: the sheet's note (2) gives it_admin
+// `money: none` deliberately, so every Money URL must be shut to it.
+const admin = withSections(
+  {
+    home: "view",
+    sell: "manage",
+    booking: "manage",
+    receive_goods: "manage",
+    transfer: "view",
+    stock_count: "manage",
+    return_to_brand: "manage",
+    stock: "manage",
+    offers_price: "manage",
+    staff: "manage",
+    reports: "view",
+    setup: "manage",
+  },
+  { role: ROLE("it_admin") },
+);
 const superuser = makeUser({ is_superuser: true });
 
 describe("canAccess", () => {
   it("superuser reaches everything", () => {
-    for (const p of ["/ledgers/vendor", "/masters/users", "/edges/rbac", "/intel/dashboards"]) {
+    for (const p of ["/money/vendor", "/setup/users", "/reports/sales", "/stock/vflips"]) {
       expect(canAccess(p, superuser)).toBe(true);
     }
   });
 
-  it("home and unknown/stub routes are open to any signed-in user", () => {
-    expect(canAccess("/", cashier)).toBe(true);
-    expect(canAccess("/store/sell", cashier)).toBe(true); // store_ops stub
-    expect(canAccess("/totally-unknown", cashier)).toBe(true);
+  it("a user the server sent no sections reaches nothing but unclaimed paths", () => {
+    const orphan = makeUser({});
+    expect(canAccess("/", orphan)).toBe(false);
+    expect(canAccess("/stock", orphan)).toBe(false);
+    expect(canAccess("/money/vendor", orphan)).toBe(false);
+    // Legacy URLs are unclaimed — they must load so the router can redirect
+    // them, and the guard then applies at the screen's new home.
+    expect(canAccess("/ledgers/vendor", orphan)).toBe(true);
   });
 
-  it("cashier cannot reach ledgers, master data or edges by URL", () => {
-    expect(canAccess("/ledgers/stock", cashier)).toBe(false);
-    expect(canAccess("/ledgers/vendor", cashier)).toBe(false);
-    expect(canAccess("/masters/users", cashier)).toBe(false);
-    expect(canAccess("/edges/rbac", cashier)).toBe(false);
+  it("the store person gets their day and nothing else", () => {
+    expect(canAccess("/", storePerson)).toBe(true);
+    expect(canAccess("/sell", storePerson)).toBe(true);
+    expect(canAccess("/receive", storePerson)).toBe(true);
+    expect(canAccess("/receive/pt/review", storePerson)).toBe(true);
+    expect(canAccess("/transfer/7", storePerson)).toBe(true);
+    expect(canAccess("/stock-count/adjustments", storePerson)).toBe(true);
+    expect(canAccess("/staff/attendance", storePerson)).toBe(true);
+    // No Booking and no Setup in the matrix — hidden in the menu, shut by URL.
+    expect(canAccess("/booking", storePerson)).toBe(false);
+    expect(canAccess("/setup/stores", storePerson)).toBe(false);
+    expect(canAccess("/setup/users", storePerson)).toBe(false);
   });
 
-  it("cashier keeps their own groups", () => {
-    expect(canAccess("/documents/bookings", cashier)).toBe(true);
-    expect(canAccess("/inbound", cashier)).toBe(true); // shared store_ops/documents
+  it("Money is one section but its books stay finance-only", () => {
+    // The store person holds money:operate — "Expenses only" on the sheet. The
+    // section opens, the vendor/cash books do not: those need money:manage, the
+    // same rung the server's `finledger.IsBooksKeeper` demands.
+    expect(canAccess("/money/expenses", storePerson)).toBe(true);
+    expect(canAccess("/money/vendor", storePerson)).toBe(false);
+    expect(canAccess("/money/cash", storePerson)).toBe(false);
+    expect(canAccess("/money/vendor", warehouse)).toBe(false); // money:operate too
+    expect(canAccess("/money/vendor", accounts)).toBe(true);
+    expect(canAccess("/money/cash", accounts)).toBe(true);
+    expect(canAccess("/money/vendor", owner)).toBe(true);
   });
 
-  it("manager has ledgers group but not the finance-only ledgers", () => {
-    expect(canAccess("/ledgers/stock", manager)).toBe(true);
-    expect(canAccess("/ledgers/stock-on-hand", manager)).toBe(true);
-    expect(canAccess("/ledgers/vendor", manager)).toBe(false);
-    expect(canAccess("/ledgers/cash", manager)).toBe(false);
+  it("Admin keeps no books — every Money URL is shut", () => {
+    // Regression: browser-testing #87 found the sidebar hiding Money from Admin
+    // while the ledger API still served it vendor payables, because the gate was
+    // a role list containing it_admin instead of the section it claims to mirror.
+    for (const p of [
+      "/money/expenses",
+      "/money/vendor",
+      "/money/cash",
+      "/money/payments",
+      "/money/bank",
+      "/money/tally",
+    ]) {
+      expect(canAccess(p, admin)).toBe(false);
+    }
+    // Everything Admin *does* own still opens.
+    expect(canAccess("/setup/users", admin)).toBe(true);
+    expect(canAccess("/stock", admin)).toBe(true);
   });
 
-  it("accounts (finance) reaches vendor/cash ledgers", () => {
-    expect(canAccess("/ledgers/vendor", accounts)).toBe(true);
-    expect(canAccess("/ledgers/cash", accounts)).toBe(true);
-    expect(canAccess("/ledgers/stock", accounts)).toBe(true);
+  it("Staff opens attendance for the floor, records and salary for the back office", () => {
+    // The store person holds staff:operate for their *own* attendance only.
+    expect(canAccess("/staff/attendance", storePerson)).toBe(true);
+    expect(canAccess("/staff/members", storePerson)).toBe(false);
+    expect(canAccess("/staff/payroll", storePerson)).toBe(false);
+    // Accounts sits *lower* on the ladder (staff:view) yet owns payroll inputs —
+    // the case the ordinal ladder cannot express, so Payroll keeps a role list.
+    expect(canAccess("/staff/payroll", accounts)).toBe(true);
+    expect(canAccess("/staff/members", accounts)).toBe(false);
+    expect(canAccess("/staff/members", admin)).toBe(true);
+    expect(canAccess("/staff/payroll", admin)).toBe(true);
   });
 
-  it("owner reaches finance ledgers and RBAC admin", () => {
-    expect(canAccess("/ledgers/vendor", owner)).toBe(true);
-    expect(canAccess("/masters/users", owner)).toBe(true);
-    expect(canAccess("/edges/rbac", owner)).toBe(true);
+  it("Users & Roles needs an RBAC-admin role, not just the Setup section", () => {
+    expect(canAccess("/setup/users", warehouse)).toBe(false); // setup:operate only
+    expect(canAccess("/setup/stores", warehouse)).toBe(true);
+    expect(canAccess("/setup/users", owner)).toBe(true);
   });
 
-  it("ho_ops sees master_data but not the RBAC-admin pages (mirrors backend)", () => {
-    expect(canAccess("/masters/stores", hoOps)).toBe(true);
-    expect(canAccess("/masters/users", hoOps)).toBe(false);
+  it("V-flip rides on the Stock section it is an action of", () => {
+    expect(canAccess("/stock", storePerson)).toBe(true);
+    expect(canAccess("/stock/vflips/3", storePerson)).toBe(true);
+    // /stock is not a prefix of /stock-count — a different section entirely.
+    expect(canAccess("/stock-count/writeoffs", accounts)).toBe(false);
   });
 
-  it("the stock section opens the stock lookups global search sends people to", () => {
-    // A cashier has no `ledgers` nav group, but the RBAC matrix gives every role
-    // `stock` at some capability — and search returns stock results, so the
-    // destination must open (#86). Vendor/cash stay shut: they are not `stock`.
-    const scanner = makeUser({ ...cashier, capabilities: { stock: "view" } });
-    expect(canAccess("/ledgers/stock-on-hand", scanner)).toBe(true);
-    expect(canAccess("/ledgers/stock", scanner)).toBe(true);
-    expect(canAccess("/ledgers/vendor", scanner)).toBe(false);
-    expect(canAccess("/ledgers/cash", scanner)).toBe(false);
-
-    // Fail-closed: the server only sends sections a user actually reaches, so an
-    // absent entry (or no payload at all) leaves the legacy gate in charge.
-    expect(canAccess("/ledgers/stock-on-hand", cashier)).toBe(false);
-    expect(canAccess("/ledgers/stock-on-hand", makeUser({ ...cashier, capabilities: {} }))).toBe(false);
+  it("the stock lookups global search sends people to are open to stock holders", () => {
+    // Search returns stock results scoped to the caller, so the destination has
+    // to open for anyone the matrix gives `stock` at any capability (#86).
+    expect(canAccess("/stock", withSections({ stock: "view" }))).toBe(true);
+    expect(canAccess("/stock/history", withSections({ stock: "view" }))).toBe(true);
+    expect(canAccess("/stock", withSections({ home: "view" }))).toBe(false);
   });
 
   it("mixed-case URLs are guarded too (React Router matches case-insensitively)", () => {
-    expect(canAccess("/LEDGERS/VENDOR", cashier)).toBe(false);
-    expect(canAccess("/Masters/Users", cashier)).toBe(false);
-    expect(canAccess("/Edges/Rbac", cashier)).toBe(false);
-    expect(canAccess("/Ledgers/Vendor", manager)).toBe(false);
-    expect(canAccess("/Ledgers/Vendor", accounts)).toBe(true);
+    expect(canAccess("/MONEY/VENDOR", storePerson)).toBe(false);
+    expect(canAccess("/Setup/Users", storePerson)).toBe(false);
+    expect(canAccess("/Booking/12", storePerson)).toBe(false);
+    expect(canAccess("/Money/Vendor", accounts)).toBe(true);
   });
 });

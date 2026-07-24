@@ -388,8 +388,39 @@ type StoreMini = ApiSchemas["StoreMini"];
 
 interface AdminMeta {
   nav_groups: string[];
+  /** The sections a role can be granted, in sidebar order (SIDEBAR RBAC, #85). */
+  sections: { code: string; label: string }[];
+  /** The capability ladder, lowest rung first. */
+  capabilities: string[];
   scope_types: { value: string; label: string }[];
   stores: { id: number; code: string; name: string; store_type: string }[];
+}
+
+/** `{section: {capability, label}}` — the shape the server stores and gates on. */
+type SectionAccess = Record<string, { capability: string; label?: string }>;
+
+function normalizeSectionAccess(value: unknown): SectionAccess {
+  if (!value || typeof value !== "object") return {};
+  const out: SectionAccess = {};
+  for (const [code, entry] of Object.entries(value as Record<string, unknown>)) {
+    const capability =
+      entry && typeof entry === "object"
+        ? String((entry as { capability?: unknown }).capability ?? "none")
+        : "none";
+    const label =
+      entry && typeof entry === "object"
+        ? (entry as { label?: unknown }).label
+        : undefined;
+    out[code] = { capability, ...(typeof label === "string" ? { label } : {}) };
+  }
+  return out;
+}
+
+function grantedSections(value: unknown): string[] {
+  const access = normalizeSectionAccess(value);
+  return Object.entries(access)
+    .filter(([, entry]) => entry.capability && entry.capability !== "none")
+    .map(([code]) => code);
 }
 
 const blankUser = {
@@ -411,6 +442,9 @@ const blankRole = {
   description: "",
   landing_page: "home",
   nav_groups: ["home"],
+  // What the sidebar and the API both read. A new role starts with nothing —
+  // access is granted deliberately, never inherited by default (fail-closed).
+  section_access: {} as SectionAccess,
   is_active: true,
 };
 
@@ -429,12 +463,21 @@ export function UsersRolesPage() {
   const [tab, setTab] = useState<"users" | "roles">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
-  const [meta, setMeta] = useState<AdminMeta>({ nav_groups: [], scope_types: [], stores: [] });
+  const [meta, setMeta] = useState<AdminMeta>({
+    nav_groups: [],
+    sections: [],
+    capabilities: [],
+    scope_types: [],
+    stores: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [ok, setOk] = useState("");
   const [userForm, setUserForm] = useState(blankUser);
   const [roleForm, setRoleForm] = useState(blankRole);
+  // The access the role was loaded with, so an edited rung can drop the RBAC
+  // sheet's wording instead of carrying a line that no longer describes it.
+  const [loadedAccess, setLoadedAccess] = useState<SectionAccess>({});
 
   const roleOptions = useMemo(() => roles.filter((r) => r.is_active), [roles]);
 
@@ -478,6 +521,7 @@ export function UsersRolesPage() {
     setTab("roles");
     setError("");
     setOk("");
+    setLoadedAccess(normalizeSectionAccess(r.section_access));
     setRoleForm({
       id: r.id,
       code: r.code,
@@ -485,6 +529,7 @@ export function UsersRolesPage() {
       description: r.description ?? "",
       landing_page: r.landing_page ?? "home",
       nav_groups: normalizeNavGroups(r.nav_groups),
+      section_access: normalizeSectionAccess(r.section_access),
       is_active: r.is_active ?? true,
     });
   }
@@ -496,11 +541,20 @@ export function UsersRolesPage() {
     }));
   }
 
-  function toggleNav(key: string) {
-    setRoleForm((f) => ({
-      ...f,
-      nav_groups: f.nav_groups.includes(key) ? f.nav_groups.filter((x) => x !== key) : [...f.nav_groups, key],
-    }));
+  function setSectionCapability(code: string, capability: string) {
+    setRoleForm((f) => {
+      // The label is the RBAC sheet's own wording for *this* rung ("Expenses
+      // only (create)"). Keep it while the rung is untouched, drop it once an
+      // admin retunes: carrying "No" next to `manage` would misdescribe the
+      // grant everywhere the payload shows it.
+      const original = loadedAccess[code];
+      const keepsSheetWording = original?.capability === capability && original.label;
+      const next = { ...f.section_access };
+      next[code] = keepsSheetWording
+        ? { capability, label: original.label as string }
+        : { capability };
+      return { ...f, section_access: next };
+    });
   }
 
   async function saveUser() {
@@ -535,13 +589,17 @@ export function UsersRolesPage() {
       name: roleForm.name,
       description: roleForm.description,
       landing_page: roleForm.landing_page,
+      // Sent unchanged: nothing navigates by nav_groups since #87, but the field
+      // is still on the model, so preserve it rather than silently rewriting it.
       nav_groups: roleForm.nav_groups,
+      section_access: roleForm.section_access,
       is_active: roleForm.is_active,
     };
     try {
       if (roleForm.id) await typedApi.patch(`/auth/admin/roles/${roleForm.id}` as "/auth/admin/roles/{id}", payload);
       else await typedApi.post("/auth/admin/roles", payload);
       setRoleForm(blankRole);
+      setLoadedAccess({});
       setOk("Role saved.");
       loadAll();
     } catch (e) {
@@ -632,7 +690,7 @@ export function UsersRolesPage() {
             <div className="toolbar" style={{ marginBottom: 12 }}>
               <h3 className="h3">{roleForm.id ? "Edit role" : "Create role"}</h3>
               <div className="spacer" />
-              {roleForm.id ? <button className="btn btn-sm" onClick={() => setRoleForm(blankRole)} data-testid="role-editor-clear"><X size={14} /> New</button> : null}
+              {roleForm.id ? <button className="btn btn-sm" onClick={() => { setRoleForm(blankRole); setLoadedAccess({}); }} data-testid="role-editor-clear"><X size={14} /> New</button> : null}
             </div>
             <div className="form-grid wide-form">
               <input className="input" placeholder="Role code" value={roleForm.code} onChange={(e) => setRoleForm({ ...roleForm, code: e.target.value })} data-testid="role-code-input" />
@@ -640,24 +698,51 @@ export function UsersRolesPage() {
               <input className="input" placeholder="Landing page" value={roleForm.landing_page} onChange={(e) => setRoleForm({ ...roleForm, landing_page: e.target.value })} data-testid="role-landing-input" />
               <input className="input" placeholder="Description" value={roleForm.description} onChange={(e) => setRoleForm({ ...roleForm, description: e.target.value })} data-testid="role-desc-input" />
               <label className="check-row"><input type="checkbox" checked={roleForm.is_active} onChange={(e) => setRoleForm({ ...roleForm, is_active: e.target.checked })} data-testid="role-active-checkbox" /> Active</label>
-              <button className="btn btn-cta" onClick={saveRole} disabled={!roleForm.code || !roleForm.name || roleForm.nav_groups.length === 0} data-testid="role-save-button"><Save size={15} /> Save role</button>
+              <button className="btn btn-cta" onClick={saveRole} disabled={!roleForm.code || !roleForm.name} data-testid="role-save-button"><Save size={15} /> Save role</button>
             </div>
-            <div className="toggle-grid" data-testid="role-nav-picker">
-              {meta.nav_groups.map((key) => (
-                <button key={key} type="button" className={`toggle-chip ${roleForm.nav_groups.includes(key) ? "active" : ""}`} onClick={() => toggleNav(key)} data-testid={`role-nav-toggle-${key}`}>{key.replace(/_/g, " ")}</button>
-              ))}
+            <div className="form-note" style={{ margin: "4px 0 10px" }}>
+              What this role sees in the sidebar and may do behind it. The API gates on
+              the same rungs, so a change here takes effect everywhere — no release needed.
+            </div>
+            <div className="table-wrap">
+              <table className="data" data-testid="role-section-picker">
+                <thead><tr><th>Section</th><th>Capability</th><th>From the RBAC sheet</th></tr></thead>
+                <tbody>
+                  {meta.sections.map((s) => {
+                    const held = roleForm.section_access[s.code]?.capability ?? "none";
+                    return (
+                      <tr key={s.code} data-testid={`role-section-row-${s.code}`}>
+                        <td><b>{s.label}</b><div className="mono" style={{ fontSize: 12 }}>{s.code}</div></td>
+                        <td>
+                          <select
+                            className="input"
+                            value={held}
+                            onChange={(e) => setSectionCapability(s.code, e.target.value)}
+                            data-testid={`role-section-capability-${s.code}`}
+                          >
+                            {meta.capabilities.map((cap) => (
+                              <option key={cap} value={cap}>{cap}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="muted">{roleForm.section_access[s.code]?.label ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 
           <div className="table-wrap">
             <table className="data" data-testid="roles-table">
-              <thead><tr><th>Role</th><th>Landing</th><th>Nav groups</th><th className="num">Users</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Role</th><th>Landing</th><th>Sections</th><th className="num">Users</th><th>Status</th><th /></tr></thead>
               <tbody>
                 {loading ? <tr><td colSpan={6}>Loading…</td></tr> : roles.map((r) => (
                   <tr key={r.id} data-testid={`role-row-${r.code}`}>
                     <td><b>{r.name}</b><div className="mono" style={{ fontSize: 12 }}>{r.code}{r.is_system ? " · system" : ""}</div></td>
                     <td className="mono">{r.landing_page}</td>
-                    <td>{normalizeNavGroups(r.nav_groups).map((n) => <span key={n} className="chip chip-navy" style={{ marginRight: 5, marginBottom: 4 }}>{n}</span>)}</td>
+                    <td>{grantedSections(r.section_access).map((n) => <span key={n} className="chip chip-navy" style={{ marginRight: 5, marginBottom: 4 }}>{n}</span>)}</td>
                     <td className="num">{r.user_count}</td>
                     <td><span className={`chip chip-${r.is_active ? "green" : "red"}`}>{r.is_active ? "Active" : "Inactive"}</span></td>
                     <td><button className="btn btn-sm" onClick={() => editRole(r)} data-testid={`edit-role-${r.code}`}><ShieldCheck size={13} /> Edit</button></td>

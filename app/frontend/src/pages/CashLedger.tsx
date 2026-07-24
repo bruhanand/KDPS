@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { FINANCE_ROLES } from "../auth/routeAccess";
+import { meetsCapability } from "../auth/routeAccess";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -27,7 +27,9 @@ interface EntryT {
 
 export default function CashLedger() {
   const { user } = useAuth();
-  const isFinance = FINANCE_ROLES.includes(user?.role?.code ?? "");
+  // Mirrors the server gate exactly (`finledger.IsBooksKeeper` = money:manage),
+  // read from the same section payload rather than a role list of our own.
+  const isFinance = Boolean(user?.is_superuser) || meetsCapability(user?.capabilities?.money, "manage");
 
   const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);
@@ -169,7 +171,7 @@ export default function CashLedger() {
           </div>
         </div>
       )}
-      <Link to="/ledgers/vendor" className="btn" style={{ marginTop: 18 }}>← Vendor Ledger</Link>
+      <Link to="/money/vendor" className="btn" style={{ marginTop: 18 }}>← Vendor Ledger</Link>
     </div>
   );
 }

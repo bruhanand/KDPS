@@ -32,9 +32,9 @@ export interface ApprovalT {
 
 // kind → the document's own page. The server never knows about client routes.
 const KIND_ROUTE: Record<string, string> = {
-  writeoff: "/outbound/writeoffs",
-  vflip: "/outbound/vflips",
-  adjustment: "/outbound/adjustments",
+  writeoff: "/stock-count/writeoffs",
+  vflip: "/stock/vflips",
+  adjustment: "/stock-count/adjustments",
 };
 
 export function approvalDocPath(a: Pick<ApprovalT, "kind" | "object_id">): string | null {

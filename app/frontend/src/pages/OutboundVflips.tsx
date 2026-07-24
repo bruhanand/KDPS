@@ -89,7 +89,7 @@ export function VFlipListPage() {
         </div>
         <div className="spacer" />
         {writable && (
-          <Link className="btn btn-cta" to="/outbound/vflips/new" data-testid="new-vflip-btn">
+          <Link className="btn btn-cta" to="/stock/vflips/new" data-testid="new-vflip-btn">
             <Plus size={16} /> New V-flip
           </Link>
         )}
@@ -129,7 +129,7 @@ export function VFlipListPage() {
                 return (
                   <tr key={v.id} data-testid={`vflip-row-${v.id}`}>
                     <td>
-                      <Link to={`/outbound/vflips/${v.id}`} className="link-cell mono" data-testid={`vflip-link-${v.id}`}>
+                      <Link to={`/stock/vflips/${v.id}`} className="link-cell mono" data-testid={`vflip-link-${v.id}`}>
                         <b>{v.doc_number || `Draft #${v.id}`}</b>
                       </Link>
                     </td>
@@ -210,7 +210,7 @@ export function VFlipNewPage() {
         season,
         lines: payloadLines,
       });
-      navigate(`/outbound/vflips/${data.id}`);
+      navigate(`/stock/vflips/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -220,7 +220,7 @@ export function VFlipNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/vflips" className="btn" style={{ marginBottom: 16 }} data-testid="vflip-back-link">
+      <Link to="/stock/vflips" className="btn" style={{ marginBottom: 16 }} data-testid="vflip-back-link">
         <ArrowLeft size={15} /> V-Flips
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New V-Flip</h1>
@@ -339,7 +339,7 @@ export function VFlipDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/vflips" className="btn" style={{ marginBottom: 16 }} data-testid="vflip-detail-back">
+      <Link to="/stock/vflips" className="btn" style={{ marginBottom: 16 }} data-testid="vflip-detail-back">
         <ArrowLeft size={15} /> V-Flips
       </Link>
       <div className="toolbar">

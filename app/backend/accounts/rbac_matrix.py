@@ -14,6 +14,12 @@ Two ratified corrections to the client's original Sheet-1 matrix are baked in:
     (Sheet 1 said NO on GRN; the booking-less direct-delivery decision wins);
   · Admin gets **no** Money access — Sheet-1 note (2), kept deliberately.
 
+One section has **no sheet row at all**: ``staff``. The sheet predates KDPS's
+hand-drawn store sidebar, which puts attendance in the store person's daily
+screen (spec #84, user story 27), so #87 adds the section with derived access —
+marked ``(derived)`` in the label so nobody mistakes it for the sheet. It is
+data like every other cell: retune it on the Role row, no release.
+
 Scope words in the cells ("Own store", "Assigned brands", "All (network)") are
 *display context only* — the acting scope is the separate ``scope_type``
 dimension (ADR-0003), not the capability. They are preserved verbatim as the
@@ -47,6 +53,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full (all locations)"),
         "money": (CAP_MANAGE, "Full"),
         "offers_price": (CAP_APPROVE, "Approve / Override"),
+        "staff": (CAP_MANAGE, "Full (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_MANAGE, "Full"),
     },
@@ -61,6 +68,10 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_VIEW, "Own store"),
         "money": (CAP_OPERATE, "Expenses only (create)"),
         "offers_price": (CAP_VIEW, "View"),
+        # The hand-drawn store sidebar puts biometric check-in in the daily
+        # screen — so the store person *operates* Staff (own attendance), even
+        # though employee records and payroll stay a back-office promise.
+        "staff": (CAP_OPERATE, "Own attendance (derived)"),
         "reports": (CAP_VIEW, "Own store only"),
         "setup": (CAP_NONE, "No"),
     },
@@ -75,6 +86,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full"),
         "money": (CAP_OPERATE, "Expenses only (create)"),
         "offers_price": (CAP_VIEW, "View"),
+        "staff": (CAP_OPERATE, "Own attendance (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_OPERATE, "Products only"),
     },
@@ -89,6 +101,8 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_VIEW, "Assigned brands"),
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_APPROVE, "Recommend + approve within limit"),
+        # A brand manager's scope is brands, not people — no staff surface.
+        "staff": (CAP_NONE, "No (derived)"),
         "reports": (CAP_VIEW, "Own brands only"),
         "setup": (CAP_OPERATE, "Edit assigned products"),
     },
@@ -103,6 +117,8 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_VIEW, "View"),
         "money": (CAP_MANAGE, "Full"),
         "offers_price": (CAP_VIEW, "View"),
+        # Payroll inputs and sales incentives are an Accounts read, not an edit.
+        "staff": (CAP_VIEW, "View (payroll inputs) (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_VIEW, "View"),
     },
@@ -117,6 +133,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full"),
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_MANAGE, "Configure"),
+        "staff": (CAP_MANAGE, "Full (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_MANAGE, "Full (incl. Users & Roles)"),
     },
@@ -149,6 +166,7 @@ DERIVED_ACCESS: dict[str, dict[str, tuple[str, str]]] = {
         "return_to_brand": (CAP_VIEW, "View"),
         "stock": (CAP_VIEW, "All locations"),
         "offers_price": (CAP_OPERATE, "Plan"),
+        "staff": (CAP_VIEW, "All (network)"),
         "reports": (CAP_VIEW, "All"),
     },
     # HO Data Steward — edits masters, reads stock. Setup stays at `operate`
@@ -164,7 +182,7 @@ DERIVED_ACCESS: dict[str, dict[str, tuple[str, str]]] = {
 
 
 def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
-    """Full 12-section access map for a role, as stored in ``section_access``.
+    """Full 13-section access map for a role, as stored in ``section_access``.
 
     Every section is present (missing → explicit ``none``), so the row is
     self-describing and fail-closed. Shape: ``{section: {capability, label}}``.

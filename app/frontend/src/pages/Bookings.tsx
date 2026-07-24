@@ -61,7 +61,7 @@ export function BookingsPage() {
           <h1 className="h1 h2-rust">Bookings</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/documents/bookings/new" data-testid="new-booking-btn">
+        <Link className="btn btn-cta" to="/booking/new" data-testid="new-booking-btn">
           <Plus size={16} /> New booking
         </Link>
       </div>
@@ -74,7 +74,7 @@ export function BookingsPage() {
           {data.map((b) => {
             const pct = b.booked_total ? Math.round((b.received_total / b.booked_total) * 100) : 0;
             return (
-              <Link key={b.id} to={`/documents/bookings/${b.id}`} className="card bk-card" data-testid={`booking-card-${b.number}`}>
+              <Link key={b.id} to={`/booking/${b.id}`} className="card bk-card" data-testid={`booking-card-${b.number}`}>
                 <div className="bk-card-top">
                   <span className="bk-num">{b.number}</span>
                   <StatusPill status={b.status} label={b.status_label} />
@@ -198,7 +198,7 @@ export function BookingNewPage() {
         source_file_id: sourceFileId,
         lines: payloadLines,
       });
-      navigate(`/documents/bookings/${data.id}`);
+      navigate(`/booking/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -208,7 +208,7 @@ export function BookingNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/bookings" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
+      <Link to="/booking" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New booking</h1>
 
       <div className="card section-card">
@@ -302,7 +302,7 @@ export function BookingDetailPage() {
   if (loading || !b) return <div className="page-pad"><p className="lead">Loading…</p></div>;
   return (
     <div className="page-pad">
-      <Link to="/documents/bookings" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
+      <Link to="/booking" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> Bookings</Link>
       <div className="toolbar">
         <div>
           <p className="eyebrow">{b.number}</p>
@@ -311,7 +311,7 @@ export function BookingDetailPage() {
         </div>
         <div className="spacer" />
         <StatusPill status={b.status} label={b.status_label} />
-        <Link className="btn btn-cta" to={`/documents/inbound/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
+        <Link className="btn btn-cta" to={`/receive/new?booking=${b.id}`} data-testid="goto-receive"><FileUp size={15} /> Receive</Link>
       </div>
 
       <div className="form-row" style={{ marginBottom: 18 }}>

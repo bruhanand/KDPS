@@ -844,6 +844,7 @@ export interface components {
             description?: string;
             landing_page?: string;
             nav_groups?: unknown;
+            section_access?: unknown;
             permissions_map?: unknown;
             readonly is_system: boolean;
             is_active?: boolean;
@@ -1072,6 +1073,7 @@ export interface components {
             description?: string;
             landing_page?: string;
             nav_groups?: unknown;
+            section_access?: unknown;
             permissions_map?: unknown;
             readonly is_system?: boolean;
             is_active?: boolean;

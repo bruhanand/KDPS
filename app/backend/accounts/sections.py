@@ -7,16 +7,18 @@ levels a role can hold on each. *Which* role gets *what* is data (see
 access); the catalog itself is code because adding a section means shipping the
 screens behind it.
 
-The twelve sections are the SIDEBAR RBAC sheet
+Twelve of the thirteen sections are the SIDEBAR RBAC sheet
 (``docs/data-from-kdps/scope-dashboard-detail/ERP_DASHBOARD_V1.xlsx`` →
-"SIDEBAR RBAC", 24 Jul 2026). "Staff" from the 13-section design is deliberately
-absent: it has no row in the RBAC matrix yet (parked pending KDPS's
-staff-vs-customer answer), and this slice returns *exactly* the matrix.
+"SIDEBAR RBAC", 24 Jul 2026). ``staff`` is the thirteenth: it has no row in that
+sheet, but spec #84 puts Staff → Attendance in the store person's daily sidebar,
+so #87 adds it with clearly-derived access (see ``rbac_matrix``). Members stays
+parked pending KDPS's staff-vs-customer answer — the section exists, that
+subsection is only a planned page.
 
-These section codes are a new, parallel vocabulary to the legacy
-``NAV_GROUPS`` (the five architecture layers). This ticket is contract-only —
-the old groups still drive today's sidebar; the re-housing (#87) switches the
-shell over to these sections and can then retire the layer names.
+These section codes replaced the legacy ``NAV_GROUPS`` (the five architecture
+layers) as the shell's authority in #87: the sidebar, the client route guards
+and the server-side section gate all read this vocabulary. ``NAV_GROUPS``
+survives only as a legacy field on ``Role`` that nothing navigates by.
 """
 
 from __future__ import annotations
@@ -59,6 +61,7 @@ SECTIONS: list[tuple[str, str]] = [
     ("stock", "Stock"),
     ("money", "Money"),
     ("offers_price", "Offers & Price"),
+    ("staff", "Staff"),
     ("reports", "Reports"),
     ("setup", "Setup"),
 ]

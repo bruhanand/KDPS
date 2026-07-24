@@ -126,7 +126,7 @@ DOC_TYPES: list[DocType] = [
         model=Booking,
         number_field="number",
         section="booking",
-        route="/documents/bookings/{pk}",
+        route="/booking/{pk}",
         scope=_scope_booking,
         related=("brand", "vendor", "destination_store"),
         context=lambda d: d.brand.name,
@@ -137,7 +137,7 @@ DOC_TYPES: list[DocType] = [
         model=Grn,
         number_field="doc_number",
         section="receive_goods",
-        route="/inbound/{pk}",
+        route="/receive/{pk}",
         scope=_scope_store,
         related=("store",),
         context=_store_code,
@@ -147,7 +147,7 @@ DOC_TYPES: list[DocType] = [
         model=PtFile,
         number_field="doc_number",
         section="receive_goods",
-        route="/documents/pt-mapper/{pk}",
+        route="/receive/pt/{pk}",
         scope=_scope_grn_store,
         related=("grn", "grn__store"),
         context=lambda d: d.grn.store.code if d.grn else "",
@@ -157,7 +157,7 @@ DOC_TYPES: list[DocType] = [
         model=StoreTransfer,
         number_field="doc_number",
         section="transfer",
-        route="/outbound/transfers/{pk}",
+        route="/transfer/{pk}",
         scope=_scope_transfer,
         related=("source_store", "destination_store"),
         context=lambda d: f"{d.source_store.code} → {d.destination_store.code}",
@@ -167,7 +167,7 @@ DOC_TYPES: list[DocType] = [
         model=ReturnToVendor,
         number_field="doc_number",
         section="return_to_brand",
-        route="/outbound/rtvs/{pk}",
+        route="/return-to-brand/{pk}",
         scope=_scope_store,
         related=("store", "brand"),
         context=lambda d: f"{_store_code(d)} · {d.brand.name}" if d.brand else _store_code(d),
@@ -177,7 +177,7 @@ DOC_TYPES: list[DocType] = [
         model=StockAdjustment,
         number_field="doc_number",
         section="stock_count",
-        route="/outbound/adjustments/{pk}",
+        route="/stock-count/adjustments/{pk}",
         scope=_scope_store,
         related=("store",),
         context=_store_code,
@@ -187,7 +187,7 @@ DOC_TYPES: list[DocType] = [
         model=WriteOff,
         number_field="doc_number",
         section="stock_count",
-        route="/outbound/writeoffs/{pk}",
+        route="/stock-count/writeoffs/{pk}",
         scope=_scope_store,
         related=("store",),
         context=_store_code,
@@ -197,7 +197,7 @@ DOC_TYPES: list[DocType] = [
         model=VFlip,
         number_field="doc_number",
         section="stock",
-        route="/outbound/vflips/{pk}",
+        route="/stock/vflips/{pk}",
         scope=_scope_store,
         related=("store", "original_brand"),
         context=_store_code,
@@ -320,7 +320,7 @@ def _search_items(user: Any, q: str) -> tuple[list[dict[str, Any]], bool]:
         identity = " · ".join(p for p in (sku.design, sku.color, sku.size) if p)
         subtitle = " · ".join(p for p in (sku.brand, identity or sku.item) if p)
         is_exact = sku.barcode.lower() == q.lower()
-        to = f"/ledgers/stock-on-hand?sku={quote(sku.barcode)}"
+        to = f"/stock?sku={quote(sku.barcode)}"
         found = cohorts.get(sku.barcode, [])[:MAX_COHORTS_PER_SKU]
         if not found:
             rows.append(
@@ -373,7 +373,7 @@ def _search_brands(user: Any, q: str) -> tuple[list[dict[str, Any]], bool]:
             "title": brand.name,
             "subtitle": brand.code,
             "meta": brand.commercial_label,
-            "to": f"/ledgers/stock-on-hand?brand={quote(brand.name)}",
+            "to": f"/stock?brand={quote(brand.name)}",
             "exact": brand.name.lower() == q.lower() or brand.code.lower() == q.lower(),
         }
         for brand in found[:MAX_PER_GROUP]
