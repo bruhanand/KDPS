@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "finledger.apps.FinledgerConfig",
     "approvals.apps.ApprovalsConfig",
     "outbound.apps.OutboundConfig",
+    # Composition root: reads across the domain apps, imported by none of them.
+    "search.apps.SearchConfig",
 ]
 
 MIDDLEWARE = [

@@ -195,6 +195,11 @@ class StockOnHandView(APIView):
             qs = qs.filter(store__code=store)
         if brand := request.query_params.get("brand"):
             qs = qs.filter(brand=brand)
+        # Where a global-search item result lands: one barcode, its stock wherever
+        # the caller may see it. Filtered in the DB, not the client, so the answer
+        # survives the MAX_LINES cap.
+        if sku := request.query_params.get("sku"):
+            qs = qs.filter(sku_code=sku)
 
         totals = qs.aggregate(units=Sum("net_qty"), value=Sum("net_value_paise"))
         rows, lines = self._rows(qs, group_by)

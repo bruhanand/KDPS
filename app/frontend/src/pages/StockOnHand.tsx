@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, ScrollText, ShieldAlert, X } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
@@ -59,6 +59,13 @@ const TABS: { key: Group; label: string }[] = [
 ];
 
 export default function StockOnHand() {
+  // Where a global-search result lands (#86): one barcode, or one brand, with
+  // its stock wherever the caller may see it. Both filters are the server's, so
+  // the answer survives the on-hand line cap.
+  const [params, setParams] = useSearchParams();
+  const skuFilter = params.get("sku") ?? "";
+  const brandFilter = params.get("brand") ?? "";
+  const deepFilter = skuFilter || brandFilter;
   const [group, setGroup] = useState<Group>("sku");
   const [data, setData] = useState<OnHandT | null>(null);
   const [quar, setQuar] = useState<QuarT | null>(null);
@@ -93,12 +100,15 @@ export default function StockOnHand() {
         .catch((e) => setError(apiErrorMessage(e)))
         .finally(() => setLoading(false));
     } else {
-      api.get(`/stockledger/on-hand?group_by=${group}`)
+      const deep = new URLSearchParams({ group_by: group });
+      if (skuFilter) deep.set("sku", skuFilter);
+      if (brandFilter) deep.set("brand", brandFilter);
+      api.get(`/stockledger/on-hand?${deep.toString()}`)
         .then((r) => setData(r.data))
         .catch((e) => setError(apiErrorMessage(e)))
         .finally(() => setLoading(false));
     }
-  }, [group, qStore, qBrand, reloadKey]);
+  }, [group, qStore, qBrand, reloadKey, skuFilter, brandFilter]);
 
   // Refresh the filter option lists from the full (unfiltered) quarantine set
   // whenever we enter the tab or the data changes.
@@ -224,6 +234,26 @@ export default function StockOnHand() {
         ))}
       </div>
 
+      {!isQuar && deepFilter && (
+        <div className="filter-bar" data-testid="onhand-deep-filter">
+          <span className={`chip chip-navy ${skuFilter ? "mono" : ""}`}>
+            {skuFilter ? `Barcode ${skuFilter}` : `Brand ${brandFilter}`}
+          </span>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              const next = new URLSearchParams(params);
+              next.delete("sku");
+              next.delete("brand");
+              setParams(next, { replace: true });
+            }}
+            data-testid="onhand-deep-filter-clear"
+          >
+            <X size={14} /> Show all stock
+          </button>
+        </div>
+      )}
+
       {isQuar && (
         <div className="filter-bar" data-testid="quarantine-filters">
           <select className="select" value={qStore} onChange={(e) => setQStore(e.target.value)} data-testid="quarantine-filter-store">
@@ -285,7 +315,9 @@ export default function StockOnHand() {
         )
       ) : emptyOnHand ? (
         <div className="card section-card" data-testid="onhand-empty">
-          No stock on hand yet. Post a PT file from Patna (PT Mapper → Push into system) to build inventory.
+          {deepFilter
+            ? `No stock of ${deepFilter} in any location you can see.`
+            : "No stock on hand yet. Post a PT file from Patna (PT Mapper → Push into system) to build inventory."}
         </div>
       ) : (
         <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>

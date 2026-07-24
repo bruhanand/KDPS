@@ -92,6 +92,22 @@ describe("canAccess", () => {
     expect(canAccess("/masters/users", hoOps)).toBe(false);
   });
 
+  it("the stock section opens the stock lookups global search sends people to", () => {
+    // A cashier has no `ledgers` nav group, but the RBAC matrix gives every role
+    // `stock` at some capability — and search returns stock results, so the
+    // destination must open (#86). Vendor/cash stay shut: they are not `stock`.
+    const scanner = makeUser({ ...cashier, capabilities: { stock: "view" } });
+    expect(canAccess("/ledgers/stock-on-hand", scanner)).toBe(true);
+    expect(canAccess("/ledgers/stock", scanner)).toBe(true);
+    expect(canAccess("/ledgers/vendor", scanner)).toBe(false);
+    expect(canAccess("/ledgers/cash", scanner)).toBe(false);
+
+    // Fail-closed: the server only sends sections a user actually reaches, so an
+    // absent entry (or no payload at all) leaves the legacy gate in charge.
+    expect(canAccess("/ledgers/stock-on-hand", cashier)).toBe(false);
+    expect(canAccess("/ledgers/stock-on-hand", makeUser({ ...cashier, capabilities: {} }))).toBe(false);
+  });
+
   it("mixed-case URLs are guarded too (React Router matches case-insensitively)", () => {
     expect(canAccess("/LEDGERS/VENDOR", cashier)).toBe(false);
     expect(canAccess("/Masters/Users", cashier)).toBe(false);

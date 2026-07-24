@@ -17,6 +17,12 @@ interface AccessRule {
   groups?: string[];
   // Any-of check against `user.role.code`, mirroring a finer backend gate.
   roles?: string[];
+  // Section from the SIDEBAR RBAC contract (#85) that also opens this route.
+  // The server is the authority on sections, and it is what global search (#86)
+  // filters its results by — so where the section says yes, the older
+  // `nav_groups` list must not veto, or a result the server just returned would
+  // land the person on "Access denied". Superseded by #87's re-housing.
+  section?: string;
 }
 
 // Longest-prefix wins (sorted below), so more specific rules override the
@@ -24,6 +30,10 @@ interface AccessRule {
 const RULES: AccessRule[] = [
   { prefix: "/ledgers/vendor", groups: ["ledgers"], roles: FINANCE_ROLES },
   { prefix: "/ledgers/cash", groups: ["ledgers"], roles: FINANCE_ROLES },
+  // Stock lookups — every role in the RBAC matrix may see stock at some scope,
+  // and search sends them here, so the `stock` section opens them.
+  { prefix: "/ledgers/stock-on-hand", groups: ["ledgers"], section: "stock" },
+  { prefix: "/ledgers/stock", groups: ["ledgers"], section: "stock" },
   { prefix: "/ledgers", groups: ["ledgers"] },
   { prefix: "/masters/users", groups: ["master_data"], roles: RBAC_ADMIN_ROLES },
   { prefix: "/masters", groups: ["master_data"] },
@@ -52,6 +62,7 @@ export function canAccess(pathname: string, user: User): boolean {
   const normalized = pathname.toLowerCase();
   const rule = RULES.find((r) => matches(normalized, r.prefix));
   if (!rule) return true;
+  if (rule.section && (user.capabilities?.[rule.section] ?? "none") !== "none") return true;
   if (rule.groups && !rule.groups.some((g) => user.nav_groups.includes(g))) return false;
   if (rule.roles && !rule.roles.includes(user.role?.code ?? "")) return false;
   return true;
