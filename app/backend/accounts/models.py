@@ -21,7 +21,9 @@ from django.utils import timezone
 from accounts.managers import UserManager
 from core.base import TimeStampedModel
 
-# Canonical sidebar groups (the five layers + edges/admin + store quick-actions).
+# Legacy nav groups — the five architecture layers that named the old sidebar.
+# The shell navigates by `accounts.sections` since #87; this list survives only
+# so existing Role rows and the role-admin API stay readable.
 NAV_GROUPS = [
     "home",
     "master_data",
@@ -44,7 +46,7 @@ class Role(TimeStampedModel):
     landing_page = models.CharField(max_length=60, default="home")
     nav_groups = models.JSONField(default=list)  # subset of NAV_GROUPS (legacy shell)
     # The SIDEBAR RBAC contract (issue #85): {section_code: {capability, label}}
-    # over the twelve sections in `accounts.sections`. This is the live authority
+    # over the sections in `accounts.sections`. This is the live authority
     # the login/`/me` payload and the server-side section gate read — editing it
     # retunes access with no release (Rule 12). Seeded from `accounts.rbac_matrix`.
     section_access = models.JSONField(default=dict)

@@ -153,7 +153,7 @@ export function TransferListPage() {
         </div>
         <div className="spacer" />
         {writable && (
-          <Link className="btn btn-cta" to="/outbound/transfers/new" data-testid="new-transfer-btn">
+          <Link className="btn btn-cta" to="/transfer/new" data-testid="new-transfer-btn">
             <Plus size={16} /> New transfer
           </Link>
         )}
@@ -204,7 +204,7 @@ export function TransferListPage() {
               {data.map((t) => (
                 <tr key={t.id} data-testid={`transfer-row-${t.id}`}>
                   <td>
-                    <Link to={`/outbound/transfers/${t.id}`} className="link-cell mono" data-testid={`transfer-link-${t.id}`}>
+                    <Link to={`/transfer/${t.id}`} className="link-cell mono" data-testid={`transfer-link-${t.id}`}>
                       <b>{t.doc_number || `Draft #${t.id}`}</b>
                     </Link>
                   </td>
@@ -313,7 +313,7 @@ export function TransferNewPage() {
         eway_bill_number: ewayBill,
         lines: payloadLines,
       });
-      navigate(`/outbound/transfers/${data.id}`);
+      navigate(`/transfer/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -323,7 +323,7 @@ export function TransferNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/transfers" className="btn" style={{ marginBottom: 16 }} data-testid="transfer-back-link">
+      <Link to="/transfer" className="btn" style={{ marginBottom: 16 }} data-testid="transfer-back-link">
         <ArrowLeft size={15} /> Transfers
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New transfer</h1>
@@ -526,7 +526,7 @@ export function TransferDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/transfers" className="btn" style={{ marginBottom: 16 }} data-testid="transfer-detail-back">
+      <Link to="/transfer" className="btn" style={{ marginBottom: 16 }} data-testid="transfer-detail-back">
         <ArrowLeft size={15} /> Transfers
       </Link>
       <div className="toolbar">

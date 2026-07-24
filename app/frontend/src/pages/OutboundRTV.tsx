@@ -108,7 +108,7 @@ export function RTVListPage() {
         </div>
         <div className="spacer" />
         {writable && (
-          <Link className="btn btn-cta" to="/outbound/rtvs/new" data-testid="new-rtv-btn">
+          <Link className="btn btn-cta" to="/return-to-brand/new" data-testid="new-rtv-btn">
             <Plus size={16} /> New RTV
           </Link>
         )}
@@ -158,7 +158,7 @@ export function RTVListPage() {
               {data.map((r) => (
                 <tr key={r.id} data-testid={`rtv-row-${r.id}`}>
                   <td>
-                    <Link to={`/outbound/rtvs/${r.id}`} className="link-cell mono" data-testid={`rtv-link-${r.id}`}>
+                    <Link to={`/return-to-brand/${r.id}`} className="link-cell mono" data-testid={`rtv-link-${r.id}`}>
                       <b>{r.doc_number || `Draft #${r.id}`}</b>
                     </Link>
                   </td>
@@ -257,7 +257,7 @@ export function RTVNewPage() {
         notes,
         lines: payloadLines,
       });
-      navigate(`/outbound/rtvs/${data.id}`);
+      navigate(`/return-to-brand/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -267,7 +267,7 @@ export function RTVNewPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/rtvs" className="btn" style={{ marginBottom: 16 }} data-testid="rtv-back-link">
+      <Link to="/return-to-brand" className="btn" style={{ marginBottom: 16 }} data-testid="rtv-back-link">
         <ArrowLeft size={15} /> Returns
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New Return to Vendor</h1>
@@ -409,7 +409,7 @@ export function RTVDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/outbound/rtvs" className="btn" style={{ marginBottom: 16 }} data-testid="rtv-detail-back">
+      <Link to="/return-to-brand" className="btn" style={{ marginBottom: 16 }} data-testid="rtv-detail-back">
         <ArrowLeft size={15} /> Returns
       </Link>
       <div className="toolbar">

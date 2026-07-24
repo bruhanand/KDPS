@@ -4,11 +4,11 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import type { Store } from "../auth/AuthContext";
+import type { Store, User } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { NAV } from "./navConfig";
-import type { NavGroup, NavItem } from "./navConfig";
+import { SECTIONS, itemPath, meetsCapability } from "./navConfig";
+import type { NavItem, NavSectionDef } from "./navConfig";
 import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
@@ -142,14 +142,49 @@ function readNavOrder(): NavOrder {
   }
 }
 
-function orderedItems(group: NavGroup, order: NavOrder): NavItem[] {
-  const saved = order[group.key] ?? [];
-  const known = new Set(group.items.map((i) => i.to));
-  const byPath = new Map(group.items.map((i) => [i.to, i]));
+function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[] {
+  const saved = order[code] ?? [];
+  const known = new Set(items.map((i) => i.to));
+  const byPath = new Map(items.map((i) => [i.to, i]));
   return [
     ...saved.filter((to) => known.has(to)).map((to) => byPath.get(to)!),
-    ...group.items.filter((i) => !saved.includes(i.to)),
+    ...items.filter((i) => !saved.includes(i.to)),
   ];
+}
+
+/** A section the signed-in user actually gets, with its visible items.
+ *  The server decides *which* sections (#85); the manifest says what is in one;
+ *  a role gate can still hide an individual item (finance-only ledgers). */
+interface VisibleSection {
+  def: NavSectionDef;
+  label: string;
+  items: NavItem[];
+}
+
+const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
+
+export function visibleSections(user: User): VisibleSection[] {
+  const roleCode = user.role?.code ?? "";
+  const out: VisibleSection[] = [];
+  // Server order, not manifest order — the payload is the authority on both
+  // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
+  for (const granted of user.sections ?? []) {
+    const def = SECTION_DEFS.get(granted.code);
+    if (!def) continue; // a section the server knows and this build doesn't
+    // Item gates are finer than the section: the rung held on *this* section
+    // (`minCapability`) or, where the ladder can't express it, a role list. The
+    // break-glass superuser passes both.
+    const items = def.items.filter((i) => {
+      if (i.action) return false;
+      if (user.is_superuser) return true;
+      if (i.minCapability && !meetsCapability(granted.capability, i.minCapability)) return false;
+      if (i.roles && !i.roles.includes(roleCode)) return false;
+      return true;
+    });
+    // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
+    if (items.length) out.push({ def, label: granted.label || def.label, items });
+  }
+  return out;
 }
 
 function Sidebar({
@@ -167,18 +202,19 @@ function Sidebar({
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
   const [dragged, setDragged] = useState<DraggedItem>(null);
   if (!user) return null;
-  const groups = NAV.filter((g) => user.nav_groups.includes(g.key));
+  const sections = visibleSections(user);
 
-  function moveItem(group: NavGroup, targetTo: string) {
-    if (!dragged || dragged.groupKey !== group.key || dragged.to === targetTo) return;
-    const current = orderedItems(group, navOrder).map((i) => i.to);
+  function moveItem(section: VisibleSection, targetTo: string) {
+    const code = section.def.code;
+    if (!dragged || dragged.groupKey !== code || dragged.to === targetTo) return;
+    const current = orderedItems(code, section.items, navOrder).map((i) => i.to);
     const from = current.indexOf(dragged.to);
     const to = current.indexOf(targetTo);
     if (from < 0 || to < 0) return;
     const next = [...current];
     const [picked] = next.splice(from, 1);
     next.splice(to, 0, picked);
-    const updated = { ...navOrder, [group.key]: next };
+    const updated = { ...navOrder, [code]: next };
     setNavOrder(updated);
     localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
   }
@@ -193,16 +229,16 @@ function Sidebar({
         </span>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
-        {groups.map((g) => {
-          const Icon = g.icon;
-          const items = orderedItems(g, navOrder).filter(
-            (it) => !it.roles || user.is_superuser || it.roles.includes(user.role?.code ?? ""),
-          );
+        {sections.map((s) => {
+          const Icon = s.def.icon;
+          const items = orderedItems(s.def.code, s.items, navOrder);
+          // One visible item ⇒ the section *is* that link. This is what keeps a
+          // store person's sidebar at the seven-line scale of the KDPS sketch.
           const single = items.length === 1;
           return (
-            <div className="nav-group" key={g.key}>
+            <div className="nav-group" key={s.def.code}>
               <div className="nav-group-head">
-                <span className="nav-ic" style={{ color: `var(--layer-${g.layer})` }}>
+                <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
                   <Icon size={16} />
                 </span>
                 {single ? (
@@ -211,12 +247,12 @@ function Sidebar({
                     end
                     onClick={onNavigate}
                     className={({ isActive }) => `nav-grouplink ${isActive ? "active" : ""}`}
-                    data-testid={`nav-${g.key}`}
+                    data-testid={`nav-${s.def.code}`}
                   >
-                    {g.label}
+                    {s.label}
                   </NavLink>
                 ) : (
-                  <span className="nav-group-label">{g.label}</span>
+                  <span className="nav-group-label">{s.label}</span>
                 )}
               </div>
               {!single && (
@@ -225,17 +261,20 @@ function Sidebar({
                     <NavLink
                       key={it.to}
                       to={it.to}
+                      // Home's dashboard is "/" — without `end` it would light
+                      // up on every screen in the app.
+                      end={it.to === "/"}
                       draggable
-                      onDragStart={() => setDragged({ groupKey: g.key, to: it.to })}
+                      onDragStart={() => setDragged({ groupKey: s.def.code, to: it.to })}
                       onDragEnd={() => setDragged(null)}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={(e) => {
                         e.preventDefault();
-                        moveItem(g, it.to);
+                        moveItem(s, it.to);
                       }}
                       onClick={onNavigate}
                       className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-                      data-testid={`nav-${g.key}-${it.to.split("/").pop()}`}
+                      data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
                     >
                       {it.label}
                     </NavLink>

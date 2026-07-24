@@ -29,24 +29,24 @@ describe("scanDestination", () => {
     // One barcode, two seasons — two rows, one screen. Still unambiguous.
     const target = scanDestination(
       body(
-        hit({ kind: "item", to: "/ledgers/stock-on-hand?sku=BB-1", exact: true }),
-        hit({ kind: "item", to: "/ledgers/stock-on-hand?sku=BB-1", exact: true }),
+        hit({ kind: "item", to: "/stock?sku=BB-1", exact: true }),
+        hit({ kind: "item", to: "/stock?sku=BB-1", exact: true }),
       ),
     );
-    expect(target?.to).toBe("/ledgers/stock-on-hand?sku=BB-1");
+    expect(target?.to).toBe("/stock?sku=BB-1");
   });
 
   it("sends a full voucher number to that document", () => {
-    expect(scanDestination(body(hit({ to: "/inbound/7", exact: true })))?.to).toBe("/inbound/7");
+    expect(scanDestination(body(hit({ to: "/receive/7", exact: true })))?.to).toBe("/receive/7");
   });
 
   it("stays put when the answer is a choice, not an answer", () => {
     // Two different documents matched exactly — only the person can pick.
-    expect(scanDestination(body(hit({ to: "/inbound/7", exact: true }), hit({ to: "/inbound/8", exact: true })))).toBeNull();
+    expect(scanDestination(body(hit({ to: "/receive/7", exact: true }), hit({ to: "/receive/8", exact: true })))).toBeNull();
     // Partial matches only: the panel is the answer, Enter is not.
-    expect(scanDestination(body(hit({ to: "/inbound/7" })))).toBeNull();
+    expect(scanDestination(body(hit({ to: "/receive/7" })))).toBeNull();
     // An exact match does not drag its partial neighbours along.
-    expect(scanDestination(body(hit({ to: "/inbound/7", exact: true }), hit({ to: "/inbound/8" })))?.to).toBe("/inbound/7");
+    expect(scanDestination(body(hit({ to: "/receive/7", exact: true }), hit({ to: "/receive/8" })))?.to).toBe("/receive/7");
   });
 
   it("handles an empty or failed answer", () => {

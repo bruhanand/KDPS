@@ -39,7 +39,7 @@ export function PtProposalsPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/pt-mapper" className="btn" style={{ marginBottom: 16 }}>
+      <Link to="/receive/pt" className="btn" style={{ marginBottom: 16 }}>
         <ArrowLeft size={15} /> PT Mapper
       </Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>Learning proposals</h1>

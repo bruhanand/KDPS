@@ -166,7 +166,7 @@ function PtFileTable({ files, empty }: { files: PtFileT[]; empty: string }) {
               <td><span className={`chip chip-${FILE_TONE[f.status] ?? "grey"}`}>{f.status_label}</span></td>
               <td><span className={`chip chip-${STAGE_TONE[f.stage] ?? "grey"}`} data-testid={`pt-file-stage-${f.id}`}>{f.stage_label}</span></td>
               <td>
-                <Link className="btn btn-sm" to={`/documents/pt-mapper/${f.id}`} data-testid={`pt-file-view-${f.id}`}>Open</Link>
+                <Link className="btn btn-sm" to={`/receive/pt/${f.id}`} data-testid={`pt-file-view-${f.id}`}>Open</Link>
               </td>
             </tr>
           ))}
@@ -223,12 +223,12 @@ function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) 
     try {
       const { data } = await api.post("/ptmapper/files", form);
       reload();
-      navigate(`/documents/pt-mapper/${data.id}`);
+      navigate(`/receive/pt/${data.id}`);
     } catch (e: any) {
       // The GRN already carries a live PT — jump straight to it rather than error.
       const existing = e?.response?.data?.pt_file_id;
       if (existing) {
-        navigate(`/documents/pt-mapper/${existing}`);
+        navigate(`/receive/pt/${existing}`);
         return;
       }
       setError(apiErrorMessage(e));
@@ -388,11 +388,11 @@ export function PtMapperPage() {
         <div className="spacer" />
         {tab === "mapper" && (
           <>
-            <Link className="btn" to="/documents/pt-mapper/proposals" data-testid="proposals-link">
+            <Link className="btn" to="/receive/pt/proposals" data-testid="proposals-link">
               <Sparkles size={16} /> Learning proposals
               {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
             </Link>
-            <Link className="btn" to="/documents/pt-mapper/review" data-testid="review-queue-link">
+            <Link className="btn" to="/receive/pt/review" data-testid="review-queue-link">
               <ListChecks size={16} /> Unmapped queue
               {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
             </Link>
@@ -905,7 +905,7 @@ export function PtFileDetailPage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/pt-mapper" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
+      <Link to="/receive/pt" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
       <div className="toolbar">
         <div>
           <p className="eyebrow">{file.profile_name}{file.meta?.sheet ? ` · sheet ${file.meta.sheet}` : ""}</p>
@@ -921,7 +921,7 @@ export function PtFileDetailPage() {
           <span className="chip chip-purple" data-testid="ptfile-source-badge">Authored · non-brand</span>
         )}
         {file.grn && (
-          <Link to={`/inbound/${file.grn}`} className="chip chip-navy" data-testid="ptfile-grn-chip">
+          <Link to={`/receive/${file.grn}`} className="chip chip-navy" data-testid="ptfile-grn-chip">
             GRN {file.grn_number || file.meta?.grn_number || `#${file.grn}`}
           </Link>
         )}
@@ -1029,14 +1029,14 @@ export function PtFileDetailPage() {
           {file.inward_doc_number ? <> as voucher <b className="mono">{file.inward_doc_number}</b></> : null}
           {file.booking_number ? <> · reconciled to booking <b>{file.booking_number}</b></> : null}
           {file.posted_at ? ` on ${new Date(file.posted_at).toLocaleString()}` : ""}. This record is locked.{" "}
-          <Link to={`/ledgers/stock?file=${file.id}`} style={{ color: "inherit", textDecoration: "underline" }} data-testid="ptfile-ledger-link">View in Stock Ledger</Link>
+          <Link to={`/stock/history?file=${file.id}`} style={{ color: "inherit", textDecoration: "underline" }} data-testid="ptfile-ledger-link">View in Stock Ledger</Link>
         </div>
       ) : file.stage === "sent" ? (
         <div className="ai-note" data-testid="ptfile-sent-banner"><Send size={14} /> Sent to Patna HO for review &amp; posting. Patna can download the Excel and push it into the system.</div>
       ) : file.unresolved_count > 0 ? (
         <div className="ai-note" data-testid="ptfile-unresolved-banner">
           <AlertTriangle size={14} /> {file.unresolved_count} value(s) couldn't be mapped automatically.{" "}
-          <Link to="/documents/pt-mapper/review" style={{ color: "inherit", textDecoration: "underline" }}>Resolve them in the unmapped queue</Link>, then re-run — or fill them in by hand with Edit.
+          <Link to="/receive/pt/review" style={{ color: "inherit", textDecoration: "underline" }}>Resolve them in the unmapped queue</Link>, then re-run — or fill them in by hand with Edit.
         </div>
       ) : (
         <div className="ok-note" data-testid="ptfile-ready-banner"><CheckCircle2 size={14} /> Every derived field mapped to a KDPS value. Ready to send to Patna.</div>
@@ -1233,7 +1233,7 @@ export function ReviewQueuePage() {
 
   return (
     <div className="page-pad">
-      <Link to="/documents/pt-mapper" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
+      <Link to="/receive/pt" className="btn" style={{ marginBottom: 16 }}><ArrowLeft size={15} /> PT File Operation</Link>
       <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>Unmapped queue</h1>
       <p className="lead" style={{ marginBottom: 18, fontSize: 13.5 }}>
         Each entry is a raw brand value the tables don't know yet. Map it once — the engine remembers it for every future file.

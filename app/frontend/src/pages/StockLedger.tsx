@@ -83,7 +83,7 @@ export default function StockLedger() {
           <h1 className="h1 h2-rust">Stock Ledger</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn" to="/ledgers/stock-on-hand" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
+        <Link className="btn" to="/stock" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
       </div>
 
       <div className="stat-grid" data-testid="stock-summary">

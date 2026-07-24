@@ -114,7 +114,7 @@ export function InboundPage() {
         <div className="spacer" />
         <Link
           className="btn btn-cta"
-          to={`/inbound/new?kind=${tab}`}
+          to={`/receive/new?kind=${tab}`}
           data-testid="new-receipt-btn"
         >
           <Plus size={16} /> New receipt
@@ -150,7 +150,7 @@ export function InboundPage() {
               return (
                 <Link
                   key={b.id}
-                  to={`/inbound/new?booking=${b.id}`}
+                  to={`/receive/new?booking=${b.id}`}
                   className="card bk-card"
                   data-testid={`pending-booking-${b.number}`}
                 >
@@ -197,7 +197,7 @@ export function InboundPage() {
               {grns.map((g) => (
                 <tr key={g.id} data-testid={`grn-row-${g.number}`}>
                   <td>
-                    <Link to={`/inbound/${g.id}`} className="link-cell mono" data-testid={`grn-detail-link-${g.number}`}>
+                    <Link to={`/receive/${g.id}`} className="link-cell mono" data-testid={`grn-detail-link-${g.number}`}>
                       <b>{g.number}</b>
                     </Link>
                   </td>
@@ -439,7 +439,7 @@ export function InboundNewPage() {
         invoice_file_id: invoiceFileId,
         lines: payloadLines,
       });
-      navigate(`/inbound/${data.id}`);
+      navigate(`/receive/${data.id}`);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -450,7 +450,7 @@ export function InboundNewPage() {
   return (
     <div className="page-pad">
       <Link
-        to={`/inbound?tab=${isNonBranded ? "nonbranded" : "branded"}`}
+        to={`/receive?tab=${isNonBranded ? "nonbranded" : "branded"}`}
         className="btn"
         style={{ marginBottom: 16 }}
         data-testid="receive-back-link"
@@ -685,7 +685,7 @@ export function GrnDetailPage() {
   const livePt = (g.pt_files ?? []).find((p) => p.stage !== "reversed") ?? null;
   return (
     <div className="page-pad">
-      <Link to="/inbound" className="btn" style={{ marginBottom: 16 }} data-testid="grn-detail-back-link">
+      <Link to="/receive" className="btn" style={{ marginBottom: 16 }} data-testid="grn-detail-back-link">
         <ArrowLeft size={15} /> Stock Receive
       </Link>
       <div className="toolbar">
@@ -721,7 +721,7 @@ export function GrnDetailPage() {
           {g.pt_files.map((p) => (
             <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0" }}>
               <FileSpreadsheet size={14} style={{ color: "var(--rust)" }} />
-              <Link to={`/documents/pt-mapper/${p.id}`} className="link-cell" data-testid={`grn-pt-link-${p.id}`}>
+              <Link to={`/receive/pt/${p.id}`} className="link-cell" data-testid={`grn-pt-link-${p.id}`}>
                 <b>{p.original_filename}</b>
               </Link>
               {p.doc_number && <span className="mono" style={{ fontSize: 12.5 }}>{p.doc_number}</span>}

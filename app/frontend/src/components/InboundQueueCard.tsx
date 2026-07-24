@@ -58,11 +58,11 @@ export function useMakePt() {
     setError("");
     try {
       const { data } = await api.post(`/ptmapper/files/from-grn/${grnId}`);
-      navigate(`/documents/pt-mapper/${data.id}`);
+      navigate(`/receive/pt/${data.id}`);
     } catch (e: any) {
       const existing = e?.response?.data?.pt_file_id;
       if (existing) {
-        navigate(`/documents/pt-mapper/${existing}`);
+        navigate(`/receive/pt/${existing}`);
         return;
       }
       setError(apiErrorMessage(e));
@@ -95,7 +95,7 @@ export function InboundQueueCard({ queue }: { queue: QueueT }) {
           {queue.awaiting_pt.map((g) => (
             <div key={g.id} className="card bk-card" data-testid={`queue-grn-${g.number}`}>
               <div className="bk-card-top">
-                <Link to={`/inbound/${g.id}`} className="bk-num mono">{g.number}</Link>
+                <Link to={`/receive/${g.id}`} className="bk-num mono">{g.number}</Link>
                 <span className="chip chip-amber status-pill">{g.received_total} pcs</span>
               </div>
               <div className="bk-brand">{g.vendor_name || "Direct receipt"}</div>
@@ -123,7 +123,7 @@ export function InboundQueueCard({ queue }: { queue: QueueT }) {
           {queue.pt_in_progress.map((p) => (
             <div key={p.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0" }}>
               <ClipboardList size={14} style={{ color: "var(--rust)" }} />
-              <Link to={`/documents/pt-mapper/${p.id}`} className="link-cell">
+              <Link to={`/receive/pt/${p.id}`} className="link-cell">
                 <b>{p.original_filename}</b>
               </Link>
               {p.grn_number && <span className="mono" style={{ fontSize: 12.5 }}>{p.grn_number}</span>}
