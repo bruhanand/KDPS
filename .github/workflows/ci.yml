@@ -78,6 +78,9 @@ jobs:
       - name: Seed PT mapper (taxonomy rules, item taxonomy, controlled values, lookups)
         run: uv run python manage.py seed_ptmapper
 
+      - name: Seed outbound demo stock (on-hand for RTV / stock-on-hand suites)
+        run: uv run python manage.py seed_outbound_demo
+
       - name: Boot ASGI server for API regression suites
         run: |
           uv run uvicorn server:app --host 0.0.0.0 --port 8001 &

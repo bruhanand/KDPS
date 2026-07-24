@@ -336,3 +336,13 @@ def test_seed_outbound_demo_emits_dmg_series():
         if not VoucherSeries.objects.filter(store_code=code, doc_type="DMG").exists()
     ]
     assert not missing, f"no DMG VoucherSeries seeded for stores: {missing}"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_mark_damaged_list_rejects_non_integer_docstatus(quar_scaffold):
+    """A malformed ``?docstatus=`` is a client error (400), not an uncaught
+    500 from ``int()`` — the list filter validates its input."""
+    s = quar_scaffold
+    resp = _client(s["user"]).get("/api/outbound/mark-damaged?docstatus=abc")
+    assert resp.status_code == 400
+    assert "docstatus" in str(resp.data)

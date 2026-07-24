@@ -12,6 +12,7 @@ Every endpoint requires authentication. RBAC:
 from __future__ import annotations
 
 from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -56,6 +57,23 @@ from outbound.serializers import (
     WriteOffWriteSerializer,
 )
 
+
+def _filter_docstatus(qs, request):
+    """Apply the optional ``?docstatus=`` filter to a list queryset.
+
+    A non-integer value is a client error, not a server one — return a
+    controlled 400 instead of letting ``int()`` raise an uncaught 500.
+    """
+    ds = request.query_params.get("docstatus")
+    if ds is None:
+        return qs
+    try:
+        code = int(ds)
+    except (TypeError, ValueError):
+        raise ValidationError({"docstatus": "must be an integer"}) from None
+    return qs.filter(docstatus=code)
+
+
 # ---------------------------------------------------------------------------
 # Transfer views
 # ---------------------------------------------------------------------------
@@ -74,9 +92,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -249,9 +265,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
         from masters.scoping import scope_by_store
 
         qs = MarkDamaged.objects.select_related("store", "created_by").prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return scope_by_store(qs, self.request.user, "store_id")
 
     def get_serializer_class(self):
@@ -293,9 +307,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
         qs = ReturnToVendor.objects.select_related(
             "store", "vendor", "brand", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         rt = self.request.query_params.get("return_type")
         if rt:
             qs = qs.filter(return_type=rt)
@@ -374,9 +386,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         qs = StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -450,9 +460,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
             "lines"
         )
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -524,9 +532,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         qs = VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
