@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 from django.utils import timezone
 
@@ -379,8 +380,9 @@ class StockAdjustment(Document):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="adjustments_approved",
-        help_text="Required for variances above tolerance.",
+        help_text="Stamped by the approvals inbox on approve — never typed (#70).",
     )
+    approvals = GenericRelation("approvals.Approval")
     notes = models.TextField(blank=True, default="")
     created_by = models.ForeignKey(
         "accounts.User",
@@ -439,8 +441,11 @@ class WriteOff(Document):
     reason = models.TextField(blank=True, default="")
     approved_by = models.ForeignKey(
         "accounts.User",
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="writeoffs_approved",
+        help_text="Stamped by the approvals inbox on approve — never typed (#70).",
     )
     created_by = models.ForeignKey(
         "accounts.User",
@@ -449,6 +454,7 @@ class WriteOff(Document):
         on_delete=models.SET_NULL,
         related_name="writeoffs_created",
     )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_write_off"
@@ -506,9 +512,11 @@ class VFlip(Document):
     season = models.CharField(max_length=120, blank=True, default="")
     authorized_by = models.ForeignKey(
         "accounts.User",
+        null=True,
+        blank=True,
         on_delete=models.PROTECT,
         related_name="vflips_authorized",
-        help_text="Owner or Finance role required.",
+        help_text="Stamped by the approvals inbox on approve — never typed (#70).",
     )
     created_by = models.ForeignKey(
         "accounts.User",
@@ -517,6 +525,7 @@ class VFlip(Document):
         on_delete=models.SET_NULL,
         related_name="vflips_created",
     )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_vflip"

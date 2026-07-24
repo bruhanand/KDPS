@@ -83,6 +83,13 @@ def _outbound_scaffold(db):
     user = User.objects.create_user(
         username="outtest", password="Test@123", role=role, entity=entity
     )
+    # The second person every write-off / V-flip / adjustment now needs (#70).
+    checker = User.objects.create_user(
+        username="outcheck",
+        password="Test@123",
+        role=Role.objects.create(code="owner", name="Owner"),
+        entity=entity,
+    )
 
     # Seed stock: 10 units of SKU "SKU001" at store_a and warehouse, 100 paise/unit
     for s in [store_a, warehouse]:
@@ -182,7 +189,24 @@ def _outbound_scaffold(db):
         "brand_sor": brand_sor,
         "vendor": vendor,
         "user": user,
+        "checker": checker,
     }
+
+
+def _approve(doc, s):
+    """Give a document the second signature the posting layer now demands (#70).
+
+    These are posting-layer tests: they exercise the ledger and the GL, not the
+    inbox, so the approval is walked through its real service rather than faked
+    — the maker asks, a *different* person approves.
+    """
+    from approvals.services import decide
+    from outbound.maker_checker import request_document_approval
+
+    approval = request_document_approval(doc, requested_by=s["user"])
+    if approval is not None:
+        decide(approval, actor=s["checker"], action="approve")
+    return doc
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +568,6 @@ def test_adjustment_shrinkage(_outbound_scaffold):
     adj = StockAdjustment.objects.create(
         store=s["store_a"],
         reason="shrinkage",
-        approved_by=s["user"],
         created_by=s["user"],
     )
     StockAdjustmentLine.objects.create(
@@ -563,6 +586,7 @@ def test_adjustment_shrinkage(_outbound_scaffold):
         unit_cost_paise=100,
     )
 
+    _approve(adj, s)
     post_adjustment(adj, user=s["user"])
     assert adj.docstatus == DocStatus.SUBMITTED
 
@@ -595,6 +619,7 @@ def test_adjustment_surplus(_outbound_scaffold):
         unit_cost_paise=100,
     )
 
+    _approve(adj, s)
     post_adjustment(adj, user=s["user"])
 
     oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU001")
@@ -624,6 +649,7 @@ def test_adjustment_blocks_insufficient_stock(_outbound_scaffold):
         unit_cost_paise=100,
     )
 
+    _approve(adj, s)
     with pytest.raises(OutboundPostingError, match="Insufficient stock"):
         post_adjustment(adj, user=s["user"])
 
@@ -640,7 +666,6 @@ def test_writeoff_posts_gl(_outbound_scaffold):
     wo = WriteOff.objects.create(
         store=s["store_a"],
         reason="Dead stock — unsellable",
-        approved_by=s["user"],
         created_by=s["user"],
     )
     WriteOffLine.objects.create(
@@ -657,6 +682,7 @@ def test_writeoff_posts_gl(_outbound_scaffold):
         unit_cost_paise=100,
     )
 
+    _approve(wo, s)
     post_writeoff(wo, user=s["user"])
     assert wo.docstatus == DocStatus.SUBMITTED
 
@@ -678,11 +704,11 @@ def test_writeoff_blocks_insufficient(_outbound_scaffold):
     s = _outbound_scaffold
     wo = WriteOff.objects.create(
         store=s["store_a"],
-        approved_by=s["user"],
         created_by=s["user"],
     )
     WriteOffLine.objects.create(writeoff=wo, sku_code="SKU001", qty=999, unit_cost_paise=100)
 
+    _approve(wo, s)
     with pytest.raises(OutboundPostingError, match="Insufficient stock"):
         post_writeoff(wo, user=s["user"])
 
@@ -700,7 +726,6 @@ def test_vflip_ownership_change(_outbound_scaffold):
         store=s["store_a"],
         original_brand=s["brand_sor"],
         season="SS26",
-        authorized_by=s["user"],
         created_by=s["user"],
     )
     VFlipLine.objects.create(
@@ -717,6 +742,7 @@ def test_vflip_ownership_change(_outbound_scaffold):
         unit_cost_paise=200,
     )
 
+    _approve(vflip, s)
     post_vflip(vflip, user=s["user"])
     assert vflip.docstatus == DocStatus.SUBMITTED
 
@@ -907,7 +933,6 @@ def test_vflip_brand_displays_v_prefix(_outbound_scaffold):
         store=s["store_a"],
         original_brand=s["brand_sor"],
         season="SS26",
-        authorized_by=s["user"],
         created_by=s["user"],
     )
     VFlipLine.objects.create(
@@ -923,6 +948,7 @@ def test_vflip_brand_displays_v_prefix(_outbound_scaffold):
         qty=3,
         unit_cost_paise=200,
     )
+    _approve(vflip, s)
     post_vflip(vflip, user=s["user"])
 
     # (a) StockOnHand brand shows "V SORBrand"
@@ -949,7 +975,6 @@ def test_vflip_ownership_is_kdps_owned(_outbound_scaffold):
         store=s["store_a"],
         original_brand=s["brand_sor"],
         season="SS26",
-        authorized_by=s["user"],
         created_by=s["user"],
     )
     VFlipLine.objects.create(
@@ -965,6 +990,7 @@ def test_vflip_ownership_is_kdps_owned(_outbound_scaffold):
         qty=2,
         unit_cost_paise=200,
     )
+    _approve(vflip, s)
     post_vflip(vflip, user=s["user"])
 
     # GL must have Dr INVENTORY (now KDPS-owned) — confirms it's NOT SOR anymore
@@ -986,7 +1012,6 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
         store=s["store_a"],
         original_brand=s["brand_sor"],
         season="SS26",
-        authorized_by=s["user"],
         created_by=s["user"],
     )
     VFlipLine.objects.create(
@@ -1002,6 +1027,7 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
         qty=3,
         unit_cost_paise=200,
     )
+    _approve(vflip, s)
     post_vflip(vflip, user=s["user"])
 
     # Confirm the stock is now "V SORBrand"
@@ -1043,7 +1069,6 @@ def test_vflip_empty_line_brand_uses_original_brand(_outbound_scaffold):
         store=s["store_a"],
         original_brand=s["brand_sor"],
         season="SS26",
-        authorized_by=s["user"],
         created_by=s["user"],
     )
     VFlipLine.objects.create(
@@ -1059,6 +1084,7 @@ def test_vflip_empty_line_brand_uses_original_brand(_outbound_scaffold):
         qty=1,
         unit_cost_paise=200,
     )
+    _approve(vflip, s)
     post_vflip(vflip, user=s["user"])
 
     oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")

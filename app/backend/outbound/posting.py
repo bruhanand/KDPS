@@ -16,6 +16,7 @@ from django.utils import timezone
 
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
+from outbound.maker_checker import require_approved
 from stockledger.models import (
     InTransitStock,
     QuarantineStock,
@@ -653,6 +654,8 @@ def post_adjustment(adj: StockAdjustment, user=None) -> list[StockLedgerEntry]:
     if not lines:
         raise OutboundPostingError("Adjustment has no lines.")
 
+    require_approved(adj)  # maker ≠ checker (#70)
+
     # Block if any line reduces stock below zero
     for line in lines:
         if line.adj_qty < 0:
@@ -722,6 +725,8 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
     if not lines:
         raise OutboundPostingError("Write-off has no lines.")
 
+    require_approved(wo)  # maker ≠ checker (#70)
+
     for line in lines:
         _check_stock(wo.store_id, line.sku_code, line.qty)
 
@@ -783,6 +788,8 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
     lines = list(vflip.lines.all())
     if not lines:
         raise OutboundPostingError("V-flip has no lines.")
+
+    require_approved(vflip)  # maker ≠ checker (#70)
 
     for line in lines:
         _check_stock(vflip.store_id, line.sku_code, line.qty)

@@ -13,6 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundAdmin } from "../lib/outbound-rbac";
+import { ApprovalPill, ApprovalTrail, type ApprovalT } from "./Approvals";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -55,8 +56,11 @@ interface WOT {
   store_code: string;
   store_name: string;
   reason: string;
-  approved_by: number;
+  approved_by: number | null;
+  approved_by_name: string;
   created_by: number | null;
+  created_by_name: string;
+  approval: ApprovalT | null;
   created_at: string;
   updated_at: string;
   lines: WOLineT[];
@@ -184,10 +188,11 @@ export function WriteOffNewPage() {
     if (!payloadLines.length) { setError("Add at least one line with a SKU and quantity."); return; }
     setSaving(true);
     try {
+      // No approver in the payload: the server refuses to let the maker be the
+      // checker, and stamps the approver from the approvals inbox (#70).
       const { data } = await api.post("/outbound/writeoffs", {
         store: Number(storeId),
         reason,
-        approved_by: user!.id,
         lines: payloadLines,
       });
       navigate(`/outbound/writeoffs/${data.id}`);
@@ -224,9 +229,10 @@ export function WriteOffNewPage() {
             <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Dead stock clearance, refused defectives" data-testid="wo-reason" />
           </div>
           <div className="field">
-            <label>Approved by</label>
+            <label>Approval</label>
             <div className="store-lock" data-testid="wo-approved-by">
-              {user?.full_name || user?.username} (you)
+              Goes to the approvals inbox — someone other than you must approve it
+              before it can post.
             </div>
           </div>
         </div>
@@ -292,7 +298,10 @@ export function WriteOffDetailPage() {
 
   const totalQty = w.lines.reduce((s, l) => s + l.qty, 0);
   const totalValue = w.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
-  const canSubmit = w.docstatus === 0 && writable;
+  // A draft cannot post until a second person has approved it — the server
+  // enforces this; the button only reflects it honestly.
+  const approved = w.approval?.status === "approved";
+  const canSubmit = w.docstatus === 0 && writable && approved;
 
   async function handleSubmit() {
     setError("");
@@ -320,6 +329,7 @@ export function WriteOffDetailPage() {
         </div>
         <div className="spacer" />
         <DocPill ds={w.docstatus} />
+        {w.docstatus === 0 && <ApprovalPill status={w.approval?.status ?? "pending"} />}
         {canSubmit && (
           <button
             type="button"
@@ -350,6 +360,10 @@ export function WriteOffDetailPage() {
           <p className="eyebrow">Date</p>
           <h3 className="h3">{fmtDate(w.created_at)}</h3>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <ApprovalTrail createdByName={w.created_by_name} approval={w.approval} />
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="wo-detail-error">{error}</div>}

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "ptmapper.apps.PtmapperConfig",
     "stockledger.apps.StockledgerConfig",
     "finledger.apps.FinledgerConfig",
+    "approvals.apps.ApprovalsConfig",
     "outbound.apps.OutboundConfig",
 ]
 

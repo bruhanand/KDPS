@@ -12,6 +12,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundAdmin } from "../lib/outbound-rbac";
+import { ApprovalPill, ApprovalTrail, type ApprovalT } from "./Approvals";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -56,8 +57,11 @@ interface VFlipT {
   original_brand: number;
   original_brand_name: string;
   season: string;
-  authorized_by: number;
+  authorized_by: number | null;
+  approved_by_name: string;
   created_by: number | null;
+  created_by_name: string;
+  approval: ApprovalT | null;
   created_at: string;
   updated_at: string;
   lines: VFlipLineT[];
@@ -197,11 +201,12 @@ export function VFlipNewPage() {
     if (!payloadLines.length) { setError("Add at least one line with a SKU and quantity."); return; }
     setSaving(true);
     try {
+      // No authoriser in the payload: the server refuses to let the maker be
+      // the checker, and stamps it from the approvals inbox (#70).
       const { data } = await api.post("/outbound/vflips", {
         store: Number(storeId),
         original_brand: Number(brandId),
         season,
-        authorized_by: user!.id,
         lines: payloadLines,
       });
       navigate(`/outbound/vflips/${data.id}`);
@@ -314,7 +319,8 @@ export function VFlipDetailPage() {
 
   const totalQty = v.lines.reduce((s, l) => s + l.qty, 0);
   const totalValue = v.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
-  const canSubmit = v.docstatus === 0 && writable;
+  // A V-flip cannot post until a second person has approved it (#70).
+  const canSubmit = v.docstatus === 0 && writable && v.approval?.status === "approved";
 
   async function handleSubmit() {
     setError("");
@@ -346,6 +352,7 @@ export function VFlipDetailPage() {
         </div>
         <div className="spacer" />
         <DocPill ds={v.docstatus} />
+        {v.docstatus === 0 && <ApprovalPill status={v.approval?.status ?? "pending"} />}
         <span className="chip chip-purple">Ownership flip</span>
         {canSubmit && (
           <button
@@ -404,6 +411,10 @@ export function VFlipDetailPage() {
           <p className="eyebrow">Date</p>
           <h3 className="h3">{fmtDate(v.created_at)}</h3>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <ApprovalTrail createdByName={v.created_by_name} approval={v.approval} />
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="vflip-detail-error">{error}</div>}

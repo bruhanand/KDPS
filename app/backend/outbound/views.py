@@ -385,7 +385,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "approvals__requested_by", "approvals__decided_by")
         qs = _filter_docstatus(qs, self.request)
         return qs
 
@@ -412,7 +412,7 @@ class AdjustmentDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "approvals__requested_by", "approvals__decided_by")
 
 
 class AdjustmentSubmitView(APIView):
@@ -458,7 +458,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
-            "lines"
+            "lines", "approvals__requested_by", "approvals__decided_by"
         )
         qs = _filter_docstatus(qs, self.request)
         return qs
@@ -486,7 +486,7 @@ class WriteOffDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return WriteOff.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "approvals__requested_by", "approvals__decided_by")
 
 
 class WriteOffSubmitView(APIView):
@@ -531,7 +531,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "approvals__requested_by", "approvals__decided_by")
         qs = _filter_docstatus(qs, self.request)
         return qs
 
@@ -558,7 +558,7 @@ class VFlipDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related("lines", "approvals__requested_by", "approvals__decided_by")
 
 
 class VFlipSubmitView(APIView):

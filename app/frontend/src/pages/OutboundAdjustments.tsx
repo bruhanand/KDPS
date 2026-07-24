@@ -13,6 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundWrite } from "../lib/outbound-rbac";
+import { ApprovalPill, ApprovalTrail, type ApprovalT } from "./Approvals";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -66,8 +67,11 @@ interface AdjT {
   store_name: string;
   reason: string;
   approved_by: number | null;
+  approved_by_name: string;
+  approval: ApprovalT | null;
   notes: string;
   created_by: number | null;
+  created_by_name: string;
   created_at: string;
   updated_at: string;
   lines: AdjLineT[];
@@ -324,7 +328,8 @@ export function AdjustmentDetailPage() {
   if (loading || !a) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
   const netAdj = a.lines.reduce((s, l) => s + l.adj_qty, 0);
-  const canSubmit = a.docstatus === 0 && writable;
+  // An adjustment cannot post until a second person has approved it (#70).
+  const canSubmit = a.docstatus === 0 && writable && a.approval?.status === "approved";
 
   async function handleSubmit() {
     setError("");
@@ -355,6 +360,7 @@ export function AdjustmentDetailPage() {
         </div>
         <div className="spacer" />
         <DocPill ds={a.docstatus} />
+        {a.docstatus === 0 && <ApprovalPill status={a.approval?.status ?? "pending"} />}
         {canSubmit && (
           <button
             type="button"
@@ -387,6 +393,10 @@ export function AdjustmentDetailPage() {
           <p className="eyebrow">Date</p>
           <h3 className="h3">{fmtDate(a.created_at)}</h3>
         </div>
+      </div>
+
+      <div style={{ marginBottom: 18 }}>
+        <ApprovalTrail createdByName={a.created_by_name} approval={a.approval} />
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="adj-detail-error">{error}</div>}
