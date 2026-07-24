@@ -244,8 +244,16 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
 
 
 def can_decide(approval: Approval, user: Any) -> bool:
-    """May ``user`` decide this one? Role gate only — the self-approval and
-    store-scope gates are applied by ``decide`` and the inbox queryset."""
+    """May ``user``'s *role* decide this one? A role gate and nothing else.
+
+    Two other gates exist and neither is here. ``decide`` bars the maker and the
+    asker. Store scope (ADR-0003) is applied where the row is *found* — by
+    ``inbox_for`` when listing, and by the decide view, which looks the approval
+    up through ``scope_by_store`` so an out-of-scope pk is a 404 before any of
+    this runs. It is deliberately not re-checked at decision time, so a caller
+    that hands ``decide`` a row it fetched some other way — a shell, a
+    management command — is responsible for scoping it first.
+    """
     if getattr(user, "is_superuser", False):
         return True
     role_code = getattr(getattr(user, "role", None), "code", "")

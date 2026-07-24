@@ -17,6 +17,10 @@ fact would be a worse lie than the one we are clearing.
 
 A draft with no ``created_by`` is skipped — there is nobody to attribute the
 request to. It stays unpostable, and its owner raises it again.
+
+Every row raised here carries ``BACKFILL_NOTE`` as its reason, which is what
+makes this migration reversible without collateral damage: the reverse deletes
+only the rows *it* wrote, never a request a person has raised since.
 """
 
 from __future__ import annotations
@@ -35,6 +39,11 @@ WIRED = [
 # Mirrors outbound.permissions.OUTBOUND_ADMIN_ROLES at the time of writing.
 # Spelled out rather than imported: a migration must not drift with live code.
 APPROVER_ROLES = ["accounts", "ho_ops", "it_admin", "owner"]
+
+#: Stamped on every row this migration raises, so the reverse can find exactly
+#: those rows again — and so a checker opening one of these sees why it appeared
+#: without a person having asked.
+BACKFILL_NOTE = "Raised automatically when maker-checker was switched on: this draft predates it."
 
 
 def _line_totals(doc):
@@ -73,7 +82,11 @@ def raise_pending_approvals(apps, schema_editor):
                 store=doc.store,
                 value_paise=value,
                 approver_roles=list(APPROVER_ROLES),
+                # Maker and asker are the same person here: nobody re-asked, the
+                # request is the one the draft should have been born with.
+                made_by_id=doc.created_by_id,
                 requested_by_id=doc.created_by_id,
+                reason=BACKFILL_NOTE,
             )
             # Drop the old self-stamp: nobody has approved this yet.
             setattr(doc, f"{approver_col}_id", None)
@@ -81,19 +94,33 @@ def raise_pending_approvals(apps, schema_editor):
 
 
 def drop_backfilled_approvals(apps, schema_editor):
-    """Reverse: remove the pending approvals this migration raised. The cleared
-    approver columns are not restored — the values were the creator's own name,
-    which is the defect, not data worth putting back."""
+    """Reverse: remove the approvals this migration raised, and only those.
+
+    Matched on ``BACKFILL_NOTE``, not on kind + status: by the time anyone
+    reverses this, people will have raised their own requests against these same
+    document kinds, and deleting those would erase real audit records and leave
+    live drafts blocked with nothing in anybody's inbox.
+
+    The cleared approver columns are not restored — the values were the
+    creator's own name, which is the defect, not data worth putting back.
+    """
     Approval = apps.get_model("approvals", "Approval")
     Approval.objects.filter(
-        kind__in=[kind for _, kind, _, _ in WIRED], status="pending"
+        kind__in=[kind for _, kind, _, _ in WIRED],
+        status="pending",
+        reason=BACKFILL_NOTE,
     ).delete()
 
 
 class Migration(migrations.Migration):
     dependencies = [
         ("outbound", "0006_alter_stockadjustment_approved_by_and_more"),
-        ("approvals", "0001_initial"),
+        # Pinned to the *latest* approvals migration, not to 0001: this writes
+        # rows, and 0003 makes ``made_by`` non-null. Django plans the approvals
+        # leaf before the outbound one, so without this the insert below would
+        # meet a column the historical model does not know about and every
+        # deployment carrying old drafts would fail.
+        ("approvals", "0003_maker_is_barred_from_checking"),
     ]
 
     operations = [
