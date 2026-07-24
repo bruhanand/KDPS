@@ -6,6 +6,7 @@
   "scripts": {
     "sandcastle": "tsx .sandcastle/main.ts",
     "sandcastle:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile",
+    "up": "./scripts/up.sh",
     "dev": "./scripts/dev.sh",
     "dev:setup": "./scripts/dev.sh --setup-only",
     "dev:reset": "./scripts/dev.sh --reset --setup-only",
