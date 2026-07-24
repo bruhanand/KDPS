@@ -44,6 +44,17 @@ export function fmtApprovalWhen(iso: string): string {
   });
 }
 
+/** Same moment, minus the year — the inbox only ever holds live requests, and
+ *  the full form wraps to three lines in a table cell on a narrow pane. */
+export function fmtApprovalWhenShort(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 const STATUS_TONE: Record<string, string> = {
   pending: "amber",
   approved: "green",

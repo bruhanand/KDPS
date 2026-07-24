@@ -1,0 +1,14 @@
+# The host venv is macOS-built and would shadow the image's Linux one.
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Dev secrets + a DATABASE_URL pointing at the host's port mapping. The container
+# gets its environment from docker-compose.yml; `.env` must never ride along.
+.env
+
+# Rebuilt by collectstatic when it is actually needed.
+staticfiles/

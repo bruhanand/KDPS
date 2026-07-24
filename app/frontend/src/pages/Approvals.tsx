@@ -8,6 +8,7 @@
 // Nothing here decides anything: the server owns who may approve what, refuses
 // self-approval, and demands a reason on reject. This screen only asks.
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Inbox, ShieldCheck, XCircle } from "lucide-react";
 
@@ -16,7 +17,7 @@ import { useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import {
   approvalDocPath,
-  fmtApprovalWhen,
+  fmtApprovalWhenShort,
   type ApprovalT,
 } from "../components/approval";
 import "./Booking.css";
@@ -24,6 +25,16 @@ import "./Booking.css";
 // ---------------------------------------------------------------------------
 // The inbox
 // ---------------------------------------------------------------------------
+
+/** Keeps Approve/Reject pinned to the right edge of a horizontally scrolling
+ *  table, and stops the buttons wrapping onto two lines. */
+const ACTIONS_CELL: CSSProperties = {
+  position: "sticky",
+  right: 0,
+  whiteSpace: "nowrap",
+  background: "var(--surface)",
+  borderLeft: "1px solid var(--hairline)",
+};
 
 export function ApprovalsPage() {
   const { data, loading, reload } = useList<ApprovalT>("/approvals/inbox");
@@ -79,13 +90,14 @@ export function ApprovalsPage() {
         <div className="table-wrap">
           <table className="data" data-testid="approvals-table">
             <thead>
+              {/* Deliberately few columns: this screen is cleared on a phone or a
+                  half-width pane as often as on a desk monitor, and the store is
+                  already the first thing in the document title. */}
               <tr>
                 <th>What</th>
                 <th>Document</th>
-                <th>Store</th>
                 <th className="num">Value</th>
                 <th>Asked by</th>
-                <th>When</th>
                 <th />
               </tr>
             </thead>
@@ -106,13 +118,19 @@ export function ApprovalsPage() {
                         <span className="mono">{a.title}</span>
                       )}
                     </td>
-                    <td>
-                      <b className="mono">{a.store_code || "—"}</b>
-                    </td>
                     <td className="num">{a.value_paise ? <Money paise={a.value_paise} /> : "—"}</td>
-                    <td>{a.requested_by_name}</td>
-                    <td>{fmtApprovalWhen(a.requested_at)}</td>
-                    <td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {a.requested_by_name}
+                      <br />
+                      <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                        {fmtApprovalWhenShort(a.requested_at)}
+                      </span>
+                    </td>
+                    {/* The decision is the point of this screen, so it must never
+                        be the thing that scrolls out of sight on a narrow pane:
+                        the actions cell sticks to the right edge while the rest
+                        of the row scrolls under it. */}
+                    <td style={ACTIONS_CELL}>
                       {rejecting === a.id ? (
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <input
@@ -121,6 +139,9 @@ export function ApprovalsPage() {
                             placeholder="Reason (required)"
                             value={reason}
                             onChange={(e) => setReason(e.target.value)}
+                            // A table cell sizes to its content; without a floor
+                            // the reason box collapses to a sliver you can't type in.
+                            style={{ minWidth: 240 }}
                             data-testid={`reject-reason-${a.id}`}
                           />
                           <button
