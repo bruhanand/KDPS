@@ -306,3 +306,33 @@ def test_rebuild_reproduces_quarantine_from_ledger(quar_scaffold):
     )
     assert after_oh == before_oh
     assert after_q == before_q
+
+
+# ---------------------------------------------------------------------------
+# Seeder guard — mark-damaged needs a DMG VoucherSeries at every store
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_seed_outbound_demo_emits_dmg_series():
+    """Regression guard for #69 gap #1.
+
+    ``seed_outbound_demo`` must mint a ``DMG`` VoucherSeries for every store —
+    without it ``mark_damaged`` can't allocate a doc number, so the whole
+    action silently rolls back on a freshly-seeded demo. The other seam tests
+    hand-create their own DMG series (see ``quar_scaffold``), so only running
+    the real seeders end-to-end catches the omission.
+    """
+    from django.core.management import call_command
+
+    call_command("seed_foundation")
+    call_command("seed_outbound_demo")
+
+    stores = list(Store.objects.values_list("code", flat=True))
+    assert stores, "seed_foundation should have created stores"
+    missing = [
+        code
+        for code in stores
+        if not VoucherSeries.objects.filter(store_code=code, doc_type="DMG").exists()
+    ]
+    assert not missing, f"no DMG VoucherSeries seeded for stores: {missing}"

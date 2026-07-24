@@ -37,10 +37,11 @@
 .dropzone:hover { border-color: var(--rust); background: var(--dropzone-hover); }
 .ai-note { background: var(--band-ai-bg); border: 1px solid var(--band-ai-bd); color: var(--purple); border-radius: 10px; padding: 10px 13px; font-size: 13px; margin-top: 12px; }
 .warn-note { background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--amber); border-radius: 10px; padding: 10px 13px; font-size: 13px; margin-top: 12px; }
-.ok-note { display: flex; align-items: center; gap: 8px; background: var(--green-bg); border: 1px solid var(--green-bd); color: var(--green); border-radius: 10px; padding: 10px 13px; font-size: 13px; margin-top: 12px; }
+/* base `.ok-note` lives in PtMapper.css (StockOnHand imports both); only its
+   dismiss-button additions live here. */
 .ok-note .spacer { flex: 1; }
-.filter-bar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
 .ok-note button { background: none; border: 0; color: inherit; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; }
+.filter-bar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
 
 /* +/- quantity stepper (mark-damaged pre-commit adjustment, #69) */
 .qty-stepper { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; }
