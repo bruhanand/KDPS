@@ -1,11 +1,12 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Search, X } from "lucide-react";
+import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import type { Store } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import { GlobalSearch } from "./GlobalSearch";
 import { NAV } from "./navConfig";
 import type { NavGroup, NavItem } from "./navConfig";
 import "./AppShell.css";
@@ -300,10 +301,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
           <StoreSwitcher />
-          <div className="topbar-search">
-            <Search size={15} />
-            <input placeholder="Search documents, items, vendors…" data-testid="global-search" />
-          </div>
+          <GlobalSearch />
           <div className="topbar-right">
             <button className="icon-btn" data-testid="notifications">
               <Bell size={18} />

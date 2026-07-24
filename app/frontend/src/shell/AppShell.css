@@ -63,8 +63,10 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px;
   padding: 0 22px;
 }
+/* Sizing lives on .search-wrap (GlobalSearch.css) — it anchors the results
+   panel; this rule is the pill itself. */
 .topbar-search {
-  flex: 1; max-width: 460px; display: flex; align-items: center; gap: 9px;
+  display: flex; align-items: center; gap: 9px;
   background: var(--inner); border: 1px solid var(--hairline); border-radius: 999px;
   padding: 8px 15px; color: var(--caption);
 }
@@ -168,9 +170,9 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   .sidebar-resizer { display: none; }
 
   .topbar { padding: 0 12px; gap: 10px; }
-  .topbar-search { display: none; }
+  .topbar-search { padding: 7px 12px; }
   .topbar-right { gap: 8px; }
-  .switcher-label { max-width: 118px; }
+  .switcher-label { max-width: 74px; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
 }
