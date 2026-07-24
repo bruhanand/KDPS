@@ -15,7 +15,13 @@ from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
-from accounts.rbac_matrix import MATRIX, ROLE_PERSONA, section_access_for
+from accounts.rbac_matrix import (
+    MATRIX,
+    ROLE_OVERRIDES,
+    ROLE_PERSONA,
+    SHEETLESS_SECTIONS,
+    section_access_for,
+)
 from accounts.sections import CAP_NONE, SECTION_CODES
 from masters.models import Gstin, LegalEntity, Store
 
@@ -177,6 +183,41 @@ def test_retuning_section_access_is_a_data_change(db):
     assert _client(user).get("/api/auth/admin/roles").status_code == 200
     body = _client(user).get("/api/auth/me").json()
     assert body["capabilities"]["setup"] == "manage"
+
+
+def test_store_manager_and_cashier_differ_only_on_staff(db):
+    """The one place the two store roles part company (#96).
+
+    Both are the "Store Person" persona and must agree on all twelve ratified
+    sheet cells. The sketch's "Member Details" — bank details, monthly target vs
+    achievement — is manager work, so the manager holds `staff: manage` and the
+    cashier keeps `operate` (own attendance). An override may only touch a
+    section the sheet never covered, which is what keeps the rest identical.
+    """
+    manager = section_access_for("store_manager")
+    cashier = section_access_for("store_staff")
+
+    assert manager["staff"]["capability"] == "manage"
+    assert cashier["staff"]["capability"] == "operate"
+    differing = {s for s in SECTION_CODES if manager[s] != cashier[s]}
+    assert differing == {"staff"}
+
+    # And the lift reaches the live payload, not just the seed table.
+    body = _client(_make_user("mgr", _make_role("store_manager"))).get("/api/auth/me").json()
+    assert body["capabilities"]["staff"] == "manage"
+    # Managing people is not managing money or users — the override is confined.
+    assert body["capabilities"]["money"] == "operate"
+    assert "setup" not in body["capabilities"]
+
+
+def test_overrides_cannot_contradict_the_sheet(db):
+    """Guardrail: the override hook must never reach a ratified sheet cell.
+
+    Without this, `ROLE_OVERRIDES` becomes a back door for quietly editing the
+    matrix in code — exactly what Rule 12 and the role editor exist to prevent.
+    """
+    for role, cells in ROLE_OVERRIDES.items():
+        assert set(cells) <= SHEETLESS_SECTIONS, role
 
 
 def test_seed_matrix_covers_every_canonical_role(db):

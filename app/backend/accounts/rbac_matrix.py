@@ -20,6 +20,13 @@ screen (spec #84, user story 27), so #87 adds the section with derived access �
 marked ``(derived)`` in the label so nobody mistakes it for the sheet. It is
 data like every other cell: retune it on the Role row, no release.
 
+That same sheetless section is where the two store roles part company. The sheet
+has one "Store Person" persona covering both, but the sketch's "Member Details"
+— add/remove people, bank details, monthly target vs achievement — is a store
+*manager's* job, not a cashier's. ``ROLE_OVERRIDES`` carries that one divergence,
+and it may only touch a sheetless section, so a persona's ratified cells stay
+the sheet's word.
+
 Scope words in the cells ("Own store", "Assigned brands", "All (network)") are
 *display context only* — the acting scope is the separate ``scope_type``
 dimension (ADR-0003), not the capability. They are preserved verbatim as the
@@ -152,6 +159,28 @@ ROLE_PERSONA = {
     "it_admin": "admin",
 }
 
+# Sections the SIDEBAR RBAC sheet never covered. Only these may be overridden
+# per role code — everything else is the sheet's ratified word.
+SHEETLESS_SECTIONS = frozenset({"staff"})
+
+# Per-role-code cells layered *on top of* the persona row, for the case where two
+# seeded roles share a persona but genuinely differ.
+#
+# ``store_manager`` and ``store_staff`` are both "Store Person" and hold the same
+# twelve sheet cells. They differ once: the hand-drawn Store Ops screen puts
+# "Member Details" — add/remove members, contact **and bank** details, monthly
+# target vs achievement, growth/de-growth — in the store's own daily list
+# (settled 25 Jul 2026: members are staff scorecards, not loyalty customers; the
+# POS still owns the customer). Managing people is the manager's job, so the
+# manager holds ``staff: manage`` while the cashier keeps ``operate`` — their own
+# attendance and nothing else. Scope stays "own store" through the separate
+# ``scope_type`` dimension (ADR-0003), never the capability.
+ROLE_OVERRIDES: dict[str, dict[str, tuple[str, str]]] = {
+    "store_manager": {
+        "staff": (CAP_MANAGE, "Own store members + attendance (derived)"),
+    },
+}
+
 # Roles that predate the sheet and have no persona row. They get sensible,
 # clearly-derived access so seeded users aren't blank in the new contract — but
 # these are NOT the RBAC matrix and can be retuned freely as data.
@@ -188,7 +217,8 @@ def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
     self-describing and fail-closed. Shape: ``{section: {capability, label}}``.
     """
     persona = ROLE_PERSONA.get(role_code)
-    source = MATRIX.get(persona, {}) if persona else DERIVED_ACCESS.get(role_code, {})
+    base = MATRIX.get(persona, {}) if persona else DERIVED_ACCESS.get(role_code, {})
+    source = {**base, **ROLE_OVERRIDES.get(role_code, {})}
     out: dict[str, dict[str, str]] = {}
     for section in SECTION_CODES:
         capability, label = source.get(section, (CAP_NONE, "No"))
@@ -199,12 +229,17 @@ def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
 def _validate() -> None:
     """Guard the transcription: catch a typo'd section/capability at import.
 
-    Both seed sources are checked so a slip in a ``DERIVED_ACCESS`` cell fails
-    loudly here rather than silently fail-closing that legacy role's access.
-    Only ``MATRIX`` must be complete (all 12 sections); derived rows are partial
-    by design (absent → ``none``).
+    All three seed sources are checked so a slip in a ``DERIVED_ACCESS`` or
+    ``ROLE_OVERRIDES`` cell fails loudly here rather than silently fail-closing
+    that role's access. Only ``MATRIX`` must be complete (all 13 sections);
+    derived and override rows are partial by design (absent → the persona's cell,
+    else ``none``).
     """
-    for source, cells_by_role in (("matrix", MATRIX), ("derived", DERIVED_ACCESS)):
+    for source, cells_by_role in (
+        ("matrix", MATRIX),
+        ("derived", DERIVED_ACCESS),
+        ("override", ROLE_OVERRIDES),
+    ):
         for role, cells in cells_by_role.items():
             for section, (capability, _) in cells.items():
                 assert is_valid_section(section), f"{source}/{role}: bad section {section!r}"
@@ -214,6 +249,13 @@ def _validate() -> None:
     for persona, cells in MATRIX.items():
         missing = set(SECTION_CODES) - set(cells)
         assert not missing, f"{persona}: matrix missing sections {sorted(missing)}"
+    # An override must never restate a ratified sheet cell — only the sections
+    # the sheet left blank are ours to vary per role.
+    for role, cells in ROLE_OVERRIDES.items():
+        off_sheet = set(cells) - SHEETLESS_SECTIONS
+        assert not off_sheet, (
+            f"override/{role}: may not override sheet sections {sorted(off_sheet)}"
+        )
 
 
 _validate()
