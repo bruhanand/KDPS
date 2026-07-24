@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+from django.db import transaction
 from rest_framework import serializers
 
+from approvals.models import ApprovalStatus
+from approvals.serializers import ApprovalReadSerializer
+from approvals.services import display_name
 from masters.models import Store
+from outbound.maker_checker import request_document_approval
 from outbound.models import (
     MarkDamaged,
     MarkDamagedLine,
@@ -20,6 +27,70 @@ from outbound.models import (
     WriteOff,
     WriteOffLine,
 )
+
+# ---------------------------------------------------------------------------
+# Maker-checker read shape (#70)
+# ---------------------------------------------------------------------------
+
+
+class ApprovedDocumentSerializer(serializers.ModelSerializer):
+    """Base read shape for a document that needs a second person.
+
+    Every such document answers the same three questions on its own page, for
+    good: **made by** whom, **approved by** whom, and **when** — plus the live
+    approval record (pending / approved / rejected, with the reject reason).
+
+    The approver is read from the approval, not from the document's own column:
+    the column is a denormalised copy stamped at post time (for Tally), so on a
+    still-unposted draft only the approval knows the answer.
+    """
+
+    created_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+    approval = serializers.SerializerMethodField()
+    approval_history = serializers.SerializerMethodField()
+
+    def _approval(self, obj: Any) -> Any:
+        """The live one. A document that was rejected and asked again holds
+        several, newest first — the newest is the one in force."""
+        return next(iter(obj.approvals.all()), None)
+
+    def get_created_by_name(self, obj: Any) -> str:
+        return display_name(obj.created_by)
+
+    def get_approved_by_name(self, obj: Any) -> str:
+        approval = self._approval(obj)
+        if approval is None or approval.status != ApprovalStatus.APPROVED:
+            return ""
+        return display_name(approval.decided_by)
+
+    def get_approval(self, obj: Any) -> dict[str, Any] | None:
+        approval = self._approval(obj)
+        return ApprovalReadSerializer(approval).data if approval else None
+
+    def get_approval_history(self, obj: Any) -> list[dict[str, Any]]:
+        """Everything asked before the live one — the rejections a maker has
+        already worked through. Empty for the common case."""
+        return [ApprovalReadSerializer(a).data for a in list(obj.approvals.all())[1:]]
+
+
+def _create_with_approval(
+    model: Any, line_model: Any, line_field: str, validated_data: Any, request: Any
+) -> Any:
+    """Create a draft + its lines, then put it in the approvals inbox.
+
+    One transaction: a draft that needs a checker is never left without one.
+    """
+    lines_data = validated_data.pop("lines")
+    user = getattr(request, "user", None)
+    validated_data["created_by"] = user
+    with transaction.atomic():
+        doc = model.objects.create(**validated_data)
+        for ld in lines_data:
+            line_model.objects.create(**{line_field: doc, **ld})
+        request_document_approval(doc, requested_by=user)
+    return doc
+
 
 # ---------------------------------------------------------------------------
 # Transfer
@@ -360,7 +431,7 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
-class StockAdjustmentReadSerializer(serializers.ModelSerializer):
+class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
     lines = StockAdjustmentLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -376,8 +447,12 @@ class StockAdjustmentReadSerializer(serializers.ModelSerializer):
             "store_name",
             "reason",
             "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "notes",
             "created_by",
+            "created_by_name",
             "created_at",
             "updated_at",
             "lines",
@@ -385,11 +460,14 @@ class StockAdjustmentReadSerializer(serializers.ModelSerializer):
 
 
 class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
+    """``approved_by`` is not accepted: the approver is stamped by whoever
+    clears the approvals inbox, and can never be the maker (#70)."""
+
     lines = StockAdjustmentLineSerializer(many=True)
 
     class Meta:
         model = StockAdjustment
-        fields = ["store", "reason", "approved_by", "notes", "lines"]
+        fields = ["store", "reason", "notes", "lines"]
 
     def validate(self, data):
         if not data.get("lines"):
@@ -397,15 +475,13 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lines_data = validated_data.pop("lines")
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
-        validated_data["created_by"] = user
-        adj = StockAdjustment.objects.create(**validated_data)
-        for ld in lines_data:
-            StockAdjustmentLine.objects.create(adjustment=adj, **ld)
-        return adj
+        return _create_with_approval(
+            StockAdjustment,
+            StockAdjustmentLine,
+            "adjustment",
+            validated_data,
+            self.context.get("request"),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +508,7 @@ class WriteOffLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
-class WriteOffReadSerializer(serializers.ModelSerializer):
+class WriteOffReadSerializer(ApprovedDocumentSerializer):
     lines = WriteOffLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -448,7 +524,11 @@ class WriteOffReadSerializer(serializers.ModelSerializer):
             "store_name",
             "reason",
             "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "created_by",
+            "created_by_name",
             "created_at",
             "updated_at",
             "lines",
@@ -456,11 +536,14 @@ class WriteOffReadSerializer(serializers.ModelSerializer):
 
 
 class WriteOffWriteSerializer(serializers.ModelSerializer):
+    """``approved_by`` is not accepted: the approver is stamped by whoever
+    clears the approvals inbox, and can never be the maker (#70)."""
+
     lines = WriteOffLineSerializer(many=True)
 
     class Meta:
         model = WriteOff
-        fields = ["store", "reason", "approved_by", "lines"]
+        fields = ["store", "reason", "lines"]
 
     def validate(self, data):
         if not data.get("lines"):
@@ -468,15 +551,9 @@ class WriteOffWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lines_data = validated_data.pop("lines")
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
-        validated_data["created_by"] = user
-        wo = WriteOff.objects.create(**validated_data)
-        for ld in lines_data:
-            WriteOffLine.objects.create(writeoff=wo, **ld)
-        return wo
+        return _create_with_approval(
+            WriteOff, WriteOffLine, "writeoff", validated_data, self.context.get("request")
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -503,7 +580,10 @@ class VFlipLineSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
 
-class VFlipReadSerializer(serializers.ModelSerializer):
+class VFlipReadSerializer(ApprovedDocumentSerializer):
+    """V-flip's own approver column is ``authorized_by``; it still answers the
+    common "approved by whom" question through ``approved_by_name``."""
+
     lines = VFlipLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
@@ -522,7 +602,11 @@ class VFlipReadSerializer(serializers.ModelSerializer):
             "original_brand_name",
             "season",
             "authorized_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "created_by",
+            "created_by_name",
             "created_at",
             "updated_at",
             "lines",
@@ -530,11 +614,14 @@ class VFlipReadSerializer(serializers.ModelSerializer):
 
 
 class VFlipWriteSerializer(serializers.ModelSerializer):
+    """``authorized_by`` is not accepted: the authoriser is stamped by whoever
+    clears the approvals inbox, and can never be the maker (#70)."""
+
     lines = VFlipLineSerializer(many=True)
 
     class Meta:
         model = VFlip
-        fields = ["store", "original_brand", "season", "authorized_by", "lines"]
+        fields = ["store", "original_brand", "season", "lines"]
 
     def validate(self, data):
         if not data.get("lines"):
@@ -542,12 +629,6 @@ class VFlipWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lines_data = validated_data.pop("lines")
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
-        validated_data["created_by"] = user
-        vflip = VFlip.objects.create(**validated_data)
-        for ld in lines_data:
-            VFlipLine.objects.create(vflip=vflip, **ld)
-        return vflip
+        return _create_with_approval(
+            VFlip, VFlipLine, "vflip", validated_data, self.context.get("request")
+        )

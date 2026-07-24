@@ -11,12 +11,15 @@ Every endpoint requires authentication. RBAC:
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
+from outbound.maker_checker import ask_again
 from outbound.models import (
     MarkDamaged,
     ReturnToVendor,
@@ -385,7 +388,9 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
         qs = _filter_docstatus(qs, self.request)
         return qs
 
@@ -412,7 +417,9 @@ class AdjustmentDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
 
 
 class AdjustmentSubmitView(APIView):
@@ -458,7 +465,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
-            "lines"
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
         )
         qs = _filter_docstatus(qs, self.request)
         return qs
@@ -486,7 +493,9 @@ class WriteOffDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return WriteOff.objects.select_related(
             "store", "approved_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
 
 
 class WriteOffSubmitView(APIView):
@@ -531,7 +540,9 @@ class VFlipListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
         qs = _filter_docstatus(qs, self.request)
         return qs
 
@@ -558,7 +569,9 @@ class VFlipDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related("lines")
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
 
 
 class VFlipSubmitView(APIView):
@@ -591,3 +604,48 @@ class VFlipSubmitView(APIView):
 
         vflip.refresh_from_db()
         return Response(VFlipReadSerializer(vflip).data)
+
+
+# ---------------------------------------------------------------------------
+# Ask again after a rejection (#70)
+# ---------------------------------------------------------------------------
+
+
+class RequestApprovalView(APIView):
+    """POST: send a rejected draft back for approval.
+
+    One view for all three wired families — the only thing that differs is
+    which model to load and who may ask, both supplied by the URL conf. The
+    rules (draft only, rejected only, and who stays the maker) live in
+    ``maker_checker.ask_again``, not here.
+    """
+
+    model: Any = None
+    read_serializer: Any = None
+
+    def _load(self, pk):
+        return (
+            self.model.objects.select_related("store", "created_by")
+            .prefetch_related(
+                "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+            )
+            .get(pk=pk)
+        )
+
+    def post(self, request, pk):
+        try:
+            doc = self._load(pk)
+        except self.model.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, doc.store_id)
+
+        try:
+            ask_again(doc, requested_by=request.user)
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Re-read rather than refresh: the fresh approval must come back with
+        # its people already joined, or the response N+1s on names.
+        doc = self._load(pk)
+        return Response(self.read_serializer(doc).data)

@@ -18,6 +18,26 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 say() { printf '\033[1;34m[sandbox-setup]\033[0m %s\n' "$*"; }
 
+# --- 0. Pre-trust the workspace for the Claude Code CLI -----------------------
+# The repo ships a tracked .claude/settings.local.json with permissions.allow
+# entries. On its FIRST invocation in a fresh sandbox the CLI treats the
+# untrusted workspace leniently (prints "Ignoring N permissions.allow entries"
+# and proceeds), but it records the project as untrusted in ~/.claude.json — so
+# the SECOND invocation in the same sandbox (the reviewer, sharing the
+# implementer's sandbox) hits a *fatal* trust gate and exits 1 before producing
+# any output. Sandcastle already runs the agent with --dangerously-skip-permissions,
+# so the allow-list is dead weight here; we just need the workspace marked
+# trusted so every phase runs. The CLI merges (not clobbers) ~/.claude.json, so
+# seeding the flag before the first run survives into later phases.
+say "Trusting workspace for the Claude Code CLI"
+CJSON="$HOME/.claude.json"
+if [ -f "$CJSON" ]; then
+  jq '.projects["/home/agent/workspace"].hasTrustDialogAccepted = true' "$CJSON" > "$CJSON.tmp" \
+    && mv "$CJSON.tmp" "$CJSON"
+else
+  printf '{"projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true}}}' > "$CJSON"
+fi
+
 # --- 1. Postgres -------------------------------------------------------------
 # The cluster was created by the Dockerfile at $PGDATA, owned by `agent`, with a
 # /tmp socket dir and trust auth. Start it if this container hasn't already.

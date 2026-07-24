@@ -36,7 +36,13 @@ export const NAV: NavGroup[] = [
     label: "Home",
     icon: LayoutDashboard,
     layer: "home",
-    items: [{ label: "Dashboard", to: "/" }],
+    // The approvals inbox is an "everywhere" surface (system.md · Maker-checker),
+    // so it hangs off Home — the one group every role has — not off Controls,
+    // which store and warehouse roles cannot see.
+    items: [
+      { label: "Dashboard", to: "/" },
+      { label: "Approvals", to: "/approvals" },
+    ],
   },
   {
     key: "store_ops",
@@ -110,7 +116,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Exception Inbox", to: "/controls/exceptions" },
       { label: "Reconciliations", to: "/controls/recon" },
-      { label: "Approvals", to: "/controls/approvals" },
+      { label: "Approvals", to: "/approvals" },
       { label: "Audit Trail", to: "/controls/audit" },
     ],
   },
