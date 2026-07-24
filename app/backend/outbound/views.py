@@ -12,11 +12,13 @@ Every endpoint requires authentication. RBAC:
 from __future__ import annotations
 
 from rest_framework import generics, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
 from outbound.models import (
+    MarkDamaged,
     ReturnToVendor,
     StockAdjustment,
     StoreTransfer,
@@ -31,6 +33,7 @@ from outbound.permissions import (
 )
 from outbound.posting import (
     OutboundPostingError,
+    mark_damaged,
     post_adjustment,
     post_rtv,
     post_transfer_dispatch,
@@ -39,6 +42,8 @@ from outbound.posting import (
     post_writeoff,
 )
 from outbound.serializers import (
+    MarkDamagedInputSerializer,
+    MarkDamagedReadSerializer,
     ReturnToVendorReadSerializer,
     ReturnToVendorWriteSerializer,
     StockAdjustmentReadSerializer,
@@ -51,6 +56,23 @@ from outbound.serializers import (
     WriteOffReadSerializer,
     WriteOffWriteSerializer,
 )
+
+
+def _filter_docstatus(qs, request):
+    """Apply the optional ``?docstatus=`` filter to a list queryset.
+
+    A non-integer value is a client error, not a server one — return a
+    controlled 400 instead of letting ``int()`` raise an uncaught 500.
+    """
+    ds = request.query_params.get("docstatus")
+    if ds is None:
+        return qs
+    try:
+        code = int(ds)
+    except (TypeError, ValueError):
+        raise ValidationError({"docstatus": "must be an integer"}) from None
+    return qs.filter(docstatus=code)
+
 
 # ---------------------------------------------------------------------------
 # Transfer views
@@ -70,9 +92,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -223,6 +243,56 @@ class ScanLookupView(APIView):
 
 
 # ---------------------------------------------------------------------------
+# Mark damaged (global action → quarantine)
+# ---------------------------------------------------------------------------
+
+
+class MarkDamagedView(generics.ListCreateAPIView):
+    """GET: list mark-damaged documents. POST: the global mark-damaged action —
+    create a DMG document from scanned pieces and post it in one call, moving
+    each piece from free-to-sell into quarantine at the store.
+
+    Any outbound writer (including store-level roles) may mark damaged from any
+    stock view — damage is caught everywhere. store_staff is read-only.
+    """
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsOutboundWriter()]
+        return [IsOutboundReader()]
+
+    def get_queryset(self):
+        from masters.scoping import scope_by_store
+
+        qs = MarkDamaged.objects.select_related("store", "created_by").prefetch_related("lines")
+        qs = _filter_docstatus(qs, self.request)
+        return scope_by_store(qs, self.request.user, "store_id")
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return MarkDamagedInputSerializer
+        return MarkDamagedReadSerializer
+
+    def create(self, request, *args, **kwargs):
+        ser = MarkDamagedInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        store = ser.validated_data["store"]
+        enforce_store_scope(request.user, store.id)
+
+        try:
+            mark = mark_damaged(
+                store,
+                ser.scans_by_barcode(),
+                user=request.user,
+                note=ser.validated_data.get("note", ""),
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(MarkDamagedReadSerializer(mark).data, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
 # RTV views
 # ---------------------------------------------------------------------------
 
@@ -237,9 +307,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
         qs = ReturnToVendor.objects.select_related(
             "store", "vendor", "brand", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         rt = self.request.query_params.get("return_type")
         if rt:
             qs = qs.filter(return_type=rt)
@@ -318,9 +386,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         qs = StockAdjustment.objects.select_related(
             "store", "approved_by", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -394,9 +460,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
             "lines"
         )
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):
@@ -468,9 +532,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         qs = VFlip.objects.select_related(
             "store", "original_brand", "authorized_by", "created_by"
         ).prefetch_related("lines")
-        ds = self.request.query_params.get("docstatus")
-        if ds is not None:
-            qs = qs.filter(docstatus=int(ds))
+        qs = _filter_docstatus(qs, self.request)
         return qs
 
     def get_serializer_class(self):

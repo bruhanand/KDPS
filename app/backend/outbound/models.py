@@ -222,6 +222,72 @@ class TransferReceipt(TimeStampedModel):
 
 
 # ---------------------------------------------------------------------------
+# 1b. Mark Damaged (global action → quarantine)
+# ---------------------------------------------------------------------------
+
+
+class MarkDamaged(Document):
+    """The global "mark damaged" action, as a document (Rule 1 — every event is
+    a document, Rule 10 — every action has an actor).
+
+    Damage is caught anywhere stock is visible — receiving, on the shelf, during
+    counting, at billing — and moves the piece into quarantine there and then.
+    Posting writes a ``damage_out`` leg (free-to-sell drops) + a ``quarantine_in``
+    leg (into the quarantine bucket) at the same store; the piece stays owned,
+    it is just no longer sellable. No GL: an internal reclassification, value
+    unchanged on the books (the two legs net to zero, like the in-transit pair).
+    """
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="damage_marks"
+    )
+    note = models.CharField(max_length=240, blank=True, default="")
+    created_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="damage_marks_created",
+    )
+
+    class Meta(Document.Meta):
+        db_table = "outbound_mark_damaged"
+        ordering = ["-created_at"]
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "DMG"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"MarkDamaged(draft #{self.pk})"
+
+
+class MarkDamagedLine(TimeStampedModel):
+    """One SKU line on a mark-damaged document — a (barcode × qty) going to
+    quarantine. Dims + unit cost are enriched from the source stock at post
+    time, never typed (Rule 6)."""
+
+    mark = models.ForeignKey(MarkDamaged, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_mark_damaged_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
 # 2. Return to Vendor (defective + seasonal)
 # ---------------------------------------------------------------------------
 

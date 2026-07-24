@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Boxes, IndianRupee, Layers, ScrollText } from "lucide-react";
+import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, ScrollText, ShieldAlert, X } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
 
-type Group = "sku" | "brand" | "store";
+type Group = "sku" | "brand" | "store" | "quarantine";
 
 interface RowT {
+  store_id?: number;
   store_code: string;
   store_name: string;
   brand: string;
@@ -29,32 +30,157 @@ interface OnHandT {
   rows: RowT[];
 }
 
+interface QuarRowT {
+  store_code: string;
+  store_name: string;
+  sku_code: string;
+  design: string;
+  color: string;
+  size: string;
+  item: string;
+  season: string;
+  brand: string;
+  qty: number;
+  value_rupees: string;
+  marked_by: string | null;
+  marked_at: string | null;
+}
+
+interface QuarT {
+  summary: { units_quarantined: number; value_rupees: string; lines: number };
+  rows: QuarRowT[];
+}
+
 const TABS: { key: Group; label: string }[] = [
   { key: "sku", label: "By SKU" },
   { key: "brand", label: "By Brand" },
   { key: "store", label: "By Store" },
+  { key: "quarantine", label: "Quarantine" },
 ];
 
 export default function StockOnHand() {
   const [group, setGroup] = useState<Group>("sku");
   const [data, setData] = useState<OnHandT | null>(null);
+  const [quar, setQuar] = useState<QuarT | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [flash, setFlash] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Quarantine filters (the backend accepts ?store=&brand=; this exposes them).
+  const [qStore, setQStore] = useState("");
+  const [qBrand, setQBrand] = useState("");
+  // Option lists come from an unfiltered snapshot so a chosen filter never
+  // empties the other dropdown.
+  const [quarOpts, setQuarOpts] = useState<{ stores: [string, string][]; brands: string[] }>({ stores: [], brands: [] });
+
+  // Mark-damaged modal state (pre-commit adjustment before posting).
+  const [dmgRow, setDmgRow] = useState<RowT | null>(null);
+  const [dmgQty, setDmgQty] = useState(1);
+  const [dmgErr, setDmgErr] = useState("");
+  const [dmgBusy, setDmgBusy] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     setError("");
-    api.get(`/stockledger/on-hand?group_by=${group}`)
-      .then((r) => setData(r.data))
-      .catch((e) => setError(apiErrorMessage(e)))
-      .finally(() => setLoading(false));
-  }, [group]);
+    if (group === "quarantine") {
+      const params = new URLSearchParams();
+      if (qStore) params.set("store", qStore);
+      if (qBrand) params.set("brand", qBrand);
+      const qs = params.toString();
+      api.get(`/stockledger/quarantine${qs ? `?${qs}` : ""}`)
+        .then((r) => setQuar(r.data))
+        .catch((e) => setError(apiErrorMessage(e)))
+        .finally(() => setLoading(false));
+    } else {
+      api.get(`/stockledger/on-hand?group_by=${group}`)
+        .then((r) => setData(r.data))
+        .catch((e) => setError(apiErrorMessage(e)))
+        .finally(() => setLoading(false));
+    }
+  }, [group, qStore, qBrand, reloadKey]);
 
-  const cards = [
-    { icon: Boxes, label: "Units on hand", value: data?.summary.units_on_hand ?? 0 },
-    { icon: IndianRupee, label: "Stock value (₹)", value: data?.summary.value_rupees ?? "0.00" },
-    { icon: Layers, label: group === "store" ? "Stores" : group === "brand" ? "Brands" : "SKU lines", value: data?.summary.lines ?? 0 },
-  ];
+  // Refresh the filter option lists from the full (unfiltered) quarantine set
+  // whenever we enter the tab or the data changes.
+  useEffect(() => {
+    if (group !== "quarantine") return;
+    api.get("/stockledger/quarantine").then((r) => {
+      const rows: QuarRowT[] = r.data.rows ?? [];
+      const stores = new Map<string, string>();
+      const brands = new Set<string>();
+      for (const row of rows) {
+        stores.set(row.store_code, row.store_name);
+        if (row.brand) brands.add(row.brand);
+      }
+      setQuarOpts({
+        stores: [...stores.entries()].sort((a, b) => a[0].localeCompare(b[0])),
+        brands: [...brands].sort(),
+      });
+    }).catch(() => { /* option lists are best-effort */ });
+  }, [group, reloadKey]);
+
+  // "Mark damaged" is a global action wherever stock is visible. Clicking it
+  // opens a stepper so the exact count is set BEFORE anything posts; on confirm
+  // the piece moves from free-to-sell into quarantine there and then.
+  function openDamage(row: RowT) {
+    if (row.store_id == null) return;
+    setDmgRow(row);
+    setDmgQty(1);
+    setDmgErr("");
+    setDmgBusy(false);
+  }
+
+  // Clamp any requested count into [1, sellable] — a piece can't be under- or
+  // over-quarantined against what's free-to-sell.
+  function clampQty(n: number): number {
+    if (!dmgRow) return 1;
+    return Math.min(dmgRow.net_qty, Math.max(1, Math.trunc(n)));
+  }
+
+  function bumpQty(delta: number) {
+    if (!dmgRow) return;
+    setDmgQty((q) => clampQty(q + delta));
+  }
+
+  async function confirmDamage() {
+    if (!dmgRow || dmgRow.store_id == null) return;
+    const qty = clampQty(dmgQty);
+    setDmgErr("");
+    setDmgBusy(true);
+    try {
+      await api.post("/outbound/mark-damaged", {
+        store: dmgRow.store_id,
+        scans: [{ barcode: dmgRow.sku_code, qty }],
+      });
+      setFlash(`Moved ${qty} × ${dmgRow.sku_code} into quarantine at ${dmgRow.store_code}.`);
+      setDmgRow(null);
+      setReloadKey((k) => k + 1);
+    } catch (e) {
+      setDmgErr(apiErrorMessage(e));
+    } finally {
+      setDmgBusy(false);
+    }
+  }
+
+  const isQuar = group === "quarantine";
+  const cards = isQuar
+    ? [
+        { icon: ShieldAlert, label: "Units quarantined", value: quar?.summary.units_quarantined ?? 0 },
+        { icon: IndianRupee, label: "Quarantine value (₹)", value: quar?.summary.value_rupees ?? "0.00" },
+        { icon: Layers, label: "Quarantine lines", value: quar?.summary.lines ?? 0 },
+      ]
+    : [
+        { icon: Boxes, label: "Units on hand", value: data?.summary.units_on_hand ?? 0 },
+        { icon: IndianRupee, label: "Stock value (₹)", value: data?.summary.value_rupees ?? "0.00" },
+        { icon: Layers, label: group === "store" ? "Stores" : group === "brand" ? "Brands" : "SKU lines", value: data?.summary.lines ?? 0 },
+      ];
+
+  const emptyQuar = !quar || quar.rows.length === 0;
+  const emptyOnHand = !data || data.rows.length === 0;
+  const dmgValue = useMemo(() => {
+    if (!dmgRow) return null;
+    return dmgQty === dmgRow.net_qty ? "all remaining" : `${dmgQty} of ${dmgRow.net_qty}`;
+  }, [dmgRow, dmgQty]);
 
   return (
     <div className="page-pad">
@@ -80,6 +206,14 @@ export default function StockOnHand() {
         ))}
       </div>
 
+      {flash && (
+        <div className="ok-note" data-testid="onhand-flash">
+          <CheckCircle2 size={16} /> {flash}
+          <span className="spacer" />
+          <button onClick={() => setFlash("")} aria-label="Dismiss"><X size={15} /></button>
+        </div>
+      )}
+
       <div className="stat-grid" data-testid="onhand-summary">
         {cards.map((c) => (
           <div className="card stat-card" key={c.label}>
@@ -90,19 +224,74 @@ export default function StockOnHand() {
         ))}
       </div>
 
+      {isQuar && (
+        <div className="filter-bar" data-testid="quarantine-filters">
+          <select className="select" value={qStore} onChange={(e) => setQStore(e.target.value)} data-testid="quarantine-filter-store">
+            <option value="">All stores</option>
+            {quarOpts.stores.map(([code, name]) => (
+              <option key={code} value={code}>{code} — {name}</option>
+            ))}
+          </select>
+          <select className="select" value={qBrand} onChange={(e) => setQBrand(e.target.value)} data-testid="quarantine-filter-brand">
+            <option value="">All brands</option>
+            {quarOpts.brands.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+          {(qStore || qBrand) && (
+            <button className="btn btn-sm" onClick={() => { setQStore(""); setQBrand(""); }} data-testid="quarantine-filter-clear">
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : error ? (
         <div className="warn-note" data-testid="onhand-error">{error}</div>
-      ) : !data || data.rows.length === 0 ? (
+      ) : isQuar ? (
+        emptyQuar ? (
+          <div className="card section-card" data-testid="quarantine-empty">
+            {qStore || qBrand
+              ? "No quarantined stock matches these filters."
+              : "Nothing in quarantine. Use “Mark damaged” on any SKU to move a piece here."}
+          </div>
+        ) : (
+          <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
+            <table className="data kdps-table" data-testid="quarantine-table">
+              <thead>
+                <tr>
+                  <th>Barcode (SKU)</th><th>Brand</th><th>Design</th><th>Colour</th>
+                  <th>Size</th><th>Season</th><th>Store</th>
+                  <th className="num">Units</th><th className="num">Value ₹</th>
+                  <th>Marked by</th><th>When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quar!.rows.map((r, i) => (
+                  <tr key={i} data-testid={`quarantine-row-${i}`}>
+                    <td className="mono">{r.sku_code}</td><td>{r.brand}</td><td>{r.design}</td>
+                    <td>{r.color}</td><td>{r.size}</td><td>{r.season}</td><td>{r.store_code}</td>
+                    <td className="num" style={{ fontWeight: 700 }}>{r.qty}</td>
+                    <td className="num mono">{r.value_rupees}</td>
+                    <td>{r.marked_by ?? "—"}</td>
+                    <td>{r.marked_at ? new Date(r.marked_at).toLocaleString("en-IN") : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : emptyOnHand ? (
         <div className="card section-card" data-testid="onhand-empty">
           No stock on hand yet. Post a PT file from Patna (PT Mapper → Push into system) to build inventory.
         </div>
       ) : (
         <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
-          {data.summary.truncated && (
+          {data!.summary.truncated && (
             <div className="warn-note" data-testid="onhand-truncated-banner" style={{ marginBottom: 10 }}>
-              Showing the first {data.summary.displayed ?? data.rows.length} of {data.summary.lines} lines. Filter by store or brand to narrow the view.
+              Showing the first {data!.summary.displayed ?? data!.rows.length} of {data!.summary.lines} lines. Filter by store or brand to narrow the view.
             </div>
           )}
           <table className="data kdps-table" data-testid="onhand-table">
@@ -118,10 +307,11 @@ export default function StockOnHand() {
                 {group === "store" && (<><th>Store</th><th>Name</th><th className="num">SKUs</th></>)}
                 <th className="num">Units</th>
                 <th className="num">Value ₹</th>
+                {group === "sku" && <th />}
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((r, i) => (
+              {data!.rows.map((r, i) => (
                 <tr key={i} data-testid={`onhand-row-${i}`}>
                   {group === "sku" && (
                     <>
@@ -134,10 +324,82 @@ export default function StockOnHand() {
                   {group === "store" && (<><td className="mono">{r.store_code}</td><td>{r.store_name}</td><td className="num">{r.skus}</td></>)}
                   <td className="num" style={{ fontWeight: 700 }}>{r.net_qty}</td>
                   <td className="num mono">{r.net_value_rupees}</td>
+                  {group === "sku" && (
+                    <td>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => openDamage(r)}
+                        data-testid={`mark-damaged-${i}`}
+                        title="Move a piece to quarantine"
+                      >
+                        <ShieldAlert size={14} /> Mark damaged
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Mark-damaged confirm dialog — set the exact count, then post. */}
+      {dmgRow && (
+        <div className="modal-backdrop" data-testid="mark-damaged-modal" onClick={() => !dmgBusy && setDmgRow(null)}>
+          <div className="modal" style={{ maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h3 className="h3"><ShieldAlert size={17} style={{ color: "var(--rust)", verticalAlign: "-3px", marginRight: 6 }} />Mark damaged</h3>
+              <button type="button" className="btn" onClick={() => setDmgRow(null)} disabled={dmgBusy}>Cancel</button>
+            </div>
+
+            <p className="lead" style={{ marginBottom: 6 }}>
+              <b className="mono">{dmgRow.sku_code}</b> · {dmgRow.brand}
+            </p>
+            <p className="stat-label" style={{ marginBottom: 18 }}>
+              {[dmgRow.design, dmgRow.color, dmgRow.size].filter(Boolean).join(" · ")} — at <b>{dmgRow.store_code}</b>,
+              {" "}{dmgRow.net_qty} sellable
+            </p>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 8 }}>
+              <span className="stat-label">Move to quarantine</span>
+              <div className="qty-stepper" data-testid="mark-damaged-stepper">
+                <button type="button" onClick={() => bumpQty(-1)} disabled={dmgBusy || dmgQty <= 1} data-testid="mark-damaged-dec" aria-label="Decrease">
+                  <Minus size={16} />
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={dmgRow.net_qty}
+                  value={dmgQty}
+                  data-testid="mark-damaged-qty"
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n)) setDmgQty(clampQty(n));
+                  }}
+                />
+                <button type="button" onClick={() => bumpQty(1)} disabled={dmgBusy || dmgQty >= dmgRow.net_qty} data-testid="mark-damaged-inc" aria-label="Increase">
+                  <Plus size={16} />
+                </button>
+              </div>
+              <span className="stat-label">{dmgValue}</span>
+            </div>
+
+            <p className="stat-label" style={{ marginBottom: 18 }}>
+              These pieces stay owned and at the store — they are just no longer free-to-sell.
+            </p>
+
+            {dmgErr && <div className="warn-note" data-testid="mark-damaged-error">{dmgErr}</div>}
+
+            <button
+              className="btn btn-cta btn-lg"
+              style={{ marginTop: 16 }}
+              disabled={dmgBusy}
+              onClick={confirmDamage}
+              data-testid="mark-damaged-confirm"
+            >
+              <ShieldAlert size={16} /> {dmgBusy ? "Moving…" : `Mark ${dmgQty} damaged`}
+            </button>
+          </div>
         </div>
       )}
     </div>
