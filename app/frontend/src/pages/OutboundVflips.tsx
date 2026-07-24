@@ -12,7 +12,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundAdmin } from "../lib/outbound-rbac";
-import { ApprovalPill, ApprovalTrail, type ApprovalT } from "../components/approval";
+import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +62,7 @@ interface VFlipT {
   created_by: number | null;
   created_by_name: string;
   approval: ApprovalT | null;
+  approval_history: ApprovalT[];
   created_at: string;
   updated_at: string;
   lines: VFlipLineT[];
@@ -320,7 +321,7 @@ export function VFlipDetailPage() {
   const totalQty = v.lines.reduce((s, l) => s + l.qty, 0);
   const totalValue = v.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
   // A V-flip cannot post until a second person has approved it (#70).
-  const canSubmit = v.docstatus === 0 && writable && v.approval?.status === "approved";
+  const canSubmit = v.docstatus === 0 && writable && isCleared(v.approval);
 
   async function handleSubmit() {
     setError("");
@@ -414,7 +415,13 @@ export function VFlipDetailPage() {
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <ApprovalTrail createdByName={v.created_by_name} approval={v.approval} />
+        <ApprovalTrail
+          createdByName={v.created_by_name}
+          createdAt={v.created_at}
+          approval={v.approval}
+          history={v.approval_history}
+          askAgainPath={writable ? `/outbound/vflips/${v.id}/request-approval` : undefined}
+        />
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="vflip-detail-error">{error}</div>}

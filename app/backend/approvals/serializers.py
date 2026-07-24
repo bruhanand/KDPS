@@ -20,10 +20,14 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
 
     store_code = serializers.CharField(source="store.code", read_only=True, default="")
     store_name = serializers.CharField(source="store.name", read_only=True, default="")
+    made_by_name = serializers.SerializerMethodField()
     requested_by_name = serializers.SerializerMethodField()
     decided_by_name = serializers.SerializerMethodField()
     # `created_at` *is* the moment the maker asked; name it honestly for clients.
     requested_at = serializers.DateTimeField(source="created_at", read_only=True)
+
+    def get_made_by_name(self, obj: Approval) -> str:
+        return display_name(obj.made_by)
 
     def get_requested_by_name(self, obj: Approval) -> str:
         return display_name(obj.requested_by)
@@ -44,6 +48,8 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
             "store_name",
             "value_paise",
             "status",
+            "made_by",
+            "made_by_name",
             "requested_by",
             "requested_by_name",
             "requested_at",

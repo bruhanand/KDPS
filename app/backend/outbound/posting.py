@@ -209,12 +209,30 @@ def _write_transit_entry(
     return entry
 
 
+def book_unit_cost(store_id: int, sku_code: str) -> int:
+    """What the books say one piece costs at this location, in paise.
+
+    The cohort's frozen P-RATE where there is one, else the on-hand average.
+    Returns 0 when the location holds no such stock — "unknown", which every
+    caller must treat as unknown rather than as free.
+    """
+    from masters.models import Cohort
+
+    on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).first()
+    if on_hand is None:
+        return 0
+    cohort = Cohort.objects.filter(barcode=sku_code, season=on_hand.season).first()
+    if cohort is not None:
+        return int(cohort.unit_cost_paise or 0)
+    if on_hand.net_qty > 0:
+        return int(on_hand.net_value_paise or 0) // on_hand.net_qty
+    return 0
+
+
 def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     """Merchandising dims + unit cost for a scanned barcode, from the source
     location's stock (the ledger is self-describing) and the cohort's frozen
     P-RATE cost where one exists (falling back to the on-hand average)."""
-    from masters.models import Cohort
-
     try:
         on_hand = StockOnHand.objects.get(store_id=store_id, sku_code=barcode)
     except StockOnHand.DoesNotExist:
@@ -222,14 +240,7 @@ def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
             f"Barcode {barcode} has no stock at the source location."
         ) from None
 
-    unit_cost = 0
-    cohort = Cohort.objects.filter(barcode=barcode, season=on_hand.season).first()
-    if cohort is not None:
-        unit_cost = int(cohort.unit_cost_paise or 0)
-    elif on_hand.net_qty > 0:
-        unit_cost = int(on_hand.net_value_paise or 0) // on_hand.net_qty
-
-    return {**merch_dims(on_hand), "unit_cost_paise": unit_cost}
+    return {**merch_dims(on_hand), "unit_cost_paise": book_unit_cost(store_id, barcode)}
 
 
 @transaction.atomic

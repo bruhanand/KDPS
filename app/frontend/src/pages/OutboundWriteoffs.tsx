@@ -13,7 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundAdmin } from "../lib/outbound-rbac";
-import { ApprovalPill, ApprovalTrail, type ApprovalT } from "../components/approval";
+import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -61,6 +61,7 @@ interface WOT {
   created_by: number | null;
   created_by_name: string;
   approval: ApprovalT | null;
+  approval_history: ApprovalT[];
   created_at: string;
   updated_at: string;
   lines: WOLineT[];
@@ -300,7 +301,7 @@ export function WriteOffDetailPage() {
   const totalValue = w.lines.reduce((s, l) => s + l.qty * l.unit_cost_paise, 0);
   // A draft cannot post until a second person has approved it — the server
   // enforces this; the button only reflects it honestly.
-  const approved = w.approval?.status === "approved";
+  const approved = isCleared(w.approval);
   const canSubmit = w.docstatus === 0 && writable && approved;
 
   async function handleSubmit() {
@@ -363,7 +364,13 @@ export function WriteOffDetailPage() {
       </div>
 
       <div style={{ marginBottom: 18 }}>
-        <ApprovalTrail createdByName={w.created_by_name} approval={w.approval} />
+        <ApprovalTrail
+          createdByName={w.created_by_name}
+          createdAt={w.created_at}
+          approval={w.approval}
+          history={w.approval_history}
+          askAgainPath={writable ? `/outbound/writeoffs/${w.id}/request-approval` : undefined}
+        />
       </div>
 
       {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="wo-detail-error">{error}</div>}

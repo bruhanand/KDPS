@@ -198,13 +198,15 @@ def _approve(doc, s):
 
     These are posting-layer tests: they exercise the ledger and the GL, not the
     inbox, so the approval is walked through its real service rather than faked
-    — the maker asks, a *different* person approves.
+    — the maker asks, a *different* person approves. A document small enough to
+    fall inside its policy tolerance is already cleared and nobody is asked.
     """
+    from approvals.models import ApprovalStatus
     from approvals.services import decide
     from outbound.maker_checker import request_document_approval
 
     approval = request_document_approval(doc, requested_by=s["user"])
-    if approval is not None:
+    if approval is not None and approval.status == ApprovalStatus.PENDING:
         decide(approval, actor=s["checker"], action="approve")
     return doc
 

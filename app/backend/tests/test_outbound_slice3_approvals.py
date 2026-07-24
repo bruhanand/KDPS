@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import pytest
 from django.db.utils import IntegrityError
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
-from approvals.models import Approval, ApprovalStatus
+from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Gstin, LegalEntity, Store
 from outbound.models import StockAdjustment, VFlip, WriteOff
@@ -141,6 +142,30 @@ def _create_writeoff(mc, qty=2):
     return resp.data
 
 
+def _create_adjustment(mc, *, adj_qty, unit_cost_paise=45000, user=None):
+    """A one-line adjustment. ``adj_qty × unit_cost`` is the value at stake —
+    the number the tolerance and the value band are read against."""
+    resp = _client(user or mc["maker"]).post(
+        "/api/outbound/adjustments",
+        {
+            "store": mc["store"].id,
+            "reason": "miscount",
+            "lines": [
+                {
+                    "sku_code": "MC001",
+                    "book_qty": 10,
+                    "counted_qty": 10 + adj_qty,
+                    "adj_qty": adj_qty,
+                    "unit_cost_paise": unit_cost_paise,
+                }
+            ],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    return resp.data
+
+
 # ---------------------------------------------------------------------------
 # The document is born pending — and the creator is never its approver
 # ---------------------------------------------------------------------------
@@ -208,23 +233,7 @@ def test_one_inbox_lists_every_document_type_waiting_for_me(mc):
         },
         format="json",
     )
-    maker.post(
-        "/api/outbound/adjustments",
-        {
-            "store": mc["store"].id,
-            "reason": "miscount",
-            "lines": [
-                {
-                    "sku_code": "MC001",
-                    "book_qty": 10,
-                    "counted_qty": 9,
-                    "adj_qty": -1,
-                    "unit_cost_paise": 45000,
-                }
-            ],
-        },
-        format="json",
-    )
+    _create_adjustment(mc, adj_qty=-6)  # above tolerance, so it needs a checker
 
     inbox = _client(mc["checker"]).get("/api/approvals/inbox")
     assert inbox.status_code == 200
@@ -326,34 +335,17 @@ def test_a_vflip_needs_a_second_person_too(mc):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_an_adjustment_needs_a_second_person_too(mc):
-    """Same rule for stock adjustments — the book does not move on one signature."""
-    created = _client(mc["maker"]).post(
-        "/api/outbound/adjustments",
-        {
-            "store": mc["store"].id,
-            "reason": "miscount",
-            "lines": [
-                {
-                    "sku_code": "MC001",
-                    "book_qty": 10,
-                    "counted_qty": 8,
-                    "adj_qty": -2,
-                    "unit_cost_paise": 45000,
-                }
-            ],
-        },
-        format="json",
-    )
-    assert created.status_code == 201, created.data
-    adj_id = created.data["id"]
+def test_an_adjustment_above_tolerance_needs_a_second_person_too(mc):
+    """Same rule for stock adjustments once the variance is worth something —
+    the book does not move on one signature."""
+    adj_id = _create_adjustment(mc, adj_qty=-6)["id"]
 
     blocked = _client(mc["maker"]).post(f"/api/outbound/adjustments/{adj_id}/submit")
     assert blocked.status_code == 400
     assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 10
 
     approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
-    assert approval.value_paise == 2 * 45000  # magnitude at stake, not the sign
+    assert approval.value_paise == 6 * 45000  # magnitude at stake, not the sign
     _client(mc["checker"]).post(
         f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
     )
@@ -361,7 +353,7 @@ def test_an_adjustment_needs_a_second_person_too(mc):
     posted = _client(mc["maker"]).post(f"/api/outbound/adjustments/{adj_id}/submit")
     assert posted.status_code == 200, posted.data
     assert StockAdjustment.objects.get(pk=adj_id).approved_by_id == mc["checker"].id
-    assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 8
+    assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 4
 
 
 # ---------------------------------------------------------------------------
@@ -529,3 +521,339 @@ def test_the_maker_can_watch_their_own_request_in_the_history(mc):
     history = _client(mc["maker"]).get("/api/approvals?status=pending")
     assert history.status_code == 200
     assert [row["kind"] for row in history.data] == ["writeoff"]
+
+
+# ---------------------------------------------------------------------------
+# Tolerance & value band — "within a configurable tolerance → auto-adjust,
+# logged, done … approval is value-banded" (system.md · Stock counting)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_small_adjustment_posts_without_a_second_person(mc):
+    """A ₹900 miscount does not queue behind the owner's morning inbox — it
+    auto-adjusts and is logged, which is what the count design asks for."""
+    adj_id = _create_adjustment(mc, adj_qty=-2)["id"]
+
+    approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
+    assert approval.status == ApprovalStatus.NOT_REQUIRED
+    assert approval.decided_by_id is None
+    assert "tolerance" in approval.reason  # the rule that let it through, on the row
+
+    posted = _client(mc["maker"]).post(f"/api/outbound/adjustments/{adj_id}/submit")
+    assert posted.status_code == 200, posted.data
+    assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 8
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_auto_adjusted_document_is_in_nobody_s_inbox(mc):
+    """Not needing a checker is not the same as hiding: it is simply not a
+    question anyone has to answer."""
+    _create_adjustment(mc, adj_qty=-2)
+    inbox = _client(mc["checker"]).get("/api/approvals/inbox")
+    assert inbox.data == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_small_writeoff_still_needs_a_second_person(mc):
+    """The tolerance belongs to counting, not to stock leaving the books: a
+    write-off of the same value still waits for someone else."""
+    data = _create_writeoff(mc, qty=2)  # ₹900 — under the adjustment tolerance
+    approval = Approval.objects.get(kind="writeoff", object_id=data["id"])
+    assert approval.status == ApprovalStatus.PENDING
+
+    blocked = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/submit")
+    assert blocked.status_code == 400
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_mid_value_adjustment_may_be_cleared_by_the_in_charge(mc):
+    """Up to the band the store in-charge approves; the row says so, so the
+    inbox routes it without anyone branching on value at read time."""
+    adj_id = _create_adjustment(mc, adj_qty=-6)["id"]  # ₹2,700
+    approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
+    assert "store_manager" in approval.approver_roles
+    assert "owner" in approval.approver_roles  # HO can always clear a small one
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_large_adjustment_goes_straight_to_ho(mc):
+    adj_id = _create_adjustment(mc, adj_qty=60)["id"]  # ₹27,000 — above the band
+    approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
+    assert "store_manager" not in approval.approver_roles
+    assert "owner" in approval.approver_roles
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_tolerance_is_data_the_business_can_retune(mc):
+    """Rule 12: the threshold is a row, not a constant. Drop it to zero and the
+    same small adjustment needs a checker again — with no redeploy."""
+    ApprovalPolicy.objects.create(
+        kind="adjustment", tolerance_paise=0, escalated_roles=["owner", "ho_ops"]
+    )
+
+    adj_id = _create_adjustment(mc, adj_qty=-2)["id"]
+    approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
+    assert approval.status == ApprovalStatus.PENDING
+
+
+# ---------------------------------------------------------------------------
+# The way back from a rejection — a refused draft is not a dead end
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_rejected_draft_can_be_fixed_and_asked_again(mc):
+    data = _create_writeoff(mc)
+    first = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{first.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+
+    again = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert again.status_code == 200, again.data
+    assert again.data["approval"]["status"] == "pending"
+    # The refusal is still on the record — that is the point of maker-checker.
+    assert [h["status"] for h in again.data["approval_history"]] == ["rejected"]
+    assert again.data["approval_history"][0]["reason"] == "Wrong store"
+
+    second = Approval.objects.get(kind="writeoff", status=ApprovalStatus.PENDING)
+    _client(mc["checker"]).post(
+        f"/api/approvals/{second.id}/decide", {"action": "approve"}, format="json"
+    )
+    posted = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/submit")
+    assert posted.status_code == 200, posted.data
+    assert WriteOff.objects.get(pk=data["id"]).approved_by_id == mc["checker"].id
+
+
+@pytest.mark.django_db(transaction=True)
+def test_whoever_asks_again_is_barred_from_deciding_it(mc):
+    """Otherwise a checker could reject a document, re-raise it themselves and
+    then clear their own request — maker-checker with extra steps."""
+    data = _create_writeoff(mc)
+    first = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{first.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+
+    again = _client(mc["checker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert again.status_code == 200, again.data
+
+    second = Approval.objects.get(kind="writeoff", status=ApprovalStatus.PENDING)
+    assert second.requested_by_id == mc["checker"].id
+
+    refused = _client(mc["checker"]).post(
+        f"/api/approvals/{second.id}/decide", {"action": "approve"}, format="json"
+    )
+    assert refused.status_code == 403
+    assert "cannot approve a request you raised" in str(refused.data)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_document_is_never_in_two_inboxes_at_once(mc):
+    """Asking again while a request is still waiting is refused — by the view,
+    and by a partial unique index underneath it."""
+    data = _create_writeoff(mc)
+    again = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert again.status_code == 400
+    assert "already waiting" in str(again.data)
+    assert Approval.objects.filter(kind="writeoff", object_id=data["id"]).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_approved_document_cannot_be_asked_again(mc):
+    data = _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
+    )
+    again = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert again.status_code == 400
+    assert "already cleared" in str(again.data)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_posted_document_cannot_be_asked_again(mc):
+    """A posted document is frozen — re-opening approval on it would imply the
+    posting could be undone, which the kernel does not allow."""
+    data = _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
+    )
+    _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/submit")
+
+    again = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert again.status_code == 400
+    assert "Only a draft" in str(again.data)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_asking_again_is_store_scoped(mc):
+    """Same fail-closed scoping as every other outbound write."""
+    data = _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{approval.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+    refused = _client(mc["outsider"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert refused.status_code == 403
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_reader_cannot_ask_again(mc):
+    """A write-off is an admin document — a warehouse writer may not re-raise it."""
+    data = _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{approval.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+    refused = _client(mc["packer"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    assert refused.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("paise", "expected"),
+    [
+        (0, "₹0"),
+        (99_900, "₹999"),
+        (2_00_000, "₹2,000"),
+        (25_00_000, "₹25,000"),
+        (10_00_00_000, "₹10,00,000"),
+    ],
+)
+def test_the_tolerance_reads_in_rupees_lakhs_and_crores(paise, expected):
+    """The threshold is quoted on an audit row a person will read, so it is
+    grouped the Indian way, not the thousands way."""
+    from outbound.maker_checker import _inr
+
+    assert _inr(paise) == expected
+
+
+# ---------------------------------------------------------------------------
+# The maker stays barred, however the request is re-raised
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_maker_cannot_approve_after_someone_else_asks_again(mc):
+    """The hole re-asking opens if only the *asker* is checked: A writes it, B
+    refuses it, B asks again — and A signs off their own document."""
+    data = _create_writeoff(mc)
+    first = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{first.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+    _client(mc["checker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+
+    second = Approval.objects.get(kind="writeoff", status=ApprovalStatus.PENDING)
+    assert second.requested_by_id == mc["checker"].id
+    assert second.made_by_id == mc["maker"].id  # unchanged — the author is the author
+
+    refused = _client(mc["maker"]).post(
+        f"/api/approvals/{second.id}/decide", {"action": "approve"}, format="json"
+    )
+    assert refused.status_code == 403
+    assert "document you created" in str(refused.data)
+    assert WriteOff.objects.get(pk=data["id"]).docstatus == DocStatus.DRAFT
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_maker_never_sees_a_re_raised_request_in_their_inbox(mc):
+    data = _create_writeoff(mc)
+    first = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{first.id}/decide",
+        {"action": "reject", "reason": "Wrong store"},
+        format="json",
+    )
+    _client(mc["checker"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+
+    assert _client(mc["maker"]).get("/api/approvals/inbox").data == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_database_bars_the_maker_too(mc):
+    """Defence in depth: bypass the service and the constraint still holds."""
+    _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    approval.decided_by = approval.made_by
+    approval.decided_at = timezone.now()
+    approval.status = ApprovalStatus.APPROVED
+    with pytest.raises(IntegrityError):
+        approval.save()
+
+
+# ---------------------------------------------------------------------------
+# The value the tolerance is read against comes from the books
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_maker_cannot_type_their_way_under_the_tolerance(mc):
+    """The whole point of the tolerance is that small variances clear
+    themselves. If the maker supplied the value, any variance could be made
+    small — so the cost is read from stock, never from the payload."""
+    adj_id = _create_adjustment(mc, adj_qty=-8, unit_cost_paise=1)["id"]
+
+    approval = Approval.objects.get(kind="adjustment", object_id=adj_id)
+    assert approval.value_paise == 8 * 45000  # the book's cost, not the typed ₹0.01
+    assert approval.status == ApprovalStatus.PENDING
+
+    blocked = _client(mc["maker"]).post(f"/api/outbound/adjustments/{adj_id}/submit")
+    assert blocked.status_code == 400
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_line_the_books_do_not_know_escalates(mc):
+    """An unknown SKU is worth an unknown amount, and unknown is never small."""
+    resp = _client(mc["maker"]).post(
+        "/api/outbound/adjustments",
+        {
+            "store": mc["store"].id,
+            "reason": "miscount",
+            "lines": [
+                {
+                    "sku_code": "NOT-IN-THE-BOOKS",
+                    "book_qty": 0,
+                    "counted_qty": 1,
+                    "adj_qty": 1,
+                    "unit_cost_paise": 45000,
+                }
+            ],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    approval = Approval.objects.get(kind="adjustment", object_id=resp.data["id"])
+    assert approval.value_paise == 0
+    assert approval.status == ApprovalStatus.PENDING
+    assert "store_manager" not in approval.approver_roles
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_vflip_has_no_tolerance_either(mc):
+    """Changing who owns a piece is never automatic, however small it is."""
+    resp = _client(mc["maker"]).post(
+        "/api/outbound/vflips",
+        {
+            "store": mc["store"].id,
+            "original_brand": mc["brand"].id,
+            "season": "SS26",
+            "lines": [{"sku_code": "MC001", "qty": 1, "unit_cost_paise": 45000}],
+        },
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    approval = Approval.objects.get(kind="vflip", object_id=resp.data["id"])
+    assert approval.status == ApprovalStatus.PENDING

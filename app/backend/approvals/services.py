@@ -7,7 +7,9 @@ system-wide by construction rather than by each module remembering them:
 * a document is never approved by the person who made it;
 * a reject always carries a reason;
 * a decision is made once — a decided approval is closed;
-* a wired document does not post until its approval says approved.
+* a wired document does not post until its approval says approved;
+* how big a document must be before a checker is asked, and who that checker
+  may be, is read from a policy row — data the business can retune (Rule 12).
 """
 
 from __future__ import annotations
@@ -15,10 +17,10 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib.contenttypes.models import ContentType
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
-from approvals.models import Approval, ApprovalStatus
+from approvals.models import CLEARED_STATUSES, Approval, ApprovalPolicy, ApprovalStatus
 from masters.scoping import scope_by_store
 
 
@@ -42,6 +44,10 @@ class ApprovalRequired(ApprovalError):
     """A wired document tried to post without a live approval."""
 
 
+class AlreadyPendingError(ApprovalError):
+    """Asked again while a request for the same document is still waiting."""
+
+
 def display_name(user: Any) -> str:
     """How a person is named on screen — full name, else username. The one
     spelling, shared by the inbox and by every document's maker/checker line."""
@@ -51,26 +57,40 @@ def display_name(user: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Policy
+# ---------------------------------------------------------------------------
+
+
+def policy_for(kind: str, *, defaults: dict[str, Any]) -> ApprovalPolicy:
+    """The live thresholds for a document family.
+
+    Materialised from the owning module's defaults the first time that kind is
+    used, so every wired family shows up in the admin ready to be retuned —
+    thresholds are business data, not a constant someone has to redeploy.
+    """
+    policy, _ = ApprovalPolicy.objects.get_or_create(kind=kind, defaults=defaults)
+    return policy
+
+
+# ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
 
 
-def request_approval(
+def _create(
     subject: models.Model,
     *,
+    status: str,
     kind: str,
     kind_label: str,
     title: str,
+    made_by: Any,
     requested_by: Any,
     approver_roles: list[str],
     store: Any = None,
     value_paise: int = 0,
+    reason: str = "",
 ) -> Approval:
-    """Put ``subject`` in the approvals inbox, waiting for someone else.
-
-    Called by the module that owns the document, at draft-creation time, so the
-    maker can never "forget" to seek approval — the document is born pending.
-    """
     return Approval.objects.create(
         kind=kind,
         kind_label=kind_label,
@@ -80,15 +100,100 @@ def request_approval(
         store=store,
         value_paise=value_paise,
         approver_roles=list(approver_roles),
+        made_by=made_by,
         requested_by=requested_by,
+        status=status,
+        reason=reason,
     )
 
 
-def approval_for(subject: models.Model) -> Approval | None:
-    """The approval against ``subject``, or None if the type isn't wired."""
+def request_approval(
+    subject: models.Model,
+    *,
+    kind: str,
+    kind_label: str,
+    title: str,
+    made_by: Any,
+    requested_by: Any,
+    approver_roles: list[str],
+    store: Any = None,
+    value_paise: int = 0,
+) -> Approval:
+    """Put ``subject`` in the approvals inbox, waiting for someone else.
+
+    Called by the module that owns the document, at draft-creation time, so the
+    maker can never "forget" to seek approval — the document is born pending.
+    Also the way back from a rejection: the document is fixed and asked again,
+    which raises a *new* request beside the rejected one. ``made_by`` is the
+    document's creator either way, so re-asking cannot move the maker aside.
+    """
+    try:
+        with transaction.atomic():
+            return _create(
+                subject,
+                status=ApprovalStatus.PENDING,
+                kind=kind,
+                kind_label=kind_label,
+                title=title,
+                made_by=made_by,
+                requested_by=requested_by,
+                approver_roles=approver_roles,
+                store=store,
+                value_paise=value_paise,
+            )
+    except IntegrityError as exc:
+        # The partial unique index is the one that actually binds — two people
+        # clicking "ask again" at the same moment race past any prior read.
+        if "uq_approval_subject_pending" not in str(exc):
+            raise
+        raise AlreadyPendingError("This document is already waiting for approval.") from exc
+
+
+def record_no_approval_needed(
+    subject: models.Model,
+    *,
+    kind: str,
+    kind_label: str,
+    title: str,
+    made_by: Any,
+    requested_by: Any,
+    store: Any = None,
+    value_paise: int = 0,
+    reason: str,
+) -> Approval:
+    """Record that ``subject`` fell within its policy tolerance.
+
+    The document may post with nobody else's say-so, but "nobody was asked" is
+    itself a fact worth keeping: the row carries who made it and which rule let
+    it through, so a small adjustment is auditable exactly like a large one.
+    """
+    return _create(
+        subject,
+        status=ApprovalStatus.NOT_REQUIRED,
+        kind=kind,
+        kind_label=kind_label,
+        title=title,
+        made_by=made_by,
+        requested_by=requested_by,
+        approver_roles=[],
+        store=store,
+        value_paise=value_paise,
+        reason=reason,
+    )
+
+
+def approvals_for(subject: models.Model) -> Any:
+    """Every approval ever raised against ``subject``, newest first."""
     return Approval.objects.filter(
         content_type=ContentType.objects.get_for_model(subject), object_id=subject.pk
-    ).first()
+    ).select_related("made_by", "requested_by", "decided_by")
+
+
+def approval_for(subject: models.Model) -> Approval | None:
+    """The *live* approval against ``subject`` — the newest one, since a
+    rejected request stays on the record after the maker asks again. None if
+    the type isn't wired, or nothing has been asked yet."""
+    return approvals_for(subject).first()
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +217,16 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
         raise ApprovalError(f"This request was already {locked.status}.")
 
     # The rule the warehouse team asked for, in one place, for every document
-    # type that uses this record: the maker is never the checker.
-    if locked.requested_by_id == getattr(actor, "id", None):
+    # type that uses this record: the maker is never the checker. Both the
+    # person who made the document and the person who asked this time are
+    # barred — after a rejection those can be two different people, and letting
+    # a colleague re-raise a document so its author can approve it would be
+    # maker-checker with extra steps.
+    actor_id = getattr(actor, "id", None)
+    if locked.made_by_id == actor_id:
         raise SelfApprovalError("You cannot approve a document you created.")
+    if locked.requested_by_id == actor_id:
+        raise SelfApprovalError("You cannot approve a request you raised.")
 
     if not can_decide(locked, actor):
         raise NotAnApproverError("Your role cannot decide this approval.")
@@ -148,14 +260,16 @@ def can_decide(approval: Approval, user: Any) -> bool:
 def inbox_for(user: Any) -> Any:
     """Everything waiting for ``user``'s decision, across every document type.
 
-    Fail-closed on three axes: pending only, never one's own (a self-approval
-    can never succeed, so it is never offered), role-matched, store-scoped.
-    An approval with no store is network-level: only unrestricted users see it.
+    Fail-closed on three axes: pending only, never one's own — neither made nor
+    asked by this user, since a self-approval can never succeed and so is never
+    offered — role-matched, store-scoped. An approval with no store is
+    network-level: only unrestricted users see it.
     """
     qs = (
         Approval.objects.filter(status=ApprovalStatus.PENDING)
         .exclude(requested_by=user)
-        .select_related("store", "requested_by", "decided_by")
+        .exclude(made_by=user)
+        .select_related("store", "made_by", "requested_by", "decided_by")
     )
     qs = scope_by_store(qs, user, "store_id")
     if not getattr(user, "is_superuser", False):
@@ -181,7 +295,9 @@ def assert_approved(subject: models.Model) -> Approval:
     if approval is None:
         raise ApprovalRequired("This document has no approval request; it cannot post.")
     if approval.status == ApprovalStatus.REJECTED:
-        raise ApprovalRequired(f"Approval was rejected: {approval.reason}")
-    if approval.status != ApprovalStatus.APPROVED:
+        raise ApprovalRequired(
+            f"Approval was rejected: {approval.reason} — fix the draft and ask again."
+        )
+    if approval.status not in CLEARED_STATUSES:
         raise ApprovalRequired("Waiting for approval by a second person.")
     return approval

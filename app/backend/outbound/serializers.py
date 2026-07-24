@@ -48,8 +48,11 @@ class ApprovedDocumentSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     approval = serializers.SerializerMethodField()
+    approval_history = serializers.SerializerMethodField()
 
     def _approval(self, obj: Any) -> Any:
+        """The live one. A document that was rejected and asked again holds
+        several, newest first — the newest is the one in force."""
         return next(iter(obj.approvals.all()), None)
 
     def get_created_by_name(self, obj: Any) -> str:
@@ -64,6 +67,11 @@ class ApprovedDocumentSerializer(serializers.ModelSerializer):
     def get_approval(self, obj: Any) -> dict[str, Any] | None:
         approval = self._approval(obj)
         return ApprovalReadSerializer(approval).data if approval else None
+
+    def get_approval_history(self, obj: Any) -> list[dict[str, Any]]:
+        """Everything asked before the live one — the rejections a maker has
+        already worked through. Empty for the common case."""
+        return [ApprovalReadSerializer(a).data for a in list(obj.approvals.all())[1:]]
 
 
 def _create_with_approval(
@@ -441,6 +449,7 @@ class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
             "approved_by",
             "approved_by_name",
             "approval",
+            "approval_history",
             "notes",
             "created_by",
             "created_by_name",
@@ -517,6 +526,7 @@ class WriteOffReadSerializer(ApprovedDocumentSerializer):
             "approved_by",
             "approved_by_name",
             "approval",
+            "approval_history",
             "created_by",
             "created_by_name",
             "created_at",
@@ -594,6 +604,7 @@ class VFlipReadSerializer(ApprovedDocumentSerializer):
             "authorized_by",
             "approved_by_name",
             "approval",
+            "approval_history",
             "created_by",
             "created_by_name",
             "created_at",
