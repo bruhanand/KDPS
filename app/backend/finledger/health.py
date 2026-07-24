@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.money import paise_to_rupees_str
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
-from finledger.views import IsFinance
+from finledger.views import IsBooksKeeper
 
 ACCOUNTS = [
     (GLAccount.INVENTORY, "Inventory (owned stock)", "asset"),
@@ -37,7 +37,7 @@ ACCOUNTS = [
 class BooksHealthView(APIView):
     """`GET /api/finledger/health` — trial balance + equation-of-state snapshot."""
 
-    permission_classes = [IsAuthenticated, IsFinance]
+    permission_classes = [IsAuthenticated, IsBooksKeeper]
 
     def get(self, request: Request) -> Response:
         balances = {code: account_balance(code) for code, _, _ in ACCOUNTS}
