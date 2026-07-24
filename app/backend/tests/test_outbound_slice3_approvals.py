@@ -278,14 +278,17 @@ def test_approve_from_the_inbox_then_the_document_posts(mc):
     assert decided.data["decided_by_name"] == "mc_checker"
     assert decided.data["decided_at"] is not None
 
-    # Approving stamps the document's own approver column — the checker, not the maker.
-    wo = WriteOff.objects.get(pk=data["id"])
-    assert wo.approved_by_id == mc["checker"].id
+    # The document already reads truthfully, before it posts.
+    detail = _client(mc["maker"]).get(f"/api/outbound/writeoffs/{data['id']}").data
+    assert detail["approved_by_name"] == "mc_checker"
 
     posted = _client(mc["maker"]).post(f"/api/outbound/writeoffs/{data['id']}/submit")
     assert posted.status_code == 200, posted.data
     assert posted.data["docstatus"] == DocStatus.SUBMITTED
     assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 8
+
+    # Posting stamps the document's own approver column — the checker, never the maker.
+    assert WriteOff.objects.get(pk=data["id"]).approved_by_id == mc["checker"].id
 
     # ...and it is gone from the inbox.
     assert _client(mc["checker"]).get("/api/approvals/inbox").data == []
@@ -316,10 +319,10 @@ def test_a_vflip_needs_a_second_person_too(mc):
     _client(mc["checker"]).post(
         f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
     )
-    assert VFlip.objects.get(pk=vflip_id).authorized_by_id == mc["checker"].id
 
     posted = _client(mc["maker"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert posted.status_code == 200, posted.data
+    assert VFlip.objects.get(pk=vflip_id).authorized_by_id == mc["checker"].id
 
 
 @pytest.mark.django_db(transaction=True)
@@ -459,6 +462,24 @@ def test_a_rejected_document_never_posts_and_says_why(mc):
     assert blocked.status_code == 400
     assert "Stock is saleable at Deoghar" in str(blocked.data)
     assert StockOnHand.objects.get(store=mc["store"], sku_code="MC001").net_qty == 10
+
+
+@pytest.mark.django_db(transaction=True)
+def test_rejecting_never_marks_the_rejecter_as_the_approver(mc):
+    """Refusing a document is not approving it — the person who said no must
+    never appear on it as its approver."""
+    data = _create_writeoff(mc)
+    approval = Approval.objects.get(kind="writeoff")
+    _client(mc["checker"]).post(
+        f"/api/approvals/{approval.id}/decide",
+        {"action": "reject", "reason": "Still saleable"},
+        format="json",
+    )
+
+    assert WriteOff.objects.get(pk=data["id"]).approved_by_id is None
+    detail = _client(mc["maker"]).get(f"/api/outbound/writeoffs/{data['id']}").data
+    assert detail["approved_by_name"] == ""
+    assert detail["approval"]["status"] == "rejected"
 
 
 @pytest.mark.django_db(transaction=True)

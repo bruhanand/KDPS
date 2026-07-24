@@ -86,13 +86,34 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core", "ptmapper"]
+root_packages = ["config", "core", "ptmapper", "approvals"]
+# The domain apps below aren't root packages yet, so they are "external" to the
+# graph; the approvals contract names them explicitly.
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "core (kernel) must not import the config/project layer"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["config"]
+
+[[tool.importlinter.contracts]]
+# `approvals` is a cross-cutting service every domain module depends on *downward*
+# (ADR-0002's core/masters exception in spirit): it must never know what it is
+# approving. Enforced, not trusted — the maker-checker spine erodes fastest if a
+# convenience import from outbound sneaks in.
+name = "approvals (maker-checker spine) must not import any domain module"
+type = "forbidden"
+source_modules = ["approvals"]
+forbidden_modules = [
+    "config",
+    "outbound",
+    "inbound",
+    "vendors",
+    "ptmapper",
+    "stockledger",
+    "finledger",
+]
 
 [[tool.importlinter.contracts]]
 name = "ptmapper mapping/learning layer must not import the HTTP (views) layer"

@@ -12,12 +12,7 @@ from typing import Any
 from rest_framework import serializers
 
 from approvals.models import Approval
-
-
-def _display_name(user: Any) -> str:
-    if user is None:
-        return ""
-    return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
+from approvals.services import display_name
 
 
 class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
@@ -31,10 +26,10 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
     requested_at = serializers.DateTimeField(source="created_at", read_only=True)
 
     def get_requested_by_name(self, obj: Approval) -> str:
-        return _display_name(obj.requested_by)
+        return display_name(obj.requested_by)
 
     def get_decided_by_name(self, obj: Approval) -> str:
-        return _display_name(obj.decided_by)
+        return display_name(obj.decided_by)
 
     class Meta:
         model = Approval

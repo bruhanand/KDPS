@@ -19,18 +19,35 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from approvals.models import Approval, ApprovalStatus
+from masters.scoping import scope_by_store
 
 
 class ApprovalError(Exception):
     """Base for every maker-checker violation."""
 
 
-class SelfApprovalError(ApprovalError):
-    """The maker tried to be the checker (403, not 400 — it is a rights failure)."""
+class ApprovalRightsError(ApprovalError):
+    """This user may not decide this one — a rights failure (403, not 400)."""
+
+
+class SelfApprovalError(ApprovalRightsError):
+    """The maker tried to be the checker."""
+
+
+class NotAnApproverError(ApprovalRightsError):
+    """The user's role is not among the approvers for this document."""
 
 
 class ApprovalRequired(ApprovalError):
     """A wired document tried to post without a live approval."""
+
+
+def display_name(user: Any) -> str:
+    """How a person is named on screen — full name, else username. The one
+    spelling, shared by the inbox and by every document's maker/checker line."""
+    if user is None:
+        return ""
+    return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +117,7 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
         raise SelfApprovalError("You cannot approve a document you created.")
 
     if not can_decide(locked, actor):
-        raise SelfApprovalError("Your role cannot decide this approval.")
+        raise NotAnApproverError("Your role cannot decide this approval.")
 
     reason = (reason or "").strip()
     if action == "reject" and not reason:
@@ -133,9 +150,8 @@ def inbox_for(user: Any) -> Any:
 
     Fail-closed on three axes: pending only, never one's own (a self-approval
     can never succeed, so it is never offered), role-matched, store-scoped.
+    An approval with no store is network-level: only unrestricted users see it.
     """
-    from masters.scoping import scope_by_store
-
     qs = (
         Approval.objects.filter(status=ApprovalStatus.PENDING)
         .exclude(requested_by=user)

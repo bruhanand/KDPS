@@ -13,7 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canOutboundWrite } from "../lib/outbound-rbac";
-import { ApprovalPill, ApprovalTrail, type ApprovalT } from "./Approvals";
+import { ApprovalPill, ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------

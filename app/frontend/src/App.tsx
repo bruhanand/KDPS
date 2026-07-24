@@ -56,7 +56,6 @@ export function App() {
             <Route path="/outbound/vflips/:id" element={<VFlipDetailPage />} />
             {/* One approvals inbox for the whole system — reachable everywhere (#70) */}
             <Route path="/approvals" element={<ApprovalsPage />} />
-            <Route path="/controls/approvals" element={<ApprovalsPage />} />
             <Route path="/documents/pt-mapper" element={<PtMapperPage />} />
             <Route path="/documents/pt-mapper/review" element={<ReviewQueuePage />} />
             <Route path="/documents/pt-mapper/proposals" element={<PtProposalsPage />} />

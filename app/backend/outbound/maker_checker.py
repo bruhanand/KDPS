@@ -30,6 +30,8 @@ class ApprovalKind:
     code: str
     label: str
     approver_roles: tuple[str, ...]
+    #: The document's own approver column, stamped from the approval at post time.
+    approver_field: str
 
 
 #: Only these roles may clear an outbound approval — a store-level maker always
@@ -37,10 +39,16 @@ class ApprovalKind:
 _ADMIN_ROLES = tuple(sorted(OUTBOUND_ADMIN_ROLES))
 
 KINDS: dict[type[models.Model], ApprovalKind] = {
-    WriteOff: ApprovalKind("writeoff", "Write-off", _ADMIN_ROLES),
-    VFlip: ApprovalKind("vflip", "V-flip", _ADMIN_ROLES),
-    StockAdjustment: ApprovalKind("adjustment", "Stock adjustment", _ADMIN_ROLES),
+    WriteOff: ApprovalKind("writeoff", "Write-off", _ADMIN_ROLES, "approved_by"),
+    VFlip: ApprovalKind("vflip", "V-flip", _ADMIN_ROLES, "authorized_by"),
+    StockAdjustment: ApprovalKind("adjustment", "Stock adjustment", _ADMIN_ROLES, "approved_by"),
 }
+
+
+def approver_field(doc_class: type[models.Model]) -> str:
+    """Which column on ``doc_class`` names its approver."""
+    kind = KINDS.get(doc_class)
+    return kind.approver_field if kind else "approved_by"
 
 
 def _line_totals(doc: Any) -> tuple[int, int, int]:
@@ -85,16 +93,29 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
 
 
 def require_approved(doc: Any) -> Approval | None:
-    """Refuse to post a wired document that no second person has approved.
+    """Refuse to post a wired document that no second person has approved, and
+    stamp the approver onto the document itself.
 
-    Raises ``OutboundPostingError`` so every caller — API, shell, management
-    command — hits the same wall. Unwired document types pass through.
+    Called from the *posting* layer, so every caller — API, shell, management
+    command — hits the same wall, and the stamp happens exactly once, on the
+    one path that matters. A rejected document never reaches here, so it can
+    never be marked as approved by the person who refused it.
+
+    Unwired document types pass through untouched.
     """
     from outbound.posting import OutboundPostingError
 
-    if type(doc) not in KINDS:
+    kind = KINDS.get(type(doc))
+    if kind is None:
         return None
     try:
-        return assert_approved(doc)
+        approval = assert_approved(doc)
     except ApprovalRequired as exc:
         raise OutboundPostingError(str(exc)) from exc
+
+    # The document is still a draft here (posting hasn't flipped it), so its own
+    # approver column is writable — and after this it is frozen with the rest.
+    if getattr(doc, f"{kind.approver_field}_id", None) != approval.decided_by_id:
+        setattr(doc, kind.approver_field, approval.decided_by)
+        doc.save(update_fields=[kind.approver_field])
+    return approval

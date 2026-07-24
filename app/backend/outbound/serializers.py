@@ -7,7 +7,9 @@ from typing import Any
 from django.db import transaction
 from rest_framework import serializers
 
+from approvals.models import ApprovalStatus
 from approvals.serializers import ApprovalReadSerializer
+from approvals.services import display_name
 from masters.models import Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
@@ -31,35 +33,36 @@ from outbound.models import (
 # ---------------------------------------------------------------------------
 
 
-def _actor_name(user: Any) -> str:
-    if user is None:
-        return ""
-    return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
-
-
 class ApprovedDocumentSerializer(serializers.ModelSerializer):
     """Base read shape for a document that needs a second person.
 
     Every such document answers the same three questions on its own page, for
     good: **made by** whom, **approved by** whom, and **when** — plus the live
     approval record (pending / approved / rejected, with the reject reason).
-    """
 
-    #: The document's own approver column — V-flip calls it ``authorized_by``.
-    approver_field = "approved_by"
+    The approver is read from the approval, not from the document's own column:
+    the column is a denormalised copy stamped at post time (for Tally), so on a
+    still-unposted draft only the approval knows the answer.
+    """
 
     created_by_name = serializers.SerializerMethodField()
     approved_by_name = serializers.SerializerMethodField()
     approval = serializers.SerializerMethodField()
 
+    def _approval(self, obj: Any) -> Any:
+        return next(iter(obj.approvals.all()), None)
+
     def get_created_by_name(self, obj: Any) -> str:
-        return _actor_name(obj.created_by)
+        return display_name(obj.created_by)
 
     def get_approved_by_name(self, obj: Any) -> str:
-        return _actor_name(getattr(obj, self.approver_field, None))
+        approval = self._approval(obj)
+        if approval is None or approval.status != ApprovalStatus.APPROVED:
+            return ""
+        return display_name(approval.decided_by)
 
     def get_approval(self, obj: Any) -> dict[str, Any] | None:
-        approval = next(iter(obj.approvals.all()), None)
+        approval = self._approval(obj)
         return ApprovalReadSerializer(approval).data if approval else None
 
 
@@ -568,10 +571,8 @@ class VFlipLineSerializer(serializers.ModelSerializer):
 
 
 class VFlipReadSerializer(ApprovedDocumentSerializer):
-    """V-flip's approver column is ``authorized_by``; it still answers the
+    """V-flip's own approver column is ``authorized_by``; it still answers the
     common "approved by whom" question through ``approved_by_name``."""
-
-    approver_field = "authorized_by"
 
     lines = VFlipLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
