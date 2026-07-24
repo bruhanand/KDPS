@@ -42,8 +42,13 @@ class Role(TimeStampedModel):
     name = models.CharField(max_length=80)
     description = models.CharField(max_length=240, blank=True, default="")
     landing_page = models.CharField(max_length=60, default="home")
-    nav_groups = models.JSONField(default=list)  # subset of NAV_GROUPS
-    permissions_map = models.JSONField(default=dict)  # fine-grained, later
+    nav_groups = models.JSONField(default=list)  # subset of NAV_GROUPS (legacy shell)
+    # The SIDEBAR RBAC contract (issue #85): {section_code: {capability, label}}
+    # over the twelve sections in `accounts.sections`. This is the live authority
+    # the login/`/me` payload and the server-side section gate read — editing it
+    # retunes access with no release (Rule 12). Seeded from `accounts.rbac_matrix`.
+    section_access = models.JSONField(default=dict)
+    permissions_map = models.JSONField(default=dict)  # fine-grained page-actions, later
     is_system = models.BooleanField(default=False)  # protected from deletion
     is_active = models.BooleanField(default=True)
 

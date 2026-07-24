@@ -17,6 +17,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from accounts.models import NAV_GROUPS, Role, User
+from accounts.rbac_matrix import section_access_for
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
 
@@ -62,6 +63,13 @@ ROLES: list[dict[str, Any]] = [
         "description": "Owns money — payables, payments, collection & bank audit, Tally.",
     },
     {
+        "code": "brand_manager",
+        "name": "Brand Manager",
+        "landing_page": "home",
+        "nav_groups": ["home", "documents", "intelligence"],
+        "description": "Owns assigned brands across stores — bookings, offers, brand reports.",
+    },
+    {
         "code": "ho_ops",
         "name": "HO Operations / Buyer",
         "landing_page": "ops",
@@ -92,12 +100,22 @@ ROLES: list[dict[str, Any]] = [
     },
 ]
 
+# Usernames granted Django-superuser break-glass. A superuser bypasses the whole
+# RBAC matrix (manage on every section) and reaches Django `/admin`, so it is
+# kept as its own account, separate from every business persona — including
+# Owner. That way the matrix is genuinely enforced for real people (Owner sees
+# only what the sheet grants, Admin has no Money) and stays auditable; god-mode
+# lives in one clearly-labelled break-glass login instead of a daily persona.
+SUPERUSERS = {"superadmin"}
+
 # (username, password, role_code, scope_type, store_codes, full_name)
 USERS: list[tuple[str, str, str, str, list[str], str]] = [
-    ("admin", "Admin@123", "it_admin", "all", [], "System Admin"),
+    ("superadmin", "Super@123", "it_admin", "all", [], "System Superadmin (break-glass)"),
+    ("admin", "Admin@123", "it_admin", "all", [], "IT Admin"),
     ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor"),
     ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops"),
     ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant"),
+    ("brand1", "Brand@123", "brand_manager", "all", [], "Madura Brand Manager"),
     ("wh.patna", "Wh@123", "warehouse", "all", [], "Patna Warehouse"),
     ("steward", "Steward@123", "data_steward", "all", [], "Data Steward"),
     ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager"),
@@ -135,6 +153,10 @@ class Command(BaseCommand):
                     "name": r["name"],
                     "landing_page": r["landing_page"],
                     "nav_groups": r["nav_groups"],
+                    # The SIDEBAR RBAC contract (#85). Re-seeding overwrites it back
+                    # to the sheet default; a live admin's retune is a deliberate
+                    # data edit they'd re-apply, same as nav_groups here.
+                    "section_access": section_access_for(r["code"]),
                     "description": r["description"],
                     "is_system": True,
                     "is_active": True,
@@ -340,7 +362,11 @@ class Command(BaseCommand):
     def _seed_users(self, entity: LegalEntity, stores: dict[str, Store]) -> None:
         for username, password, role_code, scope, store_codes, full_name in USERS:
             role = Role.objects.filter(code=role_code).first()
-            is_admin = username == "admin"
+            # Only the dedicated break-glass account is a Django superuser (see
+            # SUPERUSERS). Every business persona — `admin`/it_admin and `owner`
+            # included — is a normal user enforced by `Role.section_access`, so
+            # the ratified matrix (e.g. Admin = no Money) actually applies.
+            is_super = username in SUPERUSERS
             user, created = User.objects.update_or_create(
                 username=username,
                 defaults={
@@ -349,8 +375,8 @@ class Command(BaseCommand):
                     "scope_type": scope,
                     "entity": entity if scope != "all" else None,
                     "is_active": True,
-                    "is_staff": is_admin,
-                    "is_superuser": is_admin,
+                    "is_staff": is_super,
+                    "is_superuser": is_super,
                 },
             )
             # Set the password only when the user is first created — never overwrite
@@ -375,7 +401,9 @@ class Command(BaseCommand):
             lines.append(f"| {username} | {password} | {role_code} | {scope_txt} |")
         lines += [
             "",
-            "`admin` is the Django superuser (also reaches `/admin`).",
+            "`superadmin` is the only Django superuser (break-glass: bypasses the RBAC "
+            "matrix, reaches `/admin`). Every other login — including `admin` (it_admin) "
+            "and `owner` — is a normal user enforced by the section-access matrix.",
             "",
         ]
         # Best-effort convenience dump of the demo logins. The data is already in
