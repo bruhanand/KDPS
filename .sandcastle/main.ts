@@ -37,11 +37,28 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // Anything the Claude Code CLI accepts as --model works: a full id
 // ("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5-20251001") or an
 // alias ("opus", "sonnet", "haiku").
+//
+// Pick one per phase — uncomment exactly one line in each block.
 const MODELS = {
-  planner: "claude-opus-4-8",
-  implementer: "claude-opus-4-8",
-  reviewer: "claude-opus-4-8",
-  merger: "claude-opus-4-8",
+  // planner — dependency analysis; benefits from deeper reasoning.
+  planner: "claude-sonnet-5",
+  // planner: "claude-opus-4-8",
+  // planner: "claude-haiku-4-5-20251001",
+
+  // implementer — writes code, runs tests, iterates. The workhorse.
+  implementer: "claude-sonnet-5",
+  // implementer: "claude-opus-4-8",
+  // implementer: "claude-haiku-4-5-20251001",
+
+  // reviewer — reviews the implementer's diff on the same branch.
+  reviewer: "claude-sonnet-5",
+  // reviewer: "claude-opus-4-8",
+  // reviewer: "claude-haiku-4-5-20251001",
+
+  // merger — merges completed branches, resolves conflicts, runs the gate.
+  merger: "claude-sonnet-5",
+  // merger: "claude-opus-4-8",
+  // merger: "claude-haiku-4-5-20251001",
 } as const;
 
 // --- Iteration counts -------------------------------------------------------
