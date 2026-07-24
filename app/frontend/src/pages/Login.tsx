@@ -8,11 +8,15 @@ import "./Login.css";
 
 const DEMO: { label: string; username: string; password: string }[] = [
   { label: "Owner", username: "owner", password: "Owner@123" },
-  { label: "HO Ops", username: "ops1", password: "Ops@123" },
+  { label: "Admin", username: "admin", password: "Admin@123" },
   { label: "Accounts", username: "accounts1", password: "Acct@123" },
+  { label: "Brand manager", username: "brand1", password: "Brand@123" },
   { label: "Warehouse", username: "wh.patna", password: "Wh@123" },
   { label: "Store manager", username: "deo.manager", password: "Store@123" },
   { label: "Store cashier", username: "deo.cashier", password: "Store@123" },
+  { label: "HO Ops", username: "ops1", password: "Ops@123" },
+  { label: "Data steward", username: "steward", password: "Steward@123" },
+  { label: "Super admin", username: "superadmin", password: "Super@123" },
 ];
 
 export function Login() {

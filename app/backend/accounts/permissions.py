@@ -1,0 +1,100 @@
+"""Server-side section enforcement for the SIDEBAR RBAC contract (issue #85).
+
+The sidebar is not a security boundary — hiding a menu item does nothing if the
+API behind it still answers. So the same section→capability data that shapes a
+user's sidebar also gates the API: ``require_section(section, minimum)`` is a
+DRF permission any view can carry, and it resolves the acting user's capability
+from ``Role.section_access`` (the DB authority), fail-closed.
+
+Resolution order (all fail-closed):
+  · anonymous / unauthenticated → nothing;
+  · superuser → ``manage`` on every section (the break-glass account);
+  · a user with no role → nothing;
+  · otherwise the capability stored on the role for that section, or ``none``.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from rest_framework.permissions import BasePermission
+from rest_framework.request import Request
+
+from accounts.sections import (
+    CAP_MANAGE,
+    CAP_NONE,
+    CAP_VIEW,
+    SECTIONS,
+    is_valid_section,
+    meets,
+)
+
+
+def _resolve_section(user: Any, section: str) -> tuple[str, str]:
+    """``(capability, sheet-label)`` for ``user`` on ``section`` — one read of
+    the role row, fail-closed to ``(none, "")`` on any doubt."""
+    if not (user and getattr(user, "is_authenticated", False)):
+        return CAP_NONE, ""
+    if getattr(user, "is_superuser", False):
+        return CAP_MANAGE, "All"
+    role = getattr(user, "role", None)
+    if role is None:
+        return CAP_NONE, ""
+    entry = (role.section_access or {}).get(section)
+    if not isinstance(entry, dict):
+        return CAP_NONE, ""
+    capability = entry.get("capability", CAP_NONE)
+    label = entry.get("label", "")
+    return (
+        capability if isinstance(capability, str) else CAP_NONE,
+        label if isinstance(label, str) else "",
+    )
+
+
+def user_section_capability(user: Any, section: str) -> str:
+    """The capability ``user`` holds on ``section`` — ``none`` if any doubt."""
+    return _resolve_section(user, section)[0]
+
+
+def user_can(user: Any, section: str, minimum: str = CAP_VIEW) -> bool:
+    """Does ``user`` reach at least ``minimum`` capability on ``section``?"""
+    return meets(user_section_capability(user, section), minimum)
+
+
+def visible_sections(user: Any) -> list[dict[str, str | int]]:
+    """The sections ``user`` may see, in sidebar order, with their capability.
+
+    Only sections the user genuinely reaches (``view`` and up) are returned — a
+    role with no grants, an off-ladder capability, or no role at all yields an
+    empty list, so the shell fails closed to nothing.
+    """
+    out: list[dict[str, str | int]] = []
+    for order, (code, label) in enumerate(SECTIONS):
+        capability, scope_label = _resolve_section(user, code)
+        if not meets(capability, CAP_VIEW):
+            continue
+        out.append(
+            {
+                "code": code,
+                "label": label,
+                "order": order,
+                "capability": capability,
+                "scope_label": scope_label,
+            }
+        )
+    return out
+
+
+def require_section(section: str, minimum: str = CAP_VIEW) -> type[BasePermission]:
+    """Build a DRF permission gating a view behind a section capability."""
+    if not is_valid_section(section):  # pragma: no cover - programmer error
+        raise ValueError(f"Unknown section {section!r}")
+
+    class _HasSectionAccess(BasePermission):
+        message = f"You do not have access to the {section} section."
+
+        def has_permission(self, request: Request, view: Any) -> bool:
+            return user_can(request.user, section, minimum)
+
+    _HasSectionAccess.__name__ = f"HasSection_{section}_{minimum}"
+    return _HasSectionAccess

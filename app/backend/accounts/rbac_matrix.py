@@ -1,0 +1,201 @@
+"""The SIDEBAR RBAC matrix, transcribed as the seed default (issue #85).
+
+Source of truth: ``ERP_DASHBOARD_V1.xlsx`` → sheet "SIDEBAR RBAC" (24 Jul 2026),
+the six-persona table locked with Anand. Each cell is the exact sheet wording;
+the leading rung is the normalised capability (see ``sections`` for the ladder).
+
+This module is only the **default** — ``seed_foundation`` writes it into each
+``Role.section_access`` row, and the live API reads it back from the DB. So a
+trained admin retunes access by editing a Role (data), never by shipping code
+(Rule 12); this table just says where every fresh install starts.
+
+Two ratified corrections to the client's original Sheet-1 matrix are baked in:
+  · the store person gets receive-at-own-store + PT-making for direct receipts
+    (Sheet 1 said NO on GRN; the booking-less direct-delivery decision wins);
+  · Admin gets **no** Money access — Sheet-1 note (2), kept deliberately.
+
+Scope words in the cells ("Own store", "Assigned brands", "All (network)") are
+*display context only* — the acting scope is the separate ``scope_type``
+dimension (ADR-0003), not the capability. They are preserved verbatim as the
+label so the payload can show "why" a role sees what it sees.
+"""
+
+from __future__ import annotations
+
+from accounts.sections import (
+    CAP_APPROVE,
+    CAP_MANAGE,
+    CAP_NONE,
+    CAP_OPERATE,
+    CAP_VIEW,
+    SECTION_CODES,
+    is_valid_capability,
+    is_valid_section,
+)
+
+# Persona code → { section_code: (capability, exact sheet label) }.
+# A section absent for a persona is treated as CAP_NONE (fail-closed).
+MATRIX: dict[str, dict[str, tuple[str, str]]] = {
+    "owner": {
+        "home": (CAP_VIEW, "All (network)"),
+        "sell": (CAP_VIEW, "View"),
+        "booking": (CAP_APPROVE, "Approve"),
+        "receive_goods": (CAP_VIEW, "View all"),
+        "transfer": (CAP_APPROVE, "Override"),
+        "stock_count": (CAP_APPROVE, "View all + approve big variances"),
+        "return_to_brand": (CAP_APPROVE, "Approve"),
+        "stock": (CAP_MANAGE, "Full (all locations)"),
+        "money": (CAP_MANAGE, "Full"),
+        "offers_price": (CAP_APPROVE, "Approve / Override"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_MANAGE, "Full"),
+    },
+    "store_person": {
+        "home": (CAP_VIEW, "Own store"),
+        "sell": (CAP_OPERATE, "Create (bill, return, customer)"),
+        "booking": (CAP_NONE, "No"),
+        "receive_goods": (CAP_OPERATE, "Receive + PT (own store)"),
+        "transfer": (CAP_OPERATE, "Request / Send / Receive"),
+        "stock_count": (CAP_OPERATE, "Count own store"),
+        "return_to_brand": (CAP_OPERATE, "Mark damage only"),
+        "stock": (CAP_VIEW, "Own store"),
+        "money": (CAP_OPERATE, "Expenses only (create)"),
+        "offers_price": (CAP_VIEW, "View"),
+        "reports": (CAP_VIEW, "Own store only"),
+        "setup": (CAP_NONE, "No"),
+    },
+    "warehouse": {
+        "home": (CAP_VIEW, "Warehouse"),
+        "sell": (CAP_NONE, "No"),
+        "booking": (CAP_OPERATE, "Draft"),
+        "receive_goods": (CAP_OPERATE, "Create (GRN, PT)"),
+        "transfer": (CAP_OPERATE, "Execute (distribute, dispatch)"),
+        "stock_count": (CAP_OPERATE, "Count warehouse"),
+        "return_to_brand": (CAP_OPERATE, "Create & execute"),
+        "stock": (CAP_MANAGE, "Full"),
+        "money": (CAP_OPERATE, "Expenses only (create)"),
+        "offers_price": (CAP_VIEW, "View"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_OPERATE, "Products only"),
+    },
+    "brand_manager": {
+        "home": (CAP_VIEW, "Assigned brands"),
+        "sell": (CAP_VIEW, "View"),
+        "booking": (CAP_OPERATE, "Create"),
+        "receive_goods": (CAP_VIEW, "View"),
+        "transfer": (CAP_APPROVE, "Approve"),
+        "stock_count": (CAP_VIEW, "View assigned brands"),
+        "return_to_brand": (CAP_VIEW, "View own brands"),
+        "stock": (CAP_VIEW, "Assigned brands"),
+        "money": (CAP_NONE, "No"),
+        "offers_price": (CAP_APPROVE, "Recommend + approve within limit"),
+        "reports": (CAP_VIEW, "Own brands only"),
+        "setup": (CAP_OPERATE, "Edit assigned products"),
+    },
+    "accounts": {
+        "home": (CAP_VIEW, "Finance view"),
+        "sell": (CAP_VIEW, "View"),
+        "booking": (CAP_VIEW, "View"),
+        "receive_goods": (CAP_VIEW, "View"),
+        "transfer": (CAP_VIEW, "View"),
+        "stock_count": (CAP_VIEW, "View"),
+        "return_to_brand": (CAP_VIEW, "View (credit notes)"),
+        "stock": (CAP_VIEW, "View"),
+        "money": (CAP_MANAGE, "Full"),
+        "offers_price": (CAP_VIEW, "View"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_VIEW, "View"),
+    },
+    "admin": {
+        "home": (CAP_VIEW, "All"),
+        "sell": (CAP_MANAGE, "All"),
+        "booking": (CAP_MANAGE, "Configure"),
+        "receive_goods": (CAP_MANAGE, "All"),
+        "transfer": (CAP_VIEW, "Monitor"),
+        "stock_count": (CAP_MANAGE, "All"),
+        "return_to_brand": (CAP_MANAGE, "All"),
+        "stock": (CAP_MANAGE, "Full"),
+        "money": (CAP_NONE, "No"),
+        "offers_price": (CAP_MANAGE, "Configure"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_MANAGE, "Full (incl. Users & Roles)"),
+    },
+}
+
+# The six personas map onto the seeded role *codes*. "Store Person" covers both
+# store roles; "Admin" is the it_admin role. Every canonical role must resolve
+# to a persona so the contract test can assert it against the sheet.
+ROLE_PERSONA = {
+    "owner": "owner",
+    "store_manager": "store_person",
+    "store_staff": "store_person",
+    "warehouse": "warehouse",
+    "brand_manager": "brand_manager",
+    "accounts": "accounts",
+    "it_admin": "admin",
+}
+
+# Roles that predate the sheet and have no persona row. They get sensible,
+# clearly-derived access so seeded users aren't blank in the new contract — but
+# these are NOT the RBAC matrix and can be retuned freely as data.
+DERIVED_ACCESS: dict[str, dict[str, tuple[str, str]]] = {
+    # HO Operations / Buyer — network operator, no money/setup ownership.
+    "ho_ops": {
+        "home": (CAP_VIEW, "All (network)"),
+        "booking": (CAP_OPERATE, "Create"),
+        "receive_goods": (CAP_VIEW, "View all"),
+        "transfer": (CAP_APPROVE, "Approve"),
+        "stock_count": (CAP_APPROVE, "Approve variances"),
+        "return_to_brand": (CAP_VIEW, "View"),
+        "stock": (CAP_VIEW, "All locations"),
+        "offers_price": (CAP_OPERATE, "Plan"),
+        "reports": (CAP_VIEW, "All"),
+    },
+    # HO Data Steward — edits masters, reads stock. Setup stays at `operate`
+    # (masters only): Users & Roles admin needs `setup: manage`, which only
+    # Owner and Admin hold — a data steward must not gain that (issue #85 review).
+    "data_steward": {
+        "home": (CAP_VIEW, "All (network)"),
+        "stock": (CAP_VIEW, "All locations"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_OPERATE, "Masters"),
+    },
+}
+
+
+def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
+    """Full 12-section access map for a role, as stored in ``section_access``.
+
+    Every section is present (missing → explicit ``none``), so the row is
+    self-describing and fail-closed. Shape: ``{section: {capability, label}}``.
+    """
+    persona = ROLE_PERSONA.get(role_code)
+    source = MATRIX.get(persona, {}) if persona else DERIVED_ACCESS.get(role_code, {})
+    out: dict[str, dict[str, str]] = {}
+    for section in SECTION_CODES:
+        capability, label = source.get(section, (CAP_NONE, "No"))
+        out[section] = {"capability": capability, "label": label}
+    return out
+
+
+def _validate() -> None:
+    """Guard the transcription: catch a typo'd section/capability at import.
+
+    Both seed sources are checked so a slip in a ``DERIVED_ACCESS`` cell fails
+    loudly here rather than silently fail-closing that legacy role's access.
+    Only ``MATRIX`` must be complete (all 12 sections); derived rows are partial
+    by design (absent → ``none``).
+    """
+    for source, cells_by_role in (("matrix", MATRIX), ("derived", DERIVED_ACCESS)):
+        for role, cells in cells_by_role.items():
+            for section, (capability, _) in cells.items():
+                assert is_valid_section(section), f"{source}/{role}: bad section {section!r}"
+                assert is_valid_capability(capability), (
+                    f"{source}/{role}: bad capability {capability!r}"
+                )
+    for persona, cells in MATRIX.items():
+        missing = set(SECTION_CODES) - set(cells)
+        assert not missing, f"{persona}: matrix missing sections {sorted(missing)}"
+
+
+_validate()

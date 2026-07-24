@@ -14,7 +14,7 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -24,6 +24,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from accounts.models import NAV_GROUPS, LoginAttempt, Role, ScopeType, User
+from accounts.permissions import require_section
+from accounts.sections import CAP_MANAGE
 from accounts.serializers import (
     AdminRoleSerializer,
     AdminUserSerializer,
@@ -34,17 +36,12 @@ from masters.models import Store
 
 MAX_FAILURES = 5
 LOCK_MINUTES = 15
-RBAC_ADMIN_ROLES = {"owner", "it_admin"}
 
-
-class IsRbacAdmin(BasePermission):
-    def has_permission(self, request: Request, view: Any) -> bool:
-        role_code = getattr(getattr(request.user, "role", None), "code", "")
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and (request.user.is_superuser or role_code in RBAC_ADMIN_ROLES)
-        )
+# Managing users and roles *is* the Setup section. Gate the admin APIs on the
+# section capability (config-driven) rather than a hardcoded role list: only
+# Owner and Admin hold `setup: manage` in the RBAC matrix, so this is
+# behaviour-identical to the old role check but now retunable as data (#85).
+IsRbacAdmin = require_section("setup", CAP_MANAGE)
 
 
 class LoginView(TokenObtainPairView):

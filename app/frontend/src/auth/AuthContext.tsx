@@ -20,6 +20,18 @@ export interface Role {
   nav_groups: string[];
 }
 
+// SIDEBAR RBAC contract (issue #85): the server decides what each person may
+// see and do. These describe the new authenticated-user payload; the shell
+// re-housing (#87) consumes them. Optional here so nothing that reads the
+// legacy `nav_groups` shell needs to change in this contract-only slice.
+export interface NavSection {
+  code: string;
+  label: string;
+  order: number;
+  capability: "view" | "operate" | "approve" | "manage";
+  scope_label: string; // exact RBAC-sheet wording, e.g. "Own store"
+}
+
 export interface User {
   id: number;
   username: string;
@@ -33,6 +45,11 @@ export interface User {
   stores: Store[];
   nav_groups: string[];
   landing_page: string;
+  // New RBAC contract (may be absent when talking to an older backend).
+  sections?: NavSection[];
+  capabilities?: Record<string, NavSection["capability"]>;
+  business_units?: Store[];
+  all_business_units?: boolean;
 }
 
 interface AuthContextValue {

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from accounts.models import NAV_GROUPS, Role, User
+from accounts.permissions import visible_sections
+from accounts.sections import CAPABILITY_ORDER, is_valid_capability, is_valid_section
 from masters.models import Store
-from masters.scoping import scoped_stores
+from masters.scoping import scoped_stores, visible_store_ids
+
+_T = TypeVar("_T")
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -38,6 +43,7 @@ class AdminRoleSerializer(serializers.ModelSerializer):
             "description",
             "landing_page",
             "nav_groups",
+            "section_access",
             "permissions_map",
             "is_system",
             "is_active",
@@ -49,6 +55,23 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         unknown = sorted(set(value) - set(NAV_GROUPS))
         if unknown:
             raise serializers.ValidationError(f"Unknown nav group(s): {', '.join(unknown)}")
+        return value
+
+    def validate_section_access(self, value: dict[str, Any]) -> dict[str, Any]:
+        # Retuning access is a data edit (Rule 12) — but keep it well-formed so a
+        # typo can't silently open or hide a section. Every key must be a known
+        # section and every capability a known rung.
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("section_access must be an object.")
+        unknown = sorted(k for k in value if not is_valid_section(k))
+        if unknown:
+            raise serializers.ValidationError(f"Unknown section(s): {', '.join(unknown)}")
+        for section, entry in value.items():
+            capability = entry.get("capability") if isinstance(entry, dict) else None
+            if not is_valid_capability(capability or ""):
+                raise serializers.ValidationError(
+                    f"{section}: capability must be one of {', '.join(CAPABILITY_ORDER)}."
+                )
         return value
 
     def validate_code(self, value: str) -> str:
@@ -74,6 +97,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
     scope_label = serializers.CharField(source="get_scope_type_display", read_only=True)
     entity_name = serializers.CharField(source="entity.name", read_only=True)
     stores = serializers.SerializerMethodField()
+    # SIDEBAR RBAC contract (issue #85): the server, not the client, decides what
+    # each person sees and may do. `sections` is the ordered, role-filtered
+    # sidebar with a capability per section; `capabilities` is the flat
+    # {section: capability} the client gates on; `business_units` is the units
+    # the user may act in (fail-closed — empty ⇒ nothing).
+    sections = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
+    business_units = serializers.SerializerMethodField()
+    all_business_units = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -90,6 +122,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "stores",
             "nav_groups",
             "landing_page",
+            "sections",
+            "capabilities",
+            "business_units",
+            "all_business_units",
         ]
 
     def get_nav_groups(self, obj: User) -> list[str]:
@@ -100,8 +136,39 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_landing_page(self, obj: User) -> str:
         return obj.role.landing_page if obj.role else "home"
 
+    def _cached(self, obj: User, key: str, compute: Callable[[], _T]) -> _T:
+        """Memoize a derived value per (field, object) so the shared scope and
+        section walks run once per response — this serializer renders four
+        SerializerMethodFields off the same two computations."""
+        store = self.__dict__.setdefault("_derived", {})
+        cache_key = (key, id(obj))
+        if cache_key not in store:
+            store[cache_key] = compute()
+        result: _T = store[cache_key]
+        return result
+
     def get_stores(self, obj: User) -> list[dict[str, Any]]:
-        return StoreMiniSerializer(scoped_stores(obj), many=True).data
+        return self._cached(
+            obj, "stores", lambda: StoreMiniSerializer(scoped_stores(obj), many=True).data
+        )
+
+    def get_sections(self, obj: User) -> list[dict[str, Any]]:
+        return self._cached(obj, "sections", lambda: visible_sections(obj))
+
+    def get_capabilities(self, obj: User) -> dict[str, str]:
+        # Flat {section: capability} the client gates on — projected from the
+        # already-computed sections list, not a second resolution pass.
+        return {str(s["code"]): str(s["capability"]) for s in self.get_sections(obj)}
+
+    def get_business_units(self, obj: User) -> list[dict[str, Any]]:
+        # The units the user may act in are exactly their scoped stores. `all`-
+        # scoped users act network-wide, so the concrete list is every store
+        # (with `all_business_units` flagged so the switcher can offer an "All
+        # units" option instead of 17 rows).
+        return self.get_stores(obj)
+
+    def get_all_business_units(self, obj: User) -> bool:
+        return self._cached(obj, "all_units", lambda: visible_store_ids(obj) is None)
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
