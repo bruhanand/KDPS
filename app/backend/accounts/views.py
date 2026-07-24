@@ -25,7 +25,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 
 from accounts.models import NAV_GROUPS, LoginAttempt, Role, ScopeType, User
 from accounts.permissions import require_section
-from accounts.sections import CAP_MANAGE
+from accounts.sections import CAP_MANAGE, CAPABILITY_ORDER, SECTIONS
 from accounts.serializers import (
     AdminRoleSerializer,
     AdminUserSerializer,
@@ -165,7 +165,12 @@ class AdminMetaView(APIView):
     def get(self, request: Request) -> Response:
         return Response(
             {
-                "nav_groups": list(NAV_GROUPS),
+                "nav_groups": list(NAV_GROUPS),  # legacy; nothing navigates by it
+                # What the role editor actually edits: the sections in sidebar
+                # order and the ladder each may be set to. Sent as data so adding
+                # a section needs no front-end release (Rule 12).
+                "sections": [{"code": code, "label": label} for code, label in SECTIONS],
+                "capabilities": list(CAPABILITY_ORDER),
                 "scope_types": [
                     {"value": value, "label": label} for value, label in ScopeType.choices
                 ],
