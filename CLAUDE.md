@@ -84,7 +84,7 @@ Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See
 
 ### Triage labels
 
-The five triage states map to existing repo labels, with `ready-for-agent` → **`Sandcastle`**. See `docs/agents/triage-labels.md`.
+The five triage states each map to a repo label of the same name: `needs-triage`, `needs-info`, **`ready-for-agent`**, `ready-for-human`, `wontfix`. `ready-for-agent` is tool-neutral — any AI agent picks up work with `gh issue list --label ready-for-agent`. (It replaced the tool-specific `Sandcastle` label on 25 Jul 2026.) See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
