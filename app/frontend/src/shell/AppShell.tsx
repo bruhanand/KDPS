@@ -1,20 +1,20 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { Bell, ChevronDown, ChevronRight, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import type { User } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { SECTIONS, isActiveItem, itemPath, itemVisible } from "./navConfig";
-import type { NavItem, NavSectionDef } from "./navConfig";
+import { isActiveItem, itemPath, layoutSidebar, visibleSections } from "./navConfig";
+import type { NavItem, NavRow, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
 const NAV_ORDER_KEY = "kdps-nav-item-order";
+const MORE_OPEN_KEY = "kdps-sidebar-more-open";
 const MIN_SIDEBAR = 210;
 const MAX_SIDEBAR = 390;
 
@@ -159,37 +159,6 @@ function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[
   ];
 }
 
-/** A section the signed-in user actually gets, with its visible items.
- *  The server decides *which* sections (#85); the manifest says what is in one;
- *  a role gate can still hide an individual item (finance-only ledgers). */
-interface VisibleSection {
-  def: NavSectionDef;
-  label: string;
-  items: NavItem[];
-}
-
-const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
-
-export function visibleSections(user: User): VisibleSection[] {
-  const roleCode = user.role?.code ?? "";
-  const out: VisibleSection[] = [];
-  // Server order, not manifest order — the payload is the authority on both
-  // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
-  for (const granted of user.sections ?? []) {
-    const def = SECTION_DEFS.get(granted.code);
-    if (!def) continue; // a section the server knows and this build doesn't
-    // Item gates are finer than the section: the rung held on *this* section
-    // (`minCapability`) or, where the ladder can't express it, a role list. The
-    // break-glass superuser passes both.
-    const items = def.items.filter(
-      (i) => !i.action && itemVisible(i, granted.capability, roleCode, user.is_superuser),
-    );
-    // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
-    if (items.length) out.push({ def, label: granted.label || def.label, items });
-  }
-  return out;
-}
-
 function Sidebar({
   width,
   onResizeStart,
@@ -205,8 +174,20 @@ function Sidebar({
   const { pathname } = useLocation();
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
   const [dragged, setDragged] = useState<DraggedItem>(null);
+  // "More" holds the sections a persona uses now and then, collapsed until
+  // asked for. The choice sticks the way the sidebar's width does.
+  const [moreOpen, setMoreOpen] = useState(() => localStorage.getItem(MORE_OPEN_KEY) === "1");
   if (!user) return null;
-  const sections = visibleSections(user);
+  // What this person may reach, then how their persona reads it (#96). The
+  // second step can only rearrange the first — never add to it.
+  const bands = layoutSidebar(visibleSections(user), user.role?.code ?? "");
+
+  function toggleMore() {
+    setMoreOpen((open) => {
+      localStorage.setItem(MORE_OPEN_KEY, open ? "0" : "1");
+      return !open;
+    });
+  }
 
   function moveItem(section: VisibleSection, targetTo: string) {
     const code = section.def.code;
@@ -223,6 +204,129 @@ function Sidebar({
     localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
   }
 
+  /** The one line a screen gets, wherever it sits. */
+  function itemTestId(section: VisibleSection, item: NavItem): string {
+    return `nav-${section.def.code}-${itemPath(item).split("/").pop() || "home"}`;
+  }
+
+  const slug = (label: string) => label.toLowerCase().replace(/\s+/g, "-");
+
+  /** A section, as it has always rendered: its name, then its items.
+   *
+   *  Inside a group (`nested`) it shows its items only while you are in it, and
+   *  otherwise stands as a single line into its own first screen. Three
+   *  sections under Inventory would be fifteen lines expanded — longer than the
+   *  flat list the grouping was meant to shorten — and one click still lands on
+   *  Receive (GRN), Transfers or Stock on Hand, with the rest of the section
+   *  unfolding once you are there. */
+  function sectionBlock(s: VisibleSection, nested = false) {
+    const Icon = s.def.icon;
+    const items = orderedItems(s.def.code, s.items, navOrder);
+    // One visible item ⇒ the section *is* that link, rather than a heading over
+    // a single line. (Shortening the store's screen is the grouping's job, not
+    // this rule's — see `layoutSidebar`.)
+    const single = items.length === 1 || (nested && !s.items.some((i) => isActiveItem(i, pathname)));
+    return (
+      <div className="nav-group" key={s.def.code}>
+        <div className="nav-group-head">
+          <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+            <Icon size={16} />
+          </span>
+          {single ? (
+            <Link
+              to={items[0].to}
+              onClick={onNavigate}
+              aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
+              className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
+              data-testid={`nav-${s.def.code}`}
+            >
+              {s.label}
+            </Link>
+          ) : (
+            <span className="nav-group-label">{s.label}</span>
+          )}
+        </div>
+        {!single && (
+          <div className="nav-items">
+            {items.map((it) => {
+              const active = isActiveItem(it, pathname);
+              return (
+                <Link
+                  key={it.to}
+                  to={it.to}
+                  draggable
+                  onDragStart={() => setDragged({ sectionCode: s.def.code, to: it.to })}
+                  onDragEnd={() => setDragged(null)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    moveItem(s, it.to);
+                  }}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`nav-item ${active ? "active" : ""}`}
+                  data-testid={itemTestId(s, it)}
+                >
+                  {it.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /** Is the screen you are on inside this row? */
+  function rowIsActive(row: NavRow): boolean {
+    if (row.kind === "item") return isActiveItem(row.item, pathname);
+    const sections = row.kind === "group" ? row.sections : [row.section];
+    return sections.some((s) => s.items.some((i) => isActiveItem(i, pathname)));
+  }
+
+  function navRow(row: NavRow) {
+    if (row.kind === "section") return sectionBlock(row.section);
+    if (row.kind === "group") {
+      // A heading over sections, each of which keeps its own name — "Transfer"
+      // reads "Transfer" inside Inventory too.
+      const Icon = row.icon;
+      return (
+        <div className="nav-group" key={row.key}>
+          <div className="nav-group-head">
+            <span className="nav-ic" style={{ color: `var(--layer-${row.layer})` }}>
+              <Icon size={16} />
+            </span>
+            <span className="nav-group-label">{row.label}</span>
+          </div>
+          <div className="nav-nested" data-testid={`nav-group-${slug(row.label)}`}>
+            {row.sections.map((s) => sectionBlock(s, true))}
+          </div>
+        </div>
+      );
+    }
+    // One item of a section, standing as its own heading.
+    const Icon = row.section.def.icon;
+    const active = isActiveItem(row.item, pathname);
+    return (
+      <div className="nav-group" key={row.key}>
+        <div className="nav-group-head">
+          <span className="nav-ic" style={{ color: `var(--layer-${row.section.def.layer})` }}>
+            <Icon size={16} />
+          </span>
+          <Link
+            to={row.item.to}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={`nav-grouplink ${active ? "active" : ""}`}
+            data-testid={itemTestId(row.section, row.item)}
+          >
+            {row.item.label}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
@@ -233,62 +337,33 @@ function Sidebar({
         </span>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
-        {sections.map((s) => {
-          const Icon = s.def.icon;
-          const items = orderedItems(s.def.code, s.items, navOrder);
-          // One visible item ⇒ the section *is* that link. This is what keeps a
-          // store person's sidebar at the seven-line scale of the KDPS sketch.
-          const single = items.length === 1;
-          return (
-            <div className="nav-group" key={s.def.code}>
-              <div className="nav-group-head">
-                <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-                  <Icon size={16} />
-                </span>
-                {single ? (
-                  <Link
-                    to={items[0].to}
-                    onClick={onNavigate}
-                    aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
-                    className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
-                    data-testid={`nav-${s.def.code}`}
-                  >
-                    {s.label}
-                  </Link>
-                ) : (
-                  <span className="nav-group-label">{s.label}</span>
-                )}
-              </div>
-              {!single && (
-                <div className="nav-items">
-                  {items.map((it) => {
-                    const active = isActiveItem(it, pathname);
-                    return (
-                      <Link
-                        key={it.to}
-                        to={it.to}
-                        draggable
-                        onDragStart={() => setDragged({ sectionCode: s.def.code, to: it.to })}
-                        onDragEnd={() => setDragged(null)}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          moveItem(s, it.to);
-                        }}
-                        onClick={onNavigate}
-                        aria-current={active ? "page" : undefined}
-                        className={`nav-item ${active ? "active" : ""}`}
-                        data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
-                      >
-                        {it.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+        {bands.map((band, i) =>
+          band.collapsible ? (
+            <div className="nav-band" key={band.label ?? i}>
+              {/* Collapsed, the band can be hiding the screen you are on — so
+                  it carries the highlight itself and the sidebar never goes
+                  dark under you. It does not spring open: the daily list is
+                  what a store person should meet each morning. */}
+              <button
+                type="button"
+                className={`nav-band-toggle ${moreOpen ? "open" : ""} ${
+                  !moreOpen && band.rows.some(rowIsActive) ? "active" : ""
+                }`}
+                aria-expanded={moreOpen}
+                onClick={toggleMore}
+                data-testid={`nav-band-${slug(band.label ?? "more")}`}
+              >
+                <ChevronRight size={14} />
+                <span>{band.label}</span>
+              </button>
+              {moreOpen && band.rows.map(navRow)}
             </div>
-          );
-        })}
+          ) : (
+            // No wrapper: an unlabelled band is simply the top of the list, and
+            // every persona without a shape of its own renders exactly as before.
+            <Fragment key={band.label ?? i}>{band.rows.map(navRow)}</Fragment>
+          ),
+        )}
       </nav>
       <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
     </aside>

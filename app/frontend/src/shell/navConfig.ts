@@ -10,6 +10,7 @@
 //
 // This file is the single source of truth for navigation. Derived from it:
 //   · the sidebar          (AppShell, intersected with the server's sections)
+//   · its shape per persona (`layoutSidebar`, at the foot of this file — #96)
 //   · the route guards     (auth/routeAccess — URL → the screen that owns it)
 //   · the routes           (routes.tsx: planned screens are generated from it)
 //   · the planned pages    (pages/plannedPages — what each unbuilt screen promises)
@@ -32,8 +33,11 @@ import {
   Undo2,
   Users,
   Wallet,
+  Warehouse,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+import type { User } from "../auth/AuthContext";
 
 // The capability ladder, mirroring `accounts/sections.py`. Ordinal: a higher
 // rung includes the powers of the lower ones.
@@ -400,4 +404,214 @@ export function itemVisible(
   if (item.minCapability && !meetsCapability(held, item.minCapability)) return false;
   if (item.roles && !item.roles.includes(roleCode)) return false;
   return true;
+}
+
+/** A section the signed-in user actually gets, with its visible items.
+ *  The server decides *which* sections (#85); the manifest says what is in one;
+ *  a role gate can still hide an individual item (finance-only ledgers). */
+export interface VisibleSection {
+  def: NavSectionDef;
+  label: string;
+  items: NavItem[];
+}
+
+const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
+
+/** Everything this person may navigate to — the one filter, and the only source
+ *  the shaping below is allowed to draw from. */
+export function visibleSections(user: User): VisibleSection[] {
+  const roleCode = user.role?.code ?? "";
+  const out: VisibleSection[] = [];
+  // Server order, not manifest order — the payload is the authority on both
+  // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
+  for (const granted of user.sections ?? []) {
+    const def = SECTION_DEFS.get(granted.code);
+    if (!def) continue; // a section the server knows and this build doesn't
+    // Item gates are finer than the section: the rung held on *this* section
+    // (`minCapability`) or, where the ladder can't express it, a role list. The
+    // break-glass superuser passes both.
+    const items = def.items.filter(
+      (i) => !i.action && itemVisible(i, granted.capability, roleCode, user.is_superuser),
+    );
+    // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
+    if (items.length) out.push({ def, label: granted.label || def.label, items });
+  }
+  return out;
+}
+
+// ------------------------------------------------------------ the shape of one
+// person's sidebar (issue #96)
+//
+// Access decides *which* sections a person gets; shape decides how those
+// sections sit on the screen. This is the second question, and everything below
+// consumes `visibleSections` and can only ever arrange what it returns — a
+// section the server did not send cannot appear in a group, in "More", or
+// anywhere else. Grouping filters *after* access, never around it.
+//
+// KDPS's stores wrote their own daily screen down twice, a month apart: the
+// hand-drawn "Store Ops" page of 30 June and the notes of 25 July. Both times
+// it was a short list with Stock Receive, Stock Transfer and PT files nested
+// under one word — Inventory. So a persona may *group* the sections it holds
+// and demote the occasional ones out of the daily list. It may not rename one
+// (#84, as amended 25 Jul 2026): a store person's "Transfer" still reads
+// "Transfer", because they and the warehouse say the same word on the phone.
+
+/** One heading standing over several sections. It owns no route, no section
+ *  code, no capability and no server counterpart — it is a label with an
+ *  ordered list of section codes under it, and it is never one of the thirteen. */
+export interface NavGroupDef {
+  group: string;
+  icon: LucideIcon;
+  layer: string;
+  sections: string[];
+}
+
+/** Show this section's items as headings in their own right, and the section's
+ *  own name not at all — the shape the sketch draws for Staff, where
+ *  "Attendance" and "Member Details" are two of the seven daily lines. Item
+ *  labels are the manifest's, unchanged. */
+export interface NavSplitDef {
+  split: string;
+}
+
+type NavBandEntry = string | NavGroupDef | NavSplitDef;
+
+/** A run of the sidebar. `label: null` is the plain top of the list. */
+interface NavBandDef {
+  label: string | null;
+  collapsible?: true;
+  entries: NavBandEntry[];
+}
+
+/** The store person's daily screen, as the stores themselves drew it. */
+const STORE_SIDEBAR: NavBandDef[] = [
+  {
+    // The daily list needs no caption — it is simply the top of the sidebar.
+    label: null,
+    entries: [
+      "sell",
+      {
+        group: "Inventory",
+        icon: Warehouse,
+        layer: "store",
+        // Stock is our reading, not the sketch's word: a store person holds it
+        // already and "what do I have" plainly belongs under Inventory. Booking
+        // is deliberately absent — the sketch puts it here, but a store person
+        // holds no Booking today and #101 is where that changes.
+        sections: ["receive_goods", "transfer", "stock"],
+      },
+      "reports",
+      // Attendance and Member Details are two of the sketch's seven lines and
+      // the word "Staff" is on none of them. Which items appear stays the
+      // server's answer: a cashier holds `staff: operate` and gets Attendance
+      // alone, a manager holds `staff: manage` and gets Members too (#97).
+      { split: "staff" },
+    ],
+  },
+  {
+    label: "More",
+    collapsible: true,
+    entries: [
+      // Home is the landing screen, not a line on the store's daily list — but
+      // Approvals and Alerts live inside it, so it is demoted, never dropped.
+      "home",
+      "stock_count", // periodic, not daily
+      "return_to_brand", // "mark damage only" at this rung
+      "money", // expenses only
+      "offers_price", // view only
+    ],
+  },
+];
+
+/** Persona → the shape of their sidebar, keyed by role code. A role that is not
+ *  here gets the flat list — the fail-safe default, and what keeps every other
+ *  sidebar exactly as it was. */
+export const SIDEBAR_LAYOUTS: Record<string, NavBandDef[]> = {
+  // Both store roles share the store screen. They differ only in that the
+  // manager holds `staff: manage` and so has a Members line — a difference the
+  // server already sends, and the shape never needs to know about.
+  store_manager: STORE_SIDEBAR,
+  store_staff: STORE_SIDEBAR,
+};
+
+export type NavRow =
+  | { kind: "section"; key: string; section: VisibleSection }
+  | {
+      kind: "group";
+      key: string;
+      label: string;
+      icon: LucideIcon;
+      layer: string;
+      sections: VisibleSection[];
+    }
+  | { kind: "item"; key: string; section: VisibleSection; item: NavItem };
+
+export interface NavBand {
+  label: string | null;
+  collapsible: boolean;
+  rows: NavRow[];
+}
+
+function sectionRow(section: VisibleSection): NavRow {
+  return { kind: "section", key: section.def.code, section };
+}
+
+/** Arrange the sections this person holds into the bands their persona reads
+ *  best. Pure presentation: the output is a rearrangement of the input and
+ *  never more than it. */
+export function layoutSidebar(sections: VisibleSection[], roleCode: string): NavBand[] {
+  const shape = SIDEBAR_LAYOUTS[roleCode];
+  if (!shape) return [{ label: null, collapsible: false, rows: sections.map(sectionRow) }];
+
+  const held = new Map(sections.map((s) => [s.def.code, s]));
+  const placed = new Set<string>();
+  /** The held section under `code`, if the person has it, marked as placed. */
+  function take(code: string): VisibleSection | undefined {
+    const section = held.get(code);
+    if (section) placed.add(code);
+    return section;
+  }
+
+  const bands: NavBand[] = shape.map((band) => {
+    const rows: NavRow[] = [];
+    for (const entry of band.entries) {
+      if (typeof entry === "string") {
+        const section = take(entry);
+        if (section) rows.push(sectionRow(section));
+      } else if ("group" in entry) {
+        const members = entry.sections
+          .map(take)
+          .filter((section): section is VisibleSection => section !== undefined);
+        // Every member gated away ⇒ no heading left standing over nothing.
+        if (members.length) {
+          rows.push({
+            kind: "group",
+            key: entry.group,
+            label: entry.group,
+            icon: entry.icon,
+            layer: entry.layer,
+            sections: members,
+          });
+        }
+      } else {
+        const section = take(entry.split);
+        if (section) {
+          for (const item of section.items) rows.push({ kind: "item", key: item.to, section, item });
+        }
+      }
+    }
+    return { label: band.label, collapsible: band.collapsible ?? false, rows };
+  });
+
+  // A section the shape never names is still this person's to reach — access is
+  // data an admin retunes with no release, so the shape can always be a section
+  // behind. Unnamed ones join the last band rather than the daily list: nothing
+  // lands on the store's daily screen unless we put it there deliberately.
+  const unnamed = sections.filter((s) => !placed.has(s.def.code));
+  if (unnamed.length) {
+    const last = bands[bands.length - 1];
+    if (last) last.rows.push(...unnamed.map(sectionRow));
+    else bands.push({ label: null, collapsible: false, rows: unnamed.map(sectionRow) });
+  }
+  return bands;
 }

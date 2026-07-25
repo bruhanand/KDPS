@@ -56,6 +56,26 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   background: var(--rust); border-radius: 2px;
 }
 
+/* A heading standing over several sections — "Inventory" over Receive Goods,
+   Transfer and Stock (#96). The sections keep their own names; the rule below
+   only sets them in from the heading so the nesting reads at a glance. */
+.nav-nested { margin-left: 15px; padding-left: 8px; border-left: 1px solid var(--sidebar-border); }
+.nav-nested .nav-ic { width: 24px; height: 24px; border-radius: 7px; }
+.nav-nested .nav-items { margin-left: 34px; }
+
+/* The occasional sections, collapsed until asked for. */
+.nav-band { padding: 4px 0; }
+.nav-band-toggle {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px;
+  background: none; border: 0; border-radius: 8px; cursor: pointer;
+  font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--caption); font-family: inherit;
+}
+.nav-band-toggle:hover { background: rgba(var(--rust-rgb), .08); color: var(--ink); }
+.nav-band-toggle.active { color: var(--rust); }
+.nav-band-toggle svg { transition: transform .14s; }
+.nav-band-toggle.open svg { transform: rotate(90deg); }
+
 /* ---------- main / topbar ---------- */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar {
