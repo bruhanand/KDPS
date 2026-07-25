@@ -11,15 +11,15 @@ server, not the client, decides what each of the six roles may see and do:
 
 from __future__ import annotations
 
+import pytest
 from _creds import TEST_PASSWORD
 from rest_framework.test import APIClient
 
+from accounts import rbac_matrix
 from accounts.models import Role, User
 from accounts.rbac_matrix import (
     MATRIX,
-    ROLE_OVERRIDES,
     ROLE_PERSONA,
-    SHEETLESS_SECTIONS,
     section_access_for,
 )
 from accounts.sections import CAP_NONE, SECTION_CODES
@@ -210,14 +210,22 @@ def test_store_manager_and_cashier_differ_only_on_staff(db):
     assert "setup" not in body["capabilities"]
 
 
-def test_overrides_cannot_contradict_the_sheet(db):
-    """Guardrail: the override hook must never reach a ratified sheet cell.
+def test_overrides_cannot_contradict_the_sheet(monkeypatch):
+    """Guardrail: the override hook fails loudly if it reaches a sheet cell.
 
-    Without this, `ROLE_OVERRIDES` becomes a back door for quietly editing the
+    `_validate()` runs at import, so a real off-sheet override could never ship —
+    it would crash the process. This proves the guard actually fires: point an
+    override at `money` (a ratified sheet section) and `_validate()` must raise.
+    Without it, `ROLE_OVERRIDES` becomes a back door for quietly editing the
     matrix in code — exactly what Rule 12 and the role editor exist to prevent.
     """
-    for role, cells in ROLE_OVERRIDES.items():
-        assert set(cells) <= SHEETLESS_SECTIONS, role
+    monkeypatch.setattr(
+        rbac_matrix,
+        "ROLE_OVERRIDES",
+        {"store_manager": {"money": ("manage", "back door")}},
+    )
+    with pytest.raises(AssertionError, match="may not override sheet sections"):
+        rbac_matrix._validate()
 
 
 def test_seed_matrix_covers_every_canonical_role(db):
