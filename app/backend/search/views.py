@@ -40,7 +40,7 @@ from accounts.permissions import user_can
 from core.documents import DocStatus
 from inbound.models import Grn
 from masters.models import Brand, Cohort, Sku
-from masters.scoping import scope_by_store, visible_store_ids
+from masters.scoping import active_store_ids, scope_by_store
 from outbound.models import ReturnToVendor, StockAdjustment, StoreTransfer, VFlip, WriteOff
 from ptmapper.models import PtFile
 from stockledger.models import StockOnHand
@@ -213,7 +213,7 @@ DOC_TYPES: list[DocType] = [
 def _search_documents(user: Any, q: str) -> tuple[list[dict[str, Any]], bool]:
     """Documents whose voucher number contains `q`, across every type the caller
     may see. Returns the capped rows and whether anything was dropped."""
-    store_ids = visible_store_ids(user)
+    store_ids = active_store_ids(user)
     per_type: list[list[dict[str, Any]]] = []
     for spec in DOC_TYPES:
         if not user_can(user, spec.section):

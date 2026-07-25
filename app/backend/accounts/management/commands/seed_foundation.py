@@ -108,18 +108,29 @@ ROLES: list[dict[str, Any]] = [
 # lives in one clearly-labelled break-glass login instead of a daily persona.
 SUPERUSERS = {"superadmin"}
 
-# (username, password, role_code, scope_type, store_codes, full_name)
-USERS: list[tuple[str, str, str, str, list[str], str]] = [
-    ("superadmin", "Super@123", "it_admin", "all", [], "System Superadmin (break-glass)"),
-    ("admin", "Admin@123", "it_admin", "all", [], "IT Admin"),
-    ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor"),
-    ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops"),
-    ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant"),
-    ("brand1", "Brand@123", "brand_manager", "all", [], "Madura Brand Manager"),
-    ("wh.patna", "Wh@123", "warehouse", "all", [], "Patna Warehouse"),
-    ("steward", "Steward@123", "data_steward", "all", [], "Data Steward"),
-    ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager"),
-    ("deo.cashier", "Store@123", "store_staff", "store", ["DEO"], "Deoghar Cashier"),
+# (username, password, role_code, scope_type, store_codes, full_name, brand_codes)
+# `brand_codes` only applies to the `brand` scope — a brand manager works across
+# every store but only inside their own brands, so the top bar gives them a brand
+# filter instead of a unit list (#88).
+USERS: list[tuple[str, str, str, str, list[str], str, list[str]]] = [
+    ("superadmin", "Super@123", "it_admin", "all", [], "System Superadmin (break-glass)", []),
+    ("admin", "Admin@123", "it_admin", "all", [], "IT Admin", []),
+    ("owner", "Owner@123", "owner", "all", [], "K. D. Proprietor", []),
+    ("ops1", "Ops@123", "ho_ops", "all", [], "Head-Office Ops", []),
+    ("accounts1", "Acct@123", "accounts", "all", [], "Patna Accountant", []),
+    (
+        "brand1",
+        "Brand@123",
+        "brand_manager",
+        "brand",
+        [],
+        "Madura Brand Manager",
+        ["louis-philippe", "van-heusen", "allen-solly", "peter-england"],
+    ),
+    ("wh.patna", "Wh@123", "warehouse", "all", [], "Patna Warehouse", []),
+    ("steward", "Steward@123", "data_steward", "all", [], "Data Steward", []),
+    ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager", []),
+    ("deo.cashier", "Store@123", "store_staff", "store", ["DEO"], "Deoghar Cashier", []),
 ]
 
 
@@ -360,7 +371,7 @@ class Command(BaseCommand):
             booking.save(update_fields=["estimated_value_paise"])
 
     def _seed_users(self, entity: LegalEntity, stores: dict[str, Store]) -> None:
-        for username, password, role_code, scope, store_codes, full_name in USERS:
+        for username, password, role_code, scope, store_codes, full_name, brand_codes in USERS:
             role = Role.objects.filter(code=role_code).first()
             # Only the dedicated break-glass account is a Django superuser (see
             # SUPERUSERS). Every business persona — `admin`/it_admin and `owner`
@@ -385,6 +396,7 @@ class Command(BaseCommand):
                 user.set_password(password)
                 user.save(update_fields=["password"])
             user.stores.set([stores[c] for c in store_codes if c in stores])
+            user.brands.set(Brand.objects.filter(code__in=brand_codes))
 
     def _write_credentials(self) -> None:
         lines = [
@@ -396,8 +408,9 @@ class Command(BaseCommand):
             "| Username | Password | Role | Scope |",
             "|---|---|---|---|",
         ]
-        for username, password, role_code, scope, store_codes, _ in USERS:
-            scope_txt = f"{scope} ({','.join(store_codes)})" if store_codes else scope
+        for username, password, role_code, scope, store_codes, _, brand_codes in USERS:
+            units = store_codes or brand_codes
+            scope_txt = f"{scope} ({','.join(units)})" if units else scope
             lines.append(f"| {username} | {password} | {role_code} | {scope_txt} |")
         lines += [
             "",

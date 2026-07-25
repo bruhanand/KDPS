@@ -23,7 +23,7 @@ from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
 from masters.models import Store
-from masters.scoping import scope_by_store, visible_store_ids
+from masters.scoping import active_store_ids, scope_by_store, visible_store_ids
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
 
@@ -49,7 +49,9 @@ class PendingBookingsView(APIView):
         qs = Booking.objects.select_related(
             "vendor", "brand", "season", "destination_store"
         ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
-        ids = visible_store_ids(request.user)
+        # A read, so it follows the unit the person is *acting in* (#88), not
+        # their whole entitlement — switch to Deoghar and you see Deoghar's queue.
+        ids = active_store_ids(request.user)
         if ids is not None:  # store-scoped user → bookings with a line landing at their store
             # A booking spans several stores: a line's effective destination is its own
             # store, or (if unset) the booking's default. Visible if ANY line lands here.

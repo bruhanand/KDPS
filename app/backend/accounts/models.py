@@ -67,6 +67,10 @@ class ScopeType(models.TextChoices):
     REGION = "region", "Region / state"
     STORE_GROUP = "store_group", "Store group"
     STORE = "store", "Single store"
+    # A brand manager cuts *across* stores: their scope is the brands they are
+    # assigned, network-wide (#88). The top bar gives them a brand filter where
+    # everyone else gets a unit list.
+    BRAND = "brand", "Assigned brands (across stores)"
 
 
 class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
@@ -87,6 +91,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         related_name="users",
     )
     stores = models.ManyToManyField("masters.Store", blank=True, related_name="users")
+    # Only meaningful for `scope_type = brand`: the brands this person owns.
+    # Empty ⇒ they see no stock at all, never every brand — the same fail-closed
+    # rule as a store-scoped user with no stores.
+    brands = models.ManyToManyField("masters.Brand", blank=True, related_name="users")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)

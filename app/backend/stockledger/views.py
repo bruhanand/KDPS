@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
-from masters.scoping import scope_by_store
+from masters.scoping import scope_by_brand, scope_by_store
 from stockledger.models import (
     InTransitStock,
     QuarantineStock,
@@ -36,10 +36,13 @@ class StockLedgerListView(generics.ListAPIView):
     pagination_class = StockLedgerPagination
 
     def get_queryset(self) -> Any:
-        qs = scope_by_store(
-            StockLedgerEntry.objects.select_related("store", "booking", "pt_file"),
+        qs = scope_by_brand(
+            scope_by_store(
+                StockLedgerEntry.objects.select_related("store", "booking", "pt_file"),
+                self.request.user,
+                "store_id",
+            ),
             self.request.user,
-            "store_id",
         )
         pt = self.request.query_params.get("pt_file")
         if pt:
@@ -54,7 +57,9 @@ class StockLedgerSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        qs = scope_by_store(StockLedgerEntry.objects.all(), request.user, "store_id")
+        qs = scope_by_brand(
+            scope_by_store(StockLedgerEntry.objects.all(), request.user, "store_id"), request.user
+        )
         agg = qs.aggregate(
             entries=Count("id"),
             net_qty=Sum("qty"),
@@ -84,12 +89,15 @@ class InTransitView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        qs = scope_by_store(
-            InTransitStock.objects.filter(qty__gt=0).select_related(
-                "source_store", "destination_store"
+        qs = scope_by_brand(
+            scope_by_store(
+                InTransitStock.objects.filter(qty__gt=0).select_related(
+                    "source_store", "destination_store"
+                ),
+                request.user,
+                "source_store_id",
             ),
             request.user,
-            "source_store_id",
         )
         if doc := request.query_params.get("transfer"):
             qs = qs.filter(transfer_doc_number=doc)
@@ -131,10 +139,13 @@ class QuarantineView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        qs = scope_by_store(
-            QuarantineStock.objects.filter(qty__gt=0).select_related("store", "marked_by"),
+        qs = scope_by_brand(
+            scope_by_store(
+                QuarantineStock.objects.filter(qty__gt=0).select_related("store", "marked_by"),
+                request.user,
+                "store_id",
+            ),
             request.user,
-            "store_id",
         )
         if store := request.query_params.get("store"):
             qs = qs.filter(store__code=store)
@@ -186,10 +197,13 @@ class StockOnHandView(APIView):
         group_by = request.query_params.get("group_by", "sku")
         if group_by not in ("sku", "brand", "store"):
             group_by = "sku"
-        qs = scope_by_store(
-            StockOnHand.objects.filter(net_qty__gt=0).select_related("store"),
+        qs = scope_by_brand(
+            scope_by_store(
+                StockOnHand.objects.filter(net_qty__gt=0).select_related("store"),
+                request.user,
+                "store_id",
+            ),
             request.user,
-            "store_id",
         )
         if store := request.query_params.get("store"):
             qs = qs.filter(store__code=store)

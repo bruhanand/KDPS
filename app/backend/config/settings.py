@@ -13,6 +13,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -67,6 +68,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # The business unit / brand the caller picked in the top-bar switcher (#88).
+    # Narrows what the scoping helpers answer; it can never widen it.
+    "masters.unit_context.ActiveContextMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -145,6 +149,9 @@ SPECTACULAR_SETTINGS = {
 
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
+# Cross-origin dev (PWA on :3000 → API on :8000) must be allowed to send the
+# switcher's context headers, or every call silently falls back to network view.
+CORS_ALLOW_HEADERS = (*default_headers, "x-kdps-unit", "x-kdps-brand")
 # The broad Emergent-preview + localhost regexes are a credentialed wildcard on a
 # *shared* preview domain (any `<x>.emergentagent.com` could ride the cookie), so
 # they are gated to DEBUG (preview/dev) only. In production (DEBUG=0) CORS is driven
