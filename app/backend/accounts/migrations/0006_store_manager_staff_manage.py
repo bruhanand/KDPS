@@ -10,6 +10,13 @@ that is manager work. ``ROLE_OVERRIDES`` now lifts ``store_manager`` to
 Only a row still sitting at the seeded default is touched. If a live admin has
 already retuned this cell, their value wins — access is their data (Rule 12).
 The cashier is not touched at all.
+
+Both directions are guarded the same way, from opposite ends (issue #100):
+forward asks "is this still the seeded default?", reverse asks "is this still
+exactly what I wrote?" — capability **and** label, because a bare ``manage`` is
+also what an admin would set by hand, and only the derived label tells the two
+apart. So migrate-then-rollback is an identity, and a rollback never eats an
+admin's grant.
 """
 
 from django.db import migrations
@@ -18,14 +25,19 @@ SEEDED_DEFAULT = "operate"
 ROLE_CODE = "store_manager"
 
 
-def _retune(apps, capability: str, label: str, *, only_if: str) -> None:
+def _retune(apps, cell: dict[str, str], *, only_if: dict[str, str]) -> None:
+    """Move ``store_manager``'s ``staff`` cell to ``cell``, from a known state only.
+
+    ``only_if`` is the fields the current cell must match to count as untouched;
+    anything else is an admin's tuning and is left exactly as it is.
+    """
     Role = apps.get_model("accounts", "Role")
     for role in Role.objects.filter(code=ROLE_CODE):
         access = role.section_access or {}
         current = access.get("staff")
-        if not current or current.get("capability") != only_if:
+        if not current or any(current.get(k) != v for k, v in only_if.items()):
             continue  # never seeded, or an admin has already retuned it
-        access["staff"] = {"capability": capability, "label": label}
+        access["staff"] = dict(cell)
         role.section_access = access
         role.save(update_fields=["section_access"])
 
@@ -33,15 +45,25 @@ def _retune(apps, capability: str, label: str, *, only_if: str) -> None:
 def grant_members(apps, schema_editor):
     from accounts.rbac_matrix import section_access_for
 
-    cell = section_access_for(ROLE_CODE)["staff"]
-    _retune(apps, cell["capability"], cell["label"], only_if=SEEDED_DEFAULT)
+    _retune(
+        apps,
+        section_access_for(ROLE_CODE)["staff"],
+        only_if={"capability": SEEDED_DEFAULT},
+    )
 
 
 def revoke_members(apps, schema_editor):
-    from accounts.rbac_matrix import MATRIX
+    from accounts.rbac_matrix import MATRIX, section_access_for
 
     capability, label = MATRIX["store_person"]["staff"]
-    _retune(apps, capability, label, only_if="manage")
+    _retune(
+        apps,
+        {"capability": capability, "label": label},
+        # The whole cell this migration writes. If the override's wording ever
+        # drifts from what was written here, the match fails and the row is
+        # preserved — the safe way to be wrong.
+        only_if=section_access_for(ROLE_CODE)["staff"],
+    )
 
 
 class Migration(migrations.Migration):
