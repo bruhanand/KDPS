@@ -2,7 +2,7 @@ import { useLocation } from "react-router-dom";
 import { Compass } from "lucide-react";
 
 import { NAV_ITEMS, SECTIONS, itemPath, normalizePath } from "../shell/navConfig";
-import { STAGE_LABEL, STAGE_TONE, plannedPage } from "./plannedPages";
+import { PLANNED_PAGES, STAGE_LABEL, STAGE_TONE } from "./plannedPages";
 import "./PlannedPage.css";
 
 /** The screen and section a bare address belongs to. Exact match, not
@@ -23,18 +23,18 @@ function screenAt(pathname: string) {
 export function PlannedPage() {
   const { pathname } = useLocation();
   const { target, screen, section } = screenAt(pathname);
-  const planned = plannedPage(target);
+  const planned = PLANNED_PAGES[target];
   if (!planned) return <NotFound />;
 
   const Icon = section?.icon ?? Compass;
   const layer = section?.layer ?? "documents";
 
   return (
-    <div className="page-pad planned">
+    <div className="page-pad">
       <p className="eyebrow">{section?.label}</p>
       <div className="planned-head">
         <h1 className="h1">{screen?.label}</h1>
-        <span className={`chip ${STAGE_TONE[planned.module.stage]}`}>
+        <span className={`chip chip-${STAGE_TONE[planned.module.stage]}`}>
           {STAGE_LABEL[planned.module.stage]}
         </span>
       </div>
@@ -78,7 +78,7 @@ export function PlannedPage() {
  *  and "there is nothing here" are different messages. */
 export function NotFound() {
   return (
-    <div className="page-pad planned">
+    <div className="page-pad">
       <h1 className="h1">Nothing at this address</h1>
       <div className="card planned-card" data-testid="not-found">
         <div className="planned-medallion" style={{ color: "var(--muted)" }}>

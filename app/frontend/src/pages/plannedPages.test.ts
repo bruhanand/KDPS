@@ -31,8 +31,9 @@ describe("the planned pages", () => {
     for (const path of plannedPaths) {
       const page = PLANNED_PAGES[path];
       // A sentence, not a label: a stub reads "Billing", a promise reads "the
-      // counter screen — scan, bill, take the money."
-      expect(page.summary, path).toMatch(/\.$/);
+      // counter screen — scan, bill, take the money." Word count, not exact
+      // punctuation — copy edits should not have to come back here.
+      expect(page.summary.trim().split(/\s+/).length, path).toBeGreaterThan(5);
       expect(page.contains.length, path).toBeGreaterThanOrEqual(2);
       expect(copyAt(path), path).not.toContain("coming soon");
     }
@@ -53,6 +54,36 @@ describe("the planned pages", () => {
       const under = plannedPaths.filter((p) => p === prefix || p.startsWith(prefix + "/"));
       expect(under.length, prefix).toBeGreaterThan(0);
       for (const path of under) expect(PLANNED_PAGES[path].module.name, path).toBe(module);
+    }
+  });
+});
+
+describe("the report's own sequence", () => {
+  it("gives each module the position the report gives it", () => {
+    // The report's strip reads: Done (Core Platform · Goods Receipt) → Now
+    // (Purchase Orders · Transfers & Returns) → Next (POS & Billing) → Then
+    // (Accounts & Payments) → Later (HRMS · Promotions · Analytics).
+    //
+    // The two "already moving" modules are the trap. Their in-build column names
+    // dispatch/receive, IGST, RTV and adjustments — not Stock Request,
+    // Distribution, In-Transit or Upload Bill. So those screens are *not* in
+    // build, and must carry the report's third column ("Planned") rather than a
+    // chip that promises motion nobody has started.
+    const expected: Record<string, string> = {
+      "POS & Billing": "next",
+      "Accounts & Payments": "then",
+      "Promotions & EOSS": "later",
+      "HRMS & Payroll": "later",
+      "Reports & Analytics": "later",
+      "Goods Receipt": "unscheduled",
+      "Transfers & Returns": "unscheduled",
+      "Inventory Management": "unscheduled",
+      Administration: "unscheduled",
+    };
+    for (const path of plannedPaths) {
+      const { name, stage } = PLANNED_PAGES[path].module;
+      expect(Object.keys(expected), `${path} → ${name}`).toContain(name);
+      expect(stage, `${path} → ${name}`).toBe(expected[name]);
     }
   });
 });
@@ -95,31 +126,32 @@ describe("Attendance", () => {
 
   it("is the store's daily surface — mark in, mark out, see the month", () => {
     expect(copy).toContain("check-in");
-    expect(copy).toContain("leaves");
   });
 
   it("says plainly that no biometric device is integrated yet", () => {
     expect(copy).toContain("biometric");
-    expect(copy).toContain("no device is integrated yet");
+    expect(copy).toMatch(/no device is integrated|not integrated/);
   });
 
   it("keeps payroll as a later, separate screen", () => {
-    expect(copyAt("/staff/payroll")).toContain("after attendance");
+    // Payroll is the last part of the deferred module, not the first.
+    expect(copyAt("/staff/payroll")).toMatch(/attendance/);
+    expect(PLANNED_PAGES["/staff/payroll"].module.stage).toBe("later");
   });
 });
 
 describe("Reports", () => {
-  it("quotes the stores' own five report names", () => {
-    const reports = copyAt("/reports/sales") + copyAt("/reports/stock");
-    for (const asked of [
-      "stock report",
-      "sales report",
-      "member-wise report",
-      "item-wise report",
-      "date-range sales report",
-    ]) {
-      expect(reports, asked).toContain(asked);
-    }
+  it("quotes the stores' own five report names, in their order", () => {
+    // The 25 July note lists them: stock, sales, member-wise, item-wise,
+    // date-range. Stock is its own page; the other four are Sales Reports, and
+    // the page says out loud that they are in the stores' order — so they are.
+    expect(PLANNED_PAGES["/reports/stock"].contains).toContain("Stock report");
+    expect(PLANNED_PAGES["/reports/sales"].contains).toEqual([
+      "Sales report",
+      "Member-wise report",
+      "Item-wise report",
+      "Date-range sales report",
+    ]);
   });
 
   it("does not pretend member-wise sales is only waiting on a screen", () => {

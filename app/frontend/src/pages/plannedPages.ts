@@ -3,9 +3,9 @@
 // KDPS management has a build-status report (21 July 2026, "Build Status Report
 // — Module-wise"). A demo of the sidebar and that report must tell one story, so
 // the copy below quotes the report's own module names and promises rather than
-// paraphrasing them, and carries the same sequence — in build, next, after that,
-// later. Where the stores wrote a requirement down in their own words (the 25
-// July Store Ops notes), those words are used instead of ours.
+// paraphrasing them, and places each screen where the report places it. Where the
+// stores wrote a requirement down in their own words (the 25 July Store Ops
+// notes), those words are used instead of ours.
 //
 // The rule for this file: a planned page may not flatter. If a screen is waiting
 // on hardware, on a decision nobody has taken, or on data that will not exist
@@ -15,8 +15,11 @@
 // Paired with the section manifest: every nav item marked `planned` must have an
 // entry here, and nothing else may (asserted in plannedPages.test.ts).
 
-/** Where a module sits in the report's sequence: done → now → next → then → later. */
-export type Stage = "in-build" | "next" | "then" | "planned" | "later";
+/** When this screen arrives, in the report's own vocabulary. Three of the four
+ *  are its sequence positions (next → then → later); `unscheduled` is its third
+ *  column, "Planned" — the module may already be live or in test, but this part
+ *  of it has not been started, so there is no position to quote. */
+export type Stage = "next" | "then" | "later" | "unscheduled";
 
 export interface ReportModule {
   /** The module's name in the client report, quoted exactly. */
@@ -27,33 +30,32 @@ export interface ReportModule {
 /** How each stage is worded to a reader. Plain words, no dates — the report
  *  deliberately gives no delivery dates and neither does the product. */
 export const STAGE_LABEL: Record<Stage, string> = {
-  "in-build": "In build and test",
   next: "Next to be built",
   then: "After billing",
-  planned: "Planned",
   later: "Later",
+  unscheduled: "Planned",
 };
 
-/** Chip tone per stage, matching the report's own badge colours. */
+/** Chip tone per stage, matching the report's own badge colours. Bare tones,
+ *  rendered as `chip-${tone}` — the shape PtMapper's STAGE_TONE already uses. */
 export const STAGE_TONE: Record<Stage, string> = {
-  "in-build": "chip-amber",
-  next: "chip-blue",
-  then: "chip-blue",
-  planned: "chip-navy",
-  later: "chip-navy",
+  next: "blue",
+  then: "blue",
+  later: "navy",
+  unscheduled: "navy",
 };
 
-const GOODS_RECEIPT: ReportModule = { name: "Goods Receipt", stage: "in-build" };
-const TRANSFERS: ReportModule = { name: "Transfers & Returns", stage: "in-build" };
+const GOODS_RECEIPT: ReportModule = { name: "Goods Receipt", stage: "unscheduled" };
+const TRANSFERS: ReportModule = { name: "Transfers & Returns", stage: "unscheduled" };
 const POS: ReportModule = { name: "POS & Billing", stage: "next" };
 const ACCOUNTS: ReportModule = { name: "Accounts & Payments", stage: "then" };
-const INVENTORY: ReportModule = { name: "Inventory Management", stage: "planned" };
-const ADMINISTRATION: ReportModule = { name: "Administration", stage: "planned" };
+const INVENTORY: ReportModule = { name: "Inventory Management", stage: "unscheduled" };
+const ADMINISTRATION: ReportModule = { name: "Administration", stage: "unscheduled" };
 const PROMOTIONS: ReportModule = { name: "Promotions & EOSS", stage: "later" };
 const HRMS: ReportModule = { name: "HRMS & Payroll", stage: "later" };
 const ANALYTICS: ReportModule = { name: "Reports & Analytics", stage: "later" };
 
-export interface PlannedPage {
+export interface PlannedScreen {
   /** One line: what the screen is for, in the words its user would use. */
   summary: string;
   /** What will live here. The report's promises where the report makes one. */
@@ -65,7 +67,7 @@ export interface PlannedPage {
   module: ReportModule;
 }
 
-export const PLANNED_PAGES: Record<string, PlannedPage> = {
+export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // ---- Home ---------------------------------------------------------------
   "/alerts": {
     summary: "One list of what needs attention today, so nobody has to go looking for trouble.",
@@ -88,7 +90,7 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
       "Barcode billing and GST invoice",
       "Discounts at the counter, inside the limit the role allows",
       "Real-time stock deduction",
-      "EOSS bulk billing — stock billed and kept in the store",
+      "EOSS bulk billing — stock billed and kept in the store, set up in Offers & Price",
     ],
     notes: [
       "Selling runs through Ten Software today. Our own counter is proven at one store, one counter, before any store is switched over.",
@@ -143,6 +145,9 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
       "The request goes through approval",
       "Honest status all the way — asked, approved, sent, received",
     ],
+    notes: [
+      "Dispatch and receive are the transfer work in test now. This part has not been started.",
+    ],
     module: TRANSFERS,
   },
   "/transfer/distribution": {
@@ -150,7 +155,11 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
     contains: [
       "A suggested split across stores, which you can change by hand",
       "A buffer held back at the warehouse",
+      "Inter-store size rebalancing — moving sizes to the store that is selling them",
       "The split becomes the transfers, so nothing is typed twice",
+    ],
+    notes: [
+      "Dispatch and receive are the transfer work in test now. This part has not been started.",
     ],
     module: TRANSFERS,
   },
@@ -323,9 +332,9 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
     summary: "What was sold — by day, by store, by brand, by item, by person.",
     contains: [
       "Sales report",
+      "Member-wise report",
       "Item-wise report",
       "Date-range sales report",
-      "Member-wise report",
     ],
     notes: [
       "These four are the stores' own words, in their own order, from the 25 July Store Ops note.",
@@ -341,6 +350,7 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
       "Stock ageing",
       "Dead-stock alerts",
       "Return-deadline tracking for SOR brands",
+      "Demand forecasting and auto-replenishment",
     ],
     notes: [
       "Stock position can be read from the ledger the system already keeps today — Stock on Hand and Movement History are live in the Stock section. Ageing, dead stock and deadline tracking are the parts still to be built.",
@@ -415,8 +425,3 @@ export const PLANNED_PAGES: Record<string, PlannedPage> = {
     module: ADMINISTRATION,
   },
 };
-
-/** The promise for a screen, or undefined if that address promises nothing. */
-export function plannedPage(path: string): PlannedPage | undefined {
-  return PLANNED_PAGES[path];
-}
