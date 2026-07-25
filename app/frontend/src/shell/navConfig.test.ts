@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { NAV_ITEMS, SECTIONS, itemPath, resolveLegacyPath } from "./navConfig";
+import {
+  NAV_ITEMS,
+  SECTIONS,
+  isActiveItem,
+  itemOwning,
+  itemPath,
+  resolveLegacyPath,
+} from "./navConfig";
 
 /** Does any screen in the manifest own `path` (itself or as its parent)? */
 function claimed(path: string): boolean {
-  return NAV_ITEMS.some((i) => {
-    const owned = itemPath(i);
-    return path === owned || path.startsWith(owned + "/");
-  });
+  return itemOwning(path) !== null;
 }
 
 describe("the thirteen sections", () => {
@@ -63,6 +67,88 @@ describe("the thirteen sections", () => {
     const vflip = NAV_ITEMS.find((i) => itemPath(i) === "/stock/vflips");
     expect(vflip?.section).toBe("stock");
     expect(vflip?.action).toBe(true);
+  });
+});
+
+describe("the highlighted menu line", () => {
+  // One screen has one URL (#87), so one URL lights one line. React Router's
+  // own NavLink matching is prefix-based and lit every ancestor too: on
+  // /receive/pt both "Receive (GRN)" and "PT Files" were rust, and on
+  // /stock/history a *third* line lit in another section — Return to Brand's
+  // "Damage / Quarantine", whose /stock?view=quarantine matches on path alone.
+
+  it("is the deepest screen the URL sits under, never its parent as well", () => {
+    // Each pair is a child URL and the single item that must own it.
+    const cases: [url: string, owner: string][] = [
+      ["/receive/pt", "/receive/pt"],
+      ["/receive", "/receive"],
+      ["/sell/returns", "/sell/returns"],
+      ["/booking/new", "/booking/new"],
+      ["/transfer/in-transit", "/transfer/in-transit"],
+      ["/stock-count/writeoffs", "/stock-count/writeoffs"],
+      ["/return-to-brand/new", "/return-to-brand/new"],
+      ["/stock/history", "/stock/history"],
+      ["/offers/discounts", "/offers/discounts"],
+    ];
+    for (const [url, owner] of cases) {
+      const it = itemOwning(url);
+      expect(it && itemPath(it), url).toBe(owner);
+    }
+  });
+
+  it("stays on the list screen for a document under it", () => {
+    // /booking/12 has no menu line of its own, so Bookings keeps the highlight.
+    expect(itemOwning("/booking/12") && itemPath(itemOwning("/booking/12")!)).toBe("/booking");
+    expect(itemOwning("/receive/pt/review") && itemPath(itemOwning("/receive/pt/review")!)).toBe(
+      "/receive/pt",
+    );
+  });
+
+  it("keeps Stock on Hand lit on V-flip, which has no line of its own", () => {
+    // V-flip is an action reached from Stock on Hand, not a menu item — the
+    // sidebar must not go dark while you are on it.
+    const lit = NAV_ITEMS.filter((i) => isActiveItem(i, "/stock/vflips"));
+    expect(lit.map((i) => i.label)).toEqual(["Stock on Hand"]);
+    // The guard still resolves that URL to V-flip's own rule, not Stock's.
+    expect(itemOwning("/stock/vflips") && itemPath(itemOwning("/stock/vflips")!)).toBe(
+      "/stock/vflips",
+    );
+  });
+
+  it("never lets a deep link claim the URL its host section owns", () => {
+    // "Damage / Quarantine" points at /stock?view=quarantine, whose path *is*
+    // /stock — so it used to light in Return to Brand on every /stock* URL,
+    // alongside Stock's own line in another section.
+    for (const url of ["/stock", "/stock/history", "/stock/vflips"]) {
+      expect(itemOwning(url)?.section, url).toBe("stock");
+      const quarantine = NAV_ITEMS.find((i) => i.deepLink)!;
+      expect(isActiveItem(quarantine, url), url).toBe(false);
+    }
+  });
+
+  it("is exactly one line for every URL in the manifest", () => {
+    const menu = NAV_ITEMS.filter((i) => !i.action);
+    const urls = [...new Set(menu.map(itemPath))];
+    for (const url of urls) {
+      const lit = menu.filter((i) => isActiveItem(i, url)).map((i) => `${i.section}:${i.label}`);
+      expect(lit.length, `${url} → ${lit.join(" + ")}`).toBe(1);
+    }
+  });
+
+  it("keeps Home's dashboard off every other screen", () => {
+    expect(itemOwning("/") && itemPath(itemOwning("/")!)).toBe("/");
+    for (const url of ["/booking", "/stock", "/setup/stores"]) {
+      expect(itemOwning(url) && itemPath(itemOwning(url)!), url).not.toBe("/");
+    }
+  });
+
+  it("lights nothing at an address no screen claims", () => {
+    expect(itemOwning("/something-nobody-built")).toBeNull();
+  });
+
+  it("answers the same for a mixed-case or trailing-slash URL", () => {
+    expect(itemOwning("/Receive/PT") && itemPath(itemOwning("/Receive/PT")!)).toBe("/receive/pt");
+    expect(itemOwning("/receive/pt/") && itemPath(itemOwning("/receive/pt/")!)).toBe("/receive/pt");
   });
 });
 
