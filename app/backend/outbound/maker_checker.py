@@ -112,7 +112,7 @@ def _line_totals(doc: Any) -> tuple[int, int, int]:
     for line in lines:
         qty = abs(line.adj_qty) if hasattr(line, "adj_qty") else line.qty
         pieces += qty
-        value += qty * book_unit_cost(doc.store_id, line.sku_code)
+        value += qty * book_unit_cost(doc.store_id, line.sku_code, getattr(line, "season", ""))
     return len(lines), pieces, value
 
 

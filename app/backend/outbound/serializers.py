@@ -74,6 +74,29 @@ class ApprovedDocumentSerializer(serializers.ModelSerializer):
         return [ApprovalReadSerializer(a).data for a in list(obj.approvals.all())[1:]]
 
 
+def _priced_lines(store: Any, lines_data: list[dict[str, Any]], doc_season: str = "") -> list[dict]:
+    """Put the books' cost (and dims) on every line before it is stored (#103).
+
+    A draft is *born* with its cost of record, so the approval band, the posting
+    engine and the screen all read the same number — and a line the books cannot
+    price never becomes a document at all, rather than posting free stock later.
+    The refusal is a 400 on the create call, not a 500: an unpriceable piece is
+    something the maker has to fix, and the message says how.
+    """
+    from outbound.posting import OutboundPostingError, resolve_line_identity
+
+    priced = []
+    for ld in lines_data:
+        try:
+            identity = resolve_line_identity(
+                store.id, ld["sku_code"], ld.get("season") or doc_season
+            )
+        except OutboundPostingError as exc:
+            raise serializers.ValidationError({"lines": [str(exc)]}) from exc
+        priced.append({**ld, **identity})
+    return priced
+
+
 def _create_with_approval(
     model: Any, line_model: Any, line_field: str, validated_data: Any, request: Any
 ) -> Any:
@@ -81,7 +104,9 @@ def _create_with_approval(
 
     One transaction: a draft that needs a checker is never left without one.
     """
-    lines_data = validated_data.pop("lines")
+    lines_data = _priced_lines(
+        validated_data["store"], validated_data.pop("lines"), validated_data.get("season", "")
+    )
     user = getattr(request, "user", None)
     validated_data["created_by"] = user
     with transaction.atomic():
@@ -323,6 +348,9 @@ class MarkDamagedInputSerializer(serializers.Serializer):
 
 
 class ReturnToVendorLineSerializer(serializers.ModelSerializer):
+    """``unit_cost_paise`` is read-only: a money posting reads its cost from the
+    books, never from the payload (#103) — same rule as a transfer line."""
+
     class Meta:
         model = ReturnToVendorLine
         fields = [
@@ -338,7 +366,7 @@ class ReturnToVendorLineSerializer(serializers.ModelSerializer):
             "qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "unit_cost_paise"]
 
 
 class ReturnToVendorReadSerializer(serializers.ModelSerializer):
@@ -394,14 +422,17 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lines_data = validated_data.pop("lines")
+        lines_data = _priced_lines(
+            validated_data["store"], validated_data.pop("lines"), validated_data.get("season", "")
+        )
         user = self.context.get("request", None)
         if user:
             user = user.user
         validated_data["created_by"] = user
-        rtv = ReturnToVendor.objects.create(**validated_data)
-        for ld in lines_data:
-            ReturnToVendorLine.objects.create(rtv=rtv, **ld)
+        with transaction.atomic():
+            rtv = ReturnToVendor.objects.create(**validated_data)
+            for ld in lines_data:
+                ReturnToVendorLine.objects.create(rtv=rtv, **ld)
         return rtv
 
 
@@ -411,6 +442,9 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
 
 
 class StockAdjustmentLineSerializer(serializers.ModelSerializer):
+    """``unit_cost_paise`` is read-only: a money posting reads its cost from the
+    books, never from the payload (#103) — same rule as a transfer line."""
+
     class Meta:
         model = StockAdjustmentLine
         fields = [
@@ -428,7 +462,7 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
             "adj_qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "unit_cost_paise"]
 
 
 class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
@@ -490,6 +524,9 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
 
 
 class WriteOffLineSerializer(serializers.ModelSerializer):
+    """``unit_cost_paise`` is read-only: a money posting reads its cost from the
+    books, never from the payload (#103) — same rule as a transfer line."""
+
     class Meta:
         model = WriteOffLine
         fields = [
@@ -505,7 +542,7 @@ class WriteOffLineSerializer(serializers.ModelSerializer):
             "qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "unit_cost_paise"]
 
 
 class WriteOffReadSerializer(ApprovedDocumentSerializer):
@@ -562,6 +599,9 @@ class WriteOffWriteSerializer(serializers.ModelSerializer):
 
 
 class VFlipLineSerializer(serializers.ModelSerializer):
+    """``unit_cost_paise`` is read-only: a money posting reads its cost from the
+    books, never from the payload (#103) — same rule as a transfer line."""
+
     class Meta:
         model = VFlipLine
         fields = [
@@ -577,7 +617,7 @@ class VFlipLineSerializer(serializers.ModelSerializer):
             "qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "unit_cost_paise"]
 
 
 class VFlipReadSerializer(ApprovedDocumentSerializer):

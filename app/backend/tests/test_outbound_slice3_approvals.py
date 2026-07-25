@@ -815,8 +815,15 @@ def test_a_maker_cannot_type_their_way_under_the_tolerance(mc):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_a_line_the_books_do_not_know_escalates(mc):
-    """An unknown SKU is worth an unknown amount, and unknown is never small."""
+def test_a_line_the_books_do_not_know_is_refused_outright(mc):
+    """An unknown SKU is worth an unknown amount — and a money posting may not
+    carry an unknown (#103).
+
+    This used to be created and escalated to a checker at a value of ₹0, which
+    meant the approver saw "nothing at stake" and the posting engine later
+    relieved the pieces for free. The document is now refused where the problem
+    actually is: at the line, when it is made.
+    """
     resp = _client(mc["maker"]).post(
         "/api/outbound/adjustments",
         {
@@ -828,17 +835,14 @@ def test_a_line_the_books_do_not_know_escalates(mc):
                     "book_qty": 0,
                     "counted_qty": 1,
                     "adj_qty": 1,
-                    "unit_cost_paise": 45000,
                 }
             ],
         },
         format="json",
     )
-    assert resp.status_code == 201, resp.data
-    approval = Approval.objects.get(kind="adjustment", object_id=resp.data["id"])
-    assert approval.value_paise == 0
-    assert approval.status == ApprovalStatus.PENDING
-    assert "store_manager" not in approval.approver_roles
+    assert resp.status_code == 400, resp.data
+    assert "cannot price NOT-IN-THE-BOOKS" in str(resp.data)
+    assert not StockAdjustment.objects.filter(store=mc["store"], reason="miscount").exists()
 
 
 @pytest.mark.django_db(transaction=True)
