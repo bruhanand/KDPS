@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 
 import { AuthProvider } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
-import { ModulePage } from "./pages/ModulePage";
+import { NotFound } from "./pages/PlannedPage";
 import { Login } from "./pages/Login";
 import { PROTECTED_ROUTES } from "./routes";
 import { resolveLegacyPath } from "./shell/navConfig";
@@ -13,7 +13,7 @@ import { resolveLegacyPath } from "./shell/navConfig";
 function LegacyOrStub() {
   const { pathname, search, hash } = useLocation();
   const target = resolveLegacyPath(pathname);
-  return target ? <Navigate to={target + search + hash} replace /> : <ModulePage />;
+  return target ? <Navigate to={target + search + hash} replace /> : <NotFound />;
 }
 
 export function App() {
