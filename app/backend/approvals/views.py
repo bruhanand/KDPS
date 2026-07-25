@@ -30,7 +30,7 @@ from approvals.services import (
     decide,
     inbox_for,
 )
-from masters.scoping import scope_by_store
+from masters.scoping import scope_by_entitlement, scope_by_store
 
 
 class ApprovalInboxView(generics.ListAPIView[Approval]):
@@ -72,7 +72,9 @@ class ApprovalDecideView(APIView):
 
     def post(self, request: Request, pk: int) -> Response:
         # Scope first: an out-of-scope approval must look like it doesn't exist.
-        visible = scope_by_store(Approval.objects.all(), request.user, "store_id")
+        # By entitlement, not by the switcher — deciding is an act, and the unit
+        # on screen must not narrow what the caller may act on.
+        visible = scope_by_entitlement(Approval.objects.all(), request.user, "store_id")
         try:
             approval = visible.get(pk=pk)
         except Approval.DoesNotExist:

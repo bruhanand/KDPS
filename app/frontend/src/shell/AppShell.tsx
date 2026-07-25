@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, X } from "lucide-react";
+import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import type { Store, User } from "../auth/AuthContext";
+import type { User } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
 import { SECTIONS, isActiveItem, itemPath, itemVisible } from "./navConfig";
 import type { NavItem, NavSectionDef } from "./navConfig";
+import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
+import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
@@ -25,26 +27,35 @@ function initials(name: string, fallback: string): string {
   return (parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "");
 }
 
-function StoreSwitcher() {
-  const { user, activeStore, setActiveStore } = useAuth();
+/** The unit (or brand) the person is working in. Everything it offers comes
+ *  from the server payload — see `unitSwitcher.ts`; this only renders it. */
+function UnitSwitcher() {
+  const { user, activeStore, activeBrand, setActiveStore, setActiveBrand } = useAuth();
   const [open, setOpen] = useState(false);
   if (!user) return null;
-  const canSeeAll = user.scope_type === "all" || user.scope_type === "entity";
-  const label = activeStore ? `${activeStore.code} · ${activeStore.name}` : "All stores";
-  const state = activeStore ? activeStore.state_name : "Network";
-  const locked = !canSeeAll && user.stores.length <= 1;
+  const model = switcherModel(user, activeStore, activeBrand);
 
-  function pick(s: Store | null) {
-    setActiveStore(s);
+  function pick(option: SwitcherOption) {
+    if (option.kind === "unit") setActiveStore(option.store);
+    else if (option.kind === "brand") setActiveBrand(option.brand);
+    else if (option.kind === "all-units") setActiveStore(null);
+    else setActiveBrand(null);
     setOpen(false);
   }
 
-  if (locked) {
+  function isActive(option: SwitcherOption): boolean {
+    if (option.kind === "unit") return activeStore?.id === option.store.id;
+    if (option.kind === "brand") return activeBrand?.id === option.brand.id;
+    if (option.kind === "all-units") return activeStore === null;
+    return activeBrand === null;
+  }
+
+  if (model.locked) {
     return (
       <div className="switcher-btn locked" data-testid="store-switcher">
         <Lock size={14} />
-        <span className="switcher-label">{label}</span>
-        <span className={`chip chip-${state === "Bihar" ? "amber" : "blue"}`}>{state}</span>
+        <span className="switcher-label">{model.label}</span>
+        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
       </div>
     );
   }
@@ -52,37 +63,33 @@ function StoreSwitcher() {
   return (
     <div className="switcher">
       <button className="switcher-btn" onClick={() => setOpen((o) => !o)} data-testid="store-switcher">
-        <MapPin size={15} />
-        <span className="switcher-label">{label}</span>
-        <span className={`chip chip-${state === "Bihar" ? "amber" : state === "Jharkhand" ? "blue" : "navy"}`}>
-          {state}
-        </span>
+        {model.mode === "brands" ? <Tag size={15} /> : <MapPin size={15} />}
+        <span className="switcher-label">{model.label}</span>
+        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
         <ChevronDown size={15} />
       </button>
       {open && (
         <>
           <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
           <div className="dropdown" data-testid="store-switcher-menu">
-            <div className="dropdown-head">Context · store &amp; GSTIN</div>
-            {canSeeAll && (
-              <button className="dropdown-item" onClick={() => pick(null)}>
-                <span>All stores (network)</span>
-                <span className="chip chip-navy">Both states</span>
-              </button>
-            )}
-            {user.stores.map((s) => (
+            <div className="dropdown-head">
+              {model.mode === "brands" ? "Context · brand" : "Context · store & GSTIN"}
+            </div>
+            {model.options.map((option) => (
               <button
-                key={s.id}
-                className={`dropdown-item ${activeStore?.id === s.id ? "active" : ""}`}
-                onClick={() => pick(s)}
-                data-testid={`store-option-${s.code}`}
+                key={option.label}
+                className={`dropdown-item ${isActive(option) ? "active" : ""}`}
+                onClick={() => pick(option)}
+                data-testid={
+                  option.kind === "unit"
+                    ? `store-option-${option.store.code}`
+                    : option.kind === "brand"
+                      ? `brand-option-${option.brand.code}`
+                      : `option-${option.kind}`
+                }
               >
-                <span>
-                  <b>{s.code}</b> · {s.name}
-                </span>
-                <span className={`chip chip-${s.state_name === "Bihar" ? "amber" : "blue"}`}>
-                  {s.state_name}
-                </span>
+                <span>{option.label}</span>
+                <span className={`chip ${chipClass(option.chip)}`}>{option.chip}</span>
               </button>
             ))}
           </div>
@@ -289,6 +296,7 @@ function Sidebar({
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { activeStore, activeBrand } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
@@ -352,7 +360,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           >
             {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
-          <StoreSwitcher />
+          <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
             <button className="icon-btn" data-testid="notifications">
@@ -362,7 +370,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             <UserMenu />
           </div>
         </header>
-        <main className="content">{children}</main>
+        {/* Keyed on the working context: switching unit remounts the page, so
+            every screen refetches under the new unit instead of leaving the
+            previous store's numbers on screen. */}
+        <main className="content" key={contextKey(activeStore, activeBrand)}>
+          {children}
+        </main>
       </div>
     </div>
   );

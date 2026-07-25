@@ -10,8 +10,8 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from accounts.models import NAV_GROUPS, Role, User
 from accounts.permissions import visible_sections
 from accounts.sections import CAPABILITY_ORDER, is_valid_capability, is_valid_section
-from masters.models import Store
-from masters.scoping import scoped_stores, visible_store_ids
+from masters.models import Brand, Store
+from masters.scoping import BRAND_SCOPE, scoped_brands, scoped_stores, visible_store_ids
 
 _T = TypeVar("_T")
 
@@ -80,6 +80,12 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         return value
 
 
+class BrandMiniSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    code = serializers.CharField()
+    name = serializers.CharField()
+
+
 class StoreMiniSerializer(serializers.Serializer):
     id = serializers.IntegerField()
     code = serializers.CharField()
@@ -106,6 +112,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
     capabilities = serializers.SerializerMethodField()
     business_units = serializers.SerializerMethodField()
     all_business_units = serializers.SerializerMethodField()
+    # What the top-bar switcher offers this person (issue #88): a list of units,
+    # or — for a brand manager, whose scope cuts across every store — the brands
+    # they are assigned instead. The client renders the payload; it never infers
+    # the mode or the list from the role code.
+    business_unit_mode = serializers.SerializerMethodField()
+    assigned_brands = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -126,6 +138,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "capabilities",
             "business_units",
             "all_business_units",
+            "business_unit_mode",
+            "assigned_brands",
         ]
 
     def get_nav_groups(self, obj: User) -> list[str]:
@@ -168,7 +182,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return self.get_stores(obj)
 
     def get_all_business_units(self, obj: User) -> bool:
+        # A brand manager reaches every store, but a network *unit* view is not
+        # what they work in — their "all" is all their brands.
+        if obj.scope_type == BRAND_SCOPE and not obj.is_superuser:
+            return False
         return self._cached(obj, "all_units", lambda: visible_store_ids(obj) is None)
+
+    def get_business_unit_mode(self, obj: User) -> str:
+        return "brands" if obj.scope_type == BRAND_SCOPE and not obj.is_superuser else "units"
+
+    def get_assigned_brands(self, obj: User) -> list[dict[str, Any]]:
+        if obj.scope_type != BRAND_SCOPE or obj.is_superuser:
+            return []
+        return list(BrandMiniSerializer(scoped_brands(obj), many=True).data)
 
 
 class AdminUserSerializer(serializers.ModelSerializer):
@@ -190,6 +216,14 @@ class AdminUserSerializer(serializers.ModelSerializer):
         many=True,
         required=False,
     )
+    brands = BrandMiniSerializer(many=True, read_only=True)
+    brand_ids = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.filter(is_active=True),
+        source="brands",
+        write_only=True,
+        many=True,
+        required=False,
+    )
     password = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
@@ -206,6 +240,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "entity_name",
             "stores",
             "store_ids",
+            "brands",
+            "brand_ids",
             "is_active",
             "is_staff",
             "is_superuser",
@@ -226,21 +262,29 @@ class AdminUserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"store_ids": "A store-scoped user needs at least one store."}
             )
+        brands = attrs.get("brands")
+        if scope == BRAND_SCOPE and brands is not None and len(brands) == 0:
+            raise serializers.ValidationError(
+                {"brand_ids": "A brand-scoped user needs at least one brand."}
+            )
         if self.instance is None and not attrs.get("password"):
             raise serializers.ValidationError({"password": "Password is required for a new user."})
         return attrs
 
     def create(self, validated_data: dict[str, Any]) -> User:
         stores = validated_data.pop("stores", [])
+        brands = validated_data.pop("brands", [])
         password = validated_data.pop("password", "")
         user = User(**validated_data)
         user.set_password(password)
         user.save()
         user.stores.set(stores)
+        user.brands.set(brands)
         return user
 
     def update(self, instance: User, validated_data: dict[str, Any]) -> User:
         stores = validated_data.pop("stores", None)
+        brands = validated_data.pop("brands", None)
         password = validated_data.pop("password", "")
         for key, value in validated_data.items():
             setattr(instance, key, value)
@@ -249,6 +293,8 @@ class AdminUserSerializer(serializers.ModelSerializer):
         instance.save()
         if stores is not None:
             instance.stores.set(stores)
+        if brands is not None:
+            instance.brands.set(brands)
         return instance
 
 

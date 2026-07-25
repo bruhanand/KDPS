@@ -23,7 +23,7 @@ from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
 from masters.models import Store
-from masters.scoping import scope_by_store, visible_store_ids
+from masters.scoping import actionable_store_ids, active_store_ids, scope_by_store
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
 
@@ -49,7 +49,9 @@ class PendingBookingsView(APIView):
         qs = Booking.objects.select_related(
             "vendor", "brand", "season", "destination_store"
         ).filter(status__in=[Booking.Status.BOOKED, Booking.Status.PARTIALLY_RECEIVED])
-        ids = visible_store_ids(request.user)
+        # A read, so it follows the unit the person is *acting in* (#88), not
+        # their whole entitlement — switch to Deoghar and you see Deoghar's queue.
+        ids = active_store_ids(request.user)
         if ids is not None:  # store-scoped user → bookings with a line landing at their store
             # A booking spans several stores: a line's effective destination is its own
             # store, or (if unset) the booking's default. Visible if ANY line lands here.
@@ -94,7 +96,7 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
     store_id = data.get("store_id") or data.get("store")
     if not store_id:
         return None, Response({"detail": "store_id is required."}, status=400)
-    ids = visible_store_ids(user)
+    ids = actionable_store_ids(user)
     if ids is not None and int(store_id) not in ids:
         return None, Response({"detail": "You may not receive at this store."}, status=403)
     return Store.objects.get(pk=store_id), None
@@ -192,7 +194,7 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
     booking = Booking.objects.filter(pk=booking_id).first()
     if booking is None:
         return None, Response({"detail": "Booking not found."}, status=400)
-    ids = visible_store_ids(user)
+    ids = actionable_store_ids(user)
     if ids is not None and not _booking_touches_stores(booking, ids):
         return None, Response({"detail": "You may not receive against this booking."}, status=403)
     return booking, None

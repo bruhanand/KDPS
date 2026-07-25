@@ -29,9 +29,34 @@ export const tokens = {
   },
 };
 
+// The business unit — or, for a brand manager, the brand — the person picked in
+// the top-bar switcher (#88). Sent on every call so the server narrows its answer
+// to that unit. It can only ever *narrow*: the server intersects the header with
+// what the caller is entitled to and refuses anything outside it, so nothing here
+// is a permission. Held outside React because the interceptor needs it
+// synchronously, before any screen's fetch runs.
+let activeUnitCode = "";
+let activeBrandName = "";
+
+export const unitContext = {
+  get unit() {
+    return activeUnitCode;
+  },
+  get brand() {
+    return activeBrandName;
+  },
+  /** Both are set together: choosing one clears the other. */
+  set(next: { unit?: string; brand?: string }) {
+    activeUnitCode = next.unit ?? "";
+    activeBrandName = next.brand ?? "";
+  },
+};
+
 api.interceptors.request.use((config) => {
   const t = tokens.access;
   if (t) config.headers.Authorization = `Bearer ${t}`;
+  if (unitContext.unit) config.headers["X-KDPS-Unit"] = unitContext.unit;
+  if (unitContext.brand) config.headers["X-KDPS-Brand"] = unitContext.brand;
   return config;
 });
 

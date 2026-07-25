@@ -249,8 +249,11 @@ def can_decide(approval: Approval, user: Any) -> bool:
     Two other gates exist and neither is here. ``decide`` bars the maker and the
     asker. Store scope (ADR-0003) is applied where the row is *found* — by
     ``inbox_for`` when listing, and by the decide view, which looks the approval
-    up through ``scope_by_store`` so an out-of-scope pk is a 404 before any of
-    this runs. It is deliberately not re-checked at decision time, so a caller
+    up through ``scope_by_entitlement`` so an out-of-scope pk is a 404 before any
+    of this runs. Deciding uses the entitlement, not the top-bar unit: the
+    switcher narrows what you read, never what you may act on.
+
+    It is deliberately not re-checked at decision time, so a caller
     that hands ``decide`` a row it fetched some other way — a shell, a
     management command — is responsible for scoping it first.
     """

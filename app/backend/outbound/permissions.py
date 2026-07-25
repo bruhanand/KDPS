@@ -28,7 +28,7 @@ from __future__ import annotations
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission
 
-from masters.scoping import visible_store_ids
+from masters.scoping import actionable_store_ids
 
 # Roles that may create, submit, dispatch, receive outbound docs.
 OUTBOUND_WRITE_ROLES = frozenset(
@@ -60,10 +60,11 @@ def _role_code(user) -> str:
 def enforce_store_scope(user, store_id: int) -> None:
     """Raise 403 if the user's store scope excludes ``store_id``.
 
-    Network roles (visible_store_ids → None) pass unconditionally.
+    Network roles (actionable_store_ids → None) pass unconditionally; a
+    brand-scoped user resolves to no stores and is refused.
     Store-scoped users must have ``store_id`` in their assigned set.
     """
-    allowed = visible_store_ids(user)
+    allowed = actionable_store_ids(user)
     if allowed is None:
         return  # unrestricted
     if store_id not in allowed:

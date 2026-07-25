@@ -32,7 +32,7 @@ from accounts.serializers import (
     CustomTokenObtainPairSerializer,
     UserProfileSerializer,
 )
-from masters.models import Store
+from masters.models import Brand, Store
 
 MAX_FAILURES = 5
 LOCK_MINUTES = 15
@@ -178,6 +178,12 @@ class AdminMetaView(APIView):
                     {"id": s.id, "code": s.code, "name": s.name, "store_type": s.store_type}
                     for s in Store.objects.filter(is_active=True).order_by("name")
                 ],
+                # Brand-scoped users (a brand manager) are assigned brands, not
+                # stores — the user editor needs the list to pick from (#88).
+                "brands": [
+                    {"id": b.id, "code": b.code, "name": b.name}
+                    for b in Brand.objects.filter(is_active=True).order_by("name")
+                ],
             }
         )
 
@@ -201,7 +207,7 @@ class UserListCreateView(generics.ListCreateAPIView):
     def get_queryset(self) -> Any:
         return (
             User.objects.select_related("role", "entity")
-            .prefetch_related("stores")
+            .prefetch_related("stores", "brands")
             .order_by("username")
         )
 
@@ -211,4 +217,4 @@ class UserDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = AdminUserSerializer
 
     def get_queryset(self) -> Any:
-        return User.objects.select_related("role", "entity").prefetch_related("stores")
+        return User.objects.select_related("role", "entity").prefetch_related("stores", "brands")
