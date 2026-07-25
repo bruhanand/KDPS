@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, X } from "lucide-react";
@@ -295,25 +295,40 @@ export function AppShell({ children }: { children: ReactNode }) {
     return Number.isFinite(saved) && saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 258;
   });
 
-  function startResize(e: React.PointerEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = sidebarWidth;
-    let latestWidth = startWidth;
+  // The drag in progress, or null. Holding it as state means the listeners are
+  // torn down by the effect's cleanup rather than by the pointerup handler — a
+  // drag released outside the window, cancelled by the OS, or interrupted by a
+  // logout never fires pointerup, and used to leave a live pointermove listener
+  // re-rendering the whole shell on every mouse move for the life of the page.
+  const [resizeFrom, setResizeFrom] = useState<{ x: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (!resizeFrom) return;
+    const drag = new AbortController();
+    const { signal } = drag;
+    let latestWidth = resizeFrom.width;
     document.body.classList.add("sidebar-resizing");
     const onMove = (ev: PointerEvent) => {
-      const next = Math.min(MAX_SIDEBAR, Math.max(MIN_SIDEBAR, startWidth + ev.clientX - startX));
-      latestWidth = next;
-      setSidebarWidth(next);
+      latestWidth = Math.min(
+        MAX_SIDEBAR,
+        Math.max(MIN_SIDEBAR, resizeFrom.width + ev.clientX - resizeFrom.x),
+      );
+      setSidebarWidth(latestWidth);
     };
-    const onUp = () => {
+    const onEnd = () => setResizeFrom(null);
+    document.addEventListener("pointermove", onMove, { signal });
+    document.addEventListener("pointerup", onEnd, { signal });
+    document.addEventListener("pointercancel", onEnd, { signal });
+    return () => {
+      drag.abort();
       document.body.classList.remove("sidebar-resizing");
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
       localStorage.setItem(SIDEBAR_WIDTH_KEY, String(latestWidth));
     };
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
+  }, [resizeFrom]);
+
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setResizeFrom({ x: e.clientX, width: sidebarWidth });
   }
 
   return (
