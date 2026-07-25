@@ -6,6 +6,7 @@
 #   ./scripts/dev.sh --reset      destroy the local DB and rebuild it from scratch
 #   ./scripts/dev.sh --api        API only          --web   PWA only
 #   ./scripts/dev.sh --no-seed    skip seeding (migrations still run)
+#   ./scripts/dev.sh --free-ports kill whatever holds :8001/:3000 first
 #
 # Idempotent: safe to re-run. Nothing here touches Render — see DEPLOY.md for that.
 # Predecessors scripts/{dev-bootstrap,pg_run,app_init}.sh target the Emergent
@@ -20,7 +21,7 @@ ENV_FILE="$BACKEND/.env"
 API_PORT=8001   # app/frontend/.env pins REACT_APP_BACKEND_URL to this
 WEB_PORT=3000   # vite.config.ts sets strictPort — 3000 or nothing
 
-RUN_API=1 RUN_WEB=1 SEED=1 RESET=0 SETUP_ONLY=0
+RUN_API=1 RUN_WEB=1 SEED=1 RESET=0 SETUP_ONLY=0 FREE_PORTS=0
 for arg in "$@"; do
   case "$arg" in
     --setup-only) SETUP_ONLY=1 ;;
@@ -28,7 +29,8 @@ for arg in "$@"; do
     --api)        RUN_WEB=0 ;;
     --web)        RUN_API=0 ;;
     --no-seed)    SEED=0 ;;
-    -h|--help)    sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --free-ports) FREE_PORTS=1 ;;
+    -h|--help)    sed -n '2,11p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown flag: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -126,14 +128,26 @@ fi
 
 # --- 6. schema + seed --------------------------------------------------------
 say "Migrations"
-(cd "$BACKEND" && uv run python manage.py migrate --noinput)
+# A shared local Postgres can carry half-applied schema from another checkout, so
+# migrate aborts with a raw "relation ... already exists" traceback. Catch that and
+# point at --reset rather than leaving the operator to read a Python stack. We never
+# auto-reset - that destroys data - so the choice stays theirs.
+if ! (cd "$BACKEND" && uv run python manage.py migrate --noinput); then
+  die "Migrations failed. If the local database has leftover schema from another
+       checkout ('relation ... already exists'), rebuild it from scratch:
+         ./scripts/dev.sh --reset"
+fi
 
 if [ "$SEED" = 1 ]; then
   say "Seed (idempotent)"
-  # Both are re-runnable; ptmapper seed is tolerated failing so a seed-data bug
-  # never blocks booting the app.
+  # All three are re-runnable. The last two are tolerated failing so a seed-data
+  # bug never blocks booting the app. Same set, same order as cloud CI
+  # (.github/workflows/ci.yml) - the live-API suites are written against exactly
+  # this fixture data, and seed_outbound_demo is the on-hand stock the RTV suites
+  # spend, so leaving it out makes them skip after every --reset (issue #93).
   (cd "$BACKEND" && uv run python manage.py seed_foundation)
   (cd "$BACKEND" && uv run python manage.py seed_ptmapper) || warn "seed_ptmapper failed — PT-mapper lookups may be empty"
+  (cd "$BACKEND" && uv run python manage.py seed_outbound_demo) || warn "seed_outbound_demo failed - outbound/RTV suites will skip for want of stock"
 fi
 
 if [ "$SETUP_ONLY" = 1 ]; then
@@ -148,9 +162,24 @@ for port_pair in "$API_PORT:API" "$WEB_PORT:PWA"; do
   port="${port_pair%%:*}"; label="${port_pair##*:}"
   [ "$label" = API ] && [ "$RUN_API" = 0 ] && continue
   [ "$label" = PWA ] && [ "$RUN_WEB" = 0 ] && continue
-  if lsof -ti:"$port" >/dev/null 2>&1; then
-    die "Port $port ($label) is already in use by PID $(lsof -ti:"$port" | tr '\n' ' ').
-       Likely a server from another checkout. Free it with: kill \$(lsof -ti:$port)"
+  # `|| true`: lsof exits non-zero when the port is free, which would trip
+  # `set -e`/pipefail - an empty result is the normal, expected case here.
+  holder="$(lsof -ti:"$port" 2>/dev/null | tr '\n' ' ' || true)"
+  holder="$(printf '%s' "$holder" | xargs)"   # trim to a clean space-joined PID list
+  [ -n "$holder" ] || continue
+  # Show what is on the port - it may be an unrelated project (a different repo's
+  # dev server), which we must not kill blindly. --free-ports is the explicit
+  # opt-in to reclaim it anyway.
+  what="$(ps -o command= -p $holder 2>/dev/null | head -1)"
+  if [ "$FREE_PORTS" = 1 ]; then
+    warn "Port ${port} (${label}) held by PID ${holder} - freeing (--free-ports): ${what}"
+    kill $holder 2>/dev/null || true
+    for _ in $(seq 1 10); do lsof -ti:"$port" >/dev/null 2>&1 || break; sleep 0.5; done
+    lsof -ti:"$port" >/dev/null 2>&1 && die "Port ${port} still in use after kill - free it manually."
+  else
+    die "Port ${port} (${label}) is already in use by PID ${holder} (${what}).
+       If that is a stray server, reclaim the ports and start: ./scripts/dev.sh --free-ports
+       Or free it yourself: kill \$(lsof -ti:${port})"
   fi
 done
 

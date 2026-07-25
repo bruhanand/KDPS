@@ -15,9 +15,30 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
+from core.identity import migration_identity
+
+# The migration *names* spell out every schema change ever made, so publish them
+# only where the reader is a developer or CI and the endpoint is not open to the
+# internet. The digest and count go out everywhere - they are enough to detect a
+# mismatch, which is all a caller needs (issue #93).
+_PUBLISH_MIGRATION_NAMES = settings.DEBUG or bool(os.environ.get("CI"))
+
 
 def health(_request: HttpRequest) -> JsonResponse:
-    return JsonResponse({"status": "ok", "service": "kdps-backend"})
+    """Liveness, plus *which code* is alive.
+
+    Unauthenticated and database-free by design: it must answer when Postgres is
+    down, and callers use it before they hold a token. `migrations` is the
+    server's identity - `app/backend/tests/conftest.py` compares it against the
+    working tree so a stale server can never masquerade as the one under test.
+    """
+    return JsonResponse(
+        {
+            "status": "ok",
+            "service": "kdps-backend",
+            "migrations": migration_identity(include_names=_PUBLISH_MIGRATION_NAMES),
+        }
+    )
 
 
 # Django admin ships with a seeded superuser; exposing /admin in production widens
