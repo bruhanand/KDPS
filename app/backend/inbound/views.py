@@ -23,7 +23,7 @@ from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
 from masters.models import Store
-from masters.scoping import active_store_ids, scope_by_store, visible_store_ids
+from masters.scoping import actionable_store_ids, active_store_ids, scope_by_store
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
 
@@ -96,7 +96,7 @@ def _resolve_receiving_store(data: dict, user: Any) -> tuple[Any, Response | Non
     store_id = data.get("store_id") or data.get("store")
     if not store_id:
         return None, Response({"detail": "store_id is required."}, status=400)
-    ids = visible_store_ids(user)
+    ids = actionable_store_ids(user)
     if ids is not None and int(store_id) not in ids:
         return None, Response({"detail": "You may not receive at this store."}, status=403)
     return Store.objects.get(pk=store_id), None
@@ -194,7 +194,7 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
     booking = Booking.objects.filter(pk=booking_id).first()
     if booking is None:
         return None, Response({"detail": "Booking not found."}, status=400)
-    ids = visible_store_ids(user)
+    ids = actionable_store_ids(user)
     if ids is not None and not _booking_touches_stores(booking, ids):
         return None, Response({"detail": "You may not receive against this booking."}, status=403)
     return booking, None

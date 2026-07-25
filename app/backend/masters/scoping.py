@@ -11,9 +11,22 @@ Two layers, deliberately separate (issue #88):
     brand) they picked in the top-bar switcher for *this* request. Always the
     intersection with scope, so the header can only ever narrow.
 
-Queries scope by context (`scope_by_store`, `scope_by_brand`); write-permission
-checks scope by the boundary (`visible_store_ids`) — you may still post to any
-store you are entitled to, whichever one the switcher happens to be showing.
+Four gates sit on top, and which one you want depends on two questions — is the
+caller reading or acting, and do the rows carry a brand?
+
+  · `scope_by_store` — reading rows with no brand (approvals, documents).
+  · `scope_by_store_and_brand` — reading rows that carry one (stock).
+  · `scope_by_entitlement` — fetching a row in order to *act* on it.
+  · `actionable_store_ids` — the "may I operate at this store?" check.
+
+The two acting gates ignore the switcher on purpose: it narrows what you read,
+never what you may do, so you may still post to any store you are entitled to
+whichever one happens to be on screen.
+
+A brand-scoped user (a brand manager) is the case that makes the split matter.
+Stores are the wrong question for them, so `visible_store_ids` answers None —
+and None must never be read as "show everything". Every gate above turns that
+into *no rows* unless a brand is present to do the narrowing.
 """
 
 from __future__ import annotations
@@ -32,16 +45,28 @@ from masters.unit_context import active_brand_name, active_unit_code
 BRAND_SCOPE = "brand"
 
 
+def is_brand_scoped(user: Any) -> bool:
+    """Is this person bounded by brands rather than by stores?"""
+    if getattr(user, "is_superuser", False):
+        return False
+    return bool(getattr(user, "scope_type", None) == BRAND_SCOPE)
+
+
 def visible_store_ids(user: Any) -> list[int] | None:
-    """Store ids the user may see, or None meaning 'all stores' (no restriction)."""
+    """Store ids the user may see, or None meaning 'all stores' (no restriction).
+
+    Callers must not read None as "safe to show everything" for a brand-scoped
+    user — their boundary simply isn't a store list. Go through the gates below,
+    which fail such a user closed unless the rows carry a brand to narrow by.
+    """
     if getattr(user, "is_superuser", False):
         return None
     scope = getattr(user, "scope_type", None)
     if scope == "all":
         return None
     if scope == BRAND_SCOPE:
-        # Network-wide across stores; what narrows a brand manager is the brand,
-        # not the store (see `visible_brand_names`).
+        # Not "everything" — "stores are the wrong question". The gates below
+        # turn this into no-rows wherever a brand cannot do the narrowing.
         return None
     if scope == "entity" and getattr(user, "entity_id", None):
         return list(
@@ -49,6 +74,18 @@ def visible_store_ids(user: Any) -> list[int] | None:
         )
     # store / store_group / region → explicit membership; empty ⇒ sees nothing
     return list(user.stores.values_list("id", flat=True))
+
+
+def actionable_store_ids(user: Any) -> list[int] | None:
+    """Stores the user may *act* on — the gate for "may I receive/dispatch here?".
+
+    Same as `visible_store_ids`, except a brand-scoped user resolves to *no*
+    stores rather than to all of them. Acting on a store is a claim about a
+    place; a boundary made of brands cannot support one.
+    """
+    if is_brand_scoped(user):
+        return []
+    return visible_store_ids(user)
 
 
 def visible_brand_names(user: Any) -> list[str] | None:
@@ -103,14 +140,63 @@ def active_brand_names(user: Any) -> list[str] | None:
     chosen = active_brand_name()
     if not chosen:
         return allowed
+    if not Brand.objects.filter(name__iexact=chosen, is_active=True).exists():
+        raise PermissionDenied(f"Unknown brand '{chosen}'.")
     if allowed is not None and not any(name.lower() == chosen.lower() for name in allowed):
         raise PermissionDenied("You may not work in this brand.")
     return [chosen]
 
 
 def scope_by_store(qs: Any, user: Any, field: str = "store_id") -> Any:
-    """Restrict a queryset to the unit the user is acting in (fail-closed)."""
+    """Restrict a queryset to the unit the user is acting in (fail-closed).
+
+    The *reading* gate for rows with no brand of their own. A brand-scoped user
+    gets nothing here: these rows carry nothing that could prove they are theirs,
+    and "their scope isn't stores" must never be read as "so show them all
+    stores". Rows that do carry a brand go through `scope_by_store_and_brand`.
+
+    Use `scope_by_entitlement` wherever the row is fetched in order to act on it.
+    """
+    if is_brand_scoped(user):
+        return qs.none()
     ids = active_store_ids(user)
+    return qs if ids is None else qs.filter(**{f"{field}__in": ids})
+
+
+def scope_by_store_and_brand(
+    qs: Any, user: Any, store_field: str = "store_id", brand_field: str = "brand"
+) -> Any:
+    """The reading gate for rows that carry a brand — stock and its projections.
+
+    A brand-scoped user is narrowed by brand alone: their work genuinely spans
+    every store, so the brand is the whole boundary. Everyone else is narrowed
+    by the unit in the top bar, then optionally by a brand they chose as a
+    filter.
+    """
+    if is_brand_scoped(user):
+        return scope_by_brand(qs, user, brand_field)
+    ids = active_store_ids(user)
+    if ids is not None:
+        qs = qs.filter(**{f"{store_field}__in": ids})
+    return scope_by_brand(qs, user, brand_field)
+
+
+def scope_by_entitlement(qs: Any, user: Any, field: str = "store_id") -> Any:
+    """Restrict a queryset to every store the user is entitled to, ignoring the
+    switcher — the *permission* boundary (fail-closed).
+
+    Deliberately not `scope_by_store`. The top bar chooses what you are looking
+    at; it must never decide what you are allowed to do. A person entitled to
+    Deoghar and Patna who happens to have Deoghar on screen may still approve
+    Patna's document — narrowing that to the active unit would let the act of
+    looking elsewhere silently strip rights the admin granted.
+
+    A brand-scoped user acts on nothing here, for the same reason as above: an
+    act needs a row provably theirs, and a store list cannot prove it.
+    """
+    if is_brand_scoped(user):
+        return qs.none()
+    ids = visible_store_ids(user)
     return qs if ids is None else qs.filter(**{f"{field}__in": ids})
 
 

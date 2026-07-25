@@ -215,7 +215,7 @@ class ScanLookupView(APIView):
     permission_classes = [IsOutboundReader]
 
     def get(self, request):
-        from masters.scoping import scope_by_store
+        from masters.scoping import scope_by_entitlement
         from stockledger.models import StockOnHand, merch_dims
 
         store_id = request.query_params.get("store")
@@ -227,7 +227,9 @@ class ScanLookupView(APIView):
 
         # Fail-closed (ADR-0003): a store-scoped user can only probe stock at
         # their own stores — an out-of-scope store looks identical to no stock.
-        visible = scope_by_store(StockOnHand.objects.all(), request.user, "store_id")
+        # Scoped by entitlement, not by the switcher: the scan screen names the
+        # store it is standing in, so the top bar must not veto scanning there.
+        visible = scope_by_entitlement(StockOnHand.objects.all(), request.user, "store_id")
         try:
             on_hand = visible.get(store_id=int(store_id), sku_code=barcode)
         except (StockOnHand.DoesNotExist, ValueError):

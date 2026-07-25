@@ -40,7 +40,11 @@ from accounts.permissions import user_can
 from core.documents import DocStatus
 from inbound.models import Grn
 from masters.models import Brand, Cohort, Sku
-from masters.scoping import active_store_ids, scope_by_store
+from masters.scoping import (
+    active_store_ids,
+    is_brand_scoped,
+    scope_by_store_and_brand,
+)
 from outbound.models import ReturnToVendor, StockAdjustment, StoreTransfer, VFlip, WriteOff
 from ptmapper.models import PtFile
 from stockledger.models import StockOnHand
@@ -213,6 +217,11 @@ DOC_TYPES: list[DocType] = [
 def _search_documents(user: Any, q: str) -> tuple[list[dict[str, Any]], bool]:
     """Documents whose voucher number contains `q`, across every type the caller
     may see. Returns the capped rows and whether anything was dropped."""
+    # A document carries no brand, so a brand-scoped caller has nothing here that
+    # could be shown to be theirs. Fail closed rather than read their empty store
+    # list as "unrestricted" (ADR-0003).
+    if is_brand_scoped(user):
+        return [], False
     store_ids = active_store_ids(user)
     per_type: list[list[dict[str, Any]]] = []
     for spec in DOC_TYPES:
@@ -256,9 +265,11 @@ def _stock_context(user: Any, barcodes: list[str]) -> dict[tuple[str, str], tupl
     """`(barcode, season) → (qty, store codes)` within the caller's scope only.
 
     The item identity is master data everyone may look up; *how much is where*
-    is store data, so this is the line the anti-leak test guards.
+    is store data, so this is the line the anti-leak test guards — on both axes,
+    since a brand manager scanning another brand's barcode must be told the item
+    and nothing about its stock.
     """
-    rows = scope_by_store(
+    rows = scope_by_store_and_brand(
         StockOnHand.objects.filter(sku_code__in=barcodes, net_qty__gt=0),
         user,
         "store_id",

@@ -15,10 +15,12 @@ Hermetic (`db` fixture), so it runs in CI's `pytest tests` step.
 from __future__ import annotations
 
 from _creds import TEST_PASSWORD
+from django.contrib.contenttypes.models import ContentType
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
 from accounts.rbac_matrix import section_access_for
+from approvals.models import Approval, ApprovalStatus
 from masters.models import Brand, Gstin, LegalEntity, Store
 from stockledger.models import StockOnHand
 
@@ -82,6 +84,22 @@ def _client(user: User) -> APIClient:
 
 def _skus(response) -> set[str]:
     return {row["sku_code"] for row in response.json()["rows"]}
+
+
+def _approval(store: Store, maker: User, *, roles: list[str]) -> Approval:
+    """One pending approval sitting at ``store``, decidable by ``roles``."""
+    return Approval.objects.create(
+        kind="vflip",
+        kind_label="V-flip",
+        title=f"{store.code} · 1 line",
+        content_type=ContentType.objects.get_for_model(Store),
+        object_id=store.pk,
+        store=store,
+        approver_roles=list(roles),
+        made_by=maker,
+        requested_by=maker,
+        status=ApprovalStatus.PENDING,
+    )
 
 
 # --- What the switcher offers ---------------------------------------------
@@ -202,3 +220,82 @@ def test_the_brand_filter_does_not_restrict_anyone_else(db):
     user = _user("owner", "owner", ScopeType.ALL)
 
     assert _skus(_client(user).get(ON_HAND)) == {"DEO-1", "PAT-1"}
+
+
+# --- The switcher narrows what you read, never what you may do ------------
+def test_choosing_a_unit_does_not_revoke_authority_over_another(db):
+    """The top bar is a *view*, not a demotion. Someone entitled to both stores
+    who happens to be looking at Deoghar may still decide Patna's approval —
+    otherwise the act of looking somewhere else silently strips your rights."""
+    w = _world()
+    maker = _user("maker", "store_staff", ScopeType.STORE, stores=[w["pat"]])
+    approval = _approval(w["pat"], maker, roles=["ho_ops"])
+    boss = _user("ops", "ho_ops", ScopeType.ALL)
+
+    decided = _client(boss).post(
+        f"/api/approvals/{approval.pk}/decide",
+        {"action": "approve"},
+        format="json",
+        headers={"X-KDPS-Unit": "DEO"},
+    )
+
+    assert decided.status_code == 200, decided.data
+
+
+def test_choosing_a_unit_does_not_block_scanning_at_another(db):
+    """Same rule at the scan counter: the scan screen names its own store, and
+    an entitled user scanning there must not be refused because the top bar is
+    showing somewhere else."""
+    w = _world()
+    user = _user("ops", "ho_ops", ScopeType.ALL)
+
+    found = _client(user).get(
+        f"/api/outbound/scan-lookup?store={w['pat'].pk}&barcode=PAT-1",
+        headers={"X-KDPS-Unit": "DEO"},
+    )
+
+    assert found.status_code == 200, found.data
+
+
+def test_an_unknown_brand_is_refused_not_silently_empty(db):
+    """A unit that doesn't exist is a 403, so a brand that doesn't exist must be
+    one too. Answering "no rows" to a typo is indistinguishable from answering
+    "this brand genuinely has no stock" — the screen lies either way."""
+    _world()
+    user = _user("owner", "owner", ScopeType.ALL)
+
+    assert _client(user).get(ON_HAND, headers={"X-KDPS-Brand": "NOPE"}).status_code == 403
+
+
+# --- A brand boundary that only stock understands must not leak elsewhere --
+def test_a_brand_manager_sees_no_rows_a_brand_cannot_narrow(db):
+    """A brand manager's boundary is brands, and an approval carries no brand.
+    Nothing can prove the row is theirs, so nothing is shown — deny-by-default
+    (ADR-0003), not "network-wide because stores don't apply to me"."""
+    w = _world()
+    maker = _user("maker", "store_staff", ScopeType.STORE, stores=[w["pat"]])
+    _approval(w["pat"], maker, roles=["brand_manager"])
+    manager = _user("brand1", "brand_manager", ScopeType.BRAND, brands=[w["peter"]])
+
+    assert _client(manager).get("/api/approvals").json() == []
+    assert _client(manager).get("/api/approvals/inbox").json() == []
+
+
+def test_a_brand_manager_cannot_act_on_a_store_they_cannot_name(db):
+    """Reading is only half of it. The write gates ask "is this store in your
+    list?" — and an empty list must mean *no*, not *any*."""
+    w = _world()
+    manager = _user("brand1", "brand_manager", ScopeType.BRAND, brands=[w["peter"]])
+
+    created = _client(manager).post(
+        "/api/inbound/grns",
+        {
+            "store_id": w["pat"].id,
+            "kind": "branded",
+            "invoice_number": "INV-BM",
+            "lines": [{"style_code": "TEE-1", "size": "M", "color": "Blue", "received_qty": 3}],
+        },
+        format="json",
+    )
+
+    assert created.status_code == 403, created.data
