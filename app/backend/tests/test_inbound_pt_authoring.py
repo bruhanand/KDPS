@@ -20,11 +20,11 @@ from datetime import date
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
-from accounts.models import Role, User
-from accounts.rbac_matrix import section_access_for
+from accounts.models import User
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.models import Grn, GrnLine
@@ -73,11 +73,9 @@ def vocab(db):
 
 
 def _user(username: str, role_code: str) -> User:
-    role, _ = Role.objects.get_or_create(
-        code=role_code,
-        defaults={"name": role_code, "section_access": section_access_for(role_code)},
+    user = User.objects.create_user(
+        username=username, password=TEST_PASSWORD, role=make_role(role_code)
     )
-    user = User.objects.create_user(username=username, password=TEST_PASSWORD, role=role)
     user.scope_type = "all"
     user.save(update_fields=["scope_type"])
     return user

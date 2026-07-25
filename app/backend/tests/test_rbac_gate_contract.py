@@ -26,6 +26,7 @@ from pathlib import Path
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.apps import apps as django_apps
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
@@ -115,13 +116,7 @@ APPROVAL_SECTION = {"writeoff": "stock_count", "adjustment": "stock_count", "vfl
 
 
 def _role(code: str) -> Role:
-    return Role.objects.create(
-        code=code,
-        name=code.title(),
-        nav_groups=["home"],
-        section_access=section_access_for(code),
-        is_system=True,
-    )
+    return make_role(code, code.title(), nav_groups=["home"], is_system=True)
 
 
 def _user(username: str, role: Role | None, **kwargs) -> User:

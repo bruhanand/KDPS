@@ -25,7 +25,12 @@ from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
 from inbound.serializers import GrnSerializer
 from masters.models import Store
-from masters.scoping import actionable_store_ids, active_store_ids, scope_by_store
+from masters.scoping import (
+    actionable_store_ids,
+    active_store_ids,
+    scope_by_store,
+    scope_by_store_many,
+)
 from vendors.models import Booking, BookingLine
 from vendors.serializers import BookingSerializer
 
@@ -283,25 +288,26 @@ class InboundQueueView(APIView):
     def get(self, request: Request) -> Response:
         from ptmapper.models import PtFile
 
-        awaiting = scope_by_store(
+        awaiting, in_progress = scope_by_store_many(
+            request.user,
             # Only non-branded arrivals await an authored PT here; branded arrivals
             # wait for the brand's PT via the Mapper instead (D2 split).
-            Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
-            .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
-            .select_related("store", "booking", "vendor")
-            .prefetch_related("lines", "pt_files")
-            .order_by("created_at"),  # oldest arrival first — it has waited longest
-            request.user,
-            "store_id",
-        )
-        in_progress = scope_by_store(
-            PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
-            .select_related("grn")
-            .order_by("created_at"),
-            request.user,
+            (
+                Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
+                .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
+                .select_related("store", "booking", "vendor")
+                .prefetch_related("lines", "pt_files")
+                .order_by("created_at"),  # oldest arrival first — it has waited longest
+                "store_id",
+            ),
             # A PT has no store of its own — it belongs to the arrival it was made
             # from, so it is scoped through the GRN's.
-            "grn__store_id",
+            (
+                PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
+                .select_related("grn")
+                .order_by("created_at"),
+                "grn__store_id",
+            ),
         )
         progress_rows = [
             {

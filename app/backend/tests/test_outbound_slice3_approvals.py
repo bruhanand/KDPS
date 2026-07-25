@@ -16,12 +16,12 @@ document shows made by X, approved by Y, on date Z — forever."
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from django.db.utils import IntegrityError
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
-from accounts.rbac_matrix import section_access_for
+from accounts.models import ScopeType, User
 from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Gstin, LegalEntity, Store
@@ -55,12 +55,12 @@ def mc(db):
     )
 
     def _user(username, role_code, scope=ScopeType.ALL, stores=()):
-        role, _ = Role.objects.get_or_create(
-            code=role_code,
-            defaults={"name": role_code, "section_access": section_access_for(role_code)},
-        )
         u = User.objects.create_user(
-            username=username, password="Test@123", role=role, entity=entity, scope_type=scope
+            username=username,
+            password="Test@123",
+            role=make_role(role_code),
+            entity=entity,
+            scope_type=scope,
         )
         for s in stores:
             u.stores.add(s)

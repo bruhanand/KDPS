@@ -15,6 +15,7 @@ from typing import Any
 
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -33,7 +34,6 @@ from outbound.permissions import (
     CanWriteReturnToBrand,
     CanWriteStockCount,
     CanWriteTransfer,
-    IsOutboundReader,
     enforce_store_scope,
 )
 from outbound.posting import (
@@ -88,7 +88,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanWriteTransfer()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = StoreTransfer.objects.select_related(
@@ -117,7 +117,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
 
 
 class TransferDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
     serializer_class = StoreTransferReadSerializer
 
     def get_queryset(self):
@@ -214,7 +214,7 @@ class ScanLookupView(APIView):
     stock (the wrong-piece beep).
     """
 
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from masters.scoping import scope_by_entitlement
@@ -266,7 +266,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanWriteReturnToBrand()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         from masters.scoping import scope_by_store
@@ -308,7 +308,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanWriteReturnToBrand()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = ReturnToVendor.objects.select_related(
@@ -337,7 +337,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
 
 
 class RTVDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
     serializer_class = ReturnToVendorReadSerializer
 
     def get_queryset(self):
@@ -387,7 +387,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanWriteStockCount()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = StockAdjustment.objects.select_related(
@@ -415,7 +415,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
 
 
 class AdjustmentDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
     serializer_class = StockAdjustmentReadSerializer
 
     def get_queryset(self):
@@ -465,7 +465,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanWriteStockCount()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
@@ -491,7 +491,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
 
 
 class WriteOffDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
     serializer_class = WriteOffReadSerializer
 
     def get_queryset(self):
@@ -539,7 +539,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanFlipOwnership()]
-        return [IsOutboundReader()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         qs = VFlip.objects.select_related(
@@ -567,7 +567,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
 
 
 class VFlipDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsOutboundReader]
+    permission_classes = [IsAuthenticated]
     serializer_class = VFlipReadSerializer
 
     def get_queryset(self):

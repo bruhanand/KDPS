@@ -64,27 +64,23 @@ class ApprovalKind:
 _COUNT_APPROVERS = roles_with_capability("stock_count", CAP_APPROVE)
 _STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
 
+#: The one role the band adds on top of the approvers — a declared exception,
+#: because the ladder cannot express it.
+_BAND_IN_CHARGE = declare_role_list(
+    "outbound.adjustment_band_in_charge",
+    ("store_manager",),
+    reason=(
+        "The design lets the store in-charge clear a small counting variance "
+        "without going to HO. That is seniority *within* a section — the manager "
+        "and the cashier both hold `stock_count: operate`, and the ladder has no "
+        "rung between operate and approve to separate them. Widening it to "
+        "`stock_count: approve` would hand every counter the band."
+    ),
+)
+
 #: Within the band, the store in-charge may clear it too (a *different* person
 #: from the maker — the self-approval rule still binds).
-_IN_CHARGE_ROLES = tuple(
-    sorted(
-        {
-            *_COUNT_APPROVERS,
-            *declare_role_list(
-                "outbound.adjustment_band_in_charge",
-                ("store_manager",),
-                reason=(
-                    "The design lets the store in-charge clear a small counting "
-                    "variance without going to HO. That is seniority *within* a "
-                    "section — the manager and the cashier both hold "
-                    "`stock_count: operate`, and the ladder has no rung between "
-                    "operate and approve to separate them. Widening it to "
-                    "`stock_count: approve` would hand every counter the band."
-                ),
-            ),
-        }
-    )
-)
+_IN_CHARGE_ROLES = tuple(sorted({*_COUNT_APPROVERS, *_BAND_IN_CHARGE}))
 
 #: Stock adjustments alone carry a tolerance: they are the output of counting,
 #: where "book vs counted" is never going to agree to the piece, and the design

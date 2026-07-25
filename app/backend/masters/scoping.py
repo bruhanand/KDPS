@@ -163,6 +163,24 @@ def scope_by_store(qs: Any, user: Any, field: str = "store_id") -> Any:
     return qs if ids is None else qs.filter(**{f"{field}__in": ids})
 
 
+def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:
+    """`scope_by_store` over several querysets, resolving the scope once.
+
+    A screen built from two lists gates both against the same person in the same
+    request, so the two answers cannot differ — but `active_store_ids` is not
+    free (it reads the user's store membership and resolves the switcher's unit
+    to a row), and calling it per queryset pays that twice for one answer.
+
+    Each target is `(queryset, field)`; the results come back in the same order.
+    """
+    if is_brand_scoped(user):
+        return [qs.none() for qs, _ in targets]
+    ids = active_store_ids(user)
+    if ids is None:
+        return [qs for qs, _ in targets]
+    return [qs.filter(**{f"{field}__in": ids}) for qs, field in targets]
+
+
 def scope_by_store_and_brand(
     qs: Any, user: Any, store_field: str = "store_id", brand_field: str = "brand"
 ) -> Any:
