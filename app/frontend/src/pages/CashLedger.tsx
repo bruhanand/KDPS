@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { meetsCapability } from "../auth/routeAccess";
+import { meetsCapability } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";

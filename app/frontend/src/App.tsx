@@ -28,7 +28,6 @@ export function App() {
             ))}
             <Route path="*" element={<LegacyOrStub />} />
           </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>
