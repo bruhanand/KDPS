@@ -7,7 +7,7 @@
 // right. `id` is that assertion's handle; it never reaches the user.
 import type { RouteObject } from "react-router-dom";
 
-import { ModulePage } from "./pages/ModulePage";
+import { PlannedPage } from "./pages/PlannedPage";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage } from "./pages/MasterPages";
@@ -80,12 +80,13 @@ const BUILT: Screen[] = [
 ];
 
 // Sections whose subsections aren't built yet still appear in the sidebar — so
-// every one of them needs a page that honestly says what is planned there.
-// Generated from the manifest, so a new planned item can never 404.
-const PLANNED: Screen[] = NAV_ITEMS.filter((i) => i.intent && !i.deepLink).map((i) => ({
+// every one of them needs a page that honestly says what is planned there (#89).
+// Generated from the manifest, so a new planned item can never 404, and the copy
+// comes from pages/plannedPages, keyed by the same path.
+const PLANNED: Screen[] = NAV_ITEMS.filter((i) => i.planned && !i.deepLink).map((i) => ({
   id: `planned:${itemPath(i)}`,
   path: itemPath(i),
-  element: <ModulePage />,
+  element: <PlannedPage />,
 }));
 
 export const PROTECTED_ROUTES: Screen[] = [...BUILT, ...PLANNED];

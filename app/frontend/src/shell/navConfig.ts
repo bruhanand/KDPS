@@ -11,8 +11,8 @@
 // This file is the single source of truth for navigation. Derived from it:
 //   · the sidebar          (AppShell, intersected with the server's sections)
 //   · the route guards     (auth/routeAccess — URL → the screen that owns it)
-//   · the routes           (App.tsx: planned pages are generated from `state`)
-//   · the "coming soon" copy (pages/ModulePage)
+//   · the routes           (routes.tsx: planned screens are generated from it)
+//   · the planned pages    (pages/plannedPages — what each unbuilt screen promises)
 //   · the legacy redirects (every pre-#87 URL, below)
 //
 // Which sections a person actually gets is *not* decided here — the server
@@ -67,10 +67,11 @@ export interface NavItem {
    *  itself — e.g. the ledgers are `money: manage`, the rung only Owner and
    *  Accounts hold, so "Expenses only" roles keep the section but not the books. */
   minCapability?: Capability;
-  /** Not built yet — App.tsx routes it to the "coming soon" page, and `intent`
-   *  is what that page promises. (#89 aligns the wording with the client
-   *  report; this slice only keeps the existing honesty.) */
-  intent?: string;
+  /** Not built yet — routed to the planned page, which says what will live here.
+   *  The promise itself is in `pages/plannedPages.ts` (#89), keyed by this
+   *  item's path: navigation says what a section contains, that manifest says
+   *  what we have told the client it will do. */
+  planned?: true;
   /** Reachable and routed, but not a menu item — an action reached from inside
    *  another screen. V-flip is the case: a rare ownership correction that lives
    *  as a button on Stock, not as a line in the sidebar. */
@@ -103,12 +104,7 @@ export const SECTIONS: NavSectionDef[] = [
       // The one approvals inbox for the whole system, listed once. It used to
       // appear in two groups; Home is the group every role has, so it lives here.
       { label: "Approvals", to: "/approvals" },
-      {
-        label: "Alerts",
-        to: "/alerts",
-        intent:
-          "This page will surface what needs attention — stock stuck in transit, return windows closing, and the exceptions the old exception inbox collected.",
-      },
+      { label: "Alerts", to: "/alerts", planned: true },
     ],
   },
   {
@@ -117,24 +113,9 @@ export const SECTIONS: NavSectionDef[] = [
     icon: ShoppingCart,
     layer: "store",
     items: [
-      {
-        label: "Billing",
-        to: "/sell",
-        intent:
-          "This page will handle barcode-scan billing, GST invoices, counter discounts and live stock deduction — including EOSS bulk billing during a season sale.",
-      },
-      {
-        label: "Return & Exchange",
-        to: "/sell/returns",
-        intent:
-          "This page will handle customer returns and exchanges against the original bill.",
-      },
-      {
-        label: "Customers",
-        to: "/sell/customers",
-        intent:
-          "This page will find a customer by name, phone or bill number and reprint the bill — reprint only, never edit.",
-      },
+      { label: "Billing", to: "/sell", planned: true },
+      { label: "Return & Exchange", to: "/sell/returns", planned: true },
+      { label: "Customers", to: "/sell/customers", planned: true },
     ],
   },
   {
@@ -154,12 +135,7 @@ export const SECTIONS: NavSectionDef[] = [
     layer: "store",
     items: [
       { label: "Receive (GRN)", to: "/receive" },
-      {
-        label: "Upload Bill",
-        to: "/receive/upload-bill",
-        intent:
-          "This page will take the brand's invoice/bill (e.g. Madura) as an upload, which then feeds PT making.",
-      },
+      { label: "Upload Bill", to: "/receive/upload-bill", planned: true },
       { label: "PT Files", to: "/receive/pt" },
     ],
   },
@@ -171,24 +147,9 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Transfers", to: "/transfer" },
       { label: "Send Stock", to: "/transfer/new" },
-      {
-        label: "Stock Request",
-        to: "/transfer/requests",
-        intent:
-          "This page will let a store ask the warehouse or another store for stock, through approval, with honest status all the way.",
-      },
-      {
-        label: "Distribution",
-        to: "/transfer/distribution",
-        intent:
-          "This page will plan the split of newly received stock across stores — a suggested split, hand-adjustable, with a buffer held back.",
-      },
-      {
-        label: "In-Transit",
-        to: "/transfer/in-transit",
-        intent:
-          "This page will show stock currently between locations, and the gaps (sent ≠ received) that only a senior may close with a reason.",
-      },
+      { label: "Stock Request", to: "/transfer/requests", planned: true },
+      { label: "Distribution", to: "/transfer/distribution", planned: true },
+      { label: "In-Transit", to: "/transfer/in-transit", planned: true },
     ],
   },
   {
@@ -197,12 +158,7 @@ export const SECTIONS: NavSectionDef[] = [
     icon: ClipboardCheck,
     layer: "controls",
     items: [
-      {
-        label: "Count Sessions",
-        to: "/stock-count",
-        intent:
-          "This page will run counting sessions — a whole store, one brand or one section — counted blind, with variance reports and recounts.",
-      },
+      { label: "Count Sessions", to: "/stock-count", planned: true },
       // Corrections live where they are caused: a count is what produces them.
       { label: "Adjustments", to: "/stock-count/adjustments" },
       { label: "Write-offs", to: "/stock-count/writeoffs" },
@@ -243,39 +199,13 @@ export const SECTIONS: NavSectionDef[] = [
     // already have on the server, and Money collapses to one Expenses line for
     // everyone else.
     items: [
-      {
-        label: "Payments",
-        to: "/money/payments",
-        intent:
-          "This page will record vendor payments with their approval steps, including the 3-way check (bill vs GRN vs PT) before paying.",
-        minCapability: "manage",
-      },
+      { label: "Payments", to: "/money/payments", planned: true, minCapability: "manage" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
-      {
-        label: "Bank",
-        to: "/money/bank",
-        intent: "This page will reconcile the bank statement against what the books say.",
-        minCapability: "manage",
-      },
-      {
-        label: "Collections",
-        to: "/money/collections",
-        intent: "This page will track money collected against money banked, store by store.",
-        minCapability: "manage",
-      },
-      {
-        label: "Expenses",
-        to: "/money/expenses",
-        intent: "This page will take store and warehouse expense entries.",
-      },
-      {
-        label: "Tally",
-        to: "/money/tally",
-        intent:
-          "This page will show what has gone to Tally and what is still pending — Tally stays the statutory book of record.",
-        minCapability: "manage",
-      },
+      { label: "Bank", to: "/money/bank", planned: true, minCapability: "manage" },
+      { label: "Collections", to: "/money/collections", planned: true, minCapability: "manage" },
+      { label: "Expenses", to: "/money/expenses", planned: true },
+      { label: "Tally", to: "/money/tally", planned: true, minCapability: "manage" },
     ],
   },
   {
@@ -284,29 +214,10 @@ export const SECTIONS: NavSectionDef[] = [
     icon: Tag,
     layer: "intelligence",
     items: [
-      {
-        label: "Price List",
-        to: "/offers/price-list",
-        intent: "This page will hold prices and markdowns, date-effective.",
-      },
-      {
-        label: "Offers",
-        to: "/offers",
-        intent:
-          "This page will hold brand schemes — value slabs, buy-2-get-1, gifts — per store, with start and end dates.",
-      },
-      {
-        label: "Discounts",
-        to: "/offers/discounts",
-        intent:
-          "This page will set the discount limit per role and route anything beyond it for approval.",
-      },
-      {
-        label: "EOSS Planning",
-        to: "/offers/eoss",
-        intent:
-          "This page will plan the season sale — markdown plans, which stock, which stores. Schemes are defined here and applied in Sell.",
-      },
+      { label: "Price List", to: "/offers/price-list", planned: true },
+      { label: "Offers", to: "/offers", planned: true },
+      { label: "Discounts", to: "/offers/discounts", planned: true },
+      { label: "EOSS Planning", to: "/offers/eoss", planned: true },
     ],
   },
   {
@@ -315,30 +226,14 @@ export const SECTIONS: NavSectionDef[] = [
     icon: Users,
     layer: "edges",
     items: [
-      {
-        label: "Attendance",
-        to: "/staff/attendance",
-        intent:
-          "This page will take biometric check-in/out at the store, show your own leaves and delays, and send the day's attendance.",
-      },
+      { label: "Attendance", to: "/staff/attendance", planned: true },
       // A cashier holds Staff for their *own* attendance ("Own attendance
       // (derived)"), so employee records and salary stay off their menu. A store
       // *manager* holds `staff: manage` for their own store — the sketch makes
       // managing the store's members their job — so Members appears for them and
       // not for the cashier, from the same server-sent capability.
-      {
-        label: "Members",
-        to: "/staff/members",
-        minCapability: "manage",
-        intent:
-          "This page will hold the store's own people — add and remove members, keep contact and bank details, and track each member's monthly target against achievement with growth/de-growth on a pie. “Members” means staff, not loyalty customers (settled 25 Jul 2026 from the hand-drawn Store Ops screen); the POS still owns the customer.",
-      },
-      {
-        label: "Payroll",
-        to: "/staff/payroll",
-        roles: PAYROLL_ROLES,
-        intent: "This page will take salary inputs and sales incentives. Later.",
-      },
+      { label: "Members", to: "/staff/members", minCapability: "manage", planned: true },
+      { label: "Payroll", to: "/staff/payroll", roles: PAYROLL_ROLES, planned: true },
     ],
   },
   {
@@ -347,33 +242,11 @@ export const SECTIONS: NavSectionDef[] = [
     icon: BarChart3,
     layer: "intelligence",
     items: [
-      {
-        label: "Sales Reports",
-        to: "/reports/sales",
-        intent:
-          "This page will report sales by date range, store, brand, item and member.",
-      },
-      {
-        label: "Stock Reports",
-        to: "/reports/stock",
-        intent: "This page will report stock position, ageing and dead stock.",
-      },
-      {
-        label: "Profit",
-        to: "/reports/profit",
-        intent:
-          "This page will show brand-wise and store-wise profit, derived from cost-in and sale-out — never hand-entered.",
-      },
-      {
-        label: "Daily Summary",
-        to: "/reports/daily",
-        intent: "This page will put the day's business on one page, sent on WhatsApp.",
-      },
-      {
-        label: "Report Maker",
-        to: "/reports/maker",
-        intent: "This page will let you build your own report from approved measures and save the format.",
-      },
+      { label: "Sales Reports", to: "/reports/sales", planned: true },
+      { label: "Stock Reports", to: "/reports/stock", planned: true },
+      { label: "Profit", to: "/reports/profit", planned: true },
+      { label: "Daily Summary", to: "/reports/daily", planned: true },
+      { label: "Report Maker", to: "/reports/maker", planned: true },
     ],
   },
   {
@@ -382,27 +255,14 @@ export const SECTIONS: NavSectionDef[] = [
     icon: Settings,
     layer: "master",
     items: [
-      {
-        label: "Products",
-        to: "/setup/products",
-        intent: "This page will hold the item master — styles, sizes, colours, barcodes, HSN.",
-      },
+      { label: "Products", to: "/setup/products", planned: true },
       { label: "Stores", to: "/setup/stores" },
       { label: "Brands", to: "/setup/brands" },
       { label: "Seasons", to: "/setup/seasons" },
       { label: "GSTINs", to: "/setup/gstins" },
       { label: "Users & Roles", to: "/setup/users", minCapability: "manage" },
-      {
-        label: "Audit Log",
-        to: "/setup/audit",
-        intent: "This page will show who did what, when — forever.",
-      },
-      {
-        label: "Settings",
-        to: "/setup/settings",
-        intent:
-          "This page will manage numbering, approval limits, tolerances, alerts and integrations (including the POS sources the old Edges group held).",
-      },
+      { label: "Audit Log", to: "/setup/audit", planned: true },
+      { label: "Settings", to: "/setup/settings", planned: true },
     ],
   },
 ];
