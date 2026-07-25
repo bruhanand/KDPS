@@ -58,6 +58,13 @@ const storePerson = withSections(
   },
   { role: ROLE("store_staff") },
 );
+
+// The store *manager* is the same persona with one cell lifted: the sketch makes
+// managing their own store's members their job (ROLE_OVERRIDES, issue #96).
+const storeManager = withSections(
+  { ...(storePerson.capabilities as Record<string, NavSection["capability"]>), staff: "manage" },
+  { role: ROLE("store_manager") },
+);
 const warehouse = withSections(
   {
     home: "view",
@@ -187,6 +194,21 @@ describe("canAccess", () => {
     expect(canAccess("/staff/members", accounts)).toBe(false);
     expect(canAccess("/staff/members", admin)).toBe(true);
     expect(canAccess("/staff/payroll", admin)).toBe(true);
+  });
+
+  it("Members opens for the store manager and stays shut for the cashier", () => {
+    // Settled 25 Jul 2026 (#96): "Member Details" on the hand-drawn Store Ops
+    // screen means staff scorecards — bank details, monthly target vs
+    // achievement — so the manager manages their store's people and the cashier
+    // keeps their own attendance. Same persona, one overridden cell.
+    expect(canAccess("/staff/members", storeManager)).toBe(true);
+    expect(canAccess("/staff/members", storePerson)).toBe(false);
+    expect(canAccess("/staff/attendance", storeManager)).toBe(true);
+    // Managing people is not running payroll — that stays back-office.
+    expect(canAccess("/staff/payroll", storeManager)).toBe(false);
+    // And the lift is confined to Staff: the books stay shut.
+    expect(canAccess("/money/vendor", storeManager)).toBe(false);
+    expect(canAccess("/setup/users", storeManager)).toBe(false);
   });
 
   it("Users & Roles needs an RBAC-admin role, not just the Setup section", () => {

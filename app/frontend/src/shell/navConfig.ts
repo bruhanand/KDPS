@@ -321,14 +321,17 @@ export const SECTIONS: NavSectionDef[] = [
         intent:
           "This page will take biometric check-in/out at the store, show your own leaves and delays, and send the day's attendance.",
       },
-      // The store person holds Staff for their *own* attendance ("Own attendance
-      // (derived)"), so employee records and salary must not be on their menu.
+      // A cashier holds Staff for their *own* attendance ("Own attendance
+      // (derived)"), so employee records and salary stay off their menu. A store
+      // *manager* holds `staff: manage` for their own store — the sketch makes
+      // managing the store's members their job — so Members appears for them and
+      // not for the cashier, from the same server-sent capability.
       {
         label: "Members",
         to: "/staff/members",
         minCapability: "manage",
         intent:
-          "This page is pending one answer from KDPS: whether “members” means staff scorecards (contact and bank details, monthly target, achievement, growth) or customer loyalty. Nothing is built until that is settled.",
+          "This page will hold the store's own people — add and remove members, keep contact and bank details, and track each member's monthly target against achievement with growth/de-growth on a pie. “Members” means staff, not loyalty customers (settled 25 Jul 2026 from the hand-drawn Store Ops screen); the POS still owns the customer.",
       },
       {
         label: "Payroll",
