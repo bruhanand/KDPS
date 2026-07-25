@@ -10,11 +10,15 @@
 //                               same sandbox on the same branch. How many issue
 //                               pipelines run at once is set by
 //                               MAX_CONCURRENT_ISSUES in the config block.
-//   Phase 3 (Merge):            A single agent merges all completed branches
-//                               into the current branch.
+//   Phase 3 (Publish):          A single agent verifies the gate and opens one
+//                               pull request per completed branch. It never
+//                               merges and never closes an issue — a human does
+//                               that, the same way /deliver stops at the PR.
 //
-// The outer loop repeats up to MAX_ITERATIONS times so that newly unblocked
-// issues are picked up after each round of merges.
+// The outer loop repeats up to MAX_ITERATIONS times. Note that because nothing
+// is merged, a second cycle plans against a `main` that does not yet carry the
+// first cycle's work: keep MAX_ITERATIONS at 1 and run again after merging, or
+// accept that later cycles cannot build on earlier ones.
 //
 // Usage:
 //   npx tsx .sandcastle/main.ts
@@ -55,14 +59,14 @@ const MODELS = {
   // reviewer: "claude-opus-4-8",
   // reviewer: "claude-haiku-4-5-20251001",
 
-  // merger — merges completed branches, resolves conflicts, runs the gate.
-  merger: "claude-sonnet-5",
-  // merger: "claude-opus-4-8",
-  // merger: "claude-haiku-4-5-20251001",
+  // publisher — verifies the gate and opens a PR per branch. Never merges.
+  publisher: "claude-sonnet-5",
+  // publisher: "claude-opus-4-8",
+  // publisher: "claude-haiku-4-5-20251001",
 } as const;
 
 // --- Iteration counts -------------------------------------------------------
-// `loop` is the number of plan→execute→merge cycles before stopping; the rest
+// `loop` is the number of plan→execute→publish cycles before stopping; the rest
 // cap how many turns each agent gets inside a single cycle. The implementer is
 // the only one that needs a lot: it writes code, runs tests and iterates.
 const ITERATIONS = {
@@ -70,7 +74,7 @@ const ITERATIONS = {
   planner: 1,
   implementer: 100,
   reviewer: 1,
-  merger: 1,
+  publisher: 1,
 } as const;
 
 // --- How the work is run ----------------------------------------------------
@@ -85,12 +89,12 @@ const MAX_CONCURRENT_ISSUES: number = 1; // sequential — one issue start to fi
 
 // MAX_ISSUES_PER_CYCLE — how many issues a single cycle takes from the plan,
 // regardless of how many the planner found unblocked. The leftovers are picked
-// up by the next cycle, after the merge.
-const MAX_ISSUES_PER_CYCLE: number = 1; // one full plan→build→review→merge cycle per issue; always starts from fresh main
-// const MAX_ISSUES_PER_CYCLE: number = 3;        // three issues, then one merge
-// const MAX_ISSUES_PER_CYCLE: number = Infinity; // whole plan in one cycle, one merge at the end (stock behaviour)
+// up by the next cycle.
+const MAX_ISSUES_PER_CYCLE: number = 1; // one full plan→build→review→publish cycle per issue; always starts from fresh main
+// const MAX_ISSUES_PER_CYCLE: number = 3;        // three issues, then one publish pass
+// const MAX_ISSUES_PER_CYCLE: number = Infinity; // whole plan in one cycle, one publish pass at the end (stock behaviour)
 
-// Maximum number of plan→execute→merge cycles before stopping.
+// Maximum number of plan→execute→publish cycles before stopping.
 // Raise this if your backlog is large; lower it for a quick smoke-test run.
 const MAX_ITERATIONS = ITERATIONS.loop;
 
@@ -304,7 +308,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
             },
           });
 
-          // Merge commits from both runs so the merge phase sees all of them.
+          // Merge commits from both runs so the publish phase sees all of them.
           // Each sandbox.run() only returns commits from its own run.
           return {
             ...review,
@@ -328,8 +332,8 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     }
   }
 
-  // Only pass branches that actually produced commits to the merge phase.
-  // An agent that ran successfully but made no commits has nothing to merge.
+  // Only pass branches that actually produced commits to the publish phase.
+  // An agent that ran successfully but made no commits has nothing to publish.
   const completedIssues = settled
     .map((outcome, i) => ({ outcome, issue: issues[i]! }))
     .filter(
@@ -349,27 +353,29 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   }
 
   if (completedBranches.length === 0) {
-    // All agents ran but none made commits — nothing to merge this cycle.
-    console.log("No commits produced. Nothing to merge.");
+    // All agents ran but none made commits — nothing to publish this cycle.
+    console.log("No commits produced. Nothing to publish.");
     continue;
   }
 
   // -------------------------------------------------------------------------
-  // Phase 3: Merge
+  // Phase 3: Publish
   //
-  // One agent merges all completed branches into the current branch,
-  // resolving any conflicts and running tests to confirm everything works.
+  // One agent verifies the gate on each completed branch and opens a pull
+  // request for it. Nothing is merged and no issue is closed. A branch whose
+  // issue the reviewer labelled `ready-for-human` gets a draft PR instead, so a
+  // flagged design or money finding cannot ride through to main unnoticed.
   //
   // The {{BRANCHES}} and {{ISSUES}} prompt arguments are lists that the agent
-  // uses to know which branches to merge and which issues to close.
+  // uses to know which branches to publish and which issues they close.
   // -------------------------------------------------------------------------
   await sandcastle.run({
     hooks: buildHooks,
     sandbox: sandboxProvider(),
-    name: "merger",
-    maxIterations: ITERATIONS.merger,
-    agent: sandcastle.claudeCode(MODELS.merger),
-    promptFile: "./.sandcastle/merge-prompt.md",
+    name: "publisher",
+    maxIterations: ITERATIONS.publisher,
+    agent: sandcastle.claudeCode(MODELS.publisher),
+    promptFile: "./.sandcastle/publish-prompt.md",
     promptArgs: {
       // A markdown list of branch names, one per line.
       BRANCHES: completedBranches.map((b) => `- ${b}`).join("\n"),
@@ -380,7 +386,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     },
   });
 
-  console.log("\nBranches merged.");
+  console.log("\nPull requests opened.");
 }
 
 console.log("\nAll done.");
