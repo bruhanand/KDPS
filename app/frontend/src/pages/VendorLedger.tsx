@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerReset, Users, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { meetsCapability } from "../auth/routeAccess";
+import { meetsCapability } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";

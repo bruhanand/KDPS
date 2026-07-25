@@ -1,27 +1,22 @@
 import { useLocation } from "react-router-dom";
 import { Compass } from "lucide-react";
 
-import { SECTIONS, itemPath } from "../shell/navConfig";
+import { NAV_ITEMS, SECTIONS, itemPath, normalizePath } from "../shell/navConfig";
 
 /** The honest "not built yet" page. What it promises comes from the section
  *  manifest, so the sidebar and this page can never tell different stories. */
 export function ModulePage() {
   const { pathname } = useLocation();
-  const normalized = pathname.toLowerCase().replace(/\/+$/, "") || "/";
-  let sectionLabel = "";
-  let layer = "documents";
-  let title = "Coming soon";
-  let intent = "";
-  for (const s of SECTIONS) {
-    const it = s.items.find((i) => itemPath(i) === normalized);
-    if (it) {
-      sectionLabel = s.label;
-      layer = s.layer;
-      title = it.label;
-      intent = it.intent ?? "";
-      break;
-    }
-  }
+  // Exact match, not longest-prefix: this page also serves the 404 corner, and
+  // an address nobody built should say so rather than borrow its parent's
+  // promise. A deep link owns no URL, so it never answers for one.
+  const target = normalizePath(pathname);
+  const screen = NAV_ITEMS.find((i) => !i.deepLink && itemPath(i) === target);
+  const section = screen ? SECTIONS.find((s) => s.code === screen.section) : undefined;
+  const sectionLabel = section?.label ?? "";
+  const layer = section?.layer ?? "documents";
+  const title = screen?.label ?? "Coming soon";
+  const intent = screen?.intent ?? "";
   return (
     <div className="page-pad">
       <p className="eyebrow">{sectionLabel}</p>

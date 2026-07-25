@@ -10,7 +10,7 @@
 //
 // This file is the single source of truth for navigation. Derived from it:
 //   · the sidebar          (AppShell, intersected with the server's sections)
-//   · the route guards     (auth/routeAccess — prefix → section)
+//   · the route guards     (auth/routeAccess — URL → the screen that owns it)
 //   · the routes           (App.tsx: planned pages are generated from `state`)
 //   · the "coming soon" copy (pages/ModulePage)
 //   · the legacy redirects (every pre-#87 URL, below)
@@ -460,11 +460,17 @@ export function underPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(prefix + "/");
 }
 
-/** The new home of an old URL, or null if `pathname` is not a legacy path.
- *  Case-insensitive: React Router matches paths case-insensitively, so a
- *  bookmarked `/Ledgers/Vendor` must redirect too. */
+/** One pathname shape for everything that keys on a path. Lowercase, because
+ *  React Router matches paths case-insensitively and a bookmarked
+ *  `/Ledgers/Vendor` must behave like `/ledgers/vendor`; trailing slashes
+ *  dropped, because `/money/vendor/` is the same screen as `/money/vendor`. */
+export function normalizePath(pathname: string): string {
+  return pathname.toLowerCase().replace(/\/+$/, "") || "/";
+}
+
+/** The new home of an old URL, or null if `pathname` is not a legacy path. */
 export function resolveLegacyPath(pathname: string): string | null {
-  const normalized = pathname.toLowerCase().replace(/\/+$/, "") || "/";
+  const normalized = normalizePath(pathname);
   for (const [from, to] of LEGACY_PREFIXES) {
     if (underPrefix(normalized, from)) return to + normalized.slice(from.length);
   }
@@ -479,4 +485,59 @@ export const NAV_ITEMS: (NavItem & { section: string })[] = SECTIONS.flatMap((s)
 /** The path part of an item's `to` (drops the `?view=quarantine` deep link). */
 export function itemPath(item: NavItem): string {
   return item.to.split("?")[0];
+}
+
+/** The deepest eligible item whose path `pathname` sits at or under. Longest
+ *  wins, so `/receive/pt` is PT Files and not Receive (GRN), while `/booking/12`
+ *  — a document with no line of its own — still resolves to Bookings. */
+function deepestUnder(
+  pathname: string,
+  eligible: (item: NavItem) => boolean,
+): (NavItem & { section: string }) | null {
+  const normalized = normalizePath(pathname);
+  let best: (NavItem & { section: string }) | null = null;
+  for (const item of NAV_ITEMS) {
+    if (!eligible(item)) continue;
+    const path = itemPath(item);
+    if (!underPrefix(normalized, path)) continue;
+    if (!best || path.length > itemPath(best).length) best = item;
+  }
+  return best;
+}
+
+/** The one screen a URL belongs to — what the route guard gates on. A deep link
+ *  owns no URL (the section hosting the screen keeps it), but an `action` screen
+ *  does own one and carries its own gate, so it counts here. */
+export function itemOwning(pathname: string): (NavItem & { section: string }) | null {
+  return deepestUnder(pathname, (i) => !i.deepLink);
+}
+
+/** Does this menu line get the highlight at `pathname`? Exactly one line does.
+ *
+ *  Pass the item, not its path: "Damage / Quarantine" *is* `/stock` once its
+ *  `?view=` is dropped, so comparing paths alone would light it alongside Stock
+ *  on Hand in another section. Screens with no line of their own fall back to
+ *  the nearest one that has — a V-flip keeps Stock on Hand lit, the same way a
+ *  booking document keeps Bookings lit — so the sidebar never goes dark under
+ *  you. Letting React Router answer this instead lit every ancestor too. */
+export function isActiveItem(item: NavItem, pathname: string): boolean {
+  if (item.deepLink || item.action) return false;
+  const lit = deepestUnder(pathname, (i) => !i.deepLink && !i.action);
+  return !!lit && itemPath(item) === itemPath(lit);
+}
+
+/** Is this item on the menu for a caller holding `held` on the item's section?
+ *  The sidebar gates the menu line and `routeAccess` gates the URL, reading two
+ *  different halves of the same login payload — so the rule itself lives here
+ *  once and the two cannot drift into hiding a link the URL still opens. */
+export function itemVisible(
+  item: NavItem,
+  held: string | undefined,
+  roleCode: string,
+  isSuperuser: boolean,
+): boolean {
+  if (isSuperuser) return true;
+  if (item.minCapability && !meetsCapability(held, item.minCapability)) return false;
+  if (item.roles && !item.roles.includes(roleCode)) return false;
+  return true;
 }
