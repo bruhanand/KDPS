@@ -1,13 +1,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import type { Store, User } from "../auth/AuthContext";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { SECTIONS, itemPath, meetsCapability } from "./navConfig";
+import { SECTIONS, isActiveItem, itemPath, itemVisible } from "./navConfig";
 import type { NavItem, NavSectionDef } from "./navConfig";
 import "./AppShell.css";
 
@@ -16,7 +16,7 @@ const NAV_ORDER_KEY = "kdps-nav-item-order";
 const MIN_SIDEBAR = 210;
 const MAX_SIDEBAR = 390;
 
-type DraggedItem = { groupKey: string; to: string } | null;
+type DraggedItem = { sectionCode: string; to: string } | null;
 type NavOrder = Record<string, string[]>;
 
 function initials(name: string, fallback: string): string {
@@ -174,13 +174,9 @@ export function visibleSections(user: User): VisibleSection[] {
     // Item gates are finer than the section: the rung held on *this* section
     // (`minCapability`) or, where the ladder can't express it, a role list. The
     // break-glass superuser passes both.
-    const items = def.items.filter((i) => {
-      if (i.action) return false;
-      if (user.is_superuser) return true;
-      if (i.minCapability && !meetsCapability(granted.capability, i.minCapability)) return false;
-      if (i.roles && !i.roles.includes(roleCode)) return false;
-      return true;
-    });
+    const items = def.items.filter(
+      (i) => !i.action && itemVisible(i, granted.capability, roleCode, user.is_superuser),
+    );
     // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
     if (items.length) out.push({ def, label: granted.label || def.label, items });
   }
@@ -199,6 +195,7 @@ function Sidebar({
   onNavigate: () => void;
 }) {
   const { user } = useAuth();
+  const { pathname } = useLocation();
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
   const [dragged, setDragged] = useState<DraggedItem>(null);
   if (!user) return null;
@@ -206,7 +203,7 @@ function Sidebar({
 
   function moveItem(section: VisibleSection, targetTo: string) {
     const code = section.def.code;
-    if (!dragged || dragged.groupKey !== code || dragged.to === targetTo) return;
+    if (!dragged || dragged.sectionCode !== code || dragged.to === targetTo) return;
     const current = orderedItems(code, section.items, navOrder).map((i) => i.to);
     const from = current.indexOf(dragged.to);
     const to = current.indexOf(targetTo);
@@ -242,43 +239,44 @@ function Sidebar({
                   <Icon size={16} />
                 </span>
                 {single ? (
-                  <NavLink
+                  <Link
                     to={items[0].to}
-                    end
                     onClick={onNavigate}
-                    className={({ isActive }) => `nav-grouplink ${isActive ? "active" : ""}`}
+                    aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
+                    className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
                     data-testid={`nav-${s.def.code}`}
                   >
                     {s.label}
-                  </NavLink>
+                  </Link>
                 ) : (
                   <span className="nav-group-label">{s.label}</span>
                 )}
               </div>
               {!single && (
                 <div className="nav-items">
-                  {items.map((it) => (
-                    <NavLink
-                      key={it.to}
-                      to={it.to}
-                      // Home's dashboard is "/" — without `end` it would light
-                      // up on every screen in the app.
-                      end={it.to === "/"}
-                      draggable
-                      onDragStart={() => setDragged({ groupKey: s.def.code, to: it.to })}
-                      onDragEnd={() => setDragged(null)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        moveItem(s, it.to);
-                      }}
-                      onClick={onNavigate}
-                      className={({ isActive }) => `nav-item ${isActive ? "active" : ""}`}
-                      data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
-                    >
-                      {it.label}
-                    </NavLink>
-                  ))}
+                  {items.map((it) => {
+                    const active = isActiveItem(it, pathname);
+                    return (
+                      <Link
+                        key={it.to}
+                        to={it.to}
+                        draggable
+                        onDragStart={() => setDragged({ sectionCode: s.def.code, to: it.to })}
+                        onDragEnd={() => setDragged(null)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          moveItem(s, it.to);
+                        }}
+                        onClick={onNavigate}
+                        aria-current={active ? "page" : undefined}
+                        className={`nav-item ${active ? "active" : ""}`}
+                        data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
+                      >
+                        {it.label}
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>
