@@ -36,6 +36,13 @@ CORRECTED = {
     "adjustment": (ADJUSTMENT_BAND, COUNT_APPROVERS),
 }
 
+# The adjustment band as the code defaults it (₹25,000). Needed because a policy
+# row is materialised lazily: on an install where nobody has raised an adjustment
+# yet, there is no row to read the band from, and the live answer for a pending
+# request is the default the next call would create — not zero, which would
+# escalate every one of them and quietly strip the store in-charge.
+DEFAULT_ADJUSTMENT_BAND_PAISE = 25_00_000
+
 
 def correct_stored_approvers(apps, schema_editor):
     ApprovalPolicy = apps.get_model("approvals", "ApprovalPolicy")
@@ -53,7 +60,7 @@ def correct_stored_approvers(apps, schema_editor):
             pending.update(approver_roles=escalated_roles)
             continue
         policy = ApprovalPolicy.objects.filter(kind=kind).first()
-        band = (policy.band_paise or 0) if policy else 0
+        band = (policy.band_paise or 0) if policy else DEFAULT_ADJUSTMENT_BAND_PAISE
         pending.filter(value_paise__gt=0, value_paise__lte=band).update(approver_roles=band_roles)
         pending.exclude(value_paise__gt=0, value_paise__lte=band).update(
             approver_roles=escalated_roles

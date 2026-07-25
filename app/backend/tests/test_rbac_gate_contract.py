@@ -39,7 +39,7 @@ from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE, CAP_VIEW, me
 from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from masters.models import Gstin, LegalEntity, Store
 from outbound.maker_checker import KINDS
-from outbound.models import WriteOff
+from outbound.models import StockAdjustment, WriteOff
 
 BACKEND = Path(__file__).resolve().parent.parent
 
@@ -206,24 +206,26 @@ def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
         assert "accounts" not in set(kind.approver_roles) | set(kind.band_roles), kind.code
 
 
-def test_no_undecided_approval_names_a_view_only_role(db):
-    """The running-install half: what the migration exists to fix.
+def test_a_freshly_raised_approval_names_no_view_only_role(db):
+    """The defaults reach the row, which is what ``can_decide`` actually reads.
 
-    ``can_decide`` reads the snapshot frozen on the row, so a code change alone
-    would leave Accounts able to clear everything already in the inbox. Decided
-    rows are history and are deliberately not covered.
+    Asserting over whatever the database happens to hold would pass on an empty
+    one and prove nothing, so this raises a real request through the module that
+    owns it and checks the list frozen onto it.
     """
-    undecided = Approval.objects.exclude(
-        status__in=[ApprovalStatus.APPROVED, ApprovalStatus.REJECTED]
-    )
-    for approval in undecided:
-        section = APPROVAL_SECTION.get(approval.kind)
-        if section is None:
-            continue
-        trusted = set(roles_with_capability(section, CAP_APPROVE)) | {"store_manager"}
-        assert set(approval.approver_roles) <= trusted, (
-            f"approval {approval.pk} ({approval.kind}) names {approval.approver_roles}"
-        )
+    from outbound.maker_checker import request_document_approval
+
+    store = _store("SEEDQ", "10AAACK1234M1Z7")
+    maker = _user("wh_maker", _role("warehouse"))
+    doc = WriteOff.objects.create(store=store, created_by=maker, reason="dead stock")
+    doc.lines.create(sku_code="Q1", qty=2, unit_cost_paise=45_000)
+
+    approval = request_document_approval(doc, requested_by=maker)
+
+    assert approval is not None
+    trusted = set(roles_with_capability(APPROVAL_SECTION["writeoff"], CAP_APPROVE))
+    assert set(approval.approver_roles) <= trusted
+    assert "accounts" not in approval.approver_roles
 
 
 #: What migration 0008 finds on the alpha: the frozen outbound admin list.
@@ -297,6 +299,39 @@ def test_the_migration_does_not_invent_policy_rows(db):
     assert not ApprovalPolicy.objects.exists()
 
 
+def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
+    """The lazy-row case: a small one must still be the in-charge's to clear.
+
+    ``ApprovalPolicy`` is materialised on first use, so an install can carry
+    pending adjustments and no row at all. Reading the missing band as zero
+    would push every one of them to HO and quietly take the store manager off
+    a variance the design says is his — so the default band stands in.
+    """
+    migration = import_module("outbound.migrations.0008_rbac_approver_roles")
+    maker = _user("adj_maker", _role("warehouse"))
+    store = _store("BNK", "10AAACK1234M1Z8")
+    doc = StockAdjustment.objects.create(store=store, created_by=maker, reason="miscount")
+    small = Approval.objects.create(
+        kind="adjustment",
+        kind_label="Stock adjustment",
+        title="t",
+        content_type=ContentType.objects.get_for_model(StockAdjustment),
+        object_id=doc.pk,
+        store=store,
+        value_paise=5_00_000,  # ₹5,000 — inside the ₹25,000 band
+        approver_roles=STALE_APPROVERS,
+        made_by=maker,
+        requested_by=maker,
+        status=ApprovalStatus.PENDING,
+    )
+
+    migration.correct_stored_approvers(django_apps, None)
+
+    small.refresh_from_db()
+    assert "store_manager" in small.approver_roles
+    assert "accounts" not in small.approver_roles
+
+
 # --- 3. The declared exceptions -------------------------------------------
 #: The four gates the ladder provably cannot express. A change to this set is a
 #: decision, which is exactly what the test is here to force.
@@ -320,6 +355,16 @@ def test_every_declared_exception_carries_a_reason():
         assert entry.roles, name
 
 
+#: What a hand-kept gate is *called*. A constant naming a set of role codes in
+#: this codebase has always ended in one of these, so the guard below is a
+#: naming convention enforced, not a proof: a list called something else, or
+#: built inline at its call site, still escapes. It catches the shape people
+#: actually write, which is what a new one is overwhelmingly likely to be.
+ROLE_LIST_NAME = re.compile(
+    r"^\s*(_?[A-Z][A-Z0-9_]*(?:ROLES|APPROVERS|STEWARDS))\s*=\s*(.*)$", re.MULTILINE
+)
+
+
 def test_no_role_list_escapes_the_register():
     """A new hand-kept list must come through ``declare_role_list``.
 
@@ -327,15 +372,18 @@ def test_no_role_list_escapes_the_register():
     to remember: the next gate someone writes as a set literal would gate just
     as hard and appear nowhere. Source-level because that is the only place the
     difference between "declared" and "invented" is visible.
+
+    A list *derived* from the matrix is not hand-kept and passes — that is the
+    whole point of deriving it.
     """
-    pattern = re.compile(r"^([A-Z][A-Z0-9_]*ROLES)\s*=\s*(.*)$", re.MULTILINE)
+    allowed_sources = ("declare_role_list(", "roles_with_capability(", "tuple(sorted(")
     offenders = []
     for path in BACKEND.rglob("*.py"):
         parts = set(path.parts)
         if "tests" in parts or "migrations" in parts or ".venv" in parts:
             continue
-        for name, rhs in pattern.findall(path.read_text()):
-            if not rhs.startswith("declare_role_list("):
+        for name, rhs in ROLE_LIST_NAME.findall(path.read_text()):
+            if not rhs.startswith(allowed_sources):
                 offenders.append(f"{path.relative_to(BACKEND)}: {name}")
     assert not offenders, (
         "hand-kept role lists that never declared a reason — either gate them on "
