@@ -383,7 +383,14 @@ export function GstinsPage() {
 // ---------------------------------------------------------- Users & Roles
 
 type AdminRole = ApiSchemas["AdminRole"];
-type AdminUser = ApiSchemas["AdminUser"];
+interface BrandMini { id: number; code: string; name: string }
+// Brand assignment and the `brand` scope (#88) are newer than the checked-in
+// generated schema, which is regenerated on its own cadence — widen locally
+// rather than hand-edit a generated file.
+type AdminUser = Omit<ApiSchemas["AdminUser"], "scope_type"> & {
+  scope_type?: ApiSchemas["AdminUser"]["scope_type"] | "brand";
+  brands?: BrandMini[];
+};
 type StoreMini = ApiSchemas["StoreMini"];
 
 interface AdminMeta {
@@ -394,6 +401,8 @@ interface AdminMeta {
   capabilities: string[];
   scope_types: { value: string; label: string }[];
   stores: { id: number; code: string; name: string; store_type: string }[];
+  /** What a brand-scoped user (a brand manager) can be assigned (#88). */
+  brands: BrandMini[];
 }
 
 /** `{section: {capability, label}}` — the shape the server stores and gates on. */
@@ -430,6 +439,7 @@ const blankUser = {
   role_id: "",
   scope_type: "all",
   store_ids: [] as number[],
+  brand_ids: [] as number[],
   is_active: true,
   is_staff: false,
   password: "",
@@ -453,6 +463,11 @@ function storeLabel(stores: StoreMini[] | undefined): string {
   return stores.map((s) => s.code).join(", ");
 }
 
+function brandLabel(brands: BrandMini[] | undefined): string {
+  if (!brands?.length) return "No brand assigned";
+  return brands.map((b) => b.name).join(", ");
+}
+
 function normalizeNavGroups(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String) : [];
 }
@@ -469,6 +484,7 @@ export function UsersRolesPage() {
     capabilities: [],
     scope_types: [],
     stores: [],
+    brands: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -511,6 +527,7 @@ export function UsersRolesPage() {
       role_id: u.role?.id ? String(u.role.id) : "",
       scope_type: u.scope_type ?? "all",
       store_ids: (u.stores ?? []).map((s) => s.id),
+      brand_ids: (u.brands ?? []).map((b) => b.id),
       is_active: u.is_active ?? true,
       is_staff: u.is_staff ?? false,
       password: "",
@@ -541,6 +558,13 @@ export function UsersRolesPage() {
     }));
   }
 
+  function toggleBrand(id: number) {
+    setUserForm((f) => ({
+      ...f,
+      brand_ids: f.brand_ids.includes(id) ? f.brand_ids.filter((x) => x !== id) : [...f.brand_ids, id],
+    }));
+  }
+
   function setSectionCapability(code: string, capability: string) {
     setRoleForm((f) => {
       // The label is the RBAC sheet's own wording for *this* rung ("Expenses
@@ -566,6 +590,7 @@ export function UsersRolesPage() {
       role_id: userForm.role_id ? Number(userForm.role_id) : null,
       scope_type: userForm.scope_type,
       store_ids: userForm.scope_type === "store" ? userForm.store_ids : [],
+      brand_ids: userForm.scope_type === "brand" ? userForm.brand_ids : [],
       is_active: userForm.is_active,
       is_staff: userForm.is_staff,
       ...(userForm.password ? { password: userForm.password } : {}),
@@ -664,6 +689,13 @@ export function UsersRolesPage() {
                 ))}
               </div>
             )}
+            {userForm.scope_type === "brand" && (
+              <div className="toggle-grid" data-testid="user-brand-picker">
+                {meta.brands.map((b) => (
+                  <button key={b.id} type="button" className={`toggle-chip ${userForm.brand_ids.includes(b.id) ? "active" : ""}`} onClick={() => toggleBrand(b.id)} data-testid={`user-brand-toggle-${b.code}`}>{b.name}</button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="table-wrap">
@@ -675,7 +707,7 @@ export function UsersRolesPage() {
                     <td><b>{u.full_name || u.username}</b><div className="mono" style={{ fontSize: 12 }}>{u.username}</div></td>
                     <td>{u.role?.name ?? "—"}</td>
                     <td>{u.scope_label}</td>
-                    <td>{storeLabel(u.stores)}</td>
+                    <td>{u.scope_type === "brand" ? brandLabel(u.brands) : storeLabel(u.stores)}</td>
                     <td><span className={`chip chip-${u.is_active ? "green" : "red"}`}>{u.is_active ? "Active" : "Inactive"}</span></td>
                     <td><button className="btn btn-sm" onClick={() => editUser(u)} data-testid={`edit-user-${u.username}`}><UserPlus size={13} /> Edit</button></td>
                   </tr>

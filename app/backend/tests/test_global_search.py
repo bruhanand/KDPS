@@ -212,6 +212,63 @@ def test_network_user_sees_stock_across_locations(scaffold):
     assert ss26["meta"] == "507 pcs across 2 locations"
 
 
+def _brand_manager(username: str, brands: list[Brand]) -> User:
+    role, _ = Role.objects.get_or_create(
+        code="brand_manager",
+        defaults={
+            "name": "Brand Manager (search test)",
+            "section_access": section_access_for("brand_manager"),
+        },
+    )
+    user = User.objects.create_user(
+        username=username, password=TEST_PASSWORD, role=role, scope_type=ScopeType.BRAND
+    )
+    user.brands.set(brands)
+    return user
+
+
+@pytest.mark.django_db(transaction=True)
+def test_search_shows_a_brand_manager_their_own_brands_stock(scaffold):
+    """Their work spans every store, so the roll-up is the network one — the
+    brand is the boundary, not the store."""
+    manager = _brand_manager("gs_brand_own", [scaffold["brand"]])
+
+    body = _client(manager).get(f"{SEARCH}?q=GS-BAR-001").json()
+    ss26 = next(i for i in _results(body, "items") if i["subtitle"].endswith("SS26"))
+
+    assert ss26["meta"] == "507 pcs across 2 locations"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_search_never_reveals_stock_of_a_brand_that_is_not_yours(scaffold):
+    """Scanning someone else's barcode may identify the item — that is master
+    data — but must never say how much is sitting where."""
+    other = Brand.objects.create(
+        code="gs-mufti",
+        name="MuftiSearch",
+        ownership=Brand.Ownership.OWNED,
+        return_terms=Brand.ReturnTerms.NONE,
+    )
+    manager = _brand_manager("gs_brand_other", [other])
+
+    body = _client(manager).get(f"{SEARCH}?q=GS-BAR-001").json()
+    ss26 = next(i for i in _results(body, "items") if i["subtitle"].endswith("SS26"))
+
+    assert ss26["meta"] == "No stock in your locations"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_search_does_not_hand_a_brand_manager_every_stores_documents(scaffold):
+    """A voucher carries no brand, so nothing can prove it is theirs. Search must
+    fail closed rather than treat "not store-scoped" as "entitled to all"."""
+    manager = _brand_manager("gs_brand_docs", [scaffold["brand"]])
+    grn = scaffold["grn_bnk"]
+
+    body = _client(manager).get(f"{SEARCH}?q={grn.doc_number}").json()
+
+    assert _results(body, "documents") == []
+
+
 # -- documents -------------------------------------------------------------
 
 
