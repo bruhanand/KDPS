@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -89,8 +89,9 @@ class BooksHealthView(APIView):
         # over it, including a physical count, because the piece count is right;
         # only a value-per-piece read like this one ever sees it.
         stranded_qs = StockOnHand.objects.filter(net_qty=0).exclude(net_value_paise=0)
-        stranded_count = stranded_qs.count()
-        stranded_total = stranded_qs.aggregate(v=Sum("net_value_paise"))["v"] or 0
+        totals = stranded_qs.aggregate(rows=Count("id"), value=Sum("net_value_paise"))
+        stranded_count = totals["rows"] or 0
+        stranded_total = totals["value"] or 0
         stranded_rows = list(
             stranded_qs.select_related("store").order_by("-net_value_paise")[:STRANDED_SAMPLE]
         )

@@ -62,10 +62,11 @@ def _check_stock(store_id: int, sku_code: str, required_qty: int) -> None:
 def _line_amount(line, qty: int, doc_number: str) -> int:
     """Value one leg of a stock movement — qty × the line's frozen unit cost.
 
-    Refuses a line the books never priced (#103). This is the deliberate
-    exception to flag-don't-block (Rule 5): a zero-value stock movement is not
-    a flagged approximation, it is a wrong number presented as a right one —
-    the pieces leave and the rupees stay, and every quantity-based check,
+    Refuses a line the books never priced (#103). Not an exception to
+    flag-don't-block but Rule 5's own "unless it is truly dangerous" clause,
+    which the rules page now defines for money: a zero-value stock movement is
+    not a flagged approximation, it is a wrong number presented as a right one
+    — the pieces leave and the rupees stay, and every quantity-based check,
     including a physical count, passes over it.
     """
     unit_cost_paise = getattr(line, "unit_cost_paise", 0) or 0
@@ -245,14 +246,44 @@ def book_unit_cost(store_id: int, sku_code: str, season: str = "") -> int:
     cohort_season = on_hand.season if on_hand is not None else season
     cohort = Cohort.objects.filter(barcode=sku_code, season=cohort_season).first()
     if cohort is None and not cohort_season:
-        # Nothing said which season, so any cohort for this barcode is the best
-        # the books can do — never guess a season for a piece that named one.
-        cohort = Cohort.objects.filter(barcode=sku_code).first()
+        # Nothing said which season. A cohort is keyed (barcode, season) because
+        # the same SKU is bought across seasons at different locked costs, so
+        # one cohort is the only answer the books can give and more than one is
+        # a guess — and a guess priced as a book value is the exact thing this
+        # seam exists to stop. Two is all we need to know it is ambiguous.
+        candidates = list(Cohort.objects.filter(barcode=sku_code)[:2])
+        cohort = candidates[0] if len(candidates) == 1 else None
     if cohort is not None and cohort.unit_cost_paise:
         return int(cohort.unit_cost_paise)
     if on_hand is not None and on_hand.net_qty > 0:
         return int(on_hand.net_value_paise or 0) // on_hand.net_qty
     return 0
+
+
+def _cannot_price(store_id: int, sku_code: str, season: str) -> str:
+    """Why the books could not price this piece, in words the maker can act on.
+
+    Two different problems wear the same "cost is unknown" answer, and they need
+    opposite fixes: a piece the books never bought has to be brought in first,
+    while a piece bought in several seasons only needs the maker to say which
+    one. Telling them apart costs one query on the refusal path.
+    """
+    from masters.models import Cohort
+
+    if not season and not StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).exists():
+        seasons = sorted(Cohort.objects.filter(barcode=sku_code).values_list("season", flat=True))
+        if len(seasons) > 1:
+            return (
+                f"{sku_code} was bought in more than one season ({', '.join(seasons)}), each at "
+                "its own cost, and the store holds none of it — so the books cannot tell which "
+                "buy this piece came from. Say which season it belongs to and make this "
+                "document again."
+            )
+    return (
+        f"The books cannot price {sku_code} at this location, so it cannot be "
+        "valued. Bring the piece in on a GRN/PT first (or correct its cost), "
+        "then make this document again."
+    )
 
 
 def resolve_line_cost(store_id: int, sku_code: str, season: str = "") -> int:
@@ -269,11 +300,7 @@ def resolve_line_cost(store_id: int, sku_code: str, season: str = "") -> int:
     """
     cost = book_unit_cost(store_id, sku_code, season)
     if cost <= 0:
-        raise OutboundPostingError(
-            f"The books cannot price {sku_code} at this location, so it cannot be "
-            "valued. Bring the piece in on a GRN/PT first (or correct its cost), "
-            "then make this document again."
-        )
+        raise OutboundPostingError(_cannot_price(store_id, sku_code, season))
     return cost
 
 

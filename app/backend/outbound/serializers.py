@@ -74,19 +74,25 @@ class ApprovedDocumentSerializer(serializers.ModelSerializer):
         return [ApprovalReadSerializer(a).data for a in list(obj.approvals.all())[1:]]
 
 
-def _priced_lines(store: Any, lines_data: list[dict[str, Any]], doc_season: str = "") -> list[dict]:
-    """Put the books' cost (and dims) on every line before it is stored (#103).
+def _priced_lines(validated_data: Any) -> list[dict[str, Any]]:
+    """Take the lines off a validated create payload, priced from the books (#103).
 
     A draft is *born* with its cost of record, so the approval band, the posting
     engine and the screen all read the same number — and a line the books cannot
     price never becomes a document at all, rather than posting free stock later.
     The refusal is a 400 on the create call, not a 500: an unpriceable piece is
     something the maker has to fix, and the message says how.
+
+    Takes the whole payload rather than its parts because every caller needs the
+    same three (store, lines, the document's season) and the lines must come
+    *off* it before the document is created from what is left.
     """
     from outbound.posting import OutboundPostingError, resolve_line_identity
 
+    store = validated_data["store"]
+    doc_season = validated_data.get("season", "")
     priced = []
-    for ld in lines_data:
+    for ld in validated_data.pop("lines"):
         try:
             identity = resolve_line_identity(
                 store.id, ld["sku_code"], ld.get("season") or doc_season
@@ -104,9 +110,7 @@ def _create_with_approval(
 
     One transaction: a draft that needs a checker is never left without one.
     """
-    lines_data = _priced_lines(
-        validated_data["store"], validated_data.pop("lines"), validated_data.get("season", "")
-    )
+    lines_data = _priced_lines(validated_data)
     user = getattr(request, "user", None)
     validated_data["created_by"] = user
     with transaction.atomic():
@@ -422,9 +426,7 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        lines_data = _priced_lines(
-            validated_data["store"], validated_data.pop("lines"), validated_data.get("season", "")
-        )
+        lines_data = _priced_lines(validated_data)
         user = self.context.get("request", None)
         if user:
             user = user.user

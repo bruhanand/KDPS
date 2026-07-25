@@ -98,10 +98,17 @@ def _line_totals(doc: Any) -> tuple[int, int, int]:
     Adjustment lines carry a signed ``adj_qty``; the others a plain ``qty``.
     Value is what is at stake, so the magnitude is what counts.
 
-    The unit cost comes from the **books**, never from the payload: the value
+    The unit cost is the one **frozen onto the line** when the draft was made,
+    which is the same number the posting engine will use — read it rather than
+    deriving it again, or the books can move between drafting and approving and
+    the approver is shown one figure while the engine posts another (#103).
+
+    A line made outside the API — a shell, a management command, a draft left
+    over from before that fix — carries no frozen cost, so the books are read
+    for it instead. Either way it never comes from the payload: the value
     decides whether a second person is asked at all, so a maker who could type
-    it could type their way out of being checked. A line the books know nothing
-    about contributes nothing, which leaves the total at 0 — read everywhere as
+    it could type their way out of being checked. A line neither route can
+    price contributes nothing, leaving the total at 0 — read everywhere as
     "unknown", and unknown escalates.
     """
     from outbound.posting import book_unit_cost
@@ -112,7 +119,10 @@ def _line_totals(doc: Any) -> tuple[int, int, int]:
     for line in lines:
         qty = abs(line.adj_qty) if hasattr(line, "adj_qty") else line.qty
         pieces += qty
-        value += qty * book_unit_cost(doc.store_id, line.sku_code, getattr(line, "season", ""))
+        frozen = getattr(line, "unit_cost_paise", 0) or 0
+        value += qty * (
+            frozen or book_unit_cost(doc.store_id, line.sku_code, getattr(line, "season", ""))
+        )
     return len(lines), pieces, value
 
 

@@ -585,3 +585,158 @@ def test_books_health_names_a_stranded_row(books):
     assert stranded["value_paise"] == 720_000
     assert stranded["rows"][0]["sku_code"] == "BC-AVG"
     assert stranded["rows"][0]["store_code"] == "BC-A"
+
+
+# ---------------------------------------------------------------------------
+# Which buying cohort priced it — a season nobody named must not be guessed
+# ---------------------------------------------------------------------------
+
+
+def _cohort(barcode, season, unit_cost, mrp=99_900):
+    """Register another buying cohort for a barcode the store holds none of."""
+    sku = Sku.objects.filter(barcode=barcode).first() or Sku.objects.create(
+        barcode=barcode,
+        design="Shirt",
+        color="Blue",
+        size="M",
+        brand="BcOwned",
+        item="shirt",
+        hsn="6205",
+        mrp_paise=mrp,
+    )
+    Cohort.objects.create(
+        sku=sku, barcode=barcode, season=season, unit_cost_paise=unit_cost, mrp_paise=mrp
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_found_piece_bought_in_two_seasons_is_refused_when_no_season_is_named(books):
+    """The same SKU can be bought across seasons at different locked costs. A
+    surplus that names no season is not "price it from whichever cohort sorts
+    first" — that is a guess wearing the clothes of a book value. The screen
+    sends no season at all, so this is the ordinary path, not an edge."""
+    _cohort("BC-TWICE", "AW25", 5_000)
+    _cohort("BC-TWICE", "SS26", 90_000)
+
+    resp = _client(books["maker"]).post(
+        "/api/outbound/adjustments",
+        {
+            "store": books["store"].id,
+            "reason": "surplus_found",
+            "lines": [{"sku_code": "BC-TWICE", "book_qty": 0, "counted_qty": 1, "adj_qty": 1}],
+        },
+        format="json",
+    )
+    assert resp.status_code == 400, resp.data
+    assert "AW25" in str(resp.data) and "SS26" in str(resp.data)
+    assert not StockAdjustment.objects.filter(store=books["store"]).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_found_piece_bought_once_is_priced_without_naming_a_season(books):
+    """One cohort is not a guess — there is only one answer the books can give,
+    so a surplus that names no season is still priced rather than refused."""
+    create = _client(books["maker"]).post(
+        "/api/outbound/adjustments",
+        {
+            "store": books["store"].id,
+            "reason": "surplus_found",
+            "lines": [{"sku_code": "BC-FOUND", "book_qty": 0, "counted_qty": 2, "adj_qty": 2}],
+        },
+        format="json",
+    )
+    assert create.status_code == 201, create.data
+    assert create.data["lines"][0]["unit_cost_paise"] == 12_000
+
+
+@pytest.mark.django_db(transaction=True)
+def test_naming_the_season_prices_a_twice_bought_piece(books):
+    """Naming it removes the ambiguity — and the answer is that season's cost,
+    not the other one."""
+    _cohort("BC-TWICE", "AW25", 5_000)
+    _cohort("BC-TWICE", "SS26", 90_000)
+
+    create = _client(books["maker"]).post(
+        "/api/outbound/adjustments",
+        {
+            "store": books["store"].id,
+            "reason": "surplus_found",
+            "lines": [
+                {
+                    "sku_code": "BC-TWICE",
+                    "season": "AW25",
+                    "book_qty": 0,
+                    "counted_qty": 1,
+                    "adj_qty": 1,
+                }
+            ],
+        },
+        format="json",
+    )
+    assert create.status_code == 201, create.data
+    assert create.data["lines"][0]["unit_cost_paise"] == 5_000
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_cohort_carrying_no_cost_falls_through_to_the_on_hand_average(books):
+    """A registered cohort with no P-RATE on it is a gap in the books, not a
+    piece that cost nothing — the on-hand average is what the books can still
+    honestly say."""
+    from outbound.posting import book_unit_cost
+
+    _cohort("BC-AVG", "SS26", 0, mrp=99_900)
+
+    assert book_unit_cost(books["store"].id, "BC-AVG") == AVERAGE_COST
+
+
+# ---------------------------------------------------------------------------
+# One number: what the approver was shown is what the engine posts
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_approval_band_reads_the_cost_frozen_on_the_line(books):
+    """The line is born with its cost of record, so the amount at stake must be
+    read from it — not derived again later. Re-derivation lets the books move
+    between drafting and approving, and then the approver is shown one number
+    while the engine posts another."""
+    create = _client(books["maker"]).post(
+        "/api/outbound/writeoffs",
+        {
+            "store": books["store"].id,
+            "reason": "Water damage",
+            "lines": [{"sku_code": "BC-COHORT", "qty": 4}],
+        },
+        format="json",
+    )
+    assert create.status_code == 201, create.data
+    frozen = 4 * COHORT_COST
+    approval = Approval.objects.get(kind="writeoff", object_id=create.data["id"])
+    assert approval.value_paise == frozen
+
+    resp = _client(books["checker"]).post(
+        f"/api/approvals/{approval.pk}/decide",
+        {"action": "reject", "reason": "Check the count first"},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.data
+
+    # The books move underneath the draft — a re-costed cohort, exactly what a
+    # correction to the inward would do.
+    Cohort.objects.filter(barcode="BC-COHORT").update(unit_cost_paise=90_000)
+
+    again = _client(books["maker"]).post(
+        f"/api/outbound/writeoffs/{create.data['id']}/request-approval"
+    )
+    assert again.status_code == 200, again.data
+
+    fresh = Approval.objects.filter(kind="writeoff", object_id=create.data["id"]).order_by("-id")[0]
+    assert fresh.value_paise == frozen, "the band must read the line's frozen cost"
+
+    cleared = _client(books["checker"]).post(
+        f"/api/approvals/{fresh.pk}/decide", {"action": "approve"}, format="json"
+    )
+    assert cleared.status_code == 200, cleared.data
+    submit = _client(books["maker"]).post(f"/api/outbound/writeoffs/{create.data['id']}/submit")
+    assert submit.status_code == 200, submit.data
+    assert _posted_value(submit.data["doc_number"], "write_off") == -frozen
