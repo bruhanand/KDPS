@@ -160,8 +160,10 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Count Sessions", to: "/stock-count", planned: true },
       // Corrections live where they are caused: a count is what produces them.
-      { label: "Adjustments", to: "/stock-count/adjustments" },
-      { label: "Write-offs", to: "/stock-count/writeoffs" },
+      // Both are writes gated on `stock_count: operate` server-side, so the
+      // link must not open for a role the API will refuse (#94).
+      { label: "Adjustments", to: "/stock-count/adjustments", minCapability: "operate" },
+      { label: "Write-offs", to: "/stock-count/writeoffs", minCapability: "operate" },
     ],
   },
   {
@@ -185,7 +187,8 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Stock on Hand", to: "/stock" },
       { label: "Movement History", to: "/stock/history" },
       // Not a menu item — an ownership action reached from Stock on Hand.
-      { label: "V-Flip", to: "/stock/vflips", action: true },
+      // Relabelling who owns stock is `stock: manage` on the server (#94).
+      { label: "V-Flip", to: "/stock/vflips", action: true, minCapability: "manage" },
     ],
   },
   {

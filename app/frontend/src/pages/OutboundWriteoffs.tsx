@@ -12,7 +12,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundAdmin } from "../lib/outbound-rbac";
+import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
@@ -76,7 +76,7 @@ interface StoreT { id: number; code: string; name: string; store_type: string; }
 export function WriteOffListPage() {
   const { user } = useAuth();
   const { data, loading } = useList<WOT>("/outbound/writeoffs");
-  const writable = canOutboundAdmin(user?.role?.code);
+  const writable = canWriteStockCount(user);
 
   return (
     <div className="page-pad">
@@ -291,7 +291,7 @@ export function WriteOffDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: w, loading } = useDoc<WOT>(`/outbound/writeoffs/${id}`);
-  const writable = canOutboundAdmin(user?.role?.code);
+  const writable = canWriteStockCount(user);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 

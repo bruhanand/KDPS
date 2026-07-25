@@ -2,9 +2,9 @@
 
 Every endpoint requires authentication. RBAC:
   - Read (GET list/detail): any authenticated user (store scoping via queryset)
-  - Write (POST create/submit/dispatch/receive): OUTBOUND_WRITE_ROLES
-  - Admin write (V-flip, write-off): OUTBOUND_ADMIN_ROLES
-  - store_staff: READ ONLY on all outbound surfaces
+  - Write (POST create/submit/dispatch/receive): the endpoint group's section
+    gate — see the table in ``outbound.permissions``, which is the one place
+    the mapping lives
   - Store-scoped roles: may only write against their assigned stores
     (enforced via ``enforce_store_scope`` on every write path)
 """
@@ -29,9 +29,11 @@ from outbound.models import (
     WriteOff,
 )
 from outbound.permissions import (
-    IsOutboundAdmin,
+    CanFlipOwnership,
+    CanWriteReturnToBrand,
+    CanWriteStockCount,
+    CanWriteTransfer,
     IsOutboundReader,
-    IsOutboundWriter,
     enforce_store_scope,
 )
 from outbound.posting import (
@@ -85,7 +87,7 @@ def _filter_docstatus(qs, request):
 class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundWriter()]
+            return [CanWriteTransfer()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -132,7 +134,7 @@ class TransferDispatchView(APIView):
     source → in-transit bucket under this transfer.
     """
 
-    permission_classes = [IsOutboundWriter]
+    permission_classes = [CanWriteTransfer]
 
     def post(self, request, pk):
         try:
@@ -172,7 +174,7 @@ class TransferReceiveView(APIView):
     in-transit and flags the receipt.
     """
 
-    permission_classes = [IsOutboundWriter]
+    permission_classes = [CanWriteTransfer]
 
     def post(self, request, pk):
         try:
@@ -263,7 +265,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundWriter()]
+            return [CanWriteReturnToBrand()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -305,7 +307,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
 class RTVListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundWriter()]
+            return [CanWriteReturnToBrand()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -347,7 +349,7 @@ class RTVDetailView(generics.RetrieveAPIView):
 class RTVSubmitView(APIView):
     """POST: Submit (post) a draft RTV — stock exits, GL posts."""
 
-    permission_classes = [IsOutboundWriter]
+    permission_classes = [CanWriteReturnToBrand]
 
     def post(self, request, pk):
         try:
@@ -384,7 +386,7 @@ class RTVSubmitView(APIView):
 class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundWriter()]
+            return [CanWriteStockCount()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -427,7 +429,7 @@ class AdjustmentDetailView(generics.RetrieveAPIView):
 class AdjustmentSubmitView(APIView):
     """POST: Submit (post) a draft stock adjustment."""
 
-    permission_classes = [IsOutboundWriter]
+    permission_classes = [CanWriteStockCount]
 
     def post(self, request, pk):
         try:
@@ -462,7 +464,7 @@ class AdjustmentSubmitView(APIView):
 class WriteOffListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundAdmin()]
+            return [CanWriteStockCount()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -503,7 +505,7 @@ class WriteOffDetailView(generics.RetrieveAPIView):
 class WriteOffSubmitView(APIView):
     """POST: Submit (post) a draft write-off."""
 
-    permission_classes = [IsOutboundAdmin]
+    permission_classes = [CanWriteStockCount]
 
     def post(self, request, pk):
         try:
@@ -536,7 +538,7 @@ class WriteOffSubmitView(APIView):
 class VFlipListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsOutboundAdmin()]
+            return [CanFlipOwnership()]
         return [IsOutboundReader()]
 
     def get_queryset(self):
@@ -579,7 +581,7 @@ class VFlipDetailView(generics.RetrieveAPIView):
 class VFlipSubmitView(APIView):
     """POST: Submit (post) a draft V-flip."""
 
-    permission_classes = [IsOutboundAdmin]
+    permission_classes = [CanFlipOwnership]
 
     def post(self, request, pk):
         try:

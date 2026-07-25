@@ -17,6 +17,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_VIEW
 from core.documents import DocStatus, VoucherSeries
 from files.models import StoredFile, UploadTooLarge
 from inbound.agents import read_invoice
@@ -263,41 +265,43 @@ class GrnDetailView(generics.RetrieveAPIView):
         return scope_by_store(qs, self.request.user, "store_id")
 
 
-# The queue serves the people who act on arrivals: the warehouse (makes the PT) and
-# Patna/HO (reviews & posts). Store roles have no queue duty — fail-closed 403.
-QUEUE_ROLES = {"warehouse", "data_steward", "ho_ops", "accounts", "owner", "it_admin"}
-
-
 class InboundQueueView(APIView):
     """The inbound work queue (Q9: in-app is the system of record; WhatsApp nudge is
     a later phase). Derived, never stored: an arrival is *awaiting* while it has no
     live PT (a reversed PT re-opens it); a PT in the warehouse/Patna pipeline shows
-    as in-progress. GET only."""
+    as in-progress. GET only.
 
-    permission_classes = [IsAuthenticated]
+    Gated on ``receive_goods: view`` rather than a role list (#94), so the queue
+    opens for exactly the people the sidebar already shows Receive Goods to — the
+    store person included, whose own arrivals are their work. Both halves are then
+    narrowed to the unit in the top-bar switcher, the same gate ``GrnListView``
+    uses, so a store sees its own queue and nobody else's.
+    """
+
+    permission_classes = [IsAuthenticated, require_section("receive_goods", CAP_VIEW)]
 
     def get(self, request: Request) -> Response:
-        role = getattr(getattr(request.user, "role", None), "code", "")
-        if not (getattr(request.user, "is_superuser", False) or role in QUEUE_ROLES):
-            return Response(
-                {"detail": "The inbound queue is a warehouse/HO screen."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
         from ptmapper.models import PtFile
 
-        awaiting = (
+        awaiting = scope_by_store(
             # Only non-branded arrivals await an authored PT here; branded arrivals
             # wait for the brand's PT via the Mapper instead (D2 split).
             Grn.objects.filter(docstatus=DocStatus.SUBMITTED, kind=Grn.Kind.NON_BRANDED)
             .exclude(pt_files__docstatus__in=[DocStatus.DRAFT, DocStatus.SUBMITTED])
             .select_related("store", "booking", "vendor")
             .prefetch_related("lines", "pt_files")
-            .order_by("created_at")  # oldest arrival first — it has waited longest
+            .order_by("created_at"),  # oldest arrival first — it has waited longest
+            request.user,
+            "store_id",
         )
-        in_progress = (
+        in_progress = scope_by_store(
             PtFile.objects.filter(grn__isnull=False, docstatus=DocStatus.DRAFT)
             .select_related("grn")
-            .order_by("created_at")
+            .order_by("created_at"),
+            request.user,
+            # A PT has no store of its own — it belongs to the arrival it was made
+            # from, so it is scoped through the GRN's.
+            "grn__store_id",
         )
         progress_rows = [
             {

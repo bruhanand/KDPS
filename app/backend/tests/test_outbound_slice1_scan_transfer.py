@@ -20,6 +20,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
+from accounts.rbac_matrix import section_access_for
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import StoreTransfer, StoreTransferLine, TransferReceipt
@@ -51,7 +52,9 @@ def scan_scaffold(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
 
-    role = Role.objects.create(code="ho_ops", name="HO Ops (scan test)")
+    role = Role.objects.create(
+        code="ho_ops", name="HO Ops (scan test)", section_access=section_access_for("ho_ops")
+    )
     user = User.objects.create_user(
         username="scan_ops",
         password="Test@123",
@@ -523,7 +526,11 @@ def test_scan_lookup_is_store_scoped_fail_closed(scan_scaffold):
     """A store-scoped user cannot probe another store's stock — an
     out-of-scope store looks identical to no stock (ADR-0003)."""
     s = scan_scaffold
-    role = Role.objects.create(code="store_manager", name="SM (scan test)")
+    role = Role.objects.create(
+        code="store_manager",
+        name="SM (scan test)",
+        section_access=section_access_for("store_manager"),
+    )
     sm = User.objects.create_user(
         username="scan_sm",
         password="Test@123",

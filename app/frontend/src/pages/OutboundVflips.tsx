@@ -11,7 +11,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundAdmin } from "../lib/outbound-rbac";
+import { canFlipOwnership } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
@@ -78,7 +78,7 @@ interface BrandT { id: number; name: string; }
 export function VFlipListPage() {
   const { user } = useAuth();
   const { data, loading } = useList<VFlipT>("/outbound/vflips");
-  const writable = canOutboundAdmin(user?.role?.code);
+  const writable = canFlipOwnership(user);
 
   return (
     <div className="page-pad">
@@ -311,7 +311,7 @@ export function VFlipDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: v, loading } = useDoc<VFlipT>(`/outbound/vflips/${id}`);
-  const writable = canOutboundAdmin(user?.role?.code);
+  const writable = canFlipOwnership(user);
   const [submitting, setSubmitting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");

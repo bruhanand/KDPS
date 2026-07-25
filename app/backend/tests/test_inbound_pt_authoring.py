@@ -24,6 +24,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
 from accounts.models import Role, User
+from accounts.rbac_matrix import section_access_for
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.models import Grn, GrnLine
@@ -72,7 +73,10 @@ def vocab(db):
 
 
 def _user(username: str, role_code: str) -> User:
-    role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": role_code})
+    role, _ = Role.objects.get_or_create(
+        code=role_code,
+        defaults={"name": role_code, "section_access": section_access_for(role_code)},
+    )
     user = User.objects.create_user(username=username, password=TEST_PASSWORD, role=role)
     user.scope_type = "all"
     user.save(update_fields=["scope_type"])
@@ -351,9 +355,31 @@ def test_queue_lists_arrivals_and_clears_on_pt(world, vocab, warehouse_client):
     assert q["pt_in_progress"][0]["grn_number"] == grn.doc_number
 
 
-def test_queue_is_a_warehouse_ho_screen(world, vocab, store_client):
-    r = store_client.get("/api/inbound/queue")
-    assert r.status_code == 403
+def test_queue_opens_for_the_store_but_shows_only_its_own_arrivals(world, vocab, store_client):
+    """The queue is `receive_goods: view`, scoped to the caller's unit (#94).
+
+    It used to be a role list that refused every store outright. But a store
+    receives its own direct deliveries, so the sidebar already shows it Receive
+    Goods — refusing the API behind that link was the drift. What actually keeps
+    one store out of another's work is the scope, not the rung: this user is
+    entitled to a shop, and the arrival under test landed at the warehouse.
+    """
+    _grn(world, lines=LINES)
+
+    shop = Store.objects.create(
+        code="SHOP-1", name="Shop 1", store_type=Store.StoreType.STORE, gstin=world["wh"].gstin
+    )
+    scoped = _user("shop-scoped", "store_staff")
+    scoped.scope_type = "store"
+    scoped.save(update_fields=["scope_type"])
+    scoped.stores.add(shop)
+    scoped_client = APIClient()
+    scoped_client.force_authenticate(scoped)
+
+    assert store_client.get("/api/inbound/queue").status_code == 200
+
+    body = scoped_client.get("/api/inbound/queue").json()
+    assert body["counts"] == {"awaiting_pt": 0, "pt_in_progress": 0}
 
 
 # ------------------------------------------------- derived GRN lifecycle (full walk)

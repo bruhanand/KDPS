@@ -217,9 +217,13 @@ describe("canAccess", () => {
     expect(canAccess("/setup/users", owner)).toBe(true);
   });
 
-  it("V-flip rides on the Stock section it is an action of", () => {
+  it("V-flip rides on Stock, at the rung the server gates it on", () => {
     expect(canAccess("/stock", storePerson)).toBe(true);
-    expect(canAccess("/stock/vflips/3", storePerson)).toBe(true);
+    // Converting ownership is `stock: manage` server-side (#94). The store
+    // person holds `stock: view`, so the link no longer opens a screen whose
+    // every button the API would refuse.
+    expect(canAccess("/stock/vflips/3", storePerson)).toBe(false);
+    expect(canAccess("/stock/vflips/3", warehouse)).toBe(true);
     // /stock is not a prefix of /stock-count — a different section entirely.
     expect(canAccess("/stock-count/writeoffs", accounts)).toBe(false);
   });

@@ -144,7 +144,10 @@ def books(db):
             scope_type=ScopeType.ALL,
         )
 
-    maker = _user("bc_maker", "ho_ops")
+    # The warehouse is the one role that makes all four document families under
+    # the section gates (#94): `return_to_brand: operate`, `stock_count: operate`
+    # and `stock: manage`. Owner checks, and is never the maker.
+    maker = _user("bc_maker", "warehouse")
     checker = _user("bc_checker", "owner")
 
     for doc_type in ["WRO", "VFL", "ADJ", "RTV", "STO"]:

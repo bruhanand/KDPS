@@ -12,7 +12,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundWrite } from "../lib/outbound-rbac";
+import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
@@ -87,7 +87,7 @@ interface StoreT { id: number; code: string; name: string; store_type: string; }
 export function AdjustmentListPage() {
   const { user } = useAuth();
   const { data, loading } = useList<AdjT>("/outbound/adjustments");
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteStockCount(user);
 
   return (
     <div className="page-pad">
@@ -322,7 +322,7 @@ export function AdjustmentDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: a, loading } = useDoc<AdjT>(`/outbound/adjustments/${id}`);
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteStockCount(user);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 

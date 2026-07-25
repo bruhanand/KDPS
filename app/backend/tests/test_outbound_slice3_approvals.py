@@ -21,6 +21,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
+from accounts.rbac_matrix import section_access_for
 from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Gstin, LegalEntity, Store
@@ -34,10 +35,10 @@ FY = "26-27"
 def mc(db):
     """One store with stock, plus four people:
 
-    maker    — ho_ops, may create and may normally approve, but never its own
-    checker  — owner, the second person
-    packer   — warehouse, a writer whose role may not approve anything
-    outsider — store_manager scoped to a different store
+    maker    — ho_ops, makes and clears counting corrections, but never its own
+    checker  — owner, the second person on every family here
+    packer   — warehouse, the one who makes V-flips (`stock: manage`, #94)
+    outsider — accounts, a reader on stock and counting, scoped to another store
     """
     entity = LegalEntity.objects.create(code="mc-ent", name="MC Entity", pan="AAACM1234M")
     gstin = Gstin.objects.create(
@@ -54,7 +55,10 @@ def mc(db):
     )
 
     def _user(username, role_code, scope=ScopeType.ALL, stores=()):
-        role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": role_code})
+        role, _ = Role.objects.get_or_create(
+            code=role_code,
+            defaults={"name": role_code, "section_access": section_access_for(role_code)},
+        )
         u = User.objects.create_user(
             username=username, password="Test@123", role=role, entity=entity, scope_type=scope
         )
@@ -223,7 +227,8 @@ def test_one_inbox_lists_every_document_type_waiting_for_me(mc):
     """One endpoint, three different document families, one list."""
     maker = _client(mc["maker"])
     maker.post("/api/outbound/writeoffs", _writeoff_payload(mc["store"]), format="json")
-    maker.post(
+    # A V-flip is the warehouse's to make — `stock: manage` (#94).
+    _client(mc["packer"]).post(
         "/api/outbound/vflips",
         {
             "store": mc["store"].id,
@@ -306,8 +311,12 @@ def test_approve_from_the_inbox_then_the_document_posts(mc):
 @pytest.mark.django_db(transaction=True)
 def test_a_vflip_needs_a_second_person_too(mc):
     """Same rule, different document family — the V-flip's ``authorized_by``
-    is the checker, and it will not post before that."""
-    created = _client(mc["maker"]).post(
+    is the checker, and it will not post before that.
+
+    The warehouse makes it: relabelling ownership is `stock: manage` (#94), a
+    rung HO ops does not hold.
+    """
+    created = _client(mc["packer"]).post(
         "/api/outbound/vflips",
         {
             "store": mc["store"].id,
@@ -320,7 +329,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
     assert created.status_code == 201, created.data
     vflip_id = created.data["id"]
 
-    blocked = _client(mc["maker"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    blocked = _client(mc["packer"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert blocked.status_code == 400
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id is None
 
@@ -329,7 +338,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
         f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
     )
 
-    posted = _client(mc["maker"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    posted = _client(mc["packer"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert posted.status_code == 200, posted.data
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id == mc["checker"].id
 
@@ -708,7 +717,12 @@ def test_asking_again_is_store_scoped(mc):
 
 @pytest.mark.django_db(transaction=True)
 def test_a_reader_cannot_ask_again(mc):
-    """A write-off is an admin document — a warehouse writer may not re-raise it."""
+    """Re-raising is a write, so it needs the write rung on the section.
+
+    The reader here is Accounts, which the matrix gives `stock_count: view` —
+    the refusal names the section, so it is the rung talking and not the store
+    scope, which is checked later and would say something else (#94).
+    """
     data = _create_writeoff(mc)
     approval = Approval.objects.get(kind="writeoff")
     _client(mc["checker"]).post(
@@ -716,8 +730,9 @@ def test_a_reader_cannot_ask_again(mc):
         {"action": "reject", "reason": "Wrong store"},
         format="json",
     )
-    refused = _client(mc["packer"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
+    refused = _client(mc["outsider"]).post(f"/api/outbound/writeoffs/{data['id']}/request-approval")
     assert refused.status_code == 403
+    assert "stock_count" in str(refused.data["detail"])
 
 
 @pytest.mark.parametrize(
@@ -848,7 +863,7 @@ def test_a_line_the_books_do_not_know_is_refused_outright(mc):
 @pytest.mark.django_db(transaction=True)
 def test_a_vflip_has_no_tolerance_either(mc):
     """Changing who owns a piece is never automatic, however small it is."""
-    resp = _client(mc["maker"]).post(
+    resp = _client(mc["packer"]).post(
         "/api/outbound/vflips",
         {
             "store": mc["store"].id,

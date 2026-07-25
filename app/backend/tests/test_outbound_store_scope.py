@@ -14,6 +14,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
+from accounts.rbac_matrix import section_access_for
 from core.documents import VoucherSeries
 from masters.models import Brand, Gstin, LegalEntity, Store
 from outbound.models import (
@@ -63,7 +64,11 @@ def scope_scaffold(db):
     vendor = Vendor.objects.create(name="Scope Vendor", code="scvnd")
 
     # Store manager: scoped to DEO only
-    sm_role = Role.objects.create(code="store_manager", name="Store Manager (scope test)")
+    sm_role = Role.objects.create(
+        code="store_manager",
+        name="Store Manager (scope test)",
+        section_access=section_access_for("store_manager"),
+    )
     sm_user = User.objects.create_user(
         username="scope_sm",
         password="Test@123",
@@ -74,7 +79,9 @@ def scope_scaffold(db):
     sm_user.stores.add(store_deo)
 
     # Admin: all scope
-    admin_role = Role.objects.create(code="owner", name="Owner (scope test)")
+    admin_role = Role.objects.create(
+        code="owner", name="Owner (scope test)", section_access=section_access_for("owner")
+    )
     admin_user = User.objects.create_user(
         username="scope_admin",
         password="Test@123",

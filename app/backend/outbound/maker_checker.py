@@ -17,6 +17,9 @@ from typing import Any
 
 from django.db import models
 
+from accounts.rbac_matrix import roles_with_capability
+from accounts.role_lists import declare_role_list
+from accounts.sections import CAP_APPROVE
 from approvals.models import Approval, ApprovalStatus
 from approvals.services import (
     AlreadyPendingError,
@@ -29,7 +32,6 @@ from approvals.services import (
 )
 from core.documents import DocStatus
 from outbound.models import StockAdjustment, VFlip, WriteOff
-from outbound.permissions import OUTBOUND_ADMIN_ROLES
 
 
 @dataclass(frozen=True)
@@ -55,13 +57,34 @@ class ApprovalKind:
     band_roles: tuple[str, ...] = ()
 
 
-#: Only these roles may clear an outbound approval above the band — a store-level
-#: maker always needs someone at HO/finance level, never a peer.
-_ADMIN_ROLES = tuple(sorted(OUTBOUND_ADMIN_ROLES))
+#: Who may clear a correction, and who may clear an ownership flip — the roles
+#: the matrix puts at ``approve`` or above on that document's own section, read
+#: from the sheet rather than hand-listed here (#94). These are *seed* values;
+#: the live answer is the ``ApprovalPolicy`` row, which the business retunes.
+_COUNT_APPROVERS = roles_with_capability("stock_count", CAP_APPROVE)
+_STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
 
-#: Within the band, the store in-charge may clear it too (a *different* one from
-#: the maker — the self-approval rule still binds).
-_IN_CHARGE_ROLES = tuple(sorted({*_ADMIN_ROLES, "store_manager"}))
+#: Within the band, the store in-charge may clear it too (a *different* person
+#: from the maker — the self-approval rule still binds).
+_IN_CHARGE_ROLES = tuple(
+    sorted(
+        {
+            *_COUNT_APPROVERS,
+            *declare_role_list(
+                "outbound.adjustment_band_in_charge",
+                ("store_manager",),
+                reason=(
+                    "The design lets the store in-charge clear a small counting "
+                    "variance without going to HO. That is seniority *within* a "
+                    "section — the manager and the cashier both hold "
+                    "`stock_count: operate`, and the ladder has no rung between "
+                    "operate and approve to separate them. Widening it to "
+                    "`stock_count: approve` would hand every counter the band."
+                ),
+            ),
+        }
+    )
+)
 
 #: Stock adjustments alone carry a tolerance: they are the output of counting,
 #: where "book vs counted" is never going to agree to the piece, and the design
@@ -72,12 +95,12 @@ _ADJ_TOLERANCE_PAISE = 2_00_000  # ₹2,000 at stake
 _ADJ_BAND_PAISE = 25_00_000  # ₹25,000 — above this, HO only
 
 KINDS: dict[type[models.Model], ApprovalKind] = {
-    WriteOff: ApprovalKind("writeoff", "Write-off", _ADMIN_ROLES, "approved_by"),
-    VFlip: ApprovalKind("vflip", "V-flip", _ADMIN_ROLES, "authorized_by"),
+    WriteOff: ApprovalKind("writeoff", "Write-off", _COUNT_APPROVERS, "approved_by"),
+    VFlip: ApprovalKind("vflip", "V-flip", _STOCK_APPROVERS, "authorized_by"),
     StockAdjustment: ApprovalKind(
         "adjustment",
         "Stock adjustment",
-        _ADMIN_ROLES,
+        _COUNT_APPROVERS,
         "approved_by",
         tolerance_paise=_ADJ_TOLERANCE_PAISE,
         band_paise=_ADJ_BAND_PAISE,
