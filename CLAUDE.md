@@ -78,6 +78,13 @@ These are properties of the business, independent of any design choice:
 
 ## Agent skills
 
+### Delivering an issue
+
+`/deliver <issue#>` takes one `ready-for-agent` issue from containment check to an open PR:
+containment → branch → `/tdd` → `npm run ci` → `/simplify` → `/code-review` → live browser QA → PR.
+It stops at the PR and never merges. Run one issue per session; the dev stack is single-tenant
+(one Postgres, `:8001`, `:3000`), so only one session can hold the QA gate at a time.
+
 ### Issue tracker
 
 Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
@@ -90,12 +97,11 @@ The five triage states each map to a repo label of the same name: `needs-triage`
 
 **Single-context**: one root `CONTEXT.md`, ADRs in `docs/my-understanding/system-design/adr/`. See `docs/agents/domain.md`.
 
-## gstack
+## Browser use
 
-Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
-Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review,
-/design-consultation, /design-shotgun, /design-html, /review, /ship, /land-and-deploy,
-/canary, /benchmark, /browse, /connect-chrome, /qa, /qa-only, /design-review,
-/setup-browser-cookies, /setup-deploy, /setup-gbrain, /sync-gbrain, /retro, /investigate,
-/document-release, /document-generate, /codex, /cso, /autoplan, /plan-devex-review,
-/devex-review, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, /learn.
+Use the **chrome-devtools MCP** tools (`mcp__chrome-devtools__*`) to drive the app: they can assert on
+network requests and console messages, which is what QA'ing an ERP screen actually needs.
+Do not use `mcp__claude-in-chrome__*` - it drives Anand's own Chrome session.
+The recipe (preconditions, flows, what to assert) is `.claude/skills/deliver/LIVE-QA.md`.
+
+*(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*
