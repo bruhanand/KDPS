@@ -5,13 +5,17 @@ that sum to zero, so the whole value GL's `Σ(amount)` (trial balance) is exactl
 0 when the books tie. We also present the equation of state — assets the PT slice
 builds (inventory + SOR stock + input GST + cash) against the liabilities/contra
 it raises (vendor payable + GRNI + SOR contra). Finance/owner-only (ADR-0003).
+
+It also answers one question the trial balance cannot: whether any stock row
+holds **zero pieces and non-zero rupees** (#103). A balanced GL says the legs
+tie; it says nothing about value stranded against pieces that have gone.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -21,6 +25,10 @@ from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.money import paise_to_rupees_str
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from finledger.views import IsBooksKeeper
+from stockledger.models import StockOnHand
+
+#: How many stranded rows to name before the list is just a count.
+STRANDED_SAMPLE = 20
 
 ACCOUNTS = [
     (GLAccount.INVENTORY, "Inventory (owned stock)", "asset"),
@@ -76,6 +84,33 @@ class BooksHealthView(APIView):
                 "drift_paise": cash_sub - gl_cash,
             },
         }
+        # Zero pieces still carrying rupees (#103) — a movement that relieved
+        # quantity but not value. Every quantity-based reconciliation passes
+        # over it, including a physical count, because the piece count is right;
+        # only a value-per-piece read like this one ever sees it.
+        stranded_qs = StockOnHand.objects.filter(net_qty=0).exclude(net_value_paise=0)
+        totals = stranded_qs.aggregate(rows=Count("id"), value=Sum("net_value_paise"))
+        stranded_count = totals["rows"] or 0
+        stranded_total = totals["value"] or 0
+        stranded_rows = list(
+            stranded_qs.select_related("store").order_by("-net_value_paise")[:STRANDED_SAMPLE]
+        )
+        stranded = {
+            "clean": stranded_count == 0,
+            "row_count": stranded_count,
+            "value_paise": stranded_total,
+            "value_rupees": paise_to_rupees_str(stranded_total),
+            "rows": [
+                {
+                    "store_code": row.store.code,
+                    "sku_code": row.sku_code,
+                    "value_paise": row.net_value_paise,
+                    "value_rupees": paise_to_rupees_str(row.net_value_paise),
+                }
+                for row in stranded_rows
+            ],
+        }
+
         accounts: list[dict[str, Any]] = [
             {
                 "code": code,
@@ -92,6 +127,7 @@ class BooksHealthView(APIView):
                 "trial_balance_paise": tb,
                 "trial_balance_rupees": paise_to_rupees_str(tb),
                 "reconciliation": reconciliation,
+                "stranded_stock_value": stranded,
                 "assets_paise": assets,
                 "assets_rupees": paise_to_rupees_str(assets),
                 "liabilities_paise": liabilities,

@@ -59,6 +59,26 @@ def _check_stock(store_id: int, sku_code: str, required_qty: int) -> None:
         )
 
 
+def _line_amount(line, qty: int, doc_number: str) -> int:
+    """Value one leg of a stock movement — qty × the line's frozen unit cost.
+
+    Refuses a line the books never priced (#103). Not an exception to
+    flag-don't-block but Rule 5's own "unless it is truly dangerous" clause,
+    which the rules page now defines for money: a zero-value stock movement is
+    not a flagged approximation, it is a wrong number presented as a right one
+    — the pieces leave and the rupees stay, and every quantity-based check,
+    including a physical count, passes over it.
+    """
+    unit_cost_paise = getattr(line, "unit_cost_paise", 0) or 0
+    if unit_cost_paise <= 0:
+        raise OutboundPostingError(
+            f"{line.sku_code} on {doc_number} carries no unit cost, so this movement "
+            "cannot be valued. Stock never moves at zero value — re-make the document "
+            "so its cost is read from the books."
+        )
+    return qty * unit_cost_paise
+
+
 def _write_stock_entry(
     *,
     store,
@@ -71,7 +91,7 @@ def _write_stock_entry(
     posted_by=None,
 ) -> StockLedgerEntry:
     """Create a single stock ledger entry and update StockOnHand."""
-    amount_paise = qty * (line.unit_cost_paise if hasattr(line, "unit_cost_paise") else 0)
+    amount_paise = _line_amount(line, qty, doc_number)
     entry = StockLedgerEntry.objects.create(
         store=store,
         gstin=gstin,
@@ -173,7 +193,7 @@ def _write_transit_entry(
     the receiver scans in) and deliberately do NOT touch StockOnHand — the
     bucket lives in InTransitStock, keyed to the transfer's doc number.
     """
-    amount_paise = qty * line.unit_cost_paise
+    amount_paise = _line_amount(line, qty, transfer.doc_number)
     entry = StockLedgerEntry.objects.create(
         store=transfer.source_store,
         gstin=transfer.source_store.gstin,
@@ -209,38 +229,106 @@ def _write_transit_entry(
     return entry
 
 
-def book_unit_cost(store_id: int, sku_code: str) -> int:
+def book_unit_cost(store_id: int, sku_code: str, season: str = "") -> int:
     """What the books say one piece costs at this location, in paise.
 
     The cohort's frozen P-RATE where there is one, else the on-hand average.
-    Returns 0 when the location holds no such stock — "unknown", which every
+    Returns 0 when the books cannot price the piece — "unknown", which every
     caller must treat as unknown rather than as free.
+
+    ``season`` is only read for a piece the location holds none of (a stocktake
+    surplus): with no on-hand row there is no season to look the cohort up by,
+    so the caller supplies the one on its line.
     """
     from masters.models import Cohort
 
     on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).first()
-    if on_hand is None:
-        return 0
-    cohort = Cohort.objects.filter(barcode=sku_code, season=on_hand.season).first()
-    if cohort is not None:
-        return int(cohort.unit_cost_paise or 0)
-    if on_hand.net_qty > 0:
+    cohort_season = on_hand.season if on_hand is not None else season
+    cohort = Cohort.objects.filter(barcode=sku_code, season=cohort_season).first()
+    if cohort is None and not cohort_season:
+        # Nothing said which season. A cohort is keyed (barcode, season) because
+        # the same SKU is bought across seasons at different locked costs, so
+        # one cohort is the only answer the books can give and more than one is
+        # a guess — and a guess priced as a book value is the exact thing this
+        # seam exists to stop. Two is all we need to know it is ambiguous.
+        candidates = list(Cohort.objects.filter(barcode=sku_code)[:2])
+        cohort = candidates[0] if len(candidates) == 1 else None
+    if cohort is not None and cohort.unit_cost_paise:
+        return int(cohort.unit_cost_paise)
+    if on_hand is not None and on_hand.net_qty > 0:
         return int(on_hand.net_value_paise or 0) // on_hand.net_qty
     return 0
+
+
+def _cannot_price(store_id: int, sku_code: str, season: str) -> str:
+    """Why the books could not price this piece, in words the maker can act on.
+
+    Two different problems wear the same "cost is unknown" answer, and they need
+    opposite fixes: a piece the books never bought has to be brought in first,
+    while a piece bought in several seasons only needs the maker to say which
+    one. Telling them apart costs one query on the refusal path.
+    """
+    from masters.models import Cohort
+
+    if not season and not StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).exists():
+        seasons = sorted(Cohort.objects.filter(barcode=sku_code).values_list("season", flat=True))
+        if len(seasons) > 1:
+            return (
+                f"{sku_code} was bought in more than one season ({', '.join(seasons)}), each at "
+                "its own cost, and the store holds none of it — so the books cannot tell which "
+                "buy this piece came from. Say which season it belongs to and make this "
+                "document again."
+            )
+    return (
+        f"The books cannot price {sku_code} at this location, so it cannot be "
+        "valued. Bring the piece in on a GRN/PT first (or correct its cost), "
+        "then make this document again."
+    )
+
+
+def resolve_line_cost(store_id: int, sku_code: str, season: str = "") -> int:
+    """The books' unit cost for one line — or a refusal (#103).
+
+    The single derive-or-refuse seam for every value-bearing outbound line. The
+    cost is *always* read here and never accepted from the caller: a maker who
+    could type it could type a piece out of the books for nothing, and the same
+    number decides who has to approve the document.
+
+    Where the books cannot price the piece, the line is refused rather than
+    defaulted to free — see ``_line_amount`` for why zero is the one thing a
+    money posting may not fall back to.
+    """
+    cost = book_unit_cost(store_id, sku_code, season)
+    if cost <= 0:
+        raise OutboundPostingError(_cannot_price(store_id, sku_code, season))
+    return cost
+
+
+def resolve_line_identity(store_id: int, sku_code: str, season: str = "") -> dict[str, int | str]:
+    """Merchandising dims + unit cost for one document line, read from the books.
+
+    What ``_resolve_scan_identity`` does for a scan, for the typed documents
+    (write-off, adjustment, RTV, V-flip) — with one difference: it also answers
+    for a piece the location holds none of, which is how a stocktake surplus is
+    priced from its cohort. Dims the books do not know are left to the caller's
+    payload; the cost never is.
+    """
+    on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).first()
+    dims = {k: v for k, v in merch_dims(on_hand).items() if v} if on_hand is not None else {}
+    return {**dims, "unit_cost_paise": resolve_line_cost(store_id, sku_code, season)}
 
 
 def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     """Merchandising dims + unit cost for a scanned barcode, from the source
     location's stock (the ledger is self-describing) and the cohort's frozen
-    P-RATE cost where one exists (falling back to the on-hand average)."""
-    try:
-        on_hand = StockOnHand.objects.get(store_id=store_id, sku_code=barcode)
-    except StockOnHand.DoesNotExist:
-        raise OutboundPostingError(
-            f"Barcode {barcode} has no stock at the source location."
-        ) from None
+    P-RATE cost where one exists (falling back to the on-hand average).
 
-    return {**merch_dims(on_hand), "unit_cost_paise": book_unit_cost(store_id, barcode)}
+    Unlike ``resolve_line_identity`` a scan must *be there* to be scanned, so a
+    location holding none of the piece is the wrong-piece beep, not a pricing
+    question."""
+    if not StockOnHand.objects.filter(store_id=store_id, sku_code=barcode).exists():
+        raise OutboundPostingError(f"Barcode {barcode} has no stock at the source location.")
+    return resolve_line_identity(store_id, barcode)
 
 
 @transaction.atomic
@@ -436,7 +524,7 @@ def _write_quarantine_entry(
     the bucket record the most-recent mark-damaged actor + time for the
     inventory quarantine filter.
     """
-    amount_paise = qty * line.unit_cost_paise
+    amount_paise = _line_amount(line, qty, doc_number)
     entry = StockLedgerEntry.objects.create(
         store=store,
         gstin=gstin,
