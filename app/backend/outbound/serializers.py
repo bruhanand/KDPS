@@ -13,6 +13,7 @@ from approvals.services import display_name
 from masters.models import Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
+    GapReason,
     MarkDamaged,
     MarkDamagedLine,
     ReturnToVendor,
@@ -21,7 +22,10 @@ from outbound.models import (
     StockAdjustmentLine,
     StoreTransfer,
     StoreTransferLine,
+    TransferGapClosure,
+    TransferGapClosureLine,
     TransferReceipt,
+    TransferReceiptException,
     VFlip,
     VFlipLine,
     WriteOff,
@@ -128,8 +132,9 @@ def _create_with_approval(
 
 class StoreTransferLineSerializer(serializers.ModelSerializer):
     """Read shape. Quantities are scan-derived: ``qty_planned`` is the plan,
-    ``qty_dispatched``/``qty_received`` are what was scanned, ``qty_in_transit``
-    is derived (dispatched − received), never stored."""
+    ``qty_dispatched``/``qty_received`` are what was scanned, ``qty_resolved``
+    is what a posted gap closure accounted for, and ``qty_in_transit`` is derived
+    from the three, never stored."""
 
     qty_in_transit = serializers.IntegerField(read_only=True)
 
@@ -148,27 +153,145 @@ class StoreTransferLineSerializer(serializers.ModelSerializer):
             "qty_planned",
             "qty_dispatched",
             "qty_received",
+            "qty_resolved",
             "qty_in_transit",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id", "qty_dispatched", "qty_received", "unit_cost_paise"]
+        read_only_fields = [
+            "id",
+            "qty_dispatched",
+            "qty_received",
+            "qty_resolved",
+            "unit_cost_paise",
+        ]
+
+
+class ReceiptExceptionSerializer(serializers.ModelSerializer):
+    """One short / extra / damaged outcome, as recorded at receive (#71)."""
+
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+
+    class Meta:
+        model = TransferReceiptException
+        fields = [
+            "id",
+            "kind",
+            "kind_label",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
+            "note",
+        ]
+        read_only_fields = fields
 
 
 class TransferReceiptSerializer(serializers.ModelSerializer):
+    exceptions = ReceiptExceptionSerializer(many=True, read_only=True)
+    received_by_name = serializers.SerializerMethodField()
+
+    def get_received_by_name(self, obj: TransferReceipt) -> str:
+        return display_name(obj.received_by)
+
     class Meta:
         model = TransferReceipt
-        fields = ["id", "received_by", "receipt_date", "receipt_status", "shortfall_notes"]
+        fields = [
+            "id",
+            "received_by",
+            "received_by_name",
+            "receipt_date",
+            "receipt_status",
+            "shortfall_notes",
+            "exceptions",
+        ]
         read_only_fields = ["id", "receipt_date"]
+
+
+class GapClosureLineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TransferGapClosureLine
+        fields = [
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "unit_cost_paise",
+        ]
+        read_only_fields = fields
+
+
+class GapClosureReadSerializer(ApprovedDocumentSerializer):
+    """A gap closure and everything a reviewer needs to judge it — which
+    transfer, which pieces, whose reason, and who signed it off."""
+
+    lines = GapClosureLineSerializer(many=True, read_only=True)
+    reason_label = serializers.CharField(source="get_reason_display", read_only=True)
+    store_code = serializers.CharField(source="store.code", read_only=True)
+    transfer_doc_number = serializers.CharField(source="transfer.doc_number", read_only=True)
+    source_store_code = serializers.CharField(source="transfer.source_store.code", read_only=True)
+    destination_store_code = serializers.CharField(
+        source="transfer.destination_store.code", read_only=True
+    )
+
+    class Meta:
+        model = TransferGapClosure
+        fields = [
+            "id",
+            "doc_number",
+            "docstatus",
+            "transfer",
+            "transfer_doc_number",
+            "store",
+            "store_code",
+            "source_store_code",
+            "destination_store_code",
+            "reason",
+            "reason_label",
+            "note",
+            "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+            "lines",
+        ]
+
+
+class GapClosureInputSerializer(serializers.Serializer):
+    """Raising a closure: a reason and (optionally) a sentence. Nothing else —
+    the lines are read off the transfer's in-transit remainder, so the person
+    closing the gap cannot quietly change how much went missing."""
+
+    reason = serializers.ChoiceField(choices=GapReason.choices)
+    note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
 
 
 class StoreTransferReadSerializer(serializers.ModelSerializer):
     lines = StoreTransferLineSerializer(many=True, read_only=True)
     receipt = TransferReceiptSerializer(read_only=True)
+    gap_closure = GapClosureReadSerializer(read_only=True)
     source_store_code = serializers.CharField(source="source_store.code", read_only=True)
     source_store_name = serializers.CharField(source="source_store.name", read_only=True)
     destination_store_code = serializers.CharField(source="destination_store.code", read_only=True)
     destination_store_name = serializers.CharField(source="destination_store.name", read_only=True)
     dispatch_mismatch = serializers.SerializerMethodField()
+    qty_in_transit = serializers.SerializerMethodField()
+    gap_state = serializers.SerializerMethodField()
 
     def get_dispatch_mismatch(self, obj: StoreTransfer) -> bool:
         """Derived, never stored: a dispatched transfer whose scanned
@@ -181,6 +304,34 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             line.qty_planned is not None and line.qty_planned != line.qty_dispatched
             for line in obj.lines.all()
         )
+
+    def get_qty_in_transit(self, obj: StoreTransfer) -> int:
+        """Pieces still on the road (or missing) under this transfer."""
+        from core.documents import DocStatus
+
+        if obj.docstatus != DocStatus.SUBMITTED:
+            return 0
+        return sum(line.qty_in_transit for line in obj.lines.all())
+
+    def get_gap_state(self, obj: StoreTransfer) -> str:
+        """Where this transfer stands, derived from its documents — never stored
+        (the architecture's rule: a lifecycle is read off the record, not set).
+
+        ``in_transit`` nothing received yet · ``received`` all of it landed ·
+        ``gap`` received short, still open · ``closed`` a senior said what became
+        of the shortfall.
+        """
+        from core.documents import DocStatus
+
+        if obj.docstatus != DocStatus.SUBMITTED:
+            return ""
+        receipt = getattr(obj, "receipt", None)
+        if receipt is None:
+            return "in_transit"
+        closure = getattr(obj, "gap_closure", None)
+        if closure is not None and closure.docstatus == DocStatus.SUBMITTED:
+            return "closed"
+        return "gap" if self.get_qty_in_transit(obj) > 0 else "received"
 
     class Meta:
         model = StoreTransfer
@@ -208,8 +359,11 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "dispatch_mismatch",
+            "qty_in_transit",
+            "gap_state",
             "lines",
             "receipt",
+            "gap_closure",
         ]
 
 
@@ -272,17 +426,56 @@ class ScanLineSerializer(serializers.Serializer):
     qty = serializers.IntegerField(min_value=1)
 
 
+def _totals(scans: list[dict[str, Any]] | None) -> dict[str, int]:
+    """Aggregate a scan list into barcode → total qty (a barcode may repeat)."""
+    totals: dict[str, int] = {}
+    for scan in scans or []:
+        totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
+    return totals
+
+
 class TransferScanInputSerializer(serializers.Serializer):
-    """For dispatch/receive: the scanned lines are the only quantities."""
+    """For dispatch: the scanned lines are the only quantities."""
 
     scans = ScanLineSerializer(many=True, allow_empty=False)
 
     def scans_by_barcode(self) -> dict[str, int]:
-        """Aggregate scans into barcode → total qty (a barcode may repeat)."""
-        totals: dict[str, int] = {}
-        for scan in self.validated_data["scans"]:
-            totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
-        return totals
+        return _totals(self.validated_data["scans"])
+
+
+class TransferReceiveInputSerializer(serializers.Serializer):
+    """Receiving, with the three exceptions the carton actually produces (#71).
+
+    ``scans`` are the pieces that arrived intact, ``damaged`` the ones that
+    arrived broken (quarantine, never the shop floor), ``extras`` the ones that
+    arrived without being sent. ``notes`` is the receiver's sentence about the
+    shortfall — the field the old payload dropped.
+
+    Any one bucket may be empty but not all three: a receipt records something
+    turning up. Which barcodes belong in which bucket is the server's call, in
+    ``posting._validate_receive``.
+    """
+
+    scans = ScanLineSerializer(many=True, required=False, default=list)
+    damaged = ScanLineSerializer(many=True, required=False, default=list)
+    extras = ScanLineSerializer(many=True, required=False, default=list)
+    notes = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
+
+    def validate(self, data: Any) -> Any:
+        if not (data.get("scans") or data.get("damaged") or data.get("extras")):
+            raise serializers.ValidationError(
+                "Scan at least one piece — as received, damaged, or an extra."
+            )
+        return data
+
+    def scans_by_barcode(self) -> dict[str, int]:
+        return _totals(self.validated_data["scans"])
+
+    def damaged_by_barcode(self) -> dict[str, int]:
+        return _totals(self.validated_data["damaged"])
+
+    def extras_by_barcode(self) -> dict[str, int]:
+        return _totals(self.validated_data["extras"])
 
 
 # ---------------------------------------------------------------------------

@@ -37,9 +37,16 @@ const KIND_ROUTE: Record<string, string> = {
   adjustment: "/stock-count/adjustments",
 };
 
+/** Kinds with no page of their own — the approver reads them where the work is.
+ *  A gap closure means nothing apart from the gaps list it came from. */
+const KIND_LIST_ROUTE: Record<string, string> = {
+  gap_closure: "/transfer/in-transit",
+};
+
 export function approvalDocPath(a: Pick<ApprovalT, "kind" | "object_id">): string | null {
   const base = KIND_ROUTE[a.kind];
-  return base ? `${base}/${a.object_id}` : null;
+  if (base) return `${base}/${a.object_id}`;
+  return KIND_LIST_ROUTE[a.kind] ?? null;
 }
 
 export function fmtApprovalWhen(iso: string): string {

@@ -286,7 +286,7 @@ class Command(BaseCommand):
         # Ensure VoucherSeries exist for all outbound doc types at all stores.
         fy = _fy()
         for store in Store.objects.all():
-            for dt in ("STO", "DMG", "RTV", "ADJ", "WRO", "VFL"):
+            for dt in ("STO", "DMG", "GAP", "RTV", "ADJ", "WRO", "VFL"):
                 VoucherSeries.objects.get_or_create(fy=fy, store_code=store.code, doc_type=dt)
 
         deo = Store.objects.get(code="DEO")

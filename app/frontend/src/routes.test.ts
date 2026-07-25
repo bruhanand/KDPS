@@ -52,12 +52,13 @@ describe("the route table", () => {
     expect(screenAt("/stock-count/writeoffs/12")).toBe("writeoff-detail");
   });
 
-  it("planned sub-screens do not swallow the Transfer document ids", () => {
-    // /transfer/requests, /transfer/distribution and /transfer/in-transit are
-    // planned pages sitting where transfer ids live.
+  it("Transfer sub-screens do not swallow the Transfer document ids", () => {
+    // /transfer/requests and /transfer/distribution are planned pages, and
+    // /transfer/in-transit is now built (#71) — all three sit where ids live.
     expect(screenAt("/transfer/requests")).toBe("planned:/transfer/requests");
-    expect(screenAt("/transfer/in-transit")).toBe("planned:/transfer/in-transit");
     expect(screenAt("/transfer/distribution")).toBe("planned:/transfer/distribution");
+    expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
+    expect(screenAt("/transfer/12")).toBe("transfer-detail");
   });
 
   it("gives every sidebar item somewhere to land", () => {

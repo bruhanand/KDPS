@@ -52,6 +52,34 @@ class ReceiptStatus(models.TextChoices):
     SHORTFALL = "shortfall", "Shortfall"
 
 
+class ReceiptExceptionKind(models.TextChoices):
+    """The three things that go wrong at receive (#71), as structured outcomes.
+
+    Free text cannot be counted, chased or reported on, so each one is a row
+    with a quantity: **short** (sent but never scanned in — stays in-transit on
+    the open transfer), **extra** (a piece arrived that the transfer never sent
+    — accepted with a flag, never silently swallowed) and **damaged** (arrived
+    broken — scanned straight into quarantine, never onto the shop floor).
+    """
+
+    SHORT = "short", "Short — sent but not scanned in"
+    EXTRA = "extra", "Extra / wrong item — not on this transfer"
+    DAMAGED = "damaged", "Damaged on arrival — into quarantine"
+
+
+class GapReason(models.TextChoices):
+    """Why a transfer's gap is being closed — the three real answers (#71).
+
+    A gap is short pieces still sitting in the in-transit bucket. Each reason
+    posts different resolving entries, so the reason is not a note: it is the
+    instruction to the ledger.
+    """
+
+    FOUND_LATER = "found_later", "Found later — the pieces did arrive"
+    LOST_IN_TRANSIT = "lost_in_transit", "Lost in transit — written off"
+    WRONGLY_SCANNED = "wrongly_scanned", "Wrongly scanned — never left the sender"
+
+
 class TransferType(models.TextChoices):
     STORE_SPLIT = "store_split", "Store split (warehouse → store)"
     INTER_STORE = "inter_store", "Inter-store transfer"
@@ -179,12 +207,20 @@ class StoreTransferLine(TimeStampedModel):
     qty_planned = models.IntegerField(null=True, blank=True)
     qty_dispatched = models.IntegerField(default=0)
     qty_received = models.IntegerField(default=0)
+    qty_resolved = models.IntegerField(
+        default=0,
+        help_text="Pieces a posted gap closure accounted for (#71) — found later, "
+        "returned to the sender, or written off as lost. Deliberately not folded "
+        "into qty_received: only two of those three ever reached the destination, "
+        "and the receipt must keep saying what was actually scanned in.",
+    )
     unit_cost_paise = MoneyField(default=0)
 
     @property
     def qty_in_transit(self) -> int:
-        """Derived, never stored: dispatched but not yet scanned in."""
-        return self.qty_dispatched - self.qty_received
+        """Derived, never stored: dispatched, not scanned in, and not yet
+        accounted for by a gap closure."""
+        return self.qty_dispatched - self.qty_received - self.qty_resolved
 
     class Meta:
         db_table = "outbound_store_transfer_line"
@@ -212,7 +248,13 @@ class TransferReceipt(TimeStampedModel):
     receipt_status = models.CharField(
         max_length=12, choices=ReceiptStatus.choices, default=ReceiptStatus.COMPLETE
     )
-    shortfall_notes = models.TextField(blank=True, default="")
+    shortfall_notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="What the receiver typed about the shortfall. The screen has "
+        "always asked for it; until #71 the payload dropped it before the server "
+        "saw it, so the one sentence explaining a gap was thrown away.",
+    )
 
     class Meta:
         db_table = "outbound_transfer_receipt"
@@ -220,6 +262,131 @@ class TransferReceipt(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"Receipt for {self.transfer}"
+
+
+class TransferReceiptException(TimeStampedModel):
+    """One thing that went wrong at receive — short, extra or damaged (#71).
+
+    Structured, quantified and kept on the receipt for good, so a wrong delivery
+    is a number somebody can chase rather than a chip that disappears when the
+    page reloads. ``unit_cost_paise`` is what the books said the piece was worth
+    at the moment of receiving; a zero on an *extra* means the books could not
+    price the piece at all, so it was recorded but deliberately not brought into
+    stock (see ``outbound.posting.post_transfer_receipt``).
+    """
+
+    receipt = models.ForeignKey(
+        TransferReceipt, on_delete=models.CASCADE, related_name="exceptions"
+    )
+    kind = models.CharField(max_length=12, choices=ReceiptExceptionKind.choices)
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+    note = models.CharField(max_length=240, blank=True, default="")
+
+    class Meta:
+        db_table = "outbound_transfer_receipt_exception"
+        ordering = ["kind", "id"]
+
+    def __str__(self) -> str:
+        return f"{self.kind} {self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# 1c. Transfer gap closure (senior-gated, reason-coded)
+# ---------------------------------------------------------------------------
+
+
+class TransferGapClosure(Document):
+    """Closes the in-transit gap a short receive left open (#71).
+
+    A short receive is honest but unfinished: the missing pieces stay in the
+    in-transit bucket, and somebody has to say what became of them. That
+    somebody is never the store that received short — this document is raised
+    and approved at HO/warehouse, and the reason it carries decides which
+    resolving entries post (``outbound.posting.post_gap_closure``).
+
+    It hangs off the *source* store, not the destination: the sender is
+    answerable for the pieces until the receiver scans them in, so the gap is
+    the sender's number, its voucher runs on the sender's series, and the
+    approval lands in the sender's side of the inbox.
+    """
+
+    transfer = models.OneToOneField(
+        StoreTransfer, on_delete=models.PROTECT, related_name="gap_closure"
+    )
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="gap_closures"
+    )
+    reason = models.CharField(max_length=20, choices=GapReason.choices)
+    note = models.TextField(blank=True, default="")
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="gap_closures_approved",
+        help_text="Stamped by the approvals inbox on approve — never typed (#70).",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="gap_closures_created",
+    )
+    approvals = GenericRelation("approvals.Approval")
+
+    class Meta(Document.Meta):
+        db_table = "outbound_transfer_gap_closure"
+        ordering = ["-created_at"]
+
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with — a gap closure means
+        nothing there without naming the transfer whose gap it closes."""
+        return self.transfer.doc_number or f"Transfer #{self.transfer_id}"
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "GAP"
+
+    def __str__(self) -> str:
+        return self.doc_number or f"GapClosure(draft #{self.pk})"
+
+
+class TransferGapClosureLine(TimeStampedModel):
+    """One barcode's worth of gap being closed.
+
+    Built from the in-transit remainder at draft time, never typed — the whole
+    point is that the closure resolves exactly what the ledger still holds.
+    """
+
+    closure = models.ForeignKey(TransferGapClosure, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    unit_cost_paise = MoneyField(default=0)
+
+    class Meta:
+        db_table = "outbound_transfer_gap_closure_line"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"
 
 
 # ---------------------------------------------------------------------------

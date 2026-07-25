@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from django.urls import path
 
-from outbound.models import StockAdjustment, VFlip, WriteOff
+from outbound.models import StockAdjustment, TransferGapClosure, VFlip, WriteOff
 from outbound.permissions import IsOutboundAdmin, IsOutboundWriter
 from outbound.serializers import (
+    GapClosureReadSerializer,
     StockAdjustmentReadSerializer,
     VFlipReadSerializer,
     WriteOffReadSerializer,
@@ -13,6 +14,8 @@ from outbound.views import (
     AdjustmentDetailView,
     AdjustmentListCreateView,
     AdjustmentSubmitView,
+    GapClosureDetailView,
+    GapClosureSubmitView,
     MarkDamagedView,
     RequestApprovalView,
     RTVDetailView,
@@ -21,6 +24,8 @@ from outbound.views import (
     ScanLookupView,
     TransferDetailView,
     TransferDispatchView,
+    TransferGapClosureCreateView,
+    TransferGapListView,
     TransferListCreateView,
     TransferReceiveView,
     VFlipDetailView,
@@ -34,9 +39,32 @@ from outbound.views import (
 urlpatterns = [
     # Store Transfers
     path("transfers", TransferListCreateView.as_view(), name="transfer-list"),
+    # Before <int:pk> so "gaps" is read as the gaps list, not a transfer id.
+    path("transfers/gaps", TransferGapListView.as_view(), name="transfer-gap-list"),
     path("transfers/<int:pk>", TransferDetailView.as_view(), name="transfer-detail"),
     path("transfers/<int:pk>/dispatch", TransferDispatchView.as_view(), name="transfer-dispatch"),
     path("transfers/<int:pk>/receive", TransferReceiveView.as_view(), name="transfer-receive"),
+    path(
+        "transfers/<int:pk>/gap-closure",
+        TransferGapClosureCreateView.as_view(),
+        name="transfer-gap-closure-create",
+    ),
+    # Gap closures (senior-gated, reason-coded — #71)
+    path("gap-closures/<int:pk>", GapClosureDetailView.as_view(), name="gap-closure-detail"),
+    path(
+        "gap-closures/<int:pk>/submit",
+        GapClosureSubmitView.as_view(),
+        name="gap-closure-submit",
+    ),
+    path(
+        "gap-closures/<int:pk>/request-approval",
+        RequestApprovalView.as_view(
+            model=TransferGapClosure,
+            read_serializer=GapClosureReadSerializer,
+            permission_classes=[IsOutboundAdmin],
+        ),
+        name="gap-closure-request-approval",
+    ),
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
     # Mark damaged (global action → quarantine)
     path("mark-damaged", MarkDamagedView.as_view(), name="mark-damaged"),

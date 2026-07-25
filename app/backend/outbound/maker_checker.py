@@ -6,8 +6,9 @@ put a fresh draft in the inbox and one to refuse a post that hasn't cleared it.
 The rules themselves (maker ≠ checker, reason on reject, one decision) live in
 ``approvals.services`` and are shared with every other module that wires in.
 
-Wired in this slice: write-offs, V-flips, stock adjustments — the three that
-used to stamp their own creator as approver.
+Wired: write-offs, V-flips, stock adjustments — the three that used to stamp
+their own creator as approver — plus transfer gap closures (#71), which reach
+the inbox the same way as everything else.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from approvals.services import (
     request_approval,
 )
 from core.documents import DocStatus
-from outbound.models import StockAdjustment, VFlip, WriteOff
+from outbound.models import StockAdjustment, TransferGapClosure, VFlip, WriteOff
 from outbound.permissions import OUTBOUND_ADMIN_ROLES
 
 
@@ -83,6 +84,12 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
         band_paise=_ADJ_BAND_PAISE,
         band_roles=_IN_CHARGE_ROLES,
     ),
+    # No tolerance and no band: a gap closure decides what became of pieces that
+    # went missing between two locations, and it is HO/warehouse work whatever it
+    # is worth. The rule that the *receiving* store cannot be either party is
+    # about entitlement rather than role, so it lives in
+    # ``posting._refuse_self_closure`` — this table only says who is senior.
+    TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _ADMIN_ROLES, "approved_by"),
 }
 
 
@@ -173,6 +180,11 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
 
     line_count, pieces, value = _line_totals(doc)
     title = f"{doc.store.code} · {line_count} line{'' if line_count == 1 else 's'} · {pieces} pcs"
+    # A document may add what the store code alone cannot say — a gap closure is
+    # meaningless in the inbox without naming the transfer it closes. Optional,
+    # so nothing else has to know this hook exists.
+    if subject := getattr(doc, "approval_subject", ""):
+        title = f"{subject} · {title}"
     policy = _policy(kind)
     common = {
         "kind": kind.code,

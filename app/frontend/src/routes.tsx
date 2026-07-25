@@ -16,6 +16,7 @@ import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
 import { TransferListPage, TransferNewPage, TransferDetailPage } from "./pages/OutboundTransfers";
+import { InTransitPage } from "./pages/OutboundInTransit";
 import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
 import { AdjustmentListPage, AdjustmentNewPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
 import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/OutboundWriteoffs";
@@ -50,6 +51,8 @@ const BUILT: Screen[] = [
   // Transfer
   { id: "transfer-list", path: "/transfer", element: <TransferListPage /> },
   { id: "transfer-new", path: "/transfer/new", element: <TransferNewPage /> },
+  // Before /transfer/:id, or "in-transit" would be read as a transfer id (#71).
+  { id: "transfer-in-transit", path: "/transfer/in-transit", element: <InTransitPage /> },
   { id: "transfer-detail", path: "/transfer/:id", element: <TransferDetailPage /> },
   // Stock Count — the corrections a count produces live with it
   { id: "adjustment-list", path: "/stock-count/adjustments", element: <AdjustmentListPage /> },
