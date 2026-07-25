@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerReset, Users, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { meetsCapability } from "../shell/navConfig";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -52,7 +52,7 @@ export default function VendorLedger() {
   const { user } = useAuth();
   // Mirrors the server gate exactly (`finledger.IsBooksKeeper` = money:manage),
   // read from the same section payload rather than a role list of our own.
-  const isFinance = Boolean(user?.is_superuser) || meetsCapability(user?.capabilities?.money, "manage");
+  const isFinance = userCan(user, "money", "manage");
 
   const [balances, setBalances] = useState<{ total_payable_rupees: string; vendors_with_dues: number; rows: BalanceT[] }>();
   const [ageing, setAgeing] = useState<AgeingT>();

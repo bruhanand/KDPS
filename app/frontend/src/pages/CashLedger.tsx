@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { meetsCapability } from "../shell/navConfig";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -29,7 +29,7 @@ export default function CashLedger() {
   const { user } = useAuth();
   // Mirrors the server gate exactly (`finledger.IsBooksKeeper` = money:manage),
   // read from the same section payload rather than a role list of our own.
-  const isFinance = Boolean(user?.is_superuser) || meetsCapability(user?.capabilities?.money, "manage");
+  const isFinance = userCan(user, "money", "manage");
 
   const [summary, setSummary] = useState<{ total_rupees: string; accounts: AccountT[] }>();
   const [entries, setEntries] = useState<EntryT[]>([]);

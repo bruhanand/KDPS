@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.urls import path
 
 from outbound.models import StockAdjustment, VFlip, WriteOff
-from outbound.permissions import IsOutboundAdmin, IsOutboundWriter
+from outbound.permissions import CanFlipOwnership, CanWriteStockCount
 from outbound.serializers import (
     StockAdjustmentReadSerializer,
     VFlipReadSerializer,
@@ -53,7 +53,7 @@ urlpatterns = [
         RequestApprovalView.as_view(
             model=StockAdjustment,
             read_serializer=StockAdjustmentReadSerializer,
-            permission_classes=[IsOutboundWriter],
+            permission_classes=[CanWriteStockCount],
         ),
         name="adjustment-request-approval",
     ),
@@ -66,7 +66,7 @@ urlpatterns = [
         RequestApprovalView.as_view(
             model=WriteOff,
             read_serializer=WriteOffReadSerializer,
-            permission_classes=[IsOutboundAdmin],
+            permission_classes=[CanWriteStockCount],
         ),
         name="writeoff-request-approval",
     ),
@@ -79,7 +79,7 @@ urlpatterns = [
         RequestApprovalView.as_view(
             model=VFlip,
             read_serializer=VFlipReadSerializer,
-            permission_classes=[IsOutboundAdmin],
+            permission_classes=[CanFlipOwnership],
         ),
         name="vflip-request-approval",
     ),

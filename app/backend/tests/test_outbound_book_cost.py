@@ -16,10 +16,10 @@ ORM with ``unit_cost_paise`` pre-filled, which is exactly why this shipped green
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
-from accounts.rbac_matrix import section_access_for
+from accounts.models import ScopeType, User
 from approvals.models import Approval, ApprovalStatus
 from core.gl import GLAccount, GLEntry
 from finledger.models import VendorLedgerEntry
@@ -129,22 +129,18 @@ def books(db):
     _registered("BC-FOUND", 12_000, 49_900)
 
     def _user(username, role_code):
-        # ``section_access`` is what the API gates on, so seed it from the RBAC
-        # matrix exactly as ``seed_foundation`` does — a role row without it
-        # reaches nothing (fail-closed).
-        role, _ = Role.objects.get_or_create(
-            code=role_code,
-            defaults={"name": role_code, "section_access": section_access_for(role_code)},
-        )
         return User.objects.create_user(
             username=username,
             password="Test@123",
-            role=role,
+            role=make_role(role_code),
             entity=entity,
             scope_type=ScopeType.ALL,
         )
 
-    maker = _user("bc_maker", "ho_ops")
+    # The warehouse is the one role that makes all four document families under
+    # the section gates (#94): `return_to_brand: operate`, `stock_count: operate`
+    # and `stock: manage`. Owner checks, and is never the maker.
+    maker = _user("bc_maker", "warehouse")
     checker = _user("bc_checker", "owner")
 
     for doc_type in ["WRO", "VFL", "ADJ", "RTV", "STO"]:

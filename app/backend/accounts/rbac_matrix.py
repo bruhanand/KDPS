@@ -44,6 +44,7 @@ from accounts.sections import (
     SECTION_CODES,
     is_valid_capability,
     is_valid_section,
+    meets,
 )
 
 # Persona code → { section_code: (capability, exact sheet label) }.
@@ -224,6 +225,27 @@ def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
         capability, label = source.get(section, (CAP_NONE, "No"))
         out[section] = {"capability": capability, "label": label}
     return out
+
+
+#: Every role code this table can answer for — the nine ``seed_foundation``
+#: writes. Anything outside it resolves to no access at all (fail-closed).
+KNOWN_ROLE_CODES: tuple[str, ...] = tuple(sorted({*ROLE_PERSONA, *DERIVED_ACCESS}))
+
+
+def roles_with_capability(section: str, minimum: str) -> tuple[str, ...]:
+    """The role codes the matrix puts at ``minimum`` or above on ``section``.
+
+    The seed-time answer to "who may approve a write-off?", so an approver list
+    is *derived from* the ratified matrix rather than hand-kept beside it. Only a
+    default: the value is written onto an ``ApprovalPolicy`` row on first use and
+    the business retunes it there (Rule 12). What this removes is the drift — a
+    default can no longer name a role the sheet gives only ``view``.
+    """
+    return tuple(
+        code
+        for code in KNOWN_ROLE_CODES
+        if meets(section_access_for(code)[section]["capability"], minimum)
+    )
 
 
 def _validate() -> None:

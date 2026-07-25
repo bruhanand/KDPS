@@ -47,6 +47,24 @@ export function meetsCapability(held: string | undefined, minimum: Capability): 
   return rank >= 0 && rank >= CAPABILITY_ORDER.indexOf(minimum);
 }
 
+/** Does this user reach at least `minimum` on `section`? The client's mirror of
+ *  `accounts.permissions.user_can`, break-glass branch included: a superuser
+ *  resolves to `manage` everywhere server-side, so a screen must not hide what
+ *  the API would let them do.
+ *
+ *  One home for the rule, because it is easy to write four times and forget the
+ *  superuser branch in one of them. Typed structurally rather than against
+ *  `User`, so the navigation manifest keeps no dependency on the auth module. */
+export function userCan(
+  user: { is_superuser?: boolean; capabilities?: Record<string, string> } | null | undefined,
+  section: string,
+  minimum: Capability,
+): boolean {
+  if (!user) return false;
+  if (user.is_superuser) return true;
+  return meetsCapability(user.capabilities?.[section], minimum);
+}
+
 // Payroll is the one gate the ladder cannot express: Accounts must see it on
 // `staff: view` ("payroll inputs") while a store person must not, and the store
 // person sits *higher* on the ladder at `staff: operate` ("own attendance").
@@ -160,8 +178,10 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Count Sessions", to: "/stock-count", planned: true },
       // Corrections live where they are caused: a count is what produces them.
-      { label: "Adjustments", to: "/stock-count/adjustments" },
-      { label: "Write-offs", to: "/stock-count/writeoffs" },
+      // Both are writes gated on `stock_count: operate` server-side, so the
+      // link must not open for a role the API will refuse (#94).
+      { label: "Adjustments", to: "/stock-count/adjustments", minCapability: "operate" },
+      { label: "Write-offs", to: "/stock-count/writeoffs", minCapability: "operate" },
     ],
   },
   {
@@ -185,7 +205,8 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Stock on Hand", to: "/stock" },
       { label: "Movement History", to: "/stock/history" },
       // Not a menu item — an ownership action reached from Stock on Hand.
-      { label: "V-Flip", to: "/stock/vflips", action: true },
+      // Relabelling who owns stock is `stock: manage` on the server (#94).
+      { label: "V-Flip", to: "/stock/vflips", action: true, minCapability: "manage" },
     ],
   },
   {

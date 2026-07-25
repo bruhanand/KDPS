@@ -15,6 +15,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.role_lists import declare_role_list
 from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store
 from masters.scoping import scoped_stores
 from masters.serializers import (
@@ -25,7 +26,17 @@ from masters.serializers import (
     StoreSerializer,
 )
 
-STEWARD_ROLES = {"owner", "it_admin", "data_steward"}
+STEWARD_ROLES = declare_role_list(
+    "masters.writes",
+    ("owner", "it_admin", "data_steward"),
+    reason=(
+        "The matrix's Setup grants are *scoped* — the warehouse holds "
+        "'Products only' and a brand manager 'Edit assigned products', both at "
+        "`setup: operate`. One Setup rung cannot carry per-model or per-brand "
+        "scope, so widening master-data writes to `setup: operate` would hand "
+        "them store, GSTIN and legal-entity edits. Parked in #104."
+    ),
+)
 
 
 class IsMasterSteward(BasePermission):
