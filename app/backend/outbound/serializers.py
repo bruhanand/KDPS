@@ -9,7 +9,8 @@ from rest_framework import serializers
 
 from approvals.models import ApprovalStatus
 from approvals.serializers import ApprovalReadSerializer
-from approvals.services import display_name
+from approvals.services import approval_for, display_name
+from core.documents import DocStatus
 from masters.models import Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
@@ -296,7 +297,6 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     def get_dispatch_mismatch(self, obj: StoreTransfer) -> bool:
         """Derived, never stored: a dispatched transfer whose scanned
         quantities differ from its plan (Rule 5 — flagged, not blocked)."""
-        from core.documents import DocStatus
 
         if obj.docstatus == DocStatus.DRAFT:  # nothing scanned yet
             return False
@@ -307,7 +307,6 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
 
     def get_qty_in_transit(self, obj: StoreTransfer) -> int:
         """Pieces still on the road (or missing) under this transfer."""
-        from core.documents import DocStatus
 
         if obj.docstatus != DocStatus.SUBMITTED:
             return 0
@@ -321,7 +320,6 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
         ``gap`` received short, still open · ``closed`` a senior said what became
         of the shortfall.
         """
-        from core.documents import DocStatus
 
         if obj.docstatus != DocStatus.SUBMITTED:
             return ""
@@ -503,9 +501,39 @@ class MarkDamagedLineSerializer(serializers.ModelSerializer):
 
 
 class MarkDamagedReadSerializer(serializers.ModelSerializer):
+    """A damage report and where it has got to (#138).
+
+    ``flag_status`` is the one word both screens read: the store that reported
+    the damage needs to see that its report is still waiting, and the person who
+    can confirm it needs the same row to say what they are being asked.
+    """
+
     lines = MarkDamagedLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
+    created_by_name = serializers.SerializerMethodField()
+    confirmed_by_name = serializers.SerializerMethodField()
+    flag_status = serializers.SerializerMethodField()
+    decision_reason = serializers.SerializerMethodField()
+
+    def get_created_by_name(self, obj: MarkDamaged) -> str:
+        return display_name(obj.created_by)
+
+    def get_confirmed_by_name(self, obj: MarkDamaged) -> str:
+        return display_name(obj.confirmed_by)
+
+    def get_flag_status(self, obj: MarkDamaged) -> str:
+        """Confirmed once it has posted; otherwise whatever the inbox says."""
+        if obj.docstatus == DocStatus.SUBMITTED:
+            return "confirmed"
+        approval = approval_for(obj)
+        if approval is not None and approval.status == ApprovalStatus.REJECTED:
+            return "rejected"
+        return "flagged"
+
+    def get_decision_reason(self, obj: MarkDamaged) -> str:
+        approval = approval_for(obj)
+        return approval.reason if approval is not None else ""
 
     class Meta:
         model = MarkDamaged
@@ -513,11 +541,16 @@ class MarkDamagedReadSerializer(serializers.ModelSerializer):
             "id",
             "doc_number",
             "docstatus",
+            "flag_status",
             "store",
             "store_code",
             "store_name",
             "note",
             "created_by",
+            "created_by_name",
+            "confirmed_by",
+            "confirmed_by_name",
+            "decision_reason",
             "created_at",
             "lines",
         ]

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 from django.utils import timezone
 
+from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
 from outbound.maker_checker import request_document_approval, require_approved
@@ -1245,10 +1246,15 @@ def _write_quarantine_entry(
 @transaction.atomic
 def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> MarkDamaged:
     """The global mark-damaged action, end to end (Rule 1 — every event is a
-    document): create a DMG document, enrich each scanned piece from the store's
-    stock (dims + frozen cost, never typed), and post it — moving the pieces from
-    free-to-sell into quarantine at the store, all in one transaction so a bad
-    scan rolls the whole thing back (no orphan draft).
+    document): create a DMG document and enrich each scanned piece from the
+    store's stock (dims + frozen cost, never typed).
+
+    Whether it *posts* depends on who is doing it (#138). A store person is
+    reporting damage, so the document stays a draft in the approvals inbox and
+    the piece stays on the shelf; a warehouse or HO person holds the confirming
+    rung, so their own document clears itself and posts here and now. Either
+    way it is one transaction, so a bad scan rolls the whole thing back and
+    leaves no orphan draft.
     """
     from outbound.models import MarkDamaged, MarkDamagedLine
 
@@ -1259,26 +1265,60 @@ def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> Mar
     for barcode, qty in sorted(scans.items()):
         identity = _resolve_scan_identity(store.id, barcode)
         MarkDamagedLine.objects.create(mark=mark, sku_code=barcode, qty=qty, **identity)
-    post_mark_damaged(mark, user=user)
+
+    approval = request_document_approval(mark, requested_by=user)
+    if approval is not None and approval.status in CLEARED_STATUSES:
+        post_mark_damaged(mark, user=user, confirmed_by=user)
     return mark
 
 
+def confirm_mark_damaged(mark: MarkDamaged, *, actor) -> None:
+    """The warehouse's confirmation, which is what posts a damage flag (#138).
+
+    Registered with the approvals inbox in ``outbound.apps`` and called from
+    inside the decision's transaction, so the stock movement and the decision
+    commit together — or roll back together, which is what happens when the
+    flagged piece was sold while it waited.
+    """
+    from approvals.services import ApprovalError
+
+    try:
+        post_mark_damaged(mark, user=actor)
+    except OutboundPostingError as exc:
+        # Re-raised in the inbox's own language so the decide endpoint answers
+        # 400 with the reason, rather than 500 with a traceback.
+        raise ApprovalError(str(exc)) from exc
+
+
 @transaction.atomic
-def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
+def post_mark_damaged(mark: MarkDamaged, user=None, confirmed_by=None) -> list[StockLedgerEntry]:
     """Post a mark-damaged document: move each line's pieces from free-to-sell
     into quarantine at the store.
 
+    Refuses unless the flag has been confirmed by someone who holds the rung
+    (``require_approved``) — the ledger seam behind #138, so no caller, API or
+    shell, can turn a store's report into a stock movement.
+
     Blocks (Rule 5's dangerous-exception) if the store has too little sellable
-    stock of a piece — you cannot quarantine stock that isn't there. Stock move
+    stock of a piece — you cannot quarantine stock that isn't there, which is
+    also what happens when a flagged piece is sold while it waits. Stock move
     only, no GL.
     """
     lines = list(mark.lines.all())
     if not lines:
         raise OutboundPostingError("Mark-damaged has no lines.")
 
+    require_approved(mark)  # a store report is not a stock movement (#138)
+
     # Row-lock + validate sellable stock at the store before minting a number.
     for line in lines:
         _check_stock(mark.store_id, line.sku_code, line.qty)
+
+    if confirmed_by is not None and mark.confirmed_by_id is None:
+        # The self-clearing case: nobody else was asked, so the inbox has no
+        # decider to stamp — the person who found the damage confirmed it.
+        mark.confirmed_by = confirmed_by
+        mark.save(update_fields=["confirmed_by"])
 
     mark.post()
 

@@ -7,7 +7,10 @@ system-wide by construction rather than by each module remembering them:
 * a document is never approved by the person who made it;
 * a reject always carries a reason;
 * a decision is made once — a decided approval is closed;
-* a wired document does not post until its approval says approved;
+* a wired document does not post until its approval says approved — and where
+  the ruling says the *approval* is what posts, the owning module's registered
+  callback does it (``approvals.hooks``), so approvals still never learns what
+  it is approving;
 * how big a document must be before a checker is asked, and who that checker
   may be, is read from a policy row — data the business can retune (Rule 12).
 """
@@ -20,6 +23,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from approvals.hooks import run_on_approved
 from approvals.models import CLEARED_STATUSES, Approval, ApprovalPolicy, ApprovalStatus
 from masters.scoping import scope_by_store
 
@@ -240,6 +244,11 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
     locked.decided_at = timezone.now()
     locked.reason = reason
     locked.save(update_fields=["status", "decided_by", "decided_at", "reason", "updated_at"])
+
+    if locked.status == ApprovalStatus.APPROVED:
+        # Where the ruling says the *approval* is what posts, this is where it
+        # posts — inside the decision's transaction. See ``approvals.hooks``.
+        run_on_approved(locked.subject, actor=actor)
     return locked
 
 

@@ -406,7 +406,12 @@ class MarkDamaged(Document):
     a document, Rule 10 — every action has an actor).
 
     Damage is caught anywhere stock is visible — receiving, on the shelf, during
-    counting, at billing — and moves the piece into quarantine there and then.
+    counting, at billing — and it takes **two rungs** to move a piece out of
+    sellable stock (#138, Anand's ruling of 26 July): a store person *reports*
+    damage and the document stays a draft, so nothing moves and the piece is
+    still on the shelf; a warehouse or HO person's *confirmation* is what posts
+    it. Someone who holds the confirming rung does both in one action.
+
     Posting writes a ``damage_out`` leg (free-to-sell drops) + a ``quarantine_in``
     leg (into the quarantine bucket) at the same store; the piece stays owned,
     it is just no longer sellable. No GL: an internal reclassification, value
@@ -423,7 +428,17 @@ class MarkDamaged(Document):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="damage_marks_created",
+        help_text="Who reported the damage — kept for good, on the piece (#138).",
     )
+    confirmed_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="damage_marks_confirmed",
+        help_text="Stamped by the approvals inbox on confirm — never typed (#138).",
+    )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_mark_damaged"

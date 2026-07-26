@@ -7,8 +7,13 @@ The rules themselves (maker ≠ checker, reason on reject, one decision) live in
 ``approvals.services`` and are shared with every other module that wires in.
 
 Wired: write-offs, V-flips, stock adjustments — the three that used to stamp
-their own creator as approver — plus transfer gap closures (#71), which reach
-the inbox the same way as everything else.
+their own creator as approver — plus transfer gap closures (#71) and damage
+flags (#138), which reach the inbox the same way as everything else.
+
+Damage is the one family where the second person is asked for on a *rung*
+rather than on a value: a store person may report damage but not move the
+stock, so their document waits, while a warehouse or HO person's own document
+clears itself (``self_clearing_roles``).
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ from approvals.services import (
     request_approval,
 )
 from core.documents import DocStatus
-from outbound.models import StockAdjustment, TransferGapClosure, VFlip, WriteOff
+from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VFlip, WriteOff
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,10 @@ class ApprovalKind:
     band_paise: int = 0
     #: Who may approve within the band (in-charge + HO).
     band_roles: tuple[str, ...] = ()
+    #: Roles that hold the deciding rung themselves, so their own document needs
+    #: nobody else. Not a value tolerance — a rung: the maker *is* the checker
+    #: this family would have asked, so asking would be asking themselves.
+    self_clearing_roles: tuple[str, ...] = ()
 
 
 #: Who may clear a correction, and who may clear an ownership flip — the roles
@@ -79,6 +88,40 @@ _STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
 #: rule barring anyone tied to the receiving store is a separate gate in
 #: ``posting._refuse_self_closure``.
 _GAP_APPROVERS = roles_with_capability("transfer", CAP_APPROVE)
+
+#: Who may confirm a damage flag (#138). The ladder gives the ratified half —
+#: the roles the sheet puts at ``return_to_brand: approve`` or above (Owner, and
+#: Admin at ``manage``) — and cannot give the other half: the sheet puts the
+#: warehouse and the store person on the *same* rung, ``return_to_brand:
+#: operate``, and separates them only in the cell's words ("Create & execute" vs
+#: "Mark damage only"). Anand's 26 July ruling turns that wording into a real
+#: gate, so the warehouse is declared here rather than promoted to ``approve``,
+#: which would hand it every other return-to-brand decision as well.
+#:
+#: ``ho_ops`` — the HO seat the ruling names alongside the warehouse — is
+#: deliberately *not* here: the matrix gives it ``return_to_brand: view``, and a
+#: viewer must not move stock. The seat that carries HO on this section is the
+#: Owner. If the business wants Operations Head confirming damage, the answer is
+#: the ``ApprovalPolicy`` row (data, Rule 12) or a sheet row for HO Ops — not a
+#: wider list here.
+_DAMAGE_CONFIRMERS = tuple(
+    sorted(
+        {
+            *roles_with_capability("return_to_brand", CAP_APPROVE),
+            *declare_role_list(
+                "outbound.damage_confirmers",
+                ("warehouse",),
+                reason=(
+                    "A store person reports damage; a warehouse or HO person confirms it "
+                    "and that confirmation is what posts the piece to quarantine (#138). "
+                    "Both hold `return_to_brand: operate` on the ratified sheet — the "
+                    "ladder has no rung between 'may report' and 'may post', and widening "
+                    "the warehouse to `approve` would also hand it RTV approval."
+                ),
+            ),
+        }
+    )
+)
 
 #: The one role the band adds on top of the approvers — a declared exception,
 #: because the ladder cannot express it.
@@ -124,6 +167,17 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     # about entitlement rather than role, so it lives in
     # ``posting._refuse_self_closure`` — this table only says who is senior.
     TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _GAP_APPROVERS, "approved_by"),
+    # No tolerance: a flag is a report about a piece, and how much that piece is
+    # worth has nothing to do with whether the store may take it off the shelf
+    # on its own say-so. The rung does — hence ``self_clearing_roles``, which
+    # lets a warehouse or HO person flag and confirm in the one action.
+    MarkDamaged: ApprovalKind(
+        "damage",
+        "Damage flag",
+        _DAMAGE_CONFIRMERS,
+        "confirmed_by",
+        self_clearing_roles=_DAMAGE_CONFIRMERS,
+    ),
 }
 
 
@@ -220,6 +274,10 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     if subject := getattr(doc, "approval_subject", ""):
         title = f"{subject} · {title}"
     policy = _policy(kind)
+    role_code = getattr(getattr(requested_by, "role", None), "code", "")
+    holds_the_rung = bool(kind.self_clearing_roles) and (
+        role_code in kind.self_clearing_roles or getattr(requested_by, "is_superuser", False)
+    )
     common = {
         "kind": kind.code,
         "kind_label": kind.label,
@@ -232,6 +290,16 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
         "store": doc.store,
         "value_paise": value,
     }
+
+    if holds_the_rung:
+        return record_no_approval_needed(
+            doc,
+            reason=(
+                f"Raised by someone who may decide a {kind.label.lower()} themselves — "
+                "posted and logged, nobody else asked."
+            ),
+            **common,
+        )
 
     if not policy.needs_checker(value):
         return record_no_approval_needed(

@@ -140,6 +140,7 @@ APPROVAL_SECTION = {
     "adjustment": "stock_count",
     "vflip": "stock",
     "gap_closure": "transfer",
+    "damage": "return_to_brand",
 }
 
 
@@ -226,11 +227,19 @@ def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
     for kind in KINDS.values():
         section = APPROVAL_SECTION[kind.code]
         can_approve = set(roles_with_capability(section, CAP_APPROVE))
-        assert set(kind.approver_roles) == can_approve, kind.code
+        # Nobody the matrix trusts is ever dropped…
+        assert can_approve <= set(kind.approver_roles), kind.code
+        # …and the only additions are registered exceptions. One kind has one:
+        # the warehouse confirms damage flags (#138) while holding the same
+        # `return_to_brand: operate` rung as the store person who raises them.
+        extra_approvers = set(kind.approver_roles) - can_approve
+        assert extra_approvers <= REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles, (
+            kind.code
+        )
         # The band may add the in-charge, and nothing else — that one addition
         # is the registered exception, so it is named here rather than assumed.
         extra = set(kind.band_roles) - can_approve
-        assert extra <= {"store_manager"}, kind.code
+        assert extra <= {"store_manager"} | extra_approvers, kind.code
         assert "accounts" not in set(kind.approver_roles) | set(kind.band_roles), kind.code
 
 
@@ -361,10 +370,11 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 
 
 # --- 3. The declared exceptions -------------------------------------------
-#: The four gates the ladder provably cannot express. A change to this set is a
+#: The five gates the ladder provably cannot express. A change to this set is a
 #: decision, which is exactly what the test is here to force.
 EXPECTED_EXCEPTIONS = {
     "outbound.adjustment_band_in_charge",
+    "outbound.damage_confirmers",
     "ptmapper.post_and_reverse_pt",
     "ptmapper.mapping_stewardship",
     "masters.writes",
