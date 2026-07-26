@@ -265,6 +265,27 @@ def test_a_brand_session_leaves_the_other_brand_alone(count_scaffold):
     assert [line["sku_code"] for line in variance["lines"]] == [SHIRT["barcode"]]
 
 
+def test_a_count_at_another_store_is_not_readable(count_scaffold):
+    """A count carries per-line cost and value, so an out-of-scope reader must
+    not be able to open one by guessing its id — out of scope reads as gone."""
+    take = _open_count(count_scaffold)
+    outsider_store = Store.objects.create(
+        code="C-B", name="Other Store", gstin=count_scaffold["gstin"]
+    )
+    outsider = User.objects.create_user(
+        username="cnt_out",
+        password="Test@123",
+        role=make_role("store_manager"),
+        scope_type=ScopeType.STORE,
+    )
+    outsider.stores.add(outsider_store)
+
+    client = _client(outsider)
+    assert client.get(f"/api/outbound/stocktakes/{take}").status_code == 404
+    assert client.get(f"/api/outbound/stocktakes/{take}/variance").status_code == 404
+    assert client.get("/api/outbound/stocktakes").data == []
+
+
 # ---------------------------------------------------------------------------
 # The correction — and its cost
 # ---------------------------------------------------------------------------
@@ -279,6 +300,24 @@ def _count_and_apply(scaffold, *, shirt_counted: int, confirm: list[str] | None 
     return take, _client(scaffold["counter"]).post(
         f"/api/outbound/stocktakes/{take}/apply", {"confirm": confirm or []}, format="json"
     )
+
+
+def test_applying_while_someone_is_still_counting_is_refused(count_scaffold):
+    """The report only sees submitted sessions, so correcting mid-count would
+    book the unfinished counter's aisle as shrinkage. Refused, by name."""
+    take = _open_count(count_scaffold)
+    done = _open_session(count_scaffold, take, scope=CountScope.SECTION, value="Rack A")
+    _scan(count_scaffold, done, SHIRT["barcode"], 9)
+    _submit(count_scaffold, done)
+    _open_session(count_scaffold, take, scope=CountScope.SECTION, value="Rack B")
+
+    resp = _client(count_scaffold["counter"]).post(
+        f"/api/outbound/stocktakes/{take}/apply", {}, format="json"
+    )
+
+    assert resp.status_code == 400, resp.data
+    assert "Rack B" in resp.data["error"]
+    assert StockAdjustment.objects.count() == 0
 
 
 def test_a_within_tolerance_variance_adjusts_itself_and_is_logged(count_scaffold):

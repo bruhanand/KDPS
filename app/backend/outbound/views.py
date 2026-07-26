@@ -895,14 +895,25 @@ class RequestApprovalView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _stocktakes():
-    return Stocktake.objects.select_related("store", "opened_by", "adjustment").prefetch_related(
+def _stocktakes(user: Any) -> Any:
+    """Counts this user may see — scoped at the queryset, fail-closed (ADR-0003).
+
+    Scope belongs here rather than on each view because a count carries per-line
+    cost and value: a store-scoped person reading another store's variance would
+    read that location's book cost, which is the one thing #76's "value is shown
+    to the person counting **their own** location" rule withholds. Out of scope
+    is therefore indistinguishable from not existing.
+    """
+    from masters.scoping import scope_by_store
+
+    qs = Stocktake.objects.select_related("store", "opened_by", "adjustment").prefetch_related(
         "sessions__lines", "sessions__counted_by"
     )
+    return scope_by_store(qs, user, "store_id")
 
 
-def _load_stocktake(pk: int) -> Stocktake:
-    return _stocktakes().get(pk=pk)
+def _load_stocktake(pk: int, user: Any) -> Stocktake:
+    return _stocktakes(user).get(pk=pk)
 
 
 class StocktakeListCreateView(APIView):
@@ -912,10 +923,7 @@ class StocktakeListCreateView(APIView):
         return [CanWriteStockCount()] if self.request.method == "POST" else [IsAuthenticated()]
 
     def get(self, request):
-        from masters.scoping import scope_by_store
-
-        qs = scope_by_store(_stocktakes(), request.user, "store_id")
-        return Response(StocktakeReadSerializer(qs, many=True).data)
+        return Response(StocktakeReadSerializer(_stocktakes(request.user), many=True).data)
 
     def post(self, request):
         ser = StocktakeCreateSerializer(data=request.data)
@@ -924,7 +932,7 @@ class StocktakeListCreateView(APIView):
         enforce_store_scope(request.user, store.id)
         stocktake = open_stocktake(store, user=request.user, note=ser.validated_data["note"])
         return Response(
-            StocktakeReadSerializer(_load_stocktake(stocktake.pk)).data,
+            StocktakeReadSerializer(_load_stocktake(stocktake.pk, request.user)).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -934,7 +942,7 @@ class StocktakeDetailView(APIView):
 
     def get(self, request, pk):
         try:
-            return Response(StocktakeReadSerializer(_load_stocktake(pk)).data)
+            return Response(StocktakeReadSerializer(_load_stocktake(pk, request.user)).data)
         except Stocktake.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1042,7 +1050,7 @@ class CountSessionSubmitView(APIView):
         return Response(CountSessionReadSerializer(_load_session(pk)).data)
 
 
-def _load_session(pk: int) -> Any:
+def _load_session(pk: int) -> CountSession | None:
     return (
         CountSession.objects.select_related("stocktake__store", "counted_by")
         .prefetch_related("lines")
@@ -1063,7 +1071,7 @@ class StocktakeVarianceView(APIView):
 
     def get(self, request, pk):
         try:
-            stocktake = _load_stocktake(pk)
+            stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1092,7 +1100,7 @@ class StocktakeApplyView(APIView):
 
     def post(self, request, pk):
         try:
-            stocktake = _load_stocktake(pk)
+            stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         enforce_store_scope(request.user, stocktake.store_id)

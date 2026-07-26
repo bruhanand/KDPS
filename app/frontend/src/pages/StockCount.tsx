@@ -290,20 +290,27 @@ export function StockCountDetailPage() {
   const submitted = take.sessions.filter((s) => s.status !== "open");
   const canApply = writable && take.status !== "closed" && submitted.length > 0;
 
-  async function startSession() {
+  /** Post something and show the result, which on this screen always means
+   *  reloading: a count changes on the server (another counter submits, the
+   *  variance is applied) and a partial client update would show one of the two
+   *  halves. `onFail` lets a caller answer a refusal in its own way. */
+  async function post(url: string, body: unknown, onFail?: (e: unknown) => boolean) {
     setError("");
     setBusy(true);
     try {
-      await api.post(`/outbound/stocktakes/${take!.id}/sessions`, {
-        scope,
-        scope_value: scope === "store" ? "" : scopeValue,
-      });
+      await api.post(url, body);
       window.location.reload();
     } catch (e) {
-      setError(apiErrorMessage(e));
+      if (!onFail?.(e)) setError(apiErrorMessage(e));
       setBusy(false);
     }
   }
+
+  const startSession = () =>
+    post(`/outbound/stocktakes/${take.id}/sessions`, {
+      scope,
+      scope_value: scope === "store" ? "" : scopeValue,
+    });
 
   /** A count's lookup, not a transfer's: it never answers with a quantity, and
    *  a piece the location holds none of still scans — that is the surplus. */
@@ -318,30 +325,13 @@ export function StockCountDetailPage() {
     }
   }
 
-  async function saveScans(session: SessionT, result: ScanResult) {
-    setError("");
-    setBusy(true);
-    try {
-      const scans = Object.entries(result.scans).map(([barcode, qty]) => ({ barcode, qty }));
-      await api.post(`/outbound/count-sessions/${session.id}/scan`, { scans });
-      window.location.reload();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-      setBusy(false);
-    }
-  }
+  const saveScans = (session: SessionT, result: ScanResult) =>
+    post(`/outbound/count-sessions/${session.id}/scan`, {
+      scans: Object.entries(result.scans).map(([barcode, qty]) => ({ barcode, qty })),
+    });
 
-  async function submitSession(session: SessionT) {
-    setError("");
-    setBusy(true);
-    try {
-      await api.post(`/outbound/count-sessions/${session.id}/submit`, {});
-      window.location.reload();
-    } catch (e) {
-      setError(apiErrorMessage(e));
-      setBusy(false);
-    }
-  }
+  const submitSession = (session: SessionT) =>
+    post(`/outbound/count-sessions/${session.id}/submit`, {});
 
   async function loadVariance() {
     setError("");
@@ -353,23 +343,14 @@ export function StockCountDetailPage() {
     }
   }
 
-  async function apply(confirm: string[] = []) {
-    setError("");
-    setBusy(true);
-    try {
-      await api.post(`/outbound/stocktakes/${take!.id}/apply`, { confirm });
-      window.location.reload();
-    } catch (e: any) {
+  const apply = (confirm: string[] = []) =>
+    post(`/outbound/stocktakes/${take.id}/apply`, { confirm }, (e: any) => {
       // 409: pieces moved between the count and now. Never overwritten blind —
       // the person sees which piece moved, and says so line by line.
-      if (e?.response?.status === 409) {
-        setMovedAsk(e.response.data.moved as VarianceLineT[]);
-      } else {
-        setError(apiErrorMessage(e));
-      }
-      setBusy(false);
-    }
-  }
+      if (e?.response?.status !== 409) return false;
+      setMovedAsk(e.response.data.moved as VarianceLineT[]);
+      return true;
+    });
 
   return (
     <div className="page-pad">

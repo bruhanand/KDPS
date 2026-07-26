@@ -762,14 +762,9 @@ def _against_the_book(store_id: int, lines: list[dict[str, Any]]) -> list[dict[s
     everything it is measured against is read here (#76). A piece the location
     holds none of books as zero — that is a surplus, not a missing number.
     """
-    from stockledger.models import StockOnHand
+    from outbound.counting import book_quantities
 
-    held = {
-        row.sku_code: row.net_qty
-        for row in StockOnHand.objects.filter(
-            store_id=store_id, sku_code__in=[ld["sku_code"] for ld in lines]
-        )
-    }
+    held = book_quantities(store_id, [ld["sku_code"] for ld in lines])
     return [
         {
             **ld,

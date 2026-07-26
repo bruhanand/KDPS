@@ -29,6 +29,7 @@ the number stops them sizing their own problem and protects nothing.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -152,7 +153,22 @@ def identity_dims(store_id: int, barcode: str) -> dict[str, str]:
     return merch_dims(sku) if sku is not None else dict.fromkeys(MERCH_DIM_FIELDS, "")
 
 
-def book_set(session: CountSession) -> QuerySet[StockOnHand]:
+def book_quantities(store_id: int, sku_codes: Iterable[str]) -> dict[str, int]:
+    """What the books say the location holds of each barcode, right now.
+
+    One place, because two callers ask the same question for opposite reasons —
+    the variance report asks in order to spot a piece that moved since the count,
+    and an adjustment asks in order to have something to be a difference *from* —
+    and they must never get different answers. A barcode the location holds none
+    of is simply absent: zero is the caller's own reading of that.
+    """
+    return {
+        row.sku_code: row.net_qty
+        for row in StockOnHand.objects.filter(store_id=store_id, sku_code__in=list(sku_codes))
+    }
+
+
+def pieces_in_scope(session: CountSession) -> QuerySet[StockOnHand]:
     """Which pieces this session is entitled to speak about — see ``CountScope``.
 
     A store or brand session covers everything the books hold in that scope, so
@@ -181,7 +197,7 @@ def submit_session(session: CountSession) -> CountSession:
         raise CountError("This session has already been submitted.")
 
     scanned = {line.sku_code: line for line in session.lines.all()}
-    for on_hand in book_set(session):
+    for on_hand in pieces_in_scope(session):
         line = scanned.get(on_hand.sku_code)
         if line is None:
             line = CountSessionLine(session=session, sku_code=on_hand.sku_code, counted_qty=0)
@@ -268,12 +284,7 @@ def variance_report(stocktake: Stocktake) -> list[VarianceLine]:
             entry.book_qty = line.book_qty or 0
             entry.dims = {f: getattr(line, f) or "" for f in MERCH_DIM_FIELDS}
 
-    live = {
-        row.sku_code: row.net_qty
-        for row in StockOnHand.objects.filter(
-            store_id=stocktake.store_id, sku_code__in=merged.keys()
-        )
-    }
+    live = book_quantities(stocktake.store_id, merged.keys())
     for entry in merged.values():
         entry.live_book_qty = live.get(entry.sku_code, 0)
         entry.unit_cost_paise = book_unit_cost(
@@ -316,8 +327,19 @@ def apply_variance(
     """
     if stocktake.adjustment_id is not None:
         raise CountError("This count's variance has already been applied.")
-    if not any(s.status != CountStatus.OPEN for s in stocktake.sessions.all()):
+
+    sessions = list(stocktake.sessions.all())
+    if not any(s.status != CountStatus.OPEN for s in sessions):
         raise CountError("Submit a count session before applying its variance.")
+    # Correcting while someone is still counting would book *their* aisle as
+    # shrinkage: the report only sees submitted sessions, so an unfinished
+    # counter's pieces read as nobody having found them.
+    if still_counting := [s for s in sessions if s.status == CountStatus.OPEN]:
+        raise CountError(
+            f"{len(still_counting)} session{'' if len(still_counting) == 1 else 's'} "
+            f"({', '.join(s.scope_label for s in still_counting)}) "
+            "have not been submitted. Their stock would be corrected as missing."
+        )
 
     lines = [v for v in variance_report(stocktake) if v.adj_qty != 0]
     if not lines:
@@ -363,7 +385,7 @@ __all__ = [
     "OutboundPostingError",
     "VarianceLine",
     "apply_variance",
-    "book_set",
+    "pieces_in_scope",
     "open_session",
     "open_stocktake",
     "record_scans",

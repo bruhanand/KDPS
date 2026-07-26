@@ -98,7 +98,7 @@ export function AdjustmentListPage() {
             book-against-counted form this screen used to carry is gone (#76):
             the variance is computed server-side from a count session. */}
         {writable && (
-          <Link className="btn btn-cta" to="/stock-count" data-testid="new-adjustment-btn">
+          <Link className="btn btn-cta" to="/stock-count" data-testid="count-stock-btn">
             <ClipboardCheck size={16} /> Count stock
           </Link>
         )}

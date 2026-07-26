@@ -44,7 +44,7 @@ export interface ScanResult {
 type Bucket = "scans" | "damaged" | "extras";
 
 interface ScanScreenProps {
-  mode: string; // "DISPATCH" | "RECEIVE" — shown in the header chip
+  mode: string; // "DISPATCH" | "RECEIVE" | "COUNT" — shown in the header chip
   docLabel: string; // doc number or "Draft #12"
   routeLabel: string; // "RAN-WH → DEO"
   targets: ScanTarget[];
