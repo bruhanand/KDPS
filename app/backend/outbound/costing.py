@@ -1,0 +1,60 @@
+"""What the books say a piece costs — and the error raised when they cannot say.
+
+This module exists to break a cycle, and its contents are chosen for exactly
+that: ``outbound.posting`` imports ``outbound.maker_checker`` at module level
+(every posting path asks whether a second person is needed), while
+``maker_checker`` needed two things back from ``posting`` — the cost of a piece,
+to size the document against the approval tolerance, and the error type to refuse
+with. That was answered with four function-level imports of ``posting`` inside
+``maker_checker``, which works but leaves a real cycle standing behind a deferred
+import: import order becomes load-order-sensitive, and every future reader has to
+re-derive why the imports are hiding inside functions.
+
+Both of those things depend on nothing in the posting engine — a cost is a read
+of the cohort and the on-hand row — so they live here, below both modules. The
+``outbound`` layers contract in ``pyproject.toml`` now forbids the edge from ever
+being added back.
+
+``outbound.posting`` re-exports both names, so the many callers that say
+``from outbound.posting import OutboundPostingError`` keep working: for a caller,
+the error still belongs to posting.
+"""
+
+from __future__ import annotations
+
+from stockledger.models import StockOnHand
+
+
+class OutboundPostingError(Exception):
+    """Raised when an outbound document cannot be posted."""
+
+
+def book_unit_cost(store_id: int, sku_code: str, season: str = "") -> int:
+    """What the books say one piece costs at this location, in paise.
+
+    The cohort's frozen P-RATE where there is one, else the on-hand average.
+    Returns 0 when the books cannot price the piece — "unknown", which every
+    caller must treat as unknown rather than as free.
+
+    ``season`` is only read for a piece the location holds none of (a stocktake
+    surplus): with no on-hand row there is no season to look the cohort up by,
+    so the caller supplies the one on its line.
+    """
+    from masters.models import Cohort
+
+    on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).first()
+    cohort_season = on_hand.season if on_hand is not None else season
+    cohort = Cohort.objects.filter(barcode=sku_code, season=cohort_season).first()
+    if cohort is None and not cohort_season:
+        # Nothing said which season. A cohort is keyed (barcode, season) because
+        # the same SKU is bought across seasons at different locked costs, so
+        # one cohort is the only answer the books can give and more than one is
+        # a guess — and a guess priced as a book value is the exact thing this
+        # seam exists to stop. Two is all we need to know it is ambiguous.
+        candidates = list(Cohort.objects.filter(barcode=sku_code)[:2])
+        cohort = candidates[0] if len(candidates) == 1 else None
+    if cohort is not None and cohort.unit_cost_paise:
+        return int(cohort.unit_cost_paise)
+    if on_hand is not None and on_hand.net_qty > 0:
+        return int(on_hand.net_value_paise or 0) // on_hand.net_qty
+    return 0

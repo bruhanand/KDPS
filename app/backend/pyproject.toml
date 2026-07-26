@@ -55,7 +55,27 @@ target-version = "py312"
 extend-exclude = ["migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "DJ"]
+select = ["E", "F", "I", "UP", "B", "DJ", "C90"]
+
+# One function, one job — enforced, because "this function got long" is a review
+# comment nobody makes twice. The ceiling is 10 branches; the files below are the
+# baseline as it stood when the gate went in (26 Jul 2026), and like the ungated-
+# views baseline it may only ever shrink. Anything new, anywhere else, fails.
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+# Management commands: one-shot operational scripts, branch-heavy by nature
+# (argument combinations, dry-run/apply, progress reporting). Low blast radius.
+"*/management/commands/*.py" = ["C901"]
+# The PT-mapper HTTP layer (patch: 25, post: 16) and its taxonomy mapper. The
+# mapping engine is the least-safe thing in the codebase to restructure while
+# archetypes are still being fed; splitting these is its own ticket.
+"ptmapper/views.py" = ["C901"]
+"ptmapper/engine.py" = ["C901"]
+# The collection hook that decides which live suites can run here: a decision
+# table about the target environment, and clearest read as one.
+"tests/conftest.py" = ["C901"]
 
 # --- Types -------------------------------------------------------------------
 # K0 starts mypy strict on a tiny surface (core + config). As money slices land,
@@ -86,7 +106,7 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core", "ptmapper", "approvals"]
+root_packages = ["config", "core", "ptmapper", "approvals", "outbound"]
 # The domain apps below aren't root packages yet, so they are "external" to the
 # graph; the approvals contract names them explicitly.
 include_external_packages = true
@@ -126,3 +146,13 @@ source_modules = [
     "ptmapper.profiles",
 ]
 forbidden_modules = ["ptmapper.views"]
+
+[[tool.importlinter.contracts]]
+# `posting` imports `maker_checker` (every posting path asks whether a second
+# person is needed) and `maker_checker` needed the cost of a piece and the
+# refusal type back — a real cycle, previously held apart by four function-level
+# imports. Those two things now live in `costing`, below both. Stated as layers
+# so the deferred-import workaround can never be reintroduced as the fix.
+name = "outbound posting is layered: posting → maker_checker → costing, never back"
+type = "layers"
+layers = ["outbound.posting", "outbound.maker_checker", "outbound.costing"]

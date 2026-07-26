@@ -18,6 +18,7 @@ Seams:
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -54,18 +55,18 @@ def damage_scaffold(db):
 
     store_role = make_role("store_manager", "Store manager (damage test)")
     reporter = User.objects.create_user(
-        username="dmg_store", password="Test@123", role=store_role, scope_type=ScopeType.STORE
+        username="dmg_store", password=TEST_PASSWORD, role=store_role, scope_type=ScopeType.STORE
     )
     reporter.stores.add(store)
     colleague = User.objects.create_user(
-        username="dmg_store2", password="Test@123", role=store_role, scope_type=ScopeType.STORE
+        username="dmg_store2", password=TEST_PASSWORD, role=store_role, scope_type=ScopeType.STORE
     )
     colleague.stores.add(store)
 
     warehouse_role = make_role("warehouse", "Warehouse (damage test)")
     confirmer = User.objects.create_user(
         username="dmg_wh",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=warehouse_role,
         entity=entity,
         scope_type=ScopeType.ALL,

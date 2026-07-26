@@ -17,6 +17,7 @@ import os
 from typing import Any
 
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -48,7 +49,7 @@ def _count(payload: Any) -> int:
 
 
 def test_finledger_reads_require_finance_role() -> None:
-    owner = _login("owner", "Owner@123")
+    owner = _login("owner", SEED_OWNER_PASSWORD)
     cashier = _login("deo.cashier", "Store@123")
     warehouse = _login("wh.patna", "Wh@123")
 
@@ -67,7 +68,7 @@ def test_finledger_reads_require_finance_role() -> None:
 
 
 def test_pt_post_and_reverse_require_patna_role() -> None:
-    owner = _login("owner", "Owner@123")
+    owner = _login("owner", SEED_OWNER_PASSWORD)
     cashier = _login("deo.cashier", "Store@123")
     warehouse = _login("wh.patna", "Wh@123")
 
@@ -98,7 +99,7 @@ def test_review_resolve_requires_steward_role() -> None:
 
 
 def test_stockledger_reads_are_store_scoped() -> None:
-    owner = _login("owner", "Owner@123")  # scope = all
+    owner = _login("owner", SEED_OWNER_PASSWORD)  # scope = all
     cashier = _login("deo.cashier", "Store@123")  # scope = single store (DEO)
 
     owner_entries = requests.get(f"{API}/stockledger/entries", headers=owner, timeout=30)
@@ -119,7 +120,7 @@ def test_stockledger_reads_are_store_scoped() -> None:
 
 
 def test_pt_delete_endpoint_guards_non_mapping() -> None:
-    owner = _login("owner", "Owner@123")
+    owner = _login("owner", SEED_OWNER_PASSWORD)
     # Deleting a non-existent file resolves to 404 (endpoint exists, guard runs on a
     # real object). The real protection — 409 on a sent/posted file — is exercised by
     # the posting flow; here we assert the destroy route is wired and not a 500.

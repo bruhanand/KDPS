@@ -21,6 +21,7 @@ import io
 from pathlib import Path
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -67,7 +68,7 @@ def pt_scaffold(db):
     # A store person: transfer:operate, no inbound-PT rights of any kind.
     store_user = User.objects.create_user(
         username="pt_store_mgr",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=make_role("store_manager", "Store Manager (PT test)"),
         entity=entity,
         scope_type=ScopeType.STORE,
@@ -360,7 +361,7 @@ def test_the_pt_gate_is_the_transfer_section_and_only_that(pt_scaffold):
 
     transfer_only = User.objects.create_user(
         username="pt_viewer",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=Role.objects.create(
             code="pt_transfer_viewer",
             name="Transfer viewer",
@@ -372,7 +373,7 @@ def test_the_pt_gate_is_the_transfer_section_and_only_that(pt_scaffold):
 
     no_transfer = User.objects.create_user(
         username="pt_outsider",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=Role.objects.create(
             code="pt_no_transfer",
             name="No transfer",

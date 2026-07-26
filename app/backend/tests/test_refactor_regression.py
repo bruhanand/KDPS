@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -35,7 +36,7 @@ def _login(username: str, password: str) -> str:
 
 @pytest.fixture(scope="module")
 def owner_token():
-    return _login("owner", "Owner@123")
+    return _login("owner", SEED_OWNER_PASSWORD)
 
 
 @pytest.fixture(scope="module")

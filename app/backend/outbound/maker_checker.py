@@ -38,6 +38,7 @@ from approvals.services import (
     request_approval,
 )
 from core.documents import DocStatus
+from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VFlip, WriteOff
 
 
@@ -205,8 +206,6 @@ def _line_totals(doc: Any) -> tuple[int, int, int]:
     price contributes nothing, leaving the total at 0 — read everywhere as
     "unknown", and unknown escalates.
     """
-    from outbound.posting import book_unit_cost
-
     lines = list(doc.lines.all())
     pieces = 0
     value = 0
@@ -331,8 +330,6 @@ def ask_again(doc: Any, *, requested_by: Any) -> Approval:
     maker is carried across unchanged, so re-asking can never move the author
     out of the way and let them approve their own document.
     """
-    from outbound.posting import OutboundPostingError
-
     kind = KINDS.get(type(doc))
     if kind is None:
         raise OutboundPostingError("This document type does not need approval.")
@@ -366,8 +363,6 @@ def require_approved(doc: Any) -> Approval | None:
 
     Unwired document types pass through untouched.
     """
-    from outbound.posting import OutboundPostingError
-
     kind = KINDS.get(type(doc))
     if kind is None:
         return None

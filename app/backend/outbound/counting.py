@@ -38,6 +38,7 @@ from django.db.models import QuerySet
 from django.utils import timezone
 
 from approvals.models import CLEARED_STATUSES
+from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
     AdjustmentReason,
@@ -49,12 +50,7 @@ from outbound.models import (
     StockAdjustmentLine,
     Stocktake,
 )
-from outbound.posting import (
-    OutboundPostingError,
-    book_unit_cost,
-    post_adjustment,
-    resolve_line_identity,
-)
+from outbound.posting import post_adjustment, resolve_line_identity
 from stockledger.models import MERCH_DIM_FIELDS, StockOnHand, merch_dims
 
 if TYPE_CHECKING:
@@ -319,6 +315,27 @@ def apply_variance(
     outbound document uses, so a variance can never post at zero value (#103) and
     a caller cannot supply a number of their own.
 
+    Three steps, in this order: refuse a count that is not ready to be applied
+    (`_variance_to_apply`), write the correction document (`_build_adjustment`),
+    then ask maker-checker and close the take.
+    """
+    lines = _variance_to_apply(stocktake, confirm_skus)
+    adjustment = _build_adjustment(stocktake, lines, user)
+
+    approval = request_document_approval(adjustment, requested_by=user)
+    if approval is not None and approval.status in CLEARED_STATUSES:
+        post_adjustment(adjustment, user=user)
+
+    stocktake.adjustment = adjustment
+    stocktake.status = CountStatus.CLOSED
+    stocktake.save(update_fields=["adjustment", "status", "updated_at"])
+    adjustment.refresh_from_db()
+    return adjustment
+
+
+def _variance_to_apply(stocktake: Stocktake, confirm_skus: frozenset[str]) -> list[VarianceLine]:
+    """The lines this take may correct, or the reason it may not correct anything.
+
     A line whose piece moved since the snapshot applies only if named in
     ``confirm_skus``; otherwise the whole call is refused with those lines named.
     A confirmed line still applies its *counted-minus-snapshot* difference — the
@@ -347,7 +364,13 @@ def apply_variance(
 
     if moved := [v for v in lines if v.moved and v.sku_code not in confirm_skus]:
         raise MovedMidCountError(moved)
+    return lines
 
+
+def _build_adjustment(
+    stocktake: Stocktake, lines: list[VarianceLine], user: User | None
+) -> StockAdjustment:
+    """The one correction document the count produces, priced by the books."""
     adjustment = StockAdjustment.objects.create(
         store=stocktake.store,
         reason=AdjustmentReason.MISCOUNT,
@@ -367,15 +390,6 @@ def apply_variance(
             adj_qty=v.adj_qty,
             **identity,
         )
-
-    approval = request_document_approval(adjustment, requested_by=user)
-    if approval is not None and approval.status in CLEARED_STATUSES:
-        post_adjustment(adjustment, user=user)
-
-    stocktake.adjustment = adjustment
-    stocktake.status = CountStatus.CLOSED
-    stocktake.save(update_fields=["adjustment", "status", "updated_at"])
-    adjustment.refresh_from_db()
     return adjustment
 
 

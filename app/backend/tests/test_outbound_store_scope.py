@@ -11,6 +11,7 @@ since enforce_store_scope runs in the view layer.
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -67,7 +68,7 @@ def scope_scaffold(db):
     sm_role = make_role("store_manager", "Store Manager (scope test)")
     sm_user = User.objects.create_user(
         username="scope_sm",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=sm_role,
         entity=entity,
         scope_type=ScopeType.STORE,
@@ -78,7 +79,7 @@ def scope_scaffold(db):
     admin_role = make_role("owner", "Owner (scope test)")
     admin_user = User.objects.create_user(
         username="scope_admin",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=admin_role,
         entity=entity,
         scope_type=ScopeType.ALL,
@@ -387,7 +388,7 @@ def test_admin_cannot_writeoff_outside_assigned_stores(scope_scaffold):
     # Create a store-scoped 'owner' role user (hypothetical)
     scoped_admin = User.objects.create_user(
         username="scope_owner",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=Role.objects.get(code="owner"),
         entity=s["entity"],
         scope_type=ScopeType.STORE,

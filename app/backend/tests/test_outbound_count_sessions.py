@@ -21,6 +21,7 @@ The seams this suite holds, one test apiece:
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -105,11 +106,11 @@ def count_scaffold(db):
 
     role = make_role("store_manager", "Store manager (count test)")
     counter = User.objects.create_user(
-        username="cnt_a", password="Test@123", role=role, scope_type=ScopeType.STORE
+        username="cnt_a", password=TEST_PASSWORD, role=role, scope_type=ScopeType.STORE
     )
     counter.stores.add(store)
     second = User.objects.create_user(
-        username="cnt_b", password="Test@123", role=role, scope_type=ScopeType.STORE
+        username="cnt_b", password=TEST_PASSWORD, role=role, scope_type=ScopeType.STORE
     )
     second.stores.add(store)
 
@@ -274,7 +275,7 @@ def test_a_count_at_another_store_is_not_readable(count_scaffold):
     )
     outsider = User.objects.create_user(
         username="cnt_out",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=make_role("store_manager"),
         scope_type=ScopeType.STORE,
     )

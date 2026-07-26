@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -94,7 +95,7 @@ def test_cookie_only_auth_me_supported() -> None:
     s = requests.Session()
     login = s.post(
         f"{API}/auth/login",
-        json={"username": "owner", "password": "Owner@123"},
+        json={"username": "owner", "password": SEED_OWNER_PASSWORD},
         timeout=30,
     )
     assert login.status_code == 200, login.text[:250]
@@ -108,7 +109,7 @@ def test_cookie_only_auth_me_supported() -> None:
 
 # module and feature: inbound.views _add_grn_line helpers
 def test_grn_direct_line_keeps_received_and_damaged_qty() -> None:
-    auth = _login("owner", "Owner@123")
+    auth = _login("owner", SEED_OWNER_PASSWORD)
     h = _headers(auth["access"])
     store_id = _pick_id("/masters/stores", h)
 
@@ -142,7 +143,7 @@ def test_grn_direct_line_keeps_received_and_damaged_qty() -> None:
 
 # module and feature: stockledger.posting post_pt_inward/reverse_pt_inward + inbound variance
 def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_variance() -> None:
-    owner = _login("owner", "Owner@123")
+    owner = _login("owner", SEED_OWNER_PASSWORD)
     access = owner["access"]
     h = _headers(access)
 

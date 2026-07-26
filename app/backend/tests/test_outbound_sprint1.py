@@ -13,6 +13,7 @@ Fixture scaffold:
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 
 from accounts.models import Role, User
 from core.documents import DocStatus, VoucherSeries
@@ -81,12 +82,12 @@ def _outbound_scaffold(db):
     vendor = Vendor.objects.create(name="Test Vendor", code="tvnd")
     role = Role.objects.create(code="test-admin", name="Test Admin")
     user = User.objects.create_user(
-        username="outtest", password="Test@123", role=role, entity=entity
+        username="outtest", password=TEST_PASSWORD, role=role, entity=entity
     )
     # The second person every write-off / V-flip / adjustment now needs (#70).
     checker = User.objects.create_user(
         username="outcheck",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=Role.objects.create(code="owner", name="Owner"),
         entity=entity,
     )

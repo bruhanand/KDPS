@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -43,7 +44,7 @@ def test_health_endpoint_ok_shape():
 
 
 def test_login_owner_success_and_cookie_present(session: requests.Session):
-    r = _login(session, "owner", "Owner@123")
+    r = _login(session, "owner", SEED_OWNER_PASSWORD)
     assert r.status_code == 200, r.text[:300]
 
     data = r.json()
@@ -57,7 +58,7 @@ def test_login_owner_success_and_cookie_present(session: requests.Session):
 
 
 def test_cookie_only_auth_me_works_after_login(session: requests.Session):
-    login = _login(session, "owner", "Owner@123")
+    login = _login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200, login.text[:300]
 
     me = session.get(f"{API}/auth/me", timeout=30)
@@ -68,7 +69,7 @@ def test_cookie_only_auth_me_works_after_login(session: requests.Session):
 
 
 def test_core_authenticated_dashboard_feed_loads(session: requests.Session):
-    login = _login(session, "owner", "Owner@123")
+    login = _login(session, "owner", SEED_OWNER_PASSWORD)
     assert login.status_code == 200, login.text[:300]
     access = login.json()["access"]
     headers = {"Authorization": f"Bearer {access}"}

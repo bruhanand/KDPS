@@ -17,6 +17,7 @@ Scan-is-truth rulings (Anand, 23 Jul):
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -55,7 +56,7 @@ def scan_scaffold(db):
     role = make_role("ho_ops", "HO Ops (scan test)")
     user = User.objects.create_user(
         username="scan_ops",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=role,
         entity=entity,
         scope_type=ScopeType.ALL,
@@ -527,7 +528,7 @@ def test_scan_lookup_is_store_scoped_fail_closed(scan_scaffold):
     role = make_role("store_manager", "SM (scan test)")
     sm = User.objects.create_user(
         username="scan_sm",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=role,
         scope_type=ScopeType.STORE,
     )

@@ -10,7 +10,7 @@ All amounts are integer paise. Debit is positive, credit is negative.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -18,6 +18,7 @@ from django.utils import timezone
 from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
+from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.maker_checker import request_document_approval, require_approved
 from stockledger.models import (
     MERCH_DIM_FIELDS,
@@ -42,10 +43,6 @@ if TYPE_CHECKING:
         VFlip,
         WriteOff,
     )
-
-
-class OutboundPostingError(Exception):
-    """Raised when an outbound document cannot be posted."""
 
 
 def _check_stock(store_id: int, sku_code: str, required_qty: int) -> None:
@@ -240,37 +237,6 @@ def _write_transit_entry(
     else:
         bucket.save()
     return entry
-
-
-def book_unit_cost(store_id: int, sku_code: str, season: str = "") -> int:
-    """What the books say one piece costs at this location, in paise.
-
-    The cohort's frozen P-RATE where there is one, else the on-hand average.
-    Returns 0 when the books cannot price the piece — "unknown", which every
-    caller must treat as unknown rather than as free.
-
-    ``season`` is only read for a piece the location holds none of (a stocktake
-    surplus): with no on-hand row there is no season to look the cohort up by,
-    so the caller supplies the one on its line.
-    """
-    from masters.models import Cohort
-
-    on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=sku_code).first()
-    cohort_season = on_hand.season if on_hand is not None else season
-    cohort = Cohort.objects.filter(barcode=sku_code, season=cohort_season).first()
-    if cohort is None and not cohort_season:
-        # Nothing said which season. A cohort is keyed (barcode, season) because
-        # the same SKU is bought across seasons at different locked costs, so
-        # one cohort is the only answer the books can give and more than one is
-        # a guess — and a guess priced as a book value is the exact thing this
-        # seam exists to stop. Two is all we need to know it is ambiguous.
-        candidates = list(Cohort.objects.filter(barcode=sku_code)[:2])
-        cohort = candidates[0] if len(candidates) == 1 else None
-    if cohort is not None and cohort.unit_cost_paise:
-        return int(cohort.unit_cost_paise)
-    if on_hand is not None and on_hand.net_qty > 0:
-        return int(on_hand.net_value_paise or 0) // on_hand.net_qty
-    return 0
 
 
 def _cannot_price(store_id: int, sku_code: str, season: str) -> str:
@@ -1059,7 +1025,6 @@ def amend_gap_closure(
     from approvals.models import ApprovalStatus
     from approvals.services import approval_for
     from core.documents import DocStatus
-    from outbound.maker_checker import request_document_approval
     from outbound.models import TransferGapClosureLine
 
     if closure.docstatus != DocStatus.DRAFT:
@@ -1093,37 +1058,32 @@ def amend_gap_closure(
     return closure
 
 
-@transaction.atomic
-def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedgerEntry]:
-    """Post a gap closure: drain the in-transit remainder, per the stated reason.
+def _lock_and_read_gap_lines(closure: TransferGapClosure) -> list[Any]:
+    """Take the lock this closure posts under, and read the lines it will drain.
 
-    Refuses unless a second, senior person has approved it (``require_approved``)
-    and neither of them is entitled to the receiving store. Then the pieces leave
-    the bucket and land where the reason says — at the destination, back at the
-    sender, or off the books as a loss (Dr SUSPENSE / Cr INVENTORY, the same
-    shape as a write-off, because that is what a lost carton is).
+    The lock is on the *transfer*, not the closure: two closures of the same gap
+    are the collision that matters, and the second one has to wait here so it
+    finds the bucket already drained rather than draining it twice.
     """
     from core.documents import DocStatus
-    from outbound.models import GapReason, StoreTransfer
+    from outbound.models import StoreTransfer
 
     if closure.docstatus != DocStatus.DRAFT:
         raise OutboundPostingError("This gap closure has already been posted.")
-    # Serialize on the transfer: a concurrent closure of the same gap blocks
-    # here, then finds the bucket already drained below.
     StoreTransfer.objects.select_for_update().get(pk=closure.transfer_id)
 
     lines = list(closure.lines.all())
     if not lines:
         raise OutboundPostingError("Gap closure has no lines.")
+    return lines
 
-    approval = require_approved(closure)  # maker ≠ checker, senior-gated (#70)
-    _refuse_self_closure(
-        closure, closure.created_by, approval.decided_by if approval else None, user
-    )
 
-    # The bucket is the source of truth for what is still owed: if a rebuild, a
-    # correction or a racing closure moved it since the draft was made, the
-    # numbers on this document are stale and it must be made again.
+def _refuse_stale_gap(closure: TransferGapClosure, lines: list[Any]) -> None:
+    """The bucket is the source of truth for what is still owed.
+
+    If a rebuild, a correction or a racing closure moved it since the draft was
+    made, the numbers on this document are stale and it must be made again.
+    """
     held = dict(
         InTransitStock.objects.filter(transfer_doc_number=closure.transfer.doc_number).values_list(
             "sku_code", "qty"
@@ -1137,6 +1097,28 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
                 "The gap moved since this closure was drafted — correct it, "
                 "which re-reads what is still owed."
             )
+
+
+@transaction.atomic
+def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedgerEntry]:
+    """Post a gap closure: drain the in-transit remainder, per the stated reason.
+
+    Refuses unless a second, senior person has approved it (``require_approved``)
+    and neither of them is entitled to the receiving store. Then the pieces leave
+    the bucket and land where the reason says — at the destination, back at the
+    sender, or off the books as a loss (Dr SUSPENSE / Cr INVENTORY, the same
+    shape as a write-off, because that is what a lost carton is).
+    """
+    from outbound.models import GapReason
+
+    lines = _lock_and_read_gap_lines(closure)
+
+    approval = require_approved(closure)  # maker ≠ checker, senior-gated (#70)
+    _refuse_self_closure(
+        closure, closure.created_by, approval.decided_by if approval else None, user
+    )
+
+    _refuse_stale_gap(closure, lines)
 
     _ensure_gap_series(closure)
     closure.post()

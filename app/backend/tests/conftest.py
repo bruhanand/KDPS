@@ -52,6 +52,7 @@ from urllib.parse import urlsplit
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 from _live_gate import mismatch_reason
 
 _BACKEND_URL_ENV = "REACT_APP_BACKEND_URL"
@@ -98,7 +99,7 @@ def _live_api_unready_reason() -> str | None:
     try:
         response = requests.post(
             f"{BASE_URL}/api/auth/login",
-            json={"username": "owner", "password": "Owner@123"},
+            json={"username": "owner", "password": SEED_OWNER_PASSWORD},
             timeout=5,
         )
     except requests.RequestException as exc:

@@ -53,87 +53,97 @@ class BooksHealthView(APIView):
         assets = sum(balances[c] for c, _, side in ACCOUNTS if side == "asset")
         # liabilities/contra are credit-side (negative paise); present magnitude.
         liabilities = -sum(balances[c] for c, _, side in ACCOUNTS if side == "liability")
-
-        # F1 subledger-reconciliation proof: the single value GL is the book of
-        # record, so its control accounts MUST equal the subledger running sums.
-        # Vendor payable is credit-side (−paise) vs a +ve "we owe" subledger, so it
-        # ties when Σ(vendor rows) == −GL payable. Cash is an asset (debit +), same
-        # sign as its subledger.
-        vendor_sub = VendorLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
-        cash_sub = CashLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
-        gl_payable = balances[GLAccount.VENDOR_PAYABLE]
-        gl_cash = balances[GLAccount.CASH]
-        vendor_reconciled = vendor_sub == -gl_payable
-        cash_reconciled = cash_sub == gl_cash
-        reconciliation = {
-            "reconciled": vendor_reconciled and cash_reconciled,
-            "vendor": {
-                "reconciled": vendor_reconciled,
-                "subledger_paise": vendor_sub,
-                "subledger_rupees": paise_to_rupees_str(vendor_sub),
-                "gl_control_paise": -gl_payable,
-                "gl_control_rupees": paise_to_rupees_str(-gl_payable),
-                "drift_paise": vendor_sub + gl_payable,
-            },
-            "cash": {
-                "reconciled": cash_reconciled,
-                "subledger_paise": cash_sub,
-                "subledger_rupees": paise_to_rupees_str(cash_sub),
-                "gl_control_paise": gl_cash,
-                "gl_control_rupees": paise_to_rupees_str(gl_cash),
-                "drift_paise": cash_sub - gl_cash,
-            },
-        }
-        # Zero pieces still carrying rupees (#103) — a movement that relieved
-        # quantity but not value. Every quantity-based reconciliation passes
-        # over it, including a physical count, because the piece count is right;
-        # only a value-per-piece read like this one ever sees it.
-        stranded_qs = StockOnHand.objects.filter(net_qty=0).exclude(net_value_paise=0)
-        totals = stranded_qs.aggregate(rows=Count("id"), value=Sum("net_value_paise"))
-        stranded_count = totals["rows"] or 0
-        stranded_total = totals["value"] or 0
-        stranded_rows = list(
-            stranded_qs.select_related("store").order_by("-net_value_paise")[:STRANDED_SAMPLE]
-        )
-        stranded = {
-            "clean": stranded_count == 0,
-            "row_count": stranded_count,
-            "value_paise": stranded_total,
-            "value_rupees": paise_to_rupees_str(stranded_total),
-            "rows": [
-                {
-                    "store_code": row.store.code,
-                    "sku_code": row.sku_code,
-                    "value_paise": row.net_value_paise,
-                    "value_rupees": paise_to_rupees_str(row.net_value_paise),
-                }
-                for row in stranded_rows
-            ],
-        }
-
-        accounts: list[dict[str, Any]] = [
-            {
-                "code": code,
-                "label": label,
-                "side": side,
-                "balance_paise": balances[code],
-                "balance_rupees": paise_to_rupees_str(balances[code]),
-            }
-            for code, label, side in ACCOUNTS
-        ]
         return Response(
             {
                 "balanced": tb == 0,
                 "trial_balance_paise": tb,
                 "trial_balance_rupees": paise_to_rupees_str(tb),
-                "reconciliation": reconciliation,
-                "stranded_stock_value": stranded,
+                "reconciliation": _reconciliation(balances),
+                "stranded_stock_value": _stranded_stock_value(),
                 "assets_paise": assets,
                 "assets_rupees": paise_to_rupees_str(assets),
                 "liabilities_paise": liabilities,
                 "liabilities_rupees": paise_to_rupees_str(liabilities),
                 "leg_count": GLEntry.objects.count(),
                 "voucher_count": GLEntry.objects.values("doc_number").distinct().count(),
-                "accounts": accounts,
+                "accounts": _accounts(balances),
             }
         )
+
+
+def _reconciliation(balances: dict[str, int]) -> dict[str, Any]:
+    """F1 subledger-reconciliation proof.
+
+    The single value GL is the book of record, so its control accounts MUST equal
+    the subledger running sums. Vendor payable is credit-side (−paise) against a
+    positive "we owe" subledger, so it ties when Σ(vendor rows) == −GL payable.
+    Cash is an asset (debit +), the same sign as its subledger.
+    """
+    vendor_sub = VendorLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
+    cash_sub = CashLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
+    gl_payable = balances[GLAccount.VENDOR_PAYABLE]
+    gl_cash = balances[GLAccount.CASH]
+    vendor_reconciled = vendor_sub == -gl_payable
+    cash_reconciled = cash_sub == gl_cash
+    return {
+        "reconciled": vendor_reconciled and cash_reconciled,
+        "vendor": {
+            "reconciled": vendor_reconciled,
+            "subledger_paise": vendor_sub,
+            "subledger_rupees": paise_to_rupees_str(vendor_sub),
+            "gl_control_paise": -gl_payable,
+            "gl_control_rupees": paise_to_rupees_str(-gl_payable),
+            "drift_paise": vendor_sub + gl_payable,
+        },
+        "cash": {
+            "reconciled": cash_reconciled,
+            "subledger_paise": cash_sub,
+            "subledger_rupees": paise_to_rupees_str(cash_sub),
+            "gl_control_paise": gl_cash,
+            "gl_control_rupees": paise_to_rupees_str(gl_cash),
+            "drift_paise": cash_sub - gl_cash,
+        },
+    }
+
+
+def _stranded_stock_value() -> dict[str, Any]:
+    """Zero pieces still carrying rupees (#103).
+
+    A movement that relieved quantity but not value. Every quantity-based
+    reconciliation passes over it, including a physical count, because the piece
+    count is right; only a value-per-piece read like this one ever sees it.
+    """
+    stranded_qs = StockOnHand.objects.filter(net_qty=0).exclude(net_value_paise=0)
+    totals = stranded_qs.aggregate(rows=Count("id"), value=Sum("net_value_paise"))
+    count = totals["rows"] or 0
+    total = totals["value"] or 0
+    rows = list(stranded_qs.select_related("store").order_by("-net_value_paise")[:STRANDED_SAMPLE])
+    return {
+        "clean": count == 0,
+        "row_count": count,
+        "value_paise": total,
+        "value_rupees": paise_to_rupees_str(total),
+        "rows": [
+            {
+                "store_code": row.store.code,
+                "sku_code": row.sku_code,
+                "value_paise": row.net_value_paise,
+                "value_rupees": paise_to_rupees_str(row.net_value_paise),
+            }
+            for row in rows
+        ],
+    }
+
+
+def _accounts(balances: dict[str, int]) -> list[dict[str, Any]]:
+    """The equation of state, account by account, in the ratified display order."""
+    return [
+        {
+            "code": code,
+            "label": label,
+            "side": side,
+            "balance_paise": balances[code],
+            "balance_rupees": paise_to_rupees_str(balances[code]),
+        }
+        for code, label, side in ACCOUNTS
+    ]

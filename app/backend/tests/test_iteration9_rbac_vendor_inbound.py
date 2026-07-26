@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 assert BASE_URL, "REACT_APP_BACKEND_URL not set"
@@ -33,7 +34,7 @@ def _auth_headers(access: str) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def owner_auth() -> dict[str, Any]:
-    return _login("owner", "Owner@123")
+    return _login("owner", SEED_OWNER_PASSWORD)
 
 
 @pytest.fixture(scope="module")
@@ -306,7 +307,7 @@ def test_login_bruteforce_lockout_after_five_failures():
 def test_login_cookie_and_cors_headers(owner_auth: dict[str, Any]):
     login_resp = requests.post(
         f"{API}/auth/login",
-        json={"username": "owner", "password": "Owner@123"},
+        json={"username": "owner", "password": SEED_OWNER_PASSWORD},
         timeout=30,
     )
     assert login_resp.status_code == 200

@@ -20,6 +20,7 @@ mark-damaged is a document (Rule 1).
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -58,7 +59,7 @@ def quar_scaffold(db):
     role = make_role("warehouse", "Warehouse (quar test)")
     user = User.objects.create_user(
         username="quar_ops",
-        password="Test@123",
+        password=TEST_PASSWORD,
         role=role,
         entity=entity,
         scope_type=ScopeType.ALL,
@@ -240,7 +241,7 @@ def test_mark_damaged_is_store_scoped(quar_scaffold):
     s = quar_scaffold
     role = make_role("store_manager", "SM (quar test)")
     sm = User.objects.create_user(
-        username="quar_sm", password="Test@123", role=role, scope_type=ScopeType.STORE
+        username="quar_sm", password=TEST_PASSWORD, role=role, scope_type=ScopeType.STORE
     )
     sm.stores.add(s["other"])  # scoped to Q-B, NOT Q-A where the stock is
     c = _client(sm)
@@ -264,7 +265,7 @@ def test_quarantine_filter_is_store_scoped_fail_closed(quar_scaffold):
     )
     role = make_role("store_manager", "SM2 (quar test)")
     sm = User.objects.create_user(
-        username="quar_sm2", password="Test@123", role=role, scope_type=ScopeType.STORE
+        username="quar_sm2", password=TEST_PASSWORD, role=role, scope_type=ScopeType.STORE
     )
     sm.stores.add(s["other"])  # not the store holding the quarantine
     resp = _client(sm).get("/api/stockledger/quarantine")

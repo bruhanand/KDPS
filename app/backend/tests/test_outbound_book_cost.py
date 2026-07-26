@@ -16,6 +16,7 @@ ORM with ``unit_cost_paise`` pre-filled, which is exactly why this shipped green
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -131,7 +132,7 @@ def books(db):
     def _user(username, role_code):
         return User.objects.create_user(
             username=username,
-            password="Test@123",
+            password=TEST_PASSWORD,
             role=make_role(role_code),
             entity=entity,
             scope_type=ScopeType.ALL,

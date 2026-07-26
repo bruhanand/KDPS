@@ -13,13 +13,14 @@ import os
 
 import pytest
 import requests
+from _creds import SEED_OWNER_PASSWORD
 from _seed_stock import require_seed_stock
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
 # Test credentials from test_credentials.md
 ADMIN_CREDS = {"username": "admin", "password": "Admin@123"}
-OWNER_CREDS = {"username": "owner", "password": "Owner@123"}
+OWNER_CREDS = {"username": "owner", "password": SEED_OWNER_PASSWORD}
 CASHIER_CREDS = {"username": "deo.cashier", "password": "Store@123"}  # BUG FIX 2
 
 # Store/Vendor/Brand IDs from seed data

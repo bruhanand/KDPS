@@ -282,38 +282,53 @@ def roles_with_capability(section: str, minimum: str) -> tuple[str, ...]:
     )
 
 
-def _validate() -> None:
-    """Guard the transcription: catch a typo'd section/capability at import.
+def _check_cells_are_transcribed(
+    source: str, cells_by_role: dict[str, dict[str, tuple[str, str]]]
+) -> None:
+    """Every section and capability named in a source must be one the system has."""
+    for role, cells in cells_by_role.items():
+        for section, (capability, _) in cells.items():
+            assert is_valid_section(section), f"{source}/{role}: bad section {section!r}"
+            assert is_valid_capability(capability), (
+                f"{source}/{role}: bad capability {capability!r}"
+            )
 
-    Both seed sources are checked so a slip in a ``ROLE_OVERRIDES`` cell fails
-    loudly here rather than silently fail-closing that role's access. Every
-    ``MATRIX`` row must be complete (all 13 sections) - a ratified row states
-    where it says "no" - while override rows are partial by design (absent → the
-    persona's cell). And every seeded role code must land on a row, so no role
-    can be seeded into the blank that used to be the derived block's job.
-    """
-    for source, cells_by_role in (
-        ("matrix", MATRIX),
-        ("override", ROLE_OVERRIDES),
-    ):
-        for role, cells in cells_by_role.items():
-            for section, (capability, _) in cells.items():
-                assert is_valid_section(section), f"{source}/{role}: bad section {section!r}"
-                assert is_valid_capability(capability), (
-                    f"{source}/{role}: bad capability {capability!r}"
-                )
+
+def _check_matrix_rows_are_complete() -> None:
+    """A ratified row must state all 13 sections — it says where it says "no"."""
     for persona, cells in MATRIX.items():
         missing = set(SECTION_CODES) - set(cells)
         assert not missing, f"{persona}: matrix missing sections {sorted(missing)}"
+
+
+def _check_every_role_has_a_row() -> None:
+    """No role may be seeded into the blank that used to be the derived block's job."""
     for role, persona in ROLE_PERSONA.items():
         assert persona in MATRIX, f"role/{role}: no ratified row for persona {persona!r}"
-    # An override must never restate a ratified sheet cell — only the sections
-    # the sheet left blank are ours to vary per role.
+
+
+def _check_overrides_stay_off_the_sheet() -> None:
+    """An override must never restate a ratified cell — only the sections the
+    sheet left blank are ours to vary per role."""
     for role, cells in ROLE_OVERRIDES.items():
         off_sheet = set(cells) - SHEETLESS_SECTIONS
         assert not off_sheet, (
             f"override/{role}: may not override sheet sections {sorted(off_sheet)}"
         )
+
+
+def _validate() -> None:
+    """Guard the transcription: catch a typo'd section/capability at import.
+
+    Both seed sources are checked so a slip in a ``ROLE_OVERRIDES`` cell fails
+    loudly here rather than silently fail-closing that role's access. Each rule
+    below is one named check, so the assertion that fires names the rule it broke.
+    """
+    _check_cells_are_transcribed("matrix", MATRIX)
+    _check_cells_are_transcribed("override", ROLE_OVERRIDES)
+    _check_matrix_rows_are_complete()
+    _check_every_role_has_a_row()
+    _check_overrides_stay_off_the_sheet()
 
 
 _validate()

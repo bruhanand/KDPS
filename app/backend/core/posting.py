@@ -80,30 +80,15 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     `doc_number`; optionally `store`/`gstin`/`posted_by`). Raises `UnbalancedError`
     if the legs do not sum to zero or there are fewer than two; `PostingError` if the
     document has no number or a leg amount is not integer paise.
+
+    Reads as the three things it is: refuse anything that is not a balanced
+    posting, resolve what the legs inherit from the document, then write. The
+    refusals are grouped in `_refuse_unpostable` on purpose — they are the
+    invariants of the value ledger, and they are worth reading in one place.
     """
     legs = list(legs)
-    if len(legs) < 2:
-        raise UnbalancedError("a posting needs at least two legs (a debit and a credit)")
-    for leg in legs:
-        if isinstance(leg.amount, bool) or not isinstance(leg.amount, int):
-            raise PostingError(
-                f"leg amount must be integer paise, got {type(leg.amount).__name__} "
-                f"for account {leg.account!r}"
-            )
-    total = sum(leg.amount for leg in legs)
-    if total != 0:
-        raise UnbalancedError(f"legs do not balance: Σ = {total} paise (must be 0)")
-
-    doc_type = getattr(doc, "doc_type", None)
-    doc_number = getattr(doc, "doc_number", None)
-    if not doc_type or not doc_number:
-        raise PostingError("post_entries requires a doc with a doc_type and a minted doc_number")
-
-    default_store = getattr(doc, "store", None)
-    default_gstin = getattr(doc, "gstin", None)
-    actor = posted_by if posted_by is not None else getattr(doc, "posted_by", None)
-    if actor is not None and not getattr(actor, "is_authenticated", False):
-        actor = None
+    _refuse_unpostable(doc, legs)
+    doc_type, doc_number, default_store, default_gstin, actor = _posting_context(doc, posted_by)
 
     rows = [
         GLEntry(
@@ -126,3 +111,38 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     ]
     GLEntry.objects.bulk_create(rows)
     return rows
+
+
+def _refuse_unpostable(doc: Any, legs: list[Leg]) -> None:
+    """Every reason a posting is refused, in one place. Raises, or returns None."""
+    if len(legs) < 2:
+        raise UnbalancedError("a posting needs at least two legs (a debit and a credit)")
+    for leg in legs:
+        if isinstance(leg.amount, bool) or not isinstance(leg.amount, int):
+            raise PostingError(
+                f"leg amount must be integer paise, got {type(leg.amount).__name__} "
+                f"for account {leg.account!r}"
+            )
+    total = sum(leg.amount for leg in legs)
+    if total != 0:
+        raise UnbalancedError(f"legs do not balance: Σ = {total} paise (must be 0)")
+    if not getattr(doc, "doc_type", None) or not getattr(doc, "doc_number", None):
+        raise PostingError("post_entries requires a doc with a doc_type and a minted doc_number")
+
+
+def _posting_context(doc: Any, posted_by: Any) -> tuple[str, str, Any, Any, Any]:
+    """What every leg of this voucher inherits from its document.
+
+    An unauthenticated actor is recorded as nobody rather than as itself: a leg's
+    `posted_by` is evidence, and `AnonymousUser` is not a person.
+    """
+    actor = posted_by if posted_by is not None else getattr(doc, "posted_by", None)
+    if actor is not None and not getattr(actor, "is_authenticated", False):
+        actor = None
+    return (
+        doc.doc_type,
+        doc.doc_number,
+        getattr(doc, "store", None),
+        getattr(doc, "gstin", None),
+        actor,
+    )

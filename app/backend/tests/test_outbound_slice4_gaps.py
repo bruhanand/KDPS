@@ -24,6 +24,7 @@ Rulings exercised here:
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
@@ -75,7 +76,7 @@ def gap_scaffold(db):
 
     def _user(username, role, scope=ScopeType.ALL, stores=()):
         u = User.objects.create_user(
-            username=username, password="Test@123", role=role, entity=entity, scope_type=scope
+            username=username, password=TEST_PASSWORD, role=role, entity=entity, scope_type=scope
         )
         for s in stores:
             u.stores.add(s)

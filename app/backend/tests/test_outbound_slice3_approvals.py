@@ -16,6 +16,7 @@ document shows made by X, approved by Y, on date Z — forever."
 from __future__ import annotations
 
 import pytest
+from _creds import TEST_PASSWORD
 from _rbac import make_role
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -57,7 +58,7 @@ def mc(db):
     def _user(username, role_code, scope=ScopeType.ALL, stores=()):
         u = User.objects.create_user(
             username=username,
-            password="Test@123",
+            password=TEST_PASSWORD,
             role=make_role(role_code),
             entity=entity,
             scope_type=scope,
