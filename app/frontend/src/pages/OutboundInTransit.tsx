@@ -17,7 +17,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundAdmin } from "../lib/outbound-rbac";
+import { canCloseTransferGap } from "../lib/outbound-rbac";
 import { isCleared } from "../components/approval";
 import {
   GapStatePill,
@@ -259,7 +259,7 @@ function GapCard({ transfer, canClose, onChanged }: {
 
 export function InTransitPage() {
   const { user } = useAuth();
-  const canClose = canOutboundAdmin(user?.role?.code);
+  const canClose = canCloseTransferGap(user);
   const { data: gaps, loading: gapsLoading, reload } = useList<TransferT>(
     "/outbound/transfers/gaps",
   );

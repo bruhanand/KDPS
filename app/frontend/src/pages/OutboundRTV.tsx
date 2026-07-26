@@ -13,7 +13,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundWrite } from "../lib/outbound-rbac";
+import { canWriteReturnToBrand } from "../lib/outbound-rbac";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
@@ -93,7 +93,7 @@ export function RTVListPage() {
   const { user } = useAuth();
   const tab = params.get("type") === "seasonal" ? "seasonal" : "defective";
   const { data, loading } = useList<RTVT>(`/outbound/rtvs?return_type=${tab}`);
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteReturnToBrand(user);
 
   function setTab(next: string) {
     setParams((p) => { p.set("type", next); return p; });
@@ -385,7 +385,7 @@ export function RTVDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: r, loading } = useDoc<RTVT>(`/outbound/rtvs/${id}`);
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteReturnToBrand(user);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 

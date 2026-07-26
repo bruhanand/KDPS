@@ -29,9 +29,9 @@ The system design ("the spine") is built in process order, one discussion at a t
 
 **Stack (ratified 25 Jun 2026 — ADR-0001):** browser-based **React (TypeScript) PWA** front end + **Python/Django** back end (gives login, roles, back-office admin and ledger transactions out of the box; same language as the analytics/AI) + **PostgreSQL** (deployed on a **Render alpha, Singapore region**; true in-India data residency deferred). **No backend-as-a-service** — Supabase rejected (weak for all-or-nothing ledger transactions, complex permissions, lock-in). ERPNext (open-source India ERP with GST built in) considered and not adopted, but its GST data model is borrowed. Full reasoning: `docs/my-understanding/system-design/consolidation/stack-decision.html`; how to run/deploy: `README.md` + `DEPLOY.md`.
 
-**Reviewed, decided & reconciled (25 June 2026).** A full design review (drift audit + India retail-ERP best-practice research) ran across the corpus, then a **16-decision Q&A** locked every open seam — GRN posts quantity / PT posts value + liability; cross-state (Bihar↔Jharkhand) transfer = taxable IGST; unit cost = P RATE directly (never strip GST); barcode = a non-unique scan-alias with stock a **count under it**; own-POS in scope behind Ten Software (one store, one POS, idempotent); booking-less direct receipt for any brand; commercial model stored as **two axes** (ownership × return-terms) with derived labels; **stack ratified (ADR-0001)**; per-user-configurable digest; **Rule 12 "variation is data, not code"**. Decisions are logged in `.context/qa-decisions.md`; the review is `consolidation/system-review-2026-06-24.html`. The **canonical doc set is now in order**: constitution (`00-system-architecture.html`) → design-of-record (`consolidation/consolidated-system-design.html`) → build artifacts (`consolidation/glossary.html`, `data-model.html`, `posting-catalog.html`, `lifecycles.html`, `integration-contracts.html`) → ratified **ADR chain** (`adr/0001`–`0007`) → D1–D8 appendices → build companion (`build-process-and-roadmap.html`, `erpnext-engineering-study.html`). **Five money-critical items still await a CA ruling before the alpha handles live money**: SOR/Consignment GST single-recognition (F9), the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT, and the no-reposting rule. The distrusted `foundation.html`, old `docs/adr/*` and `docs/agents/*` in the checkout are **slated for deletion (pending Anand's go)**; their salvage is already folded into the new ADRs + glossary. (`CONTEXT.md` is **not** in that list — it is now the canonical build-context briefing; see the top of this file.)
+**Reviewed, decided & reconciled (25 June 2026).** A full design review (drift audit + India retail-ERP best-practice research) ran across the corpus, then a **16-decision Q&A** locked every open seam — GRN posts quantity / PT posts value + liability; cross-state (Bihar↔Jharkhand) transfer = taxable IGST; unit cost = P RATE directly (never strip GST); barcode = a non-unique scan-alias with stock a **count under it**; own-POS in scope (**superseded 26 Jun→26 Jul 2026: the third-party-POS route is dropped — KDPS builds its own POS, designed later**); booking-less direct receipt for any brand; commercial model stored as **two axes** (ownership × return-terms) with derived labels; **stack ratified (ADR-0001)**; per-user-configurable digest; **Rule 12 "variation is data, not code"**. Decisions are logged in `.context/qa-decisions.md`; the review is `consolidation/system-review-2026-06-24.html`. The **canonical doc set is now in order**: constitution (`00-system-architecture.html`) → design-of-record (`consolidation/consolidated-system-design.html`) → build artifacts (`consolidation/glossary.html`, `data-model.html`, `posting-catalog.html`, `lifecycles.html`, `integration-contracts.html`) → ratified **ADR chain** (`adr/0001`–`0007`) → D1–D8 appendices → build companion (`build-process-and-roadmap.html`, `erpnext-engineering-study.html`). **Five money-critical items still await a CA ruling before the alpha handles live money**: SOR/Consignment GST single-recognition (F9), the 6-month deemed-supply clock, late-freight-after-PT, sold-before-PT, and the no-reposting rule. The distrusted `foundation.html`, old `docs/adr/*` and `docs/agents/*` in the checkout are **slated for deletion (pending Anand's go)**; their salvage is already folded into the new ADRs + glossary. (`CONTEXT.md` is **not** in that list — it is now the canonical build-context briefing; see the top of this file.)
 
-**Pace (decided 10 June 2026): no fixed timeline — ASAP with quality.** Working plan (revised 23 Jun): lock the stack → build the **foundation** (project setup) → then **one verified vertical slice at a time** with just-in-time per-slice specs (data model, posting entries and golden files grow per slice, not all upfront). Spike the three externals (Ten Software POS API, Tally import, barcode tool) **in parallel** — they have lead time. D9 migration is designed before go-live. Never all PRDs upfront, never module-by-module to completion. Full process: the **"How we build"** section of the architecture doc.
+**Pace (decided 10 June 2026): no fixed timeline — ASAP with quality.** Working plan (revised 23 Jun): lock the stack → build the **foundation** (project setup) → then **one verified vertical slice at a time** with just-in-time per-slice specs (data model, posting entries and golden files grow per slice, not all upfront). Spike the two externals (Tally import, barcode tool) **in parallel** — they have lead time. (A third, the incumbent POS's API, was dropped on 26 Jul 2026 when KDPS decided to build its own POS.) D9 migration is designed before go-live. Never all PRDs upfront, never module-by-module to completion. Full process: the **"How we build"** section of the architecture doc.
 
 The in-app **PT-mapper** (`app/backend/ptmapper`, the brand-PT → KDPS mapper) is built and live — 9 brand profiles + seeded lookups + a human review queue; fed and hardened 1 Jul, seeded on Render. The separate standalone `code/pdf-to-pt` Invoice→PT maker is regenerated per-need (weekly), not restored.
 
@@ -78,6 +78,13 @@ These are properties of the business, independent of any design choice:
 
 ## Agent skills
 
+### Delivering an issue
+
+`/deliver <issue#>` takes one `ready-for-agent` issue from containment check to an open PR:
+containment → branch → `/tdd` → `npm run ci` → `/simplify` → `/code-review` → live browser QA → PR.
+It stops at the PR and never merges. Run one issue per session; the dev stack is single-tenant
+(one Postgres, `:8001`, `:3000`), so only one session can hold the QA gate at a time.
+
 ### Issue tracker
 
 Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
@@ -90,12 +97,11 @@ The five triage states each map to a repo label of the same name: `needs-triage`
 
 **Single-context**: one root `CONTEXT.md`, ADRs in `docs/my-understanding/system-design/adr/`. See `docs/agents/domain.md`.
 
-## gstack
+## Browser use
 
-Use /browse from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
-Available skills: /office-hours, /plan-ceo-review, /plan-eng-review, /plan-design-review,
-/design-consultation, /design-shotgun, /design-html, /review, /ship, /land-and-deploy,
-/canary, /benchmark, /browse, /connect-chrome, /qa, /qa-only, /design-review,
-/setup-browser-cookies, /setup-deploy, /setup-gbrain, /sync-gbrain, /retro, /investigate,
-/document-release, /document-generate, /codex, /cso, /autoplan, /plan-devex-review,
-/devex-review, /careful, /freeze, /guard, /unfreeze, /gstack-upgrade, /learn.
+Use the **chrome-devtools MCP** tools (`mcp__chrome-devtools__*`) to drive the app: they can assert on
+network requests and console messages, which is what QA'ing an ERP screen actually needs.
+Do not use `mcp__claude-in-chrome__*` - it drives Anand's own Chrome session.
+The recipe (preconditions, flows, what to assert) is `.claude/skills/deliver/LIVE-QA.md`.
+
+*(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*

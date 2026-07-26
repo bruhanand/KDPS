@@ -290,16 +290,13 @@
 
   <dl class="gloss">
     <dt id="sale">Sale <span class="alias">the source-agnostic sale document</span> <span class="pill p-rule">posting rule</span></dt>
-    <dd>The document a till raises when something sells. It is <strong>source-agnostic</strong> — <code>source ∈ {Ten Software, KDPS POS, manual bill}</code> — and the posting logic lives on the Sale document, not on the adapter. The Sale is the writer of SOR/Consignment sold-liability (the PT only flags not-owned). Each store runs <strong>exactly one POS</strong> (a hard config invariant), so the dedup key store + bill-no is uniform.</dd>
-
-    <dt id="ten">Ten Software <span class="alias">the external POS</span></dt>
-    <dd>The existing third-party POS, wrapped behind a swappable adapter (an anti-corruption layer) so its data model never reaches the ledger. The adapter ships as a <strong>reader first</strong> (ingest + daily reconciliation green before any own-POS store goes live). <span class="badge b-next">spike</span> Can the sale event carry more than the raw barcode (season / MRP), and does it prompt on a multi-variant barcode.</dd>
+    <dd>The document a till raises when something sells. It is <strong>source-agnostic</strong> — <code>source ∈ {KDPS POS, manual bill}</code> — and the posting logic lives on the Sale document, not on any adapter. The Sale is the writer of SOR/Consignment sold-liability (the PT only flags not-owned), and it records <strong>who sold it</strong> — a salesperson per bill, distinct from the till login. Each store runs <strong>exactly one POS</strong> (a hard config invariant), so the dedup key store + bill-no is uniform.</dd>
 
     <dt id="kdpspos">KDPS POS <span class="alias">own POS</span> <span class="pill p-rule">posting rule</span></dt>
-    <dd>The POS KDPS builds itself, a parallel writer of the same source-agnostic <a href="#sale">Sale</a> document, phased in behind Ten Software. Built offline-first (PWA + durable outbox + a client-UUID per sale → the server returns the same Sale-ID on retry, so syncing is idempotent). The counter bill is a normal B2C GST tax invoice — <strong>no IRP/IRN</strong> (e-invoicing is B2B-only).</dd>
+    <dd>The POS KDPS builds itself, and — since <strong>26 Jul 2026</strong>, when the third-party-POS route was dropped — the <strong>only</strong> writer of a <a href="#sale">Sale</a>. Built offline-first (PWA + durable outbox + a client-UUID per sale → the server returns the same Sale-ID on retry, so syncing is idempotent). The counter bill is a normal B2C GST tax invoice — <strong>no IRP/IRN</strong> (e-invoicing is B2B-only).</dd>
 
     <dt id="adapter">Swappable adapter <span class="alias">anti-corruption layer · the POS contract</span> <span class="pill p-rule">posting rule</span></dt>
-    <dd>The locked POS boundary: a facade of push/pull operations (item/price master, pending-inward, EOSS/offer rules out; line-item sales, stock-on-hand, daily collection in) defined in KDPS domain terms. Both Ten Software and KDPS POS sit behind it; a per-store cutover is a one-field master flip with zero spine change. The join is <strong>barcode + season</strong> with a barcode-only fallback that re-attaches season at the edge via the effective-dated master.</dd>
+    <dd>The locked POS boundary: a facade of push/pull operations (item/price master, pending-inward, EOSS/offer rules out; line-item sales, stock-on-hand, daily collection in) defined in KDPS domain terms. It was drawn so a third-party POS could never reach the ledger; that POS is gone (26 Jul 2026) and the KDPS POS sits behind the boundary alone. It is kept because it costs nothing and keeps any future importer — including the migration load — out of the posting logic. The join is <strong>barcode + season</strong> with a barcode-only fallback that re-attaches season at the edge via the effective-dated master.</dd>
 
     <dt id="idempotency">Idempotency key <span class="alias">client-UUID per sale</span> <span class="pill p-rule">posting rule</span></dt>
     <dd>A UUID the till stamps on each sale before it ever leaves the device. On retry the server recognises the UUID and returns the <strong>same Sale-ID</strong> instead of posting a duplicate — non-negotiable for offline sync where a sale may be sent more than once. The Tally voucher number follows the same deterministic-key pattern.</dd>
@@ -367,7 +364,7 @@
     <tr><td><a href="#prate">P RATE / landed cost</a></td><td>Cost = P RATE directly; never divide by (1 + slab).</td></tr>
     <tr><td><a href="#tally">Tally</a></td><td>The statutory book of record, fed one-way with a deterministic voucher number.</td></tr>
     <tr><td><a href="#sale">Sale</a></td><td>Source-agnostic sale document; posting logic lives on it, not the adapter.</td></tr>
-    <tr><td><a href="#adapter">Swappable adapter</a></td><td>The POS contract; both Ten Software and KDPS POS sit behind it.</td></tr>
+    <tr><td><a href="#adapter">Swappable adapter</a></td><td>The POS contract; the KDPS POS sits behind it, and so would any future importer.</td></tr>
     <tr><td><a href="#idempotency">Idempotency key</a></td><td>Client-UUID per sale; retry returns the same Sale-ID.</td></tr>
     <tr><td><a href="#offer">Offer</a></td><td>Brand-specific slab/condition discounts, applied on-invoice at the till.</td></tr>
     <tr><td><a href="#ai-edges">AI at the edges</a></td><td>AI reads &amp; suggests, never posts or approves.</td></tr>

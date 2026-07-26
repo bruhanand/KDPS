@@ -265,8 +265,8 @@
 <h3>The till &amp; the brain</h3>
 <table>
   <tr><th style="width:24%">Word</th><th>Plain meaning</th></tr>
-  <tr><td><strong>Sale</strong></td><td>The slip a till raises. It is <strong>source-agnostic</strong> — it doesn't matter if it came from Ten Software, our own POS, or a hand-written bill.</td></tr>
-  <tr><td><strong>Ten Software</strong> / <strong>KDPS POS</strong></td><td>The current outside till, and the one we build later. Both sit behind one <strong>adapter</strong>, so swapping is a one-line change.</td></tr>
+  <tr><td><strong>Sale</strong></td><td>The slip a till raises. It is <strong>source-agnostic</strong> — it doesn't matter if it came from our own POS or a hand-written bill.</td></tr>
+  <tr><td><strong>KDPS POS</strong></td><td>The till we build ourselves — decided 26 Jul 2026, replacing the earlier plan to connect to the outside billing software. It sits behind one <strong>boundary</strong>, so the counter can never reach the ledger directly.</td></tr>
   <tr><td><strong>Idempotency key</strong></td><td>A unique id the till stamps on each sale, so re-sending it after a network drop never creates a duplicate.</td></tr>
   <tr><td><strong>Offer</strong></td><td>Brand-specific discount rules (slabs, buy-2-get-1, gifts). Applied at the till; it only lowers the price we collect.</td></tr>
   <tr><td><strong>Flag, don't block</strong> / <strong>Exception queue</strong></td><td>A mismatch raises a “please fix” item to its owner and waits in a queue. The counter keeps selling.</td></tr>
@@ -653,7 +653,7 @@
 <h3>Left out on purpose (for now)</h3>
 <ul>
   <li><strong>Integration wiring</strong> — the exact push/pull contracts with the POS, Tally, bank and WhatsApp. We're focused on the <strong>foundation and the core service layer</strong> first; the edges come when we build the slices that use them.</li>
-  <li><strong>POS and Tally are deferred (26 Jun 2026)</strong> — not in the current build. <strong>POS is the last module</strong>: Ten Software will sell API access at a cost plus lead time, so we use their API if it's ready by then, else KDPS builds its own — decided at that point. The Tally/accounting sync waits too.</li>
+  <li><strong>Selling and Tally are deferred</strong> — not in the current build. <strong>Selling is the last module, and the till is ours</strong> (26 Jul 2026): KDPS builds its own POS rather than connecting to the outside billing software, so nothing here waits on another company. The Tally/accounting sync waits too.</li>
 </ul>
 
 <h3>A few money points still need a CA's word</h3>

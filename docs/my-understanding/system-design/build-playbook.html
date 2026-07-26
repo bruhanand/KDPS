@@ -152,7 +152,7 @@
       <div><h3>Development — module by module, in vertical slices</h3><p class="small">First slice = one branded shipment all the way to accurate stock. Then the rest, using the loop below.</p></div>
       <span class="pill p-later">Then</span></div>
     <div class="stage"><div class="stnum">7</div>
-      <div><h3>Integration — the outside systems</h3><p class="small">POS (Ten Software), Tally, barcode, bank, WhatsApp — connected as you reach the module that uses each. Woven into stage 6, not a phase you wait for.</p></div>
+      <div><h3>Integration — the outside systems</h3><p class="small">POS (ours), Tally, barcode, bank, WhatsApp — connected as you reach the module that uses each. Woven into stage 6, not a phase you wait for.</p></div>
       <span class="pill p-later">During build</span></div>
     <div class="stage"><div class="stnum">8</div>
       <div><h3>Data migration &amp; go-live</h3><p class="small">Import masters + opening stock, parallel run with Tally, store-by-store rollout. Designed in D9.</p></div>
@@ -253,15 +253,14 @@
   <div class="card">
     <table>
       <tr><th>System</th><th>Used by</th><th>When to connect</th></tr>
-      <tr><td><b>Ten Software (POS)</b></td><td>Selling / outbound, cash audit</td><td>Confirm it works (a quick PoC) <b>before</b> you build Selling — see the note below.</td></tr>
-      <tr><td><b>Tally</b> (via TaxOne)</td><td>Accounting sync</td><td>When you build the Tally-sync module (near the end).</td></tr>
+            <tr><td><b>Tally</b> (via TaxOne)</td><td>Accounting sync</td><td>When you build the Tally-sync module (near the end).</td></tr>
       <tr><td><b>Barcode tool</b></td><td>Selling / stock movement</td><td>When you build Selling.</td></tr>
       <tr><td><b>Bank</b></td><td>Payments / cash audit</td><td>When you build Payments.</td></tr>
       <tr><td><b>WhatsApp</b></td><td>Daily digest, alerts</td><td>When you build the reports module.</td></tr>
     </table>
     <div class="callout c-good" style="margin-bottom:0"><b>Everything before Selling needs none of these.</b> Booking, inbound, the PT maker, stock-to-ledger and payments all run without the POS. So you can start building immediately once the project is set up.</div>
   </div>
-  <div class="callout c-stop"><b>The one thing not to leave to the last minute:</b> check the Ten Software POS API actually works <b>before</b> you build the Selling module. If it has no usable API, that part may need its own simple POS — a bigger decision you don't want to hit by surprise. Everything earlier is unaffected, so this is "before Selling", not "before anything".</div>
+  <div class="callout c-stop"><b>Resolved 26 Jul 2026.</b> This used to say: check the third-party POS API works before you build Selling, because if it had no usable API that part would need its own POS. That decision has been taken deliberately — <b>KDPS builds its own counter</b>, so Selling is ordinary build work and nothing about it waits on an outside party. Everything earlier is unaffected, so this is "before Selling", not "before anything".</div>
 
   <!-- NEXT -->
   <h2>What to do next</h2>

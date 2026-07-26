@@ -13,6 +13,7 @@ import os
 
 import pytest
 import requests
+from _seed_stock import require_seed_stock
 
 BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 
@@ -23,6 +24,7 @@ CASHIER_CREDS = {"username": "deo.cashier", "password": "Store@123"}  # BUG FIX 
 
 # Store/Vendor/Brand IDs from seed data
 DEO_STORE_ID = 1
+DEO_STORE_CODE = "DEO"
 BANKA_STORE_ID = 5
 ABFRL_VENDOR_ID = 1
 PETER_ENGLAND_BRAND_ID = 4  # owned
@@ -147,6 +149,11 @@ class TestStockOnHand:
     def test_stock_on_hand_has_data(self):
         """GET /api/stockledger/on-hand should return non-zero balances."""
         token = get_auth_token(**OWNER_CREDS)
+        # Reads only, but the assertions below are about the outbound demo fixture,
+        # so say so rather than failing on a database that never had it.
+        require_seed_stock(
+            BASE_URL, auth_header(token), sku_code="PE-FRM-WHT-40", store_code=DEO_STORE_CODE
+        )
         r = requests.get(
             f"{BASE_URL}/api/stockledger/on-hand",
             headers=auth_header(token),
@@ -186,6 +193,13 @@ class TestBugFix1OwnedRTVVendorSubledger:
         """
         token = get_auth_token(**OWNER_CREDS)
         headers = auth_header(token)
+
+        # This test *spends* a unit of seeded stock. Confirm it is there before
+        # doing anything, so an exhausted fixture reads as "reseed the shared DB"
+        # and not as a defect in the RTV path (issue #93).
+        require_seed_stock(
+            BASE_URL, headers, sku_code="PE-FRM-WHT-40", store_code=DEO_STORE_CODE, qty=1
+        )
 
         # Step 1: Get initial health state
         health_before = requests.get(
@@ -275,6 +289,11 @@ class TestBugFix1bSORRTVNoGL:
         """
         token = get_auth_token(**OWNER_CREDS)
         headers = auth_header(token)
+
+        # Spends a unit of the SOR fixture stock - see the owned-RTV test above.
+        require_seed_stock(
+            BASE_URL, headers, sku_code="LP-POLO-BLK-L", store_code=DEO_STORE_CODE, qty=1
+        )
 
         # Step 1: Get initial health state
         health_before = requests.get(

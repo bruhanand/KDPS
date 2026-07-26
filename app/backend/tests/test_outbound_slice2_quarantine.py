@@ -17,9 +17,10 @@ mark-damaged is a document (Rule 1).
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
+from accounts.models import ScopeType, User
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import MarkDamaged
@@ -49,7 +50,9 @@ def quar_scaffold(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
 
-    role = Role.objects.create(code="ho_ops", name="HO Ops (quar test)")
+    # Marking damage is `return_to_brand: operate` (#94) — the warehouse and the
+    # store hold it; HO ops, which only monitors returns, no longer does.
+    role = make_role("warehouse", "Warehouse (quar test)")
     user = User.objects.create_user(
         username="quar_ops",
         password="Test@123",
@@ -232,7 +235,7 @@ def test_mark_damaged_unknown_barcode_rejected(quar_scaffold):
 def test_mark_damaged_is_store_scoped(quar_scaffold):
     """A store-scoped user cannot mark damaged at a store outside their scope."""
     s = quar_scaffold
-    role = Role.objects.create(code="store_manager", name="SM (quar test)")
+    role = make_role("store_manager", "SM (quar test)")
     sm = User.objects.create_user(
         username="quar_sm", password="Test@123", role=role, scope_type=ScopeType.STORE
     )
@@ -256,7 +259,7 @@ def test_quarantine_filter_is_store_scoped_fail_closed(quar_scaffold):
         {"store": s["store"].id, "scans": [{"barcode": "QC001", "qty": 2}]},
         format="json",
     )
-    role = Role.objects.create(code="store_manager", name="SM2 (quar test)")
+    role = make_role("store_manager", "SM2 (quar test)")
     sm = User.objects.create_user(
         username="quar_sm2", password="Test@123", role=role, scope_type=ScopeType.STORE
     )

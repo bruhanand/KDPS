@@ -21,6 +21,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.role_lists import declare_role_list
 from core.documents import DocStatus
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
@@ -125,11 +126,30 @@ def _parse_context(data: Any) -> tuple[dict, Response | None]:
     return ctx, None
 
 
-# Pushing a PT into the system (post) and reversing it write the stock ledger and
-# raise vendor liability — a Patna/HO accounts action, never the warehouse. Resolving
-# review items grows the master lookup tables — a mapping-steward action.
-PATNA_ROLES = {"accounts", "owner", "it_admin"}
-MAPPING_STEWARD_ROLES = {"warehouse", "data_steward", "ho_ops", "owner", "it_admin"}
+# Two gates the capability ladder cannot express, kept as role lists on purpose
+# and registered with their reasons (#94).
+PATNA_ROLES = declare_role_list(
+    "ptmapper.post_and_reverse_pt",
+    ("accounts", "owner", "it_admin"),
+    reason=(
+        "Pushing a PT into the system, and reversing it, writes the stock ledger "
+        "and raises vendor liability — the design reserves that inward action for "
+        "Patna HO. 'Patna' is a place, not a sidebar section: gating it on "
+        "`receive_goods: operate` would both add the warehouse, which the design "
+        "forbids, and drop Owner, who holds only `receive_goods: view`. The actor "
+        "question is parked in #104."
+    ),
+)
+MAPPING_STEWARD_ROLES = declare_role_list(
+    "ptmapper.mapping_stewardship",
+    ("warehouse", "data_steward", "ho_ops", "owner", "it_admin"),
+    reason=(
+        "Making a PT, pricing it and resolving review items grow the master "
+        "lookup tables. Mapping stewardship is not a rung on any section — the "
+        "nearest, `receive_goods`, is about arrivals, and data_steward holds no "
+        "capability on it at all. Parked in #104."
+    ),
+)
 
 
 def _role_code(user: Any) -> str:
@@ -565,9 +585,10 @@ class PtRowsUpdateView(APIView):
 def _invoice_send_blocks(pt: PtFile) -> list[dict]:
     """The hard gates before an authored PT may leave the warehouse (invoice source
     only — the brand path is untouched): every row needs a BARCODE (keep-if-present;
-    else the warehouse generates in POS and types it — manual v1, Ten Software API
-    pending) and a SEASON (the canonical-season block, Q39 — the editor already
-    restricts the cell to Master-Sheet seasons, this refuses blanks)."""
+    else the warehouse generates it in the counter software and types it — manual for
+    now; generation moves in-house with the KDPS-built POS) and a SEASON (the
+    canonical-season block, Q39 — the editor already restricts the cell to
+    Master-Sheet seasons, this refuses blanks)."""
     problems: list[dict] = []
     for row in pt.rows.all():
         missing = [c for c in ("BARCODE", "SEASON") if not str(row.data.get(c) or "").strip()]
@@ -634,7 +655,9 @@ class PtFilePostView(APIView):
 
     def post(self, request: Request, pk: int) -> Response:
         if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden("Only Patna HO (accounts/owner) can post a PT into the system.")
+            return _forbidden(
+                "Only Patna HO (accounts / owner / IT admin) can post a PT into the system."
+            )
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -678,7 +701,9 @@ class PtFileReverseView(APIView):
 
     def post(self, request: Request, pk: int) -> Response:
         if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden("Only Patna HO (accounts/owner) can reverse a posted PT.")
+            return _forbidden(
+                "Only Patna HO (accounts / owner / IT admin) can reverse a posted PT."
+            )
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)

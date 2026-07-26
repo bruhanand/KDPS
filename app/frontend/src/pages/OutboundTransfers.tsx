@@ -16,7 +16,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canOutboundAdmin, canOutboundWrite } from "../lib/outbound-rbac";
+import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
@@ -237,7 +237,7 @@ export function TransferListPage() {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
   const tab = params.get("type") === "store_split" ? "store_split" : "inter_store";
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteTransfer(user);
 
   const { data, loading } = useList<TransferT>(`/outbound/transfers?type=${tab}`);
 
@@ -576,7 +576,7 @@ export function TransferDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { data: t, loading } = useDoc<TransferT>(`/outbound/transfers/${id}`);
-  const writable = canOutboundWrite(user?.role?.code);
+  const writable = canWriteTransfer(user);
   const [scanMode, setScanMode] = useState<"" | "dispatch" | "receive">("");
   const [posting, setPosting] = useState(false);
   const [scanError, setScanError] = useState("");
@@ -784,7 +784,7 @@ export function TransferDetailPage() {
             ) : (
               // Only offered to the people who can act on it — for anyone else
               // the gaps list is scoped away and the link would go nowhere.
-              canOutboundAdmin(user?.role?.code) && (
+              canCloseTransferGap(user) && (
                 <Link to="/transfer/in-transit">Open the gaps list</Link>
               )
             )}

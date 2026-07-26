@@ -11,6 +11,7 @@ since enforce_store_scope runs in the view layer.
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
@@ -63,7 +64,7 @@ def scope_scaffold(db):
     vendor = Vendor.objects.create(name="Scope Vendor", code="scvnd")
 
     # Store manager: scoped to DEO only
-    sm_role = Role.objects.create(code="store_manager", name="Store Manager (scope test)")
+    sm_role = make_role("store_manager", "Store Manager (scope test)")
     sm_user = User.objects.create_user(
         username="scope_sm",
         password="Test@123",
@@ -74,7 +75,7 @@ def scope_scaffold(db):
     sm_user.stores.add(store_deo)
 
     # Admin: all scope
-    admin_role = Role.objects.create(code="owner", name="Owner (scope test)")
+    admin_role = make_role("owner", "Owner (scope test)")
     admin_user = User.objects.create_user(
         username="scope_admin",
         password="Test@123",

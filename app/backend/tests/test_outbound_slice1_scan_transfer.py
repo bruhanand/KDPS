@@ -17,9 +17,10 @@ Scan-is-truth rulings (Anand, 23 Jul):
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
+from accounts.models import ScopeType, User
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import StoreTransfer, StoreTransferLine, TransferReceipt
@@ -51,7 +52,7 @@ def scan_scaffold(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
 
-    role = Role.objects.create(code="ho_ops", name="HO Ops (scan test)")
+    role = make_role("ho_ops", "HO Ops (scan test)")
     user = User.objects.create_user(
         username="scan_ops",
         password="Test@123",
@@ -523,7 +524,7 @@ def test_scan_lookup_is_store_scoped_fail_closed(scan_scaffold):
     """A store-scoped user cannot probe another store's stock — an
     out-of-scope store looks identical to no stock (ADR-0003)."""
     s = scan_scaffold
-    role = Role.objects.create(code="store_manager", name="SM (scan test)")
+    role = make_role("store_manager", "SM (scan test)")
     sm = User.objects.create_user(
         username="scan_sm",
         password="Test@123",

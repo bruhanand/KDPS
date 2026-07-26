@@ -125,8 +125,8 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Tally** — the statutory book of record; KDPS feeds it one-way via a deterministic voucher number.
 
 **POS & edges**
-- **Sale** — the **source-agnostic** sale document (`source ∈ {Ten Software, KDPS POS, manual}`); posting logic lives on the Sale, not the adapter.
-- **Ten Software** — the existing third-party POS, behind a swappable adapter (reader first). **KDPS POS** — own-built parallel writer of the same Sale; offline-first, idempotent.
+- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson per bill, distinct from the till login (#107).
+- **KDPS POS** — our own counter, and the only writer of a Sale. Offline-first, idempotent. **Decided 26 Jul 2026: KDPS builds its own POS; the third-party-POS route is dropped**, so there is no external sales feed to ingest or reconcile against. The source-agnostic Sale shape is kept anyway — it costs nothing and keeps a future importer (or a migration load) from touching posting logic.
 - **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till.
 - **Idempotency key** — client-UUID per sale; retries return the same Sale-ID.
 

@@ -93,7 +93,7 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
       "EOSS bulk billing — stock billed and kept in the store, set up in Offers & Price",
     ],
     notes: [
-      "Selling runs through Ten Software today. Our own counter is proven at one store, one counter, before any store is switched over.",
+      "Selling runs on the existing store billing software today. Our own counter is proven at one store, one counter, before any store is switched over.",
       "The stores put Sell first on their own list of daily screens, twice — 30 June and 25 July.",
     ],
     module: POS,

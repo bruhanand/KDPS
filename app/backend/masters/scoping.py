@@ -157,10 +157,29 @@ def scope_by_store(qs: Any, user: Any, field: str = "store_id") -> Any:
 
     Use `scope_by_entitlement` wherever the row is fetched in order to act on it.
     """
+    return scope_by_store_many(user, (qs, field))[0]
+
+
+def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:
+    """`scope_by_store` over several querysets, resolving the scope once.
+
+    The rule lives here and `scope_by_store` is the one-queryset case of it, so
+    the fail-closed branch a brand-scoped user takes cannot be fixed in one and
+    forgotten in the other.
+
+    A screen built from two lists gates both against the same person in the same
+    request, so the two answers cannot differ — but `active_store_ids` is not
+    free (it reads the user's store membership and resolves the switcher's unit
+    to a row), and calling it per queryset pays that twice for one answer.
+
+    Each target is `(queryset, field)`; the results come back in the same order.
+    """
     if is_brand_scoped(user):
-        return qs.none()
+        return [qs.none() for qs, _ in targets]
     ids = active_store_ids(user)
-    return qs if ids is None else qs.filter(**{f"{field}__in": ids})
+    if ids is None:
+        return [qs for qs, _ in targets]
+    return [qs.filter(**{f"{field}__in": ids}) for qs, field in targets]
 
 
 def scope_by_store_and_brand(

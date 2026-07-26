@@ -133,7 +133,7 @@
     📝 <strong>This is a living document.</strong> Every decision shows its status and the reason behind it — a human or an AI can pick it up and continue anywhere.
     <p style="margin:12px 0 4px;color:#6b5a1f"><strong>Last folded — changelog:</strong></p>
     <ul style="margin:0 0 0 2px;padding-left:18px">
-      <li><strong>17 Jun 2026 (from the outbound chat):</strong> three corrections folded in — (1) <strong>non-branded colour</strong>: use the invoice's colour if it states one, else P/M/E <span class="qref">Q28</span>; (2) <strong>barcode source</strong>: the POS (Ten Software) generates the barcode today, we integrate that generator <span class="qref">Q8</span>; (3) <strong>season/SKU reuse resolved</strong>: reuse the style identity across seasons, each season is a distinct cohort (barcode+season).</li>
+      <li><strong>17 Jun 2026 (from the outbound chat):</strong> three corrections folded in — (1) <strong>non-branded colour</strong>: use the invoice's colour if it states one, else P/M/E <span class="qref">Q28</span>; (2) <strong>barcode source</strong>: the incumbent counter software generates the barcode today; barcode generation becomes ours with the KDPS-built POS <span class="qref">Q8</span>; (3) <strong>season/SKU reuse resolved</strong>: reuse the style identity across seasons, each season is a distinct cohort (barcode+season).</li>
       <li><strong>16 Jun 2026 (client truths):</strong> several model corrections folded in:
         <ul style="margin:4px 0 0;padding-left:18px">
           <li><strong>One barcode → many pieces</strong> — barcode is the product identity, not a per-piece serial; stock is a count <span class="qref">Q41</span> (reverses the earlier per-piece rule)</li>
@@ -189,7 +189,7 @@
     </ul>
   </div>
   <div class="callout co-dep">
-    <strong>POS = <a href="https://tensoftware.in/">tensoftware.in</a></strong> — online-first, so a REST API is likely. Full push/pull contract in the <a href="#pos">POS Integration</a> section. Two load-bearing answers to confirm with them:
+    <strong>POS = KDPS's own counter</strong> (decided 26 Jul 2026; the incumbent third-party till is being replaced, not integrated). Full push/pull contract in the <a href="#pos">POS Integration</a> section. Two load-bearing answers to confirm with them:
     <ul style="margin:8px 0 6px;padding-left:18px">
       <li>Does the API accept a <strong>pending-inward / incoming-transfer</strong> quantity?</li>
       <li>Can it <strong>export line-item sales</strong> back to us?</li>
@@ -336,7 +336,7 @@
     <p>Two cases:</p>
     <ul>
       <li><strong>Barcode already present:</strong> keep it — the PT is built with every item carrying its barcode, then straight to Patna inward and store allocation.</li>
-      <li><strong>No barcode:</strong> the PT is created <strong>editable with the barcode column empty</strong>; once everything else is filled in order, the <strong>POS (Ten Software) generates the code</strong> and the <strong>warehouse operator fills the barcode column</strong>, then on to Patna inward and allocation.</li>
+      <li><strong>No barcode:</strong> the PT is created <strong>editable with the barcode column empty</strong>; once everything else is filled in order, the <strong>POS generates the code</strong> and the <strong>warehouse operator fills the barcode column</strong>, then on to Patna inward and allocation.</li>
     </ul>
     <p class="why">One barcode is generated per <strong>identity</strong>, not per piece (Q41). Barcode generation today is done by the <strong>POS</strong> — we integrate that; native generation can come later.</p>
   </div>
@@ -502,7 +502,7 @@
 
 <section id="pos">
   <h2 class="sec">POS Integration — push &amp; pull <span class="badge b-open">Confirm endpoints</span> <span class="qref">Q34</span></h2>
-  <p>POS is <strong><a href="https://tensoftware.in/">tensoftware.in</a></strong> (online-first, so a REST API is likely). We don't rebuild POS — we feed it and read from it. The shared <strong>join key is the barcode</strong>.</p>
+  <p>POS is <strong>KDPS's own counter</strong> (decided 26 Jul 2026 — the earlier plan to integrate the incumbent third-party till is dropped). We feed it and read from it across an internal boundary. The shared <strong>join key is the barcode</strong>.</p>
   <div class="callout co-note"><strong>Barcode is a non-unique alias; season is re-attached at the adapter <span class="qref">Q6 · Q7</span>.</strong> The barcode is a <strong>scan-alias that points to a SKU cohort</strong>, not the inventory identity itself — brands reuse a barcode across seasons, and several genuinely-interchangeable pieces share one (count under the barcode). So <strong>no re-barcoding at inbound</strong>. The full unit key is <strong>barcode + season</strong>, and <strong>season is inferred at the POS adapter</strong>, not carried by the scan: the adapter resolves the barcode to the active cohort at that store on that sale date via the effective-dated master — one match posts; many matches take the <strong>oldest season first</strong>; a genuinely ambiguous scan is a one-tap "which season?", <strong>never a blocked sale</strong>. A true cross-SKU collision (two different items sharing a vendor barcode) is caught <strong>at inbound</strong> — flagged and given an internal barcode via the generator (Q8) — not by a blanket re-barcode.</div>
   <h3>KDPS → POS (push)</h3>
   <table>
@@ -524,7 +524,6 @@
     </tbody>
   </table>
   <div class="callout co-dep"><strong>Negative SOH → D3 <span class="qref">Q40</span>.</strong> The daily SOH pull surfaces stores where POS shows minus stock (sold what the books say isn't there). Inbound only <em>detects</em> it; the policy — how it's reconciled and corrected — is an explicit agenda item on the D3 outbound discussion (also added to the architecture page's D3 row).</div>
-  <div class="callout co-dep"><strong>Two mechanics to confirm with Ten Software:</strong> <strong>how</strong> (REST / webhook / file export, and sync frequency), and that the <strong>barcode</strong> is an acceptable join key on both sides.</div>
 </section>
 
 <section id="ai">
@@ -559,7 +558,7 @@
       <tr><td>Q5</td><td>Brand mapping rules</td><td>Built by dev from client formats</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q6</td><td>Unknown brand format</td><td>Park in unmapped queue, alert dev</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q7</td><td>Non-branded margin</td><td>Per-category default 30–35%, overridable</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>Q8</td><td>Barcode generation</td><td>Barcode present → keep it; absent → <strong>the POS (Ten Software) generates it</strong> and the WH operator fills the barcode column in the editable PT. We integrate the POS generator; native later</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>Q8</td><td>Barcode generation</td><td>Barcode present → keep it; absent → <strong>the POS generates it</strong> and the WH operator fills the barcode column in the editable PT. Generation moves in-house with the KDPS-built POS (26 Jul 2026)</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q9</td><td>Notifications</td><td>In-app = record; WhatsApp = nudge</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q10</td><td>Status tracking</td><td>Shipment + line-item</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q11</td><td>Invoice data trust</td><td>Risk-based (non-branded confirm, branded light)</td><td><span class="badge b-locked">Locked</span></td></tr>
@@ -582,7 +581,7 @@
       <tr><td>Q31</td><td>SKU vs barcode</td><td><strong>Changed →</strong> SKU (type) = Brand+Style+Colour+Size, and the <strong>barcode is a non-unique scan-alias</strong> pointing to that identity (not a per-piece serial). One barcode → many pieces; stock = count per barcode. the same barcode can recur across <em>and within</em> a season (Q7), so it is never unique; identity is the SKU cohort and stock is a count under it. A genuine two-SKU collision is caught at inbound (internal alias minted), never at the till</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q32</td><td>GRN over-receipt &amp; damaged</td><td>Over-receipt adds line+remark; damaged = received-flagged → defective (quarantined)</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q33</td><td>Anchor object name</td><td>Renamed Consignment → Shipment</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>Q34</td><td>POS push/pull contract</td><td>Push: item master + pending-inward. Pull: sales + SOH + collection. Confirm endpoints w/ Ten Software</td><td><span class="badge b-open">Open</span></td></tr>
+      <tr><td>Q34</td><td>POS push/pull contract</td><td>Push: item master + pending-inward. Pull: sales + SOH + collection. Now an internal contract — the counter is KDPS-built</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q35</td><td>v1 build scope</td><td><strong>Corrected 10 Jun:</strong> both inbound paths are v1. Parked = non-branded <em>vendor management</em> only (records, agents, bookings — D1 §13, pending the data-input discussion). v1 non-branded shipments may arrive booking-less: minimal vendor record on the fly, GRN stands alone. <strong>Generalised 25 Jun:</strong> booking-less direct receipt applies to <strong>any brand, branded included</strong> — Shipment (booking_ref = NULL) is the anchor, simple-receipt GRN, model snapshotted at receipt, retro-link to a later booking allowed</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q36</td><td>Canonical unit cost</td><td><strong>Corrected 25 Jun:</strong> cost = <strong>P RATE directly</strong> — the ex-GST per-piece payable (GST is added on top at invoice, never stripped) + value-weighted share of invoice-level charges − discounts; frozen on the stock-in posting. (Replaces the earlier "P RATE − GST" step.)</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q37</td><td>PT posting spec</td><td><strong>Two-step (split 25 Jun):</strong> the <strong>GRN posts quantity</strong> (qty + location + condition + season, provisional owned-flag, no cost — sellable day one); the <strong>PT at Patna inward posts value + liability</strong> (frozen unit cost stamped, owned-flag finalised). Vendor payable: <strong>Outright &amp; Correction</strong> = invoice total incl. GST at inward (both KDPS-owned; Correction nets the return allowance back on D3 return), <strong>SOR</strong> = accrues per piece on sale (D3), <strong>Consignment</strong> = never from the PT. <em>Updated 13 Jun: 4 models — Correction split out from SOR</em></td><td><span class="badge b-locked">Locked</span></td></tr>
@@ -598,7 +597,6 @@
 
 <section id="open">
   <h2 class="sec">Open / To Confirm</h2>
-  <div class="callout co-dep"><strong>POS API (tensoftware.in)</strong> — confirm the full push/pull list in <a href="#pos">POS Integration</a> is supported, plus sync mechanism &amp; barcode join key. <em>Confirm with Ten Software.</em></div>
   <div class="callout co-dep"><strong>Order list interface</strong> — exact shape of the structured order list that pre-fills the GRN. <em>Owned by the Booking module.</em></div>
   <div class="callout co-open"><strong>Per-brand cost mapping <span class="qref">Q36</span></strong> — for each brand's PT format: which column carries the per-piece payable rate, and is GST inside it? The cost <em>definition</em> is locked; these per-brand inputs are pending. <em>Client will provide the brand formats.</em></div>
   <div class="callout co-open"><strong>SOR statutory timing (for D6)</strong> — Q37 books a TIR purchase at Patna inward while the SOR payable accrues only on sale. Confirm how brands actually bill SOR deliveries (tax invoice at delivery vs approval-basis challan) and how Tally should book them — D6 must reconcile the two timings. <em>Ask client / accountant.</em></div>
@@ -607,7 +605,7 @@
   <div class="callout co-dep"><strong>Season master ownership — D8 critical path</strong> — booking, PT and barcode identity all key on season, but its master (open/close ritual, corrections, cross-season barcode reuse) is owned by nobody until D8. Interim rule in Q39. <em>Must not slip out of D8.</em></div>
   <div class="callout co-note"><strong>Resolved (17 Jun):</strong> if the invoice states a colour, <strong>use it</strong>; fall back to P/M/E only when no colour is given <span class="qref">Q28</span>.</div>
   <div class="callout co-note"><strong>Resolved (updated 16 Jun):</strong> a barcode identifies a <em>product identity</em> shared by its pieces (one barcode → many pieces), unique <em>within a season</em>; some brands reuse a barcode in a later season → the key = <strong>barcode + season</strong> <span class="qref">Q41</span>.</div>
-  <div class="callout co-note"><strong>Resolved (17 Jun):</strong> the barcode is <strong>generated by the POS (Ten Software)</strong> today; we integrate that generator. Native generation can come later <span class="qref">Q8</span>.</div>
+  <div class="callout co-note"><strong>Resolved (17 Jun; revised 26 Jul 2026):</strong> the barcode is <strong>generated by the counter software</strong> today. With the POS now KDPS-built, generation comes in-house with the selling slice rather than being integrated from outside <span class="qref">Q8</span>.</div>
   <div class="callout co-open"><strong>Sales-data import</strong> — format and cleanup needed before forecasting can use per-store / per-brand history.</div>
   <div class="callout co-note"><strong>Resolved:</strong> P/M/E price bands = operator judgment, no fixed thresholds (Q28).</div>
   <div class="editbox">➕ Add new open items here as the discussion grows.</div>

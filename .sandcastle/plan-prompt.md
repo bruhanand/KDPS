@@ -4,11 +4,20 @@ Here are the open issues in the repo:
 
 <issues-json>
 
-!`gh issue list -R bruhanand/KDPS --state open --label Sandcastle --json number,title,body,labels,comments --jq '[.[] | {number, title, body, labels: [.labels[].name], comments: [.comments[].body]}]'`
+!`gh issue list -R bruhanand/KDPS --state open --label ready-for-agent --json number,title,body,labels,comments,assignees --jq '[.[] | {number, title, body, labels: [.labels[].name], assignees: [.assignees[].login], comments: [.comments[].body]}]'`
 
 </issues-json>
 
-The list above has already been filtered to issues ready for work.
+The list above is filtered to `ready-for-agent` — the label any AI agent picks work up from.
+
+# DROP THESE BEFORE YOU PLAN ANYTHING
+
+An issue can carry the label and still not be workable. Drop it from the plan, and say in one line why:
+
+1. **The body disagrees with the comments.** A ruling or decision left in a comment while the body still holds the old spec means the issue carries two specs, and an agent will faithfully build the wrong one. This has already happened once. Do not plan it — say which two disagree so a human can rewrite the body.
+2. **It already has an assignee.** Somebody, or some other session, is on it.
+3. **It is a PRD.** A `PRD` label means it is a parent holding a discussion, not a slice to build. Its children are the work.
+4. **A named blocker is still open.**
 
 # TASK
 

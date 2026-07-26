@@ -1,60 +1,68 @@
-"""Outbound RBAC permission classes + store-scope enforcement.
+"""Outbound RBAC — one gate per endpoint group, plus store-scope enforcement.
 
-Role matrix
------------
-Read (list/detail):
-    All authenticated users with ``outbound`` nav-group (store-scoped for
-    store-level users, full for network roles).
+There is no outbound role list. Every write resolves through the *same* section
+capability that shapes the caller's sidebar (``require_section``, issue #85), so
+a screen and the API behind it can no longer disagree — and Accounts, which the
+matrix gives ``view`` on stock, transfers, counting and returns, can no longer
+write in any of them (#94).
 
-Write (create / submit / dispatch / receive):
-    owner, it_admin, ho_ops, accounts, store_manager, warehouse.
-    store_manager + warehouse are further limited to their own store scope.
+The mapping, read straight off the ratified SIDEBAR RBAC matrix:
 
-Admin write (V-flip, write-off):
-    owner, it_admin, ho_ops, accounts only.  Store-level roles must not
-    convert ownership or write off stock — these are finance/HO decisions.
+============================================  ===========================
+Endpoint group                                Gate
+============================================  ===========================
+Transfer create / submit / dispatch / receive ``transfer: operate``
+Transfer gap closure raise / post             ``transfer: approve``
+Mark damaged                                  ``return_to_brand: operate``
+Return to brand create / submit               ``return_to_brand: operate``
+Adjustment create / submit                    ``stock_count: operate``
+Write-off create / submit                     ``stock_count: operate``
+V-flip create / submit                        ``stock: manage``
+============================================  ===========================
 
-store_staff is READ-ONLY on all outbound surfaces.
+Two consequences are deliberate, not accidents. The ladder is ordinal, so a role
+holding ``approve`` clears an ``operate`` gate — which is why a brand manager
+(``transfer: approve``) may move stock. And V-flip sits at ``stock: manage``,
+which the design settled as an ownership relabel of stock that stays put: that
+adds the warehouse and drops HO ops. Both follow the matrix; if either is wrong
+it is a matrix change, not an exception here.
 
-Store-scope:
-    Store-scoped roles (store_manager, warehouse, store_staff) may only
-    write against stores in their ``user.stores`` M2M.  Network roles
-    (scope_type='all', superuser) are unrestricted.  ``enforce_store_scope``
-    is the single shared gate — every outbound write view calls it.
+Reads are unchanged — any authenticated user (DRF's own ``IsAuthenticated``;
+outbound has no read rule of its own), store-scoped at the queryset.
+
+Store scope is a separate, unchanged concern: ``enforce_store_scope`` still runs
+on every write, so holding the rung never means holding it *everywhere*.
 """
 
 from __future__ import annotations
 
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import BasePermission
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE
 from masters.scoping import actionable_store_ids
 
-# Roles that may create, submit, dispatch, receive outbound docs.
-OUTBOUND_WRITE_ROLES = frozenset(
-    {
-        "owner",
-        "it_admin",
-        "ho_ops",
-        "accounts",
-        "store_manager",
-        "warehouse",
-    }
-)
+#: Moving stock between locations — the transfer section's daily work.
+CanWriteTransfer = require_section("transfer", CAP_OPERATE)
 
-# Roles that may perform V-flip (ownership conversion) and write-offs.
-OUTBOUND_ADMIN_ROLES = frozenset(
-    {
-        "owner",
-        "it_admin",
-        "ho_ops",
-        "accounts",
-    }
-)
+#: Deciding what became of pieces that went missing between two locations. A rung
+#: above the daily work on purpose: the design gives gap closure to the Operations
+#: Head, so the person who sent or received the carton must not be able to write
+#: off their own shortfall. Seniority is all this expresses — the separate rule
+#: that bars anyone entitled to the *receiving* store, senior or not, is enforced
+#: in ``posting._refuse_self_closure`` so a shell hits it too (#71).
+CanCloseTransferGap = require_section("transfer", CAP_APPROVE)
 
+#: Marking damage and returning it to the brand are the same section's work:
+#: the matrix's "Mark damage only" cell is the store person's rung on it.
+CanWriteReturnToBrand = require_section("return_to_brand", CAP_OPERATE)
 
-def _role_code(user) -> str:
-    return getattr(getattr(user, "role", None), "code", "")
+#: Adjustments and write-offs are both corrections that a count produces.
+CanWriteStockCount = require_section("stock_count", CAP_OPERATE)
+
+#: V-flip relabels who owns stock that never moves — an action on Stock itself,
+#: at the rung that owns the section rather than merely operates in it.
+CanFlipOwnership = require_section("stock", CAP_MANAGE)
 
 
 def enforce_store_scope(user, store_id: int) -> None:
@@ -69,37 +77,3 @@ def enforce_store_scope(user, store_id: int) -> None:
         return  # unrestricted
     if store_id not in allowed:
         raise PermissionDenied("You do not have permission to operate on this store.")
-
-
-class IsOutboundReader(BasePermission):
-    """Any authenticated user may read outbound docs (list/detail).
-
-    Store scoping is handled at the queryset level, not here.
-    """
-
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated)
-
-
-class IsOutboundWriter(BasePermission):
-    """Create, submit, dispatch, receive — requires a write-capable role."""
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        if user.is_superuser:
-            return True
-        return _role_code(user) in OUTBOUND_WRITE_ROLES
-
-
-class IsOutboundAdmin(BasePermission):
-    """V-flip and write-off — requires an admin-level role."""
-
-    def has_permission(self, request, view):
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        if user.is_superuser:
-            return True
-        return _role_code(user) in OUTBOUND_ADMIN_ROLES

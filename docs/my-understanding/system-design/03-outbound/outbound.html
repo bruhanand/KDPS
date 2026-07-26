@@ -159,7 +159,7 @@
 
 <section id="d-pos">
   <h2 class="sec">3 · The POS boundary <span class="badge b-pos">swappable</span></h2>
-  <p>Ten Software's APIs aren't ready, so <strong>every POS touchpoint goes through one adapter</strong>. If their APIs arrive, we wire them; if not, we build a <strong>KDPS-owned POS</strong> behind the same contract and swap it in — nothing else changes. The join key both sides agree on is <strong>barcode + season</strong>. Brands reuse a barcode across seasons, so the bare barcode is not enough on its own: the adapter <strong>infers the season at the edge</strong> from the active cohort for that barcode at that store on the sale date — one match posts straight through, several matches take the <strong>oldest cohort first</strong>, and only a genuinely ambiguous scan asks a <strong>one-tap "which season?"</strong>. It never blocks the sale.</p>
+  <p><strong>KDPS builds its own POS</strong> (settled 26 Jul 2026), so every POS touchpoint is ours end to end; the boundary the third-party plan needed is kept as an internal contract, and nothing else changes. The join key both sides agree on is <strong>barcode + season</strong>. Brands reuse a barcode across seasons, so the bare barcode is not enough on its own: the adapter <strong>infers the season at the edge</strong> from the active cohort for that barcode at that store on the sale date — one match posts straight through, several matches take the <strong>oldest cohort first</strong>, and only a genuinely ambiguous scan asks a <strong>one-tap "which season?"</strong>. It never blocks the sale.</p>
   <table>
     <thead><tr><th>We push to POS</th><th>We pull from POS</th></tr></thead>
     <tbody>
@@ -185,7 +185,7 @@
     <p>From <code>SALE REPORT FORMAT.xlsx</code>: Bill Date · Bill No · Customer · Phone · Item · Brand · <strong>Color (=P/M/E)</strong> · Size · Design No · <strong>Barcode</strong> · SalesMan (cashier) · Sub Category · Gender · Fit · <strong>season</strong> · Qty · Rate (MRP) · Gross · <strong>Disc% · Disc Amt</strong> · Net · Bill Amount · <strong>Cash / Card / Credit</strong>.</p>
     <p class="why"><strong>Cadence:</strong> near-real-time poll (POS-agnostic) + an authoritative EOD batch that is the daily close and the negative-SOH catch. Real-time push is the destination once we own the POS. <strong>Not in the report:</strong> funding source, approver, offer-rule id — derived (funding) or target-only (approver/rule).</p>
   </div>
-  <div class="callout co-note"><strong>The KDPS-built POS is in scope now, running alongside Ten Software.</strong> Own-POS is no longer a "someday swap" — we build it in scope while Ten Software stays live, and <strong>both sit behind the same adapter</strong>. Nothing in the architecture changes: there is <strong>one Sale document</strong> with a source tag (Ten Software · KDPS POS · manual), and <strong>all the money and stock posting lives on that Sale document, never in the adapter</strong> — so the source is interchangeable. Two guardrails make this safe: <strong>one store runs exactly one POS</strong> (a hard rule, so bill numbers never collide across sources), and every sale is <strong>idempotent</strong> — the POS stamps a unique id on each sale, and if it is sent twice (a retry after a dropped connection) our system returns the same Sale and never double-counts. We ship the adapter as a <strong>reader first</strong> (pull sales from Ten Software, reconcile clean) before any store goes live on our own POS.</div>
+  <div class="callout co-note"><strong>The POS is ours (decided 26 Jul 2026).</strong> KDPS builds its own counter, and the earlier plan — integrate the incumbent third-party POS behind an adapter, own-POS alongside it — is dropped. There is no external sales feed to ingest and no vendor API to wait on. Nothing in the architecture changes: there is still <strong>one Sale document</strong> with a source tag (KDPS POS · manual), <strong>all the money and stock posting lives on that Sale document</strong>, and every Sale records <strong>who sold it</strong> — a salesperson per bill, distinct from the till login. Two guardrails stay: <strong>one store runs exactly one POS</strong> (a hard rule, so bill numbers never collide), and every sale is <strong>idempotent</strong> — the till stamps a unique id on each sale, and a retry after a dropped connection returns the same Sale and never double-counts. Rollout is <strong>one store, one counter</strong>, reconciling clean, before any second store follows.</div>
   <div class="callout co-park"><strong>Banked for the KDPS-built POS:</strong> offline-first (queue + sync; cloud-down resilient) · <strong>auto-inward-on-scan</strong> (selling a not-yet-inwarded allocated piece inwards + bills in one scan) · exchange as a first-class transaction · local price/offer cache · per-transaction risk caps · multi-terminal sync.</div>
 </section>
 
@@ -297,14 +297,14 @@
 <section id="d-boundaries">
   <h2 class="sec">6 · Build now / target / deferred</h2>
   <table>
-    <thead><tr><th>Now (interim, Ten Software)</th><th>Target (KDPS POS)</th><th>Deferred to other discussions</th></tr></thead>
+    <thead><tr><th>Now (no counter yet — manual bill)</th><th>Target (KDPS POS)</th><th>Deferred to other discussions</th></tr></thead>
     <tbody><tr>
-      <td>Pull sale report + SOH + collection; push allocation; capture manual discount; reconcile at EOD; transfers/returns/adjustments in our system</td>
+      <td>Manual bill as the Sale of record; SOH + collection captured at EOD; push allocation; capture manual discount; reconcile at EOD; transfers/returns/adjustments in our system</td>
       <td>Real-time push; auto-apply offers; enforced approval; offline-first; auto-inward-on-scan; exchange as first-class</td>
       <td><b>D4 payments:</b> brand credits/claims, settlement money. <b>D5 offers:</b> the offer rulebook (authoring). <b>Analytics:</b> markdown-vs-return view, dead-stock hunter</td>
     </tr></tbody>
   </table>
-  <div class="callout co-dep"><strong>POS API requirement doc</strong> — every event's push/pull above is the contract to hand Ten Software (or build our POS to). Ready to assemble.</div>
+  <div class="callout co-dep"><strong>POS requirement doc</strong> — every event's push/pull above is the contract we build our own counter to. Ready to assemble.</div>
 </section>
 
 <section id="d-connect">
@@ -350,7 +350,7 @@
       <tr><td>Q1</td><td>Stock source of truth</td><td>Our system = book of record; POS = sale counter; sales pulled as source documents</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q2</td><td>Stock-state representation</td><td>Derived from open documents; physical count + free-to-sell = physical − locked; feed POS "physical minus locked"</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q3</td><td>Initiation boundary</td><td>POS-born (pull): sale, manual bill, exchange. System-born (push): transfer, defective, SOR return, EOSS-flip, stocktake</td><td><span class="badge b-locked">Locked</span></td></tr>
-      <tr><td>D3-4</td><td>POS replaceability</td><td>Every POS touchpoint behind one adapter; swap Ten Software for a KDPS POS later. Produce a POS API requirement doc</td><td><span class="badge b-locked">Locked</span></td></tr>
+      <tr><td>D3-4</td><td>POS replaceability</td><td>Every POS touchpoint behind one contract; the counter is KDPS-built (26 Jul 2026). Produce a POS requirement doc</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q4</td><td>V-flip representation</td><td>Keep real brand, set owner=KDPS + status=liquidation, filter brand reports by owner, "V &lt;brand&gt;" display-label only, barcode unchanged</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q5</td><td>Counter-sale ingest cadence</td><td>Intraday poll (near-real-time) + authoritative EOD batch; batch = recon/close; real-time push later behind same contract</td><td><span class="badge b-locked">Locked</span></td></tr>
       <tr><td>Q6</td><td>Manual-bill fallback</td><td>Serve on paper, re-enter before EOD + outage flag; EOD recon flags missing/duplicate; offline-first POS noted for the build</td><td><span class="badge b-locked">Locked</span></td></tr>
@@ -371,7 +371,6 @@
   <div class="callout co-dep"><strong>Client questions</strong> — (1) EOSS billed-but-retained — <span style="color:var(--green)">answered ✅</span> (the V-flip); (2) <em>to send:</em> how does the POS record a customer exchange (single "exchange" vs return + sale, linked to the original bill)?; (3) <em>optional:</em> Madura direct-pickup handover document?</div>
   <div class="callout co-dep"><strong>POS API requirement doc</strong> — deliverable; the push/pull contract is now complete and ready to assemble.</div>
   <div class="callout co-park"><strong>To D4 (payments):</strong> SOR/Consignment sale payables, RTV brand credits, EOSS/V-flip settlements. <strong>To D5 (offers):</strong> offer rulebook authoring. <strong>Analytics (later):</strong> markdown-vs-return decision view.</div>
-  <div class="callout co-note"><strong>Parked (client owns):</strong> Ten Software API access/readiness.</div>
   <div class="callout co-note"><strong>Conscious omission (26 Jun 2026) — Udhaar (customer credit sale):</strong> selling on customer credit / part-payment is not modelled in outbound this round; the POS "Credit" tender is captured as a payment type only, with no customer-receivable ledger or collection-chase. To be designed with banking/receivables before go-live.</div>
 </section>
 
@@ -380,7 +379,7 @@
   <div class="gq"><div class="qh">Q1 · Stock source of truth <span class="pill-status b-locked">Answered</span></div>Our system = book of record; POS = sale counter. Sales pulled as source documents; SOH pull reconciles + catches negative-SOH.</div>
   <div class="gq"><div class="qh">Q2 · Stock-state representation <span class="pill-status b-locked">Answered</span></div>Derived from open documents (not hand-set). Physical count + free-to-sell = physical − locked; feed POS "physical minus locked."</div>
   <div class="gq"><div class="qh">Q3 · Initiation boundary <span class="pill-status b-locked">Answered</span></div>POS owns the customer; we own every back-office movement.</div>
-  <div class="gq"><div class="qh">D3-4 · POS replaceability <span class="pill-status b-locked">Added by Anand</span></div>POS behind one swappable adapter; build a KDPS POS later if Ten Software lags. Produce a POS API requirement doc.</div>
+  <div class="gq"><div class="qh">D3-4 · POS replaceability <span class="pill-status b-locked">Added by Anand</span></div>POS behind one swappable contract; the counter is KDPS-built (26 Jul 2026 — the third-party route is dropped). Produce a POS requirement doc.</div>
   <div class="gq"><div class="qh">Q4 · V-flip representation <span class="pill-status b-locked">Answered</span></div>Keep the real brand, owner=KDPS + status=liquidation, brand reports filter by owner, "V &lt;brand&gt;" display label, barcode unchanged. Settlement money → D4.</div>
   <div class="gq"><div class="qh">Q5 · Counter-sale ingest cadence <span class="pill-status b-locked">Answered</span></div>Intraday poll (POS-agnostic) + authoritative EOD batch. Sharpened by research: keep the poll near-real-time; batch = reconciliation; push later.</div>
   <div class="gq"><div class="qh">Q6 · Manual-bill fallback <span class="pill-status b-locked">Answered</span></div>Serve on paper, re-enter before EOD + outage flag; EOD recon flags missing/duplicate. Banked: offline-first POS, auto-inward-on-scan.</div>

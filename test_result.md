@@ -23,7 +23,7 @@ Sprint 1: Build the Outbound module (transfers, returns, adjustments, write-offs
 - Use the access token as: Authorization: Bearer <access_token>
 
 ## Incorporate User Feedback
-- No POS, no Ten Software integration
+- No POS (KDPS builds its own; selling is the last module)
 - No mocked behavior
 - All GL postings must be balanced (trial balance = 0)
 

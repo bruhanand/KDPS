@@ -545,7 +545,7 @@
 
   <div class="callout co-kdps">
     <span class="lbl">Applying to KDPS</span>
-    The POS-day flow is exactly KDPS's "Ten Software behind one POS, idempotent-merge" design: per-store POS invoices accumulate during the shift, reconcile at close, and merge into the proper Sales Invoices that hit the GL and stock once. And the procure-to-stock flow encodes the KDPS rule that <strong>GRN posts quantity</strong> (Purchase Receipt → SLE) while <strong>the PT/bill posts value and liability</strong> (Purchase Invoice → GL) — two separate documents, two separate ledgers, by design.
+    The POS-day flow is exactly KDPS's "one store, one POS, idempotent-merge" design: per-store POS invoices accumulate during the shift, reconcile at close, and merge into the proper Sales Invoices that hit the GL and stock once. And the procure-to-stock flow encodes the KDPS rule that <strong>GRN posts quantity</strong> (Purchase Receipt → SLE) while <strong>the PT/bill posts value and liability</strong> (Purchase Invoice → GL) — two separate documents, two separate ledgers, by design.
   </div>
 
   <h3>The posting funnel — the one diagram that explains the whole system</h3>
