@@ -8,6 +8,54 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
+## Review pass 2 — 26 July 2026, night (static-analysis report, verified before applied)
+A tool-generated code-quality report was handed over. Three of its six findings were wrong in ways that would
+have broken the build, so each was checked against the code before anything was changed.
+
+**Applied:**
+- **The `outbound` import cycle is really gone (was held apart by deferred imports).** `posting` imports
+  `maker_checker` at module level; `maker_checker` imported `posting` back inside four functions. The two names it
+  needed (`OutboundPostingError`, `book_unit_cost`) depend on nothing in the posting engine and now live in a new
+  **`outbound/costing.py`** below both. All five deferred imports deleted; `posting` re-exports both names so no
+  caller or test changed. New **4th import-linter contract** — `posting → maker_checker → costing, never back` —
+  and it was proven to bite by adding the bad edge and watching the build fail.
+- **Test credentials centralised.** 22 × `password="Test@123"` (ten hermetic suites) → `TEST_PASSWORD`;
+  29 × `"Owner@123"` (eleven live suites + `tests/conftest.py`) → new `SEED_OWNER_PASSWORD`. Both env-backed
+  (`KDPS_TEST_PASSWORD`, `KDPS_SEED_OWNER_PASSWORD`), defaults unchanged.
+- **Five functions split, no behaviour change:** `core/posting.py::post_entries` (+ `_refuse_unpostable`,
+  `_posting_context`), `finledger/health.py::get` (89 → 20 lines, + three helpers), `outbound/counting.py::
+  apply_variance` (+ `_variance_to_apply`, `_build_adjustment`), `accounts/rbac_matrix.py::_validate` (→ four
+  named checks), `outbound/posting.py::post_gap_closure` (+ `_lock_and_read_gap_lines`, `_refuse_stale_gap`).
+- **A complexity gate, so it cannot regress:** ruff `C901` at max-complexity 10 with a documented per-file
+  baseline (management commands, ptmapper views/engine, the collection hook) that may only shrink.
+- **The dev environment can build itself again:** `scripts/dev-bootstrap.sh` was pip-installing a hand-written
+  package list into the container's Python **3.11** venv, where this codebase cannot even import (PEP 695
+  generics in `core/textsearch.py`). It now runs `uv sync` against `pyproject.toml`, and **`.python-version`
+  pins 3.12** so uv stops silently building the env on 3.14 while ruff/mypy target 3.12.
+
+**Refused, with evidence (do not re-apply these):**
+- *"Syntax error, missing `(` at core/textsearch.py:41"* — line 41 is `def text_filter[QS: QuerySet[Any]](...)`,
+  a valid **PEP 695** generic. Adding the character would create the error being reported. The analyser was a
+  3.11-era parser.
+- *"31 possibly-undefined variables"* — ruff's `F` set (pyflakes, incl. **F821 undefined-name**) is enabled
+  repo-wide and reports **zero** across 283 files; it caught a real undefined `Any` of mine during this pass. The
+  31 are unparsed-file noise from the same 3.11 parser.
+- *"Add `tests/_creds.py` to .gitignore"* — imported by ~20 suites; removing it from git breaks CI and every
+  fresh clone. It holds no secret, only two `os.environ.get` calls with dev defaults.
+- *"Refactor `masters/migrations/0002_phasef_identity::backfill_identity` (complexity 22)"* — an applied
+  migration is frozen history; rewriting it changes nothing running, cannot be tested, and risks divergence.
+  (Ruff excludes `migrations/` for this reason.)
+- *"Split `outbound/posting.py` (40 imports) / `ptmapper/views.py` (33)"* — not refused, **not done blind**: that
+  is a design change (one module per document family over a shared kernel) needing its own ticket and tests
+  first, not a change made to move a number. The cycle fix removed the coupling that actually hurt.
+
+**Verified:** full suite green on 3.12 (0 failures/errors), ruff + C901 + format + 4/4 import contracts + mypy
+green, and testing agent **iteration_24: 0 defects** — books-health payload identical key-for-key, backward-
+compatible `outbound.posting` imports intact, section access unchanged for all 8 roles, every outbound flow and
+every count-variance refusal path passing. Note: the pod was reprovisioned mid-pass (Postgres binaries vanish
+with `/usr`; only `/app` persists) — `bash scripts/dev-bootstrap.sh` rebuilds everything, and the platform
+rewrote `frontend/.env` to the canonical preview host, which is correct and was left alone.
+
 ## Review pass — 26 July 2026, evening (independent code/UI/ERP review, no issue overlap)
 Full stack brought up in the Emergent container (Postgres 15 · `kdps_dev`, uvicorn on 8001 via a shim at
 `/root/.venv/bin/uvicorn` → `/opt/kdpsvenv` py3.12 venv, Vite on 3000), clicked as owner / store manager /

@@ -188,6 +188,68 @@
 </section>
 
 <section>
+  <h2 class="sec">Second pass — the static-analysis report, checked before it was applied</h2>
+  <p>A tool-generated review arrived after the pass above. Every finding was verified against the code first, because three of them were wrong in ways that would have broken a working system. What follows is what was applied, and what was refused and why.</p>
+
+  <h3>Applied</h3>
+  <table>
+    <tr><th>#</th><th>Finding</th><th>What was done</th></tr>
+    <tr>
+      <td>2</td>
+      <td><span class="badge b-p1">Real</span> Circular import <code>outbound/posting.py</code> ↔ <code>outbound/maker_checker.py</code></td>
+      <td>Confirmed: <code>posting</code> imports <code>maker_checker</code> at module level, and <code>maker_checker</code> imported <code>posting</code> back inside four functions — a real cycle standing behind deferred imports. The two things it needed back (<code>OutboundPostingError</code>, <code>book_unit_cost</code>) depend on nothing in the posting engine, so they now live in a new <strong><code>outbound/costing.py</code></strong> below both. All four deferred imports are gone, plus a fifth that had become redundant. <code>posting</code> re-exports both names so no caller or test changed. A 4th <strong>import-linter contract</strong> (<code>posting → maker_checker → costing, never back</code>) now enforces it — and was proven to bite by adding the bad edge and watching the build fail.</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td><span class="badge b-p1">Partly real</span> Hardcoded credentials in 13 test files</td>
+      <td>The literals were real: 22 × <code>password="Test@123"</code> across ten hermetic suites, and 29 × <code>"Owner@123"</code> across eleven live suites plus <code>conftest.py</code> — in a repo that already had <code>tests/_creds.py</code> for exactly this. Both now come from env-backed constants (<code>TEST_PASSWORD</code>, new <code>SEED_OWNER_PASSWORD</code>, overridable via <code>KDPS_TEST_PASSWORD</code> / <code>KDPS_SEED_OWNER_PASSWORD</code>). Defaults unchanged, so no suite behaves differently.</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td><span class="badge b-p1">Real</span> Excessive function complexity</td>
+      <td>Five of the named functions were refactored into named parts with no behaviour change: <code>core/posting.py::post_entries</code> (→ <code>_refuse_unpostable</code> + <code>_posting_context</code>), <code>finledger/health.py::get</code> (89 → 20 lines, → <code>_reconciliation</code> + <code>_stranded_stock_value</code> + <code>_accounts</code>), <code>outbound/counting.py::apply_variance</code> (→ <code>_variance_to_apply</code> + <code>_build_adjustment</code>), <code>accounts/rbac_matrix.py::_validate</code> (→ four named checks, so a failing assertion names the rule it broke), and <code>outbound/posting.py::post_gap_closure</code> (→ <code>_lock_and_read_gap_lines</code> + <code>_refuse_stale_gap</code>). <strong>Then the gate went in:</strong> ruff <code>C901</code> at max-complexity 10, with a documented per-file baseline (management commands, the PT-mapper HTTP/engine layer, the collection hook) that — like the ungated-views baseline — may only shrink. Anything new, anywhere else, now fails the build.</td>
+    </tr>
+    <tr>
+      <td>—</td>
+      <td><span class="badge b-obs">Found while fixing</span> The dev environment could not build itself</td>
+      <td><code>scripts/dev-bootstrap.sh</code> hand-listed pip packages into the container's Python <strong>3.11</strong> venv, where this codebase does not even import (PEP 695 generics). It now runs <code>uv sync</code> against <code>pyproject.toml</code>, and <code>.python-version</code> pins 3.12 so <code>uv</code> stops silently building the env on 3.14 while mypy and ruff target 3.12.</td>
+    </tr>
+  </table>
+
+  <h3>Refused, with evidence</h3>
+  <div class="card warn">
+    <h3>1 · “Syntax error: missing <code>(</code> at <code>core/textsearch.py:41</code>”</h3>
+    <p>Line 41 is <code>def text_filter[QS: QuerySet[Any]](qs, term, fields) -&gt; QS:</code> — a <strong>PEP 695 generic function</strong>, valid Python 3.12+ and the version this project targets (<code>requires-python = "&gt;=3.12"</code>, <code>ruff target-version = "py312"</code>, <code>mypy python_version = 3.12</code>). Adding the “expected” character would have created the syntax error the report was reporting. The analyser was a 3.11-era parser; the same tool almost certainly produced finding 3.</p>
+  </div>
+  <div class="card warn">
+    <h3>3 · “31 possibly-undefined variables”</h3>
+    <p><code>ruff</code>'s <code>F</code> rule set — which is pyflakes, and includes <strong>F821 undefined-name</strong> — is enabled repo-wide and reports <strong>zero</strong> across 283 files. It is not a theoretical check either: during this very pass it caught a real <code>Any</code> I left undefined in <code>rbac_matrix.py</code> within seconds. A file that cannot be parsed yields undefined-name noise for every symbol in it, which is the shape of a 31-item list from a 283-file codebase.</p>
+  </div>
+  <div class="card warn">
+    <h3>4b · “Add <code>tests/_creds.py</code> to <code>.gitignore</code>”</h3>
+    <p>That file is <code>import</code>ed by about twenty suites: removing it from version control breaks the test run for every other developer and for CI, on the next clone. It also holds no secret — two <code>os.environ.get</code> lookups with throwaway dev defaults, one of them a demo password already printed in <code>memory/test_credentials.md</code> and on the alpha login screen. The literals were the problem; the constants module is the fix.</p>
+  </div>
+  <div class="card warn">
+    <h3>5b · Refactor <code>masters/migrations/0002_phasef_identity.py::backfill_identity</code> (complexity 22)</h3>
+    <p>An applied migration is frozen history, not live code: it has already run on every database and will only ever run again on a fresh one. Rewriting it changes nothing about the running system, risks a divergence between what was applied and what the file says, and cannot be meaningfully tested. Ruff excludes <code>migrations/</code> for this reason.</p>
+  </div>
+  <div class="card warn">
+    <h3>6 · Split <code>outbound/posting.py</code> (40 imports) and <code>ptmapper/views.py</code> (33)</h3>
+    <p>Not refused so much as <strong>not done blind</strong>. The import count is high because <code>posting</code> is the one seam every outbound document type crosses — models, stock ledger, value GL, voucher series, approvals. Cutting it apart is a real design change (one module per document family, with a shared kernel) that deserves its own ticket, tests written first, and a working alpha to compare against — not a change made to move a number. The cycle fix above removed the coupling that actually hurt.</p>
+  </div>
+
+  <h3>Verification of the second pass</h3>
+  <table>
+    <tr><th>Gate</th><th>Result</th></tr>
+    <tr><td><code>pytest</code></td><td>full suite green on Python 3.12 — 0 failures, 0 errors (live suites skip by design)</td></tr>
+    <tr><td><code>ruff check</code> (now with C901) · <code>ruff format --check</code></td><td>All checks passed · 209 files formatted</td></tr>
+    <tr><td><code>lint-imports</code></td><td>4 contracts kept, 0 broken — and the new one verified to fail when the bad edge is added back</td></tr>
+    <tr><td><code>mypy core config</code></td><td>Success, 21 source files</td></tr>
+    <tr><td>Independent verification</td><td>testing agent iteration_24: books-health payload identical key-for-key, backward-compatible <code>outbound.posting</code> imports intact, section access unchanged for all 8 roles, every outbound flow and every count-variance refusal path passing. <strong>0 defects.</strong></td></tr>
+  </table>
+</section>
+
+<section>
   <h2 class="sec">Deliberately not touched</h2>
   <p>All 31 open issues remain yours. In particular this pass avoided: the sidebar's <em>section shape</em> per role (#96, #118, #133, #79, #84), RBAC actor/scope work (#101, #110, #88), buttons offered then refused (#125, #126), search rollout (#106), outbound slices (#137, #141, #147), POS salesperson (#107), PT cost drop (#122), write-off folding (#105) and file-download auth (#120). Where this pass came near one of them — the vendor screen lands in Setup, which #133 will split — the change is additive and moves with the split.</p>
   <p class="small">KDPS ERP · code &amp; UX review · 26 July 2026 · Confidential — for KDPS management</p>
