@@ -14,6 +14,9 @@ from core.documents import DocStatus
 from masters.models import Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
+    CountScope,
+    CountSession,
+    CountSessionLine,
     GapReason,
     MarkDamaged,
     MarkDamagedLine,
@@ -21,6 +24,7 @@ from outbound.models import (
     ReturnToVendorLine,
     StockAdjustment,
     StockAdjustmentLine,
+    Stocktake,
     StoreTransfer,
     StoreTransferLine,
     TransferGapClosure,
@@ -667,7 +671,13 @@ class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
 
 class StockAdjustmentLineSerializer(serializers.ModelSerializer):
     """``unit_cost_paise`` is read-only: a money posting reads its cost from the
-    books, never from the payload (#103) — same rule as a transfer line."""
+    books, never from the payload (#103) — same rule as a transfer line.
+
+    So are ``book_qty`` and ``adj_qty`` (#76). The variance is the *books*
+    against what was counted, and only the count comes from outside: a client
+    that could send the book number, or the subtraction, could post a correction
+    the books never agreed to. Send ``counted_qty``; the server does the rest.
+    """
 
     class Meta:
         model = StockAdjustmentLine
@@ -686,7 +696,7 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
             "adj_qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id", "unit_cost_paise"]
+        read_only_fields = ["id", "book_qty", "adj_qty", "unit_cost_paise"]
 
 
 class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
@@ -733,6 +743,9 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
+        validated_data["lines"] = _against_the_book(
+            validated_data["store"].id, validated_data["lines"]
+        )
         return _create_with_approval(
             StockAdjustment,
             StockAdjustmentLine,
@@ -740,6 +753,26 @@ class StockAdjustmentWriteSerializer(serializers.ModelSerializer):
             validated_data,
             self.context.get("request"),
         )
+
+
+def _against_the_book(store_id: int, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fill each adjustment line's book quantity and difference from the books.
+
+    The counted quantity is the only number a correction takes from outside;
+    everything it is measured against is read here (#76). A piece the location
+    holds none of books as zero — that is a surplus, not a missing number.
+    """
+    from outbound.counting import book_quantities
+
+    held = book_quantities(store_id, [ld["sku_code"] for ld in lines])
+    return [
+        {
+            **ld,
+            "book_qty": (book := held.get(ld["sku_code"], 0)),
+            "adj_qty": ld["counted_qty"] - book,
+        }
+        for ld in lines
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -896,3 +929,136 @@ class VFlipWriteSerializer(serializers.ModelSerializer):
         return _create_with_approval(
             VFlip, VFlipLine, "vflip", validated_data, self.context.get("request")
         )
+
+
+# ---------------------------------------------------------------------------
+# Stock counting (#76)
+# ---------------------------------------------------------------------------
+
+
+class CountSessionLineSerializer(serializers.ModelSerializer):
+    """One barcode on one session. ``book_qty`` is null while the session is
+    open — that null *is* the blindness, and it is the model's state rather than
+    a field this serializer hides."""
+
+    class Meta:
+        model = CountSessionLine
+        fields = [
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "counted_qty",
+            "book_qty",
+        ]
+        read_only_fields = fields
+
+
+class CountSessionReadSerializer(serializers.ModelSerializer):
+    lines = CountSessionLineSerializer(many=True, read_only=True)
+    scope_label = serializers.CharField(read_only=True)
+    counted_by_name = serializers.SerializerMethodField()
+    counted_pieces = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CountSession
+        fields = [
+            "id",
+            "stocktake",
+            "scope",
+            "scope_value",
+            "scope_label",
+            "status",
+            "counted_by",
+            "counted_by_name",
+            "counted_pieces",
+            "submitted_at",
+            "created_at",
+            "lines",
+        ]
+
+    def get_counted_by_name(self, obj: Any) -> str:
+        return display_name(obj.counted_by)
+
+    def get_counted_pieces(self, obj: Any) -> int:
+        return sum(line.counted_qty for line in obj.lines.all())
+
+
+class StocktakeReadSerializer(serializers.ModelSerializer):
+    sessions = CountSessionReadSerializer(many=True, read_only=True)
+    store_code = serializers.CharField(source="store.code", read_only=True)
+    store_name = serializers.CharField(source="store.name", read_only=True)
+    opened_by_name = serializers.SerializerMethodField()
+    adjustment_doc_number = serializers.SerializerMethodField()
+    adjustment_docstatus = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Stocktake
+        fields = [
+            "id",
+            "store",
+            "store_code",
+            "store_name",
+            "status",
+            "note",
+            "opened_by",
+            "opened_by_name",
+            "adjustment",
+            "adjustment_doc_number",
+            "adjustment_docstatus",
+            "created_at",
+            "updated_at",
+            "sessions",
+        ]
+
+    def get_opened_by_name(self, obj: Any) -> str:
+        return display_name(obj.opened_by)
+
+    def get_adjustment_doc_number(self, obj: Any) -> str:
+        return (obj.adjustment.doc_number or "") if obj.adjustment else ""
+
+    def get_adjustment_docstatus(self, obj: Any) -> int | None:
+        return obj.adjustment.docstatus if obj.adjustment else None
+
+
+class StocktakeCreateSerializer(serializers.Serializer):
+    """Opening a count: which location, and an optional word about why."""
+
+    store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all())
+    note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")
+
+
+class CountSessionCreateSerializer(serializers.Serializer):
+    """One counter's pass: how much of the location they are taking on."""
+
+    scope = serializers.ChoiceField(choices=CountScope.choices)
+    scope_value = serializers.CharField(
+        max_length=120, required=False, allow_blank=True, default=""
+    )
+
+
+class CountScanInputSerializer(serializers.Serializer):
+    """Scanned pieces, additive. Nothing comes back but what was scanned."""
+
+    scans = ScanLineSerializer(many=True, allow_empty=False)
+
+    def scans_by_barcode(self) -> dict[str, int]:
+        return _totals(self.validated_data["scans"])
+
+
+class ApplyVarianceInputSerializer(serializers.Serializer):
+    """Which moved lines the person has looked at and still wants applied.
+
+    Confirmation is per barcode rather than a blanket "yes": the whole rule is
+    that a piece which moved mid-count is never overwritten without someone
+    seeing that particular piece.
+    """
+
+    confirm = serializers.ListField(
+        child=serializers.CharField(max_length=64), required=False, default=list
+    )

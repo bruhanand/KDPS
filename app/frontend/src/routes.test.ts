@@ -19,6 +19,7 @@ describe("the route table", () => {
       ["/receive", "grn-list"],
       ["/receive/pt", "pt-list"],
       ["/transfer", "transfer-list"],
+      ["/stock-count", "count-list"],
       ["/stock-count/adjustments", "adjustment-list"],
       ["/stock-count/writeoffs", "writeoff-list"],
       ["/return-to-brand", "rtv-list"],
@@ -50,6 +51,8 @@ describe("the route table", () => {
     expect(screenAt("/stock/vflips/12")).toBe("vflip-detail");
     expect(screenAt("/stock-count/writeoffs/new")).toBe("writeoff-new");
     expect(screenAt("/stock-count/writeoffs/12")).toBe("writeoff-detail");
+    // A count id lives in the same slot as the section's two named sub-screens.
+    expect(screenAt("/stock-count/12")).toBe("count-detail");
   });
 
   it("Transfer sub-screens do not swallow the Transfer document ids", () => {

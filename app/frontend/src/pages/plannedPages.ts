@@ -163,21 +163,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     ],
     module: TRANSFERS,
   },
-  // ---- Stock Count --------------------------------------------------------
-  "/stock-count": {
-    summary: "Counting what is actually on the shelf, and finding where the book is wrong.",
-    contains: [
-      "Physical stock count (audit) — a whole store, one brand, or one section",
-      "Counted blind: the screen never shows the book quantity",
-      "Variance report and recount",
-      "The person who counts is not the person who approves the correction",
-    ],
-    notes: [
-      "The corrections a count produces already work — Adjustments and Write-offs are live in this section. What is missing is the counting session that feeds them.",
-    ],
-    module: INVENTORY,
-  },
-
   // ---- Money --------------------------------------------------------------
   "/money/payments": {
     summary: "Paying a brand, with the checks done before the money leaves.",
