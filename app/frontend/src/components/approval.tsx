@@ -38,9 +38,11 @@ const KIND_ROUTE: Record<string, string> = {
 };
 
 /** Kinds with no page of their own — the approver reads them where the work is.
- *  A gap closure means nothing apart from the gaps list it came from. */
+ *  A gap closure means nothing apart from the gaps list it came from, and a
+ *  damage flag means nothing apart from the quarantine it is asking to join. */
 const KIND_LIST_ROUTE: Record<string, string> = {
   gap_closure: "/transfer/in-transit",
+  damage: "/stock?view=quarantine",
 };
 
 export function approvalDocPath(a: Pick<ApprovalT, "kind" | "object_id">): string | null {

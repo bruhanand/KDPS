@@ -229,13 +229,16 @@ def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
         can_approve = set(roles_with_capability(section, CAP_APPROVE))
         # Nobody the matrix trusts is ever dropped…
         assert can_approve <= set(kind.approver_roles), kind.code
-        # …and the only additions are registered exceptions. One kind has one:
-        # the warehouse confirms damage flags (#138) while holding the same
-        # `return_to_brand: operate` rung as the store person who raises them.
-        extra_approvers = set(kind.approver_roles) - can_approve
-        assert extra_approvers <= REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles, (
-            kind.code
+        # …and exactly one kind adds anyone: damage flags, whose confirmer holds
+        # the same `return_to_brand: operate` rung as the store person who
+        # raises them (#138), so the ladder cannot tell the two apart. Named per
+        # kind, so no *other* family can quietly inherit the widening.
+        allowed_extra = (
+            REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles
+            if kind.code == "damage"
+            else frozenset()
         )
+        assert set(kind.approver_roles) - can_approve <= allowed_extra, kind.code
         # The band may add the in-charge, and nothing else — that one addition
         # is the registered exception, so it is named here rather than assumed.
         extra = set(kind.band_roles) - can_approve

@@ -688,7 +688,9 @@ def post_transfer_receipt(
     return entries
 
 
-def _mark_arrivals_damaged(transfer, damaged: dict[str, int], user=None) -> str:
+def _mark_arrivals_damaged(
+    transfer: StoreTransfer, damaged: dict[str, int], user: User | None = None
+) -> str:
     """Send the broken arrivals through the one damage door (#138), and say on
     the receipt where that got to.
 
@@ -1296,7 +1298,7 @@ def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> Mar
     return mark
 
 
-def confirm_mark_damaged(mark: MarkDamaged, *, actor) -> None:
+def confirm_mark_damaged(mark: MarkDamaged, *, actor: User | None) -> None:
     """The warehouse's confirmation, which is what posts a damage flag (#138).
 
     Registered with the approvals inbox in ``outbound.apps`` and called from

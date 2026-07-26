@@ -165,11 +165,13 @@ def record_no_approval_needed(
     value_paise: int = 0,
     reason: str,
 ) -> Approval:
-    """Record that ``subject`` fell within its policy tolerance.
+    """Record that ``subject`` needed no second person, and why.
 
-    The document may post with nobody else's say-so, but "nobody was asked" is
-    itself a fact worth keeping: the row carries who made it and which rule let
-    it through, so a small adjustment is auditable exactly like a large one.
+    Two rules reach here: it fell within its policy tolerance (too little at
+    stake to ask), or the person raising it already held the rung this family
+    would have asked. Either way "nobody was asked" is itself a fact worth
+    keeping: the row carries who made it and which rule let it through, so a
+    small adjustment is auditable exactly like a large one.
     """
     return _create(
         subject,

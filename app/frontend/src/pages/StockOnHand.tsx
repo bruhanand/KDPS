@@ -325,11 +325,11 @@ export default function StockOnHand() {
         <div className="card section-card" style={{ marginTop: 16 }} data-testid="damage-flags">
           <h3 className="h3" style={{ marginBottom: 4 }}>
             <ShieldAlert size={16} style={{ color: "var(--rust)", verticalAlign: "-2px", marginRight: 6 }} />
-            Damage reported, not yet confirmed
+            Damage reported, not in quarantine
           </h3>
           <p className="stat-label" style={{ marginBottom: 12 }}>
-            These pieces are still sellable. A warehouse or HO person confirms the report before
-            they move into quarantine.
+            These pieces are still sellable — either waiting for a warehouse or HO person to
+            confirm the report, or looked at and sent back as sellable.
           </p>
           <div className="table-wrap kdps-scroll">
             <table className="data kdps-table" data-testid="damage-flags-table">

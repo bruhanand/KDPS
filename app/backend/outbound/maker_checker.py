@@ -62,11 +62,11 @@ class ApprovalKind:
     band_paise: int = 0
     #: Who may approve within the band (in-charge + HO).
     band_roles: tuple[str, ...] = ()
-    #: Whether a maker who already holds this family's approving rung clears
-    #: their own document. Not a value tolerance — a rung: the maker *is* the
-    #: checker this family would have asked, so asking would be asking
-    #: themselves. Who that is stays one list, read from the live policy row
-    #: (Rule 12), never frozen a second time here.
+    #: Whether this family asks for a second person on the **rung** instead of
+    #: on the value: a maker who already holds the approving rung clears their
+    #: own document, and everyone else waits however little is at stake. Who
+    #: holds it stays one list, read from the live policy row (Rule 12), never
+    #: frozen a second time here. The tolerance and band below do not apply.
     self_clearing: bool = False
 
 
@@ -291,15 +291,22 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
         "value_paise": value,
     }
 
-    if holds_the_rung:
-        return record_no_approval_needed(
-            doc,
-            reason=(
-                f"Raised by someone who may decide a {kind.label.lower()} themselves — "
-                "posted and logged, nobody else asked."
-            ),
-            **common,
-        )
+    if kind.self_clearing:
+        # A rung family answers on the rung alone, and never falls through to
+        # the value question below. A tolerance is business data (Rule 12), so
+        # if it could clear this too, someone retuning ₹0 to ₹500 on the policy
+        # row would quietly hand every store person the posting rung the ruling
+        # took away from them — the one thing this family exists to prevent.
+        if holds_the_rung:
+            return record_no_approval_needed(
+                doc,
+                reason=(
+                    f"Raised by someone who may decide a {kind.label.lower()} themselves — "
+                    "posted and logged, nobody else asked."
+                ),
+                **common,
+            )
+        return request_approval(doc, approver_roles=policy.approver_roles_for(value), **common)
 
     if not policy.needs_checker(value):
         return record_no_approval_needed(

@@ -446,6 +446,24 @@ class MarkDamaged(Document):
         db_table = "outbound_mark_damaged"
         ordering = ["-created_at"]
 
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with — which pieces the
+        confirmer is being asked about.
+
+        "1 line · 3 pcs" is not a damage report anyone can act on: confirming
+        takes stock off the shop floor, and the person deciding has to see what
+        it is. The first piece names the row and the rest are counted, so the
+        line stays short whatever the report's size.
+        """
+        lines = list(self.lines.all())
+        if not lines:
+            return "Damage"
+        first = lines[0]
+        described = " ".join(filter(None, [first.sku_code, first.design, first.color, first.size]))
+        more = f" +{len(lines) - 1} more" if len(lines) > 1 else ""
+        return f"Damage · {described}{more}"
+
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
         return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "DMG"

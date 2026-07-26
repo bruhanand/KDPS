@@ -287,6 +287,37 @@ def test_a_store_role_calling_the_confirm_endpoint_is_refused(damage_scaffold):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_no_tolerance_can_buy_a_store_person_the_posting_rung(damage_scaffold):
+    """Thresholds are business data (Rule 12), and someone will retune them.
+    Damage asks on the rung, not on the value, so a tolerance big enough to
+    swallow the whole report must still not let a store person post it."""
+    from approvals.models import ApprovalPolicy
+
+    s = damage_scaffold
+    _flag(s, qty=1)  # materialises the policy row on first use
+    ApprovalPolicy.objects.filter(kind="damage").update(tolerance_paise=1_00_00_000)
+
+    flag = _flag(s, qty=2)
+    assert flag["flag_status"] == "flagged"
+    assert _approval(flag["id"]).status == ApprovalStatus.PENDING
+    assert not QuarantineStock.objects.exists()
+    assert StockOnHand.objects.get(store=s["store"], sku_code="DM001").net_qty == 10
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_confirmer_is_told_which_pieces_they_are_being_asked_about(damage_scaffold):
+    """Confirming takes stock off the floor, so the inbox row has to name the
+    piece — "1 line · 3 pcs" is not something anyone can act on."""
+    s = damage_scaffold
+    flag = _flag(s, qty=3)
+
+    inbox = _client(s["confirmer"]).get("/api/approvals/inbox")
+    row = next(a for a in inbox.data if a["object_id"] == flag["id"] and a["kind"] == "damage")
+    assert "DM001" in row["title"]
+    assert "Blue" in row["title"]
+
+
+@pytest.mark.django_db(transaction=True)
 def test_the_reporter_cannot_confirm_their_own_flag(damage_scaffold):
     """Maker is never checker — a store person cannot wave their own report
     through even if their role were widened."""
