@@ -441,6 +441,12 @@ UNGATED_VIEWS = {
     "outbound/views.py:AdjustmentDetailView",
     "outbound/views.py:WriteOffDetailView",
     "outbound/views.py:VFlipDetailView",
+    # #76: record-scoped via _load_stocktake (fail-closed on the queryset),
+    # same shape as the other detail views above - no section gate of its own.
+    "outbound/views.py:StocktakeDetailView",
+    "outbound/views.py:StocktakeVarianceView",
+    # #76: a dims-only lookup during a blind count, same shape as ScanLookupView.
+    "outbound/views.py:CountLookupView",
     "ptmapper/views.py:PtFileListCreateView",
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",
