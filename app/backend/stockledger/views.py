@@ -181,7 +181,8 @@ def _search_on_hand(qs: Any, term: str) -> Any:
     """Narrow on-hand rows by a typed term or a scanned barcode.
 
     One box takes both habits, and a whole barcode is not the same question as a
-    few letters. A barcode is a scan-alias (ADR-0004): if the term IS one, the
+    few letters. A barcode is a non-unique scan-alias (CONTEXT.md, the domain
+    language) and stock is a count under it: if the term IS one, the
     person scanned a tag and means that tag — answer with its stock alone, not
     with every barcode that happens to contain those digits. Anything else is
     typing, and matches as plain substring.

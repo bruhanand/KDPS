@@ -18,7 +18,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
-import { SearchBox } from "../components/SearchBox";
+import { ListSearchBar } from "../components/SearchBox";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
@@ -281,21 +281,16 @@ export function TransferListPage() {
         </button>
       </div>
 
-      <div className="filter-bar" style={{ marginBottom: 18 }}>
-        <SearchBox
-          value={q}
-          onChange={setQ}
-          placeholder="Search transfers — doc number, from, to"
-          label="Search transfers"
-          testId="transfers-search"
-        />
-        {!loading && (
-          <span className="stat-label" data-testid="transfers-count">
-            {data.length} {data.length === 1 ? "transfer" : "transfers"}
-            {q ? ` matching “${q}”` : ""}
-          </span>
-        )}
-      </div>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search transfers — doc number, from, to"
+        label="Search transfers"
+        testId="transfers-search"
+        noun="transfer"
+        count={data.length}
+        loading={loading}
+      />
 
       {loading ? (
         <p className="lead">Loading…</p>

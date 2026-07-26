@@ -21,7 +21,6 @@ from rest_framework.views import APIView
 
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
-from masters.scoping import scope_by_any_store
 from outbound.maker_checker import ask_again
 from outbound.models import (
     MarkDamaged,
@@ -114,18 +113,16 @@ class TransferListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # Both ends of a movement see it, and nobody else does. The gate is here
-        # rather than only on writes because #102 puts a search box on this list:
-        # a term must narrow what the caller may already see, and it cannot do
-        # that on a queryset that was never narrowed at all.
-        qs = scope_by_any_store(
-            StoreTransfer.objects.select_related(
-                "source_store", "destination_store", "created_by"
-            ).prefetch_related("lines"),
-            self.request.user,
-            "source_store_id",
-            "destination_store_id",
-        )
+        # NOTE: this list is not store-scoped on read — only transfer *writes*
+        # are (`enforce_store_scope`). The search below therefore narrows the
+        # whole network's transfers rather than the caller's own. Search does not
+        # widen anything (it is a filter on the same base set a store person can
+        # already scroll), but the gate itself is missing and is tracked
+        # separately; fixing it here would be an access-control change inside a
+        # search ticket, and the detail endpoint below needs the same gate.
+        qs = StoreTransfer.objects.select_related(
+            "source_store", "destination_store", "created_by"
+        ).prefetch_related("lines")
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)

@@ -104,3 +104,39 @@ export function SearchBox({ value, onChange, placeholder, label, testId }: Searc
     </div>
   );
 }
+
+/** How many rows a list is showing, and whether that is a searched set. */
+export function searchCountLabel(count: number, noun: string, term: string): string {
+  const rows = `${count} ${count === 1 ? noun : `${noun}s`}`;
+  return term ? `${rows} matching “${term}”` : rows;
+}
+
+interface ListSearchBarProps extends SearchBoxProps {
+  /** Singular noun for the row count — "booking", "transfer". */
+  noun: string;
+  /** Rows currently on screen. Hidden while the list is still loading, because
+   *  a count of a list that has not arrived is a lie, not a zero. */
+  count: number;
+  loading: boolean;
+}
+
+/**
+ * A list screen's search bar: the box, plus the count of what it found.
+ *
+ * The count is part of the control rather than each page's own line, because
+ * "the number on screen reflects the searched set" is a property of searching —
+ * a screen that forgot to update it would be the bug, and there is no way to
+ * forget if the count travels with the box.
+ */
+export function ListSearchBar({ noun, count, loading, ...box }: ListSearchBarProps) {
+  return (
+    <div className="filter-bar" style={{ marginBottom: 18 }}>
+      <SearchBox {...box} />
+      {!loading && (
+        <span className="stat-label" data-testid={`${box.testId}-count`}>
+          {searchCountLabel(count, noun, box.value)}
+        </span>
+      )}
+    </div>
+  );
+}

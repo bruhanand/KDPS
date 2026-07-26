@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { SearchBox } from "../components/SearchBox";
+import { ListSearchBar } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
@@ -68,21 +68,16 @@ export function BookingsPage() {
         </Link>
       </div>
 
-      <div className="filter-bar" style={{ marginBottom: 18 }}>
-        <SearchBox
-          value={q}
-          onChange={setQ}
-          placeholder="Search bookings — number, vendor, brand, season"
-          label="Search bookings"
-          testId="bookings-search"
-        />
-        {!loading && (
-          <span className="stat-label" data-testid="bookings-count">
-            {data.length} {data.length === 1 ? "booking" : "bookings"}
-            {q ? ` matching “${q}”` : ""}
-          </span>
-        )}
-      </div>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search bookings — number, vendor, brand, season"
+        label="Search bookings"
+        testId="bookings-search"
+        noun="booking"
+        count={data.length}
+        loading={loading}
+      />
 
       {loading ? (
         <p className="lead">Loading…</p>
