@@ -8,6 +8,55 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
+## Review pass — 26 July 2026, evening (independent code/UI/ERP review, no issue overlap)
+Full stack brought up in the Emergent container (Postgres 15 · `kdps_dev`, uvicorn on 8001 via a shim at
+`/root/.venv/bin/uvicorn` → `/opt/kdpsvenv` py3.12 venv, Vite on 3000), clicked as owner / store manager /
+store staff at 1920, 1440 and 390 px. All 31 open GitHub issues were read first; nothing here touches them.
+Report: **`docs/my-understanding/system-design/consolidation/code-review-2026-07-26.html`**.
+
+**Five findings implemented (all green: 697 backend tests, 102 frontend tests, ruff/format/import-linter/tsc):**
+1. **P0 — the dashboard was inventing numbers.** Every KPI in `pages/Home.tsx` was a literal ("Net sales today
+   ₹18.42 L", "Owed to brands ₹42.60 L", store "Items to receive — 3 shipments", two of them labelled *live*)
+   while the trial balance was ₹0 / 0 vouchers and one booking was pending. Rewritten: each tile is either a
+   figure an endpoint owns (`/finledger/vendor/ageing`, `/stockledger/on-hand`, `/approvals/inbox`,
+   `/inbound/queue`, `/inbound/pending`) or an explicit "Not built" with `—`; unloaded reads show `…`, never `0`;
+   the payable tile is only requested at `money: manage`; tiles now open the screen that owns the number; the
+   invented sparkline is deleted.
+2. **P1 — screens were captioned in the vocabulary #87 retired.** Eleven pages still said Documents / Store Ops /
+   Ledgers / Controls / Master data / Outbound, and titles had drifted from menu entries. New
+   `components/PageHeader.tsx` derives the caption from the nav manifest (section + breadcrumb link for detail
+   screens); 15 screens adopted it; new `pages/pageVocabulary.test.ts` (21 tests) fails the build if a retired
+   group name is typed into a caption again.
+3. **P1 — sidebar folds, and the bell means something.** 13 always-open sections put ~45 links in one column;
+   sections now collapse (persisted `kdps-nav-collapsed`, `aria-expanded`, auto-unfold on the active route,
+   single-item sections unchanged). The dead bell with a permanent red dot is now a link to the approvals inbox
+   showing the real waiting count, and nothing when nothing waits.
+4. **P1 — vendor master: no screen, and an open write gate.** `POST /api/vendors` sat on bare `IsAuthenticated`
+   (a cashier could mint the supplier every booking/GRN/payable hangs off) and there was no detail route, so a
+   vendor could never be corrected. Gate moved to `masters/permissions.py` and applied; added
+   `GET/PATCH /api/vendors/<id>`, `?include_inactive=1`, search; new **Setup → Vendors** screen (create /
+   correct / retire, payment terms, brands chip picker). `VendorListCreateView` struck off `UNGATED_VIEWS`.
+5. **P1 — a booking had no ending, and `booking: approve` gated nothing.** `Status.CLOSED/CANCELLED` were
+   unreachable, so a short-shipped season stayed "Partially received" for ever. Added `Booking.end()` +
+   `POST /api/bookings/<id>/close` (`{action: close|cancel, reason}`) at `booking: approve` — reason mandatory,
+   actor + timestamp recorded, cancel refused once anything is received, double-close 409, and receiving against
+   an ended booking 409s quoting the reason. UI panel + written-off count on the booking. Migration
+   `vendors/0004_booking_close`. Tests: `tests/test_review_vendor_master_and_booking_close.py` (9).
+
+**ERP-process gaps recorded, NOT built** (each a candidate ticket, none overlapping the 31 issues): no audit-log
+table (the planned `/setup/audit` page currently overstates it; prerequisite for #135) · no period lock /
+month-end close despite ADR-0006 · no three-way match (vendor invoice is never matched to the GRN) · vendor
+payments post with no maker-checker or payment run · no open-order report · GST slab/HSN masters have no screen ·
+no replenishment/reorder logic · cycle counts have no schedule or coverage measure · no SOR brand-settlement
+statement · no landed cost · documents don't require their evidence file. Smaller: demo logins are printed on the
+login screen (needs an env flag before external eyes), zero React component tests, `mypy --strict` covers only
+`core`+`config`, the six outbound screens are copy-descended, `PtMapper.tsx` is 1,352 lines.
+
+**Verification note:** the testing agent (iteration_23) independently verified all five findings — 0 defects,
+100% backend + frontend. Its scratch live-API file `tests/test_iteration23_review.py` was deleted afterwards: it
+hardcoded this pod's URL, escaped the repo's live-suite gate (no module-level `BASE_URL`) and wrote TEST_ vendors
+to the target DB. The hermetic 9-test suite covers the same rules.
+
 ## Current state — 26 July 2026 (read this first)
 Ten days of parallel agent delivery (18–26 Jul) landed **~28 PRs on `main`**: the outbound D3 rebuild, the sidebar/RBAC redesign, search, and the `/deliver` pipeline that produced most of them. The 17-Jul snapshot below is superseded where it conflicts.
 
@@ -858,3 +907,7 @@ blind counts). The next frontiers:
 3. **Deploy `main` to Render** — `client-testing` is pinned and lags main; promoting it is a deliberate decision.
 4. Offers, payments/settlement, Tally sync, analytics, store open/close — unbuilt; five CA-gated GST items still block live money.
 5. Run broader alpha QA over the current screens and capture issues from real users.
+6. **From the 26-Jul review (in priority order):** append-only **audit log** + the `/setup/audit` screen (also
+   unblocks #135) → **period lock / month-end close** (ADR-0006's unkept promise) → **three-way match**
+   (invoice ↔ GRN ↔ booking, with a tolerance rule) → **open-order report** off the new booking close →
+   maker-checker on vendor payments → hide the demo logins behind an env flag before any external demo.
