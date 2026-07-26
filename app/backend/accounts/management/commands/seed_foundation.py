@@ -131,6 +131,13 @@ USERS: list[tuple[str, str, str, str, list[str], str, list[str]]] = [
     ("steward", "Steward@123", "data_steward", "all", [], "Data Steward", []),
     ("deo.manager", "Store@123", "store_manager", "store", ["DEO"], "Deoghar Manager", []),
     ("deo.cashier", "Store@123", "store_staff", "store", ["DEO"], "Deoghar Cashier", []),
+    ("bkr.manager", "Store@123", "store_manager", "store", ["BKR"], "Bokaro Manager", []),
+    ("bkr.cashier", "Store@123", "store_staff", "store", ["BKR"], "Bokaro Cashier", []),
+    ("hzb.manager", "Store@123", "store_manager", "store", ["HZB"], "Hazaribagh Manager", []),
+    ("dum.manager", "Store@123", "store_manager", "store", ["DUM"], "Dumka Manager", []),
+    ("banka.manager", "Store@123", "store_manager", "store", ["BANKA"], "Banka Manager", []),
+    ("banka.cashier", "Store@123", "store_staff", "store", ["BANKA"], "Banka Cashier", []),
+    ("wh.ranchi", "Wh@123", "warehouse", "store", ["RAN-WH"], "Ranchi Warehouse", []),
 ]
 
 
