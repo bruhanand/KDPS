@@ -104,6 +104,6 @@ def drop(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("outbound", "0013_storetransferline_mrp_paise_transferpt")]
+    dependencies = [("outbound", "0014_storetransferline_mrp_paise_transferpt")]
 
     operations = [migrations.RunPython(backfill, drop)]

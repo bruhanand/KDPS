@@ -9,7 +9,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('outbound', '0012_alter_transferreceiptexception_kind'),
+        ('outbound', '0013_stocktake_countsession_countsessionline'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
