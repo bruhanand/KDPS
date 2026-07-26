@@ -99,9 +99,15 @@ The five triage states each map to a repo label of the same name: `needs-triage`
 
 ## Browser use
 
-Use the **chrome-devtools MCP** tools (`mcp__chrome-devtools__*`) to drive the app: they can assert on
-network requests and console messages, which is what QA'ing an ERP screen actually needs.
-Do not use `mcp__claude-in-chrome__*` - it drives Anand's own Chrome session.
+Drive the app with whichever browser tooling the session has. Anand develops in the **Claude app**, so
+`mcp__claude-in-chrome__*` is the normal case; `mcp__chrome-devtools__*` is the terminal equivalent.
+Both can drive the page, screenshot it, and read network requests and console messages, which is what
+QA'ing an ERP screen needs.
+
+Claude in Chrome drives Anand's own browser: open a **new tab**, never reuse one, log out or use a fresh
+profile before testing a role (a pass that ran as whoever was signed in proves nothing), and never trigger
+an alert or confirm dialog - it freezes the session until he dismisses it by hand.
+
 The recipe (preconditions, flows, what to assert) is `.claude/skills/deliver/LIVE-QA.md`.
 
 *(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*

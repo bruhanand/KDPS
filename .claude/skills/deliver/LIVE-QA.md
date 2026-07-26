@@ -6,15 +6,30 @@ Tests are not evidence.
 A green suite and a broken screen coexist happily: the API returns 200 and the button does nothing, the endpoint is never called, the table renders empty, the money renders as `285000` instead of `₹2,85,000`.
 This gate exists to catch exactly that.
 
-Use the **chrome-devtools MCP** tools (`mcp__chrome-devtools__*`).
-Load them in one `ToolSearch` call, not one per tool:
+Use whichever browser tooling this session has. Both can do everything this gate needs - drive the page, screenshot it, read the network requests and read the console.
+
+**In the Claude app - Claude in Chrome.** This is the normal case now: Anand develops there, so this is the tooling that will be present.
+
+```
+ToolSearch: select:mcp__claude-in-chrome__tabs_context_mcp,mcp__claude-in-chrome__tabs_create_mcp,mcp__claude-in-chrome__navigate,mcp__claude-in-chrome__computer,mcp__claude-in-chrome__read_page,mcp__claude-in-chrome__find,mcp__claude-in-chrome__form_input,mcp__claude-in-chrome__read_network_requests,mcp__claude-in-chrome__read_console_messages
+```
+
+Call `tabs_context_mcp` first, then **open a new tab** with `tabs_create_mcp`. Never reuse a tab from another session, and never reuse a tab id from a previous run.
+
+It drives Anand's own Chrome, which has two consequences you must respect:
+
+- **He may already be logged in**, as himself, to the alpha or to a local stack. This gate logs in as a *specific role* and proves what that role can and cannot see. Log out first, or use a fresh profile. A QA pass that ran as whoever happened to be signed in proves nothing.
+- **Do not trigger alerts, confirms or any modal dialog.** They block every subsequent command and the session goes dead until he dismisses it by hand. Avoid buttons that confirm before deleting; if one is unavoidable, say so before pressing it.
+
+**In a terminal session - chrome-devtools MCP**, if `mcp__chrome-devtools__*` is what is available instead.
 
 ```
 ToolSearch: select:mcp__chrome-devtools__new_page,mcp__chrome-devtools__navigate_page,mcp__chrome-devtools__take_snapshot,mcp__chrome-devtools__take_screenshot,mcp__chrome-devtools__click,mcp__chrome-devtools__fill,mcp__chrome-devtools__fill_form,mcp__chrome-devtools__list_network_requests,mcp__chrome-devtools__list_console_messages,mcp__chrome-devtools__wait_for
 ```
 
-Do not use `mcp__claude-in-chrome__*` here.
-It drives Anand's own Chrome session, and this gate needs network and console assertions against a local stack.
+Load them in one `ToolSearch` call, never one per tool.
+
+The rest of this file is written in terms of what to *do* - open the page, act on it, read the network, read the console. Neither toolset changes what has to be true.
 
 ---
 
@@ -87,13 +102,13 @@ Add these three regardless of the issue:
 
 For each flow:
 
-1. `new_page` / `navigate_page` to `http://localhost:3000`, log in as the role.
-2. `take_snapshot` to get the accessibility tree, and act on element uids from it.
-   Snapshot over screenshot for finding things; screenshot for judging them.
+1. Open a **new tab** on `http://localhost:3000` and log in as the role.
+2. Read the page structure first (`read_page`, or `take_snapshot`), and act on the element ids it gives you.
+   Structure for finding things; screenshot for judging them.
 3. Click the real buttons and fill the real forms. Do not shortcut through the API.
 4. After each meaningful action, assert three things:
 
-**Render** - `take_screenshot`, and actually look at it.
+**Render** - screenshot it, and actually look at it.
 
 - Does the data shown match what you just entered or what the DB holds?
 - Money in Indian format with the rupee sign and lakh grouping (`₹2,85,000`), never raw paise, never `285000`.
@@ -101,14 +116,14 @@ For each flow:
 - Empty, loading and error states: does the screen say something, or is it a blank rectangle?
 - Alignment, truncation, overflow, a table that runs off the card. Anand's standard is pixel perfection, and "not related to my issue" is not a reason to leave something visibly broken - fix it or file it.
 
-**Network** - `list_network_requests`.
+**Network** - read the network requests.
 
 - Did the expected endpoint actually fire? A button that calls nothing is the most common silent failure.
 - Status codes: any 4xx or 5xx that is not a deliberate part of the flow is a finding.
 - No duplicate fire on one click, no request storm on render.
 - The payload carries what the screen showed.
 
-**Console** - `list_console_messages`.
+**Console** - read the console messages.
 
 - Zero errors. Zero unhandled rejections.
 - React key warnings, `act()` warnings and prop-type errors count as findings.
