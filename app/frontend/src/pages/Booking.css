@@ -74,3 +74,14 @@
 .variance-tag { display: inline-block; margin-left: 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: var(--amber); font-weight: 700; }
 .link-cell { color: var(--navy); text-decoration: none; }
 .link-cell:hover { text-decoration: underline; }
+
+/* Printable transfer PT (#72) — the paper that travels with the carton.
+   The screen keeps its chrome; the printed page is the document alone, on
+   white, with the table small enough to fit a portrait sheet. */
+@media print {
+  .pt-print-hide, .pt-print-hide * { display: none !important; }
+  .pt-print { padding: 0 !important; }
+  .pt-print .table-wrap { overflow: visible !important; border: 0 !important; }
+  .pt-print table.data { font-size: 9.5px; width: 100%; }
+  .pt-print table.data th, .pt-print table.data td { padding: 3px 4px; }
+}

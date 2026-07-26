@@ -176,3 +176,11 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
 }
+
+/* Printing a screen prints the document on it, not the application around it.
+   The transfer PT (#72) is the first page meant to reach paper; anything
+   printed later gets the same treatment for free. */
+@media print {
+  .sidebar, .topbar { display: none !important; }
+  .shell, .content { display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+}

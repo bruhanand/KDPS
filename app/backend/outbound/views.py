@@ -11,8 +11,12 @@ Every endpoint requires authentication. RBAC:
 
 from __future__ import annotations
 
+import csv
+import io
 from typing import Any
 
+import openpyxl
+from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -40,6 +44,7 @@ from outbound.models import (
     Stocktake,
     StoreTransfer,
     TransferGapClosure,
+    TransferPT,
     VFlip,
     WriteOff,
 )
@@ -81,6 +86,7 @@ from outbound.serializers import (
     StocktakeReadSerializer,
     StoreTransferReadSerializer,
     StoreTransferWriteSerializer,
+    TransferPTSerializer,
     TransferReceiveInputSerializer,
     TransferScanInputSerializer,
     VFlipReadSerializer,
@@ -88,6 +94,7 @@ from outbound.serializers import (
     WriteOffReadSerializer,
     WriteOffWriteSerializer,
 )
+from outbound.transfer_pt import KDPS_COLUMNS
 
 
 def _filter_docstatus(qs, request):
@@ -242,6 +249,95 @@ class TransferReceiveView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(StoreTransferReadSerializer(_transfer_for_read(pk)).data)
+
+
+# ---------------------------------------------------------------------------
+# The transfer's PT — read, download, print (#72)
+# ---------------------------------------------------------------------------
+
+
+def _transfer_pt_or_404(pk):
+    """The stored PT for a transfer, or ``None`` when there is nothing to print.
+
+    A draft has scanned nothing, so it has no carton and no document — that is a
+    404, not an empty file.
+    """
+    return (
+        TransferPT.objects.select_related("transfer__source_store", "transfer__destination_store")
+        .filter(transfer_id=pk)
+        .first()
+    )
+
+
+def _pt_filename(transfer, extension: str) -> str:
+    """``KDPS-PT-PT-A-STO-26-27-0001.csv`` — the voucher number, with the
+    slashes that a voucher series uses flattened out of the filename."""
+    stem = (transfer.doc_number or f"transfer-{transfer.pk}").replace("/", "-")
+    return f"KDPS-PT-{stem}.{extension}"
+
+
+class TransferPTView(APIView):
+    """GET: the transfer's PT, whole — the shape the print screen renders.
+
+    Read-only by construction. The PT is regenerated from the scanned lines or
+    it does not change (#72), so there is no PUT, PATCH or POST to find here;
+    anything but GET is a 405.
+
+    Open to any authenticated reader, exactly like the transfer itself. No
+    inbound-PT right is consulted: making a transfer's own packing document is
+    part of transferring, not part of inwarding a brand's goods.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        pt = _transfer_pt_or_404(pk)
+        if pt is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(TransferPTSerializer(pt).data)
+
+
+class TransferPTCsvView(APIView):
+    """GET: the PT as CSV, in KDPS column order."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        pt = _transfer_pt_or_404(pk)
+        if pt is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        resp = HttpResponse(content_type="text/csv")
+        resp["Content-Disposition"] = f'attachment; filename="{_pt_filename(pt.transfer, "csv")}"'
+        writer = csv.writer(resp)
+        writer.writerow(KDPS_COLUMNS)
+        for row in pt.rows:
+            writer.writerow([row.get(c, "") for c in KDPS_COLUMNS])
+        return resp
+
+
+class TransferPTXlsxView(APIView):
+    """GET: the PT as a real .xlsx — the file a brand or a store opens."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        pt = _transfer_pt_or_404(pk)
+        if pt is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "KDPS PT"
+        ws.append(KDPS_COLUMNS)
+        for row in pt.rows:
+            ws.append([row.get(c, "") for c in KDPS_COLUMNS])
+        buf = io.BytesIO()
+        wb.save(buf)
+        resp = HttpResponse(
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        resp["Content-Disposition"] = f'attachment; filename="{_pt_filename(pt.transfer, "xlsx")}"'
+        return resp
 
 
 # ---------------------------------------------------------------------------

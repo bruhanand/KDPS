@@ -232,6 +232,42 @@ class StoreTransferLine(TimeStampedModel):
         return f"{self.sku_code} × {self.qty_dispatched}"
 
 
+class TransferPT(TimeStampedModel):
+    """The PT file that travels with a transfer's carton (#72).
+
+    Generated once, at dispatch, from the scanned lines — the document the store
+    at the other end opens is the same list of pieces the ledger moved. There is
+    deliberately no write path: ``rows`` is a frozen copy of what
+    ``outbound.transfer_pt.build_transfer_pt_rows`` produced, and regenerating
+    from the (immutable) scanned lines is the only way it could ever change.
+
+    Storing it rather than deriving it on every read is the point: this is the
+    paper that went in the box, so months later the question "what did the
+    document say?" has an answer that is not a recomputation.
+    """
+
+    transfer = models.OneToOneField(StoreTransfer, on_delete=models.CASCADE, related_name="pt")
+    rows = models.JSONField(
+        default=list,
+        help_text="KDPS PT rows, keyed by the KDPS column names. Never hand-edited.",
+    )
+    generated_at = models.DateTimeField(auto_now_add=True)
+    generated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transfer_pts_generated",
+    )
+
+    class Meta:
+        db_table = "outbound_transfer_pt"
+        ordering = ["-generated_at"]
+
+    def __str__(self) -> str:
+        return f"PT for {self.transfer}"
+
+
 class TransferReceipt(TimeStampedModel):
     """Companion record for transfer receipt (submitted transfers are immutable).
 

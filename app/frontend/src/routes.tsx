@@ -15,7 +15,7 @@ import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Booking
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
-import { TransferListPage, TransferNewPage, TransferDetailPage } from "./pages/OutboundTransfers";
+import { TransferListPage, TransferNewPage, TransferDetailPage, TransferPtPage } from "./pages/OutboundTransfers";
 import { InTransitPage } from "./pages/OutboundInTransit";
 import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
 import { AdjustmentListPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
@@ -55,6 +55,8 @@ const BUILT: Screen[] = [
   // Before /transfer/:id, or "in-transit" would be read as a transfer id (#71).
   { id: "transfer-in-transit", path: "/transfer/in-transit", element: <InTransitPage /> },
   { id: "transfer-detail", path: "/transfer/:id", element: <TransferDetailPage /> },
+  // The printable PT the carton travels with (#72).
+  { id: "transfer-pt", path: "/transfer/:id/pt", element: <TransferPtPage /> },
   // Stock Count — the counting sessions, and the corrections they produce
   { id: "count-list", path: "/stock-count", element: <StockCountListPage /> },
   { id: "adjustment-list", path: "/stock-count/adjustments", element: <AdjustmentListPage /> },

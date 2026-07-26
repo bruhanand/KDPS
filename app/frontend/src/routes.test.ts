@@ -62,6 +62,8 @@ describe("the route table", () => {
     expect(screenAt("/transfer/distribution")).toBe("planned:/transfer/distribution");
     expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");
+    // The transfer's own PT hangs off the document, not off the section (#72).
+    expect(screenAt("/transfer/12/pt")).toBe("transfer-pt");
   });
 
   it("gives every sidebar item somewhere to land", () => {

@@ -397,6 +397,24 @@ def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     return resolve_line_identity(store_id, barcode)
 
 
+def _generate_transfer_pt(transfer: StoreTransfer, user=None) -> None:
+    """Freeze the transfer's PT onto it, inside the dispatch transaction (#72).
+
+    Every transfer generates one — never conditionally, never on request — so
+    "the carton went without its paper" is not a state the system can reach. It
+    is a packing document: it writes no ledger and raises no liability, and no
+    inbound-PT right is consulted to produce it.
+    """
+    from outbound.models import TransferPT
+    from outbound.transfer_pt import build_transfer_pt_rows
+
+    TransferPT.objects.create(
+        transfer=transfer,
+        rows=build_transfer_pt_rows(transfer),
+        generated_by=user if getattr(user, "is_authenticated", False) else None,
+    )
+
+
 @transaction.atomic
 def post_transfer_dispatch(
     transfer: StoreTransfer, scans: dict[str, int], user=None
@@ -444,6 +462,8 @@ def post_transfer_dispatch(
 
     # Post the document (mint number, set SUBMITTED — saves everything atomically)
     transfer.post()
+
+    _generate_transfer_pt(transfer, user)
 
     entries = []
     for i, line in enumerate(dispatch_lines, start=1):
