@@ -24,7 +24,7 @@ import pytest
 from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import ScopeType, User
+from accounts.models import Role, ScopeType, User
 from core.documents import DocStatus, VoucherSeries
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
@@ -341,6 +341,46 @@ def test_store_gets_its_transfer_pt_without_any_inbound_pt_right(pt_scaffold):
     pt = TransferPT.objects.get(transfer=transfer)
     assert len(pt.rows) == 1
     assert _client(s["user"]).get(f"/api/outbound/transfers/{transfer.pk}/pt").status_code == 200
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_pt_gate_is_the_transfer_section_and_only_that(pt_scaffold):
+    """What the PT endpoints ask for is a transfer right, at its lowest rung.
+
+    Proved by what the server answers rather than by reading the view, so the
+    boundary survives a rewrite of either. Somebody holding *only* ``transfer:
+    view`` — no receive_goods, no stock, nothing the inbound PT lives behind —
+    opens the file; somebody holding no transfer cell at all is refused. An
+    inbound-PT gate creeping onto this endpoint fails the first assertion.
+    """
+    s = pt_scaffold
+    transfer = _draft(s)
+    _dispatch(s, transfer, [("BC001", 3)])
+    url = f"/api/outbound/transfers/{transfer.pk}/pt"
+
+    transfer_only = User.objects.create_user(
+        username="pt_viewer",
+        password="Test@123",
+        role=Role.objects.create(
+            code="pt_transfer_viewer",
+            name="Transfer viewer",
+            section_access={"transfer": {"capability": "view", "label": "View"}},
+        ),
+        scope_type=ScopeType.ALL,
+    )
+    assert _client(transfer_only).get(url).status_code == 200
+
+    no_transfer = User.objects.create_user(
+        username="pt_outsider",
+        password="Test@123",
+        role=Role.objects.create(
+            code="pt_no_transfer",
+            name="No transfer",
+            section_access={"sell": {"capability": "operate", "label": "Create"}},
+        ),
+        scope_type=ScopeType.ALL,
+    )
+    assert _client(no_transfer).get(url).status_code == 403
 
 
 @pytest.mark.django_db(transaction=True)

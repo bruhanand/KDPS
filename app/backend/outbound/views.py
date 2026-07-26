@@ -51,6 +51,7 @@ from outbound.models import (
 from outbound.permissions import (
     CanCloseTransferGap,
     CanFlipOwnership,
+    CanReadTransferPT,
     CanWriteReturnToBrand,
     CanWriteStockCount,
     CanWriteTransfer,
@@ -263,12 +264,14 @@ class TransferPTBaseView(APIView):
     it does not change (#72), so there is no PUT, PATCH or POST on any of these;
     anything but GET is a 405.
 
-    Open to any authenticated reader, exactly like the transfer itself. No
-    inbound-PT right is consulted: making a transfer's own packing document is
-    part of transferring, not part of inwarding a brand's goods.
+    Gated on the transfer section's lowest rung, because the file is priced and
+    people forward it. That is a *transfer* right and nothing else: no inbound-PT
+    right is consulted here, so the rulings on who may make (#119) or inward
+    (#124) a brand's PT cannot reach this document. Making a transfer's own
+    packing list is part of transferring.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [CanReadTransferPT]
 
     #: File extension for the download views; the JSON view has none.
     extension = ""
