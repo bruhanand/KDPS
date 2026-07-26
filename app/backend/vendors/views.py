@@ -4,6 +4,13 @@ Booking capture is a two-step, human-in-the-loop flow:
   POST /api/bookings/draft   → Gemini reads the uploaded receiving doc, returns a
                                DRAFT (nothing saved). The handler edits it.
   POST /api/bookings/        → saves the confirmed booking + lines (status Booked).
+
+Every Booking endpoint answers on the ``booking`` section of the ratified access
+table (#130): reading a booking needs ``view``, placing one needs ``operate``.
+Until then these endpoints were open to any authenticated user, so the table's
+Booking column decided nothing — which is why a store person's ratified
+``view`` cell had to arrive with a gate behind it. *Which* bookings a caller
+sees is the separate record-scope axis, and #101's work.
 """
 
 from __future__ import annotations
@@ -18,6 +25,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_OPERATE, CAP_VIEW
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from masters.models import Brand, Season, Store
@@ -28,6 +37,13 @@ from vendors.serializers import (
     BookingSerializer,
     VendorSerializer,
 )
+
+# The Booking column of the access table, as three DRF permissions. `view` is the
+# screen and the list — the rung the store person now holds; `operate` is placing
+# one, which stays HO's, the warehouse's and the brand manager's.
+CanReadBooking = require_section("booking", CAP_VIEW)
+CanPlaceBooking = require_section("booking", CAP_OPERATE)
+CanReadOrPlaceBooking = require_section("booking", CAP_VIEW, write_minimum=CAP_OPERATE)
 
 
 def _rupees_to_paise(value: Any) -> int | None:
@@ -68,9 +84,14 @@ class VendorListCreateView(generics.ListCreateAPIView):
 
 
 class BookingDraftView(APIView):
-    """Read an uploaded receiving doc into a draft booking (not saved)."""
+    """Read an uploaded receiving doc into a draft booking (not saved).
 
-    permission_classes = [IsAuthenticated]
+    Nothing is saved, but the draft is the first half of placing a booking and it
+    burns an AI read on an upload — so it sits at the same rung as the create,
+    not at ``view``.
+    """
+
+    permission_classes = [IsAuthenticated, CanPlaceBooking]
 
     def post(self, request: Request) -> Response:
         upload = request.FILES.get("file")
@@ -96,7 +117,7 @@ class BookingDraftView(APIView):
 
 
 class BookingListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadOrPlaceBooking]
     serializer_class = BookingSerializer
 
     def get_queryset(self) -> Any:
@@ -172,7 +193,7 @@ class BookingListCreateView(generics.ListCreateAPIView):
 
 
 class BookingDetailView(generics.RetrieveAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadBooking]
     serializer_class = BookingSerializer
     queryset = Booking.objects.select_related(
         "vendor", "brand", "season", "destination_store"

@@ -131,6 +131,14 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         f"/api/outbound/vflips/{ABSENT}/request-approval",
     ),
     ("inbound queue", "receive_goods", CAP_VIEW, "get", "/api/inbound/queue"),
+    # Booking (#130). The list opens at `view` — the rung the ratified table now
+    # gives a store — while placing one, and the AI draft that begins placing
+    # one, stay at `operate`. Before #130 these three answered any authenticated
+    # caller, so the table's Booking column decided nothing.
+    ("booking list", "booking", CAP_VIEW, "get", "/api/bookings"),
+    ("booking detail", "booking", CAP_VIEW, "get", f"/api/bookings/{ABSENT}"),
+    ("booking create", "booking", CAP_OPERATE, "post", "/api/bookings"),
+    ("booking draft", "booking", CAP_OPERATE, "post", "/api/bookings/draft"),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -192,9 +200,10 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
     convert ownership or destroy stock on any of them.
     """
     client = _client(_user("acc", _role("accounts")))
-    for label, section, _minimum, method, path in GATED_ENDPOINTS:
-        if section == "receive_goods":
-            continue  # the queue is a read, and Accounts legitimately reads it
+    for label, _section, _minimum, method, path in GATED_ENDPOINTS:
+        if method == "get":
+            continue  # reads are the point of `view` — the inbound queue and
+            # the booking list are Accounts' to open
         assert _call(client, method, path).status_code == 403, label
 
 

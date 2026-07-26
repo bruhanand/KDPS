@@ -40,12 +40,15 @@ function withSections(
 
 const ROLE = (code: string) => ({ code, name: code, landing_page: "/", nav_groups: [] });
 
-// The six personas of the SIDEBAR RBAC matrix, at the capabilities the sheet
-// grants them (accounts/rbac_matrix.py). Absent section ⇒ the role has none.
+// Personas of the ratified nine-role access table, at the capabilities it grants
+// them (accounts/rbac_matrix.py). Absent section ⇒ the role has none.
 const storePerson = withSections(
   {
     home: "view",
     sell: "operate",
+    // Ratified correction to the sheet's "No" (#130): the store reads the
+    // bookings headed to it and cannot place one.
+    booking: "view",
     receive_goods: "operate",
     transfer: "operate",
     stock_count: "operate",
@@ -85,6 +88,15 @@ const warehouse = withSections(
 const accounts = withSections(
   {
     home: "view",
+    // Accounts reads the whole operating floor and writes only the books: every
+    // section below `money` is `view` in the table, booking included.
+    sell: "view",
+    booking: "view",
+    receive_goods: "view",
+    transfer: "view",
+    stock_count: "view",
+    return_to_brand: "view",
+    offers_price: "view",
     money: "manage",
     stock: "view",
     reports: "view",
@@ -145,10 +157,25 @@ describe("canAccess", () => {
     expect(canAccess("/transfer/7", storePerson)).toBe(true);
     expect(canAccess("/stock-count/adjustments", storePerson)).toBe(true);
     expect(canAccess("/staff/attendance", storePerson)).toBe(true);
-    // No Booking and no Setup in the matrix — hidden in the menu, shut by URL.
-    expect(canAccess("/booking", storePerson)).toBe(false);
+    // No Setup in the matrix — hidden in the menu, shut by URL.
     expect(canAccess("/setup/stores", storePerson)).toBe(false);
     expect(canAccess("/setup/users", storePerson)).toBe(false);
+  });
+
+  it("Booking opens read-only for the store and stays shut to placing one", () => {
+    // The ratified correction (#130): a store plans space and staff against the
+    // goods headed to it, so the list opens at `booking: view`. Creating stays
+    // at `operate` — the rung the server's `CanPlaceBooking` demands — so the
+    // form is hidden rather than offered and then refused.
+    expect(canAccess("/booking", storePerson)).toBe(true);
+    expect(canAccess("/booking/12", storePerson)).toBe(true);
+    expect(canAccess("/booking/new", storePerson)).toBe(false);
+    // And it changes nothing else about the store's day.
+    expect(canAccess("/setup/stores", storePerson)).toBe(false);
+    // HO and the warehouse, who hold `operate`, still place them.
+    expect(canAccess("/booking/new", warehouse)).toBe(true);
+    // Accounts reads bookings but never places one either.
+    expect(canAccess("/booking/new", accounts)).toBe(false);
   });
 
   it("Money is one section but its books stay finance-only", () => {
@@ -239,7 +266,8 @@ describe("canAccess", () => {
   it("mixed-case URLs are guarded too (React Router matches case-insensitively)", () => {
     expect(canAccess("/MONEY/VENDOR", storePerson)).toBe(false);
     expect(canAccess("/Setup/Users", storePerson)).toBe(false);
-    expect(canAccess("/Booking/12", storePerson)).toBe(false);
+    expect(canAccess("/Booking/New", storePerson)).toBe(false);
+    expect(canAccess("/Booking/12", storePerson)).toBe(true);
     expect(canAccess("/Money/Vendor", accounts)).toBe(true);
   });
 });

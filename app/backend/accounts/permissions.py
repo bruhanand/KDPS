@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.request import Request
 
 from accounts.sections import (
@@ -85,8 +85,16 @@ def visible_sections(user: Any) -> list[dict[str, str | int]]:
     return out
 
 
-def require_section(section: str, minimum: str = CAP_VIEW) -> type[BasePermission]:
-    """Build a DRF permission gating a view behind a section capability."""
+def require_section(
+    section: str, minimum: str = CAP_VIEW, *, write_minimum: str | None = None
+) -> type[BasePermission]:
+    """Build a DRF permission gating a view behind a section capability.
+
+    ``write_minimum`` is for the one view that both lists and creates: reads
+    answer at ``minimum``, writes at the higher rung. Without it a
+    list-and-create endpoint has to pick one rung for both, and picking the
+    lower one is how a ``view`` cell quietly becomes a create.
+    """
     if not is_valid_section(section):  # pragma: no cover - programmer error
         raise ValueError(f"Unknown section {section!r}")
 
@@ -94,7 +102,10 @@ def require_section(section: str, minimum: str = CAP_VIEW) -> type[BasePermissio
         message = f"You do not have access to the {section} section."
 
         def has_permission(self, request: Request, view: Any) -> bool:
-            return user_can(request.user, section, minimum)
+            needed = minimum
+            if write_minimum is not None and request.method not in SAFE_METHODS:
+                needed = write_minimum
+            return user_can(request.user, section, needed)
 
     _HasSectionAccess.__name__ = f"HasSection_{section}_{minimum}"
     return _HasSectionAccess

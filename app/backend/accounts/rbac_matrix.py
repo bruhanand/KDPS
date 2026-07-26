@@ -1,18 +1,31 @@
-"""The SIDEBAR RBAC matrix, transcribed as the seed default (issue #85).
+"""The nine-role access table, ratified as the seed default (issues #85, #130).
 
-Source of truth: ``ERP_DASHBOARD_V1.xlsx`` → sheet "SIDEBAR RBAC" (24 Jul 2026),
-the six-persona table locked with Anand. Each cell is the exact sheet wording;
-the leading rung is the normalised capability (see ``sections`` for the ladder).
+Source of truth: ``ERP_DASHBOARD_V1.xlsx`` → sheet "SIDEBAR RBAC" (24 Jul 2026)
+for six of the nine personas, and **PRD #104** (ratified 26 Jul 2026) for the
+other two rows plus the corrections recorded below. Each cell is the exact sheet
+wording where the sheet had one; the leading rung is the normalised capability
+(see ``sections`` for the ladder).
+
+There is **one table**. ``ho_ops`` and ``data_steward`` used to sit in a separate
+``DERIVED_ACCESS`` block that disclaimed itself — "NOT the RBAC matrix, retune
+freely" — which meant a role's access could only be answered by knowing which of
+two structures it came from. Anand ratified both rows on 26 July, so they are
+persona rows like the other seven and the disclaimer is gone.
 
 This module is only the **default** — ``seed_foundation`` writes it into each
 ``Role.section_access`` row, and the live API reads it back from the DB. So a
 trained admin retunes access by editing a Role (data), never by shipping code
 (Rule 12); this table just says where every fresh install starts.
 
-Two ratified corrections to the client's original Sheet-1 matrix are baked in:
+Ratified corrections to the client's original Sheet-1 matrix, baked in here:
   · the store person gets receive-at-own-store + PT-making for direct receipts
     (Sheet 1 said NO on GRN; the booking-less direct-delivery decision wins);
-  · Admin gets **no** Money access — Sheet-1 note (2), kept deliberately.
+  · Admin gets **no** Money access — Sheet-1 note (2), kept deliberately;
+  · the store person **views** bookings (Sheet 1 said "No"). A store plans space
+    and staff against goods headed its way, so the section opens read-only:
+    ``view`` grants the screen, never the create (PRD #104, 26 Jul 2026). The
+    cell says nothing about *which* bookings — narrowing them to the store's own
+    is the record-scope axis, and #101's work.
 
 One section has **no sheet row at all**: ``staff``. The sheet predates KDPS's
 hand-drawn store sidebar, which puts attendance in the store person's daily
@@ -48,7 +61,9 @@ from accounts.sections import (
 )
 
 # Persona code → { section_code: (capability, exact sheet label) }.
-# A section absent for a persona is treated as CAP_NONE (fail-closed).
+# Every persona states all thirteen cells, so "no access" is written down rather
+# than inferred from an omission. A section absent anyway is CAP_NONE
+# (fail-closed), and ``_validate`` refuses to let a row ship incomplete.
 MATRIX: dict[str, dict[str, tuple[str, str]]] = {
     "owner": {
         "home": (CAP_VIEW, "All (network)"),
@@ -68,7 +83,10 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
     "store_person": {
         "home": (CAP_VIEW, "Own store"),
         "sell": (CAP_OPERATE, "Create (bill, return, customer)"),
-        "booking": (CAP_NONE, "No"),
+        # Ratified correction to the sheet's "No" (PRD #104, 26 Jul 2026): a
+        # store reads the bookings headed to it so it can plan space and staff.
+        # Read-only — placing one stays HO's and the brand manager's job.
+        "booking": (CAP_VIEW, "View bookings for own store"),
         "receive_goods": (CAP_OPERATE, "Receive + PT (own store)"),
         "transfer": (CAP_OPERATE, "Request / Send / Receive"),
         "stock_count": (CAP_OPERATE, "Count own store"),
@@ -145,11 +163,50 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_MANAGE, "Full (incl. Users & Roles)"),
     },
+    # HO Operations / Buyer — the network operator. Ratified 26 Jul 2026 (#130).
+    # Books goods and chases arrivals but never inwards one: the buyer must not
+    # confirm receipt of their own order, which is what keeps the three-way match
+    # honest (PRD #104). No money, no setup ownership.
+    "ho_ops": {
+        "home": (CAP_VIEW, "All (network)"),
+        "sell": (CAP_NONE, "No"),
+        "booking": (CAP_OPERATE, "Create"),
+        "receive_goods": (CAP_VIEW, "View all"),
+        "transfer": (CAP_APPROVE, "Approve"),
+        "stock_count": (CAP_APPROVE, "Approve variances"),
+        "return_to_brand": (CAP_VIEW, "View"),
+        "stock": (CAP_VIEW, "All locations"),
+        "money": (CAP_NONE, "No"),
+        "offers_price": (CAP_OPERATE, "Plan"),
+        "staff": (CAP_VIEW, "All (network)"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_NONE, "No"),
+    },
+    # HO Data Steward — the single owner of master data. Ratified 26 Jul 2026
+    # (#130). Setup stays at `operate` (masters only): Users & Roles admin needs
+    # `setup: manage`, which only Owner and Admin hold, and a steward must not
+    # gain it (issue #85 review). Reads stock; posts nothing.
+    "data_steward": {
+        "home": (CAP_VIEW, "All (network)"),
+        "sell": (CAP_NONE, "No"),
+        "booking": (CAP_NONE, "No"),
+        "receive_goods": (CAP_NONE, "No"),
+        "transfer": (CAP_NONE, "No"),
+        "stock_count": (CAP_NONE, "No"),
+        "return_to_brand": (CAP_NONE, "No"),
+        "stock": (CAP_VIEW, "All locations"),
+        "money": (CAP_NONE, "No"),
+        "offers_price": (CAP_NONE, "No"),
+        "staff": (CAP_NONE, "No"),
+        "reports": (CAP_VIEW, "All"),
+        "setup": (CAP_OPERATE, "Masters"),
+    },
 }
 
-# The six personas map onto the seeded role *codes*. "Store Person" covers both
-# store roles; "Admin" is the it_admin role. Every canonical role must resolve
-# to a persona so the contract test can assert it against the sheet.
+# The nine seeded role *codes* map onto the eight persona rows. "Store Person"
+# covers both store roles — the one place two codes share a row; "Admin" is the
+# it_admin role. Every canonical role must resolve to a persona, so the contract
+# test can assert every one of them against the table.
 ROLE_PERSONA = {
     "owner": "owner",
     "store_manager": "store_person",
@@ -158,6 +215,8 @@ ROLE_PERSONA = {
     "brand_manager": "brand_manager",
     "accounts": "accounts",
     "it_admin": "admin",
+    "ho_ops": "ho_ops",
+    "data_steward": "data_steward",
 }
 
 # Sections the SIDEBAR RBAC sheet never covered. Only these may be overridden
@@ -182,43 +241,18 @@ ROLE_OVERRIDES: dict[str, dict[str, tuple[str, str]]] = {
     },
 }
 
-# Roles that predate the sheet and have no persona row. They get sensible,
-# clearly-derived access so seeded users aren't blank in the new contract — but
-# these are NOT the RBAC matrix and can be retuned freely as data.
-DERIVED_ACCESS: dict[str, dict[str, tuple[str, str]]] = {
-    # HO Operations / Buyer — network operator, no money/setup ownership.
-    "ho_ops": {
-        "home": (CAP_VIEW, "All (network)"),
-        "booking": (CAP_OPERATE, "Create"),
-        "receive_goods": (CAP_VIEW, "View all"),
-        "transfer": (CAP_APPROVE, "Approve"),
-        "stock_count": (CAP_APPROVE, "Approve variances"),
-        "return_to_brand": (CAP_VIEW, "View"),
-        "stock": (CAP_VIEW, "All locations"),
-        "offers_price": (CAP_OPERATE, "Plan"),
-        "staff": (CAP_VIEW, "All (network)"),
-        "reports": (CAP_VIEW, "All"),
-    },
-    # HO Data Steward — edits masters, reads stock. Setup stays at `operate`
-    # (masters only): Users & Roles admin needs `setup: manage`, which only
-    # Owner and Admin hold — a data steward must not gain that (issue #85 review).
-    "data_steward": {
-        "home": (CAP_VIEW, "All (network)"),
-        "stock": (CAP_VIEW, "All locations"),
-        "reports": (CAP_VIEW, "All"),
-        "setup": (CAP_OPERATE, "Masters"),
-    },
-}
-
 
 def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
     """Full 13-section access map for a role, as stored in ``section_access``.
 
     Every section is present (missing → explicit ``none``), so the row is
     self-describing and fail-closed. Shape: ``{section: {capability, label}}``.
+
+    A role code the table does not know reaches nothing at all — there is no
+    second table to fall through to.
     """
     persona = ROLE_PERSONA.get(role_code)
-    base = MATRIX.get(persona, {}) if persona else DERIVED_ACCESS.get(role_code, {})
+    base = MATRIX.get(persona, {}) if persona else {}
     source = {**base, **ROLE_OVERRIDES.get(role_code, {})}
     out: dict[str, dict[str, str]] = {}
     for section in SECTION_CODES:
@@ -229,7 +263,7 @@ def section_access_for(role_code: str) -> dict[str, dict[str, str]]:
 
 #: Every role code this table can answer for — the nine ``seed_foundation``
 #: writes. Anything outside it resolves to no access at all (fail-closed).
-KNOWN_ROLE_CODES: tuple[str, ...] = tuple(sorted({*ROLE_PERSONA, *DERIVED_ACCESS}))
+KNOWN_ROLE_CODES: tuple[str, ...] = tuple(sorted(ROLE_PERSONA))
 
 
 def roles_with_capability(section: str, minimum: str) -> tuple[str, ...]:
@@ -251,15 +285,15 @@ def roles_with_capability(section: str, minimum: str) -> tuple[str, ...]:
 def _validate() -> None:
     """Guard the transcription: catch a typo'd section/capability at import.
 
-    All three seed sources are checked so a slip in a ``DERIVED_ACCESS`` or
-    ``ROLE_OVERRIDES`` cell fails loudly here rather than silently fail-closing
-    that role's access. Only ``MATRIX`` must be complete (all 13 sections);
-    derived and override rows are partial by design (absent → the persona's cell,
-    else ``none``).
+    Both seed sources are checked so a slip in a ``ROLE_OVERRIDES`` cell fails
+    loudly here rather than silently fail-closing that role's access. Every
+    ``MATRIX`` row must be complete (all 13 sections) — a ratified row states
+    where it says "no" — while override rows are partial by design (absent → the
+    persona's cell). And every seeded role code must land on a row, so no role
+    can be seeded into the blank that used to be the derived block's job.
     """
     for source, cells_by_role in (
         ("matrix", MATRIX),
-        ("derived", DERIVED_ACCESS),
         ("override", ROLE_OVERRIDES),
     ):
         for role, cells in cells_by_role.items():
@@ -271,6 +305,8 @@ def _validate() -> None:
     for persona, cells in MATRIX.items():
         missing = set(SECTION_CODES) - set(cells)
         assert not missing, f"{persona}: matrix missing sections {sorted(missing)}"
+    for role, persona in ROLE_PERSONA.items():
+        assert persona in MATRIX, f"role/{role}: no ratified row for persona {persona!r}"
     # An override must never restate a ratified sheet cell — only the sections
     # the sheet left blank are ours to vary per role.
     for role, cells in ROLE_OVERRIDES.items():
