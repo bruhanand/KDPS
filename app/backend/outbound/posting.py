@@ -429,6 +429,7 @@ def post_transfer_dispatch(
     Stock move only, no GL (cross-state IGST invoice is manual by decision).
     """
     from core.documents import DocStatus
+    from masters.models import Sku
     from outbound.models import StoreTransfer, StoreTransferLine
 
     # Serialize on the transfer row: a concurrent dispatch of the same draft
@@ -444,6 +445,12 @@ def post_transfer_dispatch(
     for barcode, qty in scans.items():
         _check_stock(transfer.source_store_id, barcode, qty)
 
+    # The ticketed price of each scanned piece, snapshotted with the cost so the
+    # transfer's PT stays true to the moment of dispatch (Rule 2, #72).
+    mrps = dict(
+        Sku.objects.filter(barcode__in=scans).values_list("barcode", "mrp_paise"),
+    )
+
     dispatch_lines = []
     for barcode, qty in sorted(scans.items()):
         identity = _resolve_scan_identity(transfer.source_store_id, barcode)
@@ -451,6 +458,7 @@ def post_transfer_dispatch(
         if line is None:
             line = StoreTransferLine(transfer=transfer, sku_code=barcode, qty_planned=None)
         line.qty_dispatched = qty
+        line.mrp_paise = mrps.get(barcode)
         for field, value in identity.items():
             setattr(line, field, value)
         line.save()

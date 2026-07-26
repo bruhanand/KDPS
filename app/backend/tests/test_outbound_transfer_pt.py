@@ -292,6 +292,27 @@ def test_stored_pt_equals_a_fresh_regeneration(pt_scaffold):
     assert pt.rows == build_transfer_pt_rows(transfer)
 
 
+@pytest.mark.django_db(transaction=True)
+def test_reticketing_the_sku_cannot_rewrite_a_dispatched_pt(pt_scaffold):
+    """The PT is a function of the scanned lines and nothing else.
+
+    Cost and MRP are both snapshotted onto the line at scan time, so a piece
+    re-ticketed next season regenerates to the price the carton actually left
+    with — otherwise "regenerated from the scanned lines" would quietly mean
+    "regenerated from whatever the master says today".
+    """
+    s = pt_scaffold
+    transfer = _draft(s)
+    _dispatch(s, transfer, [("BC001", 3)])
+    pt = TransferPT.objects.get(transfer=transfer)
+
+    Sku.objects.filter(barcode="BC001").update(mrp_paise=149900)
+
+    transfer.refresh_from_db()
+    assert build_transfer_pt_rows(transfer) == pt.rows
+    assert pt.rows[0]["MRP"] == "999.00"
+
+
 # ---------------------------------------------------------------------------
 # A transfer PT is not an inbound PT
 # ---------------------------------------------------------------------------

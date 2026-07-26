@@ -23,7 +23,6 @@ packing list would be the system quietly claiming to have raised one.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -33,7 +32,7 @@ from core.money import paise_to_rupees_str
 # the format gains a column, a transfer's PT gains it on the same day.
 from ptmapper.profiles import KDPS_COLUMNS
 
-__all__ = ["KDPS_COLUMNS", "build_transfer_pt_rows", "transfer_pt_rows"]
+__all__ = ["KDPS_COLUMNS", "build_transfer_pt_rows"]
 
 
 def _money(paise: int | None) -> str:
@@ -53,7 +52,7 @@ def _margin(mrp_paise: int | None, cost_paise: int | None) -> str:
     return str(pct.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
-def _row(line: Any, mrp_paise: int | None) -> dict[str, Any]:
+def _row(line: Any) -> dict[str, Any]:
     """One dispatched line as one KDPS PT row.
 
     Everything comes off the line, which took its identity from the source
@@ -61,6 +60,7 @@ def _row(line: Any, mrp_paise: int | None) -> dict[str, Any]:
     ledger says left, not what somebody remembered about them.
     """
     cost_paise = line.unit_cost_paise
+    mrp_paise = line.mrp_paise
     return {
         "SEASON": line.season,
         "BRAND": line.brand,
@@ -90,32 +90,21 @@ def _row(line: Any, mrp_paise: int | None) -> dict[str, Any]:
     }
 
 
-def transfer_pt_rows(lines: Iterable[Any], mrp_by_barcode: Mapping[str, int | None]) -> list[dict]:
-    """The pure core: dispatched lines + known MRPs → KDPS PT rows.
+def build_transfer_pt_rows(transfer: Any) -> list[dict]:
+    """The transfer's PT rows — a function of its scanned lines and nothing else.
+
+    Nothing outside the transfer is consulted, master data included: cost and MRP
+    were both snapshotted onto the line at scan time, so regenerating this a year
+    later reproduces the paper that went in the carton even if the SKU has since
+    been re-ticketed.
 
     Lines that were planned but never scanned are dropped — the PT lists what is
     in the carton, and a piece nobody scanned is not.
     """
-    return [_row(line, mrp_by_barcode.get(line.sku_code)) for line in lines if line.qty_dispatched]
-
-
-def build_transfer_pt_rows(transfer: Any) -> list[dict]:
-    """The transfer's PT rows, with the MRPs read from the SKU master.
-
-    MRP is the one thing the transfer line does not carry: it is the ticketed
-    price of the piece, which lives on the SKU and belongs on any document a
-    store person holds next to the garment.
-    """
-    from masters.models import Sku
     from outbound.models import StoreTransferLine
 
     # Queried, never read off ``transfer.lines`` — dispatch runs against a
     # transfer whose lines were prefetched *before* the scan created them, and a
     # stale cache would print a carton that was never packed.
-    lines = list(StoreTransferLine.objects.filter(transfer=transfer))
-    mrps = dict(
-        Sku.objects.filter(barcode__in=[line.sku_code for line in lines]).values_list(
-            "barcode", "mrp_paise"
-        )
-    )
-    return transfer_pt_rows(lines, mrps)
+    lines = StoreTransferLine.objects.filter(transfer=transfer)
+    return [_row(line) for line in lines if line.qty_dispatched]

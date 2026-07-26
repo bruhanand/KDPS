@@ -582,14 +582,18 @@ export interface TransferPtT {
   rows: Record<string, string | number>[];
 }
 
-/** Pull the PT down as a file. Same blob dance as the PT-mapper export — the
- *  API needs the auth header, so a plain link cannot fetch it. */
-async function downloadPt(transferId: number | string, kind: "csv" | "xlsx", stem: string) {
+/** Pull the PT down as a file. Same blob dance as the PT-mapper export - the
+ *  API needs the auth header, so a plain link cannot fetch it.
+ *
+ *  The filename comes off the response: the server already names the PT after
+ *  its voucher, and restating that rule here would be one rule in two languages. */
+async function downloadPt(transferId: number | string, kind: "csv" | "xlsx") {
   const res = await api.get(`/outbound/transfers/${transferId}/pt.${kind}`, { responseType: "blob" });
+  const named = /filename="([^"]+)"/.exec(res.headers["content-disposition"] ?? "");
   const href = URL.createObjectURL(res.data);
   const a = document.createElement("a");
   a.href = href;
-  a.download = `KDPS-PT-${stem.replace(/\//g, "-")}.${kind}`;
+  a.download = named?.[1] ?? `KDPS-PT-${transferId}.${kind}`;
   a.click();
   URL.revokeObjectURL(href);
 }
@@ -599,14 +603,13 @@ async function downloadPt(transferId: number | string, kind: "csv" | "xlsx", ste
  *  does not change. */
 function TransferPtCard({ t }: { t: TransferT }) {
   if (!t.pt_generated_at) return null;
-  const stem = t.doc_number || `transfer-${t.id}`;
   return (
     <div className="card section-card" data-testid="transfer-pt-card">
       <p className="eyebrow">PT file</p>
       <h3 className="h3">Generated {fmtDate(t.pt_generated_at)}</h3>
       <p className="lead" style={{ marginTop: 6 }}>
         Built from the scanned lines, so the document and the carton say the same thing.
-        It is never typed and cannot be edited — send it with the goods.
+        It is never typed and cannot be edited - send it with the goods.
       </p>
       <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
         <Link className="btn btn-cta" to={`/transfer/${t.id}/pt`} data-testid="transfer-pt-open">
@@ -615,7 +618,7 @@ function TransferPtCard({ t }: { t: TransferT }) {
         <button
           type="button"
           className="btn"
-          onClick={() => void downloadPt(t.id, "xlsx", stem)}
+          onClick={() => void downloadPt(t.id, "xlsx")}
           data-testid="transfer-pt-xlsx"
         >
           <Download size={15} /> Excel (KDPS)
@@ -623,7 +626,7 @@ function TransferPtCard({ t }: { t: TransferT }) {
         <button
           type="button"
           className="btn"
-          onClick={() => void downloadPt(t.id, "csv", stem)}
+          onClick={() => void downloadPt(t.id, "csv")}
           data-testid="transfer-pt-csv"
         >
           <Download size={15} /> CSV
@@ -653,7 +656,6 @@ export function TransferPtPage() {
     );
   }
 
-  const stem = pt.doc_number || `transfer-${pt.transfer}`;
   return (
     <div className="page-pad pt-print">
       <div className="pt-print-hide">
@@ -685,7 +687,7 @@ export function TransferPtPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => void downloadPt(pt.transfer, "xlsx", stem)}
+            onClick={() => void downloadPt(pt.transfer, "xlsx")}
             data-testid="transfer-pt-page-xlsx"
           >
             <Download size={15} /> Excel (KDPS)
@@ -693,7 +695,7 @@ export function TransferPtPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => void downloadPt(pt.transfer, "csv", stem)}
+            onClick={() => void downloadPt(pt.transfer, "csv")}
             data-testid="transfer-pt-page-csv"
           >
             <Download size={15} /> CSV

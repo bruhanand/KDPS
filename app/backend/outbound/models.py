@@ -217,6 +217,13 @@ class StoreTransferLine(TimeStampedModel):
         "and the receipt must keep saying what was actually scanned in.",
     )
     unit_cost_paise = MoneyField(default=0)
+    mrp_paise = MoneyField(
+        null=True,
+        blank=True,
+        help_text="The SKU's ticketed price, snapshotted at dispatch alongside the "
+        "cost (Rule 2, snapshot masters). The transfer's PT prints it, and a later "
+        "re-ticketing of the SKU must not change what the paper in the carton said.",
+    )
 
     @property
     def qty_in_transit(self) -> int:
@@ -251,7 +258,6 @@ class TransferPT(TimeStampedModel):
         default=list,
         help_text="KDPS PT rows, keyed by the KDPS column names. Never hand-edited.",
     )
-    generated_at = models.DateTimeField(auto_now_add=True)
     generated_by = models.ForeignKey(
         "accounts.User",
         null=True,
@@ -262,7 +268,14 @@ class TransferPT(TimeStampedModel):
 
     class Meta:
         db_table = "outbound_transfer_pt"
-        ordering = ["-generated_at"]
+        ordering = ["-created_at"]
+
+    @property
+    def generated_at(self) -> Any:
+        """When the PT was cut. The row is created once and never touched, so
+        that is simply when it was created — a second timestamp column would be
+        a copy guaranteed to agree."""
+        return self.created_at
 
     def __str__(self) -> str:
         return f"PT for {self.transfer}"
