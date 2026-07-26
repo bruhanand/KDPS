@@ -9,7 +9,8 @@ All amounts are integer paise. Debit is positive, credit is negative.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
@@ -27,13 +28,16 @@ from stockledger.models import (
 )
 
 if TYPE_CHECKING:
+    from accounts.models import User
     from outbound.models import (
         MarkDamaged,
         ReturnToVendor,
         StockAdjustment,
         StoreTransfer,
+        StoreTransferLine,
         TransferGapClosure,
         TransferGapClosureLine,
+        TransferReceiptException,
         VFlip,
         WriteOff,
     )
@@ -336,6 +340,35 @@ def brand_is_owned(brand_name: str) -> bool | None:
     return None if brand is None else bool(brand.ownership == Brand.Ownership.OWNED)
 
 
+@dataclass
+class _ValueByOwner:
+    """A lot's value split by whose stock it is — KDPS's own, or a brand's on SOR.
+
+    A named pair rather than a ``dict[bool, int]`` because ownership is a *three*
+    -state answer: ``brand_is_owned`` returns ``None`` when the masters cannot
+    say, and a bool-keyed dict invites ``bucket[bool(brand_is_owned(...))]``,
+    which files an unknown brand under "brand-owned" and posts a memo pair for
+    stock that may well be ours. ``add`` refuses the undecided case outright, so
+    the contract ``brand_is_owned`` documents — treat ``None`` as a reason to
+    refuse, never to assume — is enforced where the money is bucketed rather
+    than left to each caller to remember.
+    """
+
+    own: int = 0
+    sor: int = 0
+
+    def add(self, owned: bool | None, paise: int) -> None:
+        if owned is None:
+            raise OutboundPostingError(
+                "The books cannot say who owns these pieces, so their value "
+                "cannot be booked either way."
+            )
+        if owned:
+            self.own += paise
+        else:
+            self.sor += paise
+
+
 def resolve_line_identity(store_id: int, sku_code: str, season: str = "") -> dict[str, int | str]:
     """Merchandising dims + unit cost for one document line, read from the books.
 
@@ -469,7 +502,7 @@ def _resolve_extra_identity(transfer: StoreTransfer, barcode: str) -> dict[str, 
 
 
 def _validate_receive(
-    lines: dict[str, Any],
+    lines: dict[str, StoreTransferLine],
     good: dict[str, int],
     damaged: dict[str, int],
     extras: dict[str, int],
@@ -660,7 +693,7 @@ def post_transfer_receipt(
 def _post_receive_extras(
     transfer: StoreTransfer,
     extras: dict[str, int],
-    exceptions: list,
+    exceptions: list[TransferReceiptException],
     user=None,
 ) -> list[StockLedgerEntry]:
     """Bring the extras in — the priceable ones as stock, all of them on the record.
@@ -679,8 +712,7 @@ def _post_receive_extras(
 
     dest = transfer.destination_store
     entries: list[StockLedgerEntry] = []
-    #: Value by whose stock it is — KDPS's own, or a brand's held on SOR.
-    surplus: dict[bool, int] = {True: 0, False: 0}
+    surplus = _ValueByOwner()
     for i, (barcode, qty) in enumerate(sorted(extras.items()), start=1):
         identity = _resolve_extra_identity(transfer, barcode)
         owned = brand_is_owned(str(identity.get("brand", "")))
@@ -710,7 +742,7 @@ def _post_receive_extras(
                 posted_by=user,
             )
         )
-        surplus[owned] += qty * int(identity["unit_cost_paise"])
+        surplus.add(owned, qty * int(identity["unit_cost_paise"]))
 
     ref = PostingRef(
         doc_type="STO",
@@ -719,30 +751,54 @@ def _post_receive_extras(
         gstin=dest.gstin,
         posted_by=user,
     )
-    if surplus[True]:
+    if surplus.own:
         # KDPS's own stock appearing with no document behind it — a surplus, the
         # same shape a stocktake surplus posts.
-        post_entries(
+        _post_value_pair(
             ref,
-            [
-                dr(GLAccount.INVENTORY, surplus[True], memo="Receive: extra pieces accepted in"),
-                cr(GLAccount.SUSPENSE, surplus[True], memo="Receive: extra pieces contra"),
-            ],
-            posted_by=user,
+            GLAccount.INVENTORY,
+            GLAccount.SUSPENSE,
+            surplus.own,
+            "Receive: extra pieces accepted in",
+            "Receive: extra pieces contra",
+            user,
         )
-    if surplus[False]:
+    if surplus.sor:
         # The brand's stock, held on SOR/consignment: counted by quantity, value
         # off-book behind the memo pair, and NOT a payable — nothing has been
         # sold, so nothing is owed yet.
-        post_entries(
+        _post_value_pair(
             ref,
-            [
-                dr(GLAccount.SOR_STOCK, surplus[False], memo="Receive: extra brand-owned pieces"),
-                cr(GLAccount.SOR_CONTRA, surplus[False], memo="Receive: extra brand-owned contra"),
-            ],
-            posted_by=user,
+            GLAccount.SOR_STOCK,
+            GLAccount.SOR_CONTRA,
+            surplus.sor,
+            "Receive: extra brand-owned pieces",
+            "Receive: extra brand-owned contra",
+            user,
         )
     return entries
+
+
+def _post_value_pair(
+    ref: PostingRef,
+    debit: str,
+    credit: str,
+    paise: int,
+    debit_memo: str,
+    credit_memo: str,
+    user=None,
+) -> None:
+    """One balanced two-leg voucher — the shape every value posting here takes.
+
+    Written once so the four ownership branches in this module differ only in the
+    account pair and the memo, which is the whole of what actually differs
+    between them.
+    """
+    post_entries(
+        ref,
+        [dr(debit, paise, memo=debit_memo), cr(credit, paise, memo=credit_memo)],
+        posted_by=user,
+    )
 
 
 def _extra_note(unit_cost_paise: int, owned: bool | None) -> str:
@@ -788,8 +844,8 @@ class _ExtraLine:
 #
 # A short receive is honest but unfinished: the pieces nobody scanned in are
 # still in the in-transit bucket, and the transfer stays open in a gap state.
-# Somebody senior, at HO or the warehouse, has to say what became of them — and
-# the reason they give is not a note, it is the instruction to the ledger:
+# The Operations Head has to say what became of them — and the reason they give
+# is not a note, it is the instruction to the ledger:
 #
 #   found later      the pieces did turn up  → in-transit → destination stock
 #   wrongly scanned  they never left         → in-transit → back to the sender
@@ -821,7 +877,7 @@ def _ensure_gap_series(closure: TransferGapClosure) -> None:
     VoucherSeries.objects.get_or_create(fy=fy, store_code=store_code, doc_type=doc_type)
 
 
-def _refuse_self_closure(closure: TransferGapClosure, *people: Any) -> None:
+def _refuse_self_closure(closure: TransferGapClosure, *people: User | None) -> None:
     """The receiving store never closes its own gap (#71).
 
     Maker ≠ checker is not enough on its own: two people at the same store are
@@ -829,6 +885,11 @@ def _refuse_self_closure(closure: TransferGapClosure, *people: Any) -> None:
     to explain. So the rule is about *entitlement*, not identity — anybody whose
     scope includes the destination is barred from both ends of this decision, and
     it is checked in the posting layer so no caller can route around it.
+
+    ``None`` is accepted per person because a document made outside the API — a
+    shell, a management command — has no recorded maker, and an unapproved one no
+    checker. A missing person cannot be entitled to anything, so they are skipped
+    here; that they are *required* is ``require_approved``'s rule, not this one.
     """
     from masters.scoping import actionable_store_ids
 
@@ -839,8 +900,8 @@ def _refuse_self_closure(closure: TransferGapClosure, *people: Any) -> None:
         allowed = actionable_store_ids(person)
         if allowed is not None and destination_id in allowed:
             raise OutboundPostingError(
-                "A gap is closed at HO or the warehouse, never by the store that received "
-                "short — this decision has to sit with somebody outside "
+                "A gap is closed by the Operations Head at HO, never by the store that "
+                "received short — this decision has to sit with somebody outside "
                 f"{closure.transfer.destination_store.code}."
             )
 
@@ -887,7 +948,10 @@ def raise_gap_closure(
     from outbound.models import TransferGapClosure, TransferGapClosureLine
 
     if TransferGapClosure.objects.filter(transfer=transfer).exists():
-        raise OutboundPostingError("This transfer already has a gap closure.")
+        raise OutboundPostingError(
+            "This transfer already has a gap closure — correct the one it has "
+            "rather than raising a second."
+        )
 
     closure = TransferGapClosure(
         transfer=transfer,
@@ -900,6 +964,58 @@ def raise_gap_closure(
     closure.save()
     TransferGapClosureLine.objects.bulk_create(build_gap_closure_lines(closure))
     request_document_approval(closure, requested_by=user)
+    return closure
+
+
+@transaction.atomic
+def amend_gap_closure(
+    closure: TransferGapClosure, *, reason: str, note: str = "", user=None
+) -> TransferGapClosure:
+    """Correct a draft closure and ask again.
+
+    One gap gets one closure document — but until it posts, that document can be
+    wrong: the wrong reason chosen, a checker who rejected it, or numbers the
+    bucket has moved on from. Without a way back, any of those strands the short
+    pieces in transit for good, which is the dead end this slice exists to close.
+
+    The lines are rebuilt from the transfer rather than kept, so a correction
+    cannot carry a number the maker typed or one the bucket has moved past.
+
+    A decided closure goes back to the inbox, and that is the point rather than a
+    side effect: the checker who cleared "found later" agreed to pieces coming
+    back onto the books, and a maker who could then amend it to "lost in transit"
+    and post would have written stock off on somebody else's approval. The old
+    decision stays on the record beside the new request — the trail has to keep
+    saying a checker said no, or yes to something else, once. A request still
+    pending needs no second ask: it already points at this document.
+    """
+    from approvals.models import ApprovalStatus
+    from approvals.services import approval_for
+    from core.documents import DocStatus
+    from outbound.maker_checker import request_document_approval
+    from outbound.models import TransferGapClosureLine
+
+    if closure.docstatus != DocStatus.DRAFT:
+        raise OutboundPostingError("This gap closure has already been posted.")
+    # The same entitlement bar as raising one: correcting a closure decides what
+    # became of the pieces just as much as raising it did.
+    _refuse_self_closure(closure, user)
+
+    closure.reason = reason
+    closure.note = note
+    closure.save(update_fields=["reason", "note"])
+
+    rebuilt = build_gap_closure_lines(closure)
+    closure.lines.all().delete()
+    TransferGapClosureLine.objects.bulk_create(rebuilt)
+
+    # Not ``maker_checker.ask_again``: that is the rejection-only route, and an
+    # *approved* closure has to go back to the inbox too. Asking directly still
+    # carries the document's maker across, so a re-ask cannot move the author
+    # aside and let them clear their own correction.
+    live = approval_for(closure)
+    if live is not None and live.status != ApprovalStatus.PENDING:
+        request_document_approval(closure, requested_by=user)
     return closure
 
 
@@ -944,7 +1060,8 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
             raise OutboundPostingError(
                 f"{line.sku_code} no longer has {line.qty} piece(s) in transit "
                 f"(the bucket holds {held.get(line.sku_code, 0)}). "
-                "The gap moved since this closure was drafted — make it again."
+                "The gap moved since this closure was drafted — correct it, "
+                "which re-reads what is still owed."
             )
 
     _ensure_gap_series(closure)
@@ -954,7 +1071,7 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
     transfer_lines = {line.sku_code: line for line in transfer.lines.all()}
     entries: list[StockLedgerEntry] = []
     #: Value of the lost pieces, split by whose stock it was.
-    loss: dict[bool, int] = {True: 0, False: 0}
+    loss = _ValueByOwner()
 
     if closure.reason == GapReason.LOST_IN_TRANSIT:
         # Write-off is where ownership decides everything, so it is settled
@@ -966,7 +1083,7 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
             raise OutboundPostingError(
                 f"The books cannot say who owns {', '.join(unknown)} "
                 f"(brand not in the masters), so a loss cannot be booked against it. "
-                "Add the brand, then make this closure again."
+                "Add the brand, then correct this closure."
             )
 
     for i, line in enumerate(lines, start=1):
@@ -987,7 +1104,7 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
         transfer_line.save(update_fields=["qty_resolved"])
         if closure.reason == GapReason.LOST_IN_TRANSIT:
             # Nowhere to land — the value comes off the books instead.
-            loss[bool(brand_is_owned(line.brand))] += line.qty * line.unit_cost_paise
+            loss.add(brand_is_owned(line.brand), line.qty * line.unit_cost_paise)
             continue
         landing = (
             transfer.destination_store
@@ -1014,29 +1131,31 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
         gstin=transfer.source_store.gstin,
         posted_by=user,
     )
-    if loss[True]:
+    if loss.own:
         # Our own stock, gone: a loss, the same shape as a write-off.
-        post_entries(
+        _post_value_pair(
             ref,
-            [
-                dr(GLAccount.SUSPENSE, loss[True], memo="Gap closure: lost in transit"),
-                cr(GLAccount.INVENTORY, loss[True], memo="Gap closure: stock written off"),
-            ],
-            posted_by=user,
+            GLAccount.SUSPENSE,
+            GLAccount.INVENTORY,
+            loss.own,
+            "Gap closure: lost in transit",
+            "Gap closure: stock written off",
+            user,
         )
-    if loss[False]:
+    if loss.sor:
         # The brand's stock, gone. Its value was never inside INVENTORY, so the
         # only thing to undo is the SOR memo pair. Whether KDPS owes the brand
         # for a carton it lost is a settlement claim, not a stock posting — it
         # belongs to the payments design, and inventing a payable here would be
         # exactly the model-blind liability the 30 June review found.
-        post_entries(
+        _post_value_pair(
             ref,
-            [
-                dr(GLAccount.SOR_CONTRA, loss[False], memo="Gap closure: reverse SOR contra"),
-                cr(GLAccount.SOR_STOCK, loss[False], memo="Gap closure: brand stock lost"),
-            ],
-            posted_by=user,
+            GLAccount.SOR_CONTRA,
+            GLAccount.SOR_STOCK,
+            loss.sor,
+            "Gap closure: reverse SOR contra",
+            "Gap closure: brand stock lost",
+            user,
         )
 
     return entries

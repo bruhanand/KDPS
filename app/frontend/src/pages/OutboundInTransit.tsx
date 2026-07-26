@@ -71,12 +71,22 @@ function skuLabel(r: { design: string; color: string; size: string; brand: strin
 }
 
 // ---------------------------------------------------------------------------
-// Raise a closure
+// Raise a closure — or correct the one already there
 // ---------------------------------------------------------------------------
 
-function CloseGapForm({ transfer, onDone }: { transfer: TransferT; onDone: () => void }) {
-  const [reason, setReason] = useState("");
-  const [note, setNote] = useState("");
+/**
+ * One form for both, because they ask the identical question. Passing
+ * `correcting` switches it from raising a new closure to amending the draft:
+ * a transfer only ever has one closure document, and after a rejection
+ * correcting that document is the only way the pieces get out of transit.
+ */
+function CloseGapForm({ transfer, correcting, onDone }: {
+  transfer: TransferT;
+  correcting?: { id: number; reason: string; note: string };
+  onDone: () => void;
+}) {
+  const [reason, setReason] = useState(correcting?.reason ?? "");
+  const [note, setNote] = useState(correcting?.note ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -88,7 +98,11 @@ function CloseGapForm({ transfer, onDone }: { transfer: TransferT; onDone: () =>
     }
     setBusy(true);
     try {
-      await api.post(`/outbound/transfers/${transfer.id}/gap-closure`, { reason, note });
+      if (correcting) {
+        await api.patch(`/outbound/gap-closures/${correcting.id}`, { reason, note });
+      } else {
+        await api.post(`/outbound/transfers/${transfer.id}/gap-closure`, { reason, note });
+      }
       onDone();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -140,7 +154,8 @@ function CloseGapForm({ transfer, onDone }: { transfer: TransferT; onDone: () =>
         onClick={save}
         data-testid={`gap-submit-${transfer.id}`}
       >
-        <ShieldCheck size={15} /> {busy ? "Sending…" : "Send for approval"}
+        <ShieldCheck size={15} />{" "}
+        {busy ? "Sending…" : correcting ? "Correct and send again" : "Send for approval"}
       </button>
       <p className="lead" style={{ marginTop: 8, opacity: 0.75 }}>
         This does not close the gap yet. A second, senior person has to approve it from the{" "}
@@ -160,15 +175,16 @@ function GapCard({ transfer, canClose, onChanged }: {
   onChanged: () => void;
 }) {
   const [opening, setOpening] = useState(false);
+  const [correcting, setCorrecting] = useState(false);
   const closure = transfer.gap_closure;
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState("");
 
-  async function post() {
+  async function post(closureId: number) {
     setError("");
     setPosting(true);
     try {
-      await api.post(`/outbound/gap-closures/${closure!.id}/submit`);
+      await api.post(`/outbound/gap-closures/${closureId}/submit`);
       onChanged();
     } catch (e) {
       setError(apiErrorMessage(e));
@@ -216,7 +232,9 @@ function GapCard({ transfer, canClose, onChanged }: {
             Closure raised by <b>{closure.created_by_name || "—"}</b> — {closure.reason_label}.
             {isCleared(closure.approval)
               ? " Approved — post it to move the pieces."
-              : " Waiting for a second, senior person to approve it."}
+              : closure.approval?.status === "rejected"
+                ? " Turned down — correct it and send it again, or the pieces stay in transit."
+                : " Waiting for a second, senior person to approve it."}
           </p>
           {error && <div className="login-error" data-testid={`gap-post-error-${transfer.id}`}>{error}</div>}
           {canClose && isCleared(closure.approval) && (
@@ -224,12 +242,29 @@ function GapCard({ transfer, canClose, onChanged }: {
               className="btn btn-cta"
               style={{ marginTop: 8 }}
               disabled={posting}
-              onClick={post}
+              onClick={() => post(closure.id)}
               data-testid={`gap-post-${transfer.id}`}
             >
               <ShieldCheck size={15} /> {posting ? "Posting…" : "Post the closure"}
             </button>
           )}
+          {canClose && !isCleared(closure.approval) &&
+            (correcting ? (
+              <CloseGapForm
+                transfer={transfer}
+                correcting={{ id: closure.id, reason: closure.reason, note: closure.note || "" }}
+                onDone={onChanged}
+              />
+            ) : (
+              <button
+                className="btn"
+                style={{ marginTop: 8 }}
+                onClick={() => setCorrecting(true)}
+                data-testid={`gap-correct-${transfer.id}`}
+              >
+                <AlertTriangle size={15} /> Correct this closure
+              </button>
+            ))}
         </div>
       ) : canClose ? (
         opening ? (
@@ -246,7 +281,7 @@ function GapCard({ transfer, canClose, onChanged }: {
         )
       ) : (
         <p className="lead" style={{ marginTop: 12, opacity: 0.75 }}>
-          Only HO or the warehouse can close a gap.
+          Only the Operations Head can close a gap.
         </p>
       )}
     </div>

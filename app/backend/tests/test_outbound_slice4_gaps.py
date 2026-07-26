@@ -884,6 +884,75 @@ def test_one_gap_gets_one_closure(gap_scaffold):
     )
     assert resp.status_code == 400
     assert "already has a gap closure" in str(resp.data)
+    assert "correct the one it has" in str(resp.data)
+
+
+def _reject(s, closure_id, reason="Wrong reason — those came back to us.") -> None:
+    closure = TransferGapClosure.objects.get(pk=closure_id)
+    approval = Approval.objects.filter(
+        object_id=closure.pk, kind="gap_closure", status=ApprovalStatus.PENDING
+    ).get()
+    resp = _client(s["checker"]).post(
+        f"/api/approvals/{approval.pk}/decide",
+        {"action": "reject", "reason": reason},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.data
+
+
+def _amend(s, closure_id, reason, note="", actor=None):
+    return _client(actor or s["maker"]).patch(
+        f"/api/outbound/gap-closures/{closure_id}",
+        {"reason": reason, "note": note},
+        format="json",
+    )
+
+
+def _closure_lines(closure_id):
+    return TransferGapClosure.objects.get(pk=closure_id).lines.all()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_rejected_closure_can_be_corrected_and_posted(gap_scaffold):
+    """A rejection must not strand the pieces.
+
+    One gap still gets one closure document, but while it is a draft that
+    document can be corrected — otherwise a single wrong reason code leaves the
+    shortfall in the in-transit bucket with no route out, which is the dead end
+    #71 exists to close.
+    """
+    s = gap_scaffold
+    transfer = _received_short(s, plan=(("GB001", 4),), scanned=3)
+    closure_id = _raise_closure(s, transfer, "lost_in_transit")
+    _reject(s, closure_id)
+
+    resp = _amend(s, closure_id, "found_later", note="Turned up in the back room.")
+    assert resp.status_code == 200, resp.data
+
+    closure = TransferGapClosure.objects.get(pk=closure_id)
+    assert closure.reason == "found_later"
+    assert closure.note == "Turned up in the back room."
+    assert closure.docstatus == DocStatus.DRAFT
+    # The correction asks again, and the rejection stays on the record.
+    assert (
+        Approval.objects.filter(
+            object_id=closure.pk, kind="gap_closure", status=ApprovalStatus.REJECTED
+        ).count()
+        == 1
+    )
+    pending = Approval.objects.filter(
+        object_id=closure.pk, kind="gap_closure", status=ApprovalStatus.PENDING
+    ).get()
+    assert pending.made_by_id == s["maker"].id
+
+    # And the corrected reason is the one that posts.
+    _approve(s, closure_id)
+    assert (
+        _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit").status_code
+        == 200
+    )
+    assert not InTransitStock.objects.filter(transfer_doc_number=transfer.doc_number).exists()
+    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 4
 
 
 @pytest.mark.django_db(transaction=True)
@@ -915,7 +984,85 @@ def test_a_stale_closure_is_refused_rather_than_draining_the_wrong_amount(gap_sc
     resp = _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit")
     assert resp.status_code == 400
     assert "moved since this closure was drafted" in str(resp.data)
+    assert "correct it" in str(resp.data)
     assert TransferGapClosure.objects.get(pk=closure_id).docstatus == DocStatus.DRAFT
+
+
+@pytest.mark.django_db(transaction=True)
+def test_correcting_an_approved_closure_sends_it_back_to_the_checker(gap_scaffold):
+    """A correction is never cleared by the old decision.
+
+    The checker approved "found later" — pieces coming back onto the books. If
+    the maker could then amend it to "lost in transit" and post, they would have
+    written stock off on the strength of an approval for something else.
+    """
+    s = gap_scaffold
+    transfer = _received_short(s, plan=(("GB001", 4),), scanned=3)
+    closure_id = _raise_closure(s, transfer, "found_later")
+    _approve(s, closure_id)
+
+    assert _amend(s, closure_id, "lost_in_transit").status_code == 200
+
+    resp = _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit")
+    assert resp.status_code == 400
+    assert "Waiting for approval" in str(resp.data)
+    # Nothing moved on the strength of the stale approval.
+    assert InTransitStock.objects.get(transfer_doc_number=transfer.doc_number).qty == 1
+
+    _approve(s, closure_id)
+    assert (
+        _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit").status_code
+        == 200
+    )
+    # And it is the corrected reason that posted. "Found later" would have put
+    # the missing piece on the shelf beside the three that arrived; written off,
+    # it never lands — and the bucket is empty either way.
+    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 3
+    assert not InTransitStock.objects.filter(transfer_doc_number=transfer.doc_number).exists()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_corrected_closure_re_reads_the_remainder_rather_than_keeping_it(gap_scaffold):
+    """Lines are rebuilt from the transfer, so a correction cannot carry a
+    number the maker typed or a number that has since moved on."""
+    s = gap_scaffold
+    transfer = _received_short(s, plan=(("GB001", 4), ("GB002", 3)), scanned=3)
+    closure_id = _raise_closure(s, transfer, "found_later")
+    before = {(line.sku_code, line.qty) for line in _closure_lines(closure_id)}
+
+    assert _amend(s, closure_id, "wrongly_scanned").status_code == 200
+
+    assert {(line.sku_code, line.qty) for line in _closure_lines(closure_id)} == before
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_posted_closure_cannot_be_corrected(gap_scaffold):
+    s = gap_scaffold
+    transfer = _received_short(s)
+    closure_id = _raise_closure(s, transfer, "found_later")
+    _approve(s, closure_id)
+    assert (
+        _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit").status_code
+        == 200
+    )
+
+    resp = _amend(s, closure_id, "lost_in_transit")
+    assert resp.status_code == 400
+    assert "already been posted" in str(resp.data)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_senior_at_the_receiving_store_cannot_correct_the_closure_either(gap_scaffold):
+    """The entitlement bar covers correcting, not just raising and approving —
+    otherwise the receiving store gets its say through the back door."""
+    s = gap_scaffold
+    transfer = _received_short(s)
+    closure_id = _raise_closure(s, transfer, "found_later")
+
+    resp = _amend(s, closure_id, "lost_in_transit", actor=s["ho_at_store"])
+    assert resp.status_code == 400
+    assert "never by the store that received short" in str(resp.data)
+    assert TransferGapClosure.objects.get(pk=closure_id).reason == "found_later"
 
 
 # ---------------------------------------------------------------------------

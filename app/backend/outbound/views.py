@@ -41,6 +41,7 @@ from outbound.permissions import (
 )
 from outbound.posting import (
     OutboundPostingError,
+    amend_gap_closure,
     mark_damaged,
     post_adjustment,
     post_gap_closure,
@@ -335,8 +336,13 @@ def _gap_closure_for_read(pk):
 
 
 class GapClosureDetailView(generics.RetrieveAPIView):
+    #: Reading a closure is open like outbound's other reads; correcting one is a
+    #: write, and carries the same senior gate as raising and posting it.
     permission_classes = [IsAuthenticated]
     serializer_class = GapClosureReadSerializer
+
+    def get_permissions(self):
+        return [CanCloseTransferGap()] if self.request.method == "PATCH" else [IsAuthenticated()]
 
     def get_queryset(self):
         return TransferGapClosure.objects.select_related(
@@ -348,6 +354,30 @@ class GapClosureDetailView(generics.RetrieveAPIView):
         ).prefetch_related(
             "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
         )
+
+    def patch(self, request, *args, **kwargs):
+        """Correct a draft closure — a new reason, a new note, lines re-read.
+
+        The way back from a rejection or a stale draft, so one wrong reason code
+        cannot strand the pieces in transit for good.
+        """
+        closure = self.get_object()
+        enforce_store_scope(request.user, closure.store_id)
+
+        ser = GapClosureInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            amend_gap_closure(
+                closure,
+                reason=ser.validated_data["reason"],
+                note=ser.validated_data["note"],
+                user=request.user,
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(GapClosureReadSerializer(_gap_closure_for_read(closure.pk)).data)
 
 
 class GapClosureSubmitView(APIView):
@@ -369,12 +399,8 @@ class GapClosureSubmitView(APIView):
 
         enforce_store_scope(request.user, closure.store_id)
 
-        if closure.docstatus != DocStatus.DRAFT:
-            return Response(
-                {"error": "Only drafts can be submitted"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
+        # No draft check here: ``post_gap_closure`` makes it, and a second copy
+        # would only be a second place for the two to disagree.
         try:
             post_gap_closure(closure, user=request.user)
         except OutboundPostingError as e:

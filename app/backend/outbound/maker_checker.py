@@ -65,13 +65,19 @@ class ApprovalKind:
 _COUNT_APPROVERS = roles_with_capability("stock_count", CAP_APPROVE)
 _STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
 
-#: Who may clear a transfer gap. Read from the ``transfer`` section rather than
-#: the old hand-kept admin list #94 deleted: that list named ``it_admin`` and
-#: ``accounts``, whom the sheet gives only *view* on transfers, and left out the
-#: brand manager it gives *approve*. The Operations Head (``ho_ops``) the design
-#: names is in the sheet's answer, which is the point — the seniority comes from
-#: the ratified matrix, and the entitlement rule that bars the receiving store
-#: is a separate gate in ``posting._refuse_self_closure``.
+#: Who may clear a transfer gap: the roles at ``transfer: approve``, read from the
+#: same place every other approver list is, rather than the hand-kept admin list
+#: #94 deleted (which named ``it_admin`` and ``accounts``, whom the sheet gives
+#: only *view* on transfers, and omitted the brand manager it gives *approve*).
+#:
+#: One caveat worth stating: ``ho_ops`` — the Operations Head the design actually
+#: names for this decision — holds its ``approve`` through ``DERIVED_ACCESS``,
+#: which ``rbac_matrix`` is explicit is *not* the ratified sheet and may be
+#: retuned as data. So the one role the design names is the one whose seat here is
+#: least ratified. That is an argument for giving Operations Head a sheet row, not
+#: for hand-listing roles again. Seniority is all this expresses; the entitlement
+#: rule barring anyone tied to the receiving store is a separate gate in
+#: ``posting._refuse_self_closure``.
 _GAP_APPROVERS = roles_with_capability("transfer", CAP_APPROVE)
 
 #: The one role the band adds on top of the approvers — a declared exception,

@@ -777,8 +777,8 @@ export function TransferDetailPage() {
           <p className="lead">
             <b>{t.qty_in_transit} piece(s)</b> were sent but never scanned in. They stay in the
             in-transit bucket on this transfer — {t.source_store_code} is answerable for them — until
-            a senior at HO or the warehouse closes the gap with a reason. The receiving store cannot
-            close it.{" "}
+            the Operations Head closes the gap with a reason. The receiving store cannot close
+            it.{" "}
             {t.gap_closure ? (
               <>A closure is already waiting for approval.</>
             ) : (
