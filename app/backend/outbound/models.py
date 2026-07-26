@@ -399,7 +399,7 @@ class TransferGapClosureLine(TimeStampedModel):
 
 
 # ---------------------------------------------------------------------------
-# 1b. Mark Damaged (global action → quarantine)
+# 1b. Mark Damaged (global action → a flag, and on confirmation → quarantine)
 # ---------------------------------------------------------------------------
 
 
@@ -473,9 +473,10 @@ class MarkDamaged(Document):
 
 
 class MarkDamagedLine(TimeStampedModel):
-    """One SKU line on a mark-damaged document — a (barcode × qty) going to
-    quarantine. Dims + unit cost are enriched from the source stock at post
-    time, never typed (Rule 6)."""
+    """One SKU line on a mark-damaged document — a (barcode × qty) reported
+    damaged, and bound for quarantine once the report is confirmed (#138). Dims +
+    unit cost are enriched from the source stock at post time, never typed
+    (Rule 6)."""
 
     mark = models.ForeignKey(MarkDamaged, on_delete=models.CASCADE, related_name="lines")
     sku_code = models.CharField(max_length=64)

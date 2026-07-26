@@ -445,7 +445,8 @@ class TransferReceiveInputSerializer(serializers.Serializer):
     """Receiving, with the three exceptions the carton actually produces (#71).
 
     ``scans`` are the pieces that arrived intact, ``damaged`` the ones that
-    arrived broken (quarantine, never the shop floor), ``extras`` the ones that
+    arrived broken (a damage document is raised for them — quarantine if the
+    receiver may confirm it, otherwise a flag, #138), ``extras`` the ones that
     arrived without being sent. ``notes`` is the receiver's sentence about the
     shortfall — the field the old payload dropped.
 

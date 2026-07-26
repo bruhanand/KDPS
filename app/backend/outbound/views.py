@@ -179,10 +179,13 @@ class TransferReceiveView(APIView):
     """POST: Receive a dispatched transfer from scanned lines only (#68, #71).
 
     Payload: ``{"scans": [...], "damaged": [...], "extras": [...], "notes": ""}``
-    — each list of ``{"barcode", "qty"}``. Intact pieces move in-transit →
-    destination; damaged ones go in-transit → quarantine; extras (not on the
-    transfer) are accepted in with a flag; a short receive leaves the remainder
-    in-transit and opens a gap. The notes reach the server and are stored.
+    — each list of ``{"barcode", "qty"}``. Everything that turned up moves
+    in-transit → destination, broken pieces included, and a damage document is
+    raised for those: quarantined on the spot if the receiver holds the
+    confirming rung, otherwise flagged and left in stock (#138). Extras (not on
+    the transfer) are accepted in with a flag; a short receive leaves the
+    remainder in-transit and opens a gap. The notes reach the server and are
+    stored.
     """
 
     permission_classes = [CanWriteTransfer]
@@ -453,14 +456,21 @@ class ScanLookupView(APIView):
 
 
 # ---------------------------------------------------------------------------
-# Mark damaged (global action → quarantine)
+# Mark damaged (global action → a flag, and on confirmation → quarantine)
 # ---------------------------------------------------------------------------
 
 
 class MarkDamagedView(generics.ListCreateAPIView):
-    """GET: list mark-damaged documents. POST: the global mark-damaged action —
-    create a DMG document from scanned pieces and post it in one call, moving
-    each piece from free-to-sell into quarantine at the store.
+    """GET: list mark-damaged documents — ``?docstatus=0`` for the reports still
+    waiting on someone. POST: the global mark-damaged action — create a DMG
+    document from scanned pieces.
+
+    Whether that document *posts* depends on who is asking (#138). A store
+    person is reporting damage: it stays a draft in the approvals inbox and the
+    pieces stay sellable until a warehouse or HO person confirms it. Someone who
+    holds the confirming rung reports and confirms in the one call, so the pieces
+    move from free-to-sell into quarantine here. ``flag_status`` on the response
+    says which happened.
 
     Any outbound writer (including store-level roles) may mark damaged from any
     stock view — damage is caught everywhere. store_staff is read-only.

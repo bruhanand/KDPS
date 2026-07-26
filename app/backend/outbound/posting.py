@@ -1202,14 +1202,15 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
 
 
 # ---------------------------------------------------------------------------
-# 1b. Mark damaged — global action moving a piece to quarantine
+# 1b. Mark damaged — global action; a confirmed one moves a piece to quarantine
 # ---------------------------------------------------------------------------
 #
-# A mark-damaged document posts, under its own DMG voucher number, two legs at
-# the store: damage_out (−qty, drops free-to-sell in StockOnHand) + quarantine_in
-# (+qty, into the QuarantineStock bucket). The piece never leaves the store and
-# stays owned — it is just no longer sellable. No GL: the two legs net to zero,
-# so total inventory value is unchanged (the same shape as the in-transit pair).
+# A mark-damaged document posts *once confirmed* (#138), under its own DMG
+# voucher number, two legs at the store: damage_out (−qty, drops free-to-sell in
+# StockOnHand) + quarantine_in (+qty, into the QuarantineStock bucket). The piece
+# never leaves the store and stays owned — it is just no longer sellable. No GL:
+# the two legs net to zero, so total inventory value is unchanged (the same shape
+# as the in-transit pair).
 
 # line_no bands — one DMG doc number carries both leg types.
 LINE_NO_DAMAGE_OUT = 0
