@@ -7,7 +7,10 @@ system-wide by construction rather than by each module remembering them:
 * a document is never approved by the person who made it;
 * a reject always carries a reason;
 * a decision is made once — a decided approval is closed;
-* a wired document does not post until its approval says approved;
+* a wired document does not post until its approval says approved — and where
+  the ruling says the *approval* is what posts, the owning module's registered
+  callback does it (``approvals.hooks``), so approvals still never learns what
+  it is approving;
 * how big a document must be before a checker is asked, and who that checker
   may be, is read from a policy row — data the business can retune (Rule 12).
 """
@@ -20,6 +23,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from approvals.hooks import run_on_approved
 from approvals.models import CLEARED_STATUSES, Approval, ApprovalPolicy, ApprovalStatus
 from masters.scoping import scope_by_store
 
@@ -161,11 +165,13 @@ def record_no_approval_needed(
     value_paise: int = 0,
     reason: str,
 ) -> Approval:
-    """Record that ``subject`` fell within its policy tolerance.
+    """Record that ``subject`` needed no second person, and why.
 
-    The document may post with nobody else's say-so, but "nobody was asked" is
-    itself a fact worth keeping: the row carries who made it and which rule let
-    it through, so a small adjustment is auditable exactly like a large one.
+    Two rules reach here: it fell within its policy tolerance (too little at
+    stake to ask), or the person raising it already held the rung this family
+    would have asked. Either way "nobody was asked" is itself a fact worth
+    keeping: the row carries who made it and which rule let it through, so a
+    small adjustment is auditable exactly like a large one.
     """
     return _create(
         subject,
@@ -240,7 +246,26 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
     locked.decided_at = timezone.now()
     locked.reason = reason
     locked.save(update_fields=["status", "decided_by", "decided_at", "reason", "updated_at"])
+
+    if locked.status == ApprovalStatus.APPROVED:
+        # Where the ruling says the *approval* is what posts, this is where it
+        # posts — inside the decision's transaction. See ``approvals.hooks``.
+        run_on_approved(locked.subject, actor=actor)
     return locked
+
+
+def holds_approver_role(user: Any, approver_roles: Any) -> bool:
+    """Does ``user``'s role sit on a list of approver roles?
+
+    The one spelling of "senior enough", so superuser, a user with no role and
+    an empty list are reasoned about once. Used to ask whether someone may
+    decide an existing request (``can_decide``) and, in ``outbound``, whether a
+    maker already holds the rung the family would have asked (#138).
+    """
+    if getattr(user, "is_superuser", False):
+        return True
+    role_code = getattr(getattr(user, "role", None), "code", "")
+    return bool(role_code) and role_code in (approver_roles or [])
 
 
 def can_decide(approval: Approval, user: Any) -> bool:
@@ -257,10 +282,7 @@ def can_decide(approval: Approval, user: Any) -> bool:
     that hands ``decide`` a row it fetched some other way — a shell, a
     management command — is responsible for scoping it first.
     """
-    if getattr(user, "is_superuser", False):
-        return True
-    role_code = getattr(getattr(user, "role", None), "code", "")
-    return bool(role_code) and role_code in (approval.approver_roles or [])
+    return holds_approver_role(user, approval.approver_roles)
 
 
 # ---------------------------------------------------------------------------

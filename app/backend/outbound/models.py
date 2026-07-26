@@ -59,12 +59,14 @@ class ReceiptExceptionKind(models.TextChoices):
     with a quantity: **short** (sent but never scanned in — stays in-transit on
     the open transfer), **extra** (a piece arrived that the transfer never sent
     — accepted with a flag, never silently swallowed) and **damaged** (arrived
-    broken — scanned straight into quarantine, never onto the shop floor).
+    broken — raised as a damage document, which quarantines it if the receiver
+    holds the confirming rung and otherwise flags it for a warehouse or HO
+    person, #138).
     """
 
     SHORT = "short", "Short — sent but not scanned in"
     EXTRA = "extra", "Extra / wrong item — not on this transfer"
-    DAMAGED = "damaged", "Damaged on arrival — into quarantine"
+    DAMAGED = "damaged", "Damaged on arrival — raised as a damage flag"
 
 
 class GapReason(models.TextChoices):
@@ -397,7 +399,7 @@ class TransferGapClosureLine(TimeStampedModel):
 
 
 # ---------------------------------------------------------------------------
-# 1b. Mark Damaged (global action → quarantine)
+# 1b. Mark Damaged (global action → a flag, and on confirmation → quarantine)
 # ---------------------------------------------------------------------------
 
 
@@ -406,7 +408,12 @@ class MarkDamaged(Document):
     a document, Rule 10 — every action has an actor).
 
     Damage is caught anywhere stock is visible — receiving, on the shelf, during
-    counting, at billing — and moves the piece into quarantine there and then.
+    counting, at billing — and it takes **two rungs** to move a piece out of
+    sellable stock (#138, Anand's ruling of 26 July): a store person *reports*
+    damage and the document stays a draft, so nothing moves and the piece is
+    still on the shelf; a warehouse or HO person's *confirmation* is what posts
+    it. Someone who holds the confirming rung does both in one action.
+
     Posting writes a ``damage_out`` leg (free-to-sell drops) + a ``quarantine_in``
     leg (into the quarantine bucket) at the same store; the piece stays owned,
     it is just no longer sellable. No GL: an internal reclassification, value
@@ -423,11 +430,39 @@ class MarkDamaged(Document):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="damage_marks_created",
+        help_text="Who reported the damage — kept for good, on the piece (#138).",
     )
+    confirmed_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="damage_marks_confirmed",
+        help_text="Stamped by the approvals inbox on confirm — never typed (#138).",
+    )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_mark_damaged"
         ordering = ["-created_at"]
+
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with — which pieces the
+        confirmer is being asked about.
+
+        "1 line · 3 pcs" is not a damage report anyone can act on: confirming
+        takes stock off the shop floor, and the person deciding has to see what
+        it is. The first piece names the row and the rest are counted, so the
+        line stays short whatever the report's size.
+        """
+        lines = list(self.lines.all())
+        if not lines:
+            return "Damage"
+        first = lines[0]
+        described = " ".join(filter(None, [first.sku_code, first.design, first.color, first.size]))
+        more = f" +{len(lines) - 1} more" if len(lines) > 1 else ""
+        return f"Damage · {described}{more}"
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
@@ -438,9 +473,10 @@ class MarkDamaged(Document):
 
 
 class MarkDamagedLine(TimeStampedModel):
-    """One SKU line on a mark-damaged document — a (barcode × qty) going to
-    quarantine. Dims + unit cost are enriched from the source stock at post
-    time, never typed (Rule 6)."""
+    """One SKU line on a mark-damaged document — a (barcode × qty) reported
+    damaged, and bound for quarantine once the report is confirmed (#138). Dims +
+    unit cost are enriched from the source stock at post time, never typed
+    (Rule 6)."""
 
     mark = models.ForeignKey(MarkDamaged, on_delete=models.CASCADE, related_name="lines")
     sku_code = models.CharField(max_length=64)

@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 from django.utils import timezone
 
+from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
 from outbound.maker_checker import request_document_approval, require_approved
@@ -165,13 +166,13 @@ def _write_stock_entry(
 
 # line_no bands — one doc number carries every leg type this transfer will ever
 # write, so each type gets its own band (dispatch writes OUT+TRANSIT_IN, receive
-# TRANSIT_OUT+IN and, for the exceptions, QUARANTINE_IN + the extras' TRANSFER_IN;
-# a gap closure drains what is left).
+# TRANSIT_OUT+IN and the extras' TRANSFER_IN; a gap closure drains what is left).
+# Damage on arrival writes nothing under the transfer's number any more: it goes
+# through a DMG document of its own (#138), which carries its own legs.
 LINE_NO_TRANSFER_OUT = 0
 LINE_NO_TRANSIT_IN = 500
 LINE_NO_TRANSFER_IN = 1000
 LINE_NO_TRANSIT_OUT = 1500
-LINE_NO_QUARANTINE_ON_ARRIVAL = 2000
 LINE_NO_EXTRA_IN = 2500
 LINE_NO_GAP_DRAIN = 3000
 
@@ -555,8 +556,11 @@ def post_transfer_receipt(
     Four things come off the scan screen and all four are structured:
 
     * ``scans`` — pieces that arrived intact: in-transit → destination, sellable.
-    * ``damaged`` — pieces that arrived broken: in-transit → **quarantine** at the
-      destination, so a damaged arrival never reaches the shop floor as sellable.
+    * ``damaged`` — pieces that arrived broken. They come in like the rest, and
+      a **damage document** is raised for them (#138): the warehouse receiving
+      its own carton holds the confirming rung, so they go on to quarantine here
+      and now; a store person's word is a flag, so they wait in the store's
+      stock until a warehouse or HO person confirms it.
     * ``extras`` — pieces that arrived but the transfer never sent. Accepted in
       with a flag where the books can price them (a surplus, so it posts a
       balanced Dr INVENTORY / Cr SUSPENSE voucher like a stocktake surplus);
@@ -601,6 +605,9 @@ def post_transfer_receipt(
     dest = transfer.destination_store
     entries: list[StockLedgerEntry] = []
     exceptions: list[TransferReceiptException] = []
+    # The damaged subset of ``exceptions``, same objects — they all take the same
+    # note once the damage document below says where the decision got to.
+    broken: list[TransferReceiptException] = []
     has_shortfall = False
 
     for i, (barcode, line) in enumerate(sorted(lines.items()), start=1):
@@ -637,43 +644,40 @@ def post_transfer_receipt(
                 posted_by=user,
             )
         )
-        if qty_good:
-            # …the intact pieces INTO the destination (ready for sale)
-            entries.append(
-                _write_stock_entry(
-                    store=dest,
-                    gstin=dest.gstin,
-                    line=line,
-                    qty=qty_good,
-                    kind="transfer_in",
-                    doc_number=transfer.doc_number,
-                    line_no=LINE_NO_TRANSFER_IN + i,
-                    posted_by=user,
-                )
+        # …and everything that turned up INTO the destination. Broken pieces
+        # arrive too: taking them off the floor is a damage decision now, and
+        # the receiver may not be senior enough to make it (#138).
+        entries.append(
+            _write_stock_entry(
+                store=dest,
+                gstin=dest.gstin,
+                line=line,
+                qty=arrived,
+                kind="transfer_in",
+                doc_number=transfer.doc_number,
+                line_no=LINE_NO_TRANSFER_IN + i,
+                posted_by=user,
             )
+        )
         if qty_damaged:
-            # …and the broken ones straight into quarantine, never onto the floor
-            entries.append(
-                _write_quarantine_entry(
-                    store=dest,
-                    gstin=dest.gstin,
-                    line=line,
-                    qty=qty_damaged,
-                    doc_number=transfer.doc_number,
-                    line_no=LINE_NO_QUARANTINE_ON_ARRIVAL + i,
-                    posted_by=user,
-                )
+            broken_row = TransferReceiptException(
+                kind=ReceiptExceptionKind.DAMAGED,
+                sku_code=barcode,
+                **merch_dims(line),
+                qty=qty_damaged,
+                unit_cost_paise=line.unit_cost_paise,
             )
-            exceptions.append(
-                TransferReceiptException(
-                    kind=ReceiptExceptionKind.DAMAGED,
-                    sku_code=barcode,
-                    **merch_dims(line),
-                    qty=qty_damaged,
-                    unit_cost_paise=line.unit_cost_paise,
-                    note="Quarantined on arrival — not sellable.",
-                )
-            )
+            exceptions.append(broken_row)
+            broken.append(broken_row)
+
+    if broken:
+        # The whole receipt's breakages go through one damage door, so the note
+        # saying where that got to is the same on every one of these rows. The
+        # loop kept hold of them rather than leaving them to be picked back out
+        # of ``exceptions`` by kind — it already knew which ones were damaged.
+        note = _mark_arrivals_damaged(transfer, damaged, user)
+        for exception in broken:
+            exception.note = note
 
     entries += _post_receive_extras(transfer, extras, exceptions, user)
 
@@ -688,6 +692,35 @@ def post_transfer_receipt(
     TransferReceiptException.objects.bulk_create(exceptions)
 
     return entries
+
+
+def _mark_arrivals_damaged(
+    transfer: StoreTransfer, damaged: dict[str, int], user: User | None = None
+) -> str:
+    """Send the broken arrivals through the one damage door (#138), and say on
+    the receipt where that got to.
+
+    Receiving used to write them straight into quarantine, which is a decision
+    the receiver may not hold: a store person reports damage, a warehouse or HO
+    person confirms it. So a DMG document is raised for them here — it posts on
+    the spot if the receiver holds the confirming rung, and otherwise waits in
+    the approvals inbox while the pieces sit in the destination's stock, flagged.
+
+    Either way the receipt's own damaged rows still say what arrived broken;
+    they are receipt history, and the returned note says where the decision got
+    to.
+    """
+    from core.documents import DocStatus
+
+    mark = mark_damaged(
+        transfer.destination_store,
+        damaged,
+        user=user,
+        note=f"Damaged on arrival — {transfer.doc_number}",
+    )
+    if mark.docstatus == DocStatus.SUBMITTED:
+        return f"Damaged on arrival — quarantined ({mark.doc_number})."
+    return "Damaged on arrival — flagged, waiting to be confirmed before it leaves stock."
 
 
 def _post_receive_extras(
@@ -1175,14 +1208,15 @@ def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedger
 
 
 # ---------------------------------------------------------------------------
-# 1b. Mark damaged — global action moving a piece to quarantine
+# 1b. Mark damaged — global action; a confirmed one moves a piece to quarantine
 # ---------------------------------------------------------------------------
 #
-# A mark-damaged document posts, under its own DMG voucher number, two legs at
-# the store: damage_out (−qty, drops free-to-sell in StockOnHand) + quarantine_in
-# (+qty, into the QuarantineStock bucket). The piece never leaves the store and
-# stays owned — it is just no longer sellable. No GL: the two legs net to zero,
-# so total inventory value is unchanged (the same shape as the in-transit pair).
+# A mark-damaged document posts *once confirmed* (#138), under its own DMG
+# voucher number, two legs at the store: damage_out (−qty, drops free-to-sell in
+# StockOnHand) + quarantine_in (+qty, into the QuarantineStock bucket). The piece
+# never leaves the store and stays owned — it is just no longer sellable. No GL:
+# the two legs net to zero, so total inventory value is unchanged (the same shape
+# as the in-transit pair).
 
 # line_no bands — one DMG doc number carries both leg types.
 LINE_NO_DAMAGE_OUT = 0
@@ -1245,10 +1279,15 @@ def _write_quarantine_entry(
 @transaction.atomic
 def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> MarkDamaged:
     """The global mark-damaged action, end to end (Rule 1 — every event is a
-    document): create a DMG document, enrich each scanned piece from the store's
-    stock (dims + frozen cost, never typed), and post it — moving the pieces from
-    free-to-sell into quarantine at the store, all in one transaction so a bad
-    scan rolls the whole thing back (no orphan draft).
+    document): create a DMG document and enrich each scanned piece from the
+    store's stock (dims + frozen cost, never typed).
+
+    Whether it *posts* depends on who is doing it (#138). A store person is
+    reporting damage, so the document stays a draft in the approvals inbox and
+    the piece stays on the shelf; a warehouse or HO person holds the confirming
+    rung, so their own document clears itself and posts here and now. Either
+    way it is one transaction, so a bad scan rolls the whole thing back and
+    leaves no orphan draft.
     """
     from outbound.models import MarkDamaged, MarkDamagedLine
 
@@ -1259,8 +1298,29 @@ def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> Mar
     for barcode, qty in sorted(scans.items()):
         identity = _resolve_scan_identity(store.id, barcode)
         MarkDamagedLine.objects.create(mark=mark, sku_code=barcode, qty=qty, **identity)
-    post_mark_damaged(mark, user=user)
+
+    approval = request_document_approval(mark, requested_by=user)
+    if approval is not None and approval.status in CLEARED_STATUSES:
+        post_mark_damaged(mark, user=user)
     return mark
+
+
+def confirm_mark_damaged(mark: MarkDamaged, *, actor: User | None) -> None:
+    """The warehouse's confirmation, which is what posts a damage flag (#138).
+
+    Registered with the approvals inbox in ``outbound.apps`` and called from
+    inside the decision's transaction, so the stock movement and the decision
+    commit together — or roll back together, which is what happens when the
+    flagged piece was sold while it waited.
+    """
+    from approvals.services import ApprovalError
+
+    try:
+        post_mark_damaged(mark, user=actor)
+    except OutboundPostingError as exc:
+        # Re-raised in the inbox's own language so the decide endpoint answers
+        # 400 with the reason, rather than 500 with a traceback.
+        raise ApprovalError(str(exc)) from exc
 
 
 @transaction.atomic
@@ -1268,13 +1328,21 @@ def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
     """Post a mark-damaged document: move each line's pieces from free-to-sell
     into quarantine at the store.
 
+    Refuses unless the flag has been confirmed by someone who holds the rung
+    (``require_approved``) — the ledger seam behind #138, so no caller, API or
+    shell, can turn a store's report into a stock movement.
+
     Blocks (Rule 5's dangerous-exception) if the store has too little sellable
-    stock of a piece — you cannot quarantine stock that isn't there. Stock move
+    stock of a piece — you cannot quarantine stock that isn't there, which is
+    also what happens when a flagged piece is sold while it waits. Stock move
     only, no GL.
     """
     lines = list(mark.lines.all())
     if not lines:
         raise OutboundPostingError("Mark-damaged has no lines.")
+
+    # Also what stamps ``confirmed_by`` — on every route in, not just this one.
+    require_approved(mark)  # a store report is not a stock movement (#138)
 
     # Row-lock + validate sellable stock at the store before minting a number.
     for line in lines:

@@ -140,6 +140,7 @@ APPROVAL_SECTION = {
     "adjustment": "stock_count",
     "vflip": "stock",
     "gap_closure": "transfer",
+    "damage": "return_to_brand",
 }
 
 
@@ -226,7 +227,18 @@ def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
     for kind in KINDS.values():
         section = APPROVAL_SECTION[kind.code]
         can_approve = set(roles_with_capability(section, CAP_APPROVE))
-        assert set(kind.approver_roles) == can_approve, kind.code
+        # Nobody the matrix trusts is ever dropped…
+        assert can_approve <= set(kind.approver_roles), kind.code
+        # …and exactly one kind adds anyone: damage flags, whose confirmer holds
+        # the same `return_to_brand: operate` rung as the store person who
+        # raises them (#138), so the ladder cannot tell the two apart. Named per
+        # kind, so no *other* family can quietly inherit the widening.
+        allowed_extra = (
+            REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles
+            if kind.code == "damage"
+            else frozenset()
+        )
+        assert set(kind.approver_roles) - can_approve <= allowed_extra, kind.code
         # The band may add the in-charge, and nothing else — that one addition
         # is the registered exception, so it is named here rather than assumed.
         extra = set(kind.band_roles) - can_approve
@@ -361,10 +373,11 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 
 
 # --- 3. The declared exceptions -------------------------------------------
-#: The four gates the ladder provably cannot express. A change to this set is a
+#: The five gates the ladder provably cannot express. A change to this set is a
 #: decision, which is exactly what the test is here to force.
 EXPECTED_EXCEPTIONS = {
     "outbound.adjustment_band_in_charge",
+    "outbound.damage_confirmers",
     "ptmapper.post_and_reverse_pt",
     "ptmapper.mapping_stewardship",
     "masters.writes",

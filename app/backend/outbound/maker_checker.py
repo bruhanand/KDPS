@@ -7,8 +7,13 @@ The rules themselves (maker ≠ checker, reason on reject, one decision) live in
 ``approvals.services`` and are shared with every other module that wires in.
 
 Wired: write-offs, V-flips, stock adjustments — the three that used to stamp
-their own creator as approver — plus transfer gap closures (#71), which reach
-the inbox the same way as everything else.
+their own creator as approver — plus transfer gap closures (#71) and damage
+flags (#138), which reach the inbox the same way as everything else.
+
+Damage is the one family where the second person is asked for on a *rung*
+rather than on a value: a store person may report damage but not move the
+stock, so their document waits, while a warehouse or HO person's own document
+clears itself (``self_clearing``).
 """
 
 from __future__ import annotations
@@ -27,12 +32,13 @@ from approvals.services import (
     ApprovalRequired,
     approval_for,
     assert_approved,
+    holds_approver_role,
     policy_for,
     record_no_approval_needed,
     request_approval,
 )
 from core.documents import DocStatus
-from outbound.models import StockAdjustment, TransferGapClosure, VFlip, WriteOff
+from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VFlip, WriteOff
 
 
 @dataclass(frozen=True)
@@ -56,6 +62,12 @@ class ApprovalKind:
     band_paise: int = 0
     #: Who may approve within the band (in-charge + HO).
     band_roles: tuple[str, ...] = ()
+    #: Whether this family asks for a second person on the **rung** instead of
+    #: on the value: a maker who already holds the approving rung clears their
+    #: own document, and everyone else waits however little is at stake. Who
+    #: holds it stays one list, read from the live policy row (Rule 12), never
+    #: frozen a second time here. The tolerance and band below do not apply.
+    self_clearing: bool = False
 
 
 #: Who may clear a correction, and who may clear an ownership flip — the roles
@@ -79,6 +91,40 @@ _STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
 #: rule barring anyone tied to the receiving store is a separate gate in
 #: ``posting._refuse_self_closure``.
 _GAP_APPROVERS = roles_with_capability("transfer", CAP_APPROVE)
+
+#: Who may confirm a damage flag (#138). The ladder gives the ratified half —
+#: the roles the sheet puts at ``return_to_brand: approve`` or above (Owner, and
+#: Admin at ``manage``) — and cannot give the other half: the sheet puts the
+#: warehouse and the store person on the *same* rung, ``return_to_brand:
+#: operate``, and separates them only in the cell's words ("Create & execute" vs
+#: "Mark damage only"). Anand's 26 July ruling turns that wording into a real
+#: gate, so the warehouse is declared here rather than promoted to ``approve``,
+#: which would hand it every other return-to-brand decision as well.
+#:
+#: ``ho_ops`` — the HO seat the ruling names alongside the warehouse — is
+#: deliberately *not* here: the matrix gives it ``return_to_brand: view``, and a
+#: viewer must not move stock. The seat that carries HO on this section is the
+#: Owner. If the business wants Operations Head confirming damage, the answer is
+#: the ``ApprovalPolicy`` row (data, Rule 12) or a sheet row for HO Ops — not a
+#: wider list here.
+_DAMAGE_CONFIRMERS = tuple(
+    sorted(
+        {
+            *roles_with_capability("return_to_brand", CAP_APPROVE),
+            *declare_role_list(
+                "outbound.damage_confirmers",
+                ("warehouse",),
+                reason=(
+                    "A store person reports damage; a warehouse or HO person confirms it "
+                    "and that confirmation is what posts the piece to quarantine (#138). "
+                    "Both hold `return_to_brand: operate` on the ratified sheet — the "
+                    "ladder has no rung between 'may report' and 'may post', and widening "
+                    "the warehouse to `approve` would also hand it RTV approval."
+                ),
+            ),
+        }
+    )
+)
 
 #: The one role the band adds on top of the approvers — a declared exception,
 #: because the ladder cannot express it.
@@ -124,6 +170,13 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     # about entitlement rather than role, so it lives in
     # ``posting._refuse_self_closure`` — this table only says who is senior.
     TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _GAP_APPROVERS, "approved_by"),
+    # No tolerance: a flag is a report about a piece, and how much that piece is
+    # worth has nothing to do with whether the store may take it off the shelf
+    # on its own say-so. The rung does — hence ``self_clearing``, which lets a
+    # warehouse or HO person flag and confirm in the one action.
+    MarkDamaged: ApprovalKind(
+        "damage", "Damage flag", _DAMAGE_CONFIRMERS, "confirmed_by", self_clearing=True
+    ),
 }
 
 
@@ -220,6 +273,11 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     if subject := getattr(doc, "approval_subject", ""):
         title = f"{subject} · {title}"
     policy = _policy(kind)
+    # Against the same list the request would have gone to, so retuning the
+    # policy row moves both halves together (Rule 12).
+    holds_the_rung = kind.self_clearing and holds_approver_role(
+        requested_by, policy.approver_roles_for(value)
+    )
     common = {
         "kind": kind.code,
         "kind_label": kind.label,
@@ -232,6 +290,23 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
         "store": doc.store,
         "value_paise": value,
     }
+
+    if kind.self_clearing:
+        # A rung family answers on the rung alone, and never falls through to
+        # the value question below. A tolerance is business data (Rule 12), so
+        # if it could clear this too, someone retuning ₹0 to ₹500 on the policy
+        # row would quietly hand every store person the posting rung the ruling
+        # took away from them — the one thing this family exists to prevent.
+        if holds_the_rung:
+            return record_no_approval_needed(
+                doc,
+                reason=(
+                    f"Raised by someone who may decide a {kind.label.lower()} themselves — "
+                    "posted and logged, nobody else asked."
+                ),
+                **common,
+            )
+        return request_approval(doc, approver_roles=policy.approver_roles_for(value), **common)
 
     if not policy.needs_checker(value):
         return record_no_approval_needed(
@@ -301,9 +376,15 @@ def require_approved(doc: Any) -> Approval | None:
     except ApprovalRequired as exc:
         raise OutboundPostingError(str(exc)) from exc
 
+    approver = approval.decided_by
+    if approver is None and kind.self_clearing and approval.status == ApprovalStatus.NOT_REQUIRED:
+        # Nobody else was asked because the asker already held the deciding
+        # rung, so the inbox has no decider to read — they are it (#138).
+        approver = approval.requested_by
+
     # The document is still a draft here (posting hasn't flipped it), so its own
     # approver column is writable — and after this it is frozen with the rest.
-    if getattr(doc, f"{kind.approver_field}_id", None) != approval.decided_by_id:
-        setattr(doc, kind.approver_field, approval.decided_by)
+    if getattr(doc, f"{kind.approver_field}_id", None) != getattr(approver, "pk", None):
+        setattr(doc, kind.approver_field, approver)
         doc.save(update_fields=[kind.approver_field])
     return approval

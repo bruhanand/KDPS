@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, Repeat, ScrollText, ShieldAlert, X } from "lucide-react";
 
+import { fmtApprovalWhen } from "../components/approval";
+import type { ApprovalT } from "../components/approval";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -51,6 +53,18 @@ interface QuarT {
   rows: QuarRowT[];
 }
 
+/** A damage report and where it has got to (#138). A store's report is a flag:
+ *  the pieces stay sellable until a warehouse or HO person confirms it. */
+interface DamageFlagT {
+  id: number;
+  flag_status: "flagged" | "confirmed" | "rejected";
+  store_code: string;
+  created_by_name: string;
+  approval: ApprovalT | null;
+  created_at: string;
+  lines: { sku_code: string; design: string; color: string; size: string; brand: string; qty: number }[];
+}
+
 const TABS: { key: Group; label: string }[] = [
   { key: "sku", label: "By SKU" },
   { key: "brand", label: "By Brand" },
@@ -85,6 +99,11 @@ export default function StockOnHand() {
   // empties the other dropdown.
   const [quarOpts, setQuarOpts] = useState<{ stores: [string, string][]; brands: string[] }>({ stores: [], brands: [] });
 
+  // Damage reports that have not become quarantine yet — the reporting store's
+  // own view of "I said so, and it hasn't been actioned" (#138).
+  const [openFlags, setOpenFlags] = useState<DamageFlagT[]>([]);
+  const [flagsErr, setFlagsErr] = useState("");
+
   // Mark-damaged modal state (pre-commit adjustment before posting).
   const [dmgRow, setDmgRow] = useState<RowT | null>(null);
   const [dmgQty, setDmgQty] = useState(1);
@@ -113,6 +132,23 @@ export default function StockOnHand() {
         .finally(() => setLoading(false));
     }
   }, [group, qStore, qBrand, reloadKey, skuFilter, brandFilter]);
+
+  // The reports still waiting on someone — drafts, which is flagged and
+  // rejected both; a confirmed one has posted and shows up as quarantine
+  // instead. Asked for by docstatus so the confirmed history never travels.
+  // Only the store's own are visible to it (the list is store-scoped
+  // server-side), so this is exactly "what I reported that has not been
+  // actioned yet".
+  // A failure here is said out loud rather than swallowed: an empty list and a
+  // list that would not load look identical on screen, and the store would read
+  // the silence as "my report was actioned".
+  useEffect(() => {
+    if (group !== "quarantine") return;
+    setFlagsErr("");
+    api.get("/outbound/mark-damaged?docstatus=0")
+      .then((r) => setOpenFlags(r.data as DamageFlagT[]))
+      .catch((e) => { setOpenFlags([]); setFlagsErr(apiErrorMessage(e)); });
+  }, [group, reloadKey]);
 
   // Refresh the filter option lists from the full (unfiltered) quarantine set
   // whenever we enter the tab or the data changes.
@@ -162,11 +198,16 @@ export default function StockOnHand() {
     setDmgErr("");
     setDmgBusy(true);
     try {
-      await api.post("/outbound/mark-damaged", {
+      const { data: mark } = await api.post<DamageFlagT>("/outbound/mark-damaged", {
         store: dmgRow.store_id,
         scans: [{ barcode: dmgRow.sku_code, qty }],
       });
-      setFlash(`Moved ${qty} × ${dmgRow.sku_code} into quarantine at ${dmgRow.store_code}.`);
+      setFlash(
+        mark.flag_status === "confirmed"
+          ? `Moved ${qty} × ${dmgRow.sku_code} into quarantine at ${dmgRow.store_code}.`
+          : `Reported ${qty} × ${dmgRow.sku_code} as damaged at ${dmgRow.store_code}. `
+            + "They stay sellable until the warehouse confirms it.",
+      );
       setDmgRow(null);
       setReloadKey((k) => k + 1);
     } catch (e) {
@@ -283,6 +324,56 @@ export default function StockOnHand() {
         </div>
       )}
 
+      {isQuar && !loading && !error && flagsErr && (
+        <div className="warn-note" style={{ marginTop: 16 }} data-testid="damage-flags-error">
+          Could not load the damage reports waiting to be confirmed — {flagsErr}
+        </div>
+      )}
+
+      {/* A sibling of the quarantine table, not one of its states: a store can
+          have reports waiting whether or not anything has reached quarantine. */}
+      {isQuar && !loading && !error && openFlags.length > 0 && (
+        <div className="card section-card" style={{ marginTop: 16 }} data-testid="damage-flags">
+          <h3 className="h3" style={{ marginBottom: 4 }}>
+            <ShieldAlert size={16} style={{ color: "var(--rust)", verticalAlign: "-2px", marginRight: 6 }} />
+            Damage reported, not in quarantine
+          </h3>
+          <p className="stat-label" style={{ marginBottom: 12 }}>
+            These pieces are still sellable — either waiting for a warehouse or HO person to
+            confirm the report, or looked at and sent back as sellable.
+          </p>
+          <div className="table-wrap kdps-scroll">
+            <table className="data kdps-table" data-testid="damage-flags-table">
+              <thead>
+                <tr>
+                  <th>Barcode (SKU)</th><th>Brand</th><th>Design</th><th>Colour</th><th>Size</th>
+                  <th>Store</th><th className="num">Units</th>
+                  <th>Reported by</th><th>When</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openFlags.flatMap((f) =>
+                  f.lines.map((l, j) => (
+                    <tr key={`${f.id}-${j}`} data-testid={`damage-flag-${f.id}-${j}`}>
+                      <td className="mono">{l.sku_code}</td><td>{l.brand}</td><td>{l.design}</td>
+                      <td>{l.color}</td><td>{l.size}</td><td>{f.store_code}</td>
+                      <td className="num" style={{ fontWeight: 700 }}>{l.qty}</td>
+                      <td>{f.created_by_name || "—"}</td>
+                      <td>{fmtApprovalWhen(f.created_at)}</td>
+                      <td>
+                        {f.flag_status === "rejected"
+                          ? `Not damaged — ${f.approval?.reason ?? ""}`
+                          : "Waiting to be confirmed"}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : error ? (
@@ -292,7 +383,7 @@ export default function StockOnHand() {
           <div className="card section-card" data-testid="quarantine-empty">
             {qStore || qBrand
               ? "No quarantined stock matches these filters."
-              : "Nothing in quarantine. Use “Mark damaged” on any SKU to move a piece here."}
+              : "Nothing in quarantine. “Mark damaged” on any SKU reports a piece; a warehouse or HO person's confirmation moves it here."}
           </div>
         ) : (
           <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
@@ -369,7 +460,7 @@ export default function StockOnHand() {
                         className="btn btn-sm"
                         onClick={() => openDamage(r)}
                         data-testid={`mark-damaged-${i}`}
-                        title="Move a piece to quarantine"
+                        title="Report a piece as damaged"
                       >
                         <ShieldAlert size={14} /> Mark damaged
                       </button>
@@ -400,7 +491,7 @@ export default function StockOnHand() {
             </p>
 
             <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 8 }}>
-              <span className="stat-label">Move to quarantine</span>
+              <span className="stat-label">Pieces damaged</span>
               <div className="qty-stepper" data-testid="mark-damaged-stepper">
                 <button type="button" onClick={() => bumpQty(-1)} disabled={dmgBusy || dmgQty <= 1} data-testid="mark-damaged-dec" aria-label="Decrease">
                   <Minus size={16} />
@@ -424,7 +515,9 @@ export default function StockOnHand() {
             </div>
 
             <p className="stat-label" style={{ marginBottom: 18 }}>
-              These pieces stay owned and at the store — they are just no longer free-to-sell.
+              These pieces stay owned and at the store. A store's report is checked by the
+              warehouse before they stop being free-to-sell; a warehouse or HO person's takes
+              them out of sellable stock at once.
             </p>
 
             {dmgErr && <div className="warn-note" data-testid="mark-damaged-error">{dmgErr}</div>}

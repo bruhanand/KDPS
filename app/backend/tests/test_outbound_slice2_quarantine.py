@@ -3,6 +3,9 @@
 Seams (agreed in the PRD):
 - **API seam**: the global mark-damaged action through the DRF view — a store +
   scanned pieces → a posted DMG document; the quarantine read filter; scoping.
+  Amended by #138: it posts *here* because the actor holds the confirming rung
+  (warehouse). A store person's mark-damaged is a flag that posts nothing, which
+  is ``test_outbound_damage_flag.py``'s subject.
 - **Stock-ledger seam**: mark-damaged moves the piece out of free-to-sell
   (``StockOnHand`` drops) and into the quarantine bucket (``QuarantineStock``)
   at the same store — never in no location, value conserved. The projections

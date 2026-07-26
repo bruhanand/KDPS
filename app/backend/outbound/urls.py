@@ -66,7 +66,7 @@ urlpatterns = [
         name="gap-closure-request-approval",
     ),
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
-    # Mark damaged (global action → quarantine)
+    # Mark damaged (global action → a flag, and on confirmation → quarantine)
     path("mark-damaged", MarkDamagedView.as_view(), name="mark-damaged"),
     # Returns to Vendor (RTV)
     path("rtvs", RTVListCreateView.as_view(), name="rtv-list"),

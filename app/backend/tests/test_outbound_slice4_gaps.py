@@ -12,6 +12,8 @@ Seams (agreed in the PRD, issue #67):
 
 Rulings exercised here:
 - Damaged pieces count as **received** (they arrived), so they leave in-transit.
+- Amended by #138: a broken arrival is now a damage *document* — quarantined on
+  the spot if the receiver may confirm it, otherwise flagged and left in stock.
 - An extra the books can price is accepted into stock as a surplus; one they
   cannot is recorded and deliberately NOT posted (#103 — never at zero).
 - The way out of a shortfall is the closure, not a second receive.
@@ -31,6 +33,7 @@ from core.documents import DocStatus, VoucherSeries
 from core.gl import GLAccount, GLEntry
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import (
+    MarkDamaged,
     StoreTransfer,
     StoreTransferLine,
     TransferGapClosure,
@@ -81,6 +84,9 @@ def gap_scaffold(db):
     maker = _user("gap_maker", ho)
     checker = _user("gap_checker", owner)
     receiver = _user("gap_receiver", manager, ScopeType.STORE, [store])
+    # Someone who holds the damage-confirming rung and receives at the store
+    # too — the one-step case for a broken arrival (#138).
+    wh_receiver = _user("gap_wh_receiver", make_role("warehouse", "Warehouse (gap test)"))
     # A senior whose entitlement happens to include the receiving store — the
     # person the self-closure rule must still refuse.
     ho_at_store = _user("gap_ho_at_store", ho, ScopeType.STORE, [store, warehouse])
@@ -194,7 +200,7 @@ def gap_scaffold(db):
     )
 
     for code in ["GP-WH", "GP-A"]:
-        for doc_type in ["STO", "GAP"]:
+        for doc_type in ["STO", "GAP", "DMG"]:
             VoucherSeries.objects.create(
                 fy=FY, store_code=code, doc_type=doc_type, prefix=f"{code}/{doc_type}/{FY}/"
             )
@@ -206,6 +212,7 @@ def gap_scaffold(db):
         "maker": maker,
         "checker": checker,
         "receiver": receiver,
+        "wh_receiver": wh_receiver,
         "ho_at_store": ho_at_store,
     }
 
@@ -318,7 +325,10 @@ def test_a_shortfall_cannot_be_fixed_by_receiving_twice(gap_scaffold):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_damaged_on_arrival_lands_in_quarantine_not_sellable_stock(gap_scaffold):
+def test_a_store_receiver_flags_a_broken_arrival_rather_than_quarantining_it(gap_scaffold):
+    """Amended by #138. The store person receiving the carton may report the
+    broken piece but not take it off the books, so it arrives like the rest and
+    waits, flagged, for a warehouse or HO person."""
     s = gap_scaffold
     transfer = _dispatched(s, plan=(("GB001", 4),))
 
@@ -336,23 +346,61 @@ def test_damaged_on_arrival_lands_in_quarantine_not_sellable_stock(gap_scaffold)
     assert resp.data["qty_in_transit"] == 0
     assert TransferReceipt.objects.get(transfer=transfer).receipt_status == "complete"
 
-    # Three sellable at the store, one in quarantine at the store.
-    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 3
-    quarantine = QuarantineStock.objects.get(store=s["store"], sku_code="GB001")
-    assert quarantine.qty == 1
-    assert quarantine.value_paise == 45000
-    # …written as a quarantine leg, never as free-to-sell stock.
-    assert (
-        StockLedgerEntry.objects.get(doc_number=transfer.doc_number, kind="quarantine_in").qty == 1
-    )
+    # All four are at the store, and nothing is in quarantine yet.
+    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 4
+    assert not QuarantineStock.objects.exists()
+    assert not StockLedgerEntry.objects.filter(kind="quarantine_in").exists()
+
     # The whole carton left the bucket: four pieces, one drain leg.
     assert not InTransitStock.objects.filter(transfer_doc_number=transfer.doc_number).exists()
     assert (
         StockLedgerEntry.objects.get(doc_number=transfer.doc_number, kind="transit_out").qty == -4
     )
 
+    # The broken piece is on the receipt *and* in the confirmer's inbox.
     damaged = _exceptions(transfer)["damaged"]
     assert (damaged[0].sku_code, damaged[0].qty) == ("GB001", 1)
+    assert "waiting to be confirmed" in damaged[0].note
+    mark = MarkDamaged.objects.get(store=s["store"])
+    assert mark.docstatus == DocStatus.DRAFT
+    assert transfer.doc_number in mark.note
+    assert Approval.objects.get(kind="damage", object_id=mark.pk).status == ApprovalStatus.PENDING
+    assert _total_qty("GB001") == 10
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_warehouse_receiver_quarantines_a_broken_arrival_in_one_step(gap_scaffold):
+    """The other half of #138: a receiver who holds the confirming rung reports
+    and confirms in the one action, so the piece never sits on the floor."""
+    s = gap_scaffold
+    transfer = _dispatched(s, plan=(("GB001", 4),))
+
+    resp = _client(s["wh_receiver"]).post(
+        f"/api/outbound/transfers/{transfer.pk}/receive",
+        {
+            "scans": [{"barcode": "GB001", "qty": 3}],
+            "damaged": [{"barcode": "GB001", "qty": 1}],
+        },
+        format="json",
+    )
+    assert resp.status_code == 200, resp.data
+
+    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 3
+    quarantine = QuarantineStock.objects.get(store=s["store"], sku_code="GB001")
+    assert quarantine.qty == 1
+    assert quarantine.value_paise == 45000
+
+    # The legs are the damage document's, not the transfer's.
+    mark = MarkDamaged.objects.get(store=s["store"])
+    assert mark.docstatus == DocStatus.SUBMITTED
+    assert mark.confirmed_by_id == s["wh_receiver"].id
+    assert StockLedgerEntry.objects.get(doc_number=mark.doc_number, kind="quarantine_in").qty == 1
+    assert StockLedgerEntry.objects.get(doc_number=mark.doc_number, kind="damage_out").qty == -1
+    assert not StockLedgerEntry.objects.filter(
+        doc_number=transfer.doc_number, kind="quarantine_in"
+    ).exists()
+
+    assert _exceptions(transfer)["damaged"][0].note.startswith("Damaged on arrival — quarantined")
     assert _total_qty("GB001") == 10
 
 
@@ -362,7 +410,7 @@ def test_damaged_and_short_together(gap_scaffold):
     s = gap_scaffold
     transfer = _dispatched(s, plan=(("GB001", 4),))
 
-    resp = _client(s["receiver"]).post(
+    resp = _client(s["wh_receiver"]).post(
         f"/api/outbound/transfers/{transfer.pk}/receive",
         {
             "scans": [{"barcode": "GB001", "qty": 2}],
@@ -1128,12 +1176,17 @@ def test_a_senior_at_the_receiving_store_cannot_correct_the_closure_either(gap_s
 @pytest.mark.django_db(transaction=True)
 def test_rebuild_reproduces_every_projection_after_exceptions_and_closure(gap_scaffold):
     """Damaged, extra and a closed gap all in one transfer — then wipe the three
-    caches and rebuild them from the append-only ledger."""
+    caches and rebuild them from the append-only ledger.
+
+    Received by someone who holds the damage-confirming rung, so the broken
+    piece reaches quarantine within this receipt and the rebuild has all three
+    projections to reproduce (#138).
+    """
     from django.core.management import call_command
 
     s = gap_scaffold
     transfer = _dispatched(s, plan=(("GB001", 4),))
-    resp = _client(s["receiver"]).post(
+    resp = _client(s["wh_receiver"]).post(
         f"/api/outbound/transfers/{transfer.pk}/receive",
         {
             "scans": [{"barcode": "GB001", "qty": 2}],
