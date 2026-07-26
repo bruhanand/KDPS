@@ -117,9 +117,10 @@ class TransferListCreateView(generics.ListCreateAPIView):
         # are (`enforce_store_scope`). The search below therefore narrows the
         # whole network's transfers rather than the caller's own. Search does not
         # widen anything (it is a filter on the same base set a store person can
-        # already scroll), but the gate itself is missing and is tracked
-        # separately; fixing it here would be an access-control change inside a
-        # search ticket, and the detail endpoint below needs the same gate.
+        # already scroll), but the gate itself is missing: issue #141, which also
+        # covers the detail endpoint below and the rest of outbound, and carries
+        # the open question a fix has to answer first (a brand-scoped caller has
+        # no store to gate on, and a transfer carries no brand).
         qs = StoreTransfer.objects.select_related(
             "source_store", "destination_store", "created_by"
         ).prefetch_related("lines")

@@ -13,7 +13,7 @@ Four properties are asserted here and none of them is about implementation:
   ``visible_store_ids``: on stock, where the list is genuinely store-scoped, a
   term that matches a row at another store answers with nothing rather than with
   that row. Bookings and transfers are not store-scoped on read yet (#101 owns
-  the first; the second is tracked separately), so there the same criterion is
+  the first, #141 the second), so there the same criterion is
   asserted in the only form that is honest today — a search returns a subset of
   what that caller already sees — and starts biting once the gates land;
 * **a scan resolves** — a barcode typed by a wedge scanner into the stock box
@@ -371,7 +371,7 @@ def test_transfers_search_stays_inside_the_caller_scope(scaffold):
     The transfer list is **not** store-scoped on read today — only transfer
     writes are — so the ceiling is currently the whole network and this passes
     without proving much, exactly as the same criterion does on Bookings until
-    #101 lands. Read scope for transfers is tracked separately; when it lands,
+    #101 lands. Read scope for transfers is issue #141; when it lands,
     the assertion below starts biting on its own, and the leak-shaped test
     (searching another store's voucher number answers with nothing) belongs with
     that change rather than here.
