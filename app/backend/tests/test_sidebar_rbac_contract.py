@@ -1,9 +1,11 @@
-"""SIDEBAR RBAC contract — the authenticated-user payload (issue #85).
+"""RBAC contract - the authenticated-user payload (issues #85, #130).
 
 Hermetic (`db` fixture), so it runs in CI's `pytest tests` step. It proves the
-server, not the client, decides what each of the six roles may see and do:
+server, not the client, decides what each of the nine roles may see and do:
 
   · each role's `/me` payload carries exactly its matrix sections + capabilities;
+  · every seeded role is answered by the one ratified table - no second source;
+  · what `seed_foundation` stores on a Role row is that same table;
   · a user with no role / no units gets nothing (fail-closed);
   · a section API called by the wrong role is denied server-side;
   · retuning access is a data edit — no code release (Rule 12).
@@ -13,11 +15,14 @@ from __future__ import annotations
 
 import pytest
 from _creds import TEST_PASSWORD
+from django.core.management import call_command
 from rest_framework.test import APIClient
 
 from accounts import rbac_matrix
+from accounts.management.commands.seed_foundation import ROLES as SEED_ROLES
 from accounts.models import Role, User
 from accounts.rbac_matrix import (
+    KNOWN_ROLE_CODES,
     MATRIX,
     ROLE_PERSONA,
     section_access_for,
@@ -26,6 +31,8 @@ from accounts.sections import CAP_NONE, SECTION_CODES
 from masters.models import Gstin, LegalEntity, Store
 
 # One seeded role code per persona (store_person → store_staff for the test).
+# All eight rows of the ratified table, covering all nine seeded roles - the two
+# store codes share the "Store Person" row.
 PERSONA_ROLE_CODE = {
     "owner": "owner",
     "store_person": "store_staff",
@@ -33,6 +40,8 @@ PERSONA_ROLE_CODE = {
     "brand_manager": "brand_manager",
     "accounts": "accounts",
     "admin": "it_admin",
+    "ho_ops": "ho_ops",
+    "data_steward": "data_steward",
 }
 
 
@@ -100,8 +109,9 @@ def test_sheet_specific_cells_are_honoured(db):
     }
     # Admin has NO money (Sheet-1 note 2, kept).
     assert "money" not in caps["admin"]
-    # Store person can't book, can't reach Setup, but operates Sell.
-    assert "booking" not in caps["store_person"]
+    # Store person reads bookings without placing one, can't reach Setup, and
+    # operates Sell.
+    assert caps["store_person"]["booking"] == "view"
     assert "setup" not in caps["store_person"]
     assert caps["store_person"]["sell"] == "operate"
     # Warehouse can't sell.
@@ -159,14 +169,101 @@ def test_wrong_role_denied_on_section_api(db):
     assert _client(owner).get("/api/auth/admin/roles").status_code == 200
 
 
-def test_derived_roles_do_not_gain_rbac_admin(db):
-    """Users & Roles admin needs setup:manage — held only by Owner/Admin. The
-    legacy non-persona roles must stay below it, so seeding them can't silently
-    escalate anyone onto the admin APIs (issue #85 review: data_steward 403)."""
+def test_the_two_ho_roles_do_not_gain_rbac_admin(db):
+    """Users & Roles admin needs setup:manage - held only by Owner/Admin. The two
+    head-office rows must stay below it, so seeding them can't silently escalate
+    anyone onto the admin APIs (issue #85 review: data_steward 403). Ratifying
+    the rows (#130) changed their status, not their power."""
     for code in ("data_steward", "ho_ops"):
         user = _make_user(f"d_{code}", _make_role(code))
         assert _client(user).get("/api/auth/admin/roles").status_code == 403, code
         assert section_access_for(code)["setup"]["capability"] != "manage", code
+
+
+# --- One table, nine roles (#130) ------------------------------------------
+def test_every_seeded_role_is_a_ratified_row(db):
+    """No role is answered by a fallback, and no ratified row is unreachable.
+
+    `ho_ops` and `data_steward` used to live in a `DERIVED_ACCESS` block that
+    disclaimed itself as "NOT the RBAC matrix", so a role's access could only be
+    read by first knowing which of two structures it came from. Ratified 26 Jul
+    2026: one table, and the seed and the table agree on which roles exist.
+    """
+    seeded = {spec["code"] for spec in SEED_ROLES}
+    assert seeded == set(KNOWN_ROLE_CODES) == set(ROLE_PERSONA)
+    assert len(seeded) == 9
+
+    for code in KNOWN_ROLE_CODES:
+        access = section_access_for(code)
+        assert set(access) == set(SECTION_CODES), code
+        # Every cell traces to the persona row (or the one declared override) -
+        # nothing resolves through an absent section any more.
+        persona_cells = MATRIX[ROLE_PERSONA[code]]
+        assert set(persona_cells) == set(SECTION_CODES), code
+
+
+def test_the_ratified_ho_rows_reach_the_live_payload(db):
+    """The rows that were derived now answer like any other - through /me."""
+    caps = {
+        code: _client(_make_user(f"r_{code}", _make_role(code)))
+        .get("/api/auth/me")
+        .json()["capabilities"]
+        for code in ("ho_ops", "data_steward")
+    }
+    # HO Operations books goods and approves movement, but never inwards one
+    # (the buyer must not confirm receipt of their own order) and holds no money.
+    assert caps["ho_ops"]["booking"] == "operate"
+    assert caps["ho_ops"]["receive_goods"] == "view"
+    assert caps["ho_ops"]["transfer"] == "approve"
+    assert caps["ho_ops"]["stock_count"] == "approve"
+    assert "money" not in caps["ho_ops"]
+    assert "setup" not in caps["ho_ops"]
+    # The Data Steward owns masters and reads stock; it posts nothing.
+    assert caps["data_steward"]["setup"] == "operate"
+    assert caps["data_steward"]["stock"] == "view"
+    for shut in ("money", "sell", "booking", "receive_goods", "transfer"):
+        assert shut not in caps["data_steward"], shut
+
+
+def test_the_store_person_can_see_bookings_but_not_place_one(db):
+    """The ratified correction to the sheet's "No" (PRD #104, 26 Jul 2026).
+
+    A store plans space and staff against the goods headed to it, so the section
+    opens - read-only. Placing one stays at `operate`, which the store does not
+    hold. *Which* bookings it sees is record scope, and #101's work.
+    """
+    for code in ("store_staff", "store_manager"):
+        body = _client(_make_user(f"b_{code}", _make_role(code))).get("/api/auth/me").json()
+        assert body["capabilities"]["booking"] == "view", code
+        assert [s["code"] for s in body["sections"] if s["code"] == "booking"] == ["booking"]
+
+
+def test_the_client_copy_of_the_table_is_current():
+    """The PWA's test fixtures are generated from this table, not transcribed.
+
+    The live menu is already the server's answer, but the client suite used to
+    assert against nine hand-copied personas - so a cell could be corrected here
+    and the client would keep passing against the old wording. This fails the
+    moment the generated file falls behind, and names the command that fixes it.
+    """
+    from accounts.management.commands.dump_rbac_matrix import TARGET, rendered
+
+    assert TARGET.exists(), f"{TARGET} is missing - run manage.py dump_rbac_matrix"
+    assert TARGET.read_text() == rendered(), (
+        f"{TARGET.name} is stale - run `python manage.py dump_rbac_matrix` and commit it"
+    )
+
+
+def test_seeding_stores_exactly_the_table(db):
+    """The stored answer is the table's - the seed writes no opinion of its own.
+
+    `Role.section_access` is what every gate actually reads, so a seed that
+    drifted from the table would make the table decorative.
+    """
+    call_command("seed_foundation")
+
+    for role in Role.objects.filter(code__in=KNOWN_ROLE_CODES):
+        assert role.section_access == section_access_for(role.code), role.code
 
 
 # --- Access is data, not code (Rule 12) -----------------------------------
