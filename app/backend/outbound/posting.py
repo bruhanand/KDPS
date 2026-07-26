@@ -605,6 +605,9 @@ def post_transfer_receipt(
     dest = transfer.destination_store
     entries: list[StockLedgerEntry] = []
     exceptions: list[TransferReceiptException] = []
+    # The damaged subset of ``exceptions``, same objects — they all take the same
+    # note once the damage document below says where the decision got to.
+    broken: list[TransferReceiptException] = []
     has_shortfall = False
 
     for i, (barcode, line) in enumerate(sorted(lines.items()), start=1):
@@ -657,21 +660,24 @@ def post_transfer_receipt(
             )
         )
         if qty_damaged:
-            exceptions.append(
-                TransferReceiptException(
-                    kind=ReceiptExceptionKind.DAMAGED,
-                    sku_code=barcode,
-                    **merch_dims(line),
-                    qty=qty_damaged,
-                    unit_cost_paise=line.unit_cost_paise,
-                )
+            broken_row = TransferReceiptException(
+                kind=ReceiptExceptionKind.DAMAGED,
+                sku_code=barcode,
+                **merch_dims(line),
+                qty=qty_damaged,
+                unit_cost_paise=line.unit_cost_paise,
             )
+            exceptions.append(broken_row)
+            broken.append(broken_row)
 
-    if damaged:
+    if broken:
+        # The whole receipt's breakages go through one damage door, so the note
+        # saying where that got to is the same on every one of these rows. The
+        # loop kept hold of them rather than leaving them to be picked back out
+        # of ``exceptions`` by kind — it already knew which ones were damaged.
         note = _mark_arrivals_damaged(transfer, damaged, user)
-        for exception in exceptions:
-            if exception.kind == ReceiptExceptionKind.DAMAGED:
-                exception.note = note
+        for exception in broken:
+            exception.note = note
 
     entries += _post_receive_extras(transfer, extras, exceptions, user)
 

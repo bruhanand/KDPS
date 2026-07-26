@@ -102,6 +102,7 @@ export default function StockOnHand() {
   // Damage reports that have not become quarantine yet — the reporting store's
   // own view of "I said so, and it hasn't been actioned" (#138).
   const [openFlags, setOpenFlags] = useState<DamageFlagT[]>([]);
+  const [flagsErr, setFlagsErr] = useState("");
 
   // Mark-damaged modal state (pre-commit adjustment before posting).
   const [dmgRow, setDmgRow] = useState<RowT | null>(null);
@@ -138,11 +139,15 @@ export default function StockOnHand() {
   // Only the store's own are visible to it (the list is store-scoped
   // server-side), so this is exactly "what I reported that has not been
   // actioned yet".
+  // A failure here is said out loud rather than swallowed: an empty list and a
+  // list that would not load look identical on screen, and the store would read
+  // the silence as "my report was actioned".
   useEffect(() => {
     if (group !== "quarantine") return;
+    setFlagsErr("");
     api.get("/outbound/mark-damaged?docstatus=0")
       .then((r) => setOpenFlags(r.data as DamageFlagT[]))
-      .catch(() => { /* the quarantine table is the primary read here */ });
+      .catch((e) => { setOpenFlags([]); setFlagsErr(apiErrorMessage(e)); });
   }, [group, reloadKey]);
 
   // Refresh the filter option lists from the full (unfiltered) quarantine set
@@ -316,6 +321,12 @@ export default function StockOnHand() {
               Clear filters
             </button>
           )}
+        </div>
+      )}
+
+      {isQuar && !loading && !error && flagsErr && (
+        <div className="warn-note" style={{ marginTop: 16 }} data-testid="damage-flags-error">
+          Could not load the damage reports waiting to be confirmed — {flagsErr}
         </div>
       )}
 
