@@ -90,7 +90,7 @@ export function AdjustmentListPage() {
     <div className="page-pad">
       <div className="toolbar">
         <div>
-          <p className="eyebrow">Outbound · Adjustments</p>
+          <p className="eyebrow">Stock Count · Adjustments</p>
           <h1 className="h1 h2-rust">Stock Adjustments</h1>
         </div>
         <div className="spacer" />

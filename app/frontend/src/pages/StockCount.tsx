@@ -619,6 +619,7 @@ export function StockCountDetailPage() {
           routeLabel={`${take.store_code} · ${scanning.scope_label}`}
           targets={[]}
           lookup={lookupPiece}
+          rejectReason="this system does not know this barcode"
           confirmLabel="Save what I counted"
           busy={busy}
           error={error}
