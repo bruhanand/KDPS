@@ -346,11 +346,39 @@ def test_store_scoped_user_never_sees_another_stores_documents(scaffold):
 
 @pytest.mark.django_db(transaction=True)
 def test_section_capability_gates_document_types(scaffold):
-    """A store person has no Booking section (the RBAC sheet says "No"), so the
-    booking is invisible to them even though it lands at their own store."""
-    body = _client(scaffold["store_user"]).get(f"{SEARCH}?q=GS-BK-0001").json()
+    """A document type is invisible to a role the table gives no section for.
+
+    The Data Steward owns masters and holds no Booking cell, so a booking is not
+    theirs to find. Owner holds the section and finds it. (This used to be shown
+    with the *store* person, whose Booking cell was "No" on the sheet - #130
+    ratified it to `view`, so the store is no longer the example.)
+    """
+    steward_role = Role.objects.create(
+        code="data_steward",
+        name="Data Steward (search test)",
+        section_access=section_access_for("data_steward"),
+    )
+    steward = User.objects.create_user(
+        username="gs_steward",
+        password=TEST_PASSWORD,
+        role=steward_role,
+        scope_type=ScopeType.ALL,
+    )
+
+    body = _client(steward).get(f"{SEARCH}?q=GS-BK-0001").json()
     assert _results(body, "documents") == []
     assert _results(_client(scaffold["owner"]).get(f"{SEARCH}?q=GS-BK-0001").json(), "documents")
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_store_finds_a_booking_headed_its_way(scaffold):
+    """The ratified Booking cell reaches search too (#130).
+
+    A capability is not a screen - it is the answer every surface reads, and
+    search is the one that used to hide bookings from a store outright.
+    """
+    body = _client(scaffold["store_user"]).get(f"{SEARCH}?q=GS-BK-0001").json()
+    assert len(_results(body, "documents")) == 1
 
 
 @pytest.mark.django_db(transaction=True)

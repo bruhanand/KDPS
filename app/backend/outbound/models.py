@@ -217,6 +217,13 @@ class StoreTransferLine(TimeStampedModel):
         "and the receipt must keep saying what was actually scanned in.",
     )
     unit_cost_paise = MoneyField(default=0)
+    mrp_paise = MoneyField(
+        null=True,
+        blank=True,
+        help_text="The SKU's ticketed price, snapshotted at dispatch alongside the "
+        "cost (Rule 2, snapshot masters). The transfer's PT prints it, and a later "
+        "re-ticketing of the SKU must not change what the paper in the carton said.",
+    )
 
     @property
     def qty_in_transit(self) -> int:
@@ -230,6 +237,48 @@ class StoreTransferLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku_code} × {self.qty_dispatched}"
+
+
+class TransferPT(TimeStampedModel):
+    """The PT file that travels with a transfer's carton (#72).
+
+    Generated once, at dispatch, from the scanned lines — the document the store
+    at the other end opens is the same list of pieces the ledger moved. There is
+    deliberately no write path: ``rows`` is a frozen copy of what
+    ``outbound.transfer_pt.build_transfer_pt_rows`` produced, and regenerating
+    from the (immutable) scanned lines is the only way it could ever change.
+
+    Storing it rather than deriving it on every read is the point: this is the
+    paper that went in the box, so months later the question "what did the
+    document say?" has an answer that is not a recomputation.
+    """
+
+    transfer = models.OneToOneField(StoreTransfer, on_delete=models.CASCADE, related_name="pt")
+    rows = models.JSONField(
+        default=list,
+        help_text="KDPS PT rows, keyed by the KDPS column names. Never hand-edited.",
+    )
+    generated_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transfer_pts_generated",
+    )
+
+    class Meta:
+        db_table = "outbound_transfer_pt"
+        ordering = ["-created_at"]
+
+    @property
+    def generated_at(self) -> Any:
+        """When the PT was cut. The row is created once and never touched, so
+        that is simply when it was created — a second timestamp column would be
+        a copy guaranteed to agree."""
+        return self.created_at
+
+    def __str__(self) -> str:
+        return f"PT for {self.transfer}"
 
 
 class TransferReceipt(TimeStampedModel):
@@ -770,3 +819,154 @@ class VFlipLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# 6. Stock counting — the blind count session and the stocktake it feeds (#76)
+# ---------------------------------------------------------------------------
+
+
+class CountScope(models.TextChoices):
+    """How much of the location one counter took on.
+
+    Scope decides the **book set** — which pieces the count is entitled to
+    speak about, and therefore which unscanned pieces come out as shrinkage:
+
+    - ``store``   every piece the books hold here; anything unscanned is missing.
+    - ``brand``   every piece of that brand; other brands are untouched.
+    - ``section`` only the pieces scanned. The books hold no floor plan, so a
+      section count cannot claim a piece is missing from a shelf the system
+      cannot see — it can only report on what was found.
+    """
+
+    STORE = "store", "Whole store"
+    BRAND = "brand", "One brand"
+    SECTION = "section", "One section"
+
+
+class CountStatus(models.TextChoices):
+    OPEN = "open", "Open — counting"
+    SUBMITTED = "submitted", "Submitted"
+    CLOSED = "closed", "Closed — variance applied"
+
+
+class Stocktake(models.Model):
+    """One counting exercise at one location — the thing sessions merge into.
+
+    Counting a 20,000-SKU store is not one person's job, so the unit of work is
+    the *session* (one counter, one scope) and the unit of truth is the
+    stocktake: several sessions running in parallel over different sections
+    merge into a single variance report, because the book number they are all
+    being measured against is one number per piece, not one per counter.
+
+    Not a ``Document``: a stocktake moves no stock and posts nothing. It is a
+    working record that *produces* a document — the stock adjustment its
+    variance is applied through.
+    """
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="stocktakes")
+    status = models.CharField(max_length=12, choices=CountStatus.choices, default=CountStatus.OPEN)
+    note = models.CharField(max_length=240, blank=True, default="")
+    opened_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stocktakes_opened",
+    )
+    adjustment = models.ForeignKey(
+        StockAdjustment,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stocktakes",
+        help_text="The correction this count produced, once its variance was applied.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "outbound_stocktake"
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Stocktake #{self.pk} @ {self.store_id}"
+
+
+class CountSession(models.Model):
+    """One counter's scoped, blind pass over part of a location.
+
+    Blind is the whole design: while the session is open nothing on it answers
+    "how many should there be" — the book number is withheld until submit, so a
+    counter cannot count to the answer. That is enforced at the seam rather than
+    in the screen: an open session simply has no book quantity to serve, because
+    the snapshot is not taken until it is submitted.
+    """
+
+    stocktake = models.ForeignKey(Stocktake, on_delete=models.CASCADE, related_name="sessions")
+    scope = models.CharField(max_length=8, choices=CountScope.choices)
+    #: Which brand or which section — the scope's argument. Empty for a store count.
+    scope_value = models.CharField(max_length=120, blank=True, default="")
+    status = models.CharField(max_length=12, choices=CountStatus.choices, default=CountStatus.OPEN)
+    counted_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="count_sessions",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "outbound_count_session"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"CountSession #{self.pk} ({self.scope_label})"
+
+    @property
+    def scope_label(self) -> str:
+        return f"{self.get_scope_display()}{f' · {self.scope_value}' if self.scope_value else ''}"
+
+
+class CountSessionLine(models.Model):
+    """One barcode on one session — what was counted, and what the books said.
+
+    ``book_qty`` is the snapshot taken **at submit**, not at scan time and not
+    at report time. It is what makes mid-count movement detectable: if the live
+    book has moved away from this number by the time the variance is applied,
+    something happened to the piece between the count and the correction, and
+    that line is held back for a human to confirm rather than overwritten.
+    """
+
+    session = models.ForeignKey(CountSession, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    counted_qty = models.IntegerField(default=0)
+    book_qty = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="The book at submit. Null while the session is open — blind (#76).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "outbound_count_session_line"
+        ordering = ["sku_code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session", "sku_code"], name="uq_count_session_line_sku"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} counted={self.counted_qty}"

@@ -176,3 +176,14 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
 }
+
+/* Printing the transfer PT (#72) prints the document, not the application
+   around it. Scoped to a page that opts in with `.pt-print` rather than applied
+   to every screen - what the other ~30 screens do on paper is their own
+   question, and not one this slice was asked to answer. */
+@media print {
+  .shell:has(.pt-print) .sidebar, .shell:has(.pt-print) .topbar { display: none !important; }
+  .shell:has(.pt-print), .shell:has(.pt-print) .content {
+    display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important;
+  }
+}

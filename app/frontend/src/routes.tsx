@@ -15,10 +15,11 @@ import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Booking
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
-import { TransferListPage, TransferNewPage, TransferDetailPage } from "./pages/OutboundTransfers";
+import { TransferListPage, TransferNewPage, TransferDetailPage, TransferPtPage } from "./pages/OutboundTransfers";
 import { InTransitPage } from "./pages/OutboundInTransit";
 import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
-import { AdjustmentListPage, AdjustmentNewPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
+import { AdjustmentListPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
+import { StockCountListPage, StockCountDetailPage } from "./pages/StockCount";
 import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/OutboundWriteoffs";
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
@@ -54,13 +55,17 @@ const BUILT: Screen[] = [
   // Before /transfer/:id, or "in-transit" would be read as a transfer id (#71).
   { id: "transfer-in-transit", path: "/transfer/in-transit", element: <InTransitPage /> },
   { id: "transfer-detail", path: "/transfer/:id", element: <TransferDetailPage /> },
-  // Stock Count — the corrections a count produces live with it
+  // The printable PT the carton travels with (#72).
+  { id: "transfer-pt", path: "/transfer/:id/pt", element: <TransferPtPage /> },
+  // Stock Count — the counting sessions, and the corrections they produce
+  { id: "count-list", path: "/stock-count", element: <StockCountListPage /> },
   { id: "adjustment-list", path: "/stock-count/adjustments", element: <AdjustmentListPage /> },
-  { id: "adjustment-new", path: "/stock-count/adjustments/new", element: <AdjustmentNewPage /> },
   { id: "adjustment-detail", path: "/stock-count/adjustments/:id", element: <AdjustmentDetailPage /> },
   { id: "writeoff-list", path: "/stock-count/writeoffs", element: <WriteOffListPage /> },
   { id: "writeoff-new", path: "/stock-count/writeoffs/new", element: <WriteOffNewPage /> },
   { id: "writeoff-detail", path: "/stock-count/writeoffs/:id", element: <WriteOffDetailPage /> },
+  // Last in the section: a count id must never shadow "adjustments"/"writeoffs".
+  { id: "count-detail", path: "/stock-count/:id", element: <StockCountDetailPage /> },
   // Return to Brand
   { id: "rtv-list", path: "/return-to-brand", element: <RTVListPage /> },
   { id: "rtv-new", path: "/return-to-brand/new", element: <RTVNewPage /> },

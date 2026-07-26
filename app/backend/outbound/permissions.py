@@ -12,6 +12,7 @@ The mapping, read straight off the ratified SIDEBAR RBAC matrix:
 Endpoint group                                Gate
 ============================================  ===========================
 Transfer create / submit / dispatch / receive ``transfer: operate``
+Transfer PT read / download                   ``transfer: view``
 Transfer gap closure raise / post             ``transfer: approve``
 Mark damaged                                  ``return_to_brand: operate``
 Return to brand create / submit               ``return_to_brand: operate``
@@ -27,8 +28,10 @@ which the design settled as an ownership relabel of stock that stays put: that
 adds the warehouse and drops HO ops. Both follow the matrix; if either is wrong
 it is a matrix change, not an exception here.
 
-Reads are unchanged — any authenticated user (DRF's own ``IsAuthenticated``;
-outbound has no read rule of its own), store-scoped at the queryset.
+Reads are otherwise unchanged — any authenticated user (DRF's own
+``IsAuthenticated``; outbound has no general read rule of its own), store-scoped
+at the queryset. The transfer PT is the one exception above, and only because it
+is a priced file people download and forward.
 
 Store scope is a separate, unchanged concern: ``enforce_store_scope`` still runs
 on every write, so holding the rung never means holding it *everywhere*.
@@ -39,11 +42,19 @@ from __future__ import annotations
 from rest_framework.exceptions import PermissionDenied
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE
+from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE, CAP_VIEW
 from masters.scoping import actionable_store_ids
 
 #: Moving stock between locations — the transfer section's daily work.
 CanWriteTransfer = require_section("transfer", CAP_OPERATE)
+
+#: Reading a transfer's PT — the packing document, priced (#72). Gated at the
+#: section's lowest rung rather than left open: the file carries unit costs, so
+#: somebody the matrix gives no transfer cell at all has no business opening it.
+#: This is deliberately stricter than the transfer document itself, which sits on
+#: the pre-existing ungated baseline; whether *that* should stay open is the same
+#: question for every outbound detail read, and belongs with #104, not here.
+CanReadTransferPT = require_section("transfer", CAP_VIEW)
 
 #: Deciding what became of pieces that went missing between two locations. A rung
 #: above the daily work on purpose: the design gives gap closure to the Operations

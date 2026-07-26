@@ -143,7 +143,10 @@ export const SECTIONS: NavSectionDef[] = [
     layer: "documents",
     items: [
       { label: "Bookings", to: "/booking" },
-      { label: "New Booking", to: "/booking/new" },
+      // A store holds `booking: view` (#130) - the list and the document, never
+      // the create. The server refuses the POST at `operate`, so offering the
+      // form here would walk them into a 403.
+      { label: "New Booking", to: "/booking/new", minCapability: "operate" },
     ],
   },
   {
@@ -176,7 +179,7 @@ export const SECTIONS: NavSectionDef[] = [
     icon: ClipboardCheck,
     layer: "controls",
     items: [
-      { label: "Count Sessions", to: "/stock-count", planned: true },
+      { label: "Count Sessions", to: "/stock-count" },
       // Corrections live where they are caused: a count is what produces them.
       // Both are writes gated on `stock_count: operate` server-side, so the
       // link must not open for a role the API will refuse (#94).

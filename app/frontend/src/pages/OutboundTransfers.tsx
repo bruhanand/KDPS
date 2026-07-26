@@ -5,8 +5,10 @@ import {
   ArrowRight,
   AlertTriangle,
   Boxes,
+  Download,
   PackageCheck,
   Plus,
+  Printer,
   Send,
   Trash2,
   Truck,
@@ -163,6 +165,8 @@ export interface TransferT {
   qty_in_transit: number;
   /** Derived server-side: "" (draft) · in_transit · received · gap · closed. */
   gap_state: string;
+  /** When the transfer's PT was cut. Null on a draft — nothing scanned yet (#72). */
+  pt_generated_at: string | null;
   lines: TransferLineT[];
   receipt: ReceiptT | null;
   gap_closure: GapClosureT | null;
@@ -576,6 +580,175 @@ export function TransferNewPage() {
 }
 
 // ---------------------------------------------------------------------------
+// The PT that travels with the carton (#72)
+// ---------------------------------------------------------------------------
+
+export interface TransferPtT {
+  id: number;
+  transfer: number;
+  doc_number: string | null;
+  source_store_code: string;
+  source_store_name: string;
+  destination_store_code: string;
+  destination_store_name: string;
+  dispatch_date: string | null;
+  generated_at: string;
+  generated_by_name: string;
+  columns: string[];
+  rows: Record<string, string | number>[];
+}
+
+/** Pull the PT down as a file. Same blob dance as the PT-mapper export - the
+ *  API needs the auth header, so a plain link cannot fetch it.
+ *
+ *  The filename comes off the response: the server already names the PT after
+ *  its voucher, and restating that rule here would be one rule in two languages. */
+async function downloadPt(transferId: number | string, kind: "csv" | "xlsx") {
+  const res = await api.get(`/outbound/transfers/${transferId}/pt.${kind}`, { responseType: "blob" });
+  const named = /filename="([^"]+)"/.exec(res.headers["content-disposition"] ?? "");
+  const href = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = named?.[1] ?? `KDPS-PT-${transferId}.${kind}`;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+/** The PT panel on a dispatched transfer: what it is, and the three ways out
+ *  of it. Never an editor — the PT is regenerated from the scanned lines or it
+ *  does not change. */
+function TransferPtCard({ t }: { t: TransferT }) {
+  if (!t.pt_generated_at) return null;
+  return (
+    <div className="card section-card" data-testid="transfer-pt-card">
+      <p className="eyebrow">PT file</p>
+      <h3 className="h3">Generated {fmtDate(t.pt_generated_at)}</h3>
+      <p className="lead" style={{ marginTop: 6 }}>
+        Built from the scanned lines, so the document and the carton say the same thing.
+        It is never typed and cannot be edited - send it with the goods.
+      </p>
+      <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
+        <Link className="btn btn-cta" to={`/transfer/${t.id}/pt`} data-testid="transfer-pt-open">
+          <Printer size={15} /> View &amp; print
+        </Link>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void downloadPt(t.id, "xlsx")}
+          data-testid="transfer-pt-xlsx"
+        >
+          <Download size={15} /> Excel (KDPS)
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void downloadPt(t.id, "csv")}
+          data-testid="transfer-pt-csv"
+        >
+          <Download size={15} /> CSV
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The printable PT — one transfer, one carton, one document. */
+export function TransferPtPage() {
+  const { id } = useParams();
+  const { data: pt, loading } = useDoc<TransferPtT>(`/outbound/transfers/${id}/pt`);
+
+  if (loading) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+  if (!pt) {
+    return (
+      <div className="page-pad" data-testid="transfer-pt-missing">
+        <Link to={`/transfer/${id}`} className="btn" style={{ marginBottom: 16 }}>
+          <ArrowLeft size={15} /> Transfer
+        </Link>
+        <p className="lead">
+          This transfer has no PT yet. One is generated the moment the carton is scanned and
+          dispatched.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-pad pt-print">
+      <div className="pt-print-hide">
+        <Link to={`/transfer/${pt.transfer}`} className="btn" style={{ marginBottom: 16 }} data-testid="transfer-pt-back">
+          <ArrowLeft size={15} /> Transfer
+        </Link>
+      </div>
+
+      <div className="toolbar">
+        <div>
+          <p className="eyebrow">PT file · {pt.doc_number || `Draft #${pt.transfer}`}</p>
+          <h1 className="h1">{pt.source_store_code} → {pt.destination_store_code}</h1>
+          <p className="lead">
+            {pt.source_store_name} → {pt.destination_store_name} ·{" "}
+            {pt.rows.length} line(s) · generated {fmtDate(pt.generated_at)}
+            {pt.generated_by_name ? ` by ${pt.generated_by_name}` : ""}
+          </p>
+        </div>
+        <div className="spacer" />
+        <div className="toolbar pt-print-hide" style={{ marginBottom: 0 }}>
+          <button
+            type="button"
+            className="btn btn-cta"
+            onClick={() => window.print()}
+            data-testid="transfer-pt-print"
+          >
+            <Printer size={15} /> Print
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => void downloadPt(pt.transfer, "xlsx")}
+            data-testid="transfer-pt-page-xlsx"
+          >
+            <Download size={15} /> Excel (KDPS)
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => void downloadPt(pt.transfer, "csv")}
+            data-testid="transfer-pt-page-csv"
+          >
+            <Download size={15} /> CSV
+          </button>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table className="data" data-testid="transfer-pt-table">
+          <thead>
+            <tr>{pt.columns.map((c) => <th key={c}>{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {pt.rows.map((row, i) => (
+              <tr key={i} data-testid={`transfer-pt-row-${i}`}>
+                {pt.columns.map((c) => (
+                  <td key={c} className={c === "QTY" || c === "NAG" ? "num" : undefined}>
+                    {row[c] === "" || row[c] == null ? "—" : String(row[c])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+            {pt.rows.length === 0 && (
+              <tr>
+                <td colSpan={pt.columns.length} style={{ textAlign: "center", opacity: 0.7 }}>
+                  This PT has no lines.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Detail
 // ---------------------------------------------------------------------------
 
@@ -759,6 +932,9 @@ export function TransferDetailPage() {
           <h3 className="h3 mono">{t.eway_bill_number}</h3>
         </div>
       )}
+
+      {/* The PT that went in the box (#72) */}
+      <TransferPtCard t={t} />
 
       {/* Receipt — and everything that went wrong at it (#71) */}
       {t.receipt && (

@@ -2,7 +2,9 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
 
+import { useAuth } from "../auth/AuthContext";
 import { ListSearchBar } from "../components/SearchBox";
+import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
@@ -53,8 +55,13 @@ interface BookingLineT {
 }
 
 export function BookingsPage() {
+  const { user } = useAuth();
   const [q, setQ] = useState("");
   const { data, loading } = useList<BookingT>("/bookings", { q });
+  // Mirrors the server gate exactly (`vendors.CanPlaceBooking` = booking:operate),
+  // read from the same section payload rather than a role list of our own. A
+  // store holds `booking: view` (#130) - the list, never the create.
+  const canPlace = userCan(user, "booking", "operate");
   return (
     <div className="page-pad">
       <div className="toolbar">
@@ -63,9 +70,11 @@ export function BookingsPage() {
           <h1 className="h1 h2-rust">Bookings</h1>
         </div>
         <div className="spacer" />
-        <Link className="btn btn-cta" to="/booking/new" data-testid="new-booking-btn">
-          <Plus size={16} /> New booking
-        </Link>
+        {canPlace && (
+          <Link className="btn btn-cta" to="/booking/new" data-testid="new-booking-btn">
+            <Plus size={16} /> New booking
+          </Link>
+        )}
       </div>
 
       <ListSearchBar

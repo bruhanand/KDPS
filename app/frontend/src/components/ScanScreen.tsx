@@ -44,12 +44,16 @@ export interface ScanResult {
 type Bucket = "scans" | "damaged" | "extras";
 
 interface ScanScreenProps {
-  mode: string; // "DISPATCH" | "RECEIVE" — shown in the header chip
+  mode: string; // "DISPATCH" | "RECEIVE" | "COUNT" — shown in the header chip
   docLabel: string; // doc number or "Draft #12"
   routeLabel: string; // "RAN-WH → DEO"
   targets: ScanTarget[];
   /** Scan-to-build: resolve an unknown barcode (null → wrong piece). */
   lookup?: (barcode: string) => Promise<ScanTarget | null>;
+  /** Why a rejected piece was rejected, in this flow's own words. A count is
+   *  not a transfer, and telling a counter their shirt is "not on this
+   *  transfer" tells them nothing about what to do with it. */
+  rejectReason?: string;
   /** Receive: never allow scanning past `expected` (server rejects too). */
   strictExpected?: boolean;
   /** Receive: offer the damaged mode, accept off-document pieces as extras,
@@ -120,6 +124,7 @@ export function ScanScreen({
   routeLabel,
   targets,
   lookup,
+  rejectReason = "not on this transfer",
   strictExpected = false,
   exceptions = false,
   confirmLabel,
@@ -193,7 +198,7 @@ export function ScanScreen({
 
       if (!line) {
         if (!exceptions) {
-          showResult("bad", `${code} — not on this transfer`);
+          showResult("bad", `${code} — ${rejectReason}`);
           return;
         }
         // A piece that arrived without being sent. Taken in and flagged rather
@@ -221,7 +226,19 @@ export function ScanScreen({
       bump("scans", code);
       showResult("ok", `${code} ✓`);
     },
-    [lines, scanned, damaged, busy, lookup, strictExpected, exceptions, asDamaged, showResult, bump],
+    [
+      lines,
+      scanned,
+      damaged,
+      busy,
+      lookup,
+      rejectReason,
+      strictExpected,
+      exceptions,
+      asDamaged,
+      showResult,
+      bump,
+    ],
   );
 
   function undoLast() {
@@ -242,7 +259,11 @@ export function ScanScreen({
   const totalExtras = useMemo(() => total(extras), [extras]);
   const totalArrived = totalGood + totalDamaged;
   const totalExpected = useMemo(() => {
-    if (lines.some((l) => l.expected == null)) return null;
+    // No lines yet means nothing is expected *of*, not that nothing is expected:
+    // a scan-to-build flow starts empty, and a blind count (#76) stays that way.
+    // Summing to 0 would put "0 / 0" over the counter's head, which reads as a
+    // number the books gave them — the one thing a blind count must never show.
+    if (!lines.length || lines.some((l) => l.expected == null)) return null;
     return lines.reduce((a, l) => a + (l.expected ?? 0), 0);
   }, [lines]);
 
