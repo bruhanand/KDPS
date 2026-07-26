@@ -157,7 +157,7 @@ describe("canAccess", () => {
     expect(canAccess("/transfer/7", storePerson)).toBe(true);
     expect(canAccess("/stock-count/adjustments", storePerson)).toBe(true);
     expect(canAccess("/staff/attendance", storePerson)).toBe(true);
-    // No Setup in the matrix — hidden in the menu, shut by URL.
+    // No Setup in the matrix - hidden in the menu, shut by URL.
     expect(canAccess("/setup/stores", storePerson)).toBe(false);
     expect(canAccess("/setup/users", storePerson)).toBe(false);
   });
@@ -165,7 +165,7 @@ describe("canAccess", () => {
   it("Booking opens read-only for the store and stays shut to placing one", () => {
     // The ratified correction (#130): a store plans space and staff against the
     // goods headed to it, so the list opens at `booking: view`. Creating stays
-    // at `operate` — the rung the server's `CanPlaceBooking` demands — so the
+    // at `operate` - the rung the server's `CanPlaceBooking` demands - so the
     // form is hidden rather than offered and then refused.
     expect(canAccess("/booking", storePerson)).toBe(true);
     expect(canAccess("/booking/12", storePerson)).toBe(true);

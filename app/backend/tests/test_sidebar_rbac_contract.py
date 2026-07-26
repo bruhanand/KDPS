@@ -1,10 +1,10 @@
-"""RBAC contract — the authenticated-user payload (issues #85, #130).
+"""RBAC contract - the authenticated-user payload (issues #85, #130).
 
 Hermetic (`db` fixture), so it runs in CI's `pytest tests` step. It proves the
 server, not the client, decides what each of the nine roles may see and do:
 
   · each role's `/me` payload carries exactly its matrix sections + capabilities;
-  · every seeded role is answered by the one ratified table — no second source;
+  · every seeded role is answered by the one ratified table - no second source;
   · what `seed_foundation` stores on a Role row is that same table;
   · a user with no role / no units gets nothing (fail-closed);
   · a section API called by the wrong role is denied server-side;
@@ -31,7 +31,7 @@ from accounts.sections import CAP_NONE, SECTION_CODES
 from masters.models import Gstin, LegalEntity, Store
 
 # One seeded role code per persona (store_person → store_staff for the test).
-# All eight rows of the ratified table, covering all nine seeded roles — the two
+# All eight rows of the ratified table, covering all nine seeded roles - the two
 # store codes share the "Store Person" row.
 PERSONA_ROLE_CODE = {
     "owner": "owner",
@@ -170,7 +170,7 @@ def test_wrong_role_denied_on_section_api(db):
 
 
 def test_the_two_ho_roles_do_not_gain_rbac_admin(db):
-    """Users & Roles admin needs setup:manage — held only by Owner/Admin. The two
+    """Users & Roles admin needs setup:manage - held only by Owner/Admin. The two
     head-office rows must stay below it, so seeding them can't silently escalate
     anyone onto the admin APIs (issue #85 review: data_steward 403). Ratifying
     the rows (#130) changed their status, not their power."""
@@ -196,14 +196,14 @@ def test_every_seeded_role_is_a_ratified_row(db):
     for code in KNOWN_ROLE_CODES:
         access = section_access_for(code)
         assert set(access) == set(SECTION_CODES), code
-        # Every cell traces to the persona row (or the one declared override) —
+        # Every cell traces to the persona row (or the one declared override) -
         # nothing resolves through an absent section any more.
         persona_cells = MATRIX[ROLE_PERSONA[code]]
         assert set(persona_cells) == set(SECTION_CODES), code
 
 
 def test_the_ratified_ho_rows_reach_the_live_payload(db):
-    """The rows that were derived now answer like any other — through /me."""
+    """The rows that were derived now answer like any other - through /me."""
     caps = {
         code: _client(_make_user(f"r_{code}", _make_role(code)))
         .get("/api/auth/me")
@@ -229,7 +229,7 @@ def test_the_store_person_can_see_bookings_but_not_place_one(db):
     """The ratified correction to the sheet's "No" (PRD #104, 26 Jul 2026).
 
     A store plans space and staff against the goods headed to it, so the section
-    opens — read-only. Placing one stays at `operate`, which the store does not
+    opens - read-only. Placing one stays at `operate`, which the store does not
     hold. *Which* bookings it sees is record scope, and #101's work.
     """
     for code in ("store_staff", "store_manager"):
@@ -239,7 +239,7 @@ def test_the_store_person_can_see_bookings_but_not_place_one(db):
 
 
 def test_seeding_stores_exactly_the_table(db):
-    """The stored answer is the table's — the seed writes no opinion of its own.
+    """The stored answer is the table's - the seed writes no opinion of its own.
 
     `Role.section_access` is what every gate actually reads, so a seed that
     drifted from the table would make the table decorative.

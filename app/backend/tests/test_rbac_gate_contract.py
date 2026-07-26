@@ -131,8 +131,8 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         f"/api/outbound/vflips/{ABSENT}/request-approval",
     ),
     ("inbound queue", "receive_goods", CAP_VIEW, "get", "/api/inbound/queue"),
-    # Booking (#130). The list opens at `view` — the rung the ratified table now
-    # gives a store — while placing one, and the AI draft that begins placing
+    # Booking (#130). The list opens at `view` - the rung the ratified table now
+    # gives a store - while placing one, and the AI draft that begins placing
     # one, stay at `operate`. Before #130 these three answered any authenticated
     # caller, so the table's Booking column decided nothing.
     ("booking list", "booking", CAP_VIEW, "get", "/api/bookings"),
@@ -201,10 +201,14 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
     """
     client = _client(_user("acc", _role("accounts")))
     for label, _section, _minimum, method, path in GATED_ENDPOINTS:
+        status = _call(client, method, path).status_code
         if method == "get":
-            continue  # reads are the point of `view` — the inbound queue and
-            # the booking list are Accounts' to open
-        assert _call(client, method, path).status_code == 403, label
+            # Reads are the point of `view` - the inbound queue and the booking
+            # list are Accounts' to open, and asserting that keeps this test
+            # measuring both halves rather than skipping the read rows.
+            assert status != 403, label
+        else:
+            assert status == 403, label
 
 
 def test_the_two_store_roles_get_identical_answers_on_outbound(db):

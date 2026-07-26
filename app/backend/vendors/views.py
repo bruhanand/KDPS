@@ -8,7 +8,7 @@ Booking capture is a two-step, human-in-the-loop flow:
 Every Booking endpoint answers on the ``booking`` section of the ratified access
 table (#130): reading a booking needs ``view``, placing one needs ``operate``.
 Until then these endpoints were open to any authenticated user, so the table's
-Booking column decided nothing — which is why a store person's ratified
+Booking column decided nothing - which is why a store person's ratified
 ``view`` cell had to arrive with a gate behind it. *Which* bookings a caller
 sees is the separate record-scope axis, and #101's work.
 """
@@ -39,7 +39,7 @@ from vendors.serializers import (
 )
 
 # The Booking column of the access table, as three DRF permissions. `view` is the
-# screen and the list — the rung the store person now holds; `operate` is placing
+# screen and the list - the rung the store person now holds; `operate` is placing
 # one, which stays HO's, the warehouse's and the brand manager's.
 CanReadBooking = require_section("booking", CAP_VIEW)
 CanPlaceBooking = require_section("booking", CAP_OPERATE)
@@ -87,7 +87,7 @@ class BookingDraftView(APIView):
     """Read an uploaded receiving doc into a draft booking (not saved).
 
     Nothing is saved, but the draft is the first half of placing a booking and it
-    burns an AI read on an upload — so it sits at the same rung as the create,
+    burns an AI read on an upload - so it sits at the same rung as the create,
     not at ``view``.
     """
 

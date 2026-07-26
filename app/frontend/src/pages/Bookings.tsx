@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import { api, apiErrorMessage } from "../lib/api";
 import { userCan } from "../shell/navConfig";
+import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import "./Booking.css";
@@ -58,7 +58,7 @@ export function BookingsPage() {
   const { data, loading } = useList<BookingT>("/bookings");
   // Mirrors the server gate exactly (`vendors.CanPlaceBooking` = booking:operate),
   // read from the same section payload rather than a role list of our own. A
-  // store holds `booking: view` (#130) — the list, never the create.
+  // store holds `booking: view` (#130) - the list, never the create.
   const canPlace = userCan(user, "booking", "operate");
   return (
     <div className="page-pad">

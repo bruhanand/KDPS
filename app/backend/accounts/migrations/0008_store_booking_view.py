@@ -2,7 +2,7 @@
 
 The SIDEBAR RBAC sheet said "No" on the store person's Booking cell. PRD #104
 overturned it on 26 July 2026: a store plans space and staff against the goods
-headed its way, so the section opens at ``view`` — the screen and the list, never
+headed its way, so the section opens at ``view`` - the screen and the list, never
 the create. This backfill moves the rows already in the database onto the
 ratified cell; ``rbac_matrix`` carries it for every fresh install.
 
@@ -10,17 +10,17 @@ Both store roles are touched, because both are the one "Store Person" persona
 and the correction is the persona's, not the manager's.
 
 Only a row still sitting at the seeded default is moved. If a live admin has
-already retuned this cell, their value wins — access is their data (Rule 12).
+already retuned this cell, their value wins - access is their data (Rule 12).
 
 Both directions are guarded the same way, from opposite ends (the pattern from
 0006): forward asks "is this still the seeded default?", reverse asks "is this
-still exactly what I wrote?" — capability **and** label, because a bare ``view``
+still exactly what I wrote?" - capability **and** label, because a bare ``view``
 is also what an admin would set by hand and only the ratified wording tells the
 two apart. So migrate-then-rollback is an identity, and a rollback never eats an
 admin's grant.
 
-The other half of #130 — ``ho_ops`` and ``data_steward`` becoming ratified rows
-rather than derived fallbacks — moves no data at all. Their thirteen cells are
+The other half of #130 - ``ho_ops`` and ``data_steward`` becoming ratified rows
+rather than derived fallbacks - moves no data at all. Their thirteen cells are
 written out with the same capabilities and labels the derived block resolved to,
 so a seeded row is already exactly where this migration would put it.
 """
@@ -28,7 +28,7 @@ so a seeded row is already exactly where this migration would put it.
 from django.db import migrations
 
 SECTION = "booking"
-#: What ``store_person`` held before the correction — the sheet's flat "No".
+#: What ``store_person`` held before the correction - the sheet's flat "No".
 SEEDED_DEFAULT = {"capability": "none", "label": "No"}
 ROLE_CODES = ("store_manager", "store_staff")
 
@@ -68,7 +68,7 @@ def close_booking(apps, schema_editor):
         SEEDED_DEFAULT,
         # The whole cell this migration writes. If the ratified wording ever
         # drifts from what was written here, the match fails and the row is
-        # preserved — the safe way to be wrong.
+        # preserved - the safe way to be wrong.
         only_if=section_access_for("store_staff")[SECTION],
     )
 

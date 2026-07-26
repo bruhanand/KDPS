@@ -350,7 +350,7 @@ def test_section_capability_gates_document_types(scaffold):
 
     The Data Steward owns masters and holds no Booking cell, so a booking is not
     theirs to find. Owner holds the section and finds it. (This used to be shown
-    with the *store* person, whose Booking cell was "No" on the sheet — #130
+    with the *store* person, whose Booking cell was "No" on the sheet - #130
     ratified it to `view`, so the store is no longer the example.)
     """
     steward_role = Role.objects.create(
@@ -374,7 +374,7 @@ def test_section_capability_gates_document_types(scaffold):
 def test_the_store_finds_a_booking_headed_its_way(scaffold):
     """The ratified Booking cell reaches search too (#130).
 
-    A capability is not a screen — it is the answer every surface reads, and
+    A capability is not a screen - it is the answer every surface reads, and
     search is the one that used to hide bookings from a store outright.
     """
     body = _client(scaffold["store_user"]).get(f"{SEARCH}?q=GS-BK-0001").json()

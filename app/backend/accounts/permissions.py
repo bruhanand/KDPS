@@ -98,14 +98,25 @@ def require_section(
     if not is_valid_section(section):  # pragma: no cover - programmer error
         raise ValueError(f"Unknown section {section!r}")
 
+    read_only = f"You do not have access to the {section} section."
+    write_denied = f"You may read the {section} section, but not write in it."
+
     class _HasSectionAccess(BasePermission):
-        message = f"You do not have access to the {section} section."
+        message = read_only
 
         def has_permission(self, request: Request, view: Any) -> bool:
-            needed = minimum
-            if write_minimum is not None and request.method not in SAFE_METHODS:
-                needed = write_minimum
-            return user_can(request.user, section, needed)
+            writing = write_minimum is not None and request.method not in SAFE_METHODS
+            needed = write_minimum if writing else minimum
+            allowed = user_can(request.user, section, needed)
+            # A caller who holds the read rung and was refused the write one is
+            # told which of the two they failed, rather than "no access to
+            # Booking" on a screen they are looking at.
+            if not allowed and writing and user_can(request.user, section, minimum):
+                self.message = write_denied
+            return allowed
 
-    _HasSectionAccess.__name__ = f"HasSection_{section}_{minimum}"
+    # The rungs are both in the name, so two permissions on the same section
+    # cannot be one identity in a traceback.
+    rungs = minimum if write_minimum is None else f"{minimum}_write_{write_minimum}"
+    _HasSectionAccess.__name__ = f"HasSection_{section}_{rungs}"
     return _HasSectionAccess

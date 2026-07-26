@@ -1,9 +1,9 @@
-"""Migration 0008 — the store person's Booking cell, and its rollback (issue #130).
+"""Migration 0008 - the store person's Booking cell, and its rollback (issue #130).
 
 The forward direction opens Booking read-only on a *still-seeded* store role and
 skips a cell a live admin has retuned. The reverse has to be as careful, from the
 other end: it may only undo the exact cell it wrote, never an admin's own
-``view``. So the pair is an identity — migrate, roll back, and the access matrix
+``view``. So the pair is an identity - migrate, roll back, and the access matrix
 is where it started.
 
 The functions are called directly (as ``test_accounts_staff_manage_migration``
@@ -50,7 +50,7 @@ def _booking(role: Role) -> dict[str, str] | None:
 
 
 def test_the_ratified_cell_is_read_only():
-    """The correction opens a screen, not a create — the whole of the ruling."""
+    """The correction opens a screen, not a create - the whole of the ruling."""
     assert OPENED["capability"] == "view"
 
 

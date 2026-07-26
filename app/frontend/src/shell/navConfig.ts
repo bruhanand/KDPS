@@ -143,7 +143,7 @@ export const SECTIONS: NavSectionDef[] = [
     layer: "documents",
     items: [
       { label: "Bookings", to: "/booking" },
-      // A store holds `booking: view` (#130) — the list and the document, never
+      // A store holds `booking: view` (#130) - the list and the document, never
       // the create. The server refuses the POST at `operate`, so offering the
       // form here would walk them into a 403.
       { label: "New Booking", to: "/booking/new", minCapability: "operate" },
