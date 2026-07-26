@@ -20,6 +20,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
+from core.textsearch import search_term, text_filter
+from masters.scoping import scope_by_any_store
 from outbound.maker_checker import ask_again
 from outbound.models import (
     MarkDamaged,
@@ -93,6 +95,18 @@ def _filter_docstatus(qs, request):
 # ---------------------------------------------------------------------------
 
 
+#: What a typed term looks through on the Transfers screen — the voucher number,
+#: and either end of the movement by code or by name (a store person says
+#: "Deoghar", the document says "DEO").
+TRANSFER_SEARCH_FIELDS = (
+    "doc_number",
+    "source_store__code",
+    "source_store__name",
+    "destination_store__code",
+    "destination_store__name",
+)
+
+
 class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -100,14 +114,23 @@ class TransferListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = StoreTransfer.objects.select_related(
-            "source_store", "destination_store", "created_by"
-        ).prefetch_related("lines")
+        # Both ends of a movement see it, and nobody else does. The gate is here
+        # rather than only on writes because #102 puts a search box on this list:
+        # a term must narrow what the caller may already see, and it cannot do
+        # that on a queryset that was never narrowed at all.
+        qs = scope_by_any_store(
+            StoreTransfer.objects.select_related(
+                "source_store", "destination_store", "created_by"
+            ).prefetch_related("lines"),
+            self.request.user,
+            "source_store_id",
+            "destination_store_id",
+        )
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)
         qs = _filter_docstatus(qs, self.request)
-        return qs
+        return text_filter(qs, search_term(self.request), TRANSFER_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":

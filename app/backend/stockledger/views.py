@@ -13,6 +13,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.money import paise_to_rupees_str
+from core.textsearch import search_term, text_filter
+from masters.models import Sku
 from masters.scoping import scope_by_store_and_brand
 from stockledger.models import (
     InTransitStock,
@@ -169,6 +171,28 @@ class QuarantineView(APIView):
         )
 
 
+#: What a typed term looks through on the stock screen: the barcode a person
+#: reads off the tag, the style code, the brand. Deliberately not every column —
+#: a search over sizes and colours matches half the catalogue.
+ON_HAND_SEARCH_FIELDS = ("sku_code", "design", "brand")
+
+
+def _search_on_hand(qs: Any, term: str) -> Any:
+    """Narrow on-hand rows by a typed term or a scanned barcode.
+
+    One box takes both habits, and a whole barcode is not the same question as a
+    few letters. A barcode is a scan-alias (ADR-0004): if the term IS one, the
+    person scanned a tag and means that tag — answer with its stock alone, not
+    with every barcode that happens to contain those digits. Anything else is
+    typing, and matches as plain substring.
+    """
+    if not term:
+        return qs
+    if Sku.objects.filter(barcode__iexact=term).exists():
+        return qs.filter(sku_code__iexact=term)
+    return text_filter(qs, term, ON_HAND_SEARCH_FIELDS)
+
+
 class StockOnHandView(APIView):
     """Net stock on hand (Σqty > 0) grouped by SKU / brand / store, served from the
     **materialised** `StockOnHand` projection (maintained inside each post/reverse,
@@ -200,6 +224,10 @@ class StockOnHandView(APIView):
         # survives the MAX_LINES cap.
         if sku := request.query_params.get("sku"):
             qs = qs.filter(sku_code=sku)
+        # The screen's own search box (#102). Applied last, on the already-scoped
+        # queryset, so a term can only ever narrow — and it composes with the deep
+        # link above rather than replacing it.
+        qs = _search_on_hand(qs, search_term(request))
 
         totals = qs.aggregate(units=Sum("net_qty"), value=Sum("net_value_paise"))
         rows, lines = self._rows(qs, group_by)

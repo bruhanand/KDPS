@@ -182,6 +182,31 @@ def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:
     return [qs.filter(**{f"{field}__in": ids}) for qs, field in targets]
 
 
+def scope_by_any_store(qs: Any, user: Any, *fields: str) -> Any:
+    """`scope_by_store` for a row that names two locations — a movement.
+
+    A transfer belongs to both ends of it: the store that sent the carton and the
+    store waiting for it must both see the document, and nobody else may. So the
+    row is visible when *any* of the named store fields lands in the caller's
+    scope, and a transfer between two other stores is invisible — the same rule
+    global search applies to a transfer hit.
+
+    Two sides is exactly what makes this the easy gate to get wrong: an OR is a
+    widening operator, so it lives here once rather than being re-derived per
+    view. A brand-scoped user gets nothing, for the same reason as
+    `scope_by_store` — the row carries no brand that could prove it is theirs.
+    """
+    if is_brand_scoped(user):
+        return qs.none()
+    ids = active_store_ids(user)
+    if ids is None:
+        return qs
+    match = Q()
+    for field in fields:
+        match |= Q(**{f"{field}__in": ids})
+    return qs.filter(match)
+
+
 def scope_by_store_and_brand(
     qs: Any, user: Any, store_field: str = "store_id", brand_field: str = "brand"
 ) -> Any:

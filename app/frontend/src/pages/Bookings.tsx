@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
 
+import { SearchBox } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
@@ -52,7 +53,8 @@ interface BookingLineT {
 }
 
 export function BookingsPage() {
-  const { data, loading } = useList<BookingT>("/bookings");
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<BookingT>("/bookings", { q });
   return (
     <div className="page-pad">
       <div className="toolbar">
@@ -65,10 +67,31 @@ export function BookingsPage() {
           <Plus size={16} /> New booking
         </Link>
       </div>
+
+      <div className="filter-bar" style={{ marginBottom: 18 }}>
+        <SearchBox
+          value={q}
+          onChange={setQ}
+          placeholder="Search bookings — number, vendor, brand, season"
+          label="Search bookings"
+          testId="bookings-search"
+        />
+        {!loading && (
+          <span className="stat-label" data-testid="bookings-count">
+            {data.length} {data.length === 1 ? "booking" : "bookings"}
+            {q ? ` matching “${q}”` : ""}
+          </span>
+        )}
+      </div>
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
-        <div className="card section-card">No bookings yet. Create one from a vendor's receiving document.</div>
+        <div className="card section-card" data-testid="bookings-empty">
+          {q
+            ? `No booking matches “${q}”. Try the booking number, the vendor, the brand or the season.`
+            : "No bookings yet. Create one from a vendor's receiving document."}
+        </div>
       ) : (
         <div className="card-grid" data-testid="bookings-grid">
           {data.map((b) => {

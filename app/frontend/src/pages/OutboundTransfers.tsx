@@ -18,6 +18,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
+import { SearchBox } from "../components/SearchBox";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
@@ -238,8 +239,9 @@ export function TransferListPage() {
   const { user } = useAuth();
   const tab = params.get("type") === "store_split" ? "store_split" : "inter_store";
   const writable = canWriteTransfer(user);
+  const [q, setQ] = useState("");
 
-  const { data, loading } = useList<TransferT>(`/outbound/transfers?type=${tab}`);
+  const { data, loading } = useList<TransferT>("/outbound/transfers", { type: tab, q });
 
   function setTab(next: string) {
     setParams((p) => { p.set("type", next); return p; });
@@ -279,11 +281,30 @@ export function TransferListPage() {
         </button>
       </div>
 
+      <div className="filter-bar" style={{ marginBottom: 18 }}>
+        <SearchBox
+          value={q}
+          onChange={setQ}
+          placeholder="Search transfers — doc number, from, to"
+          label="Search transfers"
+          testId="transfers-search"
+        />
+        {!loading && (
+          <span className="stat-label" data-testid="transfers-count">
+            {data.length} {data.length === 1 ? "transfer" : "transfers"}
+            {q ? ` matching “${q}”` : ""}
+          </span>
+        )}
+      </div>
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="transfer-empty">
-          No {tab === "store_split" ? "store split" : "inter-store"} transfers yet.
+          {q
+            ? `No ${tab === "store_split" ? "store split" : "inter-store"} transfer matches “${q}”. `
+              + "Try the document number, or the store it came from or went to."
+            : `No ${tab === "store_split" ? "store split" : "inter-store"} transfers yet.`}
         </div>
       ) : (
         <div className="table-wrap">

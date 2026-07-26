@@ -4,7 +4,9 @@ import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, Repeat, ScrollTe
 
 import { fmtApprovalWhen } from "../components/approval";
 import type { ApprovalT } from "../components/approval";
+import { SearchBox } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
+import { withQuery } from "../lib/query";
 import "./Booking.css";
 import "./PtMapper.css";
 
@@ -91,6 +93,9 @@ export default function StockOnHand() {
   const [error, setError] = useState("");
   const [flash, setFlash] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  // The screen's own search (#102) — style, barcode or brand. A wedge scan lands
+  // here too, so a store person can check a tag without going up to the top bar.
+  const [q, setQ] = useState("");
 
   // Quarantine filters (the backend accepts ?store=&brand=; this exposes them).
   const [qStore, setQStore] = useState("");
@@ -114,24 +119,24 @@ export default function StockOnHand() {
     setLoading(true);
     setError("");
     if (group === "quarantine") {
-      const params = new URLSearchParams();
-      if (qStore) params.set("store", qStore);
-      if (qBrand) params.set("brand", qBrand);
-      const qs = params.toString();
-      api.get(`/stockledger/quarantine${qs ? `?${qs}` : ""}`)
+      api.get(withQuery("/stockledger/quarantine", { store: qStore, brand: qBrand }))
         .then((r) => setQuar(r.data))
         .catch((e) => setError(apiErrorMessage(e)))
         .finally(() => setLoading(false));
     } else {
-      const deep = new URLSearchParams({ group_by: group });
-      if (skuFilter) deep.set("sku", skuFilter);
-      if (brandFilter) deep.set("brand", brandFilter);
-      api.get(`/stockledger/on-hand?${deep.toString()}`)
+      // Deep link (from a global-search result) and typed term compose: the term
+      // narrows inside the link, it does not replace it.
+      api.get(withQuery("/stockledger/on-hand", {
+        group_by: group,
+        sku: skuFilter,
+        brand: brandFilter,
+        q,
+      }))
         .then((r) => setData(r.data))
         .catch((e) => setError(apiErrorMessage(e)))
         .finally(() => setLoading(false));
     }
-  }, [group, qStore, qBrand, reloadKey, skuFilter, brandFilter]);
+  }, [group, qStore, qBrand, reloadKey, skuFilter, brandFilter, q]);
 
   // The reports still waiting on someone — drafts, which is flagged and
   // rejected both; a confirmed one has posted and shows up as quarantine
@@ -282,6 +287,18 @@ export default function StockOnHand() {
         ))}
       </div>
 
+      {!isQuar && (
+        <div className="filter-bar" data-testid="onhand-search-bar">
+          <SearchBox
+            value={q}
+            onChange={setQ}
+            placeholder="Search or scan — style, barcode, brand"
+            label="Search stock"
+            testId="onhand-search"
+          />
+        </div>
+      )}
+
       {!isQuar && deepFilter && (
         <div className="filter-bar" data-testid="onhand-deep-filter">
           <span className={`chip chip-navy ${skuFilter ? "mono" : ""}`}>
@@ -413,9 +430,11 @@ export default function StockOnHand() {
         )
       ) : emptyOnHand ? (
         <div className="card section-card" data-testid="onhand-empty">
-          {deepFilter
-            ? `No stock of ${deepFilter} in any location you can see.`
-            : "No stock on hand yet. Post a PT file from Patna (PT Mapper → Push into system) to build inventory."}
+          {q
+            ? `Nothing matching “${q}” in any location you can see.`
+            : deepFilter
+              ? `No stock of ${deepFilter} in any location you can see.`
+              : "No stock on hand yet. Post a PT file from Patna (PT Mapper → Push into system) to build inventory."}
         </div>
       ) : (
         <div className="table-wrap kdps-scroll" style={{ marginTop: 16 }}>
