@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, FileUp, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { ListSearchBar } from "../components/SearchBox";
 import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import { useDoc, useList } from "../lib/hooks";
@@ -55,7 +56,8 @@ interface BookingLineT {
 
 export function BookingsPage() {
   const { user } = useAuth();
-  const { data, loading } = useList<BookingT>("/bookings");
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<BookingT>("/bookings", { q });
   // Mirrors the server gate exactly (`vendors.CanPlaceBooking` = booking:operate),
   // read from the same section payload rather than a role list of our own. A
   // store holds `booking: view` (#130) - the list, never the create.
@@ -74,10 +76,26 @@ export function BookingsPage() {
           </Link>
         )}
       </div>
+
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search bookings — number, vendor, brand, season"
+        label="Search bookings"
+        testId="bookings-search"
+        noun="booking"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
-        <div className="card section-card">No bookings yet. Create one from a vendor's receiving document.</div>
+        <div className="card section-card" data-testid="bookings-empty">
+          {q
+            ? `No booking matches “${q}”. Try the booking number, the vendor, the brand or the season.`
+            : "No bookings yet. Create one from a vendor's receiving document."}
+        </div>
       ) : (
         <div className="card-grid" data-testid="bookings-grid">
           {data.map((b) => {

@@ -38,6 +38,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import user_can
 from core.documents import DocStatus
+from core.textsearch import search_term
 from inbound.models import Grn
 from masters.models import Brand, Cohort, Sku
 from masters.scoping import (
@@ -398,7 +399,9 @@ class GlobalSearchView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        query = (request.query_params.get("q") or "").strip()
+        # The same `?q=` the in-page search boxes send (#102) — read through the
+        # one helper so the two halves of search cannot drift into two contracts.
+        query = search_term(request)
         if len(query) < MIN_QUERY_LEN:
             return Response(
                 {

@@ -24,6 +24,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
+from core.textsearch import search_term, text_filter
 from outbound.counting import (
     CountError,
     MovedMidCountError,
@@ -119,6 +120,18 @@ def _filter_docstatus(qs, request):
 # ---------------------------------------------------------------------------
 
 
+#: What a typed term looks through on the Transfers screen — the voucher number,
+#: and either end of the movement by code or by name (a store person says
+#: "Deoghar", the document says "DEO").
+TRANSFER_SEARCH_FIELDS = (
+    "doc_number",
+    "source_store__code",
+    "source_store__name",
+    "destination_store__code",
+    "destination_store__name",
+)
+
+
 class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -126,6 +139,14 @@ class TransferListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
+        # NOTE: this list is not store-scoped on read — only transfer *writes*
+        # are (`enforce_store_scope`). The search below therefore narrows the
+        # whole network's transfers rather than the caller's own. Search does not
+        # widen anything (it is a filter on the same base set a store person can
+        # already scroll), but the gate itself is missing: issue #141, which also
+        # covers the detail endpoint below and the rest of outbound, and carries
+        # the open question a fix has to answer first (a brand-scoped caller has
+        # no store to gate on, and a transfer carries no brand).
         qs = StoreTransfer.objects.select_related(
             "source_store", "destination_store", "created_by"
         ).prefetch_related("lines")
@@ -133,7 +154,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
         if ttype:
             qs = qs.filter(transfer_type=ttype)
         qs = _filter_docstatus(qs, self.request)
-        return qs
+        return text_filter(qs, search_term(self.request), TRANSFER_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":

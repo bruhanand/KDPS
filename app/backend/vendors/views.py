@@ -28,6 +28,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section
 from accounts.sections import CAP_OPERATE, CAP_VIEW
 from core.documents import VoucherSeries
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile
 from masters.models import Brand, Season, Store
 from vendors.agents import read_booking_receipt
@@ -116,6 +117,18 @@ class BookingDraftView(APIView):
         return Response(result)
 
 
+#: What a typed term looks through on the Bookings screen — the four things a
+#: person half-remembers about an order: its number, who it was placed with,
+#: whose goods they are, and which season it belongs to.
+BOOKING_SEARCH_FIELDS = (
+    "number",
+    "vendor__name",
+    "brand__name",
+    "season__code",
+    "season__name",
+)
+
+
 class BookingListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, CanReadOrPlaceBooking]
     serializer_class = BookingSerializer
@@ -131,7 +144,9 @@ class BookingListCreateView(generics.ListCreateAPIView):
             qs = qs.filter(brand_id=params["brand"])
         if params.get("season"):
             qs = qs.filter(season_id=params["season"])
-        return qs
+        # The screen's own search box (#102), applied last so it can only narrow
+        # what the filters above already allow.
+        return text_filter(qs, search_term(self.request), BOOKING_SEARCH_FIELDS)
 
     @transaction.atomic
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
