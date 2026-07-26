@@ -409,6 +409,106 @@ def test_every_declared_exception_carries_a_reason():
         assert entry.roles, name
 
 
+# --- 4. Views that carry no section gate at all ---------------------------
+#: Every view still sitting on a bare ``IsAuthenticated``, as of #130. For each
+#: of these the ratified table decides nothing: any logged-in person reaches
+#: them, whatever their row says. That is the hole the Booking endpoints were in
+#: until this issue, and it was found by reading rather than by a test.
+#:
+#: This is a **baseline, not an approval**. Closing these is #124's, #131's and
+#: #134's work, ticket by ticket, and each one leaves this list when its section
+#: is decided. What the assertion buys today is that the list cannot grow by
+#: accident: a new endpoint shipping ungated fails here, so leaving it ungated
+#: becomes a recorded decision instead of an oversight.
+UNGATED_VIEWS = {
+    "accounts/views.py:MeView",
+    "accounts/views.py:LogoutView",
+    "approvals/views.py:ApprovalInboxView",
+    "approvals/views.py:ApprovalListView",
+    "approvals/views.py:ApprovalDecideView",
+    "inbound/views.py:PendingBookingsView",
+    "inbound/views.py:InvoiceDraftView",
+    "inbound/views.py:GrnListCreateView",
+    "inbound/views.py:GrnDetailView",
+    "masters/views.py:LegalEntityListView",
+    "masters/views.py:SkuLookupView",
+    "masters/views.py:SummaryView",
+    "outbound/views.py:TransferDetailView",
+    "outbound/views.py:TransferGapListView",
+    "outbound/views.py:GapClosureDetailView",
+    "outbound/views.py:ScanLookupView",
+    "outbound/views.py:RTVDetailView",
+    "outbound/views.py:AdjustmentDetailView",
+    "outbound/views.py:WriteOffDetailView",
+    "outbound/views.py:VFlipDetailView",
+    "ptmapper/views.py:PtFileListCreateView",
+    "ptmapper/views.py:PtFileFromGrnView",
+    "ptmapper/views.py:PtFileDetailView",
+    "ptmapper/views.py:PtFileRerunView",
+    "ptmapper/views.py:PtRowsUpdateView",
+    "ptmapper/views.py:PtFileSendView",
+    "ptmapper/views.py:PtFileRecallView",
+    "ptmapper/views.py:PtFilePostView",
+    "ptmapper/views.py:PtFileReverseView",
+    "ptmapper/views.py:PtFilePriceView",
+    "ptmapper/views.py:PtFileExportXlsxView",
+    "ptmapper/views.py:PtFileExportView",
+    "ptmapper/views.py:ReviewListView",
+    "ptmapper/views.py:ReviewResolveView",
+    "ptmapper/views.py:LookupProposalListView",
+    "ptmapper/views.py:LookupProposalDecideView",
+    "ptmapper/views.py:SuggestView",
+    "ptmapper/views.py:ControlledValuesView",
+    "search/views.py:GlobalSearchView",
+    "stockledger/views.py:StockLedgerListView",
+    "stockledger/views.py:StockLedgerSummaryView",
+    "stockledger/views.py:InTransitView",
+    "stockledger/views.py:QuarantineView",
+    "stockledger/views.py:StockOnHandView",
+    "vendors/views.py:VendorListCreateView",
+}
+
+_CLASS = re.compile(r"^class\s+(\w+)")
+_BARE_AUTH = re.compile(r"^\s*permission_classes\s*=\s*\[IsAuthenticated\]\s*$")
+
+
+def _views_with_no_section_gate() -> set[str]:
+    """``path:ClassName`` for every view whose only permission is authentication.
+
+    Source-level, because "this view names no section" is a fact about the code
+    rather than about any one request: an endpoint nobody wrote a test for is
+    exactly the one that ships open.
+    """
+    found = set()
+    for path in BACKEND.rglob("*.py"):
+        parts = set(path.parts)
+        if "tests" in parts or "migrations" in parts or ".venv" in parts:
+            continue
+        current = ""
+        for line in path.read_text().splitlines():
+            named = _CLASS.match(line)
+            if named:
+                current = named.group(1)
+            elif current and _BARE_AUTH.match(line):
+                found.add(f"{path.relative_to(BACKEND).as_posix()}:{current}")
+    return found
+
+
+def test_no_new_endpoint_ships_without_a_section_gate():
+    found = _views_with_no_section_gate()
+    new = found - UNGATED_VIEWS
+    assert not new, (
+        "these views answer any authenticated caller, so the access table decides "
+        "nothing about them - gate them with `require_section(...)`, or add them "
+        f"to UNGATED_VIEWS and say in the ticket why they stay open: {sorted(new)}"
+    )
+    closed = UNGATED_VIEWS - found
+    assert not closed, (
+        "these views have been gated since the baseline was written - delete them "
+        f"from UNGATED_VIEWS so the list keeps shrinking honestly: {sorted(closed)}"
+    )
+
+
 #: What a hand-kept gate is *called*. A constant naming a set of role codes in
 #: this codebase has always ended in one of these, so the guard below is a
 #: naming convention enforced, not a proof: a list called something else, or

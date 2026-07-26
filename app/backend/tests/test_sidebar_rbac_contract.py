@@ -238,6 +238,22 @@ def test_the_store_person_can_see_bookings_but_not_place_one(db):
         assert [s["code"] for s in body["sections"] if s["code"] == "booking"] == ["booking"]
 
 
+def test_the_client_copy_of_the_table_is_current():
+    """The PWA's test fixtures are generated from this table, not transcribed.
+
+    The live menu is already the server's answer, but the client suite used to
+    assert against nine hand-copied personas - so a cell could be corrected here
+    and the client would keep passing against the old wording. This fails the
+    moment the generated file falls behind, and names the command that fixes it.
+    """
+    from accounts.management.commands.dump_rbac_matrix import TARGET, rendered
+
+    assert TARGET.exists(), f"{TARGET} is missing - run manage.py dump_rbac_matrix"
+    assert TARGET.read_text() == rendered(), (
+        f"{TARGET.name} is stale - run `python manage.py dump_rbac_matrix` and commit it"
+    )
+
+
 def test_seeding_stores_exactly_the_table(db):
     """The stored answer is the table's - the seed writes no opinion of its own.
 
