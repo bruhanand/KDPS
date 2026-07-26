@@ -4,15 +4,11 @@ Read this when a review or QA finding looks like more than a bug.
 
 ## The test
 
-**Not** how serious the finding is.
-A kernel breach is serious and has one known correct answer, so fixing it is exactly what an agent is for.
-
+Not how serious the finding is - a kernel breach is serious and has one known correct answer, so fixing it is exactly what an agent is for.
 The test is: **is the answer already written down?**
 
-- **Written down** - the 12 rules, a locked decision, an ADR, the issue's own acceptance criteria - then **fix it**, however serious it looks.
-  You are applying a rule, not making one.
-- **Not written down** - then **stop**.
-  Fixing it would mean inventing policy, and invented policy has reached this codebase before.
+- **Written down** - the 12 rules, a locked decision, an ADR, the issue's own acceptance criteria - then **fix it**, however serious it looks. You are applying a rule, not making one.
+- **Not written down** - then **stop**. Fixing it would mean inventing policy, and invented policy has reached this codebase before.
 
 ## Fix it
 
@@ -21,12 +17,8 @@ The test is: **is the answer already written down?**
 - The Spec axis says you solved a different problem, and the issue is clear about which problem it wanted. Redo the work.
 - A fix far larger than the issue implied: do it, and say plainly in the PR that the issue was mis-scoped. Stop only if it has genuinely become a slice rather than an issue.
 
-### Quote the rule, or do not touch it
-
-Before fixing anything above, you must be able to **quote the rule or decision you are applying** - the sentence, and where it lives.
-
-A passage that nearly fits is not a quote.
-No quote means it is not written down, which means stop.
+Before fixing anything above, **quote the rule or decision you are applying** - the sentence, and where it lives.
+A passage that nearly fits is not a quote; no quote means it is not written down, which means stop.
 
 ## Stop and ask
 
@@ -35,22 +27,19 @@ No quote means it is not written down, which means stop.
 - Two fair readings exist and either is defensible.
 - A CA ruling is pending, including the five gated money items.
 - The blast radius has grown into a slice rather than an issue.
-- A finding survived two honest fix attempts. That is your evidence the answer was never as settled as you thought.
+- A finding survived two honest fix attempts - evidence the answer was never as settled as you thought.
 
-## Money always comes back to Anand
+## Money always goes back to the human
 
 Wrong valuation, wrong liability, wrong tax, a posting that would later need reversing, money rendered wrong on a screen.
 
 **Fix it if you can, but never open a real PR on it.**
 Stop, hand back, and ask - even when the corpus answers the question and you can quote it.
-
-A confident wrong fix here reaches the alpha and corrupts a ledger that then has to be unwound by hand.
-That cost is far higher than the cost of asking.
+A confident wrong fix here reaches the alpha and corrupts a ledger that then has to be unwound by hand, which costs far more than asking.
 
 ## What stopping looks like
 
-Stopping is not throwing the work away.
-Preserve it so the next session starts from what you learnt:
+Stopping preserves the work so the next session starts from what you learnt:
 
 ```bash
 git push -u origin HEAD
@@ -60,22 +49,18 @@ gh issue edit <n> -R bruhanand/KDPS --add-label ready-for-human --remove-label r
 ```
 
 The draft PR body says which gates passed, where it stopped, and what the finding was.
-
-Then comment on the issue and stop.
-Do not carry on to the next gate. Do not open a real PR.
+Then comment on the issue and stop - no further gates, no real PR.
 
 ## How to write the question
 
-Anand reads this, not another agent.
+A human reads this, not another agent.
 Write it in **simple, everyday English**, the way you would say it out loud to a shop owner in Patna.
 
-- Talk about shirts, brands, stores, bills and customers. Not models, endpoints, serialisers or migrations.
-- Rupees the Indian way: `₹2,85,000`, not `285000` and not `2.85 lakh INR`.
-- Dates in words: `14 August`, not `2026-08-14`.
-- One question at a time. If there are two, ask the more important one and say the other is waiting.
-- Give the choices and say which one you would pick, and why, in one line.
-- Never ask him to read code to answer.
-- No file paths, no line numbers, no findings tables. Those live in the draft PR.
+- Talk about shirts, brands, stores, bills and customers - never models, endpoints, serialisers or migrations.
+- Rupees the Indian way: `₹2,85,000`. Dates in words: `14 August`.
+- One question at a time; if there are two, ask the more important one and say the other is waiting.
+- Give the choices and say which you would pick, and why, in one line.
+- The question must be answerable without reading code: file paths, line numbers and findings tables live in the draft PR.
 
 Name the real-world situation, then the choice:
 
