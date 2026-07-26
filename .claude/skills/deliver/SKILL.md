@@ -24,11 +24,11 @@ Do not widen the issue to make a gate pass, and do not weaken a gate to make the
 | 0 | Issue still current | here, 3 checks | A ruling sits unmerged in the comments, a blocker is open, or a PR collides |
 | 1 | Claim + branch | here | - |
 | 2 | Implement (TDD) | **here** | - |
-| 3 | Green (`npm run ci`) | here, logged to file | Any lint, type, migration, import-contract or test failure |
+| 3 | Quick checks | here | The files you touched do not pass their own tests |
 | 4 | Simplify | subagent | - |
 | 5 | Two-axis review | subagents | An unfixed Spec finding, or a hard Standards violation |
-| 6 | Live QA | subagent | A screen, API call, or console is not clean in a real browser |
-| 7 | PR | here | - |
+| 6 | Live QA (full gate runs alongside) | subagent | A screen, API call, or console is not clean in a real browser |
+| 7 | Gate + PR | here | Any lint, type, migration, import-contract or test failure |
 
 Gates 5 and 6 can also produce a finding that must **not** be fixed on the branch at all - see [ESCALATION.md](ESCALATION.md).
 
@@ -114,25 +114,23 @@ Commit in small, honest steps on the branch.
 
 ---
 
-## Gate 3 - Green
+## Gate 3 - Quick checks
 
-A failing `npm run ci` prints thousands of lines, and you need about ten of them.
-Always log it to the scratchpad and read the tail:
+**Do not run `npm run ci` here.** The full gate takes about five minutes, and running it after every
+change is what turns a one-hour issue into a three-hour one. It runs **once**, at Gate 7.
+
+While you work, check only what you touched:
 
 ```bash
-npm run ci > "$SCRATCH/ci.log" 2>&1; echo "exit=$?"; tail -40 "$SCRATCH/ci.log"
+cd app/backend && uv run pytest <the one test file> -q
+cd app/backend && uv run mypy core config
+npm --prefix app/frontend run typecheck
 ```
 
-Grep the log for the specific failure instead of reading it whole.
-Re-runs during the fix loop can be narrowed: `uv run pytest <one file>`, `npm --prefix app/frontend run typecheck`.
-Run the full gate again only when you think you are done.
+Seconds, not minutes. Run them as often as you like.
 
-This is the acceptance gate: ruff format + ruff + mypy strict + `makemigrations --check` + import-linter + pytest + frontend tsc/vitest.
-
-**Green means green.**
-Cloud CI runs only a subset, so a green GitHub Actions run does not substitute for this.
-If you find a pre-existing failure unrelated to your issue, fix it if it is small, and say in the PR that you did.
-If it is not small, open a separate issue and note it - do not leave a red gate undescribed.
+Before leaving this gate, make sure the pieces you touched pass their own checks.
+The full gate is the final word, not a running commentary.
 
 ---
 
@@ -140,10 +138,10 @@ If it is not small, open a separate issue and note it - do not leave a red gate 
 
 Send this to a subagent (`general-purpose`, synchronous), so the whole diff and its reasoning stay out of your context:
 
-> Run the `/simplify` skill over the diff against `main`, apply the fixes, then run `npm run ci` (logging to a file, reading only the tail).
-> Return in **under 150 words**: what you changed, as one line each, and whether CI is green. Do not paste diffs or code.
+> Run the `/simplify` skill over the diff against `main` and apply the fixes. Do not run `npm run ci` - the full gate runs once, later. Check only the files you touched: `uv run pytest <affected file> -q`, `npm --prefix app/frontend run typecheck`.
+> Return in **under 150 words**: what you changed, as one line each. Do not paste diffs or code.
 
-If it reports CI red and cannot fix it, pull the change back into your own hands.
+Anything it breaks is caught by the single gate at Gate 7.
 
 Simplify is quality only.
 It does not hunt for bugs, so it never replaces Gate 5.
@@ -161,7 +159,7 @@ Handle the findings by axis:
 - **Standards findings** - fix hard violations.
   Judgement-call smells are yours to weigh; state the ones you consciously left.
 
-Re-run `npm run ci` after any fix.
+Re-run only the affected test file after a fix. The full gate is still at Gate 7.
 
 **Two rounds, then stop.**
 If a finding survives two honest attempts to fix it, it is not a bug you are failing to squash - it is telling you something about the design.
@@ -184,6 +182,14 @@ The rule in one line: fix it when you can quote the rule you are applying, stop 
 This is the gate that matters for an ERP, and it is the one no other skill covers.
 Tests passing is not evidence a screen works.
 
+**Start the full gate first, in the background, then drive the browser while it runs.**
+They need nothing from each other: pytest creates and drops its own test database, the browser drives `kdps_dev`.
+Run them one after the other and you wait twice for no reason.
+
+```bash
+npm run ci > "$SCRATCH/ci.log" 2>&1 &     # about five minutes; read it at Gate 7
+```
+
 It is also by far the most expensive gate to hold in context: every screenshot is an image, every accessibility snapshot is a page of tree, every network dump is a page of JSON.
 **Run it in a subagent and never look at the pictures yourself.**
 
@@ -201,9 +207,25 @@ Two re-drives at most, then read [ESCALATION.md](ESCALATION.md).
 
 ---
 
-## Gate 7 - Pull request
+## Gate 7 - The gate, then the pull request
 
-Push the branch and open a PR against `main`:
+Now read the gate you started at Gate 6:
+
+```bash
+tail -40 "$SCRATCH/ci.log"
+```
+
+This is the acceptance gate, and the only time it runs: ruff format + ruff + mypy strict + `makemigrations --check` + import-linter + pytest + frontend tsc/vitest.
+
+**Green means green.**
+Cloud CI runs only a subset, so a green GitHub Actions run does not substitute for this.
+Grep the log for the failure rather than reading it whole.
+
+If it is red, fix it, then re-run the full gate - this time you do have to wait for it.
+If you find a pre-existing failure unrelated to your issue, fix it if it is small and say so in the PR.
+If it is not small, open a separate issue and note it - do not leave a red gate undescribed.
+
+Then push the branch and open a PR against `main`:
 
 ```bash
 git push -u origin HEAD
