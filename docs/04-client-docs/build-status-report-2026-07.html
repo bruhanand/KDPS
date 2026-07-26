@@ -66,11 +66,11 @@
 <main>
   <div class="eyebrow">KDPS Lifestyle · ERP System</div>
   <h1>Build Status Report — Module-wise</h1>
-  <div class="stamp">21 July 2026 · Anand Kumar</div>
+  <div class="stamp">26 July 2026 · Anand Kumar</div>
 
   <div class="seq">
-    <span class="step done"><b>Done</b>Core Platform · Goods Receipt</span><span class="arr">→</span>
-    <span class="step now"><b>Now</b>Purchase Orders · Transfers &amp; Returns</span><span class="arr">→</span>
+    <span class="step done"><b>Done</b>Core Platform · Goods Receipt · Transfers &amp; Returns</span><span class="arr">→</span>
+    <span class="step now"><b>Now</b>Purchase Orders · Stock Count</span><span class="arr">→</span>
     <span class="step next"><b>Next</b>POS &amp; Billing</span><span class="arr">→</span>
     <span class="step next"><b>Then</b>Accounts &amp; Payments</span><span class="arr">→</span>
     <span class="step later"><b>Later</b>HRMS · Promotions · Analytics</span>
@@ -94,6 +94,7 @@
         <li>Item-level stock ledger (size × colour)</li>
         <li>GST setup — Bihar &amp; Jharkhand</li>
         <li>Web app, runs on any device</li>
+        <li>Search — one search bar everywhere, works with the barcode scanner</li>
       </ul></td>
       <td><span class="dim">—</span></td>
       <td><span class="dim">—</span></td></tr>
@@ -128,9 +129,10 @@
         <li>Stock ledger</li>
         <li>Stock on hand</li>
       </ul></td>
-      <td><span class="dim">—</span></td>
       <td><ul>
-        <li>Physical stock count (audit)</li>
+        <li>Physical stock count — blind counting with a variance report (counters can't see book stock)</li>
+      </ul></td>
+      <td><ul>
         <li>Stock aging &amp; dead-stock alerts</li>
         <li>Return-deadline tracking (SOR brands)</li>
         <li>Demand forecasting &amp; auto-replenishment</li>
@@ -138,13 +140,18 @@
       </ul></td></tr>
 
     <tr><td class="mod">Transfers &amp; Returns</td>
-      <td class="st"><span class="badge b-prog">Testing</span></td>
-      <td><span class="dim">—</span></td>
+      <td class="st"><span class="badge b-done">Working</span></td>
       <td><ul>
-        <li>Stock transfer with dispatch &amp; receive confirmation</li>
-        <li>Inter-state GST handling</li>
+        <li>Scan-based transfer — scan out at dispatch, scan in at receive, goods tracked in transit</li>
+        <li>Short / extra / damaged receipts flagged automatically, with a gaps list for follow-up</li>
+        <li>Damage: store reports, warehouse confirms — nothing written off by one person alone</li>
+        <li>Every transfer prints its own PT document</li>
+        <li>Senior approval required — no one approves their own transfer</li>
+        <li>Stock always moves at its correct book value</li>
+      </ul></td>
+      <td><ul>
         <li>Return to vendor (RTV)</li>
-        <li>Stock adjustments &amp; write-offs</li>
+        <li>Stock adjustments</li>
       </ul></td>
       <td><span class="dim">—</span></td></tr>
 
@@ -213,20 +220,22 @@
       <td class="st"><span class="badge b-part">Partly live</span></td>
       <td><ul>
         <li>Master data — stores, brands, seasons, tax</li>
-        <li>Basic user roles</li>
+        <li>User rights &amp; permissions matrix — nine roles, each screen and action gated; store staff see only their own store</li>
+        <li>Each person switches only between the units they are allowed</li>
       </ul></td>
-      <td><span class="dim">—</span></td>
       <td><ul>
-        <li>User rights &amp; permissions matrix</li>
+        <li>Remaining permission fine-tuning (approval limits by value)</li>
+      </ul></td>
+      <td><ul>
         <li>Store opening / closure workflows</li>
         <li>Data migration &amp; store-wise rollout</li>
       </ul></td></tr>
   </table>
   </div>
 
-  <div class="note"><b>In short:</b> operations modules first — core platform and goods receipt are live, purchase orders and transfers are in build-test, POS &amp; billing is next, accounts &amp; payments after that. HRMS, promotions and analytics follow.</div>
+  <div class="note"><b>In short:</b> operations modules first — core platform, goods receipt and transfers &amp; returns are working; stock counting and user permissions went live this week. POS &amp; billing is next — KDPS will have its <b>own POS built into the system</b> (no third-party POS software). Accounts &amp; payments after that; HRMS, promotions and analytics follow.</div>
 
-  <div class="foot">KDPS ERP · 21 July 2026 · Confidential — for KDPS management</div>
+  <div class="foot">KDPS ERP · 26 July 2026 · Confidential — for KDPS management</div>
 </main>
 </body>
 </html>
