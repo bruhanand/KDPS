@@ -5,6 +5,7 @@ import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-re
 
 import { useAuth } from "../auth/AuthContext";
 import type { User } from "../auth/AuthContext";
+import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
 import { SECTIONS, isActiveItem, itemPath, itemVisible } from "./navConfig";
@@ -15,6 +16,7 @@ import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
 const NAV_ORDER_KEY = "kdps-nav-item-order";
+const NAV_COLLAPSED_KEY = "kdps-nav-collapsed";
 const MIN_SIDEBAR = 210;
 const MAX_SIDEBAR = 390;
 
@@ -141,9 +143,52 @@ function UserMenu() {
   );
 }
 
+/** The bell, told what it is ringing about.
+ *
+ *  It used to be a dead button with a permanent red dot: nothing to click, and a
+ *  dot that said "something needs you" whether or not anything did. It now
+ *  counts the documents actually waiting on this person's decision and opens the
+ *  inbox — and shows nothing at all when there is nothing to show. */
+function ApprovalsBell() {
+  const [waiting, setWaiting] = useState<number | null>(null);
+  useEffect(() => {
+    api
+      .get("/approvals/inbox")
+      .then((r) => setWaiting(r.data?.length ?? 0))
+      .catch(() => setWaiting(null));
+  }, []);
+  const label = waiting
+    ? `${waiting} document${waiting === 1 ? "" : "s"} waiting for your approval`
+    : "Approvals inbox — nothing waiting for you";
+  return (
+    <Link to="/approvals" className="icon-btn" aria-label={label} title={label} data-testid="notifications">
+      <Bell size={18} />
+      {!!waiting && (
+        <span className="bell-count" data-testid="notifications-count">
+          {waiting > 9 ? "9+" : waiting}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 function readNavOrder(): NavOrder {
   try {
     return JSON.parse(localStorage.getItem(NAV_ORDER_KEY) || "{}") as NavOrder;
+  } catch {
+    return {};
+  }
+}
+
+/** Section codes the person has folded away, remembered across sessions.
+ *
+ *  Thirteen sections, all of them open, put ~45 links in front of an owner and
+ *  pushed Money, Reports and Setup below the fold on a laptop: the sidebar was
+ *  a list to scroll rather than a map to read. Folding is the ERP norm for a
+ *  reason. Everything stays open by default, so nobody loses a link they had. */
+function readCollapsed(): Record<string, true> {
+  try {
+    return JSON.parse(localStorage.getItem(NAV_COLLAPSED_KEY) || "{}") as Record<string, true>;
   } catch {
     return {};
   }
@@ -204,9 +249,34 @@ function Sidebar({
   const { user } = useAuth();
   const { pathname } = useLocation();
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
+  const [collapsed, setCollapsed] = useState<Record<string, true>>(() => readCollapsed());
   const [dragged, setDragged] = useState<DraggedItem>(null);
+
+  // Landing inside a folded section unfolds it: the sidebar must always be able
+  // to show where you are, however you got there (search, deep link, redirect).
+  useEffect(() => {
+    const owning = SECTIONS.find((s) => s.items.some((i) => isActiveItem(i, pathname)));
+    if (!owning || !collapsed[owning.code]) return;
+    setCollapsed((current) => {
+      const next = { ...current };
+      delete next[owning.code];
+      localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, [pathname, collapsed]);
+
   if (!user) return null;
   const sections = visibleSections(user);
+
+  function toggleSection(code: string) {
+    setCollapsed((current) => {
+      const next = { ...current };
+      if (next[code]) delete next[code];
+      else next[code] = true;
+      localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
 
   function moveItem(section: VisibleSection, targetTo: string) {
     const code = section.def.code;
@@ -239,13 +309,15 @@ function Sidebar({
           // One visible item ⇒ the section *is* that link. This is what keeps a
           // store person's sidebar at the seven-line scale of the KDPS sketch.
           const single = items.length === 1;
+          const open = !collapsed[s.def.code];
+          const holdsActive = items.some((i) => isActiveItem(i, pathname));
           return (
             <div className="nav-group" key={s.def.code}>
-              <div className="nav-group-head">
-                <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-                  <Icon size={16} />
-                </span>
-                {single ? (
+              {single ? (
+                <div className="nav-group-head">
+                  <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+                    <Icon size={16} />
+                  </span>
                   <Link
                     to={items[0].to}
                     onClick={onNavigate}
@@ -255,11 +327,25 @@ function Sidebar({
                   >
                     {s.label}
                   </Link>
-                ) : (
-                  <span className="nav-group-label">{s.label}</span>
-                )}
-              </div>
-              {!single && (
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="nav-group-head nav-group-toggle"
+                  aria-expanded={open}
+                  onClick={() => toggleSection(s.def.code)}
+                  data-testid={`nav-section-${s.def.code}`}
+                >
+                  <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+                    <Icon size={16} />
+                  </span>
+                  <span className={`nav-group-label ${holdsActive ? "holds-active" : ""}`}>
+                    {s.label}
+                  </span>
+                  <ChevronDown size={14} className={`nav-chev ${open ? "open" : ""}`} />
+                </button>
+              )}
+              {!single && open && (
                 <div className="nav-items">
                   {items.map((it) => {
                     const active = isActiveItem(it, pathname);
@@ -363,10 +449,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
-            <button className="icon-btn" data-testid="notifications">
-              <Bell size={18} />
-              <span className="dot" />
-            </button>
+            <ApprovalsBell />
             <UserMenu />
           </div>
         </header>

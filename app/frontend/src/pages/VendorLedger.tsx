@@ -7,6 +7,7 @@ import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface BalanceT {
   vendor_id: number;
@@ -118,19 +119,17 @@ export default function VendorLedger() {
 
   return (
     <div className="page-pad" data-testid="vendor-ledger-page">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · accounts payable · append-only</p>
-          <h1 className="h1 h2-rust">Vendor Ledger</h1>
-        </div>
-        <div className="spacer" />
-        {isFinance && (
-          <>
-            <button className="btn" onClick={() => { setMode("bill"); setError(""); }} data-testid="vl-record-bill-btn"><ReceiptText size={15} /> Record Bill</button>
-            <button className="btn btn-cta" onClick={() => { setMode("payment"); setError(""); }} data-testid="vl-record-payment-btn"><Send size={15} /> Record Payment</button>
-          </>
-        )}
-      </div>
+      <PageHeader
+        lead="Accounts payable, brand by brand. Append-only: a correction is a reversing entry."
+        actions={
+          isFinance && (
+            <>
+              <button className="btn" onClick={() => { setMode("bill"); setError(""); }} data-testid="vl-record-bill-btn"><ReceiptText size={15} /> Record Bill</button>
+              <button className="btn btn-cta" onClick={() => { setMode("payment"); setError(""); }} data-testid="vl-record-payment-btn"><Send size={15} /> Record Payment</button>
+            </>
+          )
+        }
+      />
 
       <div className="stat-grid">
         <div className="card stat-card"><IndianRupee size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono">{balances?.total_payable_rupees ?? "0.00"}</div><div className="stat-label">Total payable (₹)</div></div>

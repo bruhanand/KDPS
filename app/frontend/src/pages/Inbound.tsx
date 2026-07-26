@@ -18,6 +18,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { useMakePt } from "../components/InboundQueueCard";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 const GRN_TONE: Record<string, string> = {
   received: "green",
@@ -106,20 +107,17 @@ export function InboundPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Store Ops · Receiving</p>
-          <h1 className="h1 h2-rust">Stock Receive</h1>
-        </div>
-        <div className="spacer" />
-        <Link
-          className="btn btn-cta"
-          to={`/receive/new?kind=${tab}`}
-          data-testid="new-receipt-btn"
-        >
-          <Plus size={16} /> New receipt
-        </Link>
-      </div>
+      <PageHeader
+        actions={
+          <Link
+            className="btn btn-cta"
+            to={`/receive/new?kind=${tab}`}
+            data-testid="new-receipt-btn"
+          >
+            <Plus size={16} /> New receipt
+          </Link>
+        }
+      />
 
       <div className="mode-toggle" data-testid="receive-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
         <button

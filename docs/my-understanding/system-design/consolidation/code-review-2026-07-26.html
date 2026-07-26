@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KDPS — Code &amp; UX Review (26 July 2026)</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f; --rust-soft:#e8a07f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --red:#b3261e; --red-bg:#fbe9e7;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--blue);text-decoration:none}
+  a:hover{text-decoration:underline}
+  main{min-width:0; padding:40px 48px 120px; max-width:var(--maxw); margin:0 auto}
+  @media(max-width:900px){ main{padding:24px 18px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12.5px}
+  h1{font-size:30px; line-height:1.2; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15.5px; max-width:72ch}
+  section{margin:38px 0; scroll-margin-top:18px}
+  h2.sec{font-size:21px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16.5px; color:var(--navy2); margin:24px 0 8px}
+  p{margin:10px 0}
+  .badge{display:inline-block; font-size:11.5px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:999px; vertical-align:middle}
+  .b-pass{background:var(--green-bg); color:var(--green)}
+  .b-p1{background:var(--amber-bg); color:var(--amber)}
+  .b-p2{background:var(--grey-bg); color:#41506b}
+  .b-p0{background:var(--red-bg); color:var(--red)}
+  .b-obs{background:var(--blue-bg); color:var(--blue)}
+  .b-gap{background:var(--purple-bg); color:var(--purple)}
+  table{width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:14px 0; font-size:14.5px}
+  th{background:var(--grey-bg); text-align:left; padding:9px 12px; font-size:12.5px; letter-spacing:.06em; text-transform:uppercase; color:#41506b}
+  td{padding:9px 12px; border-top:1px solid var(--line); vertical-align:top}
+  code{background:var(--grey-bg); padding:1px 6px; border-radius:5px; font-size:13.5px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin:14px 0}
+  .verdict{border-left:5px solid var(--green); background:var(--green-bg)}
+  .verdict h3{margin-top:0; color:var(--green)}
+  .warn{border-left:5px solid var(--rust); background:#fdf1ec}
+  .warn h3{margin-top:0; color:var(--rust)}
+  ul{margin:8px 0; padding-left:22px}
+  li{margin:5px 0}
+  .small{font-size:13.5px; color:var(--muted)}
+  .fix{border-left:5px solid var(--blue)}
+  .fix h3{margin-top:0}
+</style>
+</head>
+<body>
+<main>
+<header class="doc">
+  <div class="eyebrow">KDPS Operating System · Independent review</div>
+  <h1>Code, UI and ERP-process review — and what was fixed in this pass</h1>
+  <p class="sub">Reviewed on <strong>26 July 2026</strong> against the working tree at <code>/app</code> (main, through PR #112), with the full stack brought up locally — Postgres 15, Django/ASGI on <code>uvicorn</code>, Vite dev server — and clicked through as <strong>owner</strong>, <strong>store manager</strong> and <strong>store staff</strong> on desktop (1920 / 1440) and mobile (390). All <strong>31 open GitHub issues</strong> were read first: nothing in this pass overlaps them.</p>
+</header>
+
+<section>
+  <h2 class="sec">Verdict</h2>
+  <div class="card verdict">
+    <h3>The engineering is in unusually good shape. The problem was what the app <em>said</em>, not what it did.</h3>
+    <p><code>ruff</code> clean, <code>ruff format</code> clean (208 files), <strong>3/3 import-linter contracts kept</strong>, the <strong>697-test</strong> backend suite green, <code>tsc</code> clean and the frontend suite green. No TODO/FIXME anywhere in 283 Python files, no dead frontend modules, no console errors on any screen visited. The documents, voucher series, append-only ledgers, fail-closed scoping and RBAC contract tests are better than most production ERPs carry.</p>
+    <p>The findings were concentrated in one place: <strong>screens that told the user something the database did not say.</strong> A dashboard of hand-typed figures, page captions naming sections that no longer exist, a bell with a permanent red dot and no click, a master that had no screen, and a purchase commitment with no way to end it. Those five are <strong>fixed and tested</strong> in this pass. The rest of the review is recorded as ERP-process gaps for the backlog — no code was written for them.</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">What was fixed</h2>
+
+  <div class="card fix">
+    <h3><span class="badge b-p0">P0</span> The dashboard was inventing numbers</h3>
+    <p><strong>Found:</strong> every KPI on <code>pages/Home.tsx</code> was a literal. The owner opened on <em>“Net sales today ₹18.42 L”</em>, <em>“Owed to brands ₹42.60 L”</em> and <em>“Open exceptions 5”</em>; the store manager opened on <em>“Net sales today ₹2,84,500”</em> and <em>“Items to receive — 3 shipments”</em>. At that moment the trial balance was <strong>₹0 with 0 vouchers</strong>, the vendor ledger held <strong>nothing</strong>, and there was exactly <strong>one</strong> pending booking. Two of those tiles even carried a “live” label, and tapping a tile opened a modal with an invented sparkline and no marking that the series was fiction.</p>
+    <p><strong>Why it matters more than it looks:</strong> Rule 6 of the constitution is that calculated numbers are never typed by hand, and the planned-page rule is that <em>a planned page may not flatter</em>. The dashboard broke both — and a plausible wrong total is exactly the number nobody goes and checks. On a demo to a brand or a bank it is the first screen shown.</p>
+    <p><strong>Fixed:</strong> every tile is now one of two things and says which — a figure the ledgers can answer today, or a screen that is not built (value <code>—</code>, chip “Not built”). Live tiles read <code>/finledger/vendor/ageing</code>, <code>/stockledger/on-hand</code>, <code>/approvals/inbox</code>, <code>/inbound/queue</code> and <code>/inbound/pending</code>; a request that has not landed shows <code>…</code>, never <code>0</code>. The payable tile is only requested when the person holds <code>money: manage</code>, so nobody gets a tile that 403s. Clicking a tile opens the screen that owns the number. The invented sparkline is gone.</p>
+    <p class="small">Owner now opens on <strong>Owed to brands ₹0 · Stock on hand ₹0 (0 pcs, 0 SKU lines) · Waiting for your approval 0</strong> — which is the truth, and matches “Books tie · ₹0 · 0 vouchers” two panels below it. Store manager opens on <strong>Bookings awaiting receipt 1</strong>.</p>
+  </div>
+
+  <div class="card fix">
+    <h3><span class="badge b-p1">P1</span> Screens were captioned in the vocabulary the sidebar retired</h3>
+    <p><strong>Found:</strong> #87 dissolved the five layer groups (Documents, Store Ops, Ledgers, Controls, Master data) into the thirteen work sections, and <code>navConfig.test.ts</code> guards the manifest against them. Nobody was guarding the <em>screens</em>. Eleven still shipped the old words, and the titles had drifted from the menu entries that lead to them:</p>
+    <table>
+      <tr><th>Route</th><th>Sidebar said</th><th>The page said</th></tr>
+      <tr><td><code>/receive/pt</code></td><td>Receive Goods → PT Files</td><td>“Documents · Warehouse (Ranchi) → Patna HO” / <em>PT File Operation</em></td></tr>
+      <tr><td><code>/receive</code></td><td>Receive Goods → Receive (GRN)</td><td>“Store Ops · Receiving” / <em>Stock Receive</em></td></tr>
+      <tr><td><code>/booking</code></td><td>Booking → Bookings</td><td>“Vendors · Procurement”</td></tr>
+      <tr><td><code>/transfer</code></td><td>Transfer → Transfers</td><td>“Outbound · Transfers” / <em>Stock Transfers</em></td></tr>
+      <tr><td><code>/money/vendor</code>, <code>/money/cash</code></td><td>Money → Vendor Ledger / Cash</td><td>“Ledgers · accounts payable”, “Ledgers · cash &amp; bank”</td></tr>
+      <tr><td><code>/approvals</code></td><td>Home → Approvals</td><td>“Controls · Approvals”</td></tr>
+      <tr><td><code>/return-to-brand</code></td><td>Return to Brand → Returns</td><td>“Outbound · Returns” / <em>Return to Vendor</em></td></tr>
+      <tr><td><code>/setup/*</code></td><td>Setup → Stores / Brands / Seasons / GSTINs</td><td>“Master data” / <em>Stores &amp; Warehouses</em>, <em>Season Calendar</em>, <em>GSTIN Registry</em></td></tr>
+    </table>
+    <p><strong>Fixed:</strong> one <code>components/PageHeader.tsx</code> derives the caption from the navigation manifest — section name, plus the screen as a breadcrumb link when the title is a document rather than the list. Fifteen screens now use it; a booking reads <em>“BOOKING · BOOKINGS → Peter England”</em> with the crumb clickable, which also retires the hand-rolled back button. <code>pages/pageVocabulary.test.ts</code> (new) fails the build if any page types a retired group name into a caption again — the same guard the manifest already had.</p>
+  </div>
+
+  <div class="card fix">
+    <h3><span class="badge b-p1">P1</span> Thirteen sections, always open — and a bell that rang for nothing</h3>
+    <p><strong>Found:</strong> the sidebar rendered every section expanded. For an owner that is ~45 links in one column: Money, Reports and Setup sat below the fold on a laptop, so the sidebar was a list to scroll rather than a map to read. Separately, the notification bell was a <code>&lt;button&gt;</code> with no <code>onClick</code> and a permanently lit red dot — dead UI that also lied about there being something to see.</p>
+    <p><strong>Fixed:</strong> sections fold and remember (<code>kdps-nav-collapsed</code>), with <code>aria-expanded</code>, a rotating chevron, keyboard focus ring, and auto-unfold whenever you land inside a folded section (search, deep link, redirect) so the sidebar can always show where you are. Everything stays open by default — nobody loses a link they had. Single-item sections still behave as a direct link, untouched. The bell now counts what is actually waiting on <em>this</em> person (<code>/approvals/inbox</code>), opens the inbox, and shows nothing at all when there is nothing waiting.</p>
+    <p class="small">This is presentation only — it does not touch which sections a role gets (#96 / #133 / #118 keep that work).</p>
+  </div>
+
+  <div class="card fix">
+    <h3><span class="badge b-p1">P1</span> The vendor master had no screen — and its write gate was open to everyone</h3>
+    <p><strong>Found:</strong> <code>/api/vendors</code> answered <code>POST</code> on a bare <code>IsAuthenticated</code>, while stores, brands, seasons and GSTINs have been steward-gated since D8. <strong>A store cashier could mint the supplier that every future booking, GRN, PT and payable hangs off.</strong> There was no detail route at all, so a vendor — once created — could never be corrected or retired through the API, and no screen existed anywhere in the app: vendors arrived only via <code>seed_foundation</code>. For a retail ERP, a supplier master you cannot maintain is a foundational gap, not a nicety.</p>
+    <p><strong>Fixed:</strong> the steward gate moved to <code>masters/permissions.py</code> and now covers vendors (reads stay open — the booking form needs the list; only the edit is a stewardship act). Added <code>GET/PATCH /api/vendors/&lt;id&gt;</code>, <code>?include_inactive=1</code>, and search across code / name / city / GSTIN. New screen <strong>Setup → Vendors</strong>: create, correct, retire (never delete — ledger rows point at it), payment terms, PAN/GSTIN, and the brands a vendor supplies as a chip picker. <code>VendorListCreateView</code> has been struck off the <code>UNGATED_VIEWS</code> baseline, which is how that list is supposed to shrink.</p>
+  </div>
+
+  <div class="card fix">
+    <h3><span class="badge b-p1">P1</span> A booking had no ending — and the table's Booking “Approve” cell gated nothing</h3>
+    <p><strong>Found:</strong> <code>Booking.Status</code> has carried <code>CLOSED</code> and <code>CANCELLED</code> since the first migration and <em>nothing in the codebase could ever reach them</em>. A season that delivered 40 of 100 pieces stayed “Partially received” for ever: the pending-bookings list kept offering it, the open-order figure counted 60 pieces nobody was waiting for, and the only exits were editing the quantity (rewriting history) or ignoring the row. Every ERP has this as the short-close. Separately, the ratified access table grants <code>booking: approve</code> to the owner and <strong>no endpoint read that rung</strong> — the cell was decoration.</p>
+    <p><strong>Fixed:</strong> <code>POST /api/bookings/&lt;id&gt;/close</code> with <code>{action: close|cancel, reason}</code>, gated at <code>booking: approve</code> — so the buyer who places an order cannot write off its balance, the same separation that stops the buyer confirming receipt of their own goods. The reason is mandatory (it is the answer to “why did the other 60 never come?” six months later), the actor and timestamp are stored, cancellation is refused once anything has been received (short-close it instead), and a second attempt is a 409. Receiving against an ended booking is refused with a 409 that quotes the reason, so a stale tab cannot silently reverse the decision. The detail screen gains the panel, the write-off count and a record of who ended it and why. <strong>Nine new backend tests.</strong></p>
+  </div>
+</section>
+
+<section>
+  <h2 class="sec">What is genuinely strong (so the review is fair)</h2>
+  <ul>
+    <li><strong>The money spine.</strong> Append-only ledgers with a <code>BEFORE TRUNCATE</code> guard that binds the superuser, reversal-only corrections, gap-free voucher series allocated under a row lock, and a trial-balance health endpoint. Very few systems at this stage have this.</li>
+    <li><strong>RBAC as a contract, not a convention.</strong> One ratified matrix, section+capability gates, <code>declare_role_list</code> forcing every hand-kept exception to carry a written reason, and a source-scanning test that fails when a new endpoint ships ungated. The reviewer's job was easy <em>because</em> that test exists.</li>
+    <li><strong>Fail-closed scoping.</strong> Store-scoped users are filtered at the queryset, and the tests probe the negative case, not just the happy path.</li>
+    <li><strong>The planned-page honesty rule.</strong> 27 unbuilt screens each say what will live there and what is missing. That rule is why the dashboard finding stood out so sharply — the rest of the app already lives by it.</li>
+    <li><strong>Comments that explain the decision, not the syntax.</strong> Rare, and worth protecting as the team grows.</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="sec">ERP-process gaps — recorded, not built</h2>
+  <p>Measured against how a standard retail ERP runs, not against the PRDs. Nothing below was coded in this pass; each is a candidate ticket, and none of them collides with the 31 open issues.</p>
+  <table>
+    <tr><th>Process</th><th>State</th><th>What is missing</th></tr>
+    <tr><td>Purchase → receipt → invoice (three-way match)</td><td><span class="badge b-p1">Partial</span></td><td>GRN is matched to the booking line, but the <em>vendor invoice</em> is not matched to the GRN. There is no “bill vs received vs ordered” variance screen and no tolerance rule, so an overbilled invoice can be paid. This is the single biggest control gap left in the buy cycle.</td></tr>
+    <tr><td>Audit trail</td><td><span class="badge b-p0">Missing</span></td><td>No <code>audit_log</code> table anywhere. Documents carry <code>created_by</code>/<code>posted_by</code> and approvals record decisions, but master-data edits, permission changes, logins and break-glass use leave no trail. The planned <code>/setup/audit</code> page currently claims the trail is already being written — it is not. Prerequisite for #135.</td></tr>
+    <tr><td>Period lock / month-end close</td><td><span class="badge b-p0">Missing</span></td><td>ADR-0006 promises period-lock in the posting engine; there is no <code>PeriodLock</code> model and no check in <code>post_entries</code>. Today a backdated posting can land in a month already reported.</td></tr>
+    <tr><td>Vendor payment control</td><td><span class="badge b-p1">Partial</span></td><td>“Record Bill” and “Record Payment” post straight from the screen — no maker-checker, no payment run, no bill-to-payment allocation UI, no credit limit or hold flag on a vendor.</td></tr>
+    <tr><td>Open-order (booking) reporting</td><td><span class="badge b-gap">Gap</span></td><td>Now that bookings can end, the natural next screen is open-order by brand / season / store with expected-vs-received and ageing. There is no report layer at all yet (5 planned Reports screens).</td></tr>
+    <tr><td>Item / product master</td><td><span class="badge b-p1">Planned</span></td><td>SKUs are created as a side effect of PT posting. A retail ERP needs the style master first (HSN, tax slab, MRP history, category tree) — that is #134's neighbourhood, so it stays untouched here.</td></tr>
+    <tr><td>Tax masters</td><td><span class="badge b-gap">Gap</span></td><td>GST slabs are a model with no screen; HSN lives on nothing. Rule 12 says a slab is data an admin adds.</td></tr>
+    <tr><td>Replenishment / reorder</td><td><span class="badge b-gap">Gap</span></td><td>No min/max, no reorder point, no size-curve driven distribution suggestion. Stock moves only when a human decides it should.</td></tr>
+    <tr><td>Cycle counting</td><td><span class="badge b-p1">Partial</span></td><td>Counts are ad-hoc; there is no schedule, no coverage measure (“every bin counted once a quarter”), and no count-due signal — the tile that used to invent “Cycle count due — 1 bin”.</td></tr>
+    <tr><td>SOR / brand settlement</td><td><span class="badge b-p1">Partial</span></td><td>Ownership is modelled and V-flip exists, but there is no periodic brand settlement statement (sold-on-approval reconciliation, margin share, return-window expiry) — the commercial reason SOR exists.</td></tr>
+    <tr><td>Landed cost</td><td><span class="badge b-gap">Gap</span></td><td>Freight, insurance and other charges cannot be apportioned onto stock value, so cost is invoice-price only.</td></tr>
+    <tr><td>Document attachments as evidence</td><td><span class="badge b-p1">Partial</span></td><td>Files upload and store, but no document requires its evidence (a GRN can post with no invoice image), and #120 is already on download auth.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h2 class="sec">Smaller observations (no code written)</h2>
+  <ul>
+    <li><span class="badge b-p2">P2</span> The login screen lists ten demo logins with passwords. Correct for an alpha; it must be behind an env flag before anyone outside KDPS sees the URL.</li>
+    <li><span class="badge b-p2">P2</span> Frontend tests are all pure logic — 102 of them, and not one renders a component. A jsdom + Testing-Library setup would let the sidebar, the approval flow and the dashboard tiles be tested as a user meets them.</li>
+    <li><span class="badge b-p2">P2</span> <code>mypy --strict</code> runs on <code>core</code> and <code>config</code> only. Widening it one app per sprint (<code>vendors</code>, <code>inbound</code>, <code>masters</code> are the small ones) is cheap now and expensive later.</li>
+    <li><span class="badge b-p2">P2</span> The six outbound screens are visibly copy-descended (list + tabs + status pill + detail drawer, five times over). A shared <code>DocumentListScreen</code> would remove a few hundred lines — worth doing when the outbound issues (#137 / #141 / #147) settle, not before.</li>
+    <li><span class="badge b-obs">Obs</span> <code>PtMapper.tsx</code> is 1,352 lines in one file. It works and is well commented, but it is the one file where a change is likely to be made nervously.</li>
+    <li><span class="badge b-obs">Obs</span> Python 3.12 + Postgres 15 were used locally (the repo targets 3.12/16). Nothing in the suite depends on 16-only behaviour.</li>
+  </ul>
+</section>
+
+<section>
+  <h2 class="sec">Where the AI agents belong</h2>
+  <p>The architecture already has the right shape for this: agents at the <strong>edges</strong>, drafts that a human approves, and a fence written on the screen (<em>“AI never writes stock, money or Tally”</em>). Two are live — the invoice reader on booking capture, and the PT mapper's learning proposals. The natural next edges, in the order they pay for themselves:</p>
+  <ol>
+    <li><strong>Invoice ↔ GRN match.</strong> The reader already parses the bill; comparing it to what was received is the same data with a variance rule on top — and it closes the three-way-match gap above.</li>
+    <li><strong>Short-close suggestions.</strong> Now that a booking can end, an agent can propose the list (“season closed, 60 pcs undelivered for 90 days”) with a drafted reason. The decision stays at <code>booking: approve</code>.</li>
+    <li><strong>Duplicate master detection.</strong> Two vendors called “Arvind Fashions” and “Arvind Fashion Ltd” — flag on create, steward decides. Cheap, and it protects the master that everything hangs off.</li>
+    <li><strong>Count variance triage.</strong> Rank submitted variances by value and pattern (one size missing across a style = mis-ticketing, not shrinkage) before they reach the approver.</li>
+    <li><strong>Ageing / anomaly narration</strong> for the morning brief — but only once the reports layer exists, so the agent is summarising real figures and not, as the old dashboard did, making them up.</li>
+  </ol>
+</section>
+
+<section>
+  <h2 class="sec">Verification of this pass</h2>
+  <table>
+    <tr><th>Gate</th><th>Result</th></tr>
+    <tr><td><code>ruff check</code> · <code>ruff format --check</code></td><td>clean · 208 files already formatted</td></tr>
+    <tr><td><code>lint-imports</code></td><td>3 contracts kept, 0 broken</td></tr>
+    <tr><td><code>pytest</code> (whole suite)</td><td><strong>697 collected, 0 failures</strong> (108 skipped — live-API gated), including 9 new tests for the vendor master and booking close</td></tr>
+    <tr><td><code>tsc --noEmit</code> · <code>vitest</code></td><td>clean · <strong>102 passed</strong> (81 before; 21 new caption-vocabulary tests)</td></tr>
+    <tr><td>Browser pass</td><td>owner / store manager / store staff · dashboard, bookings, booking detail (open + short-closed), receive, PT files, transfers, stock, movement history, vendor ledger, cash, approvals, all Setup screens incl. new Vendors · 1920, 1440 and 390 px · zero console errors</td></tr>
+    <tr><td>Live API checks</td><td>close without a reason → <strong>400</strong>; short-close → <strong>200</strong> (48 pcs written off, actor recorded); receive against a closed booking → <strong>409</strong>; cashier creating a vendor → <strong>403</strong>; steward create + correct → <strong>201 / 200</strong></td></tr>
+  </table>
+  <p class="small">Migration added: <code>vendors/0004_booking_close</code> (three columns, nullable — no backfill, no downtime).</p>
+</section>
+
+<section>
+  <h2 class="sec">Deliberately not touched</h2>
+  <p>All 31 open issues remain yours. In particular this pass avoided: the sidebar's <em>section shape</em> per role (#96, #118, #133, #79, #84), RBAC actor/scope work (#101, #110, #88), buttons offered then refused (#125, #126), search rollout (#106), outbound slices (#137, #141, #147), POS salesperson (#107), PT cost drop (#122), write-off folding (#105) and file-download auth (#120). Where this pass came near one of them — the vendor screen lands in Setup, which #133 will split — the change is additive and moves with the split.</p>
+  <p class="small">KDPS ERP · code &amp; UX review · 26 July 2026 · Confidential — for KDPS management</p>
+</section>
+</main>
+</body>
+</html>

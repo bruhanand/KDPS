@@ -10,13 +10,17 @@ from __future__ import annotations
 from typing import Any
 
 from rest_framework import generics
-from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.role_lists import declare_role_list
 from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store
+
+# Re-exported: the gate moved to `masters.permissions` so the vendor master —
+# which lives in `vendors` because it carries bookings — is gated by the same
+# rule. Imported here so `from masters.views import IsMasterSteward` still reads.
+from masters.permissions import STEWARD_ROLES, IsMasterSteward  # noqa: F401
 from masters.scoping import scoped_stores
 from masters.serializers import (
     BrandSerializer,
@@ -25,34 +29,6 @@ from masters.serializers import (
     SeasonSerializer,
     StoreSerializer,
 )
-
-STEWARD_ROLES = declare_role_list(
-    "masters.writes",
-    ("owner", "it_admin", "data_steward"),
-    reason=(
-        "The matrix's Setup grants are *scoped* — the warehouse holds "
-        "'Products only' and a brand manager 'Edit assigned products', both at "
-        "`setup: operate`. One Setup rung cannot carry per-model or per-brand "
-        "scope, so widening master-data writes to `setup: operate` would hand "
-        "them store, GSTIN and legal-entity edits. Parked in #104."
-    ),
-)
-
-
-class IsMasterSteward(BasePermission):
-    """Read-open, write-gated to master-data stewards (ADR-0003 / Rule 12)."""
-
-    message = "Master-data steward role required (owner / IT admin / data steward)."
-
-    def has_permission(self, request: Request, view: Any) -> bool:
-        if request.method in SAFE_METHODS:
-            return True
-        user = request.user
-        if not (user and user.is_authenticated):
-            return False
-        role = getattr(getattr(user, "role", None), "code", "")
-        return bool(user.is_superuser or role in STEWARD_ROLES)
-
 
 # --- Stores --------------------------------------------------------------
 

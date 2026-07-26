@@ -282,6 +282,10 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Products", to: "/setup/products", planned: true },
       { label: "Stores", to: "/setup/stores" },
       { label: "Brands", to: "/setup/brands" },
+      // The vendor master had no screen at all: vendors could only be created
+      // through the API, and never corrected. Bookings, GRNs and every payable
+      // hang off this row, so it belongs beside Brands (one vendor, many brands).
+      { label: "Vendors", to: "/setup/vendors" },
       { label: "Seasons", to: "/setup/seasons" },
       { label: "GSTINs", to: "/setup/gstins" },
       { label: "Users & Roles", to: "/setup/users", minCapability: "manage" },
@@ -314,6 +318,7 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/ledgers/cash", "/money/cash"],
   ["/masters/stores", "/setup/stores"],
   ["/masters/brands", "/setup/brands"],
+  ["/masters/vendors", "/setup/vendors"],
   ["/masters/seasons", "/setup/seasons"],
   ["/masters/gstins", "/setup/gstins"],
   ["/masters/users", "/setup/users"],

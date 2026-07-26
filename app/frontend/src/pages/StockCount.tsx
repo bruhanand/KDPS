@@ -25,6 +25,7 @@ import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Types + helpers
@@ -167,13 +168,7 @@ export function StockCountListPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Stock Count · Sessions</p>
-          <h1 className="h1 h2-rust">Stock Counts</h1>
-          <p className="lead">Counters scan blind; the book appears when the count is submitted.</p>
-        </div>
-      </div>
+      <PageHeader lead="Counters scan blind; the book appears when the count is submitted." />
 
       {writable && (
         <div className="card section-card" data-testid="open-count-card">

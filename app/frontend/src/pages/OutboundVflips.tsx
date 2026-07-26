@@ -14,6 +14,7 @@ import { Money } from "../lib/format";
 import { canFlipOwnership } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -82,18 +83,16 @@ export function VFlipListPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Outbound · Ownership flip</p>
-          <h1 className="h1 h2-rust">V-Flip</h1>
-        </div>
-        <div className="spacer" />
-        {writable && (
-          <Link className="btn btn-cta" to="/stock/vflips/new" data-testid="new-vflip-btn">
-            <Plus size={16} /> New V-flip
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        lead="An ownership correction: SOR ⇄ owned, without moving a piece."
+        actions={
+          writable && (
+            <Link className="btn btn-cta" to="/stock/vflips/new" data-testid="new-vflip-btn">
+              <Plus size={16} /> New V-flip
+            </Link>
+          )
+        }
+      />
 
       <div className="card section-card" style={{ marginBottom: 18, padding: "14px 18px" }} data-testid="vflip-info-banner">
         <p className="lead" style={{ margin: 0 }}>

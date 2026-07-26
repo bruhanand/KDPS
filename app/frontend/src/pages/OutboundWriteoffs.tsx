@@ -15,6 +15,7 @@ import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,18 +81,15 @@ export function WriteOffListPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Outbound · Write-offs</p>
-          <h1 className="h1 h2-rust">Write-offs</h1>
-        </div>
-        <div className="spacer" />
-        {writable && (
-          <Link className="btn btn-cta" to="/stock-count/writeoffs/new" data-testid="new-writeoff-btn">
-            <Plus size={16} /> New write-off
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        actions={
+          writable && (
+            <Link className="btn btn-cta" to="/stock-count/writeoffs/new" data-testid="new-writeoff-btn">
+              <Plus size={16} /> New write-off
+            </Link>
+          )
+        }
+      />
 
       {loading ? (
         <p className="lead">Loading…</p>

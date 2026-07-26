@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration 23 - Independent verification of the review-and-fix pass. All 5 findings verified end-to-end: (1) Dashboard truthfulness — owner tiles show real API values (₹0/₹0/0), no hardcoded literals anywhere. (2) Dashboard config modal opens, toggling net_sales adds an em-dash tile with 'NOT BUILT' chip. (3) Store dashboard shows Bookings awaiting receipt=1 (matches /api/inbound/pending), no 'Net sales today ₹2,84,500', and store role does NOT call /finledger/vendor/ageing. (4) Sidebar collapsible sections work with aria-expanded, persist to localStorage kdps-nav-collapsed, and auto-expand when navigating to a child URL. Single-item sections (Booking for store user) render as nav-booking link with no toggle. (5) Notification bell links to /approvals with no badge when inbox is empty. (6) Page headers correct on all 13 verified screens (BOOKING/Bookings, RECEIVE GOODS/Receive (GRN), etc.); no forbidden vocabulary (Documents, Store Ops, Ledgers, Controls, Master data, Outbound) in nav. (7) Booking/1 detail shows 'BOOKING · BOOKINGS' crumb with linked page-crumb-screen, title 'Peter England', and end-booking-btn opens end-booking-panel with segmented control (close/cancel), reason input, and confirm button that stays disabled until reason ≥3 chars. (8) Vendor Master screen renders vendors-table with 8 rows and vendor-new-button. (9) Vendor RBAC: cashier and ops1 receive 403 on POST /api/vendors; steward gets 201, PATCH 200; cashier PATCH → 403; owner allowed. GET open to all authenticated users. (10) Booking close RBAC/rules via API: empty reason → 400; ops1 → 403; brand1 → 403; owner with reason → 200, status='closed'; double close → 409; POST /api/inbound/grns against closed booking → 409 with reason quoted. Booking 1 reset to 'booked' after tests. 18/18 pytest tests pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration23_review.py",
+    "/app/test_reports/pytest/iteration_23.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VendorListCreateView correctly gated with IsAuthenticated + IsMasterSteward (steward/owner) — POST/PATCH refuse cashier and ops1 with 403 as designed.",
+    "BookingCloseView correctly enforces CAP_APPROVE on section 'booking' — ops1 (booking:operate only) receives 403.",
+    "inbound/_resolve_booking refuses closed bookings with 409 and quotes the close reason in the error message.",
+    "Dashboard KPI tiles use real API values; num() renders '…' while null and never fabricates 0.",
+    "Sidebar toggleSection persists to localStorage 'kdps-nav-collapsed' and useEffect on pathname auto-expands the section owning the active route.",
+    "Notification bell correctly omits the count badge when /approvals/inbox is empty (no permanent red dot).",
+    "Store role does NOT trigger /api/finledger/vendor/ageing — verified via page.on('request') listener (0 calls)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration23_review.py"
+  ],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% (all UI checks green)"},
+  "test_credentials": {
+    "owner": "owner / Owner@123",
+    "steward": "steward / Steward@123",
+    "ops1": "ops1 / Ops@123",
+    "brand1": "brand1 / Brand@123",
+    "deo.manager": "deo.manager / Store@123",
+    "deo.cashier": "deo.cashier / Store@123"
+  },
+  "seed_data_creation": "Created 2 temporary vendors TEST_qa_steward_v1 and TEST_qa_owner_v1 during RBAC tests; both deleted post-run. Booking 1 was closed briefly during close-rule tests and reset to status='booked' with cleared close_reason/closed_at/closed_by as instructed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All 5 implemented review findings verified. Test file at /app/backend/tests/test_iteration23_review.py runs 18 tests covering dashboard data endpoints, vendor RBAC (cashier/ops1/steward/owner), and booking close rules (empty reason 400, ops/brand 403, owner 200, double-close 409, receive-vs-closed 409). Frontend Playwright checks confirmed all data-testids from the review request: dashboard-card-grid, kpi-tile-payable/stock_value/approvals, dashboard-config-button/modal/close, dashboard-card-toggle-net_sales, kpi-tile-net_sales (em dash + NOT BUILT chip), notifications (with no notifications-count badge when inbox empty), nav-section-<code> with aria-expanded and localStorage kdps-nav-collapsed persistence, nav-booking single link for store user, page-crumb/page-title on 13 screens, page-crumb-screen link on booking detail, vendors-table + vendor-new-button + vendor-row-*, end-booking-btn/panel/reason/confirm + end-action-close/cancel. Store dashboard confirmed showing Bookings awaiting receipt=1. Console shows Vite 429 rate-limit noise when hammered fast — sleep between navigations. No functional regressions found. Booking 1 confirmed reset to 'booked'; TEST_* vendors cleaned up.",
+  "rca of the issue": "N/A — no defects found in the 5 implemented findings; all pass."
+}

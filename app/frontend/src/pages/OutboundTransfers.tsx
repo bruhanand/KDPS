@@ -23,6 +23,7 @@ import { ScanScreen, type ScanResult, type ScanTarget } from "../components/Scan
 import { ListSearchBar } from "../components/SearchBox";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -253,18 +254,15 @@ export function TransferListPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Outbound · Transfers</p>
-          <h1 className="h1 h2-rust">Stock Transfers</h1>
-        </div>
-        <div className="spacer" />
-        {writable && (
-          <Link className="btn btn-cta" to="/transfer/new" data-testid="new-transfer-btn">
-            <Plus size={16} /> New transfer
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        actions={
+          writable && (
+            <Link className="btn btn-cta" to="/transfer/new" data-testid="new-transfer-btn">
+              <Plus size={16} /> New transfer
+            </Link>
+          )
+        }
+      />
 
       <div className="mode-toggle" data-testid="transfer-type-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
         <button

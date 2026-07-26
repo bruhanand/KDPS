@@ -33,6 +33,7 @@ export function useList<T = any>(url: string | null, params?: QueryParams) {
 export function useDoc<T = any>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     if (!url) return;
@@ -44,6 +45,9 @@ export function useDoc<T = any>(url: string | null) {
     return () => {
       live = false;
     };
-  }, [url]);
-  return { data, loading };
+  }, [url, tick]);
+  // `reload` for the screens that act on the document they are showing (ending a
+  // booking, deciding an approval): refetch rather than patch local state, so
+  // what is on screen is always what the server says.
+  return { data, loading, reload: useCallback(() => setTick((t) => t + 1), []) };
 }

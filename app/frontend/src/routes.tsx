@@ -10,7 +10,7 @@ import type { RouteObject } from "react-router-dom";
 import { PlannedPage } from "./pages/PlannedPage";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
-import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage } from "./pages/MasterPages";
+import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -82,6 +82,7 @@ const BUILT: Screen[] = [
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },
+  { id: "setup-vendors", path: "/setup/vendors", element: <VendorsPage /> },
   { id: "setup-seasons", path: "/setup/seasons", element: <SeasonsPage /> },
   { id: "setup-gstins", path: "/setup/gstins", element: <GstinsPage /> },
   { id: "setup-users", path: "/setup/users", element: <UsersRolesPage /> },

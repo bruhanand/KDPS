@@ -5,6 +5,7 @@ import { Boxes, IndianRupee, Layers, PackageCheck, ScrollText } from "lucide-rea
 import { api } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface EntryT {
   id: number;
@@ -77,14 +78,12 @@ export default function StockLedger() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · append-only (corrections are reversing entries)</p>
-          <h1 className="h1 h2-rust">Stock Ledger</h1>
-        </div>
-        <div className="spacer" />
-        <Link className="btn" to="/stock" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
-      </div>
+      <PageHeader
+        lead="Every movement, in the order it happened. The stock ledger is append-only — a correction is a reversing entry, never an edit."
+        actions={
+          <Link className="btn" to="/stock" data-testid="stock-on-hand-link"><PackageCheck size={16} /> Stock on Hand</Link>
+        }
+      />
 
       <div className="stat-grid" data-testid="stock-summary">
         {cards.map((c) => (

@@ -9,6 +9,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { withQuery } from "../lib/query";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 type Group = "sku" | "brand" | "store" | "quarantine";
 
@@ -244,17 +245,17 @@ export default function StockOnHand() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Stock · live net position from the stock ledger</p>
-          <h1 className="h1 h2-rust">Stock on Hand</h1>
-        </div>
-        <div className="spacer" />
-        {/* V-flip is an ownership correction, not a daily job — so it is an
-            action here inside Stock rather than a line in the sidebar (#87). */}
-        <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
-        <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
-      </div>
+      <PageHeader
+        lead="The live net position, from the stock ledger."
+        actions={
+          <>
+            {/* V-flip is an ownership correction, not a daily job — so it is an
+                action here inside Stock rather than a line in the sidebar (#87). */}
+            <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
+            <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
+          </>
+        }
+      />
 
       <div className="seg" data-testid="onhand-tabs">
         {TABS.map((t) => (

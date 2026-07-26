@@ -201,6 +201,21 @@ def _resolve_booking(data: dict, user: Any) -> tuple[Any, Response | None]:
     booking = Booking.objects.filter(pk=booking_id).first()
     if booking is None:
         return None, Response({"detail": "Booking not found."}, status=400)
+    # A booking that has been short-closed or cancelled is a decision somebody
+    # took with a reason on the record. Receiving against it would quietly
+    # reverse that decision — the pending list already hides it, and a stale
+    # tab or a direct call must get the same answer.
+    if not booking.is_open:
+        return None, Response(
+            {
+                "detail": (
+                    f"Booking {booking.number} is {booking.get_status_display().lower()}"
+                    f"{f' — {booking.close_reason}' if booking.close_reason else ''}. "
+                    "Receive it as a direct arrival, or have the booking reopened."
+                )
+            },
+            status=409,
+        )
     ids = actionable_store_ids(user)
     if ids is not None and not _booking_touches_stores(booking, ids):
         return None, Response({"detail": "You may not receive against this booking."}, status=403)

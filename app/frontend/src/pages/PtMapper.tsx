@@ -30,6 +30,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 const KDPS_COLUMNS = [
   "SEASON", "BRAND", "COLOR", "GENDER", "SUB CATEGORY", "TYPE", "ITEM", "FIT",
@@ -380,25 +381,23 @@ export function PtMapperPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Documents · Warehouse (Ranchi) → Patna HO</p>
-          <h1 className="h1 h2-rust">PT File Operation</h1>
-        </div>
-        <div className="spacer" />
-        {tab === "mapper" && (
-          <>
-            <Link className="btn" to="/receive/pt/proposals" data-testid="proposals-link">
-              <Sparkles size={16} /> Learning proposals
-              {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
-            </Link>
-            <Link className="btn" to="/receive/pt/review" data-testid="review-queue-link">
-              <ListChecks size={16} /> Unmapped queue
-              {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
-            </Link>
-          </>
-        )}
-      </div>
+      <PageHeader
+        lead="Warehouse (Ranchi) → Patna HO. Goods are sellable only after their PT posts."
+        actions={
+          tab === "mapper" && (
+            <>
+              <Link className="btn" to="/receive/pt/proposals" data-testid="proposals-link">
+                <Sparkles size={16} /> Learning proposals
+                {proposals.length > 0 && <span className="chip chip-green" style={{ marginLeft: 6 }}>{proposals.length}</span>}
+              </Link>
+              <Link className="btn" to="/receive/pt/review" data-testid="review-queue-link">
+                <ListChecks size={16} /> Unmapped queue
+                {reviews.length > 0 && <span className="chip chip-amber" style={{ marginLeft: 6 }}>{reviews.length}</span>}
+              </Link>
+            </>
+          )
+        }
+      />
 
       <div className="mode-toggle" data-testid="pt-tab-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
         <button

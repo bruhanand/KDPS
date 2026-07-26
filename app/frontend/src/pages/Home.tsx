@@ -4,9 +4,11 @@ import {
   AlertTriangle,
   ArrowLeftRight,
   Banknote,
+  Boxes,
   CheckCircle2,
   ClipboardList,
   GripVertical,
+  Inbox,
   PackageCheck,
   Settings2,
   ShoppingCart,
@@ -18,6 +20,7 @@ import {
 import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { Money } from "../lib/format";
+import { userCan } from "../shell/navConfig";
 import "./Home.css";
 
 interface Summary {
@@ -40,21 +43,40 @@ const today = new Date().toLocaleDateString("en-IN", {
   month: "long",
 });
 
-type CardId = "net_sales" | "owed" | "exceptions" | "receiving" | "cycle_count" | "pt_files" | "barcode";
+// Every tile is one of two things and says which: a number the ledgers can
+// answer today, or a screen that is not built. It is never an invented figure.
+//
+// It used to be. Until this review the owner's dashboard opened on "Net sales
+// today ₹18.42 L", "Owed to brands ₹42.60 L" and "Open exceptions 5" — three
+// literals in this file, on a database whose trial balance was ₹0 with no
+// vouchers; the store's "Items to receive: 3 shipments" was a literal too, and
+// carried a "live" label. A dashboard that invents numbers is worse than one
+// with none: Rule 6 says calculated numbers are not typed by hand, and a
+// plausible wrong total is the one nobody goes and checks.
+type CardState = "live" | "unbuilt";
 
 interface DashboardCard {
-  id: CardId;
+  id: string;
   label: string;
+  /** Rendered value. `null` data reads as "…" (loading), never as 0. */
   value: React.ReactNode;
   sub: string;
   icon: React.ReactNode;
+  /** What the tile is for — shown in the card picker. */
   purpose: string;
-  built: boolean;
-  points: number[];
+  state: CardState;
+  /** The screen that owns this number; clicking the tile opens it. */
+  to: string;
 }
 
 const DASH_ORDER_KEY = "kdps-dashboard-card-order";
 const DASH_VISIBLE_KEY = "kdps-dashboard-card-visible";
+
+/** A count that has not arrived yet is "…", not zero — an empty ledger and an
+ *  unanswered request must not look the same. */
+function num(value: number | null, suffix = ""): React.ReactNode {
+  return value === null ? "…" : `${value}${suffix}`;
+}
 
 function Kpi({
   id,
@@ -62,7 +84,7 @@ function Kpi({
   label,
   value,
   sub,
-  built,
+  state,
   onOpen,
   onDragStart,
   onDrop,
@@ -72,7 +94,7 @@ function Kpi({
   label: string;
   value: React.ReactNode;
   sub?: string;
-  built: boolean;
+  state: CardState;
   onOpen: () => void;
   onDragStart: () => void;
   onDrop: () => void;
@@ -86,11 +108,12 @@ function Kpi({
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => { e.preventDefault(); onDrop(); }}
       data-testid={`kpi-tile-${id}`}
+      data-state={state}
     >
       <div className="kpi-top">
         <span className="kpi-ic">{icon}</span>
         <span className="kpi-label">
-          {label} {!built && <span className="sample-tag">Coming soon</span>}
+          {label} {state === "unbuilt" && <span className="sample-tag">Not built</span>}
         </span>
         <GripVertical size={14} className="kpi-grip" />
       </div>
@@ -112,7 +135,7 @@ function NetworkPanel({ s }: { s: Summary | null }) {
   return (
     <div className="card panel">
       <div className="panel-head">
-        <p className="eyebrow">Live master data</p>
+        <p className="eyebrow">Live counts</p>
         <h3 className="h3">Network at a glance</h3>
       </div>
       <div className="net-grid">
@@ -221,31 +244,26 @@ function MorningBrief() {
   );
 }
 
-function readOrder(defaultIds: CardId[]): CardId[] {
+function readOrder(defaultIds: string[]): string[] {
   try {
-    const saved = JSON.parse(localStorage.getItem(DASH_ORDER_KEY) || "[]") as CardId[];
+    const saved = JSON.parse(localStorage.getItem(DASH_ORDER_KEY) || "[]") as string[];
     return [...saved.filter((id) => defaultIds.includes(id)), ...defaultIds.filter((id) => !saved.includes(id))];
   } catch {
     return defaultIds;
   }
 }
 
-function readVisible(defaultIds: CardId[]): CardId[] {
+/** Saved choice, else every tile that can answer today. A retired tile id (the
+ *  invented ones this review deleted) falls out here rather than blanking the
+ *  dashboard of anyone who had picked it. */
+function readVisible(defaultIds: string[], fallback: string[]): string[] {
   try {
-    const saved = JSON.parse(localStorage.getItem(DASH_VISIBLE_KEY) || "[]") as CardId[];
-    return saved.length ? saved.filter((id) => defaultIds.includes(id)) : defaultIds.slice(0, 3);
+    const saved = JSON.parse(localStorage.getItem(DASH_VISIBLE_KEY) || "[]") as string[];
+    const kept = saved.filter((id) => defaultIds.includes(id));
+    return kept.length ? kept : fallback;
   } catch {
-    return defaultIds.slice(0, 3);
+    return fallback;
   }
-}
-
-function MiniGraph({ points }: { points: number[] }) {
-  const max = Math.max(...points, 1);
-  return (
-    <div className="mini-graph" data-testid="dashboard-card-graph">
-      {points.map((p, i) => <span key={i} style={{ height: `${Math.max(16, (p / max) * 100)}%` }} />)}
-    </div>
-  );
 }
 
 function DashboardConfigurator({
@@ -255,13 +273,13 @@ function DashboardConfigurator({
   onClose,
 }: {
   cards: DashboardCard[];
-  visible: CardId[];
-  onToggle: (id: CardId) => void;
+  visible: string[];
+  onToggle: (id: string) => void;
   onClose: () => void;
 }) {
   return (
-    <div className="modal-backdrop" data-testid="dashboard-config-modal">
-      <div className="modal dashboard-modal">
+    <div className="modal-backdrop" data-testid="dashboard-config-modal" onClick={onClose}>
+      <div className="modal dashboard-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <div><p className="eyebrow">Dashboard</p><h3 className="h3">Choose cards</h3></div>
           <button className="btn btn-sm" onClick={onClose} data-testid="dashboard-config-close"><X size={14} /> Close</button>
@@ -270,7 +288,10 @@ function DashboardConfigurator({
           {cards.map((c) => (
             <label className="dash-card-choice" key={c.id}>
               <input type="checkbox" checked={visible.includes(c.id)} onChange={() => onToggle(c.id)} data-testid={`dashboard-card-toggle-${c.id}`} />
-              <span><b>{c.label}</b><small>{c.purpose}</small></span>
+              <span>
+                <b>{c.label}{c.state === "unbuilt" && <span className="sample-tag" style={{ marginLeft: 6 }}>Not built</span>}</b>
+                <small>{c.purpose}</small>
+              </span>
             </label>
           ))}
         </div>
@@ -303,57 +324,193 @@ interface QueueCounts {
   pt_in_progress: number;
 }
 
+interface OnHandSummary {
+  units_on_hand: number;
+  value_paise: number;
+  lines: number;
+}
+
 export function Home() {
   const { user, activeStore } = useAuth();
+  const navigate = useNavigate();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [queueCounts, setQueueCounts] = useState<QueueCounts | null>(null);
+  const [inbox, setInbox] = useState<number | null>(null);
+  const [onHand, setOnHand] = useState<OnHandSummary | null>(null);
+  const [payablePaise, setPayablePaise] = useState<number | null>(null);
+  const [pendingReceipts, setPendingReceipts] = useState<number | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const [selectedCard, setSelectedCard] = useState<DashboardCard | null>(null);
-  const [dragCard, setDragCard] = useState<CardId | null>(null);
+  const [dragCard, setDragCard] = useState<string | null>(null);
+
+  // The books are finance-only on the server (`IsBooksKeeper`), so only ask for
+  // the payable when this person holds the rung — a 403 the tile then has to
+  // explain away is a worse answer than not offering the tile.
+  const canSeeMoney = userCan(user, "money", "manage");
 
   useEffect(() => {
+    // Every number below comes from the endpoint that owns it. A failure leaves
+    // the tile at "…" rather than substituting a figure.
     api.get("/masters/summary").then((r) => setSummary(r.data)).catch(() => undefined);
-    // The inbound work queue badge (Q9) — 403 for store roles is fine, card stays generic.
+    api.get("/approvals/inbox").then((r) => setInbox(r.data?.length ?? 0)).catch(() => undefined);
+    api.get("/stockledger/on-hand").then((r) => setOnHand(r.data.summary)).catch(() => undefined);
     api.get("/inbound/queue").then((r) => setQueueCounts(r.data.counts)).catch(() => undefined);
-  }, []);
+    api.get("/inbound/pending").then((r) => setPendingReceipts(r.data?.length ?? 0)).catch(() => undefined);
+    if (canSeeMoney) {
+      api
+        .get("/finledger/vendor/ageing")
+        .then((r) => setPayablePaise(r.data.total_due_paise ?? 0))
+        .catch(() => undefined);
+    }
+  }, [canSeeMoney]);
 
   const variant = user?.landing_page ?? "owner";
-  const cardCatalog: DashboardCard[] = variant === "store" ? [
-    { id: "net_sales", icon: <TrendingUp size={18} />, label: "Net sales today", value: <Money paise={284500_00} short />, sub: "Sales view coming from POS ingest", purpose: "Shows store sales once POS ingestion is connected.", built: false, points: [22, 28, 20, 31, 36, 29, 38] },
-    { id: "receiving", icon: <PackageCheck size={18} />, label: "Items to receive", value: "3 shipments", sub: "GRN workflow is live", purpose: "Opens receiving workload and GRN progress.", built: true, points: [2, 3, 4, 1, 3, 2, 3] },
-    { id: "cycle_count", icon: <ClipboardList size={18} />, label: "Cycle count due", value: "1 bin", sub: "Counting is live — the due-bin signal is not", purpose: "Counting sessions work now (Stock Count); what is still to come is the signal that says which bin is due.", built: false, points: [1, 2, 1, 1, 3, 1, 1] },
-  ] : variant === "warehouse" ? [
-    { id: "receiving", icon: <PackageCheck size={18} />, label: "Arrivals awaiting PT", value: queueCounts ? `${queueCounts.awaiting_pt}` : "—", sub: queueCounts ? "Live from the inbound work queue — make the PT to clear" : "GRN and PT mapper workflows are live", purpose: "Arrivals (GRNs) with no PT yet — goods are sellable only after their PT posts.", built: true, points: [4, 6, 7, 5, 8, 6, 7] },
-    { id: "pt_files", icon: <ClipboardList size={18} />, label: "PTs in progress", value: queueCounts ? `${queueCounts.pt_in_progress}` : "—", sub: queueCounts ? "Mapping or awaiting Patna posting" : "PT File Operation is live", purpose: "PT files linked to an arrival, still being mapped or awaiting Patna.", built: true, points: [2, 3, 2, 5, 4, 3, 4] },
-    { id: "barcode", icon: <AlertTriangle size={18} />, label: "Barcode clashes", value: "2", sub: "Controls screen coming soon", purpose: "Will highlight barcode exceptions needing resolution.", built: false, points: [1, 1, 0, 2, 1, 3, 2] },
-  ] : [
-    { id: "net_sales", icon: <TrendingUp size={18} />, label: "Net sales today", value: <Money paise={1842000_00} short />, sub: "POS ingest coming soon", purpose: "Shows network sales once selling floor data is connected.", built: false, points: [18, 22, 21, 24, 26, 23, 29] },
-    { id: "owed", icon: <Banknote size={18} />, label: "Owed to brands", value: <Money paise={4260000_00} short />, sub: "Vendor ledger ageing is live", purpose: "Opens vendor payable health and ageing movement.", built: true, points: [42, 39, 44, 41, 43, 40, 46] },
-    { id: "exceptions", icon: <AlertTriangle size={18} />, label: "Open exceptions", value: "5", sub: "Exception inbox coming soon", purpose: "Will show imports, approvals, and mismatches needing action.", built: false, points: [3, 4, 5, 4, 6, 5, 5] },
-  ];
+
+  const stockCard: DashboardCard = canSeeMoney
+    ? {
+        id: "stock_value",
+        icon: <Boxes size={18} />,
+        label: "Stock on hand",
+        value: onHand === null ? "…" : <Money paise={onHand.value_paise} short />,
+        sub: onHand ? `${onHand.units_on_hand} pcs · ${onHand.lines} SKU lines` : "From the stock ledger",
+        purpose: "Stock value at book cost, from the stock ledger — the units and lines behind it are on Stock on Hand.",
+        state: "live",
+        to: "/stock",
+      }
+    : {
+        id: "stock_units",
+        icon: <Boxes size={18} />,
+        label: "Stock on hand",
+        value: num(onHand === null ? null : onHand.units_on_hand, " pcs"),
+        sub: onHand ? `${onHand.lines} SKU lines` : "From the stock ledger",
+        purpose: "Pieces on hand from the stock ledger. Cost is not shown — the books are finance's.",
+        state: "live",
+        to: "/stock",
+      };
+
+  const approvalsCard: DashboardCard = {
+    id: "approvals",
+    icon: <Inbox size={18} />,
+    label: "Waiting for your approval",
+    value: num(inbox),
+    sub: "Never your own requests — nobody approves their own document",
+    purpose: "Documents waiting on your decision, across every type. Opens the approvals inbox.",
+    state: "live",
+    to: "/approvals",
+  };
+
+  const netSalesCard: DashboardCard = {
+    id: "net_sales",
+    icon: <TrendingUp size={18} />,
+    label: "Net sales today",
+    value: "—",
+    sub: "KDPS's own POS is not built — there are no bills to total yet",
+    purpose: "The day's billing. It stays blank until POS & Billing is built; nothing here is estimated.",
+    state: "unbuilt",
+    to: "/sell",
+  };
+
+  const exceptionsCard: DashboardCard = {
+    id: "exceptions",
+    icon: <AlertTriangle size={18} />,
+    label: "Open exceptions",
+    value: "—",
+    sub: "The alerts inbox is not built yet",
+    purpose: "In-transit ageing, closing return windows and till exceptions, once Alerts is built.",
+    state: "unbuilt",
+    to: "/alerts",
+  };
+
+  const cardCatalog: DashboardCard[] =
+    variant === "store"
+      ? [
+          {
+            id: "pending_receipts",
+            icon: <PackageCheck size={18} />,
+            label: "Bookings awaiting receipt",
+            value: num(pendingReceipts),
+            sub: "Booked or part-received, for this store",
+            purpose: "Bookings with pieces still to arrive here. Opens Receive (GRN).",
+            state: "live",
+            to: "/receive",
+          },
+          approvalsCard,
+          stockCard,
+          netSalesCard,
+        ]
+      : variant === "warehouse"
+        ? [
+            {
+              id: "awaiting_pt",
+              icon: <PackageCheck size={18} />,
+              label: "Arrivals awaiting PT",
+              value: num(queueCounts === null ? null : queueCounts.awaiting_pt),
+              sub: "Goods are sellable only after their PT posts",
+              purpose: "Receipts with no PT yet — make the PT to clear them.",
+              state: "live",
+              to: "/receive/pt",
+            },
+            {
+              id: "pt_in_progress",
+              icon: <ClipboardList size={18} />,
+              label: "PTs in progress",
+              value: num(queueCounts === null ? null : queueCounts.pt_in_progress),
+              sub: "Mapping, or waiting for Patna to post",
+              purpose: "PT files linked to an arrival and not yet posted.",
+              state: "live",
+              to: "/receive/pt",
+            },
+            approvalsCard,
+            stockCard,
+          ]
+        : [
+            ...(canSeeMoney
+              ? [
+                  {
+                    id: "payable",
+                    icon: <Banknote size={18} />,
+                    label: "Owed to brands",
+                    value: payablePaise === null ? "…" : <Money paise={payablePaise} short />,
+                    sub: "Open vendor bills, aged on the ledger screen",
+                    purpose: "What the vendor ledger still shows unpaid, FIFO-aged into 0–30 / 31–60 / 60+.",
+                    state: "live" as CardState,
+                    to: "/money/vendor",
+                  },
+                ]
+              : []),
+            stockCard,
+            approvalsCard,
+            netSalesCard,
+            exceptionsCard,
+          ];
+
   const allIds = cardCatalog.map((c) => c.id);
-  const [cardOrder, setCardOrder] = useState<CardId[]>(() => readOrder(allIds));
-  const [visibleCards, setVisibleCards] = useState<CardId[]>(() => readVisible(allIds));
+  const liveIds = cardCatalog.filter((c) => c.state === "live").map((c) => c.id);
+  const [cardOrder, setCardOrder] = useState<string[]>(() => readOrder(allIds));
+  const [visibleCards, setVisibleCards] = useState<string[]>(() => readVisible(allIds, liveIds));
   const cardsById = new Map(cardCatalog.map((c) => [c.id, c]));
-  const orderedCards = cardOrder.map((id) => cardsById.get(id)).filter(Boolean) as DashboardCard[];
+  const orderedCards = cardOrder
+    .map((id) => cardsById.get(id))
+    .filter(Boolean)
+    .concat(cardCatalog.filter((c) => !cardOrder.includes(c.id))) as DashboardCard[];
   const dashboardCards = orderedCards.filter((c) => visibleCards.includes(c.id));
 
   if (!user) return null;
   const name = (user.full_name || user.username).split(" ")[0];
   const ctx = activeStore ? `${activeStore.code} · ${activeStore.name}, ${activeStore.state_name}` : "All stores · network view";
 
-  function toggleDashboardCard(id: CardId) {
+  function toggleDashboardCard(id: string) {
     const next = visibleCards.includes(id) ? visibleCards.filter((x) => x !== id) : [...visibleCards, id];
     setVisibleCards(next);
     localStorage.setItem(DASH_VISIBLE_KEY, JSON.stringify(next));
   }
 
-  function moveDashboardCard(target: CardId) {
+  function moveDashboardCard(target: string) {
     if (!dragCard || dragCard === target) return;
-    const next = [...cardOrder];
-    const from = next.indexOf(dragCard);
-    const to = next.indexOf(target);
+    const current = orderedCards.map((c) => c.id);
+    const from = current.indexOf(dragCard);
+    const to = current.indexOf(target);
     if (from < 0 || to < 0) return;
+    const next = [...current];
     const [picked] = next.splice(from, 1);
     next.splice(to, 0, picked);
     setCardOrder(next);
@@ -371,8 +528,8 @@ export function Home() {
             label={card.label}
             value={card.value}
             sub={card.sub}
-            built={card.built}
-            onOpen={() => setSelectedCard(card)}
+            state={card.state}
+            onOpen={() => navigate(card.to)}
             onDragStart={() => setDragCard(card.id)}
             onDrop={() => moveDashboardCard(card.id)}
           />
@@ -443,18 +600,6 @@ export function Home() {
         </>
       )}
       {configOpen && <DashboardConfigurator cards={orderedCards} visible={visibleCards} onToggle={toggleDashboardCard} onClose={() => setConfigOpen(false)} />}
-      {selectedCard && (
-        <div className="modal-backdrop" data-testid="dashboard-card-modal">
-          <div className="modal dashboard-modal">
-            <div className="modal-head">
-              <div><p className="eyebrow">{selectedCard.built ? "Live / alpha" : "Coming soon"}</p><h3 className="h3">{selectedCard.label}</h3></div>
-              <button className="btn btn-sm" onClick={() => setSelectedCard(null)} data-testid="dashboard-card-modal-close"><X size={14} /> Close</button>
-            </div>
-            <MiniGraph points={selectedCard.points} />
-            <p className="lead" style={{ marginTop: 14 }}>{selectedCard.purpose}</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

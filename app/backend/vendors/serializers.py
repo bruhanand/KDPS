@@ -17,7 +17,9 @@ class VendorSerializer(serializers.ModelSerializer):
             "name",
             "city",
             "gstin",
+            "state_code",
             "state_name",
+            "pan",
             "payment_terms",
             "brands",
             "brand_names",
@@ -59,6 +61,10 @@ class BookingSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     booked_total = serializers.SerializerMethodField()
     received_total = serializers.SerializerMethodField()
+    closed_by_name = serializers.CharField(
+        source="closed_by.full_name", read_only=True, default=None
+    )
+    open_qty = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Booking
@@ -84,6 +90,10 @@ class BookingSerializer(serializers.ModelSerializer):
             "lines",
             "booked_total",
             "received_total",
+            "open_qty",
+            "close_reason",
+            "closed_at",
+            "closed_by_name",
             "created_at",
         ]
 

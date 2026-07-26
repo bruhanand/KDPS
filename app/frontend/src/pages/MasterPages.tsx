@@ -6,6 +6,7 @@ import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { CommercialBadge, StatusChip } from "../lib/format";
+import { PageHeader } from "../components/PageHeader";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
 
@@ -33,13 +34,11 @@ function useList<T>(url: string) {
 }
 
 function Screen({
-  eyebrow,
   title,
   count,
   action,
   children,
 }: {
-  eyebrow: string;
   title: string;
   count: number;
   action?: ReactNode;
@@ -47,15 +46,7 @@ function Screen({
 }) {
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">{eyebrow}</p>
-          <h1 className="h1 h2-rust" style={{ marginBottom: 4 }}>{title}</h1>
-          <p className="lead">{count} record{count === 1 ? "" : "s"}</p>
-        </div>
-        <div className="spacer" />
-        {action}
-      </div>
+      <PageHeader title={title} lead={`${count} record${count === 1 ? "" : "s"}`} actions={action} />
       {children}
     </div>
   );
@@ -110,7 +101,7 @@ export function StoresPage() {
   function add() { setForm(blankStore); setOpen(true); setOk(""); setError(""); }
 
   return (
-    <Screen eyebrow="Master data" title="Stores & Warehouses" count={data.length}
+    <Screen title="Stores" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="store-new-button"><Plus size={15} /> New store</button>}>
       <Feedback error={error} ok={ok} />
       {canEdit && open && (
@@ -189,7 +180,7 @@ export function BrandsPage() {
   function add() { setForm(blankBrand); setOpen(true); setOk(""); setError(""); }
 
   return (
-    <Screen eyebrow="Master data" title="Brands" count={data.length}
+    <Screen title="Brands" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="brand-new-button"><Plus size={15} /> New brand</button>}>
       <Feedback error={error} ok={ok} />
       {canEdit && open && (
@@ -265,7 +256,7 @@ export function SeasonsPage() {
   function add() { setForm(blankSeason); setOpen(true); setOk(""); setError(""); }
 
   return (
-    <Screen eyebrow="Master data" title="Season Calendar" count={data.length}
+    <Screen title="Seasons" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="season-new-button"><Plus size={15} /> New season</button>}>
       <Feedback error={error} ok={ok} />
       {canEdit && open && (
@@ -336,7 +327,7 @@ export function GstinsPage() {
   function add() { setForm({ ...blankGstin, legal_entity: entities[0]?.id ?? 0 }); setOpen(true); setOk(""); setError(""); }
 
   return (
-    <Screen eyebrow="Master data" title="GSTIN Registry" count={data.length}
+    <Screen title="GSTINs" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="gstin-new-button"><Plus size={15} /> New GSTIN</button>}>
       <Feedback error={error} ok={ok} />
       {canEdit && open && (
@@ -379,6 +370,149 @@ export function GstinsPage() {
     </Screen>
   );
 }
+
+// ---------------------------------------------------------------- Vendors
+
+// The supplier master. It existed in the database and in `/api/vendors` from the
+// first migration, and had no screen: vendors arrived through the seed or a raw
+// POST (which, until this review, any logged-in person could send), and a typo
+// in a name or a GSTIN could never be corrected. Bookings, GRNs, PTs and every
+// rupee of payable hang off this row.
+
+interface VendorRow {
+  id: number;
+  code: string;
+  name: string;
+  city: string;
+  gstin: string;
+  state_code: string;
+  state_name: string;
+  pan: string;
+  payment_terms: string;
+  brands: number[];
+  brand_names: string[];
+  is_active: boolean;
+}
+
+const blankVendor = {
+  id: 0, code: "", name: "", city: "", gstin: "", state_code: "", state_name: "",
+  pan: "", payment_terms: "", brands: [] as number[], is_active: true,
+};
+
+export function VendorsPage() {
+  const canEdit = useSteward();
+  const [showRetired, setShowRetired] = useState(false);
+  const { data, loading, reload } = useList<VendorRow>(
+    showRetired ? "/vendors?include_inactive=1" : "/vendors",
+  );
+  const { data: brands } = useList<{ id: number; code: string; name: string }>("/masters/brands");
+  const [form, setForm] = useState(blankVendor);
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  async function save() {
+    setError(""); setOk("");
+    const payload = {
+      code: form.code, name: form.name, city: form.city, gstin: form.gstin,
+      state_code: form.state_code, state_name: form.state_name, pan: form.pan,
+      payment_terms: form.payment_terms, brands: form.brands, is_active: form.is_active,
+    };
+    try {
+      if (form.id) await api.patch(`/vendors/${form.id}`, payload);
+      else await api.post("/vendors", payload);
+      setForm(blankVendor); setOpen(false); setOk("Vendor saved."); reload();
+    } catch (e) { setError(apiErrorMessage(e)); }
+  }
+  function edit(v: VendorRow) {
+    setOpen(true); setOk(""); setError("");
+    setForm({
+      id: v.id, code: v.code, name: v.name, city: v.city || "", gstin: v.gstin || "",
+      state_code: v.state_code || "", state_name: v.state_name || "", pan: v.pan || "",
+      payment_terms: v.payment_terms || "", brands: v.brands ?? [], is_active: v.is_active,
+    });
+  }
+  function add() { setForm(blankVendor); setOpen(true); setOk(""); setError(""); }
+  function toggleBrand(id: number) {
+    setForm((f) => ({
+      ...f,
+      brands: f.brands.includes(id) ? f.brands.filter((b) => b !== id) : [...f.brands, id],
+    }));
+  }
+
+  return (
+    <Screen title="Vendors" count={data.length}
+      action={
+        <>
+          <label className="check-row" style={{ marginRight: 10 }}>
+            <input type="checkbox" checked={showRetired} onChange={(e) => setShowRetired(e.target.checked)} data-testid="vendor-show-retired" />
+            Show retired
+          </label>
+          {canEdit && <button className="btn btn-cta" onClick={add} data-testid="vendor-new-button"><Plus size={15} /> New vendor</button>}
+        </>
+      }>
+      <Feedback error={error} ok={ok} />
+      {canEdit && open && (
+        <div className="card section-card" data-testid="vendor-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">{form.id ? "Edit vendor" : "Create vendor"}</h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={() => setOpen(false)} data-testid="vendor-editor-close"><X size={14} /> Close</button>
+          </div>
+          <div className="form-grid wide-form">
+            <input className="input" placeholder="Code (e.g. acme)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} data-testid="vendor-code-input" />
+            <input className="input" placeholder="Vendor name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="vendor-name-input" />
+            <input className="input" placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} data-testid="vendor-city-input" />
+            <input className="input" placeholder="GSTIN (15 chars)" value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} data-testid="vendor-gstin-input" />
+            <input className="input" placeholder="State name" value={form.state_name} onChange={(e) => setForm({ ...form, state_name: e.target.value })} data-testid="vendor-state-input" />
+            <input className="input" placeholder="PAN" value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} data-testid="vendor-pan-input" />
+            <input className="input" placeholder="Payment terms (e.g. 30 days from invoice)" value={form.payment_terms} onChange={(e) => setForm({ ...form, payment_terms: e.target.value })} data-testid="vendor-terms-input" />
+            <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="vendor-active-checkbox" /> Active</label>
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <p className="eyebrow" style={{ marginBottom: 6 }}>Brands this vendor supplies</p>
+            <div className="chip-picker" data-testid="vendor-brand-picker">
+              {brands.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  className={`chip chip-pick ${form.brands.includes(b.id) ? "chip-green" : ""}`}
+                  onClick={() => toggleBrand(b.id)}
+                  data-testid={`vendor-brand-${b.code}`}
+                >
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button className="btn btn-cta" style={{ marginTop: 12 }} onClick={save} disabled={!form.code || !form.name} data-testid="vendor-save-button"><Save size={15} /> Save vendor</button>
+        </div>
+      )}
+      <div className="table-wrap">
+        <table className="data" data-testid="vendors-table">
+          <thead><tr><th>Code</th><th>Vendor</th><th>City</th><th>GSTIN</th><th>Brands</th><th>Payment terms</th><th>Status</th>{canEdit && <th />}</tr></thead>
+          <tbody>
+            {loading ? <tr><td colSpan={8}>Loading…</td></tr> : data.length === 0 ? (
+              <tr><td colSpan={8}>No vendors yet. A booking needs one — create the supplier first.</td></tr>
+            ) : data.map((v) => (
+              <tr key={v.id} data-testid={`vendor-row-${v.code}`}>
+                <td><b className="mono">{v.code}</b></td>
+                <td>{v.name}</td>
+                <td>{v.city || "—"}</td>
+                <td className="mono" style={{ fontSize: 12.5 }}>{v.gstin || "—"}</td>
+                <td>{v.brand_names.length ? v.brand_names.join(", ") : <span className="muted-cell">Any brand</span>}</td>
+                <td>{v.payment_terms || "—"}</td>
+                <td><span className={`chip chip-${v.is_active ? "green" : "red"}`}>{v.is_active ? "Active" : "Retired"}</span></td>
+                {canEdit && <td><button className="btn btn-sm" onClick={() => edit(v)} data-testid={`edit-vendor-${v.code}`}><Pencil size={13} /> Edit</button></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Screen>
+  );
+}
+
 
 // ---------------------------------------------------------- Users & Roles
 
@@ -635,8 +769,7 @@ export function UsersRolesPage() {
   if (!canEdit) {
     return (
       <div className="page-pad">
-        <p className="eyebrow">Master data · access</p>
-        <h1 className="h1 h2-rust">Users & Roles</h1>
+        <PageHeader title="Users & Roles" />
         <div className="card section-card" data-testid="rbac-denied">Only Owner and IT Admin users can edit users and roles.</div>
       </div>
     );
@@ -644,17 +777,15 @@ export function UsersRolesPage() {
 
   return (
     <div className="page-pad" data-testid="users-roles-page">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Master data · RBAC</p>
-          <h1 className="h1 h2-rust">Users & Roles</h1>
-        </div>
-        <div className="spacer" />
-        <div className="seg" data-testid="rbac-tabs">
-          <button className={`seg-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")} data-testid="rbac-users-tab"><Users size={14} /> Users</button>
-          <button className={`seg-btn ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")} data-testid="rbac-roles-tab"><ShieldCheck size={14} /> Roles</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Users & Roles"
+        actions={
+          <div className="seg" data-testid="rbac-tabs">
+            <button className={`seg-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")} data-testid="rbac-users-tab"><Users size={14} /> Users</button>
+            <button className={`seg-btn ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")} data-testid="rbac-roles-tab"><ShieldCheck size={14} /> Roles</button>
+          </div>
+        }
+      />
 
       {error && <div className="warn-note" data-testid="rbac-error">{error}</div>}
       {ok && <div className="ok-note" data-testid="rbac-ok">{ok}</div>}

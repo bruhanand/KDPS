@@ -15,6 +15,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteReturnToBrand } from "../lib/outbound-rbac";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // Helpers & controlled vocab
@@ -101,18 +102,15 @@ export function RTVListPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Outbound · Returns</p>
-          <h1 className="h1 h2-rust">Return to Vendor</h1>
-        </div>
-        <div className="spacer" />
-        {writable && (
-          <Link className="btn btn-cta" to="/return-to-brand/new" data-testid="new-rtv-btn">
-            <Plus size={16} /> New RTV
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        actions={
+          writable && (
+            <Link className="btn btn-cta" to="/return-to-brand/new" data-testid="new-rtv-btn">
+              <Plus size={16} /> New RTV
+            </Link>
+          )
+        }
+      />
 
       <div className="mode-toggle" data-testid="rtv-type-toggle" style={{ maxWidth: 520, marginBottom: 18 }}>
         <button

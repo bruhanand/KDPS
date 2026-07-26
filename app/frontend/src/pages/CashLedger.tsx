@@ -7,6 +7,7 @@ import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
+import { PageHeader } from "../components/PageHeader";
 
 interface AccountT {
   account: string;
@@ -89,16 +90,14 @@ export default function CashLedger() {
 
   return (
     <div className="page-pad" data-testid="cash-ledger-page">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Ledgers · cash & bank · append-only</p>
-          <h1 className="h1 h2-rust">Cash Ledger</h1>
-        </div>
-        <div className="spacer" />
-        {isFinance && (
-          <button className="btn btn-cta" onClick={() => { setOpen(true); setError(""); }} data-testid="cl-record-btn"><Plus size={15} /> Record Movement</button>
-        )}
-      </div>
+      <PageHeader
+        lead="Cash and bank movements. Append-only: a correction is a reversing entry."
+        actions={
+          isFinance && (
+            <button className="btn btn-cta" onClick={() => { setOpen(true); setError(""); }} data-testid="cl-record-btn"><Plus size={15} /> Record Movement</button>
+          )
+        }
+      />
 
       <div className="stat-grid" data-testid="cl-summary">
         <div className="card stat-card"><Wallet size={18} style={{ color: "var(--rust)" }} /><div className="stat-value mono" data-testid="cl-total">{summary?.total_rupees ?? "0.00"}</div><div className="stat-label">Total cash on hand (₹)</div></div>

@@ -21,6 +21,7 @@ import {
   type ApprovalT,
 } from "../components/approval";
 import "./Booking.css";
+import { PageHeader } from "../components/PageHeader";
 
 // ---------------------------------------------------------------------------
 // The inbox
@@ -60,16 +61,9 @@ export function ApprovalsPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Controls · Approvals</p>
-          <h1 className="h1 h2-rust">Approvals inbox</h1>
-          <p className="lead">
-            Everything waiting for your decision. You will never see your own requests here —
-            no document is approved by the person who made it.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        lead="Everything waiting for your decision. You will never see your own requests here — no document is approved by the person who made it."
+      />
 
       {error && (
         <div className="login-error" style={{ maxWidth: 520 }} data-testid="approvals-error">

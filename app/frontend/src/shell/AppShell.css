@@ -32,6 +32,18 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 .nav { padding: 12px 12px 28px; display: flex; flex-direction: column; gap: 4px; }
 .nav-group { padding: 4px 0; }
 .nav-group-head { display: flex; align-items: center; gap: 10px; padding: 7px 10px; }
+.nav-group-toggle {
+  width: 100%; background: none; border: 0; cursor: pointer; text-align: left;
+  border-radius: 9px; font: inherit; transition: background-color .12s;
+}
+.nav-group-toggle:hover { background: rgba(var(--rust-rgb), .06); }
+.nav-group-toggle:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
+.nav-chev {
+  margin-left: auto; color: var(--caption); flex: none;
+  transform: rotate(-90deg); transition: transform .16s ease;
+}
+.nav-chev.open { transform: rotate(0deg); }
+.nav-group-label.holds-active { color: var(--rust); }
 .nav-ic {
   width: 30px; height: 30px; border-radius: 9px; background: var(--surface);
   border: 1px solid var(--sidebar-border); display: flex; align-items: center; justify-content: center;
@@ -83,6 +95,13 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 .icon-btn .dot {
   position: absolute; top: 8px; right: 9px; width: 7px; height: 7px; border-radius: 50%;
   background: var(--brand-red); border: 1.5px solid var(--surface);
+}
+/* A count, not a decoration: shown only when something is actually waiting. */
+.bell-count {
+  position: absolute; top: 3px; right: 2px; min-width: 17px; height: 17px; padding: 0 4px;
+  border-radius: 9px; background: var(--brand-red); color: #fff;
+  font-size: 10.5px; font-weight: 800; line-height: 17px; text-align: center;
+  border: 1.5px solid var(--surface);
 }
 .content { flex: 1; overflow-y: auto; }
 

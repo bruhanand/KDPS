@@ -471,7 +471,6 @@ UNGATED_VIEWS = {
     "stockledger/views.py:InTransitView",
     "stockledger/views.py:QuarantineView",
     "stockledger/views.py:StockOnHandView",
-    "vendors/views.py:VendorListCreateView",
 }
 
 _CLASS = re.compile(r"^class\s+(\w+)")
