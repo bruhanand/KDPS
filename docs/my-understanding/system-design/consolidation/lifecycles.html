@@ -346,7 +346,7 @@
 <!-- ============================ SALE / POS SYNC ============================ -->
 <section id="sale">
   <h2 class="sec">8 · Sale / POS sync <span class="badge b-locked">Q8 locked</span></h2>
-  <p>The sale itself is simple — scan, bill, post (stock out, cash in, SOR sold-liability). The hard part is getting an <strong>offline-first till's sale to the server exactly once</strong>, even over a bad network. Both Ten Software and the KDPS-built POS write the same <strong>source-agnostic Sale document</strong>; only the sync machine differs. One store runs exactly one POS (a hard config invariant), so bill numbers never collide.</p>
+  <p>The sale itself is simple — scan, bill, post (stock out, cash in, SOR sold-liability). The hard part is getting an <strong>offline-first till's sale to the server exactly once</strong>, even over a bad network. The KDPS-built POS and a manual bill write the same <strong>source-agnostic Sale document</strong>; only the sync machine differs. (The counter is ours — the third-party-POS route was dropped on 26 Jul 2026.) One store runs exactly one POS (a hard config invariant), so bill numbers never collide.</p>
 
   <div class="states">
     <div class="state start">client-UUID<small>minted at the till, offline</small></div><span class="sarr">→</span>

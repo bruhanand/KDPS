@@ -80,7 +80,7 @@
 <div class="card">
   <ul class="ck">
     <li>We are building one central system for KDPS covering: <strong>stock from brand to store</strong>, <strong>PT file making</strong>, <strong>stock aging</strong>, <strong>daily cash &amp; payment audit</strong>, and <strong>brand reports</strong>.</li>
-    <li>The billing software in stores (<strong>Ten Software POS</strong>) stays exactly as it is. Our system connects to it — staff keep billing the same way.</li>
+    <li>Billing in stores moves to <strong>our own counter</strong>, built by us and rolled out one store at a time (decided 26 July 2026). Until a store is switched, staff keep billing exactly as they do today.</li>
     <li><strong>Tally remains your account book.</strong> Our system prepares and sends entries to Tally; it never replaces it.</li>
     <li><strong>Non-branded purchases are a core part of the system:</strong> photo/PDF of the vendor's invoice → the system reads it → a ready KDPS PT file with barcodes. (The "PT Mapper" — both kinds: brand PT files <em>and</em> plain invoices.)</li>
     <li>One sitting is still needed on <strong>non-branded ordering &amp; vendor records</strong> (agents, verbal orders, vendors without GSTIN) — how that information should enter the system. Receiving and PT-making for non-branded goods is not waiting for that.</li>
@@ -166,14 +166,14 @@
   </ul>
 </div>
 
-<h2><span class="n">5.</span>The billing software (Ten Software)</h2>
+<h2><span class="n">5.</span>The billing software</h2>
 <div class="card">
+  <div class="callout"><strong>Changed on 26 July 2026: KDPS builds its own billing counter.</strong> What this section originally said — that the existing billing software stays and we connect to it — no longer holds. We are not connecting to it and we do not need anything from its supplier. Everything below about how stores bill today is still true, and still matters for the switch-over.</div>
   <ul class="ck">
-    <li>Every store bills on Ten Software POS, and it stays. Our system will <strong>send it</strong> new items and prices, and <strong>read from it</strong> daily sales, stock and collection.</li>
-    <li>Every store runs its <strong>own Ten Software</strong>, used only for billing. All bills, in every store, are made on the POS. (Confirmed.)</li>
+    <li>Every store bills on the existing POS today. Our own counter replaces it, store by store, and nothing changes for staff until their store is switched.</li>
+    <li>Every store runs its own copy, used only for billing. All bills, in every store, are made on the POS. (Confirmed.)</li>
   </ul>
   <ul class="q">
-    <li>From Ten Software we need just two things: the <strong>API and its documentation</strong>. Please connect us to your Ten Software contact for that.</li>
     <li>Stores sometimes sell an item <strong>before it is entered in stock</strong> ("provisional sale" / minus stock). Does this happen? When and why?</li>
   </ul>
   <ul class="d">
@@ -322,7 +322,6 @@
   <tr><th>#</th><th>Item</th><th>Mentioned in</th><th>Needed</th></tr>
   <tr><td>1</td><td>Brand list with model, margins, return window, payment terms per brand</td><td>§2</td><td>Now — before next design step</td></tr>
   <tr><td>2</td><td>One sample PT Excel from every brand + which column is the paid rate (GST in/out)</td><td>§2, §4</td><td>Now — development depends on it</td></tr>
-  <tr><td>3</td><td>Ten Software contact person (intro)</td><td>§5</td><td>Now — biggest open point</td></tr>
   <tr><td>4</td><td>Sample one-day sales export from POS</td><td>§5</td><td>Now</td></tr>
   <tr><td>5</td><td>Season list (codes + dates)</td><td>§4</td><td>Now</td></tr>
   <tr><td>6</td><td>Current barcode tool details + sample sticker</td><td>§4</td><td>Soon</td></tr>
@@ -367,7 +366,6 @@
   <h3>Data needed — additions to the Section 13 checklist</h3>
   <ul class="d">
     <li>A few photos of the brands' printed <strong>"receiving" order papers</strong> — needed to teach the system to read them.</li>
-    <li><strong>Ten Software API documentation</strong> (through your Ten Software contact — same as item 3 in the checklist).</li>
   </ul>
 </div>
 

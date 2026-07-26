@@ -34,8 +34,8 @@ docs/  + the ADR chain
 - `masters` (D8), `vendors` (D1), `inbound` (D2), `outbound` (D3), `payments` (D4),
   `offers` (D5), `tally` (D6), `analytics` (D7) — one domain each.
 - `integrations` — the edge adapters (POS, Tally/TaxOne, bank, WhatsApp), each behind a swappable
-  interface (anti-corruption layer). Ten Software POS and the KDPS-built POS are concurrent
-  sources behind one POS adapter.
+  interface (anti-corruption layer). The KDPS-built POS and the manual bill are the two
+  Sale sources behind the POS adapter — the third-party-POS route was dropped on 26 Jul 2026.
 
 **The seam rules:**
 

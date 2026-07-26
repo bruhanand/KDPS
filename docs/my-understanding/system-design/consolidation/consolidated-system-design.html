@@ -256,7 +256,7 @@
     <text x="114" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">invoices · brand PT</text>
     <rect x="216" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
     <text x="306" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">↔ POS</text>
-    <text x="306" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">Ten Software → own POS</text>
+    <text x="306" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">KDPS POS (own)</text>
     <rect x="408" y="740" width="180" height="40" rx="8" fill="#e6f0fb" stroke="#7fa9d9" stroke-dasharray="4 3"/>
     <text x="498" y="758" class="tn" fill="#1e5fa8" text-anchor="middle">↔ Bank</text>
     <text x="498" y="772" class="tl" fill="#1e5fa8" text-anchor="middle">statements for recon</text>
@@ -390,9 +390,9 @@
     <h4>3 · Selling &amp; Stock (Offers inside) — one machine, many reasons</h4>
     <dl>
       <dt>Solves</dt><dd>POS per store with no central truth; exchange / transfer / returns / counts all manual; discounts run on memory.</dd>
-      <dt>Documents</dt><dd><strong>Sale</strong> (Ten Software ingest · own KDPS POS, concurrent · manual-bill fallback) · <strong>Exchange</strong> · <strong>Inter-store transfer</strong> (two-step, in-transit) · <strong>RTV</strong> (defective/GR, credit or replacement) · <strong>Seasonal return</strong> (window-driven) · <strong>EOSS / V-flip</strong> · <strong>Stocktake + adjustment</strong> (ABC blind counts; negative-SOH policy).</dd>
+      <dt>Documents</dt><dd><strong>Sale</strong> (own KDPS POS · manual-bill fallback) · <strong>Exchange</strong> · <strong>Inter-store transfer</strong> (two-step, in-transit) · <strong>RTV</strong> (defective/GR, credit or replacement) · <strong>Seasonal return</strong> (window-driven) · <strong>EOSS / V-flip</strong> · <strong>Stocktake + adjustment</strong> (ABC blind counts; negative-SOH policy).</dd>
       <dt>Posts</dt><dd><strong>Stock</strong> (out / in-transit / quarantine / liquidation, with reason) · <strong>Cash</strong> (collections in) · <strong>Vendor</strong> (SOR/Consignment liability accrues <em>on sale</em>; returns debit).</dd>
-      <dt>Decisions</dt><dd>Our system is the book of record; POS is the sale counter (we ingest, we don't recreate) — joined on <strong>barcode + season</strong>, with <em>season inferred at the adapter</em> (a reused barcode resolves oldest-cohort-first; ambiguity is a one-tap "which season?", never a blocked sale), all behind one swappable adapter. <strong>POS integration is deferred — the last module, not in the current build (26 Jun 2026):</strong> Ten Software will sell API access at a cost plus lead time; when POS is built KDPS uses their API if ready, else builds its own (decided then). The Sale stays source-agnostic so any source (Ten Software · own KDPS POS · manual bill) writes the same document; each store runs exactly one POS. Free-to-sell = physical − locked. Exchange credit = what the customer paid; new item at live offer price. EOSS V-flip flips ownership to KDPS (keep real brand, owner = KDPS, status = liquidation, "V&lt;brand&gt;", barcode unchanged).</dd>
+      <dt>Decisions</dt><dd>Our system is the book of record and the POS is the sale counter — joined on <strong>barcode + season</strong>, with a reused barcode resolving oldest-cohort-first and ambiguity a one-tap "which season?", never a blocked sale. <strong>Selling is deferred — the last module, not in the current build — and the POS is ours (26 Jul 2026):</strong> the earlier plan to integrate the incumbent third-party POS behind an adapter is dropped, so there is no external sales feed to ingest and no third-party API to wait on. The Sale stays source-agnostic anyway (own KDPS POS · manual bill), and every Sale records the salesperson; each store runs exactly one POS. Free-to-sell = physical − locked. Exchange credit = what the customer paid; new item at live offer price. EOSS V-flip flips ownership to KDPS (keep real brand, owner = KDPS, status = liquidation, "V&lt;brand&gt;", barcode unchanged).</dd>
       <dt>Offers (inside)</dt><dd>One rulebook — <strong>trigger + reward + dials</strong>, eight patterns + an open model. Applied <em>per item</em> (a multi-brand bill carries many offers); <strong>best-for-customer</strong> precedence; brand vs KDPS funder tag (reporting, never a claim); a daily applied-vs-rulebook audit. Offers post nothing — a discount only lowers price.</dd>
       <dt>AI</dt><dd><span class="badge b-ai">AI</span> markdown suggestions on dead stock (cost floor + step-down) → a human authors the offer; reads offer sheets into clean rules.</dd>
       <dt>Extends via</dt><dd><span class="badge b-ext">seam</span> a new movement = new document type + reason code; a new offer = a new pattern row; <strong>a new sales channel (online) = a new Location type + a new Sale source.</strong></dd>
@@ -477,7 +477,7 @@
   <p>Each edge is a written contract — what we push, what we pull, the join key, retry behaviour, a daily reconciliation, a failure queue. Every edge is <strong>swappable behind an adapter</strong>, which is what lets the POS be replaced later without touching the spine.</p>
   <table>
     <tr><th>Edge</th><th>We push</th><th>We pull</th><th>Join key</th></tr>
-    <tr><td>POS (Ten Software + own KDPS POS, concurrent)</td><td>Item master + MRP/tax/HSN, pending-inward per store, EOSS price rules</td><td>Line-item sales, SOH per store, daily collection</td><td>Barcode + season (season inferred at the adapter)</td></tr>
+    <tr><td>POS (own KDPS POS)</td><td>Item master + MRP/tax/HSN, pending-inward per store, EOSS price rules</td><td>Line-item sales, SOH per store, daily collection</td><td>Barcode + season</td></tr>
     <tr><td>Tally</td><td>GST-ready vouchers (deterministic export, via Vyapar TaxOne; direct-XML fallback)</td><td>Acknowledgement / import logs</td><td>Voucher number</td></tr>
     <tr><td>Bank</td><td>—</td><td>Statements (CSV/PDF to start)</td><td>Date + amount + store ref</td></tr>
     <tr><td>WhatsApp</td><td>Daily digest, deadline alarms, anomaly alerts</td><td>—</td><td>Phone per role</td></tr>
@@ -508,10 +508,10 @@
 
   <h3>Worked examples</h3>
   <div class="callout co-ext">
-    <strong>Building our own POS later.</strong> The <strong>Sale</strong> is already source-agnostic — <code>source = Ten&nbsp;Software | manual&nbsp;bill | KDPS&nbsp;POS</code>, joined on barcode+season.
+    <strong>Building our own POS later.</strong> Decided <strong>26 Jul 2026</strong>: KDPS builds its own POS and the third-party route is dropped. The <strong>Sale</strong> stays source-agnostic — <code>source = manual&nbsp;bill | KDPS&nbsp;POS</code>, joined on barcode+season.
     <ul class="tight" style="margin-bottom:0">
-      <li>Today an adapter pulls Ten Software's sales into Sale documents.</li>
-      <li>A future KDPS POS simply becomes a new <em>writer</em> of the same Sale document.</li>
+      <li>Until the counter is built, a manual bill is the only writer of a Sale.</li>
+      <li>The KDPS POS becomes the second <em>writer</em> of the same Sale document.</li>
       <li>Stock/cash/vendor postings, offers, Tally vouchers and every report are unchanged — the book of record was always ours; only the counter changes.</li>
     </ul>
   </div>

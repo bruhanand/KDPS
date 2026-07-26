@@ -585,9 +585,10 @@ class PtRowsUpdateView(APIView):
 def _invoice_send_blocks(pt: PtFile) -> list[dict]:
     """The hard gates before an authored PT may leave the warehouse (invoice source
     only — the brand path is untouched): every row needs a BARCODE (keep-if-present;
-    else the warehouse generates in POS and types it — manual v1, Ten Software API
-    pending) and a SEASON (the canonical-season block, Q39 — the editor already
-    restricts the cell to Master-Sheet seasons, this refuses blanks)."""
+    else the warehouse generates it in the counter software and types it — manual for
+    now; generation moves in-house with the KDPS-built POS) and a SEASON (the
+    canonical-season block, Q39 — the editor already restricts the cell to
+    Master-Sheet seasons, this refuses blanks)."""
     problems: list[dict] = []
     for row in pt.rows.all():
         missing = [c for c in ("BARCODE", "SEASON") if not str(row.data.get(c) or "").strip()]
