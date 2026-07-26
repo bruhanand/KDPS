@@ -8,7 +8,34 @@ ledgers, Tally remains the statutory book, AI is suggest-only at the edges. The 
 `docs/` folder holds the full plan (constitution `CONTEXT.md`, 12 rules, 7 ADRs, a
 191-page application map across 14 modules).
 
-## Current state — 17 July 2026 (read this first)
+## Current state — 26 July 2026 (read this first)
+Ten days of parallel agent delivery (18–26 Jul) landed **~28 PRs on `main`**: the outbound D3 rebuild, the sidebar/RBAC redesign, search, and the `/deliver` pipeline that produced most of them. The 17-Jul snapshot below is superseded where it conflicts.
+
+**Outbound / D3 — rebuilt under Claude Code; the Sprint-1 P0s are closed:**
+- **#68 slice 1 (23 Jul, direct merge `59d0015`, no PR):** scanned transfer core + in-transit stock bucket; scan-is-truth / partial→flag rulings; reusable `ScanScreen` (keyboard-wedge scanner).
+- **PR #81 ← #69:** trusted mark-damaged UX + quarantine (re-implementation).
+- **PR #82 ← #70:** approvals inbox + maker-checker.
+- **PR #113 ← #103:** stock leaves at the cost the books say, never at zero — **closes the Sprint-1 zero-cost P0** (cost server-derived, no longer client-writable).
+- **PR #127 ← #94:** one permission gate on every outbound write, so Accounts cannot move stock it may only view — **closes the read/write-scope P1 class**.
+- **PR #115 ← #71:** receive exceptions (short / extra / damaged) + the gaps list.
+- **PR #140 ← #138:** damage becomes flag-then-confirm — a store *reports*, only the warehouse *posts* (per the outbound PRD re-grill ruling).
+- **PR #144 ← #72:** every transfer generates and prints its own PT at dispatch.
+- **PR #143 ← #76:** blind count sessions + the merged variance report (stocktake).
+
+**Access / sidebar / RBAC (24–26 Jul):**
+- **PR #91 ← #85:** SIDEBAR RBAC section contract + dedicated `superadmin` break-glass; `admin`/`owner` become normal matrix-enforced users.
+- **PR #95 ← #87:** sidebar redesign — 13 sections, one URL per screen, + two access-control fixes it uncovered.
+- **PR #109 ← #89** (unbuilt subsections say what will live there) · **PR #112 ← #88** (business-unit switcher scoped to allowed units) · **PR #97 ← #96** (members are staff; store manager keeps them) · **PR #99** (one sidebar line lights up) · **PR #108 ← #100** (0006 rollback no longer eats an admin's staff grant).
+- **The actor model is decided (26 Jul): PRD #104** — three access axes, four locked floor rules, nine ratified roles, twelve tickets. First ticket landed: **PR #142 ← #130** (the nine-role table ratified as one source; store sees its bookings).
+- **PR #146 (hotfix):** #143 + #142 were green in isolation but broke `main` together — #76's ungated views baselined into the RBAC contract test.
+
+**Search:** **PR #92 ← #86** global search (one scope-enforced endpoint + top-bar UI with wedge-scan) · **PR #145 ← #102** shared in-page search control, proven on three screens.
+
+**Dev / process:** **PR #83** one-command local stack (`npm run up`) · **PR #116 ← #93** the environment tells the truth (`/api/health` migration digest + `check_db_drift`) · **PRs #117/#123/#129** the **`/deliver`** skill (one issue → containment → TDD → CI → simplify → review → live QA → PR; never merges) · **PR #128** sandcastle proposes, no longer lands · **PR #139** QA drives whichever browser the session has · **PR #111** Hazaribagh store report · **`d83c56e`** the corpus stops promising a third-party POS — **KDPS builds its own POS** (decided 26 Jul).
+
+**Still true:** Render deploys the `client-testing` branch (pinned `d5428a3`), which **lags `main`** — updating it is a deliberate deploy action. Selling/POS, offers, payments/settlement, Tally sync, analytics, store open/close remain unbuilt. The five CA-gated GST items still block live money.
+
+## Snapshot — 17 July 2026 (superseded above where it conflicts)
 The foundation **and** the first business layer are **built and merged to `main`**, auto-deploying to a **Render alpha** (Postgres 16 + Django API + React PWA). Everything below this section is a **chronological build log**: the earliest (28 Jun) entries describe superseded money mechanics (stock value + auto-bill at **BASIC×qty**); those were **rebuilt to P RATE + commercial-model liability** in the 30-Jun Phase C/E remediation. Treat this section as the source of truth for status.
 
 - **`emergent` merged into `main` (17 Jul, local merge commit — NOT pushed).** Brings the **`outbound` app (D3, "Sprint 1")** — 5 documents + posting + RBAC + 43 tests + 5 PWA pages — plus the 6-Jul implementation review, 9-Jul warehouse notes, the Sanskar ageing report, Apr/Jun invoices, the learning workspace and an Obsidian vault. Clean merge (zero conflicts). **`outbound` is built but NOT signed off — two P0s open (see the 6-Jul review section below). Do not treat D3 as done.**
@@ -28,6 +55,7 @@ The foundation **and** the first business layer are **built and merged to `main`
 
 
 ## Merged — Outbound / D3 ("Sprint 1"), built on Emergent (6 Jul, merged 17 Jul) ⚠️ NOT SIGNED OFF
+> **Update 26 Jul:** the fix order below was executed — cost is server-derived (PR #113 ← #103), every outbound write sits behind one permission gate (PR #127 ← #94), and the module was rebuilt slice-by-slice via `/deliver` (see the 26-Jul current-state section). WriteOff was ruled never-designed and is being folded into Stock Adjustment. This section stays as the historical record of what the Emergent build got wrong.
 The `outbound` Django app + 5 PWA pages landed via the `emergent` merge. **Structure is sound; the money layer is not.** Facts below are verified against the merged code (17 Jul), not against Emergent's status claims.
 
 **What exists (verified):**
@@ -821,12 +849,12 @@ for non-stewards e.g. store cashier). Soft-deactivate, never hard-delete (ledger
 - **P2 — Non-Branded Booking / PO Maker agent:** deferred pending user's client clarification.
 - **P2 — Production hardening:** External ingress/proxy CORS policy alignment, reduce localStorage token reliance now that httpOnly cookies exist, HTTPS/secure-cookie review, Django+Postgres deploy path validation.
 
-## Next action items
-Inbound D2 (branded + non-branded, `Grn.kind` + non-brand PT authoring + location-aware posting) landed on
-`main` across #43–#49; the PWA/security batch (#55–#60) + dark mode (#61) followed. The next frontiers:
-1. **D3 outbound / POS ingest** (selling floor, outbox/dead-letter) — the next business layer, still unbuilt.
-2. ~~**Double-entry vendor/cash ledger**~~ **DONE (Jun 2026, F1):** `finledger` vendor/cash now post balanced
-   Σ=0 vouchers through `core.post_entries`; GL control accounts tie to the subledgers, proven live on
-   `/api/finledger/health`. Alpha caveat closed.
-3. Run broader alpha QA over the current screens and capture issues from real users.
-4. Add Vendor dues drill-down/export if accounts users need follow-up bill-level ageing.
+## Next action items (revised 26 Jul 2026)
+Inbound D2 landed across #43–#49; ~~D3 outbound still unbuilt~~ **D3 rebuilt slice-by-slice 18–26 Jul**
+(see the 26-Jul current-state section: slices 1–5 + 10, exceptions, damage flag-then-confirm, transfer PT,
+blind counts). The next frontiers:
+1. **Selling floor / own POS** — KDPS builds its own POS (decided 26 Jul); the third-party route is dropped. Still undesigned.
+2. **Finish the PRD #104 actor-model tickets** — #130 landed (PR #142); eleven tickets remain.
+3. **Deploy `main` to Render** — `client-testing` is pinned and lags main; promoting it is a deliberate decision.
+4. Offers, payments/settlement, Tally sync, analytics, store open/close — unbuilt; five CA-gated GST items still block live money.
+5. Run broader alpha QA over the current screens and capture issues from real users.
