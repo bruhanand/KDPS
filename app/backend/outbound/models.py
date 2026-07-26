@@ -351,8 +351,15 @@ class TransferGapClosure(Document):
     @property
     def approval_subject(self) -> str:
         """What the approvals inbox leads the row with — a gap closure means
-        nothing there without naming the transfer whose gap it closes."""
-        return self.transfer.doc_number or f"Transfer #{self.transfer_id}"
+        nothing there without naming the transfer whose gap it closes.
+
+        The reason rides along because it is the instruction to the ledger, not a
+        note: "found later" and "lost in transit" ask the checker for opposite
+        things. Frozen onto the request this way, the trail keeps saying which of
+        them was put to them, even after the draft is corrected and asked again.
+        """
+        transfer = self.transfer.doc_number or f"Transfer #{self.transfer_id}"
+        return f"{transfer} · {self.get_reason_display()}"
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()

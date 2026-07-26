@@ -786,7 +786,7 @@ def _post_value_pair(
     paise: int,
     debit_memo: str,
     credit_memo: str,
-    user=None,
+    user: User | None = None,
 ) -> None:
     """One balanced two-leg voucher — the shape every value posting here takes.
 
@@ -969,7 +969,11 @@ def raise_gap_closure(
 
 @transaction.atomic
 def amend_gap_closure(
-    closure: TransferGapClosure, *, reason: str, note: str = "", user=None
+    closure: TransferGapClosure,
+    *,
+    reason: str,
+    note: str = "",
+    user: User | None = None,
 ) -> TransferGapClosure:
     """Correct a draft closure and ask again.
 
@@ -981,13 +985,15 @@ def amend_gap_closure(
     The lines are rebuilt from the transfer rather than kept, so a correction
     cannot carry a number the maker typed or one the bucket has moved past.
 
-    A decided closure goes back to the inbox, and that is the point rather than a
-    side effect: the checker who cleared "found later" agreed to pieces coming
-    back onto the books, and a maker who could then amend it to "lost in transit"
-    and post would have written stock off on somebody else's approval. The old
-    decision stays on the record beside the new request — the trail has to keep
-    saying a checker said no, or yes to something else, once. A request still
-    pending needs no second ask: it already points at this document.
+    **A closure waiting for a decision cannot be corrected at all**, and that
+    restriction carries the security of the whole thing rather than being a
+    convenience: while a request is pending, the checker is reading the reason on
+    this very document. Editable underneath them, the maker raises "found later",
+    lets the checker approve *that*, and posts a write-off on an approval given
+    for bringing the pieces back — the reason is an instruction to the ledger, so
+    changing it changes what posts. A pending closure therefore waits for its
+    answer, and correcting it afterwards always asks again, the old decision
+    staying on the record beside the new request.
     """
     from approvals.models import ApprovalStatus
     from approvals.services import approval_for
@@ -1001,6 +1007,14 @@ def amend_gap_closure(
     # became of the pieces just as much as raising it did.
     _refuse_self_closure(closure, user)
 
+    live = approval_for(closure)
+    if live is not None and live.status == ApprovalStatus.PENDING:
+        raise OutboundPostingError(
+            "This closure is waiting for a decision, so it cannot be changed yet — "
+            "a checker is reading the reason on it. Once they have approved it or "
+            "turned it down, correct it and it goes back to them."
+        )
+
     closure.reason = reason
     closure.note = note
     closure.save(update_fields=["reason", "note"])
@@ -1013,8 +1027,7 @@ def amend_gap_closure(
     # *approved* closure has to go back to the inbox too. Asking directly still
     # carries the document's maker across, so a re-ask cannot move the author
     # aside and let them clear their own correction.
-    live = approval_for(closure)
-    if live is not None and live.status != ApprovalStatus.PENDING:
+    if live is not None:
         request_document_approval(closure, requested_by=user)
     return closure
 

@@ -1023,16 +1023,71 @@ def test_correcting_an_approved_closure_sends_it_back_to_the_checker(gap_scaffol
 
 @pytest.mark.django_db(transaction=True)
 def test_a_corrected_closure_re_reads_the_remainder_rather_than_keeping_it(gap_scaffold):
-    """Lines are rebuilt from the transfer, so a correction cannot carry a
-    number the maker typed or a number that has since moved on."""
+    """Lines are rebuilt from the transfer, so a correction catches up with a
+    remainder that has moved instead of carrying the stale one.
+
+    The draft is raised against a shortfall of 3, then two of those pieces are
+    accounted for; the correction must resolve the 1 still owed, not the 3 the
+    draft was born with.
+    """
     s = gap_scaffold
-    transfer = _received_short(s, plan=(("GB001", 4), ("GB002", 3)), scanned=3)
+    transfer = _received_short(s, plan=(("GB001", 4),), scanned=1)
     closure_id = _raise_closure(s, transfer, "found_later")
-    before = {(line.sku_code, line.qty) for line in _closure_lines(closure_id)}
+    assert _closure_lines(closure_id).get().qty == 3
+    _reject(s, closure_id)
+
+    # Two of the missing pieces turn out to be accounted for.
+    line = transfer.lines.get()
+    line.qty_resolved = 2
+    line.save(update_fields=["qty_resolved"])
 
     assert _amend(s, closure_id, "wrongly_scanned").status_code == 200
+    assert _closure_lines(closure_id).get().qty == 1
 
-    assert {(line.sku_code, line.qty) for line in _closure_lines(closure_id)} == before
+
+@pytest.mark.django_db(transaction=True)
+def test_a_closure_cannot_be_changed_under_the_checker(gap_scaffold):
+    """The reason cannot move while somebody is deciding on it.
+
+    Otherwise the maker raises "found later", the checker reads that and
+    approves it, and the document they cleared now says "lost in transit" — the
+    pieces written off on an approval given for bringing them back.
+    """
+    s = gap_scaffold
+    transfer = _received_short(s, plan=(("GB001", 4),), scanned=3)
+    closure_id = _raise_closure(s, transfer, "found_later")
+
+    resp = _amend(s, closure_id, "lost_in_transit")
+    assert resp.status_code == 400
+    assert "waiting for a decision" in str(resp.data)
+
+    # The document the checker is looking at is untouched…
+    assert TransferGapClosure.objects.get(pk=closure_id).reason == "found_later"
+    # …and approving it still posts what they were shown: the piece comes back.
+    _approve(s, closure_id)
+    assert (
+        _client(s["maker"]).post(f"/api/outbound/gap-closures/{closure_id}/submit").status_code
+        == 200
+    )
+    assert StockOnHand.objects.get(store=s["store"], sku_code="GB001").net_qty == 4
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_trail_says_which_reason_each_checker_was_asked_about(gap_scaffold):
+    """A corrected closure overwrites its own reason, so the request has to carry
+    the reason it was raised for — otherwise nothing can answer what the checker
+    who said no was actually shown."""
+    s = gap_scaffold
+    transfer = _received_short(s)
+    closure_id = _raise_closure(s, transfer, "lost_in_transit")
+    _reject(s, closure_id)
+    _amend(s, closure_id, "found_later")
+
+    asked = {
+        a.status: a.title for a in Approval.objects.filter(object_id=closure_id, kind="gap_closure")
+    }
+    assert "Lost in transit" in asked[ApprovalStatus.REJECTED]
+    assert "Found later" in asked[ApprovalStatus.PENDING]
 
 
 @pytest.mark.django_db(transaction=True)

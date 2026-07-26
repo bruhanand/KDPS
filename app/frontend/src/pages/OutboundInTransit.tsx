@@ -248,7 +248,10 @@ function GapCard({ transfer, canClose, onChanged }: {
               <ShieldCheck size={15} /> {posting ? "Posting…" : "Post the closure"}
             </button>
           )}
-          {canClose && !isCleared(closure.approval) &&
+          {/* Only once a checker has had their say. A pending closure must not
+              offer this: the server refuses to change a document somebody is
+              deciding on, and the button would only invite the attempt. */}
+          {canClose && closure.approval?.status !== "pending" &&
             (correcting ? (
               <CloseGapForm
                 transfer={transfer}
