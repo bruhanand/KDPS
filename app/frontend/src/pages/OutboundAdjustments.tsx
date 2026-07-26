@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   ClipboardCheck,
-  Plus,
   Send,
-  Trash2,
 } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
@@ -78,7 +76,6 @@ interface AdjT {
   lines: AdjLineT[];
 }
 
-interface StoreT { id: number; code: string; name: string; store_type: string; }
 
 // ---------------------------------------------------------------------------
 // List
@@ -97,9 +94,12 @@ export function AdjustmentListPage() {
           <h1 className="h1 h2-rust">Stock Adjustments</h1>
         </div>
         <div className="spacer" />
+        {/* An adjustment is what a count produces, not something typed. The
+            book-against-counted form this screen used to carry is gone (#76):
+            the variance is computed server-side from a count session. */}
         {writable && (
-          <Link className="btn btn-cta" to="/stock-count/adjustments/new" data-testid="new-adjustment-btn">
-            <Plus size={16} /> New adjustment
+          <Link className="btn btn-cta" to="/stock-count" data-testid="new-adjustment-btn">
+            <ClipboardCheck size={16} /> Count stock
           </Link>
         )}
       </div>
@@ -151,165 +151,6 @@ export function AdjustmentListPage() {
           </table>
         </div>
       )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Create
-// ---------------------------------------------------------------------------
-
-interface DraftAdjLine {
-  sku_code: string;
-  design: string;
-  size: string;
-  color: string;
-  book_qty: number | string;
-  counted_qty: number | string;
-}
-const emptyLine = (): DraftAdjLine => ({
-  sku_code: "", design: "", size: "", color: "", book_qty: "", counted_qty: "",
-});
-
-export function AdjustmentNewPage() {
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const { data: stores } = useList<StoreT>("/masters/stores");
-
-  const storeLocked = user?.scope_type === "store" && (user?.stores?.length ?? 0) >= 1;
-  const lockedStore = storeLocked ? user!.stores[0] : null;
-
-  const [storeId, setStoreId] = useState<string>(lockedStore ? String(lockedStore.id) : "");
-  const [reason, setReason] = useState("");
-  const [notes, setNotes] = useState("");
-  const [lines, setLines] = useState<DraftAdjLine[]>([emptyLine()]);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  function setLine(i: number, key: keyof DraftAdjLine, val: string) {
-    setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
-  }
-
-  async function save() {
-    setError("");
-    if (!storeId) { setError("Select a store."); return; }
-    if (!reason) { setError("Select a reason."); return; }
-    const payloadLines = lines
-      .filter((l) => l.sku_code)
-      .map((l) => {
-        const book = Number(l.book_qty) || 0;
-        const counted = Number(l.counted_qty) || 0;
-        return {
-          sku_code: l.sku_code,
-          design: l.design,
-          size: l.size,
-          color: l.color,
-          book_qty: book,
-          counted_qty: counted,
-          adj_qty: counted - book,
-        };
-      });
-    if (!payloadLines.length) { setError("Add at least one line with a SKU."); return; }
-    setSaving(true);
-    try {
-      const { data } = await api.post("/outbound/adjustments", {
-        store: Number(storeId),
-        reason,
-        notes,
-        lines: payloadLines,
-      });
-      navigate(`/stock-count/adjustments/${data.id}`);
-    } catch (e) {
-      setError(apiErrorMessage(e));
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="page-pad">
-      <Link to="/stock-count/adjustments" className="btn" style={{ marginBottom: 16 }} data-testid="adj-back-link">
-        <ArrowLeft size={15} /> Adjustments
-      </Link>
-      <h1 className="h1 h2-rust" style={{ marginBottom: 18 }}>New Stock Adjustment</h1>
-
-      <div className="card section-card">
-        <p className="eyebrow">Step 1 · Adjustment details</p>
-        <div className="form-row" style={{ marginTop: 10 }}>
-          <div className="field">
-            <label>Store</label>
-            {storeLocked && lockedStore ? (
-              <div className="store-lock" data-testid="adj-store-locked">{lockedStore.code} · {lockedStore.name}</div>
-            ) : (
-              <select className="select" value={storeId} onChange={(e) => setStoreId(e.target.value)} data-testid="adj-store-select">
-                <option value="">Select store…</option>
-                {stores.map((s) => <option key={s.id} value={s.id}>{s.code} · {s.name}</option>)}
-              </select>
-            )}
-          </div>
-          <div className="field">
-            <label>Reason</label>
-            <select className="select" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="adj-reason-select">
-              <option value="">Select reason…</option>
-              {REASON_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-            </select>
-          </div>
-          <div className="field">
-            <label>Notes (optional)</label>
-            <input className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Context for this adjustment" data-testid="adj-notes" />
-          </div>
-        </div>
-      </div>
-
-      <div className="card section-card">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div>
-            <p className="eyebrow">Step 2 · Book vs physical count</p>
-            <h3 className="h3">Adjustment lines</h3>
-          </div>
-          <button type="button" className="btn" onClick={() => setLines((l) => [...l, emptyLine()])} data-testid="add-adj-line">
-            <Plus size={15} /> Add line
-          </button>
-        </div>
-        <table className="lines-table" data-testid="adj-lines">
-          <thead>
-            <tr>
-              <th style={{ width: "22%" }}>SKU code</th>
-              <th>Design</th>
-              <th>Size</th>
-              <th>Colour</th>
-              <th className="num">Book qty</th>
-              <th className="num">Counted</th>
-              <th className="num">Adj</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => {
-              const adj = (Number(l.counted_qty) || 0) - (Number(l.book_qty) || 0);
-              return (
-                <tr key={i}>
-                  <td><input value={l.sku_code} onChange={(e) => setLine(i, "sku_code", e.target.value)} data-testid={`adj-sku-${i}`} /></td>
-                  <td><input value={l.design} onChange={(e) => setLine(i, "design", e.target.value)} data-testid={`adj-design-${i}`} /></td>
-                  <td><input value={l.size} onChange={(e) => setLine(i, "size", e.target.value)} data-testid={`adj-size-${i}`} /></td>
-                  <td><input value={l.color} onChange={(e) => setLine(i, "color", e.target.value)} data-testid={`adj-color-${i}`} /></td>
-                  <td><input className="num" value={l.book_qty} onChange={(e) => setLine(i, "book_qty", e.target.value)} data-testid={`adj-book-${i}`} /></td>
-                  <td><input className="num" value={l.counted_qty} onChange={(e) => setLine(i, "counted_qty", e.target.value)} data-testid={`adj-counted-${i}`} /></td>
-                  <td className="num" style={{ color: adj < 0 ? "var(--red)" : adj > 0 ? "var(--green)" : undefined, fontWeight: 700 }}>
-                    {adj > 0 ? "+" : ""}{adj || "—"}
-                  </td>
-                  <td><button type="button" className="line-del" onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))} data-testid={`delete-adj-line-${i}`}><Trash2 size={15} /></button></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {error && <div className="login-error" style={{ maxWidth: 480 }} data-testid="adj-create-error">{error}</div>}
-      <button className="btn btn-primary btn-lg" disabled={saving} onClick={save} data-testid="save-adj-btn">
-        <ClipboardCheck size={16} /> {saving ? "Saving…" : "Create adjustment (draft)"}
-      </button>
     </div>
   );
 }

@@ -20,12 +20,24 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
+from outbound.counting import (
+    CountError,
+    MovedMidCountError,
+    apply_variance,
+    open_session,
+    open_stocktake,
+    record_scans,
+    submit_session,
+    variance_report,
+)
 from outbound.maker_checker import ask_again
 from outbound.models import (
+    CountSession,
     MarkDamaged,
     ReceiptStatus,
     ReturnToVendor,
     StockAdjustment,
+    Stocktake,
     StoreTransfer,
     TransferGapClosure,
     VFlip,
@@ -53,6 +65,10 @@ from outbound.posting import (
     raise_gap_closure,
 )
 from outbound.serializers import (
+    ApplyVarianceInputSerializer,
+    CountScanInputSerializer,
+    CountSessionCreateSerializer,
+    CountSessionReadSerializer,
     GapClosureInputSerializer,
     GapClosureReadSerializer,
     MarkDamagedInputSerializer,
@@ -61,6 +77,8 @@ from outbound.serializers import (
     ReturnToVendorWriteSerializer,
     StockAdjustmentReadSerializer,
     StockAdjustmentWriteSerializer,
+    StocktakeCreateSerializer,
+    StocktakeReadSerializer,
     StoreTransferReadSerializer,
     StoreTransferWriteSerializer,
     TransferReceiveInputSerializer,
@@ -870,3 +888,230 @@ class RequestApprovalView(APIView):
         # its people already joined, or the response N+1s on names.
         doc = self._load(pk)
         return Response(self.read_serializer(doc).data)
+
+
+# ---------------------------------------------------------------------------
+# Stock counting — blind sessions, the merged variance, its correction (#76)
+# ---------------------------------------------------------------------------
+
+
+def _stocktakes():
+    return Stocktake.objects.select_related("store", "opened_by", "adjustment").prefetch_related(
+        "sessions__lines", "sessions__counted_by"
+    )
+
+
+def _load_stocktake(pk: int) -> Stocktake:
+    return _stocktakes().get(pk=pk)
+
+
+class StocktakeListCreateView(APIView):
+    """GET: counts at the stores this user can see. POST: open a new one."""
+
+    def get_permissions(self):
+        return [CanWriteStockCount()] if self.request.method == "POST" else [IsAuthenticated()]
+
+    def get(self, request):
+        from masters.scoping import scope_by_store
+
+        qs = scope_by_store(_stocktakes(), request.user, "store_id")
+        return Response(StocktakeReadSerializer(qs, many=True).data)
+
+    def post(self, request):
+        ser = StocktakeCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        store = ser.validated_data["store"]
+        enforce_store_scope(request.user, store.id)
+        stocktake = open_stocktake(store, user=request.user, note=ser.validated_data["note"])
+        return Response(
+            StocktakeReadSerializer(_load_stocktake(stocktake.pk)).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StocktakeDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            return Response(StocktakeReadSerializer(_load_stocktake(pk)).data)
+        except Stocktake.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class CountSessionCreateView(APIView):
+    """POST: add one counter's scoped pass to an open count."""
+
+    permission_classes = [CanWriteStockCount]
+
+    def post(self, request, pk):
+        try:
+            stocktake = Stocktake.objects.select_related("store").get(pk=pk)
+        except Stocktake.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        enforce_store_scope(request.user, stocktake.store_id)
+
+        ser = CountSessionCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            session = open_session(
+                stocktake,
+                scope=ser.validated_data["scope"],
+                scope_value=ser.validated_data["scope_value"],
+                user=request.user,
+            )
+        except CountError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(CountSessionReadSerializer(session).data, status=status.HTTP_201_CREATED)
+
+
+class CountLookupView(APIView):
+    """GET ?store=&barcode= — what a scanned piece *is*, during a blind count.
+
+    Deliberately not ``ScanLookupView``: that one answers with the location's
+    available quantity, which is the very number a blind count may not show, and
+    it 404s on a piece the books hold none of — which in a count is not a wrong
+    piece at all but the surplus the count exists to find. So this returns dims
+    only, and finds the piece in the SKU master when the location holds none.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from outbound.counting import identity_dims
+
+        store_id = request.query_params.get("store")
+        barcode = (request.query_params.get("barcode") or "").strip()
+        if not store_id or not barcode:
+            return Response(
+                {"error": "Pass store= and barcode="}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            enforce_store_scope(request.user, int(store_id))
+        except ValueError:
+            return Response({"error": "store must be an id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        dims = identity_dims(int(store_id), barcode)
+        if not any(dims.values()):
+            return Response(
+                {"error": f"{barcode} is not a piece this system knows."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response({"barcode": barcode, **dims})
+
+
+class CountSessionScanView(APIView):
+    """POST: record scanned pieces on an open session.
+
+    The response is the session as it stands — counted pieces only. No book
+    quantity exists to return yet, which is what makes the count blind (#76).
+    """
+
+    permission_classes = [CanWriteStockCount]
+
+    def post(self, request, pk):
+        session = _load_session(pk)
+        if session is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        enforce_store_scope(request.user, session.stocktake.store_id)
+
+        ser = CountScanInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            record_scans(session, ser.scans_by_barcode())
+        except CountError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(CountSessionReadSerializer(_load_session(pk)).data)
+
+
+class CountSessionSubmitView(APIView):
+    """POST: close a session and take its book snapshot."""
+
+    permission_classes = [CanWriteStockCount]
+
+    def post(self, request, pk):
+        session = _load_session(pk)
+        if session is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        enforce_store_scope(request.user, session.stocktake.store_id)
+
+        try:
+            submit_session(session)
+        except CountError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(CountSessionReadSerializer(_load_session(pk)).data)
+
+
+def _load_session(pk: int) -> Any:
+    return (
+        CountSession.objects.select_related("stocktake__store", "counted_by")
+        .prefetch_related("lines")
+        .filter(pk=pk)
+        .first()
+    )
+
+
+class StocktakeVarianceView(APIView):
+    """GET: book against counted for the whole count, in pieces and in value.
+
+    Value is not masked. Whoever counted is counting their own location's stock
+    and can already read the PT that carries the rate, so withholding the number
+    only stops them sizing their own problem (#76).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            stocktake = _load_stocktake(pk)
+        except Stocktake.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        lines = [v.as_dict() for v in variance_report(stocktake)]
+        return Response(
+            {
+                "stocktake": pk,
+                "store_code": stocktake.store.code,
+                "status": stocktake.status,
+                "lines": lines,
+                "net_pieces": sum(v["adj_qty"] for v in lines),
+                "net_variance_paise": sum(v["variance_paise"] for v in lines),
+                "unpriced": [v["sku_code"] for v in lines if not v["cost_known"] and v["adj_qty"]],
+            }
+        )
+
+
+class StocktakeApplyView(APIView):
+    """POST: apply the variance as one stock adjustment.
+
+    409 when stock moved between the count and now, naming the lines: the person
+    deciding confirms those barcodes and posts again. Never a blind overwrite.
+    """
+
+    permission_classes = [CanWriteStockCount]
+
+    def post(self, request, pk):
+        try:
+            stocktake = _load_stocktake(pk)
+        except Stocktake.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        enforce_store_scope(request.user, stocktake.store_id)
+
+        ser = ApplyVarianceInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            adjustment = apply_variance(
+                stocktake,
+                user=request.user,
+                confirm_skus=frozenset(ser.validated_data["confirm"]),
+            )
+        except MovedMidCountError as e:
+            return Response(
+                {"error": str(e), "moved": [v.as_dict() for v in e.lines]},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except (CountError, OutboundPostingError) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            StockAdjustmentReadSerializer(adjustment).data, status=status.HTTP_201_CREATED
+        )
