@@ -239,7 +239,7 @@ def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
         # The band may add the in-charge, and nothing else — that one addition
         # is the registered exception, so it is named here rather than assumed.
         extra = set(kind.band_roles) - can_approve
-        assert extra <= {"store_manager"} | extra_approvers, kind.code
+        assert extra <= {"store_manager"}, kind.code
         assert "accounts" not in set(kind.approver_roles) | set(kind.band_roles), kind.code
 
 

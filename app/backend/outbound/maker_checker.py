@@ -13,7 +13,7 @@ flags (#138), which reach the inbox the same way as everything else.
 Damage is the one family where the second person is asked for on a *rung*
 rather than on a value: a store person may report damage but not move the
 stock, so their document waits, while a warehouse or HO person's own document
-clears itself (``self_clearing_roles``).
+clears itself (``self_clearing``).
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from approvals.services import (
     ApprovalRequired,
     approval_for,
     assert_approved,
+    holds_approver_role,
     policy_for,
     record_no_approval_needed,
     request_approval,
@@ -61,10 +62,12 @@ class ApprovalKind:
     band_paise: int = 0
     #: Who may approve within the band (in-charge + HO).
     band_roles: tuple[str, ...] = ()
-    #: Roles that hold the deciding rung themselves, so their own document needs
-    #: nobody else. Not a value tolerance — a rung: the maker *is* the checker
-    #: this family would have asked, so asking would be asking themselves.
-    self_clearing_roles: tuple[str, ...] = ()
+    #: Whether a maker who already holds this family's approving rung clears
+    #: their own document. Not a value tolerance — a rung: the maker *is* the
+    #: checker this family would have asked, so asking would be asking
+    #: themselves. Who that is stays one list, read from the live policy row
+    #: (Rule 12), never frozen a second time here.
+    self_clearing: bool = False
 
 
 #: Who may clear a correction, and who may clear an ownership flip — the roles
@@ -169,14 +172,10 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _GAP_APPROVERS, "approved_by"),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
-    # on its own say-so. The rung does — hence ``self_clearing_roles``, which
-    # lets a warehouse or HO person flag and confirm in the one action.
+    # on its own say-so. The rung does — hence ``self_clearing``, which lets a
+    # warehouse or HO person flag and confirm in the one action.
     MarkDamaged: ApprovalKind(
-        "damage",
-        "Damage flag",
-        _DAMAGE_CONFIRMERS,
-        "confirmed_by",
-        self_clearing_roles=_DAMAGE_CONFIRMERS,
+        "damage", "Damage flag", _DAMAGE_CONFIRMERS, "confirmed_by", self_clearing=True
     ),
 }
 
@@ -274,9 +273,10 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     if subject := getattr(doc, "approval_subject", ""):
         title = f"{subject} · {title}"
     policy = _policy(kind)
-    role_code = getattr(getattr(requested_by, "role", None), "code", "")
-    holds_the_rung = bool(kind.self_clearing_roles) and (
-        role_code in kind.self_clearing_roles or getattr(requested_by, "is_superuser", False)
+    # Against the same list the request would have gone to, so retuning the
+    # policy row moves both halves together (Rule 12).
+    holds_the_rung = kind.self_clearing and holds_approver_role(
+        requested_by, policy.approver_roles_for(value)
     )
     common = {
         "kind": kind.code,
@@ -369,9 +369,15 @@ def require_approved(doc: Any) -> Approval | None:
     except ApprovalRequired as exc:
         raise OutboundPostingError(str(exc)) from exc
 
+    approver = approval.decided_by
+    if approver is None and kind.self_clearing and approval.status == ApprovalStatus.NOT_REQUIRED:
+        # Nobody else was asked because the asker already held the deciding
+        # rung, so the inbox has no decider to read — they are it (#138).
+        approver = approval.requested_by
+
     # The document is still a draft here (posting hasn't flipped it), so its own
     # approver column is writable — and after this it is frozen with the rest.
-    if getattr(doc, f"{kind.approver_field}_id", None) != approval.decided_by_id:
-        setattr(doc, kind.approver_field, approval.decided_by)
+    if getattr(doc, f"{kind.approver_field}_id", None) != getattr(approver, "pk", None):
+        setattr(doc, kind.approver_field, approver)
         doc.save(update_fields=[kind.approver_field])
     return approval

@@ -332,7 +332,7 @@ def test_a_rejected_flag_returns_the_piece_to_normal_stock_with_a_reason(damage_
     mine = _client(s["reporter"]).get("/api/outbound/mark-damaged")
     row = next(r for r in mine.data if r["id"] == flag["id"])
     assert row["flag_status"] == "rejected"
-    assert "tag was torn" in row["decision_reason"]
+    assert "tag was torn" in row["approval"]["reason"]
 
 
 @pytest.mark.django_db(transaction=True)

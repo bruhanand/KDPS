@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { Boxes, CheckCircle2, IndianRupee, Layers, Minus, Plus, Repeat, ScrollText, ShieldAlert, X } from "lucide-react";
 
+import { fmtApprovalWhen } from "../components/approval";
+import type { ApprovalT } from "../components/approval";
 import { api, apiErrorMessage } from "../lib/api";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -58,7 +60,7 @@ interface DamageFlagT {
   flag_status: "flagged" | "confirmed" | "rejected";
   store_code: string;
   created_by_name: string;
-  decision_reason: string;
+  approval: ApprovalT | null;
   created_at: string;
   lines: { sku_code: string; design: string; color: string; size: string; brand: string; qty: number }[];
 }
@@ -130,13 +132,16 @@ export default function StockOnHand() {
     }
   }, [group, qStore, qBrand, reloadKey, skuFilter, brandFilter]);
 
-  // The reports still waiting on someone. Only the store's own are visible to
-  // it (the list is store-scoped server-side), so this is exactly "what I
-  // reported that has not been actioned yet".
+  // The reports still waiting on someone — drafts, which is flagged and
+  // rejected both; a confirmed one has posted and shows up as quarantine
+  // instead. Asked for by docstatus so the confirmed history never travels.
+  // Only the store's own are visible to it (the list is store-scoped
+  // server-side), so this is exactly "what I reported that has not been
+  // actioned yet".
   useEffect(() => {
     if (group !== "quarantine") return;
-    api.get("/outbound/mark-damaged")
-      .then((r) => setOpenFlags((r.data as DamageFlagT[]).filter((f) => f.flag_status !== "confirmed")))
+    api.get("/outbound/mark-damaged?docstatus=0")
+      .then((r) => setOpenFlags(r.data as DamageFlagT[]))
       .catch(() => { /* the quarantine table is the primary read here */ });
   }, [group, reloadKey]);
 
@@ -314,54 +319,56 @@ export default function StockOnHand() {
         </div>
       )}
 
+      {/* A sibling of the quarantine table, not one of its states: a store can
+          have reports waiting whether or not anything has reached quarantine. */}
+      {isQuar && !loading && !error && openFlags.length > 0 && (
+        <div className="card section-card" style={{ marginTop: 16 }} data-testid="damage-flags">
+          <h3 className="h3" style={{ marginBottom: 4 }}>
+            <ShieldAlert size={16} style={{ color: "var(--rust)", verticalAlign: "-2px", marginRight: 6 }} />
+            Damage reported, not yet confirmed
+          </h3>
+          <p className="stat-label" style={{ marginBottom: 12 }}>
+            These pieces are still sellable. A warehouse or HO person confirms the report before
+            they move into quarantine.
+          </p>
+          <div className="table-wrap kdps-scroll">
+            <table className="data kdps-table" data-testid="damage-flags-table">
+              <thead>
+                <tr>
+                  <th>Barcode (SKU)</th><th>Brand</th><th>Design</th><th>Colour</th><th>Size</th>
+                  <th>Store</th><th className="num">Units</th>
+                  <th>Reported by</th><th>When</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openFlags.flatMap((f) =>
+                  f.lines.map((l, j) => (
+                    <tr key={`${f.id}-${j}`} data-testid={`damage-flag-${f.id}-${j}`}>
+                      <td className="mono">{l.sku_code}</td><td>{l.brand}</td><td>{l.design}</td>
+                      <td>{l.color}</td><td>{l.size}</td><td>{f.store_code}</td>
+                      <td className="num" style={{ fontWeight: 700 }}>{l.qty}</td>
+                      <td>{f.created_by_name || "—"}</td>
+                      <td>{fmtApprovalWhen(f.created_at)}</td>
+                      <td>
+                        {f.flag_status === "rejected"
+                          ? `Not damaged — ${f.approval?.reason ?? ""}`
+                          : "Waiting to be confirmed"}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : error ? (
         <div className="warn-note" data-testid="onhand-error">{error}</div>
       ) : isQuar ? (
-        <>
-        {openFlags.length > 0 && (
-          <div className="card section-card" style={{ marginTop: 16 }} data-testid="damage-flags">
-            <h3 className="h3" style={{ marginBottom: 4 }}>
-              <ShieldAlert size={16} style={{ color: "var(--rust)", verticalAlign: "-2px", marginRight: 6 }} />
-              Damage reported, not yet confirmed
-            </h3>
-            <p className="stat-label" style={{ marginBottom: 12 }}>
-              These pieces are still sellable. A warehouse or HO person confirms the report before
-              they move into quarantine.
-            </p>
-            <div className="table-wrap kdps-scroll">
-              <table className="data kdps-table" data-testid="damage-flags-table">
-                <thead>
-                  <tr>
-                    <th>Barcode (SKU)</th><th>Brand</th><th>Design</th><th>Colour</th><th>Size</th>
-                    <th>Store</th><th className="num">Units</th>
-                    <th>Reported by</th><th>When</th><th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openFlags.flatMap((f) =>
-                    f.lines.map((l, j) => (
-                      <tr key={`${f.id}-${j}`} data-testid={`damage-flag-${f.id}-${j}`}>
-                        <td className="mono">{l.sku_code}</td><td>{l.brand}</td><td>{l.design}</td>
-                        <td>{l.color}</td><td>{l.size}</td><td>{f.store_code}</td>
-                        <td className="num" style={{ fontWeight: 700 }}>{l.qty}</td>
-                        <td>{f.created_by_name || "—"}</td>
-                        <td>{new Date(f.created_at).toLocaleString("en-IN")}</td>
-                        <td>
-                          {f.flag_status === "rejected"
-                            ? `Not damaged — ${f.decision_reason}`
-                            : "Waiting to be confirmed"}
-                        </td>
-                      </tr>
-                    )),
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-        {emptyQuar ? (
+        emptyQuar ? (
           <div className="card section-card" data-testid="quarantine-empty">
             {qStore || qBrand
               ? "No quarantined stock matches these filters."
@@ -392,8 +399,7 @@ export default function StockOnHand() {
               </tbody>
             </table>
           </div>
-        )}
-        </>
+        )
       ) : emptyOnHand ? (
         <div className="card section-card" data-testid="onhand-empty">
           {deepFilter

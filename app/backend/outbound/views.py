@@ -474,7 +474,11 @@ class MarkDamagedView(generics.ListCreateAPIView):
     def get_queryset(self):
         from masters.scoping import scope_by_store
 
-        qs = MarkDamaged.objects.select_related("store", "created_by").prefetch_related("lines")
+        qs = MarkDamaged.objects.select_related(
+            "store", "created_by", "confirmed_by"
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
         qs = _filter_docstatus(qs, self.request)
         return scope_by_store(qs, self.request.user, "store_id")
 

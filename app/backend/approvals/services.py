@@ -252,6 +252,20 @@ def decide(approval: Approval, *, actor: Any, action: str, reason: str = "") -> 
     return locked
 
 
+def holds_approver_role(user: Any, approver_roles: Any) -> bool:
+    """Does ``user``'s role sit on a list of approver roles?
+
+    The one spelling of "senior enough", so superuser, a user with no role and
+    an empty list are reasoned about once. Used to ask whether someone may
+    decide an existing request (``can_decide``) and, in ``outbound``, whether a
+    maker already holds the rung the family would have asked (#138).
+    """
+    if getattr(user, "is_superuser", False):
+        return True
+    role_code = getattr(getattr(user, "role", None), "code", "")
+    return bool(role_code) and role_code in (approver_roles or [])
+
+
 def can_decide(approval: Approval, user: Any) -> bool:
     """May ``user``'s *role* decide this one? A role gate and nothing else.
 
@@ -266,10 +280,7 @@ def can_decide(approval: Approval, user: Any) -> bool:
     that hands ``decide`` a row it fetched some other way — a shell, a
     management command — is responsible for scoping it first.
     """
-    if getattr(user, "is_superuser", False):
-        return True
-    role_code = getattr(getattr(user, "role", None), "code", "")
-    return bool(role_code) and role_code in (approval.approver_roles or [])
+    return holds_approver_role(user, approval.approver_roles)
 
 
 # ---------------------------------------------------------------------------

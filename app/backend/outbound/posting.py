@@ -668,7 +668,10 @@ def post_transfer_receipt(
             )
 
     if damaged:
-        _mark_arrivals_damaged(transfer, dest, damaged, exceptions, user)
+        note = _mark_arrivals_damaged(transfer, damaged, user)
+        for exception in exceptions:
+            if exception.kind == ReceiptExceptionKind.DAMAGED:
+                exception.note = note
 
     entries += _post_receive_extras(transfer, extras, exceptions, user)
 
@@ -685,14 +688,9 @@ def post_transfer_receipt(
     return entries
 
 
-def _mark_arrivals_damaged(
-    transfer,
-    dest,
-    damaged: dict[str, int],
-    exceptions: list,
-    user=None,
-) -> None:
-    """Send the broken arrivals through the one damage door (#138).
+def _mark_arrivals_damaged(transfer, damaged: dict[str, int], user=None) -> str:
+    """Send the broken arrivals through the one damage door (#138), and say on
+    the receipt where that got to.
 
     Receiving used to write them straight into quarantine, which is a decision
     the receiver may not hold: a store person reports damage, a warehouse or HO
@@ -701,26 +699,20 @@ def _mark_arrivals_damaged(
     the approvals inbox while the pieces sit in the destination's stock, flagged.
 
     Either way the receipt's own damaged rows still say what arrived broken;
-    they are receipt history, and now they say where the decision got to.
+    they are receipt history, and the returned note says where the decision got
+    to.
     """
     from core.documents import DocStatus
-    from outbound.models import ReceiptExceptionKind
 
     mark = mark_damaged(
-        dest,
+        transfer.destination_store,
         damaged,
         user=user,
         note=f"Damaged on arrival — {transfer.doc_number}",
     )
-    confirmed = mark.docstatus == DocStatus.SUBMITTED
-    note = (
-        f"Damaged on arrival — quarantined ({mark.doc_number})."
-        if confirmed
-        else "Damaged on arrival — flagged, waiting to be confirmed before it leaves stock."
-    )
-    for exception in exceptions:
-        if exception.kind == ReceiptExceptionKind.DAMAGED:
-            exception.note = note
+    if mark.docstatus == DocStatus.SUBMITTED:
+        return f"Damaged on arrival — quarantined ({mark.doc_number})."
+    return "Damaged on arrival — flagged, waiting to be confirmed before it leaves stock."
 
 
 def _post_receive_extras(
@@ -1300,7 +1292,7 @@ def mark_damaged(store, scans: dict[str, int], user=None, note: str = "") -> Mar
 
     approval = request_document_approval(mark, requested_by=user)
     if approval is not None and approval.status in CLEARED_STATUSES:
-        post_mark_damaged(mark, user=user, confirmed_by=user)
+        post_mark_damaged(mark, user=user)
     return mark
 
 
@@ -1323,7 +1315,7 @@ def confirm_mark_damaged(mark: MarkDamaged, *, actor) -> None:
 
 
 @transaction.atomic
-def post_mark_damaged(mark: MarkDamaged, user=None, confirmed_by=None) -> list[StockLedgerEntry]:
+def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
     """Post a mark-damaged document: move each line's pieces from free-to-sell
     into quarantine at the store.
 
@@ -1340,17 +1332,12 @@ def post_mark_damaged(mark: MarkDamaged, user=None, confirmed_by=None) -> list[S
     if not lines:
         raise OutboundPostingError("Mark-damaged has no lines.")
 
+    # Also what stamps ``confirmed_by`` — on every route in, not just this one.
     require_approved(mark)  # a store report is not a stock movement (#138)
 
     # Row-lock + validate sellable stock at the store before minting a number.
     for line in lines:
         _check_stock(mark.store_id, line.sku_code, line.qty)
-
-    if confirmed_by is not None and mark.confirmed_by_id is None:
-        # The self-clearing case: nobody else was asked, so the inbox has no
-        # decider to stamp — the person who found the damage confirmed it.
-        mark.confirmed_by = confirmed_by
-        mark.save(update_fields=["confirmed_by"])
 
     mark.post()
 
