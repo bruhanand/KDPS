@@ -166,13 +166,13 @@ def _write_stock_entry(
 
 # line_no bands — one doc number carries every leg type this transfer will ever
 # write, so each type gets its own band (dispatch writes OUT+TRANSIT_IN, receive
-# TRANSIT_OUT+IN and, for the exceptions, QUARANTINE_IN + the extras' TRANSFER_IN;
-# a gap closure drains what is left).
+# TRANSIT_OUT+IN and the extras' TRANSFER_IN; a gap closure drains what is left).
+# Damage on arrival writes nothing under the transfer's number any more: it goes
+# through a DMG document of its own (#138), which carries its own legs.
 LINE_NO_TRANSFER_OUT = 0
 LINE_NO_TRANSIT_IN = 500
 LINE_NO_TRANSFER_IN = 1000
 LINE_NO_TRANSIT_OUT = 1500
-LINE_NO_QUARANTINE_ON_ARRIVAL = 2000
 LINE_NO_EXTRA_IN = 2500
 LINE_NO_GAP_DRAIN = 3000
 
@@ -556,8 +556,11 @@ def post_transfer_receipt(
     Four things come off the scan screen and all four are structured:
 
     * ``scans`` — pieces that arrived intact: in-transit → destination, sellable.
-    * ``damaged`` — pieces that arrived broken: in-transit → **quarantine** at the
-      destination, so a damaged arrival never reaches the shop floor as sellable.
+    * ``damaged`` — pieces that arrived broken. They come in like the rest, and
+      a **damage document** is raised for them (#138): the warehouse receiving
+      its own carton holds the confirming rung, so they go on to quarantine here
+      and now; a store person's word is a flag, so they wait in the store's
+      stock until a warehouse or HO person confirms it.
     * ``extras`` — pieces that arrived but the transfer never sent. Accepted in
       with a flag where the books can price them (a surplus, so it posts a
       balanced Dr INVENTORY / Cr SUSPENSE voucher like a stocktake surplus);
@@ -638,33 +641,22 @@ def post_transfer_receipt(
                 posted_by=user,
             )
         )
-        if qty_good:
-            # …the intact pieces INTO the destination (ready for sale)
-            entries.append(
-                _write_stock_entry(
-                    store=dest,
-                    gstin=dest.gstin,
-                    line=line,
-                    qty=qty_good,
-                    kind="transfer_in",
-                    doc_number=transfer.doc_number,
-                    line_no=LINE_NO_TRANSFER_IN + i,
-                    posted_by=user,
-                )
+        # …and everything that turned up INTO the destination. Broken pieces
+        # arrive too: taking them off the floor is a damage decision now, and
+        # the receiver may not be senior enough to make it (#138).
+        entries.append(
+            _write_stock_entry(
+                store=dest,
+                gstin=dest.gstin,
+                line=line,
+                qty=arrived,
+                kind="transfer_in",
+                doc_number=transfer.doc_number,
+                line_no=LINE_NO_TRANSFER_IN + i,
+                posted_by=user,
             )
+        )
         if qty_damaged:
-            # …and the broken ones straight into quarantine, never onto the floor
-            entries.append(
-                _write_quarantine_entry(
-                    store=dest,
-                    gstin=dest.gstin,
-                    line=line,
-                    qty=qty_damaged,
-                    doc_number=transfer.doc_number,
-                    line_no=LINE_NO_QUARANTINE_ON_ARRIVAL + i,
-                    posted_by=user,
-                )
-            )
             exceptions.append(
                 TransferReceiptException(
                     kind=ReceiptExceptionKind.DAMAGED,
@@ -672,9 +664,11 @@ def post_transfer_receipt(
                     **merch_dims(line),
                     qty=qty_damaged,
                     unit_cost_paise=line.unit_cost_paise,
-                    note="Quarantined on arrival — not sellable.",
                 )
             )
+
+    if damaged:
+        _mark_arrivals_damaged(transfer, dest, damaged, exceptions, user)
 
     entries += _post_receive_extras(transfer, extras, exceptions, user)
 
@@ -689,6 +683,44 @@ def post_transfer_receipt(
     TransferReceiptException.objects.bulk_create(exceptions)
 
     return entries
+
+
+def _mark_arrivals_damaged(
+    transfer,
+    dest,
+    damaged: dict[str, int],
+    exceptions: list,
+    user=None,
+) -> None:
+    """Send the broken arrivals through the one damage door (#138).
+
+    Receiving used to write them straight into quarantine, which is a decision
+    the receiver may not hold: a store person reports damage, a warehouse or HO
+    person confirms it. So a DMG document is raised for them here — it posts on
+    the spot if the receiver holds the confirming rung, and otherwise waits in
+    the approvals inbox while the pieces sit in the destination's stock, flagged.
+
+    Either way the receipt's own damaged rows still say what arrived broken;
+    they are receipt history, and now they say where the decision got to.
+    """
+    from core.documents import DocStatus
+    from outbound.models import ReceiptExceptionKind
+
+    mark = mark_damaged(
+        dest,
+        damaged,
+        user=user,
+        note=f"Damaged on arrival — {transfer.doc_number}",
+    )
+    confirmed = mark.docstatus == DocStatus.SUBMITTED
+    note = (
+        f"Damaged on arrival — quarantined ({mark.doc_number})."
+        if confirmed
+        else "Damaged on arrival — flagged, waiting to be confirmed before it leaves stock."
+    )
+    for exception in exceptions:
+        if exception.kind == ReceiptExceptionKind.DAMAGED:
+            exception.note = note
 
 
 def _post_receive_extras(

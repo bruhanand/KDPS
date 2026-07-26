@@ -59,12 +59,14 @@ class ReceiptExceptionKind(models.TextChoices):
     with a quantity: **short** (sent but never scanned in — stays in-transit on
     the open transfer), **extra** (a piece arrived that the transfer never sent
     — accepted with a flag, never silently swallowed) and **damaged** (arrived
-    broken — scanned straight into quarantine, never onto the shop floor).
+    broken — raised as a damage document, which quarantines it if the receiver
+    holds the confirming rung and otherwise flags it for a warehouse or HO
+    person, #138).
     """
 
     SHORT = "short", "Short — sent but not scanned in"
     EXTRA = "extra", "Extra / wrong item — not on this transfer"
-    DAMAGED = "damaged", "Damaged on arrival — into quarantine"
+    DAMAGED = "damaged", "Damaged on arrival — raised as a damage flag"
 
 
 class GapReason(models.TextChoices):
