@@ -29,6 +29,7 @@ from outbound.models import (
     StoreTransferLine,
     TransferGapClosure,
     TransferGapClosureLine,
+    TransferPT,
     TransferReceipt,
     TransferReceiptException,
     VFlip,
@@ -36,6 +37,7 @@ from outbound.models import (
     WriteOff,
     WriteOffLine,
 )
+from outbound.transfer_pt import KDPS_COLUMNS
 
 # ---------------------------------------------------------------------------
 # Maker-checker read shape (#70)
@@ -286,6 +288,53 @@ class GapClosureInputSerializer(serializers.Serializer):
     note = serializers.CharField(max_length=2000, required=False, allow_blank=True, default="")
 
 
+class TransferPTSerializer(serializers.ModelSerializer):
+    """The transfer's PT as the print screen needs it (#72).
+
+    Read-only throughout: the rows are a frozen copy of what the scanned lines
+    generated, and the columns come from the KDPS format itself rather than from
+    the rows, so a PT with no lines still prints with its proper header.
+    """
+
+    columns = serializers.SerializerMethodField()
+    doc_number = serializers.CharField(source="transfer.doc_number", read_only=True)
+    source_store_code = serializers.CharField(source="transfer.source_store.code", read_only=True)
+    source_store_name = serializers.CharField(source="transfer.source_store.name", read_only=True)
+    destination_store_code = serializers.CharField(
+        source="transfer.destination_store.code", read_only=True
+    )
+    destination_store_name = serializers.CharField(
+        source="transfer.destination_store.name", read_only=True
+    )
+    dispatch_date = serializers.DateTimeField(source="transfer.dispatch_date", read_only=True)
+    generated_by_name = serializers.SerializerMethodField()
+
+    def get_columns(self, obj: TransferPT) -> list[str]:
+        return list(KDPS_COLUMNS)
+
+    def get_generated_by_name(self, obj: TransferPT) -> str:
+        return display_name(obj.generated_by)
+
+    class Meta:
+        model = TransferPT
+        fields = [
+            "id",
+            "transfer",
+            "doc_number",
+            "source_store_code",
+            "source_store_name",
+            "destination_store_code",
+            "destination_store_name",
+            "dispatch_date",
+            "generated_at",
+            "generated_by",
+            "generated_by_name",
+            "columns",
+            "rows",
+        ]
+        read_only_fields = fields
+
+
 class StoreTransferReadSerializer(serializers.ModelSerializer):
     lines = StoreTransferLineSerializer(many=True, read_only=True)
     receipt = TransferReceiptSerializer(read_only=True)
@@ -297,6 +346,14 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     dispatch_mismatch = serializers.SerializerMethodField()
     qty_in_transit = serializers.SerializerMethodField()
     gap_state = serializers.SerializerMethodField()
+    pt_generated_at = serializers.SerializerMethodField()
+
+    def get_pt_generated_at(self, obj: StoreTransfer) -> str | None:
+        """When this transfer's PT was cut — the screen's cue that there is a
+        document to print. A draft has none: nothing has been scanned (#72)."""
+
+        pt = getattr(obj, "pt", None)
+        return pt.generated_at.isoformat() if pt else None
 
     def get_dispatch_mismatch(self, obj: StoreTransfer) -> bool:
         """Derived, never stored: a dispatched transfer whose scanned
@@ -363,6 +420,7 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             "dispatch_mismatch",
             "qty_in_transit",
             "gap_state",
+            "pt_generated_at",
             "lines",
             "receipt",
             "gap_closure",

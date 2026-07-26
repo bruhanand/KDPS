@@ -35,6 +35,9 @@ from outbound.views import (
     TransferGapClosureCreateView,
     TransferGapListView,
     TransferListCreateView,
+    TransferPTCsvView,
+    TransferPTView,
+    TransferPTXlsxView,
     TransferReceiveView,
     VFlipDetailView,
     VFlipListCreateView,
@@ -52,6 +55,10 @@ urlpatterns = [
     path("transfers/<int:pk>", TransferDetailView.as_view(), name="transfer-detail"),
     path("transfers/<int:pk>/dispatch", TransferDispatchView.as_view(), name="transfer-dispatch"),
     path("transfers/<int:pk>/receive", TransferReceiveView.as_view(), name="transfer-receive"),
+    # The PT that travels with the carton (#72) — read and download only.
+    path("transfers/<int:pk>/pt", TransferPTView.as_view(), name="transfer-pt"),
+    path("transfers/<int:pk>/pt.csv", TransferPTCsvView.as_view(), name="transfer-pt-csv"),
+    path("transfers/<int:pk>/pt.xlsx", TransferPTXlsxView.as_view(), name="transfer-pt-xlsx"),
     path(
         "transfers/<int:pk>/gap-closure",
         TransferGapClosureCreateView.as_view(),

@@ -397,6 +397,24 @@ def _resolve_scan_identity(store_id: int, barcode: str) -> dict[str, int | str]:
     return resolve_line_identity(store_id, barcode)
 
 
+def _generate_transfer_pt(transfer: StoreTransfer, user=None) -> None:
+    """Freeze the transfer's PT onto it, inside the dispatch transaction (#72).
+
+    Every transfer generates one — never conditionally, never on request — so
+    "the carton went without its paper" is not a state the system can reach. It
+    is a packing document: it writes no ledger and raises no liability, and no
+    inbound-PT right is consulted to produce it.
+    """
+    from outbound.models import TransferPT
+    from outbound.transfer_pt import build_transfer_pt_rows
+
+    TransferPT.objects.create(
+        transfer=transfer,
+        rows=build_transfer_pt_rows(transfer),
+        generated_by=user if getattr(user, "is_authenticated", False) else None,
+    )
+
+
 @transaction.atomic
 def post_transfer_dispatch(
     transfer: StoreTransfer, scans: dict[str, int], user=None
@@ -411,6 +429,7 @@ def post_transfer_dispatch(
     Stock move only, no GL (cross-state IGST invoice is manual by decision).
     """
     from core.documents import DocStatus
+    from masters.models import Sku
     from outbound.models import StoreTransfer, StoreTransferLine
 
     # Serialize on the transfer row: a concurrent dispatch of the same draft
@@ -426,6 +445,12 @@ def post_transfer_dispatch(
     for barcode, qty in scans.items():
         _check_stock(transfer.source_store_id, barcode, qty)
 
+    # The ticketed price of each scanned piece, snapshotted with the cost so the
+    # transfer's PT stays true to the moment of dispatch (Rule 2, #72).
+    mrps = dict(
+        Sku.objects.filter(barcode__in=scans).values_list("barcode", "mrp_paise"),
+    )
+
     dispatch_lines = []
     for barcode, qty in sorted(scans.items()):
         identity = _resolve_scan_identity(transfer.source_store_id, barcode)
@@ -433,6 +458,7 @@ def post_transfer_dispatch(
         if line is None:
             line = StoreTransferLine(transfer=transfer, sku_code=barcode, qty_planned=None)
         line.qty_dispatched = qty
+        line.mrp_paise = mrps.get(barcode)
         for field, value in identity.items():
             setattr(line, field, value)
         line.save()
@@ -444,6 +470,8 @@ def post_transfer_dispatch(
 
     # Post the document (mint number, set SUBMITTED — saves everything atomically)
     transfer.post()
+
+    _generate_transfer_pt(transfer, user)
 
     entries = []
     for i, line in enumerate(dispatch_lines, start=1):

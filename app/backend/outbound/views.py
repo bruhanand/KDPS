@@ -11,8 +11,12 @@ Every endpoint requires authentication. RBAC:
 
 from __future__ import annotations
 
+import csv
+import io
 from typing import Any
 
+import openpyxl
+from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -40,12 +44,14 @@ from outbound.models import (
     Stocktake,
     StoreTransfer,
     TransferGapClosure,
+    TransferPT,
     VFlip,
     WriteOff,
 )
 from outbound.permissions import (
     CanCloseTransferGap,
     CanFlipOwnership,
+    CanReadTransferPT,
     CanWriteReturnToBrand,
     CanWriteStockCount,
     CanWriteTransfer,
@@ -81,6 +87,7 @@ from outbound.serializers import (
     StocktakeReadSerializer,
     StoreTransferReadSerializer,
     StoreTransferWriteSerializer,
+    TransferPTSerializer,
     TransferReceiveInputSerializer,
     TransferScanInputSerializer,
     VFlipReadSerializer,
@@ -88,6 +95,7 @@ from outbound.serializers import (
     WriteOffReadSerializer,
     WriteOffWriteSerializer,
 )
+from outbound.transfer_pt import KDPS_COLUMNS
 
 
 def _filter_docstatus(qs, request):
@@ -242,6 +250,101 @@ class TransferReceiveView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(StoreTransferReadSerializer(_transfer_for_read(pk)).data)
+
+
+# ---------------------------------------------------------------------------
+# The transfer's PT — read, download, print (#72)
+# ---------------------------------------------------------------------------
+
+
+class TransferPTBaseView(APIView):
+    """Everything the three PT endpoints share: find it, or say there is none.
+
+    Read-only by construction. The PT is regenerated from the scanned lines or
+    it does not change (#72), so there is no PUT, PATCH or POST on any of these;
+    anything but GET is a 405.
+
+    Gated on the transfer section's lowest rung, because the file is priced and
+    people forward it. That is a *transfer* right and nothing else: no inbound-PT
+    right is consulted here, so the rulings on who may make (#119) or inward
+    (#124) a brand's PT cannot reach this document. Making a transfer's own
+    packing list is part of transferring.
+    """
+
+    permission_classes = [CanReadTransferPT]
+
+    #: File extension for the download views; the JSON view has none.
+    extension = ""
+
+    def get(self, request, pk):
+        pt = (
+            TransferPT.objects.select_related(
+                "transfer__source_store", "transfer__destination_store"
+            )
+            .filter(transfer_id=pk)
+            .first()
+        )
+        # A draft has scanned nothing, so it has no carton and no document —
+        # that is a 404, not an empty file.
+        if pt is None:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        return self.render(pt)
+
+    def render(self, pt):  # pragma: no cover - overridden by every subclass
+        raise NotImplementedError
+
+    def rows_in_column_order(self, pt) -> list[list]:
+        """The stored rows as plain lists, in the KDPS column order — the shape
+        both file formats write."""
+        return [[row.get(column, "") for column in KDPS_COLUMNS] for row in pt.rows]
+
+    def as_attachment(self, resp, pt):
+        """Name the download after the voucher, with the slashes a voucher series
+        uses flattened out of the filename: ``KDPS-PT-PT-A-STO-26-27-0001.csv``."""
+        stem = (pt.transfer.doc_number or f"transfer-{pt.transfer_id}").replace("/", "-")
+        resp["Content-Disposition"] = f'attachment; filename="KDPS-PT-{stem}.{self.extension}"'
+        return resp
+
+
+class TransferPTView(TransferPTBaseView):
+    """GET: the transfer's PT, whole — the shape the print screen renders."""
+
+    def render(self, pt):
+        return Response(TransferPTSerializer(pt).data)
+
+
+class TransferPTCsvView(TransferPTBaseView):
+    """GET: the PT as CSV, in KDPS column order."""
+
+    extension = "csv"
+
+    def render(self, pt):
+        resp = HttpResponse(content_type="text/csv")
+        writer = csv.writer(resp)
+        writer.writerow(KDPS_COLUMNS)
+        writer.writerows(self.rows_in_column_order(pt))
+        return self.as_attachment(resp, pt)
+
+
+class TransferPTXlsxView(TransferPTBaseView):
+    """GET: the PT as a real .xlsx — the file a brand or a store opens."""
+
+    extension = "xlsx"
+
+    def render(self, pt):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "KDPS PT"
+        ws.append(KDPS_COLUMNS)
+        for row in self.rows_in_column_order(pt):
+            ws.append(row)
+        buf = io.BytesIO()
+        wb.save(buf)
+        resp = HttpResponse(
+            buf.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        return self.as_attachment(resp, pt)
 
 
 # ---------------------------------------------------------------------------
