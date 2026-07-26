@@ -23,13 +23,16 @@ from core.documents import DocStatus
 from outbound.maker_checker import ask_again
 from outbound.models import (
     MarkDamaged,
+    ReceiptStatus,
     ReturnToVendor,
     StockAdjustment,
     StoreTransfer,
+    TransferGapClosure,
     VFlip,
     WriteOff,
 )
 from outbound.permissions import (
+    CanCloseTransferGap,
     CanFlipOwnership,
     CanWriteReturnToBrand,
     CanWriteStockCount,
@@ -38,15 +41,20 @@ from outbound.permissions import (
 )
 from outbound.posting import (
     OutboundPostingError,
+    amend_gap_closure,
     mark_damaged,
     post_adjustment,
+    post_gap_closure,
     post_rtv,
     post_transfer_dispatch,
     post_transfer_receipt,
     post_vflip,
     post_writeoff,
+    raise_gap_closure,
 )
 from outbound.serializers import (
+    GapClosureInputSerializer,
+    GapClosureReadSerializer,
     MarkDamagedInputSerializer,
     MarkDamagedReadSerializer,
     ReturnToVendorReadSerializer,
@@ -55,6 +63,7 @@ from outbound.serializers import (
     StockAdjustmentWriteSerializer,
     StoreTransferReadSerializer,
     StoreTransferWriteSerializer,
+    TransferReceiveInputSerializer,
     TransferScanInputSerializer,
     VFlipReadSerializer,
     VFlipWriteSerializer,
@@ -167,11 +176,13 @@ class TransferDispatchView(APIView):
 
 
 class TransferReceiveView(APIView):
-    """POST: Receive a dispatched transfer from scanned lines only (#68).
+    """POST: Receive a dispatched transfer from scanned lines only (#68, #71).
 
-    Payload: ``{"scans": [{"barcode": ..., "qty": ...}, ...]}``. Each scanned
-    piece moves in-transit → destination; a short receive leaves the remainder
-    in-transit and flags the receipt.
+    Payload: ``{"scans": [...], "damaged": [...], "extras": [...], "notes": ""}``
+    — each list of ``{"barcode", "qty"}``. Intact pieces move in-transit →
+    destination; damaged ones go in-transit → quarantine; extras (not on the
+    transfer) are accepted in with a flag; a short receive leaves the remainder
+    in-transit and opens a gap. The notes reach the server and are stored.
     """
 
     permission_classes = [CanWriteTransfer]
@@ -194,16 +205,208 @@ class TransferReceiveView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        ser = TransferScanInputSerializer(data=request.data)
+        ser = TransferReceiveInputSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
         try:
-            post_transfer_receipt(transfer, ser.scans_by_barcode(), user=request.user)
+            post_transfer_receipt(
+                transfer,
+                ser.scans_by_barcode(),
+                user=request.user,
+                damaged=ser.damaged_by_barcode(),
+                extras=ser.extras_by_barcode(),
+                notes=ser.validated_data["notes"],
+            )
         except OutboundPostingError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        transfer.refresh_from_db()
-        return Response(StoreTransferReadSerializer(transfer).data)
+        return Response(StoreTransferReadSerializer(_transfer_for_read(pk)).data)
+
+
+# ---------------------------------------------------------------------------
+# Gaps — transfers where sent ≠ received (#71)
+# ---------------------------------------------------------------------------
+
+
+def _transfer_for_read(pk):
+    """Re-read a transfer with everything the read shape joins on.
+
+    Re-read rather than ``refresh_from_db``: the response carries the fresh
+    receipt, its exceptions and the gap closure, and a refreshed instance keeps
+    the stale prefetch caches from before the post.
+    """
+    return (
+        StoreTransfer.objects.select_related("source_store", "destination_store", "created_by")
+        .prefetch_related("lines", "receipt__exceptions", "gap_closure__lines")
+        .get(pk=pk)
+    )
+
+
+def _open_gap_transfers():
+    """Every transfer where what was sent and what was received do not agree,
+    and nobody has yet said why.
+
+    A shortfall receipt is the flag; the absence of a *posted* closure is what
+    keeps it on the list. A transfer merely on the road is not a gap — it is
+    in transit, which the in-transit view already reports.
+    """
+    return (
+        StoreTransfer.objects.filter(
+            docstatus=DocStatus.SUBMITTED,
+            receipt__receipt_status=ReceiptStatus.SHORTFALL,
+        )
+        .exclude(gap_closure__docstatus=DocStatus.SUBMITTED)
+        .select_related("source_store", "destination_store", "created_by")
+        .prefetch_related("lines", "receipt__exceptions", "gap_closure__lines")
+    )
+
+
+class TransferGapListView(generics.ListAPIView):
+    """GET: the gaps list — every open gap, for the warehouse/HO screen.
+
+    Scoped on the *source* store: the sender is answerable for the pieces until
+    the receiver scans them in, so a gap is the sender's to explain. That also
+    means the receiving store does not find its own gap on this list.
+    """
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = StoreTransferReadSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        from masters.scoping import scope_by_store
+
+        return scope_by_store(_open_gap_transfers(), self.request.user, "source_store_id")
+
+
+class TransferGapClosureCreateView(APIView):
+    """POST: raise the closure for a transfer's gap — reason + optional note.
+
+    Creating it does not close anything: the draft goes straight into the
+    approvals inbox, and only a senior's approval lets it post. The lines are
+    read off the transfer's in-transit remainder, so the person raising it
+    cannot restate how much went missing.
+    """
+
+    permission_classes = [CanCloseTransferGap]
+
+    def post(self, request, pk):
+        try:
+            transfer = _transfer_for_read(pk)
+        except StoreTransfer.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # The gap belongs to the sender, so this is a write against the sender's
+        # store; the receiving store's own bar is in ``_refuse_self_closure``.
+        enforce_store_scope(request.user, transfer.source_store_id)
+
+        ser = GapClosureInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            closure = raise_gap_closure(
+                transfer,
+                reason=ser.validated_data["reason"],
+                note=ser.validated_data["note"],
+                user=request.user,
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            GapClosureReadSerializer(_gap_closure_for_read(closure.pk)).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+def _gap_closure_for_read(pk):
+    return (
+        TransferGapClosure.objects.select_related(
+            "store",
+            "created_by",
+            "approved_by",
+            "transfer__source_store",
+            "transfer__destination_store",
+        )
+        .prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
+        .get(pk=pk)
+    )
+
+
+class GapClosureDetailView(generics.RetrieveAPIView):
+    #: Reading a closure is open like outbound's other reads; correcting one is a
+    #: write, and carries the same senior gate as raising and posting it.
+    permission_classes = [IsAuthenticated]
+    serializer_class = GapClosureReadSerializer
+
+    def get_permissions(self):
+        return [CanCloseTransferGap()] if self.request.method == "PATCH" else [IsAuthenticated()]
+
+    def get_queryset(self):
+        return TransferGapClosure.objects.select_related(
+            "store",
+            "created_by",
+            "approved_by",
+            "transfer__source_store",
+            "transfer__destination_store",
+        ).prefetch_related(
+            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        )
+
+    def patch(self, request, *args, **kwargs):
+        """Correct a draft closure — a new reason, a new note, lines re-read.
+
+        The way back from a rejection or a stale draft, so one wrong reason code
+        cannot strand the pieces in transit for good.
+        """
+        closure = self.get_object()
+        enforce_store_scope(request.user, closure.store_id)
+
+        ser = GapClosureInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            amend_gap_closure(
+                closure,
+                reason=ser.validated_data["reason"],
+                note=ser.validated_data["note"],
+                user=request.user,
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(GapClosureReadSerializer(_gap_closure_for_read(closure.pk)).data)
+
+
+class GapClosureSubmitView(APIView):
+    """POST: post an approved gap closure — the resolving entries land here.
+
+    The rules that matter (approved by a second, senior person; never anybody
+    entitled to the receiving store; the bucket still holds what the draft says)
+    all live in ``posting.post_gap_closure``, so a shell or a management command
+    hits the same wall this endpoint does.
+    """
+
+    permission_classes = [CanCloseTransferGap]
+
+    def post(self, request, pk):
+        try:
+            closure = _gap_closure_for_read(pk)
+        except TransferGapClosure.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, closure.store_id)
+
+        # No draft check here: ``post_gap_closure`` makes it, and a second copy
+        # would only be a second place for the two to disagree.
+        try:
+            post_gap_closure(closure, user=request.user)
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(GapClosureReadSerializer(_gap_closure_for_read(pk)).data)
 
 
 class ScanLookupView(APIView):

@@ -9,6 +9,7 @@ All amounts are integer paise. Debit is positive, credit is negative.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from django.db import transaction
@@ -16,8 +17,9 @@ from django.utils import timezone
 
 from core.gl import GLAccount
 from core.posting import PostingRef, cr, dr, post_entries
-from outbound.maker_checker import require_approved
+from outbound.maker_checker import request_document_approval, require_approved
 from stockledger.models import (
+    MERCH_DIM_FIELDS,
     InTransitStock,
     QuarantineStock,
     StockLedgerEntry,
@@ -26,11 +28,16 @@ from stockledger.models import (
 )
 
 if TYPE_CHECKING:
+    from accounts.models import User
     from outbound.models import (
         MarkDamaged,
         ReturnToVendor,
         StockAdjustment,
         StoreTransfer,
+        StoreTransferLine,
+        TransferGapClosure,
+        TransferGapClosureLine,
+        TransferReceiptException,
         VFlip,
         WriteOff,
     )
@@ -156,12 +163,17 @@ def _write_stock_entry(
 # post. A scanned-vs-plan gap is flagged, never blocked (Rule 5); a barcode
 # outside the plan (or, at receive, outside the dispatched lines) is rejected.
 
-# line_no bands — one doc number carries all four leg types, so each type gets
-# its own band (dispatch writes OUT+TRANSIT_IN, receive TRANSIT_OUT+IN).
+# line_no bands — one doc number carries every leg type this transfer will ever
+# write, so each type gets its own band (dispatch writes OUT+TRANSIT_IN, receive
+# TRANSIT_OUT+IN and, for the exceptions, QUARANTINE_IN + the extras' TRANSFER_IN;
+# a gap closure drains what is left).
 LINE_NO_TRANSFER_OUT = 0
 LINE_NO_TRANSIT_IN = 500
 LINE_NO_TRANSFER_IN = 1000
 LINE_NO_TRANSIT_OUT = 1500
+LINE_NO_QUARANTINE_ON_ARRIVAL = 2000
+LINE_NO_EXTRA_IN = 2500
+LINE_NO_GAP_DRAIN = 3000
 
 
 def _validate_scans(scans: dict[str, int], allowed: set[str] | None, context: str) -> None:
@@ -304,6 +316,59 @@ def resolve_line_cost(store_id: int, sku_code: str, season: str = "") -> int:
     return cost
 
 
+def brand_is_owned(brand_name: str) -> bool | None:
+    """Whose stock is this — KDPS's, or the brand's held on SOR/consignment?
+
+    The answer decides which accounts a value posting may touch: owned stock is
+    an on-book asset, brand-owned stock lives behind the SOR memo pair and never
+    inside INVENTORY. Getting it wrong is the "model-blind liability" defect the
+    30 June review found, so it is asked once, here.
+
+    ``None`` means the masters cannot say, which is not the same as "ours".
+    Every caller must treat it as a reason to refuse rather than to assume.
+    """
+    from masters.models import Brand
+
+    if not brand_name:
+        return None
+    # A V-flipped piece is displayed as "V <brand>" and is KDPS-owned by
+    # definition — the flip is the ownership change (see ``post_vflip``), so the
+    # original brand's row must not be consulted for it.
+    if brand_name.startswith("V "):
+        return True
+    brand = Brand.objects.filter(name=brand_name).first()
+    return None if brand is None else bool(brand.ownership == Brand.Ownership.OWNED)
+
+
+@dataclass
+class _ValueByOwner:
+    """A lot's value split by whose stock it is — KDPS's own, or a brand's on SOR.
+
+    A named pair rather than a ``dict[bool, int]`` because ownership is a *three*
+    -state answer: ``brand_is_owned`` returns ``None`` when the masters cannot
+    say, and a bool-keyed dict invites ``bucket[bool(brand_is_owned(...))]``,
+    which files an unknown brand under "brand-owned" and posts a memo pair for
+    stock that may well be ours. ``add`` refuses the undecided case outright, so
+    the contract ``brand_is_owned`` documents — treat ``None`` as a reason to
+    refuse, never to assume — is enforced where the money is bucketed rather
+    than left to each caller to remember.
+    """
+
+    own: int = 0
+    sor: int = 0
+
+    def add(self, owned: bool | None, paise: int) -> None:
+        if owned is None:
+            raise OutboundPostingError(
+                "The books cannot say who owns these pieces, so their value "
+                "cannot be booked either way."
+            )
+        if owned:
+            self.own += paise
+        else:
+            self.sor += paise
+
+
 def resolve_line_identity(store_id: int, sku_code: str, season: str = "") -> dict[str, int | str]:
     """Merchandising dims + unit cost for one document line, read from the books.
 
@@ -409,21 +474,112 @@ def post_transfer_dispatch(
     return entries
 
 
+def _resolve_extra_identity(transfer: StoreTransfer, barcode: str) -> dict[str, int | str]:
+    """Dims + book cost for a piece that arrived but was never sent (#71).
+
+    An extra is, by definition, a piece the destination was not expecting, so
+    ``_resolve_scan_identity``'s "it must be there to be scanned" rule cannot
+    apply. The books are asked at the destination first, then at the sender —
+    the two places that plausibly know this barcode — and the item master fills
+    in dims where neither location holds any.
+
+    A cost of 0 means *the books cannot price this piece*, which is not the same
+    as free (#103). The caller records the extra and refuses to post it into
+    stock rather than inventing a value for it.
+    """
+    from masters.models import Sku
+
+    sku = Sku.objects.filter(barcode=barcode).first()
+    master_dims = {k: v for k, v in merch_dims(sku).items() if v} if sku is not None else {}
+    for store_id in (transfer.destination_store_id, transfer.source_store_id):
+        cost = book_unit_cost(store_id, barcode)
+        if cost <= 0:
+            continue
+        on_hand = StockOnHand.objects.filter(store_id=store_id, sku_code=barcode).first()
+        dims = {k: v for k, v in merch_dims(on_hand).items() if v} if on_hand is not None else {}
+        return {**master_dims, **dims, "unit_cost_paise": cost}
+    return {**master_dims, "unit_cost_paise": 0}
+
+
+def _validate_receive(
+    lines: dict[str, StoreTransferLine],
+    good: dict[str, int],
+    damaged: dict[str, int],
+    extras: dict[str, int],
+) -> None:
+    """Guard the receive payload before a single leg is written.
+
+    The three buckets divide the scanned carton between them, so they are
+    validated together: good and damaged pieces must be *on* the transfer (and
+    together no more than was sent), an extra must be a barcode the transfer
+    never carried, and something must have arrived for this to be a receipt.
+    """
+    if not (good or damaged or extras):
+        raise OutboundPostingError("Receive needs scanned lines (barcode × qty ≥ 1).")
+    if any(q < 1 for q in (*good.values(), *damaged.values(), *extras.values())):
+        raise OutboundPostingError("Receive needs scanned lines (barcode × qty ≥ 1).")
+
+    unknown = sorted((set(good) | set(damaged)) - set(lines))
+    if unknown:
+        raise OutboundPostingError(
+            f"Not on this transfer: {', '.join(unknown)}. A piece the transfer never sent "
+            "is an extra — record it as one so it is flagged, not counted as received."
+        )
+    misfiled = sorted(set(extras) & set(lines))
+    if misfiled:
+        raise OutboundPostingError(
+            f"On this transfer, so not an extra: {', '.join(misfiled)}. "
+            "Scan it as received (or damaged) instead."
+        )
+    for barcode, line in lines.items():
+        arrived = good.get(barcode, 0) + damaged.get(barcode, 0)
+        if arrived > line.qty_dispatched:
+            raise OutboundPostingError(
+                f"Scanned more than was sent for {barcode}: "
+                f"sent={line.qty_dispatched}, scanned={arrived}."
+            )
+
+
 @transaction.atomic
 def post_transfer_receipt(
-    transfer: StoreTransfer, scans: dict[str, int], user=None
+    transfer: StoreTransfer,
+    scans: dict[str, int],
+    user=None,
+    *,
+    damaged: dict[str, int] | None = None,
+    extras: dict[str, int] | None = None,
+    notes: str = "",
 ) -> list[StockLedgerEntry]:
-    """Post the receive side from scanned quantities only.
+    """Post the receive side from scanned quantities only, exceptions included (#71).
 
-    ``scans`` maps barcode → scanned-in qty. Each scanned piece moves from
-    the in-transit bucket to the destination. A short receive leaves the
-    remainder in-transit and flags the receipt (shortfall); scanning a
-    barcode that wasn't dispatched, or more than was sent, is rejected
-    (extra/damaged handling is a later slice). Creates a TransferReceipt
-    companion record (submitted docs are immutable).
+    Four things come off the scan screen and all four are structured:
+
+    * ``scans`` — pieces that arrived intact: in-transit → destination, sellable.
+    * ``damaged`` — pieces that arrived broken: in-transit → **quarantine** at the
+      destination, so a damaged arrival never reaches the shop floor as sellable.
+    * ``extras`` — pieces that arrived but the transfer never sent. Accepted in
+      with a flag where the books can price them (a surplus, so it posts a
+      balanced Dr INVENTORY / Cr SUSPENSE voucher like a stocktake surplus);
+      recorded but *not* posted into stock where they cannot, since a movement
+      valued at zero is a wrong number dressed as a right one (#103). Either way
+      the piece is on the record — never silently swallowed.
+    * ``notes`` — what the receiver typed about the shortfall, which until now
+      was dropped from the payload before the server ever saw it.
+
+    Damaged pieces count as **received**: they arrived, so they leave the
+    in-transit bucket. Only pieces that never turned up are short, and those stay
+    in the bucket on the still-open transfer until a senior closes the gap
+    (``post_gap_closure``) — which is why this function keeps refusing a second
+    receive: the way out of a shortfall is the closure, not another scan.
     """
     from core.documents import DocStatus
-    from outbound.models import ReceiptStatus, StoreTransfer, TransferReceipt
+    from outbound.models import (
+        ReceiptExceptionKind,
+        ReceiptStatus,
+        StoreTransfer,
+        TransferReceipt,
+        TransferReceiptException,
+    )
 
     if transfer.docstatus != DocStatus.SUBMITTED:
         raise OutboundPostingError("Transfer must be dispatched (submitted) before receipt.")
@@ -431,63 +587,589 @@ def post_transfer_receipt(
     # blocks here, then the already-received check below sees the first receipt.
     StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
     if TransferReceipt.objects.filter(transfer=transfer).exists():
-        raise OutboundPostingError("Transfer already received.")
+        raise OutboundPostingError(
+            "Transfer already received. Missing pieces are closed from the gaps "
+            "list by a senior, not by receiving the transfer twice."
+        )
 
+    good = dict(scans or {})
+    damaged = dict(damaged or {})
+    extras = dict(extras or {})
     lines = {line.sku_code: line for line in transfer.lines.all() if line.qty_dispatched > 0}
-    _validate_scans(scans, set(lines), "Receive")
+    _validate_receive(lines, good, damaged, extras)
 
-    for barcode, qty in scans.items():
-        if qty > lines[barcode].qty_dispatched:
-            raise OutboundPostingError(
-                f"Scanned more than was sent for {barcode}: "
-                f"sent={lines[barcode].qty_dispatched}, scanned={qty}."
-            )
-
-    entries = []
+    dest = transfer.destination_store
+    entries: list[StockLedgerEntry] = []
+    exceptions: list[TransferReceiptException] = []
     has_shortfall = False
 
     for i, (barcode, line) in enumerate(sorted(lines.items()), start=1):
-        qty_recv = scans.get(barcode, 0)
-        line.qty_received = qty_recv
+        qty_good = good.get(barcode, 0)
+        qty_damaged = damaged.get(barcode, 0)
+        arrived = qty_good + qty_damaged
+        line.qty_received = arrived
         line.save(update_fields=["qty_received"])
 
-        if qty_recv != line.qty_dispatched:
+        short = line.qty_dispatched - arrived
+        if short > 0:
             has_shortfall = True
-        if qty_recv == 0:
+            exceptions.append(
+                TransferReceiptException(
+                    kind=ReceiptExceptionKind.SHORT,
+                    sku_code=barcode,
+                    **merch_dims(line),
+                    qty=short,
+                    unit_cost_paise=line.unit_cost_paise,
+                    note="Stays in transit until the gap is closed.",
+                )
+            )
+        if arrived == 0:
             continue
 
-        # OUT of the in-transit bucket…
+        # OUT of the in-transit bucket — everything that turned up, damaged or not
         entries.append(
             _write_transit_entry(
                 transfer=transfer,
                 line=line,
-                qty=-qty_recv,
+                qty=-arrived,
                 kind="transit_out",
                 line_no=LINE_NO_TRANSIT_OUT + i,
                 posted_by=user,
             )
         )
-        # …and INTO the destination (ready for sale)
+        if qty_good:
+            # …the intact pieces INTO the destination (ready for sale)
+            entries.append(
+                _write_stock_entry(
+                    store=dest,
+                    gstin=dest.gstin,
+                    line=line,
+                    qty=qty_good,
+                    kind="transfer_in",
+                    doc_number=transfer.doc_number,
+                    line_no=LINE_NO_TRANSFER_IN + i,
+                    posted_by=user,
+                )
+            )
+        if qty_damaged:
+            # …and the broken ones straight into quarantine, never onto the floor
+            entries.append(
+                _write_quarantine_entry(
+                    store=dest,
+                    gstin=dest.gstin,
+                    line=line,
+                    qty=qty_damaged,
+                    doc_number=transfer.doc_number,
+                    line_no=LINE_NO_QUARANTINE_ON_ARRIVAL + i,
+                    posted_by=user,
+                )
+            )
+            exceptions.append(
+                TransferReceiptException(
+                    kind=ReceiptExceptionKind.DAMAGED,
+                    sku_code=barcode,
+                    **merch_dims(line),
+                    qty=qty_damaged,
+                    unit_cost_paise=line.unit_cost_paise,
+                    note="Quarantined on arrival — not sellable.",
+                )
+            )
+
+    entries += _post_receive_extras(transfer, extras, exceptions, user)
+
+    receipt = TransferReceipt.objects.create(
+        transfer=transfer,
+        received_by=user,
+        receipt_status=(ReceiptStatus.SHORTFALL if has_shortfall else ReceiptStatus.COMPLETE),
+        shortfall_notes=notes,
+    )
+    for exception in exceptions:
+        exception.receipt = receipt
+    TransferReceiptException.objects.bulk_create(exceptions)
+
+    return entries
+
+
+def _post_receive_extras(
+    transfer: StoreTransfer,
+    extras: dict[str, int],
+    exceptions: list[TransferReceiptException],
+    user=None,
+) -> list[StockLedgerEntry]:
+    """Bring the extras in — the priceable ones as stock, all of them on the record.
+
+    A piece that arrived without being sent is real inventory appearing at a
+    location with no document behind it, so on the value side it is a surplus:
+    one balanced Dr INVENTORY / Cr SUSPENSE voucher for the lot, exactly as a
+    stocktake surplus posts. Where the books cannot price the piece, the
+    exception row is the whole outcome and its note says so — visible on the
+    transfer and in the gaps list, so somebody has to deal with it.
+    """
+    from outbound.models import ReceiptExceptionKind, TransferReceiptException
+
+    if not extras:
+        return []
+
+    dest = transfer.destination_store
+    entries: list[StockLedgerEntry] = []
+    surplus = _ValueByOwner()
+    for i, (barcode, qty) in enumerate(sorted(extras.items()), start=1):
+        identity = _resolve_extra_identity(transfer, barcode)
+        owned = brand_is_owned(str(identity.get("brand", "")))
+        note = _extra_note(int(identity["unit_cost_paise"]), owned)
+        exceptions.append(
+            TransferReceiptException(
+                kind=ReceiptExceptionKind.EXTRA,
+                sku_code=barcode,
+                qty=qty,
+                note=note,
+                **{k: v for k, v in identity.items() if k != "unit_cost_paise"},
+                unit_cost_paise=identity["unit_cost_paise"],
+            )
+        )
+        if int(identity["unit_cost_paise"]) <= 0 or owned is None:
+            continue
+        line = _ExtraLine(barcode, identity)
         entries.append(
             _write_stock_entry(
-                store=transfer.destination_store,
-                gstin=transfer.destination_store.gstin,
+                store=dest,
+                gstin=dest.gstin,
                 line=line,
-                qty=qty_recv,
+                qty=qty,
                 kind="transfer_in",
                 doc_number=transfer.doc_number,
-                line_no=LINE_NO_TRANSFER_IN + i,
+                line_no=LINE_NO_EXTRA_IN + i,
+                posted_by=user,
+            )
+        )
+        surplus.add(owned, qty * int(identity["unit_cost_paise"]))
+
+    ref = PostingRef(
+        doc_type="STO",
+        doc_number=transfer.doc_number,
+        store=dest,
+        gstin=dest.gstin,
+        posted_by=user,
+    )
+    if surplus.own:
+        # KDPS's own stock appearing with no document behind it — a surplus, the
+        # same shape a stocktake surplus posts.
+        _post_value_pair(
+            ref,
+            GLAccount.INVENTORY,
+            GLAccount.SUSPENSE,
+            surplus.own,
+            "Receive: extra pieces accepted in",
+            "Receive: extra pieces contra",
+            user,
+        )
+    if surplus.sor:
+        # The brand's stock, held on SOR/consignment: counted by quantity, value
+        # off-book behind the memo pair, and NOT a payable — nothing has been
+        # sold, so nothing is owed yet.
+        _post_value_pair(
+            ref,
+            GLAccount.SOR_STOCK,
+            GLAccount.SOR_CONTRA,
+            surplus.sor,
+            "Receive: extra brand-owned pieces",
+            "Receive: extra brand-owned contra",
+            user,
+        )
+    return entries
+
+
+def _post_value_pair(
+    ref: PostingRef,
+    debit: str,
+    credit: str,
+    paise: int,
+    debit_memo: str,
+    credit_memo: str,
+    user: User | None = None,
+) -> None:
+    """One balanced two-leg voucher — the shape every value posting here takes.
+
+    Written once so the four ownership branches in this module differ only in the
+    account pair and the memo, which is the whole of what actually differs
+    between them.
+    """
+    post_entries(
+        ref,
+        [dr(debit, paise, memo=debit_memo), cr(credit, paise, memo=credit_memo)],
+        posted_by=user,
+    )
+
+
+def _extra_note(unit_cost_paise: int, owned: bool | None) -> str:
+    """What happened to this extra, in a sentence the receiver's manager can act on.
+
+    Two different unknowns keep a piece out of stock and they need different
+    fixes, so they must not wear the same words: the books cannot *price* it, or
+    the books cannot say *whose* it is. Either way the piece is on the record —
+    the whole point of the exception row — but neither is guessed at.
+    """
+    if unit_cost_paise <= 0:
+        return (
+            "Not on this transfer, and the books cannot price it — recorded but NOT "
+            "brought into stock. Bring it in on a GRN/PT."
+        )
+    if owned is None:
+        return (
+            "Not on this transfer, and its brand is not in the masters, so the books "
+            "cannot say whether it is ours or the brand's — recorded but NOT brought "
+            "into stock. Add the brand, then bring it in on a GRN/PT."
+        )
+    return "Not on this transfer — accepted into stock, flagged."
+
+
+class _ExtraLine:
+    """The line-shaped object ``_write_stock_entry`` needs for an extra piece.
+
+    An extra has no ``StoreTransferLine`` behind it — that is what makes it an
+    extra — so its dims and cost are carried here instead of being faked onto
+    the transfer's plan.
+    """
+
+    def __init__(self, barcode: str, identity: dict[str, int | str]) -> None:
+        self.sku_code = barcode
+        for field in MERCH_DIM_FIELDS:
+            setattr(self, field, identity.get(field, ""))
+        self.unit_cost_paise = int(identity["unit_cost_paise"])
+
+
+# ---------------------------------------------------------------------------
+# 1a. Gap closure — draining what a short receive left in transit
+# ---------------------------------------------------------------------------
+#
+# A short receive is honest but unfinished: the pieces nobody scanned in are
+# still in the in-transit bucket, and the transfer stays open in a gap state.
+# The Operations Head has to say what became of them — and the reason they give
+# is not a note, it is the instruction to the ledger:
+#
+#   found later      the pieces did turn up  → in-transit → destination stock
+#   wrongly scanned  they never left         → in-transit → back to the sender
+#   lost in transit  they are gone           → in-transit → off the books (loss)
+#
+# **The "found later" sub-decision (#80, undecided until now): closure posts the
+# entries directly; there is no second scan-receive against a received transfer.**
+# One route, one document, one place the numbers come from — and, decisively, a
+# second receive would put the closing act back in the receiving store's hands,
+# which is the one thing this whole flow exists to prevent.
+#
+# The drain leg deliberately carries the *transfer's* doc number, not the
+# closure's: ``InTransitStock`` is keyed by the transfer that holds the pieces,
+# and the ledger rebuild groups transit legs the same way, so a drain filed
+# under the closure's number would open a second bucket instead of emptying the
+# first. The resolving legs and the GL voucher carry the closure's own number.
+
+
+def _ensure_gap_series(closure: TransferGapClosure) -> None:
+    """Make sure the gap-free GAP voucher series exists before ``post()``.
+
+    Same reason the GRN path does it: a series row missing for a (FY, store) is
+    a setup gap, and failing the closure over it would leave the pieces stuck in
+    transit for a bookkeeping reason.
+    """
+    from core.documents import VoucherSeries
+
+    fy, store_code, doc_type = closure.series_lookup()
+    VoucherSeries.objects.get_or_create(fy=fy, store_code=store_code, doc_type=doc_type)
+
+
+def _refuse_self_closure(closure: TransferGapClosure, *people: User | None) -> None:
+    """The receiving store never closes its own gap (#71).
+
+    Maker ≠ checker is not enough on its own: two people at the same store are
+    still two people, and the store that scanned short is the one with something
+    to explain. So the rule is about *entitlement*, not identity — anybody whose
+    scope includes the destination is barred from both ends of this decision, and
+    it is checked in the posting layer so no caller can route around it.
+
+    ``None`` is accepted per person because a document made outside the API — a
+    shell, a management command — has no recorded maker, and an unapproved one no
+    checker. A missing person cannot be entitled to anything, so they are skipped
+    here; that they are *required* is ``require_approved``'s rule, not this one.
+    """
+    from masters.scoping import actionable_store_ids
+
+    destination_id = closure.transfer.destination_store_id
+    for person in people:
+        if person is None:
+            continue
+        allowed = actionable_store_ids(person)
+        if allowed is not None and destination_id in allowed:
+            raise OutboundPostingError(
+                "A gap is closed by the Operations Head at HO, never by the store that "
+                "received short — this decision has to sit with somebody outside "
+                f"{closure.transfer.destination_store.code}."
+            )
+
+
+def build_gap_closure_lines(closure: TransferGapClosure) -> list[TransferGapClosureLine]:
+    """The closure's lines, read off the still-open transfer — never typed.
+
+    A closure resolves exactly what the ledger still holds, so its lines are the
+    transfer's own in-transit remainders at the *frozen dispatch cost*. That cost
+    is the number the bucket was filled at (itself derived from the books at
+    dispatch, never from a payload), so draining at it empties the bucket to
+    zero; re-deriving it here would leave value stranded behind an emptied
+    quantity.
+    """
+    from outbound.models import TransferGapClosureLine
+
+    lines = [
+        TransferGapClosureLine(
+            closure=closure,
+            sku_code=line.sku_code,
+            **merch_dims(line),
+            qty=line.qty_in_transit,
+            unit_cost_paise=line.unit_cost_paise,
+        )
+        for line in closure.transfer.lines.all()
+        if line.qty_in_transit > 0
+    ]
+    if not lines:
+        raise OutboundPostingError("This transfer has no gap — nothing is still in transit.")
+    return lines
+
+
+@transaction.atomic
+def raise_gap_closure(
+    transfer: StoreTransfer, *, reason: str, note: str = "", user=None
+) -> TransferGapClosure:
+    """Raise the closure for a transfer's gap and put it in the approvals inbox.
+
+    Nothing is resolved here — this is the *asking*. One transaction, so a
+    closure that cannot be built (no gap, or the asker is the receiving store)
+    leaves no orphan draft behind, and one that can is never left sitting
+    without a checker.
+    """
+    from outbound.models import TransferGapClosure, TransferGapClosureLine
+
+    if TransferGapClosure.objects.filter(transfer=transfer).exists():
+        raise OutboundPostingError(
+            "This transfer already has a gap closure — correct the one it has "
+            "rather than raising a second."
+        )
+
+    closure = TransferGapClosure(
+        transfer=transfer,
+        store=transfer.source_store,
+        reason=reason,
+        note=note,
+        created_by=user,
+    )
+    _refuse_self_closure(closure, user)
+    closure.save()
+    TransferGapClosureLine.objects.bulk_create(build_gap_closure_lines(closure))
+    request_document_approval(closure, requested_by=user)
+    return closure
+
+
+@transaction.atomic
+def amend_gap_closure(
+    closure: TransferGapClosure,
+    *,
+    reason: str,
+    note: str = "",
+    user: User | None = None,
+) -> TransferGapClosure:
+    """Correct a draft closure and ask again.
+
+    One gap gets one closure document — but until it posts, that document can be
+    wrong: the wrong reason chosen, a checker who rejected it, or numbers the
+    bucket has moved on from. Without a way back, any of those strands the short
+    pieces in transit for good, which is the dead end this slice exists to close.
+
+    The lines are rebuilt from the transfer rather than kept, so a correction
+    cannot carry a number the maker typed or one the bucket has moved past.
+
+    **A closure waiting for a decision cannot be corrected at all**, and that
+    restriction carries the security of the whole thing rather than being a
+    convenience: while a request is pending, the checker is reading the reason on
+    this very document. Editable underneath them, the maker raises "found later",
+    lets the checker approve *that*, and posts a write-off on an approval given
+    for bringing the pieces back — the reason is an instruction to the ledger, so
+    changing it changes what posts. A pending closure therefore waits for its
+    answer, and correcting it afterwards always asks again, the old decision
+    staying on the record beside the new request.
+    """
+    from approvals.models import ApprovalStatus
+    from approvals.services import approval_for
+    from core.documents import DocStatus
+    from outbound.maker_checker import request_document_approval
+    from outbound.models import TransferGapClosureLine
+
+    if closure.docstatus != DocStatus.DRAFT:
+        raise OutboundPostingError("This gap closure has already been posted.")
+    # The same entitlement bar as raising one: correcting a closure decides what
+    # became of the pieces just as much as raising it did.
+    _refuse_self_closure(closure, user)
+
+    live = approval_for(closure)
+    if live is not None and live.status == ApprovalStatus.PENDING:
+        raise OutboundPostingError(
+            "This closure is waiting for a decision, so it cannot be changed yet — "
+            "a checker is reading the reason on it. Once they have approved it or "
+            "turned it down, correct it and it goes back to them."
+        )
+
+    closure.reason = reason
+    closure.note = note
+    closure.save(update_fields=["reason", "note"])
+
+    rebuilt = build_gap_closure_lines(closure)
+    closure.lines.all().delete()
+    TransferGapClosureLine.objects.bulk_create(rebuilt)
+
+    # Not ``maker_checker.ask_again``: that is the rejection-only route, and an
+    # *approved* closure has to go back to the inbox too. Asking directly still
+    # carries the document's maker across, so a re-ask cannot move the author
+    # aside and let them clear their own correction.
+    if live is not None:
+        request_document_approval(closure, requested_by=user)
+    return closure
+
+
+@transaction.atomic
+def post_gap_closure(closure: TransferGapClosure, user=None) -> list[StockLedgerEntry]:
+    """Post a gap closure: drain the in-transit remainder, per the stated reason.
+
+    Refuses unless a second, senior person has approved it (``require_approved``)
+    and neither of them is entitled to the receiving store. Then the pieces leave
+    the bucket and land where the reason says — at the destination, back at the
+    sender, or off the books as a loss (Dr SUSPENSE / Cr INVENTORY, the same
+    shape as a write-off, because that is what a lost carton is).
+    """
+    from core.documents import DocStatus
+    from outbound.models import GapReason, StoreTransfer
+
+    if closure.docstatus != DocStatus.DRAFT:
+        raise OutboundPostingError("This gap closure has already been posted.")
+    # Serialize on the transfer: a concurrent closure of the same gap blocks
+    # here, then finds the bucket already drained below.
+    StoreTransfer.objects.select_for_update().get(pk=closure.transfer_id)
+
+    lines = list(closure.lines.all())
+    if not lines:
+        raise OutboundPostingError("Gap closure has no lines.")
+
+    approval = require_approved(closure)  # maker ≠ checker, senior-gated (#70)
+    _refuse_self_closure(
+        closure, closure.created_by, approval.decided_by if approval else None, user
+    )
+
+    # The bucket is the source of truth for what is still owed: if a rebuild, a
+    # correction or a racing closure moved it since the draft was made, the
+    # numbers on this document are stale and it must be made again.
+    held = dict(
+        InTransitStock.objects.filter(transfer_doc_number=closure.transfer.doc_number).values_list(
+            "sku_code", "qty"
+        )
+    )
+    for line in lines:
+        if held.get(line.sku_code, 0) != line.qty:
+            raise OutboundPostingError(
+                f"{line.sku_code} no longer has {line.qty} piece(s) in transit "
+                f"(the bucket holds {held.get(line.sku_code, 0)}). "
+                "The gap moved since this closure was drafted — correct it, "
+                "which re-reads what is still owed."
+            )
+
+    _ensure_gap_series(closure)
+    closure.post()
+
+    transfer = closure.transfer
+    transfer_lines = {line.sku_code: line for line in transfer.lines.all()}
+    entries: list[StockLedgerEntry] = []
+    #: Value of the lost pieces, split by whose stock it was.
+    loss = _ValueByOwner()
+
+    if closure.reason == GapReason.LOST_IN_TRANSIT:
+        # Write-off is where ownership decides everything, so it is settled
+        # before a single leg is written: KDPS's own loss hits INVENTORY, the
+        # brand's does not (it was never on our books), and a piece the masters
+        # cannot place must not be guessed either way.
+        unknown = sorted({line.sku_code for line in lines if brand_is_owned(line.brand) is None})
+        if unknown:
+            raise OutboundPostingError(
+                f"The books cannot say who owns {', '.join(unknown)} "
+                f"(brand not in the masters), so a loss cannot be booked against it. "
+                "Add the brand, then correct this closure."
+            )
+
+    for i, line in enumerate(lines, start=1):
+        # OUT of the in-transit bucket, under the TRANSFER's number (see above)
+        entries.append(
+            _write_transit_entry(
+                transfer=transfer,
+                line=line,
+                qty=-line.qty,
+                kind="transit_out",
+                line_no=LINE_NO_GAP_DRAIN + i,
+                posted_by=user,
+            )
+        )
+        # …and the transfer line stops claiming those pieces are still on the road.
+        transfer_line = transfer_lines[line.sku_code]
+        transfer_line.qty_resolved += line.qty
+        transfer_line.save(update_fields=["qty_resolved"])
+        if closure.reason == GapReason.LOST_IN_TRANSIT:
+            # Nowhere to land — the value comes off the books instead.
+            loss.add(brand_is_owned(line.brand), line.qty * line.unit_cost_paise)
+            continue
+        landing = (
+            transfer.destination_store
+            if closure.reason == GapReason.FOUND_LATER
+            else transfer.source_store
+        )
+        entries.append(
+            _write_stock_entry(
+                store=landing,
+                gstin=landing.gstin,
+                line=line,
+                qty=line.qty,
+                kind="transfer_in",
+                doc_number=closure.doc_number,
+                line_no=i,
                 posted_by=user,
             )
         )
 
-    # Create the receipt companion record (short remainder stays in-transit,
-    # flagged; gap closure is a later slice)
-    TransferReceipt.objects.create(
-        transfer=transfer,
-        received_by=user,
-        receipt_status=(ReceiptStatus.SHORTFALL if has_shortfall else ReceiptStatus.COMPLETE),
+    ref = PostingRef(
+        doc_type="GAP",
+        doc_number=closure.doc_number,
+        store=transfer.source_store,
+        gstin=transfer.source_store.gstin,
+        posted_by=user,
     )
+    if loss.own:
+        # Our own stock, gone: a loss, the same shape as a write-off.
+        _post_value_pair(
+            ref,
+            GLAccount.SUSPENSE,
+            GLAccount.INVENTORY,
+            loss.own,
+            "Gap closure: lost in transit",
+            "Gap closure: stock written off",
+            user,
+        )
+    if loss.sor:
+        # The brand's stock, gone. Its value was never inside INVENTORY, so the
+        # only thing to undo is the SOR memo pair. Whether KDPS owes the brand
+        # for a carton it lost is a settlement claim, not a stock posting — it
+        # belongs to the payments design, and inventing a payable here would be
+        # exactly the model-blind liability the 30 June review found.
+        _post_value_pair(
+            ref,
+            GLAccount.SOR_CONTRA,
+            GLAccount.SOR_STOCK,
+            loss.sor,
+            "Gap closure: reverse SOR contra",
+            "Gap closure: brand stock lost",
+            user,
+        )
 
     return entries
 

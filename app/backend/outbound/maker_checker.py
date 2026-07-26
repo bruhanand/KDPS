@@ -6,8 +6,9 @@ put a fresh draft in the inbox and one to refuse a post that hasn't cleared it.
 The rules themselves (maker ≠ checker, reason on reject, one decision) live in
 ``approvals.services`` and are shared with every other module that wires in.
 
-Wired in this slice: write-offs, V-flips, stock adjustments — the three that
-used to stamp their own creator as approver.
+Wired: write-offs, V-flips, stock adjustments — the three that used to stamp
+their own creator as approver — plus transfer gap closures (#71), which reach
+the inbox the same way as everything else.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from approvals.services import (
     request_approval,
 )
 from core.documents import DocStatus
-from outbound.models import StockAdjustment, VFlip, WriteOff
+from outbound.models import StockAdjustment, TransferGapClosure, VFlip, WriteOff
 
 
 @dataclass(frozen=True)
@@ -63,6 +64,21 @@ class ApprovalKind:
 #: the live answer is the ``ApprovalPolicy`` row, which the business retunes.
 _COUNT_APPROVERS = roles_with_capability("stock_count", CAP_APPROVE)
 _STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
+
+#: Who may clear a transfer gap: the roles at ``transfer: approve``, read from the
+#: same place every other approver list is, rather than the hand-kept admin list
+#: #94 deleted (which named ``it_admin`` and ``accounts``, whom the sheet gives
+#: only *view* on transfers, and omitted the brand manager it gives *approve*).
+#:
+#: One caveat worth stating: ``ho_ops`` — the Operations Head the design actually
+#: names for this decision — holds its ``approve`` through ``DERIVED_ACCESS``,
+#: which ``rbac_matrix`` is explicit is *not* the ratified sheet and may be
+#: retuned as data. So the one role the design names is the one whose seat here is
+#: least ratified. That is an argument for giving Operations Head a sheet row, not
+#: for hand-listing roles again. Seniority is all this expresses; the entitlement
+#: rule barring anyone tied to the receiving store is a separate gate in
+#: ``posting._refuse_self_closure``.
+_GAP_APPROVERS = roles_with_capability("transfer", CAP_APPROVE)
 
 #: The one role the band adds on top of the approvers — a declared exception,
 #: because the ladder cannot express it.
@@ -102,6 +118,12 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
         band_paise=_ADJ_BAND_PAISE,
         band_roles=_IN_CHARGE_ROLES,
     ),
+    # No tolerance and no band: a gap closure decides what became of pieces that
+    # went missing between two locations, and it is HO/warehouse work whatever it
+    # is worth. The rule that the *receiving* store cannot be either party is
+    # about entitlement rather than role, so it lives in
+    # ``posting._refuse_self_closure`` — this table only says who is senior.
+    TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _GAP_APPROVERS, "approved_by"),
 }
 
 
@@ -192,6 +214,11 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
 
     line_count, pieces, value = _line_totals(doc)
     title = f"{doc.store.code} · {line_count} line{'' if line_count == 1 else 's'} · {pieces} pcs"
+    # A document may add what the store code alone cannot say — a gap closure is
+    # meaningless in the inbox without naming the transfer it closes. Optional,
+    # so nothing else has to know this hook exists.
+    if subject := getattr(doc, "approval_subject", ""):
+        title = f"{subject} · {title}"
     policy = _policy(kind)
     common = {
         "kind": kind.code,

@@ -20,6 +20,16 @@ export function canWriteTransfer(user: User | null | undefined): boolean {
   return userCan(user, "transfer", "operate");
 }
 
+/**
+ * Raise or post a transfer gap closure — a rung above the daily transfer work,
+ * because deciding what became of missing pieces is the Operations Head's call
+ * (#71). The server also bars anyone entitled to the receiving store, which no
+ * capability can express, so this hides the button and the API still refuses.
+ */
+export function canCloseTransferGap(user: User | null | undefined): boolean {
+  return userCan(user, "transfer", "approve");
+}
+
 /** Mark damage, and create or submit a return to brand. */
 export function canWriteReturnToBrand(user: User | null | undefined): boolean {
   return userCan(user, "return_to_brand", "operate");

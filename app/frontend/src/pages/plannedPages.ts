@@ -163,19 +163,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     ],
     module: TRANSFERS,
   },
-  "/transfer/in-transit": {
-    summary: "Everything currently between two locations, and every gap that has opened.",
-    contains: [
-      "Stock dispatched but not yet received",
-      "Gaps — where what was sent and what was received do not agree",
-      "A gap closes only when a senior gives a reason, and the reason is kept",
-    ],
-    notes: [
-      "Dispatch and receive by scan are already built and in test; this is the view that sits between them.",
-    ],
-    module: TRANSFERS,
-  },
-
   // ---- Stock Count --------------------------------------------------------
   "/stock-count": {
     summary: "Counting what is actually on the shelf, and finding where the book is wrong.",

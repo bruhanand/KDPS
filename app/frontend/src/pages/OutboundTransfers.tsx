@@ -16,15 +16,16 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canWriteTransfer } from "../lib/outbound-rbac";
-import { ScanScreen, type ScanTarget } from "../components/ScanScreen";
+import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
+import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
+import { ApprovalTrail, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-function fmtDate(iso: string): string {
+export function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
@@ -88,19 +89,53 @@ interface TransferLineT {
   qty_planned: number | null;
   qty_dispatched: number;
   qty_received: number;
+  qty_resolved: number;
   qty_in_transit: number;
   unit_cost_paise: number;
+}
+
+export interface ReceiptExceptionT {
+  id: number;
+  kind: "short" | "extra" | "damaged";
+  kind_label: string;
+  sku_code: string;
+  design: string;
+  color: string;
+  size: string;
+  brand: string;
+  qty: number;
+  unit_cost_paise: number;
+  note: string;
 }
 
 interface ReceiptT {
   id: number;
   received_by: number | null;
+  received_by_name: string;
   receipt_date: string;
   receipt_status: string;
   shortfall_notes: string;
+  exceptions: ReceiptExceptionT[];
 }
 
-interface TransferT {
+export interface GapClosureT {
+  id: number;
+  doc_number: string | null;
+  docstatus: number;
+  transfer: number;
+  transfer_doc_number: string | null;
+  reason: string;
+  reason_label: string;
+  note: string;
+  approved_by_name: string;
+  approval: ApprovalT | null;
+  approval_history: ApprovalT[];
+  created_by_name: string;
+  created_at: string;
+  lines: { id: number; sku_code: string; qty: number; unit_cost_paise: number }[];
+}
+
+export interface TransferT {
   id: number;
   doc_number: string | null;
   docstatus: number;
@@ -124,8 +159,74 @@ interface TransferT {
   created_at: string;
   updated_at: string;
   dispatch_mismatch: boolean;
+  qty_in_transit: number;
+  /** Derived server-side: "" (draft) · in_transit · received · gap · closed. */
+  gap_state: string;
   lines: TransferLineT[];
   receipt: ReceiptT | null;
+  gap_closure: GapClosureT | null;
+}
+
+export const GAP_STATE_LABEL: Record<string, string> = {
+  in_transit: "In transit",
+  received: "Received",
+  gap: "Gap — sent ≠ received",
+  closed: "Gap closed",
+};
+
+const GAP_STATE_TONE: Record<string, string> = {
+  in_transit: "amber",
+  received: "green",
+  gap: "red",
+  closed: "grey",
+};
+
+export function GapStatePill({ state }: { state: string }) {
+  if (!state) return null;
+  return (
+    <span className={`chip chip-${GAP_STATE_TONE[state] ?? "grey"}`} data-testid="gap-state-pill">
+      {GAP_STATE_LABEL[state] ?? state}
+    </span>
+  );
+}
+
+const EXCEPTION_TONE: Record<string, string> = {
+  short: "red",
+  extra: "amber",
+  damaged: "amber",
+};
+
+/** The three receive outcomes, as a table anyone can read months later (#71). */
+export function ReceiptExceptions({ rows }: { rows: ReceiptExceptionT[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="table-wrap" data-testid="receipt-exceptions">
+      <table className="data">
+        <thead>
+          <tr>
+            <th>What happened</th>
+            <th>SKU</th>
+            <th>Item</th>
+            <th className="num">Pieces</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((e) => (
+            <tr key={e.id} data-testid={`exception-${e.kind}-${e.sku_code}`}>
+              <td>
+                <span className={`chip chip-${EXCEPTION_TONE[e.kind] ?? "grey"}`}>{e.kind_label}</span>
+              </td>
+              <td><b className="mono">{e.sku_code}</b></td>
+              <td>{[e.design, e.color, e.size].filter(Boolean).join(" · ") || e.brand || "—"}</td>
+              <td className="num"><b>{e.qty}</b></td>
+              <td>{e.note}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -466,6 +567,11 @@ function lineLabel(l: TransferLineT): string {
   return [l.design, l.color, l.size].filter(Boolean).join(" · ") || l.brand || "—";
 }
 
+/** A scan tally as the API's ``[{barcode, qty}]`` shape. */
+function asPairs(counts: Record<string, number>) {
+  return Object.entries(counts).map(([barcode, qty]) => ({ barcode, qty }));
+}
+
 export function TransferDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
@@ -506,12 +612,19 @@ export function TransferDetailPage() {
     }
   }
 
-  async function postScans(action: "dispatch" | "receive", scans: Record<string, number>) {
+  async function postScans(action: "dispatch" | "receive", result: ScanResult) {
     setScanError("");
     setPosting(true);
     try {
       await api.post(`/outbound/transfers/${t!.id}/${action}`, {
-        scans: Object.entries(scans).map(([barcode, qty]) => ({ barcode, qty })),
+        scans: asPairs(result.scans),
+        ...(action === "receive"
+          ? {
+              damaged: asPairs(result.damaged),
+              extras: asPairs(result.extras),
+              notes: result.notes,
+            }
+          : {}),
       });
       window.location.reload();
     } catch (e) {
@@ -522,7 +635,6 @@ export function TransferDetailPage() {
 
   const totalDispatched = t.lines.reduce((s, l) => s + l.qty_dispatched, 0);
   const totalReceived = t.lines.reduce((s, l) => s + l.qty_received, 0);
-  const totalInTransit = t.docstatus === 1 ? totalDispatched - totalReceived : 0;
 
   return (
     <div className="page-pad">
@@ -540,6 +652,7 @@ export function TransferDetailPage() {
         </div>
         <div className="spacer" />
         <DocPill ds={t.docstatus} />
+        <GapStatePill state={t.gap_state} />
         {t.is_cross_state && <span className="chip chip-amber">Cross-state</span>}
         <span className="chip chip-navy">{TRANSFER_TYPE_LABEL[t.transfer_type] ?? t.transfer_type}</span>
         {t.docstatus === 1 && t.dispatch_mismatch && (
@@ -577,7 +690,7 @@ export function TransferDetailPage() {
           confirmLabel="Confirm dispatch"
           busy={posting}
           error={scanError}
-          onConfirm={(scans) => void postScans("dispatch", scans)}
+          onConfirm={(result) => void postScans("dispatch", result)}
           onClose={() => setScanMode("")}
         />
       )}
@@ -588,10 +701,11 @@ export function TransferDetailPage() {
           routeLabel={`${t.source_store_code} → ${t.destination_store_code}`}
           targets={receiveTargets}
           strictExpected
+          exceptions
           confirmLabel="Confirm receipt"
           busy={posting}
           error={scanError}
-          onConfirm={(scans) => void postScans("receive", scans)}
+          onConfirm={(result) => void postScans("receive", result)}
           onClose={() => setScanMode("")}
         />
       )}
@@ -611,9 +725,9 @@ export function TransferDetailPage() {
         <div className="card section-card">
           <p className="eyebrow">Dispatched / Received</p>
           <h3 className="h3">{totalDispatched} / {totalReceived} pcs</h3>
-          {totalInTransit > 0 && (
+          {t.qty_in_transit > 0 && (
             <p className="lead" style={{ marginTop: 4 }} data-testid="in-transit-count">
-              <b>{totalInTransit} pcs in transit</b>
+              <b>{t.qty_in_transit} pcs in transit</b>
             </p>
           )}
         </div>
@@ -630,16 +744,65 @@ export function TransferDetailPage() {
         </div>
       )}
 
-      {/* Receipt info */}
+      {/* Receipt — and everything that went wrong at it (#71) */}
       {t.receipt && (
         <div className="card section-card" style={{ marginBottom: 18 }} data-testid="transfer-receipt-info">
           <p className="eyebrow">Receipt</p>
-          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
             <span className={`chip chip-${RECEIPT_TONE[t.receipt.receipt_status] ?? "grey"}`}>
               {t.receipt.receipt_status}
             </span>
             <span className="lead">{fmtDate(t.receipt.receipt_date)}</span>
-            {t.receipt.shortfall_notes && <span className="lead">{t.receipt.shortfall_notes}</span>}
+            {t.receipt.received_by_name && (
+              <span className="lead">by <b>{t.receipt.received_by_name}</b></span>
+            )}
+          </div>
+          {t.receipt.shortfall_notes && (
+            <p className="lead" style={{ marginTop: 10 }} data-testid="shortfall-notes">
+              “{t.receipt.shortfall_notes}”
+            </p>
+          )}
+          {t.receipt.exceptions.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <ReceiptExceptions rows={t.receipt.exceptions} />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* The gap and how it was closed */}
+      {t.gap_state === "gap" && (
+        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="transfer-open-gap">
+          <p className="eyebrow">Open gap</p>
+          <p className="lead">
+            <b>{t.qty_in_transit} piece(s)</b> were sent but never scanned in. They stay in the
+            in-transit bucket on this transfer — {t.source_store_code} is answerable for them — until
+            the Operations Head closes the gap with a reason. The receiving store cannot close
+            it.{" "}
+            {t.gap_closure ? (
+              <>A closure is already waiting for approval.</>
+            ) : (
+              // Only offered to the people who can act on it — for anyone else
+              // the gaps list is scoped away and the link would go nowhere.
+              canCloseTransferGap(user) && (
+                <Link to="/transfer/in-transit">Open the gaps list</Link>
+              )
+            )}
+          </p>
+        </div>
+      )}
+      {t.gap_closure && (
+        <div className="card section-card" style={{ marginBottom: 18 }} data-testid="transfer-gap-closure">
+          <p className="eyebrow">Gap closure {t.gap_closure.doc_number ? `· ${t.gap_closure.doc_number}` : "(draft)"}</p>
+          <h3 className="h3">{t.gap_closure.reason_label}</h3>
+          {t.gap_closure.note && <p className="lead" style={{ marginTop: 6 }}>{t.gap_closure.note}</p>}
+          <div style={{ marginTop: 12 }}>
+            <ApprovalTrail
+              createdByName={t.gap_closure.created_by_name}
+              createdAt={t.gap_closure.created_at}
+              approval={t.gap_closure.approval}
+              history={t.gap_closure.approval_history}
+            />
           </div>
         </div>
       )}
@@ -657,6 +820,7 @@ export function TransferDetailPage() {
               <th className="num">Planned</th>
               <th className="num">Dispatched</th>
               <th className="num">Received</th>
+              <th className="num">Gap closed</th>
               <th className="num">In transit</th>
               <th className="num">Cost</th>
             </tr>
@@ -677,6 +841,7 @@ export function TransferDetailPage() {
                   )}
                 </td>
                 <td className="num">{l.qty_received}</td>
+                <td className="num">{l.qty_resolved || "—"}</td>
                 <td className="num">
                   {t.docstatus === 1 && l.qty_in_transit > 0 ? (
                     <b data-testid={`line-in-transit-${l.id}`}>{l.qty_in_transit}</b>
@@ -689,7 +854,7 @@ export function TransferDetailPage() {
             ))}
             {t.lines.length === 0 && (
               <tr>
-                <td colSpan={10} style={{ textAlign: "center", opacity: 0.7 }}>
+                <td colSpan={11} style={{ textAlign: "center", opacity: 0.7 }}>
                   No lines yet — this transfer builds its lines by scanning at dispatch.
                 </td>
               </tr>

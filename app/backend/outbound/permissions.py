@@ -12,6 +12,7 @@ The mapping, read straight off the ratified SIDEBAR RBAC matrix:
 Endpoint group                                Gate
 ============================================  ===========================
 Transfer create / submit / dispatch / receive ``transfer: operate``
+Transfer gap closure raise / post             ``transfer: approve``
 Mark damaged                                  ``return_to_brand: operate``
 Return to brand create / submit               ``return_to_brand: operate``
 Adjustment create / submit                    ``stock_count: operate``
@@ -38,11 +39,19 @@ from __future__ import annotations
 from rest_framework.exceptions import PermissionDenied
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_MANAGE, CAP_OPERATE
+from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE
 from masters.scoping import actionable_store_ids
 
 #: Moving stock between locations — the transfer section's daily work.
 CanWriteTransfer = require_section("transfer", CAP_OPERATE)
+
+#: Deciding what became of pieces that went missing between two locations. A rung
+#: above the daily work on purpose: the design gives gap closure to the Operations
+#: Head, so the person who sent or received the carton must not be able to write
+#: off their own shortfall. Seniority is all this expresses — the separate rule
+#: that bars anyone entitled to the *receiving* store, senior or not, is enforced
+#: in ``posting._refuse_self_closure`` so a shell hits it too (#71).
+CanCloseTransferGap = require_section("transfer", CAP_APPROVE)
 
 #: Marking damage and returning it to the brand are the same section's work:
 #: the matrix's "Mark damage only" cell is the store person's rung on it.

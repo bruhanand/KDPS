@@ -65,6 +65,29 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         "post",
         f"/api/outbound/transfers/{ABSENT}/receive",
     ),
+    # Gap closure sits a rung above the daily transfer work: the design gives the
+    # decision to the Operations Head, not to whoever sent or received the carton.
+    (
+        "gap closure raise",
+        "transfer",
+        CAP_APPROVE,
+        "post",
+        f"/api/outbound/transfers/{ABSENT}/gap-closure",
+    ),
+    (
+        "gap closure post",
+        "transfer",
+        CAP_APPROVE,
+        "post",
+        f"/api/outbound/gap-closures/{ABSENT}/submit",
+    ),
+    (
+        "gap closure ask again",
+        "transfer",
+        CAP_APPROVE,
+        "post",
+        f"/api/outbound/gap-closures/{ABSENT}/request-approval",
+    ),
     ("mark damaged", "return_to_brand", CAP_OPERATE, "post", "/api/outbound/mark-damaged"),
     ("rtv create", "return_to_brand", CAP_OPERATE, "post", "/api/outbound/rtvs"),
     ("rtv submit", "return_to_brand", CAP_OPERATE, "post", f"/api/outbound/rtvs/{ABSENT}/submit"),
@@ -112,7 +135,12 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
 
 #: Which section each wired approval kind belongs to — the section whose
 #: ``approve`` rung decides who may clear it.
-APPROVAL_SECTION = {"writeoff": "stock_count", "adjustment": "stock_count", "vflip": "stock"}
+APPROVAL_SECTION = {
+    "writeoff": "stock_count",
+    "adjustment": "stock_count",
+    "vflip": "stock",
+    "gap_closure": "transfer",
+}
 
 
 def _role(code: str) -> Role:
