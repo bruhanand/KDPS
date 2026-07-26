@@ -22,9 +22,10 @@ Rulings exercised here:
 from __future__ import annotations
 
 import pytest
+from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
+from accounts.models import ScopeType, User
 from approvals.models import Approval, ApprovalStatus
 from core.documents import DocStatus, VoucherSeries
 from core.gl import GLAccount, GLEntry
@@ -61,9 +62,13 @@ def gap_scaffold(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
 
-    ho = Role.objects.create(code="ho_ops", name="HO Ops (gap test)")
-    accounts = Role.objects.create(code="accounts", name="Accounts (gap test)")
-    manager = Role.objects.create(code="store_manager", name="Store manager (gap test)")
+    # Roles carry the matrix's access (#85/#94), so a gate here answers the way
+    # the live install answers. The checker is the Owner rather than Accounts:
+    # the sheet gives Accounts only *view* on transfers, so it cannot clear a
+    # gap closure — the seniority for that comes from ``transfer: approve``.
+    ho = make_role("ho_ops", "HO Ops (gap test)")
+    owner = make_role("owner", "Owner (gap test)")
+    manager = make_role("store_manager", "Store manager (gap test)")
 
     def _user(username, role, scope=ScopeType.ALL, stores=()):
         u = User.objects.create_user(
@@ -74,7 +79,7 @@ def gap_scaffold(db):
         return u
 
     maker = _user("gap_maker", ho)
-    checker = _user("gap_checker", accounts)
+    checker = _user("gap_checker", owner)
     receiver = _user("gap_receiver", manager, ScopeType.STORE, [store])
     # A senior whose entitlement happens to include the receiving store — the
     # person the self-closure rule must still refuse.

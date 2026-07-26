@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('core', '0005_glentry'),
         ('masters', '0004_seed_default_category_margin'),
-        ('outbound', '0007_backfill_approvals'),
+        ('outbound', '0008_rbac_approver_roles'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

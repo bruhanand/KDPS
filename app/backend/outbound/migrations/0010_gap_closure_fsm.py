@@ -9,7 +9,7 @@ TABLE = "outbound_transfer_gap_closure"
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("outbound", "0008_receive_exceptions_and_gap_closure"),
+        ("outbound", "0009_receive_exceptions_and_gap_closure"),
     ]
 
     operations = [
