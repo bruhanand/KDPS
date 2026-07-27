@@ -18,17 +18,24 @@ process is `docs/my-understanding/system-design/build-operating-manual.html`.
 ## 0 · Just run it
 
 ```bash
-npm run dev       # Postgres + Django API (:8001) + React PWA (:3000). Ctrl-C stops it.
+npm run dev       # Postgres + Django API + React PWA. Ctrl-C stops it.
 ```
 
-One command, from a cold checkout: starts the Docker Postgres, installs
-dependencies, migrates, seeds demo data, and runs both servers. Idempotent —
-re-run it any time. Open **http://localhost:3000** and sign in with a login from
-`memory/test_credentials.md` (e.g. `owner` / `Owner@123`).
+One command, from a cold checkout: starts this workspace's Docker Postgres,
+installs dependencies, migrates, seeds demo data, and runs both servers.
+Idempotent — re-run it any time. It prints the URLs it chose; open the PWA one and
+sign in with a login from `memory/test_credentials.md` (e.g. `owner` / `Owner@123`).
+
+**The ports are per workspace.** Every Conductor workspace gets its own database
+and its own three ports, so `:3000` / `:8001` are only the fallback outside
+Conductor — see "One database per workspace" below, and run `npm run dev:where` to
+see this workspace's.
 
 ```bash
+npm run dev:where   # this workspace's compose project, ports and database URL
 npm run dev:setup   # provision DB + deps + seed, start no servers
-npm run dev:reset   # destroy the local database and rebuild it from scratch (~11s), then exit
+npm run dev:reset   # destroy this workspace's database and rebuild it (~11s), then exit
+npm run dev:down    # stop this workspace's Postgres (its data is kept)
 ./scripts/dev.sh --api    # API only          --web   PWA only
 ./scripts/dev.sh --reset  # rebuild the database AND run the stack
 ```
@@ -44,20 +51,49 @@ invoice reader), is inert here: `aiagents` is not in `INSTALLED_APPS`.
 should ever be one typo away from the alpha's books. Use the Render dashboard for
 that (`DEPLOY.md`).
 
-### The shared database
+### One database per workspace
 
-**Every checkout on this machine uses the same Postgres.** The Docker volume in
-`docker-compose.yml` is named, not per-worktree, so a second workspace - another
-branch, another agent, another Conductor worktree - migrates and seeds the very
-same `kdps_dev`. Whichever branch ran `migrate` last is the schema everybody has.
+**Every Conductor workspace runs its own system.** Its own Postgres container, its
+own volume, its own database, and its own three host ports - so two workspaces can
+run the stack, the seeds and the live-API suites at the same time and neither can
+migrate, seed or drop the other's data. Nothing is shared.
 
-That is fine most of the time and occasionally poisonous. Switching to a branch
-whose migrations are a subset of what the database already carries leaves columns
-in place that the branch knows nothing about, and a `migrate` on a branch that has
-since dropped a migration leaves a history row pointing at a file that no longer
-exists. Both used to surface as an unexplained 500 at insert time (issue #93).
+`scripts/workspace-env.sh` is the single place that decides which stack you are.
+Conductor gives each workspace a name and a block of ten ports; the script spends
+three of them and names the Compose project after the workspace:
 
-Two things now catch it:
+| | |
+|---|---|
+| Compose project | `kdps-<workspace>` (volume `kdps-<workspace>_kdps_pgdata`) |
+| React PWA | `CONDUCTOR_PORT` |
+| Django API | `CONDUCTOR_PORT + 1` |
+| Postgres | `CONDUCTOR_PORT + 2` |
+
+Outside Conductor - a plain clone, the root checkout, CI - there is no allocation
+to honour, so it falls back to the historic fixed `3000` / `8001` / `55432` and
+behaves exactly as it always has.
+
+```bash
+npm run dev:where   # which project, which ports, which database — this workspace
+```
+
+**The database lives exactly as long as the workspace does.** Creating a workspace
+provisions it (`setup` in `.conductor/settings.toml`); archiving the workspace runs
+`docker compose -p kdps-<workspace> down -v`, which destroys the container *and*
+the volume. Archive is the delete.
+
+`app/backend/.env` carries this workspace's `DATABASE_URL`, and `scripts/dev.sh`
+rewrites that one key on every run. It has to: Conductor copies the root
+checkout's `.env` into each new workspace, so a fresh workspace is born holding
+another workspace's port. For the same reason `config/settings.py` loads the file
+with `override=True` - the worktree's `.env` beats anything already in the
+environment, because an inherited `DATABASE_URL` is a silent wrong-database bug.
+Do not put a `DATABASE_URL` in `[environment_variables]` in
+`.conductor/settings.toml`: TOML values are static, so one written there pins every
+workspace to a single database, which is the arrangement this replaced.
+
+Schema drift is now only ever your own, from an earlier branch of this same
+worktree. Two things still catch it:
 
 ```bash
 cd app/backend && uv run python manage.py check_db_drift
@@ -65,25 +101,26 @@ cd app/backend && uv run python manage.py check_db_drift
 
 names any table and column where the database and the migration graph disagree -
 it runs as part of `npm run ci`, so drift stops the gate instead of a slice.
-And the live-API suites ask the server on `:8001` which migrations it carries; if
-that disagrees with your working tree, they **skip** and say so rather than
-testing a server you are not editing.
+And the live-API suites ask the server which migrations it carries; if that
+disagrees with your working tree, they **skip** and say so rather than testing a
+server you are not editing.
 
-The cure is always the same, and it is yours to run, never a test's:
+The cure is the same as ever, and it is yours to run, never a test's:
 
 ```bash
-npm run dev:reset   # destroy the local database and rebuild it from scratch (~11s)
+npm run dev:reset   # destroy THIS workspace's database and rebuild it (~11s)
 npm run dev         # migrate, seed, and start the stack from *this* working tree
+npm run dev:down    # stop this workspace's Postgres, keep its data
 ```
 
-It destroys the data every workspace on the machine shares, so check that nobody
-else is mid-run first. Nothing in the test suite will ever do it for you.
+`dev:reset` now destroys only your own workspace's data - no need to check whether
+anyone else is mid-run. Nothing in the test suite will ever do it for you.
 
 **There is no API container.** The only local API is the one `scripts/dev.sh`
 starts from the working tree you are editing. A containerised one used to answer
 on `:8001`; it silently outlived the code it was built from and served pre-#85
 code against a migrated schema for weeks. It was retired in #93 - if something
-answers on `:8001` that you did not start, that is the bug.
+answers on this workspace's API port that you did not start, that is the bug.
 
 Sections 1–3 below are the manual equivalent, and what the gate needs.
 
@@ -102,9 +139,15 @@ Pick one path:
 **A · Docker — reproducible on a clean machine (recommended)**
 
 ```bash
-docker compose up -d db
-export DATABASE_URL=postgres://kdps:kdps@localhost:55432/kdps_dev
+npm run dev:setup       # this workspace's Postgres + deps + migrate + seed
 ```
+
+Use this rather than a bare `docker compose up -d db`. Without `-p` Compose names
+the project after the *directory* and publishes the fixed fallback port, which is
+how two workspaces used to collide; `dev.sh` sources `scripts/workspace-env.sh`
+first and passes the right project name and port. It also writes this workspace's
+`DATABASE_URL` into `app/backend/.env`, which is what Django reads — exporting the
+variable by hand no longer overrides that file (see above).
 
 **B · Local Postgres (e.g. Homebrew)**
 

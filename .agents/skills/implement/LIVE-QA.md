@@ -11,9 +11,9 @@ It drives the user's own Chrome: always a new tab, never a tab from another sess
 
 Skip this and you will debug a ghost - a stale container has served months-old code against a migrated schema before.
 
-1. **Is a stack already up?** Check who holds `:8001`/`:3000`. Free: start it with `./scripts/dev.sh`. Held by another session: wait and say so. A stray container from an old checkout: stop and report - never kill another session's stack.
+1. **Which stack is mine, and is it up?** `npm run dev:where` prints this workspace's ports and database - it owns them, and another workspace running its own stack is not your problem, so never wait on one. Ports free: start it with `./scripts/dev.sh`. Something you did not start holding *your* ports: stop and report - never kill another session's stack.
 2. **Does the server carry this branch's code?** Compare the `migrations` digest from `/api/health` against this working tree; if they differ, restart and trust nothing the browser shows until they match.
-3. **Does the database match the migrations?** `manage.py check_db_drift`; drift means another branch's schema - `./scripts/dev.sh --reset` rebuilds and reseeds.
+3. **Does the database match the migrations?** `manage.py check_db_drift`; drift can now only be your own, from an earlier branch of this worktree - `./scripts/dev.sh --reset` rebuilds and reseeds this workspace's database alone.
 4. **Is the data there?** Screens assume the seed commands have run; an empty screen is usually missing seed, not a bug - confirm before filing one.
 
 State all four results in one line before touching the browser.
