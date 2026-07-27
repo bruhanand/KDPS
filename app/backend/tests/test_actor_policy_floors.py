@@ -15,6 +15,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework.test import APIClient
 
 from accounts.models import ActorPolicy, Role, User
+from accounts.rbac_matrix import section_access_for
 from approvals.models import Approval, ApprovalPolicy
 from core.gl import GLAccount, GLEntry
 from core.posting import PostingFloorError, PostingRef, cr, dr, post_entries
@@ -28,10 +29,15 @@ def _user(
     scope_type: str = "all",
     section_access: dict | None = None,
 ) -> User:
+    # Seeded from the ratified sheet exactly as `seed_foundation` does, unless a
+    # test is about the access itself and says otherwise. A role built empty
+    # would be refused everything and prove nothing about the floor underneath.
     role = Role.objects.create(
         code=role_code,
         name=role_code,
-        section_access=section_access or {},
+        section_access=section_access
+        if section_access is not None
+        else section_access_for(role_code),
     )
     user = User.objects.create(username=username, role=role, scope_type=scope_type)
     user.set_password("Policy-test-password-131!")
@@ -291,7 +297,15 @@ def test_superuser_without_owner_or_it_admin_role_cannot_change_access(db):
 
 
 def test_attempt_to_configure_away_a_floor_rule_is_refused_clearly(db):
-    owner = _user("floor_editor", "owner")
+    """An invented switch is refused out loud, not dropped on the floor.
+
+    DRF ignores a field it does not know, which here would answer 202 to
+    "allow_store_value_posting: true" and let an administrator believe they had
+    turned a floor rule off.
+    """
+    owner = _user(
+        "floor_editor", "owner", section_access={"setup": {"capability": "manage", "label": "F"}}
+    )
 
     response = _client(owner).patch(
         "/api/auth/admin/actor-policies/masters.writes",
@@ -300,7 +314,22 @@ def test_attempt_to_configure_away_a_floor_rule_is_refused_clearly(db):
     )
 
     assert response.status_code == 400
-    assert "cannot be configured" in response.json()["detail"].lower()
+    body = response.json()
+    assert "floor rules" in body["detail"].lower()
+    assert body["fields"] == ["allow_store_value_posting"]
+
+
+def test_holding_the_floor_role_is_not_enough_without_the_setup_rung(db):
+    """The floor sits *under* the ladder, it does not replace it.
+
+    Owner and IT Admin are the only roles the ratified sheet gives
+    ``setup: manage``, so both gates normally agree. They must both still be
+    asked: an Owner whose Setup access was retuned away is not an administrator
+    just because of the name on their role.
+    """
+    demoted = _user("owner_without_setup", "owner", section_access={})
+
+    assert _client(demoted).get("/api/auth/admin/roles").status_code == 403
 
 
 def test_actor_policy_cannot_add_a_role_outside_the_value_floor(db):

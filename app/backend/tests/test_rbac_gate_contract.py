@@ -289,6 +289,39 @@ def test_no_seeded_family_lets_admin_or_a_cashier_approve():
         assert "store_manager" not in escalated, code
 
 
+#: Where the ruling deliberately seats an approver the sheet gives less than
+#: ``approve`` on that family's own section. Each is a decision from #104, named
+#: here so it stays one — the alarm below is what stops a *sixth* appearing by
+#: accident when somebody retunes a seed.
+RULING_OVERRIDES_THE_SHEET = {
+    ("writeoff", "store_manager"): "the in-charge clears a small loss without going to HO",
+    ("adjustment", "store_manager"): "same band, on the variance counting produces",
+    ("vflip", "accounts"): "Accounts executes the flip, so Accounts signs the small ones",
+    ("damage", "warehouse"): "a store reports damage; the warehouse confirms it (#138)",
+}
+
+
+def test_every_seeded_approver_is_trusted_by_the_sheet_or_named_as_a_ruling():
+    """The drift alarm, pointed at the ruling instead of only at the sheet.
+
+    Approvers used to be read straight off the RBAC matrix, and a test asserted
+    they never named a role the sheet gives only ``view``. #104 overrides the
+    sheet on purpose in four places, so the assertion cannot simply be dropped —
+    it becomes: an approver either holds ``approve`` on that family's section,
+    or it is one of the four the ruling put there, with the reason written down.
+    """
+    for code, (band, escalated) in RATIFIED_APPROVERS.items():
+        section = APPROVAL_SECTION.get(code)
+        if section is None:
+            continue  # a family the outbound slices have not wired yet
+        trusted = set(roles_with_capability(section, CAP_APPROVE))
+        for role in set(band) | set(escalated):
+            if role in trusted:
+                continue
+            reason = RULING_OVERRIDES_THE_SHEET.get((code, role))
+            assert reason, f"{code}: {role!r} approves but the sheet does not trust it"
+
+
 def test_a_freshly_raised_approval_names_no_view_only_role(db):
     """The defaults reach the row, which is what ``can_decide`` actually reads.
 
@@ -384,13 +417,13 @@ def test_the_migration_does_not_invent_policy_rows(db):
     assert set(ApprovalPolicy.objects.values_list("kind", flat=True)) == before
 
 
-def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
-    """The lazy-row case: a small one must still be the in-charge's to clear.
+def test_the_migration_leaves_a_small_pending_adjustment_with_the_in_charge(db):
+    """Correcting a running install must not take the store manager off a
+    variance the design says is his.
 
-    ``ApprovalPolicy`` is materialised on first use, so an install can carry
-    pending adjustments and no row at all. Reading the missing band as zero
-    would push every one of them to HO and quietly take the store manager off
-    a variance the design says is his — so the default band stands in.
+    The migration rewrites the approver list frozen onto every pending
+    approval. Reading the band as zero while it did so would push every small
+    adjustment to HO — so the ₹25,000 band decides, and ₹5,000 stays local.
     """
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
     maker = _user("adj_maker", _role("warehouse"))
@@ -418,8 +451,10 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 
 
 # --- 3. The declared exceptions -------------------------------------------
-#: The five gates the ladder provably cannot express. A change to this set is a
-#: decision, which is exactly what the test is here to force.
+#: The two gates that stayed in code once who-may-act became data (#131) —
+#: both are floor rules, and a floor stored in editable policy could configure
+#: itself away. A change to this set is a decision, which is exactly what the
+#: test is here to force.
 EXPECTED_EXCEPTIONS = {
     "accounts.access_administrators_floor",
     "accounts.head_office_value_actors_floor",

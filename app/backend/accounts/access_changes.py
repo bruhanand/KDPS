@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from django.contrib.auth.hashers import make_password
@@ -110,14 +111,9 @@ def _target(model: type, change: AccessChange) -> Any:
         raise AccessChangeError("The row this access change targeted no longer exists.") from exc
 
 
-def _apply_role(change: AccessChange) -> None:
-    role = _target(Role, change)
-    for key, value in change.payload.items():
-        setattr(role, key, value)
-    role.save()
-
-
 def _apply_user(change: AccessChange) -> None:
+    """The one resource whose payload is not just columns: two m2m sets and a
+    password that was hashed at proposal time, never carried in the clear."""
     user = _target(User, change)
     payload = dict(change.payload)
     store_ids = payload.pop("store_ids", None)
@@ -134,11 +130,27 @@ def _apply_user(change: AccessChange) -> None:
         user.brands.set(brand_ids)
 
 
-def _apply_plain(model: type, change: AccessChange) -> None:
-    row = _target(model, change)
-    for key, value in change.payload.items():
-        setattr(row, key, value)
-    row.save()
+def _apply_columns(model: type) -> Callable[[AccessChange], None]:
+    """Every other resource is a row of plain columns the serializer validated."""
+
+    def apply(change: AccessChange) -> None:
+        row = _target(model, change)
+        for key, value in change.payload.items():
+            setattr(row, key, value)
+        row.save()
+
+    return apply
+
+
+#: One entry per resource, keyed the same way ``SERIALIZERS`` is, so proposing
+#: and applying a new kind of access change is one pair of lines rather than a
+#: branch somebody has to remember to add.
+APPLIERS: dict[str, Callable[[AccessChange], None]] = {
+    AccessChange.Resource.ROLE: _apply_columns(Role),
+    AccessChange.Resource.USER: _apply_user,
+    AccessChange.Resource.ACTOR_POLICY: _apply_columns(ActorPolicy),
+    AccessChange.Resource.APPROVAL_POLICY: _apply_columns(ApprovalPolicy),
+}
 
 
 @transaction.atomic
@@ -149,16 +161,15 @@ def apply_access_change(change: AccessChange, *, actor: User) -> None:
     locked = AccessChange.objects.select_for_update().get(pk=change.pk)
     if locked.applied_at is not None:
         raise AccessChangeError("This access change has already been applied.")
-    if locked.resource == AccessChange.Resource.ROLE:
-        _apply_role(locked)
-    elif locked.resource == AccessChange.Resource.USER:
-        _apply_user(locked)
-    elif locked.resource == AccessChange.Resource.ACTOR_POLICY:
-        _apply_plain(ActorPolicy, locked)
-    elif locked.resource == AccessChange.Resource.APPROVAL_POLICY:
-        _apply_plain(ApprovalPolicy, locked)
-    else:  # pragma: no cover - choices and the database constrain this
-        raise AccessChangeError(f"Unsupported access resource {locked.resource!r}.")
+    try:
+        apply = APPLIERS[locked.resource]
+    except KeyError as exc:  # pragma: no cover - choices and the database constrain this
+        raise AccessChangeError(f"Unsupported access resource {locked.resource!r}.") from exc
+    apply(locked)
     locked.applied_by = actor
     locked.applied_at = timezone.now()
-    locked.save(update_fields=["applied_by", "applied_at", "updated_at"])
+    # The password only ever had to survive until somebody applied it. Leaving
+    # the hash in a row that is kept as evidence gives an offline attack a place
+    # to start, and the audit trail is no poorer for its absence.
+    locked.payload.pop("password_hash", None)
+    locked.save(update_fields=["applied_by", "applied_at", "payload", "updated_at"])

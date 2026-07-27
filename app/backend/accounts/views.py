@@ -209,15 +209,6 @@ class AdminMetaView(APIView):
         )
 
 
-FLOOR_OVERRIDE_FIELDS = {
-    "allow_self_approval",
-    "allow_store_value_posting",
-    "allow_unnamed_brand_liability",
-    "apply_immediately",
-    "floor_overrides",
-}
-
-
 def _pending_response(change: AccessChange, approval: Any) -> Response:
     return Response(
         {
@@ -231,15 +222,29 @@ def _pending_response(change: AccessChange, approval: Any) -> Response:
 
 
 class PendingAccessChangeMixin:
+    """Every Setup write becomes a proposal a second administrator applies."""
+
     access_resource: str
 
     def _propose(self, request: Request, *, target: Any = None, partial: bool = False) -> Response:
-        forbidden = sorted(set(request.data) & FLOOR_OVERRIDE_FIELDS)
-        if forbidden:
+        # A field this serializer does not know is refused rather than dropped.
+        # DRF's default is to ignore it, which is the one answer this endpoint
+        # must never give: somebody sending `allow_self_approval: true` to
+        # switch off a floor rule would get 202 and believe it worked. There is
+        # no such flag and there never will be — so say so, out loud.
+        writable = {
+            name for name, field in self.get_serializer().fields.items() if not field.read_only
+        }
+        unknown = sorted(set(request.data) - writable)
+        if unknown:
             return Response(
                 {
-                    "detail": "Floor rules cannot be configured or bypassed.",
-                    "fields": forbidden,
+                    "detail": (
+                        "These are not settings on this row, and the four floor rules "
+                        "cannot be configured away by adding one: "
+                        f"{', '.join(unknown)}."
+                    ),
+                    "fields": unknown,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -264,21 +269,21 @@ class PendingAccessChangeMixin:
 
 
 class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     queryset = Role.objects.all().order_by("name")
     access_resource = AccessChange.Resource.ROLE
 
 
 class RoleDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     queryset = Role.objects.all()
     access_resource = AccessChange.Resource.ROLE
 
 
 class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
     access_resource = AccessChange.Resource.USER
 
@@ -291,7 +296,7 @@ class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
 
 
 class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
     access_resource = AccessChange.Resource.USER
 
@@ -300,13 +305,13 @@ class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
 
 
 class ActorPolicyListView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ActorPolicySerializer
     queryset = ActorPolicy.objects.all()
 
 
 class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ActorPolicySerializer
     queryset = ActorPolicy.objects.all()
     access_resource = AccessChange.Resource.ACTOR_POLICY
@@ -315,14 +320,14 @@ class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPI
 
 
 class ApprovalPolicyListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ApprovalPolicyAdminSerializer
     queryset = ApprovalPolicy.objects.all()
     access_resource = AccessChange.Resource.APPROVAL_POLICY
 
 
 class ApprovalPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = ApprovalPolicyAdminSerializer
     queryset = ApprovalPolicy.objects.all()
     access_resource = AccessChange.Resource.APPROVAL_POLICY
