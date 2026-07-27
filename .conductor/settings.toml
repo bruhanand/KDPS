@@ -2,61 +2,83 @@
 
 # Shared Conductor config for the KDPS monorepo (app/backend = Django via uv,
 # app/frontend = React/TS PWA via Vite). See README.md + DEPLOY.md.
-
-# The Django backend needs DATABASE_URL (settings.py reads os.environ["DATABASE_URL"]).
-# Point every workspace at the shared local Docker Postgres from docker-compose.yml
-# (host port 55432 — a KDPS-specific port that dodges other projects on 5432/5433).
-[environment_variables]
-DATABASE_URL = "postgres://kdps:kdps@localhost:55432/kdps_dev"
+#
+# EVERY WORKSPACE IS ITS OWN RUNNING SYSTEM. Conductor gives each workspace a
+# stable name and a block of ten host ports; `scripts/workspace-env.sh` turns
+# those into a per-workspace Docker Compose project, so each workspace gets its
+# own Postgres container, its own volume, its own database and its own three
+# ports (PWA, API, Postgres). Workspaces can run and be tested in parallel, and
+# `archive` below destroys the container and the volume when the workspace goes:
+# the database lives exactly as long as the workspace does.
+#
+# There is deliberately NO [environment_variables] DATABASE_URL here, and there
+# must never be one again. TOML values are static strings, so a URL written here
+# would pin every workspace to one database — precisely the arrangement this
+# setup removes. The per-workspace URL is written into `app/backend/.env` by
+# `scripts/dev.sh`, and `config/settings.py` reads it via `load_dotenv()`.
+# `load_dotenv` does not override a variable already present in the environment,
+# so a value set here would silently beat the correct one in the file.
 
 [scripts]
-# Install backend (uv) + frontend (npm) deps, bring up the shared dev Postgres,
-# and fast-forward the root checkout so new workspaces start current.
+# Fast-forward the root checkout so new workspaces start current, then provision
+# THIS workspace: its own Postgres container on its own port, deps, migrations
+# and seed. `--setup-only` starts no servers.
 setup = """
 git -C "$CONDUCTOR_ROOT_PATH" fetch --prune origin && git -C "$CONDUCTOR_ROOT_PATH" pull --ff-only || true
-npm run setup
-# Shared KDPS dev Postgres (docker-compose service `db`, host port 55432).
-# `up -d` is idempotent: it reuses the running container or starts it if absent.
-docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" up -d db || true
+./scripts/dev.sh --setup-only
 """
 
-# One shared local Postgres (fixed host port 55432) + shared migrations/seed state,
-# so only one workspace should run the app/tests at a time.
-run_mode = "nonconcurrent"
-
-# On archive, reclaim only THIS workspace's regenerable, gitignored artifacts
-# (each git worktree has its own node_modules / .venv / build output; `npm run
-# setup` recreates them). Deliberately does NOT stop or remove the shared Docker
-# Postgres — the root checkout and other workspaces depend on it. `|| true`
-# keeps archiving from failing when a path is already absent.
+# Archiving a workspace destroys its development environment: the Postgres
+# container AND its data volume (`down -v`), plus the regenerable, gitignored
+# build artifacts each worktree carries. `npm run setup` recreates the latter;
+# nothing recreates the database, which is the point.
+#
+# The resolver is sourced from the ROOT checkout, not from this worktree, so a
+# workspace sitting on an old branch cannot archive itself with a stale — or
+# missing — copy of it. The inline fallback covers the one case that leaves:
+# archiving a branch created before this landed, where the root checkout may not
+# have the script either. It must keep computing the same name as `_kdps_slug` in
+# workspace-env.sh. A mismatch would leave a workspace's database behind rather
+# than delete the wrong one, since a name that matches no project deletes nothing.
 archive = """
+if [ -f "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh" ]; then
+  . "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh"
+else
+  KDPS_PROJECT="kdps-$(printf '%s' "$CONDUCTOR_WORKSPACE_NAME" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9_-]/-/g' -e 's/^[^a-z0-9]*//' -e 's/[^a-z0-9]*$//')"
+fi
+docker compose -p "$KDPS_PROJECT" -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" down -v --remove-orphans || true
 rm -rf node_modules app/frontend/node_modules app/frontend/dist app/backend/.venv || true
 """
 
-# One click: ensures the Docker Postgres is up AND accepting connections, then
-# runs the Django backend (on CONDUCTOR_PORT+1) and the Vite frontend (on
-# CONDUCTOR_PORT) together in a single process group via `concurrently` (-k kills
-# both when one exits), so Conductor can stop them cleanly. `npx -y` fetches
-# concurrently if it's missing.
+# Concurrent: there is no longer a shared local resource. Ports, container,
+# volume and database are all per-workspace, so several workspaces can run the
+# stack — and the live-API suites — at the same time.
+run_mode = "concurrent"
+
+# One click for the whole stack. dev.sh resolves this workspace's ports itself
+# (PWA on CONDUCTOR_PORT, API on +1, Postgres on +2), brings the database up and
+# waits for it, migrates, seeds, then runs both servers as children of one
+# process — and traps SIGHUP, which is how Conductor stops it.
 [scripts.run.dev]
-command = """
-docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" up -d db
-until docker compose -f "$CONDUCTOR_ROOT_PATH/docker-compose.yml" exec -T db pg_isready -U kdps -d kdps_dev >/dev/null 2>&1; do echo "waiting for postgres..."; sleep 1; done
-npx -y concurrently -k -n api,web -c blue,green \
-  "cd app/backend && uv run python manage.py migrate --noinput && uv run python manage.py runserver 0.0.0.0:$((CONDUCTOR_PORT+1))" \
-  "REACT_APP_BACKEND_URL=http://localhost:$((CONDUCTOR_PORT+1)) npm --prefix app/frontend run dev -- --port $CONDUCTOR_PORT --host"
-"""
+command = "./scripts/dev.sh"
 default = true
 icon = "rocket"
 
 [scripts.run.frontend]
-command = "REACT_APP_BACKEND_URL=http://localhost:$((CONDUCTOR_PORT+1)) npm --prefix app/frontend run dev -- --port $CONDUCTOR_PORT --host"
+command = "./scripts/dev.sh --web"
 icon = "globe"
 
 [scripts.run.backend]
-command = "cd app/backend && uv run python manage.py migrate --noinput && uv run python manage.py runserver 0.0.0.0:$((CONDUCTOR_PORT+1))"
+command = "./scripts/dev.sh --api"
 icon = "server"
 
 [scripts.run.test]
 command = "npm run ci"
 icon = "test-tube"
+
+# Where am I? Prints this workspace's compose project, its three ports and its
+# database URL — the first thing to check when a screen shows data you did not
+# expect.
+[scripts.run.where]
+command = "./scripts/dev.sh --where"
+icon = "map-pin"

@@ -20,7 +20,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load .env (DATABASE_URL, secrets, seed admin creds) — the served process and
 # local manage.py commands both read it. Protected vars never go in code.
-load_dotenv(BASE_DIR / ".env")
+#
+# override=True: this file is the authority on which local stack we are part of.
+# .env is gitignored and only ever written by scripts/dev.sh, which stamps it
+# with THIS worktree's DATABASE_URL — each Conductor workspace runs its own
+# Postgres on its own port (scripts/workspace-env.sh). Default dotenv behaviour
+# is the opposite, letting an inherited environment variable win, and that is a
+# silent wrong-database bug: a shell that exported another workspace's URL, or a
+# Conductor [environment_variables] entry, would migrate and seed a database
+# belonging to somebody else's branch with nothing on screen to say so.
+#
+# Inert everywhere it must be. Render (render.yaml) and GitHub CI supply
+# DATABASE_URL as real environment variables and never have a .env file to read,
+# so there is nothing for override to override.
+load_dotenv(BASE_DIR / ".env", override=True)
 
 SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
 DEBUG = os.environ["DJANGO_DEBUG"] == "1"
