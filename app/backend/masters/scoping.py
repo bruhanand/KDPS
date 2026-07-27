@@ -14,7 +14,8 @@ Two layers, deliberately separate (issue #88):
 Four gates sit on top, and which one you want depends on two questions — is the
 caller reading or acting, and do the rows carry a brand?
 
-  · `scope_by_store` — reading rows with no brand (approvals, documents).
+  · `scope_by_store` — reading rows with no brand (approvals, documents), and
+    `scope_by_store_predicate` for rows whose store is not one plain field.
   · `scope_by_store_and_brand` — reading rows that carry one (stock).
   · `scope_by_entitlement` — fetching a row in order to *act* on it.
   · `actionable_store_ids` — the "may I operate at this store?" check.
@@ -31,6 +32,7 @@ into *no rows* unless a brand is present to do the narrowing.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from django.db.models import Q
@@ -158,6 +160,24 @@ def scope_by_store(qs: Any, user: Any, field: str = "store_id") -> Any:
     Use `scope_by_entitlement` wherever the row is fetched in order to act on it.
     """
     return scope_by_store_many(user, (qs, field))[0]
+
+
+def scope_by_store_predicate(qs: Any, user: Any, predicate: Callable[[list[int]], Q]) -> Any:
+    """`scope_by_store` for a row whose store is not one plain field.
+
+    A store transfer has two of them — it belongs to the sender and to the
+    receiver alike — so the *rule* it needs is this module's, but the *shape* of
+    the match is the owning module's. This takes that shape as a callable and
+    keeps the rule here, where the fail-closed branch a brand-scoped user takes
+    is written once and cannot be fixed in one gate and forgotten in another.
+
+    `predicate` receives the store ids this request may read and returns the `Q`
+    matching rows at them.
+    """
+    if is_brand_scoped(user):
+        return qs.none()
+    ids = active_store_ids(user)
+    return qs if ids is None else qs.filter(predicate(ids))
 
 
 def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:

@@ -37,6 +37,8 @@ from outbound.models import (
     StockAdjustment,
     StockAdjustmentLine,
     StoreTransfer,
+    TransferGapClosure,
+    TransferPT,
     VFlip,
     VFlipLine,
     WriteOff,
@@ -266,6 +268,48 @@ def test_a_brand_scoped_caller_cannot_open_one_by_id_either(scaffold):
     assert client.get(f"{TRANSFERS}/{scaffold['out_of_deo'].id}").status_code == 404
     for url, key in STORE_DOCS:
         assert client.get(f"{url}/{scaffold[f'{key}_deo'].id}").status_code == 404, url
+
+
+# -- The routes that reach the same document another way --------------------
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("suffix", ["pt", "pt.csv", "pt.xlsx"])
+def test_the_transfer_pt_is_not_a_way_round_the_gate_on_its_transfer(scaffold, suffix):
+    """The PT travels with the carton and is reached through the transfer, so it
+    inherits the transfer's scope. It is the surface that matters most: the rows
+    carry the unit cost the transfer detail does not print, so an open PT would
+    hand another store its landed cost.
+    """
+    TransferPT.objects.create(transfer=scaffold["foreign"], rows=[{"MRP": "999"}])
+    TransferPT.objects.create(transfer=scaffold["out_of_deo"], rows=[{"MRP": "999"}])
+    client = _client(scaffold["store_user"])
+
+    assert client.get(f"{TRANSFERS}/{scaffold['foreign'].id}/{suffix}").status_code == 404
+    assert client.get(f"{TRANSFERS}/{scaffold['out_of_deo'].id}/{suffix}").status_code == 200
+    assert (
+        _client(scaffold["owner"]).get(f"{TRANSFERS}/{scaffold['foreign'].id}/{suffix}").status_code
+        == 200
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_gap_closure_at_another_store_cannot_be_read_by_id(scaffold):
+    """The closure names both ends of the move and prices the missing pieces, so
+    it is scoped like the documents around it — by entitlement rather than by the
+    switcher, because correcting one is an act and the top bar must not veto it.
+    """
+    closure = TransferGapClosure.objects.create(
+        transfer=scaffold["foreign"],
+        store=scaffold["bnk"],
+        reason="lost_in_transit",
+        created_by=scaffold["owner"],
+    )
+    url = f"/api/outbound/gap-closures/{closure.id}"
+
+    assert _client(scaffold["store_user"]).get(url).status_code == 404
+    assert _client(scaffold["brand_user"]).get(url).status_code == 404
+    assert _client(scaffold["owner"]).get(url).status_code == 200
 
 
 # -- The in-page search (#102) now filters a genuinely scoped set -----------

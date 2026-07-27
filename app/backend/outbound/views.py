@@ -105,6 +105,14 @@ from outbound.serializers import (
 )
 from outbound.transfer_pt import KDPS_COLUMNS
 
+#: The people on a document's approval trail. Every maker-checker document's read
+#: shape joins all three, and a response that forgets one N+1s on names.
+APPROVAL_JOINS = (
+    "approvals__made_by",
+    "approvals__requested_by",
+    "approvals__decided_by",
+)
+
 
 def _filter_docstatus(qs, request):
     """Apply the optional ``?docstatus=`` filter to a list queryset.
@@ -139,12 +147,16 @@ TRANSFER_SEARCH_FIELDS = (
 )
 
 
-def _transfers():
-    """The transfer read shape, before scope — one join list for the list and the
-    detail, so the two cannot drift into two different response costs."""
-    return StoreTransfer.objects.select_related(
+def _transfers(user: Any) -> Any:
+    """Transfers the caller is an end of (#141), in the read shape.
+
+    Scoped here rather than at each view, so a new transfer read cannot be added
+    ungated — the only way to a `StoreTransfer` on a read path is through this.
+    """
+    qs = StoreTransfer.objects.select_related(
         "source_store", "destination_store", "created_by"
     ).prefetch_related("lines")
+    return scope_transfers(qs, user)
 
 
 class TransferListCreateView(generics.ListCreateAPIView):
@@ -156,7 +168,7 @@ class TransferListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         # Scoped before anything else narrows it, so the typed term filters the
         # caller's own transfers rather than the network's (#141, #102).
-        qs = scope_transfers(_transfers(), self.request.user)
+        qs = _transfers(self.request.user)
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)
@@ -186,7 +198,7 @@ class TransferDetailView(generics.RetrieveAPIView):
     serializer_class = StoreTransferReadSerializer
 
     def get_queryset(self):
-        return scope_transfers(_transfers(), self.request.user)
+        return _transfers(self.request.user)
 
 
 class TransferDispatchView(APIView):
@@ -297,6 +309,11 @@ class TransferPTBaseView(APIView):
     right is consulted here, so the rulings on who may make (#119) or inward
     (#124) a brand's PT cannot reach this document. Making a transfer's own
     packing list is part of transferring.
+
+    Store-scoped on top of that right, through the transfer itself (#141). The
+    right says *this kind of document*; the scope says *this one*. Without the
+    second, the PT would be the way round the gate on the transfer it belongs to
+    — and the worse way, since these rows carry the unit cost the detail does not.
     """
 
     permission_classes = [CanReadTransferPT]
@@ -305,6 +322,11 @@ class TransferPTBaseView(APIView):
     extension = ""
 
     def get(self, request, pk):
+        # Reached through the scoped transfer, so another store's PT is a 404 —
+        # the same answer as a transfer that does not exist, and as a dispatched
+        # transfer with no PT yet.
+        if not _transfers(request.user).filter(pk=pk).exists():
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
         pt = (
             TransferPT.objects.select_related(
                 "transfer__source_store", "transfer__destination_store"
@@ -478,16 +500,15 @@ def _gap_closure_for_read(pk):
             "transfer__source_store",
             "transfer__destination_store",
         )
-        .prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
+        .prefetch_related("lines", *APPROVAL_JOINS)
         .get(pk=pk)
     )
 
 
 class GapClosureDetailView(generics.RetrieveAPIView):
-    #: Reading a closure is open like outbound's other reads; correcting one is a
-    #: write, and carries the same senior gate as raising and posting it.
+    #: Reading a closure is store-scoped like outbound's other reads (#141);
+    #: correcting one is a write, and carries the same senior gate as raising and
+    #: posting it.
     permission_classes = [IsAuthenticated]
     serializer_class = GapClosureReadSerializer
 
@@ -495,14 +516,24 @@ class GapClosureDetailView(generics.RetrieveAPIView):
         return [CanCloseTransferGap()] if self.request.method == "PATCH" else [IsAuthenticated()]
 
     def get_queryset(self):
-        return TransferGapClosure.objects.select_related(
-            "store",
-            "created_by",
-            "approved_by",
-            "transfer__source_store",
-            "transfer__destination_store",
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        # Scoped by *entitlement*, not by the switcher, because this is the one
+        # outbound detail that is also fetched in order to act on it: the PATCH
+        # below corrects the draft. The top bar chooses what you are looking at
+        # and must never decide what you may do, so a senior entitled to the
+        # sending store may still correct its closure with another unit on
+        # screen. Everything the correction itself refuses — a posted closure, a
+        # senior at the receiving store — stays in `amend_gap_closure`, and still
+        # answers 400 with its reason rather than a silent 404.
+        return scope_by_entitlement(
+            TransferGapClosure.objects.select_related(
+                "store",
+                "created_by",
+                "approved_by",
+                "transfer__source_store",
+                "transfer__destination_store",
+            ).prefetch_related("lines", *APPROVAL_JOINS),
+            self.request.user,
+            "store_id",
         )
 
     def patch(self, request, *args, **kwargs):
@@ -630,9 +661,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = MarkDamaged.objects.select_related(
             "store", "created_by", "confirmed_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
+        ).prefetch_related("lines", *APPROVAL_JOINS)
         qs = _filter_docstatus(qs, self.request)
         return scope_by_store(qs, self.request.user, "store_id")
 
@@ -751,9 +780,7 @@ def _adjustments(user):
     """Stock adjustments at the caller's own stores (#141), in the read shape."""
     qs = StockAdjustment.objects.select_related(
         "store", "approved_by", "created_by"
-    ).prefetch_related(
-        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-    )
+    ).prefetch_related("lines", *APPROVAL_JOINS)
     return scope_by_store(qs, user, "store_id")
 
 
@@ -828,7 +855,7 @@ class AdjustmentSubmitView(APIView):
 def _writeoffs(user):
     """Write-offs at the caller's own stores (#141), in the read shape."""
     qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
-        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+        "lines", *APPROVAL_JOINS
     )
     return scope_by_store(qs, user, "store_id")
 
@@ -908,9 +935,7 @@ def _vflips(user):
     """
     qs = VFlip.objects.select_related(
         "store", "original_brand", "authorized_by", "created_by"
-    ).prefetch_related(
-        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-    )
+    ).prefetch_related("lines", *APPROVAL_JOINS)
     return scope_by_store(qs, user, "store_id")
 
 
@@ -999,9 +1024,7 @@ class RequestApprovalView(APIView):
     def _load(self, pk):
         return (
             self.model.objects.select_related("store", "created_by")
-            .prefetch_related(
-                "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-            )
+            .prefetch_related("lines", *APPROVAL_JOINS)
             .get(pk=pk)
         )
 

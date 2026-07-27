@@ -23,7 +23,7 @@ from typing import Any
 
 from django.db.models import Q
 
-from masters.scoping import active_store_ids, is_brand_scoped
+from masters.scoping import scope_by_store_predicate
 
 
 def transfer_at_stores(store_ids: list[int]) -> Q:
@@ -39,13 +39,10 @@ def transfer_at_stores(store_ids: list[int]) -> Q:
 def scope_transfers(qs: Any, user: Any) -> Any:
     """Restrict a transfer queryset to the caller's own end of the move.
 
-    The reading counterpart of `masters.scoping.scope_by_store`, differing only in
-    which field carries the store — so the brand-scoped branch fails closed the
-    same way: a transfer carries no brand, nothing can prove a row is theirs, and
-    "stores are the wrong question" must never resolve to "so show every store"
-    (ADR-0003). #110 replaces that interim with cross-by-brand.
+    Only the *shape* of the match is ours; the rule is `masters.scoping`'s, so a
+    brand-scoped caller fails closed here for the same reason and by the same
+    code as everywhere else — a transfer carries no brand, nothing can prove a
+    row is theirs, and "stores are the wrong question" must never resolve to "so
+    show every store" (ADR-0003). #110 replaces that interim with cross-by-brand.
     """
-    if is_brand_scoped(user):
-        return qs.none()
-    ids = active_store_ids(user)
-    return qs if ids is None else qs.filter(transfer_at_stores(ids))
+    return scope_by_store_predicate(qs, user, transfer_at_stores)
