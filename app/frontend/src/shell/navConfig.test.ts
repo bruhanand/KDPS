@@ -5,17 +5,55 @@ import {
   PERSONA_LAYOUTS,
   SECTIONS,
   applyLayout,
+  headingOwning,
   isActiveItem,
   itemOwning,
   itemPath,
   resolveLegacyPath,
+  sectionsIn,
+  sidebarRows,
+  testId,
   visibleSections,
 } from "./navConfig";
-import type { NavRow, VisibleSection } from "./navConfig";
+import type { NavRow } from "./navConfig";
 
 /** Does any screen in the manifest own `path` (itself or as its parent)? */
 function claimed(path: string): boolean {
   return itemOwning(path) !== null;
+}
+
+/** The authenticated-user payload for a role holding `caps`, in the server's
+ *  order (the catalog order). A section at `none` is simply not sent. */
+function user(roleCode: string, caps: Record<string, string>) {
+  return {
+    role: { code: roleCode },
+    is_superuser: false,
+    sections: SECTIONS.filter((s) => caps[s.code]).map((s) => ({
+      code: s.code,
+      label: s.label,
+      capability: caps[s.code],
+    })),
+  };
+}
+
+/** Each row named as the person reads it: a section by its label, a grouping
+ *  heading as "Heading > section, section". */
+function headings(rows: NavRow[]): string[] {
+  return rows.map((r) =>
+    r.kind === "section"
+      ? r.section.label
+      : `${r.group.heading} > ${r.sections.map((s) => s.label).join(", ")}`,
+  );
+}
+
+/** The item labels drawn under one section, wherever that section is drawn. */
+function itemsUnder(rows: NavRow[], sectionCode: string): string[] {
+  return sectionsIn(rows).find((s) => s.def.code === sectionCode)?.items.map((i) => i.label) ?? [];
+}
+
+/** Every item label on the sidebar, whatever heading it ended up under. */
+function allLabels(rows: NavRow[]): string[] {
+  return sectionsIn(rows).flatMap((s) => s.items.map((i) => i.label));
 }
 
 describe("the thirteen sections", () => {
@@ -160,7 +198,7 @@ describe("a persona's sidebar shape (#96)", () => {
   // What the server sends today, from `accounts/rbac_matrix.py`: the sheet's
   // "Store Person" row, plus #97's `staff: manage` for a manager. Written out
   // here rather than imported because the point of these tests is that the
-  // *arrangement* obeys whatever the server says — including values an admin
+  // *arrangement* obeys whatever the server says - including values an admin
   // retunes later, which is why several tests below change them.
   const STORE_CAPS: Record<string, string> = {
     home: "view",
@@ -192,40 +230,8 @@ describe("a persona's sidebar shape (#96)", () => {
     setup: "operate",
   };
 
-  /** The authenticated-user payload for a role holding `caps`, in the server's
-   *  order (the catalog order). A section at `none` is simply not sent. */
-  function user(roleCode: string, caps: Record<string, string>) {
-    return {
-      role: { code: roleCode },
-      is_superuser: false,
-      sections: SECTIONS.filter((s) => caps[s.code]).map((s) => ({
-        code: s.code,
-        label: s.label,
-        capability: caps[s.code],
-      })),
-    };
-  }
-
-  function rowsFor(roleCode: string, caps: Record<string, string>): NavRow[] {
-    return applyLayout(visibleSections(user(roleCode, caps)), roleCode);
-  }
-
-  /** Each row named as the person reads it: a section by its label, a grouping
-   *  heading as "Heading > section, section". */
-  function headings(rows: NavRow[]): string[] {
-    return rows.map((r) =>
-      r.kind === "section"
-        ? r.section.label
-        : `${r.group.heading} > ${r.sections.map((s) => s.label).join(", ")}`,
-    );
-  }
-
-  function itemsUnder(rows: NavRow[], sectionCode: string): string[] {
-    const all: VisibleSection[] = rows.flatMap((r) =>
-      r.kind === "section" ? [r.section] : r.sections,
-    );
-    return all.find((s) => s.def.code === sectionCode)?.items.map((i) => i.label) ?? [];
-  }
+  const rowsFor = (roleCode: string, caps: Record<string, string>) =>
+    sidebarRows(user(roleCode, caps));
 
   it("gives a store cashier the screen the store asked for, twice", () => {
     // Booking is last because the layout does not name it: they were granted
@@ -275,7 +281,7 @@ describe("a persona's sidebar shape (#96)", () => {
   it("leaves Return to Brand off the store's sidebar, with damage still one click away", () => {
     const rows = rowsFor("store_staff", STORE_CAPS);
     expect(headings(rows)).not.toContain("Return to Brand");
-    // The store keeps "mark damage only" — the entry is drawn under Stock, the
+    // The store keeps "mark damage only" - the entry is drawn under Stock, the
     // section that owns the screen, so nothing became unreachable.
     expect(itemsUnder(rows, "stock")).toContain("Damage / Quarantine");
     expect(itemsUnder(rowsFor("warehouse", WAREHOUSE_CAPS), "stock")).not.toContain(
@@ -305,6 +311,25 @@ describe("a persona's sidebar shape (#96)", () => {
     }
   });
 
+  it("unfolds the heading a screen is actually drawn under", () => {
+    // The sidebar must be able to show where you are. For a store person on
+    // Attendance that heading is Home, not the Staff section that owns it.
+    expect(headingOwning("/staff/attendance", "store_staff")).toBe("home");
+    expect(headingOwning("/staff/attendance", "warehouse")).toBe("staff");
+    expect(headingOwning("/receive/pt", "store_staff")).toBe("receive_goods");
+    expect(headingOwning("/nobody-built-this", "store_staff")).toBeNull();
+  });
+
+  it("gives every line on a store person's sidebar its own test handle", () => {
+    // Damage / Quarantine drawn under Stock *is* /stock once its `?view=` is
+    // dropped, so a handle built from the path alone collided with Stock on Hand.
+    const handles = sectionsIn(rowsFor("store_manager", MANAGER_CAPS)).flatMap((s) =>
+      s.items.map((i) => testId(s.def.code, i)),
+    );
+    expect(new Set(handles).size).toBe(handles.length);
+    expect(handles).toContain("nav-stock-stock-quarantine");
+  });
+
   it("leaves every other persona's sidebar flat and untouched", () => {
     for (const role of ["owner", "warehouse", "accounts", "it_admin", "brand_manager", "ho_ops"]) {
       const sections = visibleSections(user(role, WAREHOUSE_CAPS));
@@ -317,7 +342,7 @@ describe("a persona's sidebar shape (#96)", () => {
 
 describe("arranging a sidebar can never widen it", () => {
   // The invariant the whole of #96 rests on: grouping consumes the output of
-  // the access filter, so it can reorder, nest or drop — never add.
+  // the access filter, so it can reorder, nest or drop - never add.
   const ROLES = ["store_staff", "store_manager", "warehouse", "owner"];
 
   function shuffleCaps(seed: number): Record<string, string> {
@@ -333,18 +358,9 @@ describe("arranging a sidebar can never widen it", () => {
     for (const role of ROLES) {
       for (let seed = 0; seed < 8; seed++) {
         const caps = shuffleCaps(seed);
-        const granted = visibleSections({
-          role: { code: role },
-          is_superuser: false,
-          sections: SECTIONS.filter((s) => caps[s.code]).map((s) => ({
-            code: s.code,
-            label: s.label,
-            capability: caps[s.code],
-          })),
-        });
+        const granted = visibleSections(user(role, caps));
         const allowed = new Map(granted.map((s) => [s.def.code, new Set(s.items.map((i) => i.to))]));
-        const rows = applyLayout(granted, role);
-        const drawn = rows.flatMap((r) => (r.kind === "section" ? [r.section] : r.sections));
+        const drawn = sectionsIn(applyLayout(granted, role));
 
         expect(new Set(drawn.map((s) => s.def.code)).size, `${role}/${seed}`).toBe(drawn.length);
         for (const s of drawn) {
@@ -362,25 +378,22 @@ describe("arranging a sidebar can never widen it", () => {
 
   it("never draws a relocated entry for somebody who does not hold its section", () => {
     // Attendance belongs to Staff and keeps Staff's gate wherever it is drawn.
-    const caps: Record<string, string> = { home: "view", stock: "view", sell: "operate" };
-    const rows = applyLayout(
-      visibleSections({
-        role: { code: "store_staff" },
-        is_superuser: false,
-        sections: SECTIONS.filter((s) => caps[s.code]).map((s) => ({
-          code: s.code,
-          label: s.label,
-          capability: caps[s.code],
-        })),
-      }),
-      "store_staff",
-    );
-    const labels = rows.flatMap((r) =>
-      (r.kind === "section" ? [r.section] : r.sections).flatMap((s) => s.items.map((i) => i.label)),
+    const labels = allLabels(
+      sidebarRows(user("store_staff", { home: "view", stock: "view", sell: "operate" })),
     );
     expect(labels).not.toContain("Attendance");
     // Same for the other move: no Return to Brand grant, no damage entry.
     expect(labels).not.toContain("Damage / Quarantine");
+  });
+
+  it("gives a hidden section its heading back rather than stranding an entry", () => {
+    // Return to Brand leaves the store's sidebar *because* Damage / Quarantine
+    // is drawn under Stock. Hold Return to Brand without Stock - an admin can
+    // retune to that - and hiding it would take the one entry they can use with
+    // it, so the heading comes back instead.
+    const rows = sidebarRows(user("store_staff", { home: "view", return_to_brand: "operate" }));
+    expect(headings(rows)).toContain("Return to Brand");
+    expect(allLabels(rows)).toContain("Damage / Quarantine");
   });
 
   it("survives a retune in either direction", () => {
@@ -393,18 +406,9 @@ describe("arranging a sidebar can never widen it", () => {
       reports: "view",
     };
     function shape(caps: Record<string, string>) {
-      return applyLayout(
-        visibleSections({
-          role: { code: "store_staff" },
-          is_superuser: false,
-          sections: SECTIONS.filter((s) => caps[s.code]).map((s) => ({
-            code: s.code,
-            label: s.label,
-            capability: caps[s.code],
-          })),
-        }),
-        "store_staff",
-      ).map((r) => (r.kind === "section" ? r.section.label : r.group.heading));
+      return sidebarRows(user("store_staff", caps)).map((r) =>
+        r.kind === "section" ? r.section.label : r.group.heading,
+      );
     }
     // Revoked: Transfer goes, Inventory stays and keeps the other two.
     const { transfer: _dropped, ...withoutTransfer } = base;

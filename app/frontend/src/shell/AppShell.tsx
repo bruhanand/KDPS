@@ -7,7 +7,7 @@ import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { SECTIONS, applyLayout, isActiveItem, itemPath, visibleSections } from "./navConfig";
+import { headingOwning, isActiveItem, sidebarRows, testId } from "./navConfig";
 import type { NavItem, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
@@ -242,22 +242,23 @@ function Sidebar({
 
   // Landing inside a folded section unfolds it: the sidebar must always be able
   // to show where you are, however you got there (search, deep link, redirect).
+  // The heading to unfold is the one this person's sidebar draws the screen
+  // under, which is not always the section that owns it - a store person on
+  // Attendance is standing under Home.
+  const roleCode = user?.role?.code ?? "";
   useEffect(() => {
-    const owning = SECTIONS.find((s) => s.items.some((i) => isActiveItem(i, pathname)));
-    if (!owning || !collapsed[owning.code]) return;
+    const heading = headingOwning(pathname, roleCode);
+    if (!heading || !collapsed[heading]) return;
     setCollapsed((current) => {
       const next = { ...current };
-      delete next[owning.code];
+      delete next[heading];
       localStorage.setItem(NAV_COLLAPSED_KEY, JSON.stringify(next));
       return next;
     });
-  }, [pathname, collapsed]);
+  }, [pathname, collapsed, roleCode]);
 
   if (!user) return null;
-  // Access first, arrangement second: `visibleSections` decides what may be
-  // drawn, `applyLayout` only decides where. A role with no layout of its own —
-  // everyone but the store — gets that same list back, flat and unchanged.
-  const rows = applyLayout(visibleSections(user), user.role?.code ?? "");
+  const rows = sidebarRows(user);
 
   function toggleSection(code: string) {
     setCollapsed((current) => {
@@ -348,7 +349,7 @@ function Sidebar({
                   onClick={onNavigate}
                   aria-current={active ? "page" : undefined}
                   className={`nav-item ${active ? "active" : ""}`}
-                  data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
+                  data-testid={testId(s.def.code, it)}
                 >
                   {it.label}
                 </Link>
@@ -373,7 +374,7 @@ function Sidebar({
         {rows.map((row) => {
           if (row.kind === "section") return renderSection(row.section);
           // A grouping heading: a label and an order, nothing else. It owns no
-          // route and no capability, so it is not a link and does not collapse —
+          // route and no capability, so it is not a link and does not collapse -
           // the sections beneath it keep their own heads and their own gates.
           const GroupIcon = row.group.icon;
           const slug = row.group.heading.toLowerCase();

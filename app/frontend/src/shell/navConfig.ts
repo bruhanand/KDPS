@@ -433,12 +433,12 @@ export function itemVisible(
 }
 
 // ---------------------------------------------------------------------------
-// Persona layouts (#96) — how one persona's sidebar is *arranged*.
+// Persona layouts (#96) - how one persona's sidebar is *arranged*.
 //
 // The sections above are shared vocabulary and the server decides which of them
 // a person gets. Neither changes here. What changes is the order they are drawn
-// in and which heading they sit under, because a store person asked — twice, a
-// month apart — for their own screen: Home, Sell, one "Inventory" heading over
+// in and which heading they sit under, because a store person asked - twice, a
+// month apart - for their own screen: Home, Sell, one "Inventory" heading over
 // the goods work, Reports, Staff, Stock Count, Money, Offers & Price.
 //
 // Three rules this must not break, all of them tested below in navConfig.test:
@@ -447,13 +447,13 @@ export function itemVisible(
 //   · An entry's gate travels with the entry. Attendance drawn under Home is
 //     still Staff's entry with Staff's gate; moving it changes nobody's access.
 //   · Names never change. Grouping is allowed, renaming is not (#84 as amended)
-//     — a store person and the warehouse both say "Transfer" on the phone.
+//     - a store person and the warehouse both say "Transfer" on the phone.
 //
 // A role with no layout gets the flat list, which is what keeps every other
 // persona byte-identical to before this file grew this section.
 
 /** A heading with sections nested under it. It owns no route, no section code,
- *  no capability and no server counterpart — it is a label and an order. */
+ *  no capability and no server counterpart - it is a label and an order. */
 export interface NavGroupDef {
   heading: string;
   icon: LucideIcon;
@@ -468,7 +468,7 @@ export type LayoutRow = string | NavGroupDef;
 
 export interface PersonaLayout {
   /** The rows, top to bottom. A section held but named nowhere here is still
-   *  drawn — appended after these rows — so retuning somebody's access can
+   *  drawn - appended after these rows - so retuning somebody's access can
    *  never silently lose them a section. */
   rows: LayoutRow[];
   /** Sections this persona does not get a heading for. The capability is
@@ -478,7 +478,7 @@ export interface PersonaLayout {
   /** Entries drawn under a heading other than their own section's, keyed by the
    *  entry's `to`. `after` places it directly below that entry in the host, else
    *  it goes last. If the host section is not held, the entry stays where it is
-   *  — the move is presentation, so it can never be the reason something goes
+   *  - the move is presentation, so it can never be the reason something goes
    *  missing. */
   relocate: Record<string, { under: string; after?: string }>;
 }
@@ -489,7 +489,7 @@ export interface PersonaLayout {
 // Attendance is drawn under Home ("Home only"), and Damage / Quarantine is
 // drawn under Stock, which is the section that already owns that screen. That
 // second move is what lets Return to Brand leave the sidebar without anything
-// becoming unreachable — a store person keeps "mark damage only" and reaches it
+// becoming unreachable - a store person keeps "mark damage only" and reaches it
 // in one click, they just no longer see a Returns heading they cannot use.
 const STORE_LAYOUT: PersonaLayout = {
   rows: [
@@ -535,7 +535,7 @@ export interface VisibleSection {
 
 const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
 
-/** The sections this person gets, with their visible items — the one access
+/** The sections this person gets, with their visible items - the one access
  *  filter, and the only authority on what may be drawn. Everything below it
  *  (arranging, grouping, collapsing) consumes its output and can only subtract.
  *
@@ -548,7 +548,7 @@ export function visibleSections(user: {
 }): VisibleSection[] {
   const roleCode = user.role?.code ?? "";
   const out: VisibleSection[] = [];
-  // Server order, not manifest order — the payload is the authority on both
+  // Server order, not manifest order - the payload is the authority on both
   // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
   for (const granted of user.sections ?? []) {
     const def = SECTION_DEFS.get(granted.code);
@@ -573,7 +573,7 @@ export type NavRow =
 /** Arrange the sections this person holds into their persona's rows.
  *
  *  Takes the *output* of the access filter and only ever reorders, nests or
- *  drops what is already in it — so no arrangement can put a section in front
+ *  drops what is already in it - so no arrangement can put a section in front
  *  of somebody the server did not send it to. */
 export function applyLayout(sections: VisibleSection[], roleCode: string): NavRow[] {
   const layout = PERSONA_LAYOUTS[roleCode];
@@ -606,8 +606,19 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
     return s && s.items.length ? s : null;
   }
 
+  // A hidden section is only safe to hide once the entries the layout moves out
+  // of it have actually landed. Return to Brand leaves the store's sidebar
+  // *because* Damage / Quarantine is drawn under Stock - so if a retune ever
+  // leaves somebody holding Return to Brand without Stock, the heading comes
+  // back rather than taking the only entry they can use down with it.
+  const stranded = (s: VisibleSection) => s.items.some((i) => i.to in layout.relocate);
+  const hidden = layout.hide.filter((code) => {
+    const s = byCode.get(code);
+    return !s || !stranded(s);
+  });
+
   const rows: NavRow[] = [];
-  const spokenFor = new Set<string>(layout.hide);
+  const spokenFor = new Set<string>(hidden);
   for (const row of layout.rows) {
     if (typeof row === "string") {
       spokenFor.add(row);
@@ -624,7 +635,7 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
     if (inner.length) rows.push({ kind: "group", key: `group:${row.heading}`, group: row, sections: inner });
   }
 
-  // Held, but named nowhere in the layout — an admin can retune access, so this
+  // Held, but named nowhere in the layout - an admin can retune access, so this
   // is a real case and not a defect. Appended in the server's order rather than
   // dropped: a sidebar that quietly loses a section somebody was just granted is
   // worse than one whose last row is in an unexpected place.
@@ -634,4 +645,43 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
     if (d) rows.push({ kind: "section", key: s.def.code, section: d });
   }
   return rows;
+}
+
+/** The whole sidebar for one signed-in person: what they may see, arranged the
+ *  way their persona reads it. One call, so the two steps can only happen in
+ *  that order - access first, arrangement second. */
+export function sidebarRows(user: {
+  role?: { code?: string } | null;
+  is_superuser: boolean;
+  sections?: { code: string; label?: string; capability: string }[];
+}): NavRow[] {
+  return applyLayout(visibleSections(user), user.role?.code ?? "");
+}
+
+/** The test handle for a menu line, as `nav-<section>-<screen>`. A deep link
+ *  keeps its `?view=`, because its path alone is the host section's own screen:
+ *  drawn under Stock, "Damage / Quarantine" would otherwise answer to the same
+ *  handle as "Stock on Hand". */
+export function testId(sectionCode: string, item: NavItem): string {
+  const tail = itemPath(item).split("/").pop() || "home";
+  const view = item.to.split("?view=")[1];
+  return `nav-${sectionCode}-${tail}${view ? `-${view}` : ""}`;
+}
+
+/** Every section drawn in `rows`, group members included. */
+export function sectionsIn(rows: NavRow[]): VisibleSection[] {
+  return rows.flatMap((r) => (r.kind === "section" ? [r.section] : r.sections));
+}
+
+/** The code of the section whose head this person's sidebar draws `pathname`
+ *  under - the section that owns the screen, unless their layout relocates that
+ *  entry to another heading. What the sidebar has to unfold to show where you
+ *  are: a store person standing on Attendance is under Home, not under Staff. */
+export function headingOwning(pathname: string, roleCode: string): string | null {
+  for (const section of SECTIONS) {
+    const entry = section.items.find((i) => isActiveItem(i, pathname));
+    if (!entry) continue;
+    return PERSONA_LAYOUTS[roleCode]?.relocate[entry.to]?.under ?? section.code;
+  }
+  return null;
 }
