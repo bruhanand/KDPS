@@ -1,6 +1,8 @@
 """Master-data API: scoped reads for the foundation switcher + steward-gated
 create/edit (the D8 stewardship slice). Reads stay open to any authenticated
 user; writes require a master-data steward (owner / IT admin / data steward).
+One read is deliberately *un*scoped — `LocationListView`, whose docstring says
+why — and it pays for that by carrying identity fields and nothing else.
 Records are deactivated (`is_active`), never hard-deleted — masters are referenced
 by append-only ledger rows.
 """
@@ -26,6 +28,7 @@ from masters.serializers import (
     BrandSerializer,
     GstinSerializer,
     LegalEntitySerializer,
+    LocationSerializer,
     SeasonSerializer,
     StoreSerializer,
 )
@@ -39,6 +42,25 @@ class StoreListView(generics.ListCreateAPIView):
 
     def get_queryset(self) -> Any:
         return scoped_stores(self.request.user)
+
+
+class LocationListView(generics.ListAPIView):
+    """Every active location in the network, identity fields only — the list of
+    places stock may be *sent* to.
+
+    Deliberately unscoped, unlike `StoreListView` above. That one answers "which
+    units may I operate on", which is the right question for the *source* of a
+    transfer and the wrong one for its *destination*: sending a carton somewhere
+    claims no rights at the place it is going. Scoping both alike left every
+    store person with an empty destination picker and no way to start a transfer
+    at all (#147). What guards a store sending anywhere is the e-way bill the
+    screen demands across registrations, plus the Operations Head approval gate
+    (PRD #104) — a picker is not a permission and must not become one.
+    """
+
+    serializer_class = LocationSerializer
+    permission_classes = [IsAuthenticated]
+    queryset = Store.objects.filter(is_active=True).select_related("gstin").order_by("code")
 
 
 class StoreDetailView(generics.RetrieveUpdateAPIView):

@@ -495,6 +495,16 @@ UNGATED_VIEWS = {
     "inbound/views.py:GrnListCreateView",
     "inbound/views.py:GrnDetailView",
     "masters/views.py:LegalEntityListView",
+    # #147: the list of places stock may be *sent* to. Open on purpose, and the
+    # one entry here that is a decision rather than a baseline. A store person
+    # may send a carton to any sister store while holding no right at all at the
+    # receiving end, so a section gate here would put the empty destination
+    # picker straight back and take store-to-store transfer away again. It
+    # answers with identity fields only — code, name, type, registration, state —
+    # so an open answer discloses nothing a scope was keeping from anyone. The
+    # acts it feeds stay gated where acts belong: create and dispatch check the
+    # source store, receive checks the destination.
+    "masters/views.py:LocationListView",
     "masters/views.py:SkuLookupView",
     "masters/views.py:SummaryView",
     "outbound/views.py:TransferDetailView",
