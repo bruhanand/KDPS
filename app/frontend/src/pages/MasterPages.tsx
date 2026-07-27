@@ -8,7 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import { SearchBox } from "../components/SearchBox";
-import { withQuery } from "../lib/query";
+import { withQuery, type QueryParams } from "../lib/query";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
 
@@ -17,21 +17,22 @@ function useSteward(): boolean {
   return Boolean(user?.is_superuser || STEWARD_ROLES.includes(user?.role?.code ?? ""));
 }
 
-function useList<T>(url: string) {
+function useList<T>(url: string, params?: QueryParams) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const full = withQuery(url, params);
   useEffect(() => {
     let live = true;
     setLoading(true);
     api
-      .get(url)
+      .get(full)
       .then((r) => live && setData(r.data))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-  }, [url, tick]);
+  }, [full, tick]);
   return { data, loading, reload: () => setTick((t) => t + 1) };
 }
 
@@ -84,7 +85,7 @@ const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", g
 export function StoresPage() {
   const canEdit = useSteward();
   const [q, setQ] = useState("");
-  const { data, loading, reload } = useList<Store>(withQuery("/masters/stores", { q }));
+  const { data, loading, reload } = useList<Store>("/masters/stores", { q });
   const { data: gstins } = useList<GstinOpt>("/masters/gstins");
   const [form, setForm] = useState(blankStore);
   const [open, setOpen] = useState(false);
@@ -170,7 +171,7 @@ const blankBrand = { id: 0, code: "", name: "", ownership: "owned", return_terms
 export function BrandsPage() {
   const canEdit = useSteward();
   const [q, setQ] = useState("");
-  const { data, loading, reload } = useList<Brand>(withQuery("/masters/brands", { q }));
+  const { data, loading, reload } = useList<Brand>("/masters/brands", { q });
   const [form, setForm] = useState(blankBrand);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -252,7 +253,7 @@ const blankSeason = { id: 0, code: "", name: "", status: "open", sort_order: 0 }
 export function SeasonsPage() {
   const canEdit = useSteward();
   const [q, setQ] = useState("");
-  const { data, loading, reload } = useList<Season>(withQuery("/masters/seasons", { q }));
+  const { data, loading, reload } = useList<Season>("/masters/seasons", { q });
   const [form, setForm] = useState(blankSeason);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -328,7 +329,7 @@ const blankGstin = { id: 0, gstin: "", state_code: "", state_name: "", legal_ent
 export function GstinsPage() {
   const canEdit = useSteward();
   const [q, setQ] = useState("");
-  const { data, loading, reload } = useList<Gstin>(withQuery("/masters/gstins", { q }));
+  const { data, loading, reload } = useList<Gstin>("/masters/gstins", { q });
   const { data: entities } = useList<EntityOpt>("/masters/entities");
   const [form, setForm] = useState(blankGstin);
   const [open, setOpen] = useState(false);

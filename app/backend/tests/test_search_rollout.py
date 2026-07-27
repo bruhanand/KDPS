@@ -4,9 +4,11 @@
 screens. This is where the rollout is asserted at the API seam: the term
 narrows the list, on the server, and — the property the issue calls out by
 name — a store-scoped user searching a store-scoped screen never gets a row
-their scope would otherwise withhold. Return to Brand and the Approvals inbox
-are asserted here; the stock ledger's own store-scope search is covered
-alongside on-hand in ``test_inpage_search.py``.
+their scope would otherwise withhold. Movement History (the stock ledger),
+Return to Brand and the Approvals inbox are asserted here — the three the
+issue names explicitly. ``test_inpage_search.py`` proves the same property for
+Stock on Hand, a different endpoint (#102) that happens to share a store; it
+does not exercise ``/stockledger/entries`` at all.
 
 A handful of the remaining screens (adjustments, write-offs, V-flips, the
 vendor ledger) get a narrower smoke test — the term narrows the list and an
@@ -39,6 +41,7 @@ from outbound.models import (
     WriteOff,
     WriteOffLine,
 )
+from stockledger.models import StockLedgerEntry
 from vendors.models import Vendor
 
 RTVS = "/api/outbound/rtvs"
@@ -48,6 +51,7 @@ VFLIPS = "/api/outbound/vflips"
 APPROVALS_INBOX = "/api/approvals/inbox"
 VENDOR_ENTRIES = "/api/finledger/vendor/entries"
 CASH_ENTRIES = "/api/finledger/cash/entries"
+MOVEMENT_HISTORY = "/api/stockledger/entries"
 
 
 def _client(user: User) -> APIClient:
@@ -220,7 +224,73 @@ def scaffold(db):
     built["cle_deo"] = cle_deo
     built["cle_other"] = cle_other
 
+    sle_deo = StockLedgerEntry.objects.create(
+        store=deo,
+        gstin=gstin_jh,
+        sku_code="SR-MOVE-DEO",
+        design="RolloutStyle",
+        brand="RolloutBrand",
+        qty=1,
+        kind=StockLedgerEntry.Kind.PT_INWARD,
+        doc_number="SR-MV-DEO-1",
+        amount=100000,
+    )
+    sle_bnk = StockLedgerEntry.objects.create(
+        store=bnk,
+        gstin=gstin_bh,
+        sku_code="SR-MOVE-BNK",
+        design="RolloutStyle",
+        brand="RolloutBrand",
+        qty=1,
+        kind=StockLedgerEntry.Kind.PT_INWARD,
+        doc_number="SR-MV-BNK-1",
+        amount=100000,
+    )
+    built["sle_deo"] = sle_deo
+    built["sle_bnk"] = sle_bnk
+
     return built
+
+
+# -- Movement History (stock ledger) -------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_movement_history_search_matches_doc_number_and_style(scaffold):
+    client = _client(scaffold["owner"])
+    sle = scaffold["sle_deo"]
+    matched = client.get(f"{MOVEMENT_HISTORY}?q={sle.doc_number}").json()["results"]
+    assert {r["id"] for r in matched} == {sle.id}
+    by_style = client.get(f"{MOVEMENT_HISTORY}?q=RolloutStyle").json()["results"]
+    assert sle.id in {r["id"] for r in by_style}
+    assert client.get(f"{MOVEMENT_HISTORY}?q=no-such-movement").json()["results"] == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_movement_history_search_stays_inside_the_caller_store_scope(scaffold):
+    """`RolloutStyle` names the design at both stores. A store-scoped user's
+    search on Movement History gets only their own store's row, never BNK's —
+    scoping (`scope_by_store_and_brand`) is applied before search narrows
+    further, never the other way."""
+    client = _client(scaffold["store_user"])
+    seen = {r["id"] for r in client.get(f"{MOVEMENT_HISTORY}?q=RolloutStyle").json()["results"]}
+    assert seen == {scaffold["sle_deo"].id}
+    assert scaffold["sle_bnk"].id not in seen
+
+    # ...and the same term, for the owner whose scope reaches both, finds it.
+    seen_by_owner = {
+        r["id"]
+        for r in _client(scaffold["owner"])
+        .get(f"{MOVEMENT_HISTORY}?q=RolloutStyle")
+        .json()["results"]
+    }
+    assert seen_by_owner == {scaffold["sle_deo"].id, scaffold["sle_bnk"].id}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_movement_history_empty_term_reads_exactly_as_today(scaffold):
+    client = _client(scaffold["store_user"])
+    assert client.get(f"{MOVEMENT_HISTORY}?q=").json() == client.get(MOVEMENT_HISTORY).json()
 
 
 # -- Return to Brand ----------------------------------------------------------
