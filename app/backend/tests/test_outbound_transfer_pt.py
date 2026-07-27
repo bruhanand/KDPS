@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 from _creds import TEST_PASSWORD
 from _rbac import make_role
+from _transfers import approve_transfer
 from rest_framework.test import APIClient
 
 from accounts.models import ActorPolicy, Role, ScopeType, User
@@ -146,6 +147,7 @@ def _draft(s, plan=None) -> StoreTransfer:
 
 
 def _dispatch(s, transfer, scans) -> None:
+    approve_transfer(transfer)  # nothing leaves without the Operations Head (#137)
     resp = _client(s["user"]).post(
         f"/api/outbound/transfers/{transfer.pk}/dispatch",
         {"scans": [{"barcode": b, "qty": q} for b, q in scans]},

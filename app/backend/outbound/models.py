@@ -156,6 +156,14 @@ class StoreTransfer(Document):
     # Receipt fields are stored on the companion TransferReceipt model
     # (submitted documents are DB-level immutable per kernel rule)
 
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transfers_approved",
+        help_text="Stamped from the approvals inbox at dispatch — never typed (#137).",
+    )
     created_by = models.ForeignKey(
         "accounts.User",
         null=True,
@@ -163,10 +171,24 @@ class StoreTransfer(Document):
         on_delete=models.SET_NULL,
         related_name="transfers_created",
     )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_store_transfer"
         ordering = ["-created_at"]
+
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with.
+
+        A transfer is a movement, so the destination is the fact the Operations
+        Head is being asked about — the source is already in the line below it.
+        Cross-state is called out because those two locations are distinct
+        persons under GST: that transfer raises a tax invoice and an e-way bill,
+        which is the reason no transfer is left to a store's own say-so (#137).
+        """
+        destination = self.destination_store.code
+        return f"To {destination} · cross-state" if self.is_cross_state else f"To {destination}"
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()

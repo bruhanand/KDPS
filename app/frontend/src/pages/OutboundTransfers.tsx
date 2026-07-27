@@ -22,7 +22,7 @@ import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
 import { destinationOptions, isCrossState, type LocationT } from "../lib/transfer-locations";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import { ListSearchBar } from "../components/SearchBox";
-import { ApprovalTrail, type ApprovalT } from "../components/approval";
+import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -160,6 +160,13 @@ export interface TransferT {
   dispatch_date: string | null;
   dispatched_by: number | null;
   created_by: number | null;
+  created_by_name: string;
+  /** Stamped at dispatch from the approval — never typed (#137). */
+  approved_by: number | null;
+  approved_by_name: string;
+  /** The live request. No stock leaves until this is cleared (#137). */
+  approval: ApprovalT | null;
+  approval_history: ApprovalT[];
   created_at: string;
   updated_at: string;
   dispatch_mismatch: boolean;
@@ -338,7 +345,12 @@ export function TransferListPage() {
                       <span className="chip chip-grey">Same state</span>
                     )}
                   </td>
-                  <td><DocPill ds={t.docstatus} /></td>
+                  <td>
+                    <DocPill ds={t.docstatus} />
+                    {/* A draft's real state has two halves since #137: it is a
+                        draft, and it is either cleared to go or it is not. */}
+                    {t.docstatus === 0 && <ApprovalPill status={t.approval?.status ?? "pending"} />}
+                  </td>
                   <td>
                     {t.receipt ? (
                       <span className={`chip chip-${RECEIPT_TONE[t.receipt.receipt_status] ?? "grey"}`}>
@@ -775,7 +787,11 @@ export function TransferDetailPage() {
 
   if (loading || !t) return <div className="page-pad"><p className="lead">Loading…</p></div>;
 
-  const canDispatch = t.docstatus === 0 && writable;
+  // No stock leaves until the Operations Head has approved (#137). The server
+  // refuses either way — the button only reflects that honestly, so nobody is
+  // walked through a scan the API will throw away.
+  const approved = isCleared(t.approval);
+  const canDispatch = t.docstatus === 0 && writable && approved;
   const canReceive = t.docstatus === 1 && !t.receipt && writable;
   const hasPlan = t.lines.some((l) => l.qty_planned != null);
 
@@ -844,6 +860,7 @@ export function TransferDetailPage() {
         </div>
         <div className="spacer" />
         <DocPill ds={t.docstatus} />
+        {t.docstatus === 0 && <ApprovalPill status={t.approval?.status ?? "pending"} />}
         <GapStatePill state={t.gap_state} />
         {t.is_cross_state && <span className="chip chip-amber">Cross-state</span>}
         <span className="chip chip-navy">{TRANSFER_TYPE_LABEL[t.transfer_type] ?? t.transfer_type}</span>
@@ -935,6 +952,17 @@ export function TransferDetailPage() {
           <h3 className="h3 mono">{t.eway_bill_number}</h3>
         </div>
       )}
+
+      {/* Who made this transfer and who let the stock go (#137) */}
+      <div style={{ marginBottom: 18 }} data-testid="transfer-approval">
+        <ApprovalTrail
+          createdByName={t.created_by_name}
+          createdAt={t.created_at}
+          approval={t.approval}
+          history={t.approval_history}
+          askAgainPath={writable ? `/outbound/transfers/${t.id}/request-approval` : undefined}
+        />
+      </div>
 
       {/* The PT that went in the box (#72) */}
       <TransferPtCard t={t} />

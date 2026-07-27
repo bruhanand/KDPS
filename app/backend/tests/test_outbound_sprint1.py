@@ -243,6 +243,7 @@ def test_store_split_same_gstin_no_gl(_outbound_scaffold):
     )
 
     # Dispatch (scanned lines are the only quantities)
+    _approve(transfer, s)
     post_transfer_dispatch(transfer, {"SKU001": 3}, user=s["user"])
     assert transfer.docstatus == DocStatus.SUBMITTED
     assert transfer.doc_number is not None
@@ -302,6 +303,7 @@ def test_inter_store_transfer_same_state(_outbound_scaffold):
         qty_planned=5,
     )
 
+    _approve(transfer, s)
     post_transfer_dispatch(transfer, {"SKU001": 5}, user=s["user"])
     assert transfer.is_cross_state is False
     assert transfer.dispatch_date is not None
@@ -341,6 +343,7 @@ def test_cross_state_transfer_flagged(_outbound_scaffold):
         qty_planned=2,
     )
 
+    _approve(transfer, s)
     post_transfer_dispatch(transfer, {"SKU001": 2}, user=s["user"])
     assert transfer.is_cross_state is True
     assert transfer.eway_bill_number == "EWB-2026-001"
@@ -362,6 +365,7 @@ def test_transfer_shortfall_flagged(_outbound_scaffold):
         qty_planned=4,
     )
 
+    _approve(transfer, s)
     post_transfer_dispatch(transfer, {"SKU001": 4}, user=s["user"])
     post_transfer_receipt(transfer, {"SKU001": 3}, user=s["user"])
 
@@ -388,6 +392,7 @@ def test_transfer_blocks_on_insufficient_stock(_outbound_scaffold):
         qty_planned=999,
     )
 
+    _approve(transfer, s)
     with pytest.raises(OutboundPostingError, match="Insufficient stock"):
         post_transfer_dispatch(transfer, {"SKU001": 999}, user=s["user"])
 
@@ -807,6 +812,7 @@ def test_transfer_receive_idempotent(_outbound_scaffold):
         qty_planned=2,
     )
 
+    _approve(transfer, s)
     post_transfer_dispatch(transfer, {"SKU001": 2}, user=s["user"])
     post_transfer_receipt(transfer, {"SKU001": 2}, user=s["user"])
 

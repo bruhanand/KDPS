@@ -393,6 +393,11 @@ def post_transfer_dispatch(
     the scans *become* the lines, enriched from the source stock.
 
     Stock move only, no GL (cross-state IGST invoice is manual by decision).
+
+    Refuses unless the Operations Head (or the Owner, overriding) has approved
+    the transfer — ``require_approved``, at the posting layer rather than the
+    view, so a shell, a management command and the API all hit the same wall
+    (#137). Nothing leaves the shelf on the sender's own say-so.
     """
     from core.documents import DocStatus
     from masters.models import Sku
@@ -403,6 +408,10 @@ def post_transfer_dispatch(
     locked = StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
     if locked.docstatus != DocStatus.DRAFT:
         raise OutboundPostingError("Transfer already dispatched.")
+
+    # Before a single piece is validated: an unapproved transfer is not a
+    # dispatch with a problem, it is not a dispatch.
+    require_approved(transfer)
 
     plan_lines = {line.sku_code: line for line in transfer.lines.all()}
     _validate_scans(scans, set(plan_lines) if plan_lines else None, "Dispatch")

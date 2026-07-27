@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 from _creds import TEST_PASSWORD
 from _rbac import make_role
+from _transfers import approve_transfer
 from rest_framework.test import APIClient
 
 from accounts.models import Role, ScopeType, User
@@ -293,6 +294,7 @@ def test_sm_cannot_create_transfer_from_outside_scope(scope_scaffold):
             "source_store": s["store_banka"].id,
             "destination_store": s["store_deo"].id,
             "transfer_type": "inter_store",
+            "eway_bill_number": "EWB-SCOPE-1",
             "lines": [{"sku_code": "SC-SKU1", "qty_planned": 1}],
         },
         format="json",
@@ -311,6 +313,7 @@ def test_sm_can_create_transfer_from_own_store(scope_scaffold):
             "source_store": s["store_deo"].id,
             "destination_store": s["store_banka"].id,
             "transfer_type": "inter_store",
+            "eway_bill_number": "EWB-SCOPE-2",
             "lines": [{"sku_code": "SC-SKU1", "qty_planned": 1}],
         },
         format="json",
@@ -334,6 +337,7 @@ def test_sm_cannot_receive_transfer_at_outside_store(scope_scaffold):
         sku_code="SC-SKU1",
         qty_planned=1,
     )
+    approve_transfer(transfer)
     post_transfer_dispatch(transfer, {"SC-SKU1": 1}, user=s["admin_user"])
 
     c = _client(s["sm_user"])

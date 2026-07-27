@@ -35,6 +35,7 @@ const KIND_ROUTE: Record<string, string> = {
   writeoff: "/stock-count/writeoffs",
   vflip: "/stock/vflips",
   adjustment: "/stock-count/adjustments",
+  transfer: "/transfer",
 };
 
 /** Kinds with no page of their own — the approver reads them where the work is.

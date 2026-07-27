@@ -335,7 +335,7 @@ class TransferPTSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class StoreTransferReadSerializer(serializers.ModelSerializer):
+class StoreTransferReadSerializer(ApprovedDocumentSerializer):
     lines = StoreTransferLineSerializer(many=True, read_only=True)
     receipt = TransferReceiptSerializer(read_only=True)
     gap_closure = GapClosureReadSerializer(read_only=True)
@@ -415,6 +415,11 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             "dispatch_date",
             "dispatched_by",
             "created_by",
+            "created_by_name",
+            "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "created_at",
             "updated_at",
             "dispatch_mismatch",
@@ -465,17 +470,39 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         dst = data.get("destination_store")
         if src and dst and src == dst:
             raise serializers.ValidationError("Source and destination must differ.")
+        # Bihar ↔ Jharkhand is a supply between two distinct persons, so the
+        # carton cannot legally travel without an e-way bill. The screen has
+        # always said so; saying it here too means the API refuses as well, and
+        # a transfer created any other way cannot skip the number (#137).
+        cross_state = bool(src and dst and src.gstin_id != dst.gstin_id)
+        if cross_state and not (data.get("eway_bill_number") or "").strip():
+            raise serializers.ValidationError(
+                {"eway_bill_number": "E-way bill number is required for cross-state transfers."}
+            )
         return data
 
     def create(self, validated_data):
+        """Create the draft and put it straight in the Operations Head's inbox.
+
+        One transaction, at creation time, exactly as the other maker-checker
+        families do: a transfer is *born* waiting, so a maker can neither forget
+        to ask nor dispatch in the gap before asking (#137).
+
+        The plan is priced off the source store's books here rather than reusing
+        ``_create_with_approval``: a transfer's lines carry no cost until the
+        pieces are scanned out, so what the approver is shown is what the plan is
+        worth today, and a plan-less scan-to-build draft is worth "unknown" —
+        which the policy reads as escalate.
+        """
         lines_data = validated_data.pop("lines", [])
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
+        request = self.context.get("request", None)
+        user = request.user if request else None
         validated_data["created_by"] = user
-        transfer = StoreTransfer.objects.create(**validated_data)
-        for ld in lines_data:
-            StoreTransferLine.objects.create(transfer=transfer, **ld)
+        with transaction.atomic():
+            transfer = StoreTransfer.objects.create(**validated_data)
+            for ld in lines_data:
+                StoreTransferLine.objects.create(transfer=transfer, **ld)
+            request_document_approval(transfer, requested_by=user)
         return transfer
 
 
