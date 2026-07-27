@@ -78,10 +78,14 @@ These are properties of the business, independent of any design choice:
 
 ## Agent skills
 
-### Delivering an issue
+### The dev process
 
-`/deliver <issue#>` takes one `ready-for-agent` issue from containment check to an open PR:
-containment → branch → `/tdd` → `npm run ci` → `/simplify` → `/code-review` → live browser QA → PR.
+Feature work runs through the phase chain in `docs/agents/dev-process.md`, each phase invoked by hand and stopping for approval:
+`/feature-analyst` → grill (`/grilling`, money: `/grill-with-docs`) → `/contract-designer` → `/system-designer` → `/to-tickets` → `/implement` per issue → `/closeout`.
+Phases 0–3 write their artifacts to `docs/features/<slug>/`; small fixes skip the chain and go straight to `/implement`.
+
+`/implement <issue#>` takes one `ready-for-agent` issue to an open PR:
+spec check → branch → `/tdd` → `/code-review` + fix → `npm run ci` → live browser QA → PR.
 It stops at the PR and never merges. Run one issue per session; the dev stack is single-tenant
 (one Postgres, `:8001`, `:3000`), so only one session can hold the QA gate at a time.
 
@@ -108,6 +112,6 @@ Claude in Chrome drives Anand's own browser: open a **new tab**, never reuse one
 profile before testing a role (a pass that ran as whoever was signed in proves nothing), and never trigger
 an alert or confirm dialog - it freezes the session until he dismisses it by hand.
 
-The recipe (preconditions, flows, what to assert) is `.claude/skills/deliver/LIVE-QA.md`.
+The recipe (preconditions, flows, what to assert) is `.claude/skills/implement/LIVE-QA.md`.
 
 *(gstack is no longer installed in this project; its `/browse` rule was removed on 26 Jul 2026.)*
