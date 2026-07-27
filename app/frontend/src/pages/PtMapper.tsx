@@ -635,7 +635,7 @@ export function PtFileDetailPage() {
   const [ctxBrand, setCtxBrand] = useState("");
   const [ctxDate, setCtxDate] = useState("");
   const [showRerun, setShowRerun] = useState(false);
-  // What the last "Push into system" actually wrote — kept so the rows the post
+  // What the last "Push into system" actually wrote - kept so the rows the post
   // skipped for having no quantity are stated on screen, not left invisible.
   const [postResult, setPostResult] = useState<PostResultT | null>(null);
 

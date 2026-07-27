@@ -5,8 +5,8 @@ Exercises the rebuilt `post_pt_inward` / `reverse_pt_inward` directly against th
   * brand-owned (SOR/Consignment)    → NO payable, off-book Dr SOR_STOCK/Cr SOR_CONTRA;
   * stock is valued at **P RATE** (not the ex-GST BASIC);
   * P RATE > MRP blocks the post (nothing written);
-  * an unreadable NAG/QTY blocks the post too — the same strict-money rule on the
-    quantity axis — while a blank/zero quantity is skipped and *counted*;
+  * an unreadable NAG/QTY blocks the post too - the same strict-money rule on the
+    quantity axis - while a blank/zero quantity is skipped and *counted*;
   * the value GL always ties to zero (trial balance), and a reversal unwinds it.
 """
 
@@ -21,7 +21,7 @@ from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from ptmapper.models import PtFile, PtRow
 from stockledger.models import StockLedgerEntry, StockOnHand
 from stockledger.posting import PtPostingError, post_pt_inward, reverse_pt_inward
-from vendors.models import Booking, Vendor
+from vendors.models import Booking, BookingLine, Vendor
 
 
 @pytest.fixture
@@ -183,7 +183,7 @@ def test_p_rate_above_mrp_blocks_the_post(world):
 
 
 def test_unreadable_quantity_blocks_the_post(world):
-    """A NAG cell that exists but cannot be read is a quantity defect — it blocks the
+    """A NAG cell that exists but cannot be read is a quantity defect - it blocks the
     whole post exactly like an unreadable cost, instead of silently becoming qty 0."""
     booking = _booking(world, world["owned"], number="BK-QTY-1")
     pt = _pt_with_rows({"NAG": "2", "QTY": "2"}, {"NAG": "2 pcs", "QTY": "2 pcs"})
@@ -199,7 +199,7 @@ def test_unreadable_quantity_blocks_the_post(world):
 
 
 def test_blank_or_zero_quantity_rows_are_skipped_and_counted(world):
-    """Filler/summary rows carry no quantity — still skipped, but the post says how
+    """Filler/summary rows carry no quantity - still skipped, but the post says how
     many, so the drop is visible at the point of posting instead of invisible."""
     booking = _booking(world, world["owned"], number="BK-QTY-2")
     pt = _pt_with_rows(
@@ -217,7 +217,7 @@ def test_blank_or_zero_quantity_rows_are_skipped_and_counted(world):
 
 
 def test_thousands_separated_quantity_still_parses(world):
-    """`1,000` is a formatted number, not garbage — it must not block the post."""
+    """`1,000` is a formatted number, not garbage - it must not block the post."""
     booking = _booking(world, world["owned"], number="BK-QTY-3")
     pt = _pt_with_rows({"NAG": "1,000", "QTY": "1,000"})
 
@@ -225,6 +225,66 @@ def test_thousands_separated_quantity_still_parses(world):
 
     assert result["skipped_rows"] == 0
     assert StockLedgerEntry.objects.get(pt_file=pt).qty == 1000
+
+
+def test_unreadable_nag_falls_back_to_a_readable_qty(world):
+    """The NAG → QTY fallback survives: only a row with no readable quantity at all
+    blocks, so a junk NAG artifact beside a clean QTY still posts the right count."""
+    booking = _booking(world, world["owned"], number="BK-QTY-4")
+    pt = _pt_with_rows({"NAG": "2 pcs", "QTY": "3"})
+
+    result = post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert result["skipped_rows"] == 0
+    assert StockLedgerEntry.objects.get(pt_file=pt).qty == 3
+
+
+def test_negative_quantity_blocks_the_post(world):
+    """A PT brings goods in - a negative inward quantity is a data defect, not a
+    filler row, so it must not be quietly counted among the skipped."""
+    booking = _booking(world, world["owned"], number="BK-QTY-5")
+    pt = _pt_with_rows({"NAG": "-3", "QTY": "-3"})
+
+    with pytest.raises(PtPostingError) as caught:
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert "row 1" in str(caught.value)
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+    assert trial_balance() == 0
+
+
+def test_non_finite_mrp_is_refused_not_crashed(world):
+    """`inf` parses into a Decimal and slips past `cost > mrp`, then poisons the paise
+    conversion. It has to be refused as a bad price cell, like any other garbage."""
+    booking = _booking(world, world["owned"], number="BK-QTY-6")
+    pt = _pt_with_rows({"MRP": "inf"})
+
+    with pytest.raises(PtPostingError):
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+    assert trial_balance() == 0
+
+
+def test_booking_is_reconciled_from_the_ledger_and_unwound_on_reversal(world):
+    """Reconciliation follows the stock rows, not a re-read of the PT file, so the
+    reversal un-bumps exactly what the post bumped even with a filler row present."""
+    booking = _booking(world, world["owned"], number="BK-QTY-7")
+    line = BookingLine.objects.create(booking=booking, style_code="STYLE1", size="M", booked_qty=10)
+    pt = _pt_with_rows(
+        {"DESIGN": "STYLE1", "SIZE": "M", "NAG": "2", "QTY": "2"},
+        {"DESIGN": "STYLE1", "SIZE": "M", "NAG": "", "QTY": ""},
+    )
+
+    result = post_pt_inward(pt, world["actor"], booking=booking)
+    line.refresh_from_db()
+    assert result["reconciled_lines"] == 1
+    assert result["skipped_rows"] == 1
+    assert line.inwarded_qty == 2
+
+    reverse_pt_inward(pt, world["actor"])
+    line.refresh_from_db()
+    assert line.inwarded_qty == 0
 
 
 def test_reversal_unwinds_stock_payable_and_value_gl(world):
