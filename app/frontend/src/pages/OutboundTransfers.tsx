@@ -159,6 +159,7 @@ export interface TransferT {
   eway_bill_number: string;
   dispatch_date: string | null;
   dispatched_by: number | null;
+  dispatched_by_name: string;
   created_by: number | null;
   created_by_name: string;
   /** Stamped at dispatch from the approval — never typed (#137). */
@@ -941,8 +942,16 @@ export function TransferDetailPage() {
           )}
         </div>
         <div className="card section-card">
-          <p className="eyebrow">Date</p>
+          <p className="eyebrow">Raised</p>
           <h3 className="h3">{fmtDate(t.created_at)}</h3>
+          {/* Who actually let the stock go, and when — the other half of the
+              trail. The "Dispatcher" card above is the free-text person carrying
+              the carton, which is not the same question (#137). */}
+          {t.dispatch_date && (
+            <p className="lead" style={{ marginTop: 4 }} data-testid="dispatched-by">
+              Sent by <b>{t.dispatched_by_name || "—"}</b> on {fmtDate(t.dispatch_date)}
+            </p>
+          )}
         </div>
       </div>
 

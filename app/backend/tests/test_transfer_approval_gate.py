@@ -24,6 +24,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import ScopeType, User
 from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
+from approvals.services import display_name
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import StoreTransfer, StoreTransferLine
@@ -503,6 +504,12 @@ def test_dispatch_records_when_it_left_and_who_sent_it(gate):
     transfer = StoreTransfer.objects.get(pk=data["id"])
     assert transfer.dispatch_date is not None
     assert transfer.dispatched_by_id == g["sender"].pk
+
+    # And the screen can say so: a raw id the page cannot render is the same
+    # blank the store has always seen.
+    read = _client(g["ops"]).get(f"/api/outbound/transfers/{data['id']}").data
+    assert read["dispatch_date"] is not None
+    assert read["dispatched_by_name"] == display_name(g["sender"])
 
 
 # ---------------------------------------------------------------------------

@@ -347,6 +347,14 @@ class StoreTransferReadSerializer(ApprovedDocumentSerializer):
     qty_in_transit = serializers.SerializerMethodField()
     gap_state = serializers.SerializerMethodField()
     pt_generated_at = serializers.SerializerMethodField()
+    dispatched_by_name = serializers.SerializerMethodField()
+
+    def get_dispatched_by_name(self, obj: StoreTransfer) -> str:
+        """Who actually sent the pieces. Distinct from ``dispatcher_name``,
+        which is the free-text person carrying the carton — the trail wants the
+        user who pressed the button (#137)."""
+
+        return display_name(obj.dispatched_by)
 
     def get_pt_generated_at(self, obj: StoreTransfer) -> str | None:
         """When this transfer's PT was cut — the screen's cue that there is a
@@ -414,6 +422,7 @@ class StoreTransferReadSerializer(ApprovedDocumentSerializer):
             "eway_bill_number",
             "dispatch_date",
             "dispatched_by",
+            "dispatched_by_name",
             "created_by",
             "created_by_name",
             "approved_by",
