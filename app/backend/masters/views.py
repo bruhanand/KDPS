@@ -17,6 +17,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.textsearch import search_term, text_filter
 from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store
 
 # Re-exported: the gate moved to `masters.permissions` so the vendor master —
@@ -33,6 +34,14 @@ from masters.serializers import (
     StoreSerializer,
 )
 
+#: Master data lists (#106) — every one of them searches by name / code.
+STORE_SEARCH_FIELDS = ("code", "name")
+BRAND_SEARCH_FIELDS = ("code", "name")
+SEASON_SEARCH_FIELDS = ("code", "name")
+#: `Gstin` carries no name/code pair — the number itself, its state, and the
+#: legal entity it's registered under are the nearest equivalent.
+GSTIN_SEARCH_FIELDS = ("gstin", "state_name", "legal_entity__name", "legal_entity__code")
+
 # --- Stores --------------------------------------------------------------
 
 
@@ -41,7 +50,8 @@ class StoreListView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsMasterSteward]
 
     def get_queryset(self) -> Any:
-        return scoped_stores(self.request.user)
+        qs = scoped_stores(self.request.user)
+        return text_filter(qs, search_term(self.request), STORE_SEARCH_FIELDS)
 
 
 class LocationListView(generics.ListAPIView):
@@ -75,7 +85,10 @@ class StoreDetailView(generics.RetrieveUpdateAPIView):
 class BrandListView(generics.ListCreateAPIView):
     serializer_class = BrandSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
-    queryset = Brand.objects.filter(is_active=True)
+
+    def get_queryset(self) -> Any:
+        qs = Brand.objects.filter(is_active=True)
+        return text_filter(qs, search_term(self.request), BRAND_SEARCH_FIELDS)
 
 
 class BrandDetailView(generics.RetrieveUpdateAPIView):
@@ -90,7 +103,10 @@ class BrandDetailView(generics.RetrieveUpdateAPIView):
 class SeasonListView(generics.ListCreateAPIView):
     serializer_class = SeasonSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
-    queryset = Season.objects.all()
+
+    def get_queryset(self) -> Any:
+        qs = Season.objects.all()
+        return text_filter(qs, search_term(self.request), SEASON_SEARCH_FIELDS)
 
 
 class SeasonDetailView(generics.RetrieveUpdateAPIView):
@@ -105,7 +121,10 @@ class SeasonDetailView(generics.RetrieveUpdateAPIView):
 class GstinListView(generics.ListCreateAPIView):
     serializer_class = GstinSerializer
     permission_classes = [IsAuthenticated, IsMasterSteward]
-    queryset = Gstin.objects.select_related("legal_entity").filter(is_active=True)
+
+    def get_queryset(self) -> Any:
+        qs = Gstin.objects.select_related("legal_entity").filter(is_active=True)
+        return text_filter(qs, search_term(self.request), GSTIN_SEARCH_FIELDS)
 
 
 class GstinDetailView(generics.RetrieveUpdateAPIView):

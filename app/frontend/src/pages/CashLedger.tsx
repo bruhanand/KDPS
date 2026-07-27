@@ -5,6 +5,7 @@ import { ArrowDownCircle, ArrowUpCircle, Plus, RotateCcw, Wallet, X } from "luci
 import { useAuth } from "../auth/AuthContext";
 import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
 import { PageHeader } from "../components/PageHeader";
@@ -39,6 +40,8 @@ export default function CashLedger() {
   const [hasNext, setHasNext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [q, setQ] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ direction: "in", amount: "", account: "CASH", description: "" });
@@ -46,14 +49,17 @@ export default function CashLedger() {
 
   function loadAll() {
     api.get("/finledger/cash/summary").then((r) => setSummary(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/cash/entries?${q}`).then((r) => {
+    setEntriesLoading(true);
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (q.trim()) params.set("q", q.trim());
+    api.get(`/finledger/cash/entries?${params}`).then((r) => {
       setEntries(r.data.results);
       setCount(r.data.count);
       setHasNext(Boolean(r.data.next));
-    });
+    }).finally(() => setEntriesLoading(false));
   }
-  useEffect(loadAll, [page]);
+  useEffect(loadAll, [page, q]);
+  useEffect(() => setPage(1), [q]);
 
   async function submit() {
     setBusy(true);
@@ -136,8 +142,20 @@ export default function CashLedger() {
       )}
 
       <h3 className="h3" style={{ margin: "22px 0 8px" }}>All movements</h3>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search movements — doc number, party"
+        label="Search cash ledger entries"
+        testId="cl-entries-search"
+        noun="movement"
+        count={count}
+        loading={entriesLoading}
+      />
       {entries.length === 0 ? (
-        <div className="card section-card" data-testid="cl-entries-empty">No cash movements yet.</div>
+        <div className="card section-card" data-testid="cl-entries-empty">
+          {q ? `No movement matches “${q}”.` : "No cash movements yet."}
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="data" data-testid="cl-entries-table">

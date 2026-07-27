@@ -14,6 +14,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteReturnToBrand } from "../lib/outbound-rbac";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -93,7 +94,8 @@ export function RTVListPage() {
   const [params, setParams] = useSearchParams();
   const { user } = useAuth();
   const tab = params.get("type") === "seasonal" ? "seasonal" : "defective";
-  const { data, loading } = useList<RTVT>(`/outbound/rtvs?return_type=${tab}`);
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<RTVT>("/outbound/rtvs", { return_type: tab, q });
   const writable = canWriteReturnToBrand(user);
 
   function setTab(next: string) {
@@ -131,11 +133,24 @@ export function RTVListPage() {
         </button>
       </div>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search returns — doc number, brand"
+        label="Search returns to brand"
+        testId="rtv-search"
+        noun="return"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="rtv-empty">
-          No {RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} returns yet.
+          {q
+            ? `No ${RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} return matches “${q}”.`
+            : `No ${RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} returns yet.`}
         </div>
       ) : (
         <div className="table-wrap">

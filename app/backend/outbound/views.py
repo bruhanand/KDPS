@@ -702,6 +702,10 @@ def _rtvs(user: Any) -> Any:
     return scope_by_store(qs, user, "store_id")
 
 
+#: Return to Brand (#106) — the return's own number, and who it's going back to.
+RTV_SEARCH_FIELDS = ("doc_number", "brand__name", "vendor__name")
+
+
 class RTVListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -713,7 +717,9 @@ class RTVListCreateView(generics.ListCreateAPIView):
         rt = self.request.query_params.get("return_type")
         if rt:
             qs = qs.filter(return_type=rt)
-        return qs
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope + filters above already allow.
+        return text_filter(qs, search_term(self.request), RTV_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -784,6 +790,10 @@ def _adjustments(user: Any) -> Any:
     return scope_by_store(qs, user, "store_id")
 
 
+#: Adjustments (#106) — the document number, the reason code, and the store.
+ADJUSTMENT_SEARCH_FIELDS = ("doc_number", "reason", "store__name", "store__code")
+
+
 class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -791,7 +801,9 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return _filter_docstatus(_adjustments(self.request.user), self.request)
+        qs = _filter_docstatus(_adjustments(self.request.user), self.request)
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), ADJUSTMENT_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -860,6 +872,10 @@ def _writeoffs(user: Any) -> Any:
     return scope_by_store(qs, user, "store_id")
 
 
+#: Write-offs (#106) — the document number, the reason, and the store.
+WRITEOFF_SEARCH_FIELDS = ("doc_number", "reason", "store__name", "store__code")
+
+
 class WriteOffListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -867,7 +883,9 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return _filter_docstatus(_writeoffs(self.request.user), self.request)
+        qs = _filter_docstatus(_writeoffs(self.request.user), self.request)
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), WRITEOFF_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -939,6 +957,10 @@ def _vflips(user: Any) -> Any:
     return scope_by_store(qs, user, "store_id")
 
 
+#: V-Flips (#106) — the document number, the brand being flipped, and the store.
+VFLIP_SEARCH_FIELDS = ("doc_number", "original_brand__name", "store__name", "store__code")
+
+
 class VFlipListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -946,7 +968,9 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        return _filter_docstatus(_vflips(self.request.user), self.request)
+        qs = _filter_docstatus(_vflips(self.request.user), self.request)
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), VFLIP_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         if self.request.method == "POST":

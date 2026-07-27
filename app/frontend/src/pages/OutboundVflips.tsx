@@ -13,6 +13,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canFlipOwnership } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -78,7 +79,8 @@ interface BrandT { id: number; name: string; }
 
 export function VFlipListPage() {
   const { user } = useAuth();
-  const { data, loading } = useList<VFlipT>("/outbound/vflips");
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<VFlipT>("/outbound/vflips", { q });
   const writable = canFlipOwnership(user);
 
   return (
@@ -101,11 +103,24 @@ export function VFlipListPage() {
         </p>
       </div>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search V-flips — doc number, brand, store"
+        label="Search V-flips"
+        testId="vflip-search"
+        noun="V-flip"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="vflip-empty">
-          No V-flips yet. Create one to convert brand-owned stock to KDPS-owned.
+          {q
+            ? `No V-flip matches “${q}”.`
+            : "No V-flips yet. Create one to convert brand-owned stock to KDPS-owned."}
         </div>
       ) : (
         <div className="table-wrap">

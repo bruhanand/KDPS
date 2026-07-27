@@ -26,6 +26,7 @@ import {
 import { useAuth } from "../auth/AuthContext";
 import { Combobox } from "../components/Combobox";
 import { InboundQueueCard, useInboundQueue } from "../components/InboundQueueCard";
+import { ListSearchBar } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
 import { useList } from "../lib/hooks";
 import "./Booking.css";
@@ -130,9 +131,13 @@ interface GrnPickT {
   pt_files: { stage: string }[];
 }
 
-function PtFileTable({ files, empty }: { files: PtFileT[]; empty: string }) {
+function PtFileTable({ files, empty, searchTerm }: { files: PtFileT[]; empty: string; searchTerm?: string }) {
   if (files.length === 0) {
-    return <div className="card section-card" data-testid="pt-files-empty">{empty}</div>;
+    return (
+      <div className="card section-card" data-testid="pt-files-empty">
+        {searchTerm ? `No PT file matches “${searchTerm}”.` : empty}
+      </div>
+    );
   }
   return (
     <div className="table-wrap">
@@ -183,7 +188,7 @@ function fmtDate(iso: string): string {
 
 /** PT File Mapper — branded brand-PT → KDPS. Invoice-first entry (D3): pick the
  *  received invoice, then upload the brand PT so it is linked to that GRN. */
-function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) {
+function MapperTab({ files, reload, searchTerm }: { files: PtFileT[]; reload: () => void; searchTerm?: string }) {
   const navigate = useNavigate();
   const { data: grns } = useList<GrnPickT>("/inbound/grns?kind=branded");
   const vocab = useVocab();
@@ -345,25 +350,26 @@ function MapperTab({ files, reload }: { files: PtFileT[]; reload: () => void }) 
         </div>
       )}
 
-      <PtFileTable files={files} empty="No brand PT files mapped yet." />
+      <PtFileTable files={files} empty="No brand PT files mapped yet." searchTerm={searchTerm} />
     </>
   );
 }
 
 /** PT File Making — non-branded invoice → PT authoring. Hosts the "arrivals
  *  awaiting PT" work queue + the "Make PT file" button (moved off Stock Receive). */
-function MakingTab({ files }: { files: PtFileT[] }) {
+function MakingTab({ files, searchTerm }: { files: PtFileT[]; searchTerm?: string }) {
   const { queue } = useInboundQueue();
   return (
     <>
       {queue && <InboundQueueCard queue={queue} />}
-      <PtFileTable files={files} empty="No PT files made from arrivals yet." />
+      <PtFileTable files={files} empty="No PT files made from arrivals yet." searchTerm={searchTerm} />
     </>
   );
 }
 
 export function PtMapperPage() {
-  const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files");
+  const [q, setQ] = useState("");
+  const { data: files, loading, reload } = useList<PtFileT>("/ptmapper/files", { q });
   const { data: reviews } = useList<any>("/ptmapper/review?status=open");
   const { data: proposals } = useList<any>("/ptmapper/proposals?status=proposed");
   const [params, setParams] = useSearchParams();
@@ -418,12 +424,23 @@ export function PtMapperPage() {
         </button>
       </div>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search PT files — file name, brand, status"
+        label="Search PT files"
+        testId="pt-files-search"
+        noun="file"
+        count={tab === "mapper" ? brandFiles.length : makingFiles.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : tab === "mapper" ? (
-        <MapperTab files={brandFiles} reload={reload} />
+        <MapperTab files={brandFiles} reload={reload} searchTerm={q} />
       ) : (
-        <MakingTab files={makingFiles} />
+        <MakingTab files={makingFiles} searchTerm={q} />
       )}
     </div>
   );
@@ -1220,7 +1237,8 @@ interface ReviewT {
 }
 
 export function ReviewQueuePage() {
-  const { data: items, loading, reload } = useList<ReviewT>("/ptmapper/review?status=open");
+  const [q, setQ] = useState("");
+  const { data: items, loading, reload } = useList<ReviewT>("/ptmapper/review", { status: "open", q });
   const [vocab, setVocab] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
@@ -1238,10 +1256,24 @@ export function ReviewQueuePage() {
         Each entry is a raw brand value the tables don't know yet. Map it once — the engine remembers it for every future file.
       </p>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search the queue — raw value, dimension, status"
+        label="Search the unmapped queue"
+        testId="review-search"
+        noun="item"
+        count={items.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : items.length === 0 ? (
-        <div className="ok-note" data-testid="review-empty"><CheckCircle2 size={14} /> Queue is empty — every value maps to a KDPS value.</div>
+        <div className="ok-note" data-testid="review-empty">
+          <CheckCircle2 size={14} />{" "}
+          {q ? `No queue item matches “${q}”.` : "Queue is empty — every value maps to a KDPS value."}
+        </div>
       ) : (
         <div className="review-list" data-testid="review-list">
           {items.map((it) => (

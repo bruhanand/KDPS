@@ -44,6 +44,7 @@ from accounts.serializers import (
     UserProfileSerializer,
 )
 from approvals.models import ApprovalPolicy
+from core.textsearch import search_term, text_filter
 from masters.models import Brand, Store
 
 MAX_FAILURES = 5
@@ -268,11 +269,19 @@ class PendingAccessChangeMixin:
         )
 
 
+#: Users & Roles (#106) — name / code, same as every other master list.
+ROLE_SEARCH_FIELDS = ("code", "name")
+USER_SEARCH_FIELDS = ("username", "full_name")
+
+
 class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
-    queryset = Role.objects.all().order_by("name")
     access_resource = AccessChange.Resource.ROLE
+
+    def get_queryset(self) -> Any:
+        qs = Role.objects.all().order_by("name")
+        return text_filter(qs, search_term(self.request), ROLE_SEARCH_FIELDS)
 
 
 class RoleDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
@@ -288,11 +297,12 @@ class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
     access_resource = AccessChange.Resource.USER
 
     def get_queryset(self) -> Any:
-        return (
+        qs = (
             User.objects.select_related("role", "entity")
             .prefetch_related("stores", "brands")
             .order_by("username")
         )
+        return text_filter(qs, search_term(self.request), USER_SEARCH_FIELDS)
 
 
 class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):

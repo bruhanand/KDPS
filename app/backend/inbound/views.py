@@ -20,6 +20,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
 from core.documents import DocStatus, VoucherSeries
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
 from inbound.agents import read_invoice
 from inbound.models import Grn, GrnLine
@@ -235,19 +236,27 @@ def _booking_touches_stores(booking: Any, ids: list[int]) -> bool:
     return bool(effective & id_set)
 
 
+#: Receive/GRN (#106) — GRN number, who it was received from, whose goods they
+#: are. `booking__brand__name`, not `vendor__brands__name` — the latter is a
+#: to-many relation and `text_filter` must not span one.
+GRN_SEARCH_FIELDS = ("doc_number", "vendor__name", "booking__brand__name")
+
+
 class GrnListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GrnSerializer
 
     def get_queryset(self) -> Any:
-        qs = Grn.objects.select_related("store", "booking", "vendor").prefetch_related(
-            "lines", "pt_files"
-        )
+        qs = Grn.objects.select_related(
+            "store", "booking", "booking__brand", "vendor"
+        ).prefetch_related("lines", "pt_files")
         qs = scope_by_store(qs, self.request.user, "store_id")
         kind = self.request.query_params.get("kind")
         if kind in Grn.Kind.values:  # honour ?kind=branded|non_branded (else unfiltered)
             qs = qs.filter(kind=kind)
-        return qs
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope + filters above already allow.
+        return text_filter(qs, search_term(self.request), GRN_SEARCH_FIELDS)
 
     @transaction.atomic
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:

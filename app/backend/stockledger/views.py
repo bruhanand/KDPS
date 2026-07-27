@@ -32,6 +32,11 @@ class StockLedgerPagination(PageNumberPagination):
     max_page_size = 500
 
 
+#: Movement History (#106) — a document number, the style, or the barcode a
+#: person scans. `sku_code` *is* the barcode/SKU identity on this ledger.
+MOVEMENT_SEARCH_FIELDS = ("doc_number", "sku_code", "design")
+
+
 class StockLedgerListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = StockLedgerEntrySerializer
@@ -49,7 +54,9 @@ class StockLedgerListView(generics.ListAPIView):
         doc = self.request.query_params.get("doc_number")
         if doc:
             qs = qs.filter(doc_number=doc)
-        return qs
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope + filters above already allow.
+        return text_filter(qs, search_term(self.request), MOVEMENT_SEARCH_FIELDS)
 
 
 class StockLedgerSummaryView(APIView):

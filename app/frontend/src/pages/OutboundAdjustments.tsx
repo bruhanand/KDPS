@@ -12,6 +12,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -84,7 +85,8 @@ interface AdjT {
 
 export function AdjustmentListPage() {
   const { user } = useAuth();
-  const { data, loading } = useList<AdjT>("/outbound/adjustments");
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<AdjT>("/outbound/adjustments", { q });
   const writable = canWriteStockCount(user);
 
   return (
@@ -102,11 +104,24 @@ export function AdjustmentListPage() {
         }
       />
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search adjustments — doc number, reason, store"
+        label="Search adjustments"
+        testId="adjustment-search"
+        noun="adjustment"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="adjustment-empty">
-          No stock adjustments yet. Create one after a physical count.
+          {q
+            ? `No adjustment matches “${q}”.`
+            : "No stock adjustments yet. Create one after a physical count."}
         </div>
       ) : (
         <div className="table-wrap">
