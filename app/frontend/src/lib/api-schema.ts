@@ -84,12 +84,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_actor_policies_retrieve"];
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         put: operations["auth_admin_actor_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         patch: operations["auth_admin_actor_policies_partial_update"];
         trace?: never;
     };
@@ -100,8 +103,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_approval_policies_list"];
         put?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         post: operations["auth_admin_approval_policies_create"];
         delete?: never;
         options?: never;
@@ -116,12 +121,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_approval_policies_retrieve"];
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         put: operations["auth_admin_approval_policies_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         patch: operations["auth_admin_approval_policies_partial_update"];
         trace?: never;
     };
@@ -148,8 +156,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_roles_list"];
         put?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         post: operations["auth_admin_roles_create"];
         delete?: never;
         options?: never;
@@ -164,12 +174,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_roles_retrieve"];
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         put: operations["auth_admin_roles_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         patch: operations["auth_admin_roles_partial_update"];
         trace?: never;
     };
@@ -180,8 +193,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_users_list"];
         put?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         post: operations["auth_admin_users_create"];
         delete?: never;
         options?: never;
@@ -196,12 +211,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         get: operations["auth_admin_users_retrieve"];
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         put: operations["auth_admin_users_update"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
+        /** @description Every Setup write becomes a proposal a second administrator applies. */
         patch: operations["auth_admin_users_partial_update"];
         trace?: never;
     };
@@ -716,6 +734,35 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["masters_gstins_partial_update"];
+        trace?: never;
+    };
+    "/api/masters/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Every active location in the network, identity fields only — the list of
+         *     places stock may be *sent* to.
+         *
+         *     Deliberately unscoped, unlike `StoreListView` above. That one answers "which
+         *     units may I operate on", which is the right question for the *source* of a
+         *     transfer and the wrong one for its *destination*: sending a carton somewhere
+         *     claims no rights at the place it is going. Scoping both alike left every
+         *     store person with an empty destination picker and no way to start a transfer
+         *     at all (#147). What guards a store sending anywhere is the e-way bill the
+         *     screen demands across registrations, plus the Operations Head approval gate
+         *     (PRD #104) — a picker is not a permission and must not become one.
+         */
+        get: operations["masters_locations_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/masters/seasons": {
@@ -2465,6 +2512,28 @@ export interface components {
             name: string;
             pan?: string;
             is_active?: boolean;
+        };
+        /**
+         * @description A place in the network, as a picker needs to name it (#147).
+         *
+         *     Deliberately thinner than `StoreSerializer`: identity, and the registration
+         *     a transfer's tax treatment turns on. Nothing costed, nothing a caller's
+         *     scope exists to keep from them.
+         *
+         *     `gstin` is the registration's row id, not the number — enough to ask "is
+         *     this the same distinct person?", which is exactly the question
+         *     `StoreTransfer.save()` asks when it sets `is_cross_state`. The state travels
+         *     alongside it because that is what the screen *says* out loud ("Bihar ↔
+         *     Jharkhand"); the two must not be allowed to drift apart.
+         */
+        Location: {
+            readonly id: number;
+            code: string;
+            name: string;
+            store_type?: components["schemas"]["StoreTypeEnum"];
+            gstin: number;
+            readonly state_code: string;
+            readonly state_name: string;
         };
         /**
          * @description * `store_pickup` - Brand collects from store (Madura)
@@ -4839,6 +4908,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Gstin"];
+                };
+            };
+        };
+    };
+    masters_locations_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Location"][];
                 };
             };
         };

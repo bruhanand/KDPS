@@ -19,6 +19,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canCloseTransferGap, canWriteTransfer } from "../lib/outbound-rbac";
+import { destinationOptions, isCrossState, type LocationT } from "../lib/transfer-locations";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import { ListSearchBar } from "../components/SearchBox";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
@@ -77,7 +78,6 @@ interface StoreT {
   name: string;
   store_type: string;
   state_name: string;
-  gstin: number | null;
 }
 
 interface TransferLineT {
@@ -374,7 +374,10 @@ const emptyLine = (): DraftPlanLine => ({ sku_code: "", qty_planned: "" });
 export function TransferNewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Two lists on purpose (#147): the source is what this person may operate on,
+  // the destination is anywhere in the network. See `lib/transfer-locations`.
   const { data: stores } = useList<StoreT>("/masters/stores");
+  const { data: locations } = useList<LocationT>("/masters/locations");
 
   const storeLocked = user?.scope_type === "store" && (user?.stores?.length ?? 0) >= 1;
   const lockedStore = storeLocked ? user!.stores[0] : null;
@@ -392,14 +395,16 @@ export function TransferNewPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Determine cross-state from selected stores
-  const isCrossState = useMemo(() => {
-    if (!sourceId || !destId) return false;
-    const src = stores.find((s) => String(s.id) === sourceId);
-    const dst = stores.find((s) => String(s.id) === destId);
-    if (!src || !dst) return false;
-    return src.gstin !== dst.gstin;
-  }, [sourceId, destId, stores]);
+  // Cross-state is read off the network list, since that is the only one that
+  // holds both ends for a store-scoped user.
+  const crossState = useMemo(
+    () => isCrossState(locations, sourceId, destId),
+    [locations, sourceId, destId],
+  );
+  const destinations = useMemo(
+    () => destinationOptions(locations, sourceId),
+    [locations, sourceId],
+  );
 
   function setLine(i: number, key: keyof DraftPlanLine, val: string) {
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, [key]: val } : l)));
@@ -410,7 +415,7 @@ export function TransferNewPage() {
     if (!sourceId) { setError("Select a source store."); return; }
     if (!destId) { setError("Select a destination store."); return; }
     if (sourceId === destId) { setError("Source and destination must differ."); return; }
-    if (isCrossState && !ewayBill.trim()) { setError("E-way bill number is required for cross-state transfers."); return; }
+    if (crossState && !ewayBill.trim()) { setError("E-way bill number is required for cross-state transfers."); return; }
     const payloadLines = lines
       .filter((l) => l.sku_code && Number(l.qty_planned) > 0)
       .map((l) => ({ sku_code: l.sku_code.trim(), qty_planned: Number(l.qty_planned) }));
@@ -469,8 +474,8 @@ export function TransferNewPage() {
             <label>Destination store / warehouse</label>
             <select className="select" value={destId} onChange={(e) => setDestId(e.target.value)} data-testid="transfer-dest-select">
               <option value="">Select destination…</option>
-              {stores.filter((s) => String(s.id) !== sourceId).map((s) => (
-                <option key={s.id} value={s.id}>{s.code} · {s.name} {s.store_type === "warehouse" ? "(WH)" : ""}</option>
+              {destinations.map((l) => (
+                <option key={l.id} value={l.id}>{l.code} · {l.name} {l.store_type === "warehouse" ? "(WH)" : ""}</option>
               ))}
             </select>
           </div>
@@ -491,7 +496,7 @@ export function TransferNewPage() {
             </select>
           </div>
         </div>
-        {isCrossState && (
+        {crossState && (
           <div className="warn-note" style={{ marginTop: 14 }} data-testid="cross-state-warning">
             <AlertTriangle size={14} style={{ verticalAlign: "middle", marginRight: 6 }} />
             Cross-state transfer (Bihar ↔ Jharkhand) — <b>E-way bill is required</b>.
@@ -523,7 +528,7 @@ export function TransferNewPage() {
             <label>Expected arrival</label>
             <input className="input" value={expectedArrival} onChange={(e) => setExpectedArrival(e.target.value)} placeholder="e.g. Tomorrow by 2 PM" data-testid="transfer-expected-arrival" />
           </div>
-          {isCrossState && (
+          {crossState && (
             <div className="field">
               <label>E-way bill number *</label>
               <input className="input" value={ewayBill} onChange={(e) => setEwayBill(e.target.value)} placeholder="Required for cross-state" data-testid="transfer-eway-bill" />

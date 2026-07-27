@@ -48,6 +48,28 @@ class StoreSerializer(serializers.ModelSerializer):
         ]
 
 
+class LocationSerializer(serializers.ModelSerializer):
+    """A place in the network, as a picker needs to name it (#147).
+
+    Deliberately thinner than `StoreSerializer`: identity, and the registration
+    a transfer's tax treatment turns on. Nothing costed, nothing a caller's
+    scope exists to keep from them.
+
+    `gstin` is the registration's row id, not the number — enough to ask "is
+    this the same distinct person?", which is exactly the question
+    `StoreTransfer.save()` asks when it sets `is_cross_state`. The state travels
+    alongside it because that is what the screen *says* out loud ("Bihar ↔
+    Jharkhand"); the two must not be allowed to drift apart.
+    """
+
+    state_name = serializers.CharField(source="gstin.state_name", read_only=True)
+    state_code = serializers.CharField(source="gstin.state_code", read_only=True)
+
+    class Meta:
+        model = Store
+        fields = ["id", "code", "name", "store_type", "gstin", "state_code", "state_name"]
+
+
 class SeasonSerializer(serializers.ModelSerializer):
     class Meta:
         model = Season
