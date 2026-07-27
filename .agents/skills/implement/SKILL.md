@@ -36,9 +36,10 @@ Two rounds, then [ESCALATION.md](ESCALATION.md) - a finding that survives two ho
 
 ## Live QA
 
-QA what you actually built in a real browser, following [LIVE-QA.md](LIVE-QA.md).
+Send a **Sonnet** subagent, synchronous, to QA what you actually built in a real browser, following [LIVE-QA.md](LIVE-QA.md). Give it the issue's acceptance criteria, the branch name, and the path to LIVE-QA.md.
+Ask it to return in under 300 words: pass or fail per flow, and for each fail what it clicked, what it expected, what happened, and the network or console line that proves it - screenshots referenced by path, never pasted.
 The dev stack is single-tenant (one Postgres, `:8001`, `:3000`); if another session holds it, say so and wait.
-A failed flow: fix, re-drive only the failed flows; two re-drives at most, then [ESCALATION.md](ESCALATION.md).
+A failed flow: fix it yourself, then send a **fresh** Sonnet subagent to re-drive only the failed flows. Two re-drives at most, then [ESCALATION.md](ESCALATION.md).
 
 ## Pull request
 
