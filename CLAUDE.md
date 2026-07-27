@@ -85,7 +85,8 @@ Feature work runs through the phase chain in `docs/agents/dev-process.md`, each 
 Phases 0–3 write their artifacts to `docs/features/<slug>/`; small fixes skip the chain and go straight to `/implement`.
 
 `/implement <issue#>` takes one `ready-for-agent` issue to an open PR:
-spec check → branch → `/tdd` → `/code-review` + fix → `npm run ci` → live browser QA → PR.
+spec check → branch → `/tdd` → `/code-review` + fix → live browser QA → push (triggers cloud CI) → PR.
+The full local `npm run ci` gate is not run as part of this flow - only cloud CI, at push/PR time - to keep the loop fast; run it by hand if you want the stricter local gate.
 It stops at the PR and never merges. Run one issue per session; the dev stack is single-tenant
 (one Postgres, `:8001`, `:3000`), so only one session can hold the QA gate at a time.
 

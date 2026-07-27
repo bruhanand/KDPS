@@ -25,7 +25,7 @@ Read the issue with its comments and check three things before starting; if any 
 Work on a branch off fresh `main`, commit in small honest steps, and never `git stash` - the working tree may be shared with other sessions.
 Use /tdd at the seams the spec names; prefer an existing seam, fewest seams wins.
 Money paths: the contract's postings section is the design - every posting goes through `post_entries`; if the design is not locked, stop and say so.
-While working, check only what you touched (the one test file, mypy, tsc); the full gate runs once, at the end.
+While working, check only what you touched (the one test file, mypy, tsc) - that is the only local check; the full `npm run ci` suite does not run as part of this flow.
 
 ## Review and fix
 
@@ -34,15 +34,16 @@ Fix every Spec finding, or record a deliberate deviation and its reason in the P
 Fix every critical Correctness & Safety finding and every hard Standards violation; name the judgement-call smells you consciously leave.
 Two rounds, then [ESCALATION.md](ESCALATION.md) - a finding that survives two honest fix attempts is telling you something about the design, and money always goes back to the human.
 
-## Gate and live QA
+## Live QA
 
-`npm run ci` is the acceptance gate and runs once, at the end.
-Green means green - cloud CI runs a subset and does not substitute.
-Then QA what you actually built in a real browser, following [LIVE-QA.md](LIVE-QA.md).
+QA what you actually built in a real browser, following [LIVE-QA.md](LIVE-QA.md).
 The dev stack is single-tenant (one Postgres, `:8001`, `:3000`); if another session holds it, say so and wait.
-A failed flow: fix, re-run the gate, re-drive only the failed flows; two re-drives at most, then [ESCALATION.md](ESCALATION.md).
+A failed flow: fix, re-drive only the failed flows; two re-drives at most, then [ESCALATION.md](ESCALATION.md).
 
 ## Pull request
 
-Open a PR against `main`: what changed in plain language, gate results, review findings and what was fixed, QA flows driven with screenshot paths, deliberate deviations, anything a human must check by hand.
+Push the branch and open a PR against `main`. The push alone triggers cloud CI (`.github/workflows/ci.yml`) - it runs on GitHub, not locally; do not wait for it before opening the PR.
+PR body: what changed in plain language, review findings and what was fixed, QA flows driven with screenshot paths, deliberate deviations, anything a human must check by hand.
 Comment the same summary on the issue and stop - the PR stays open, the issue stays open, nothing merges, nothing deploys.
+
+Cloud CI is lighter than the full local `npm run ci` (it skips ruff, mypy strict, import-linter, and the migration check) - that trade is deliberate, for speed. Run `npm run ci` yourself only if you want the stricter local gate; it is not part of this flow.
