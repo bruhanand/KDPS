@@ -5,6 +5,8 @@ Exercises the rebuilt `post_pt_inward` / `reverse_pt_inward` directly against th
   * brand-owned (SOR/Consignment)    → NO payable, off-book Dr SOR_STOCK/Cr SOR_CONTRA;
   * stock is valued at **P RATE** (not the ex-GST BASIC);
   * P RATE > MRP blocks the post (nothing written);
+  * an unreadable NAG/QTY blocks the post too — the same strict-money rule on the
+    quantity axis — while a blank/zero quantity is skipped and *counted*;
   * the value GL always ties to zero (trial balance), and a reversal unwinds it.
 """
 
@@ -97,6 +99,29 @@ def _pt_with_row(*, prate="100", basic="80", mrp="200", qty="2", design="STYLE1"
     return pt
 
 
+def _pt_with_rows(*rows: dict):
+    """A sent PT file whose rows are the given overrides on top of a valued row."""
+    pt = PtFile.objects.create(
+        original_filename="test.xlsx", draft_stage=PtFile.DraftStage.SENT, row_count=len(rows)
+    )
+    for line_no, overrides in enumerate(rows, start=1):
+        data = {
+            "BARCODE": f"B{line_no}",
+            "DESIGN": f"STYLE{line_no}",
+            "SIZE": "M",
+            "BRAND": "X",
+            "SEASON": "SS26",
+            "P RATE": "100",
+            "BASIC": "80",
+            "MRP": "200",
+            "QTY": "2",
+            "NAG": "2",
+        }
+        data.update(overrides)
+        PtRow.objects.create(pt_file=pt, line_no=line_no, data=data)
+    return pt
+
+
 def test_owned_brand_raises_payable_with_balanced_inventory_gl(world):
     booking = _booking(world, world["owned"], number="BK-OWNED-1")
     pt = _pt_with_row(prate="100", mrp="200", qty="2")
@@ -155,6 +180,51 @@ def test_p_rate_above_mrp_blocks_the_post(world):
     assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
     assert trial_balance() == 0
     assert not VendorLedgerEntry.objects.filter(pt_file=pt).exists()
+
+
+def test_unreadable_quantity_blocks_the_post(world):
+    """A NAG cell that exists but cannot be read is a quantity defect — it blocks the
+    whole post exactly like an unreadable cost, instead of silently becoming qty 0."""
+    booking = _booking(world, world["owned"], number="BK-QTY-1")
+    pt = _pt_with_rows({"NAG": "2", "QTY": "2"}, {"NAG": "2 pcs", "QTY": "2 pcs"})
+
+    with pytest.raises(PtPostingError) as caught:
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert "row 2" in str(caught.value)
+    # all-or-none: the good row didn't land either
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+    assert trial_balance() == 0
+    assert not VendorLedgerEntry.objects.filter(pt_file=pt).exists()
+
+
+def test_blank_or_zero_quantity_rows_are_skipped_and_counted(world):
+    """Filler/summary rows carry no quantity — still skipped, but the post says how
+    many, so the drop is visible at the point of posting instead of invisible."""
+    booking = _booking(world, world["owned"], number="BK-QTY-2")
+    pt = _pt_with_rows(
+        {"NAG": "2", "QTY": "2"},
+        {"NAG": "", "QTY": ""},
+        {"NAG": "0", "QTY": "0"},
+    )
+
+    result = post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert result["entries"] == 1
+    assert result["skipped_rows"] == 2
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 1
+    assert trial_balance() == 0
+
+
+def test_thousands_separated_quantity_still_parses(world):
+    """`1,000` is a formatted number, not garbage — it must not block the post."""
+    booking = _booking(world, world["owned"], number="BK-QTY-3")
+    pt = _pt_with_rows({"NAG": "1,000", "QTY": "1,000"})
+
+    result = post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert result["skipped_rows"] == 0
+    assert StockLedgerEntry.objects.get(pt_file=pt).qty == 1000
 
 
 def test_reversal_unwinds_stock_payable_and_value_gl(world):
