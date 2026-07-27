@@ -24,7 +24,7 @@ KDPS Lifestyle Pvt Ltd — a multi-brand Indian fashion retailer (Bihar + Jharkh
 2. **Documents write ledgers; ledgers are never hand-edited.** Fix with a correction document, never an edit.
 3. **Master data lives in one place; documents copy (snapshot) it.** A later master edit never rewrites yesterday's document.
 4. **Every fact has exactly one owner.** Stock→stock ledger; sale→POS; accounting/GST→Tally; offers→offer rulebook.
-5. **Flag, never block.** A mismatch raises a problem item for its owner; the counter keeps working unless truly dangerous. *For money, "truly dangerous" is defined:* a stock movement the books cannot price is **refused**, never posted at zero — a flag is a visible approximation, a zero-value posting is an invisible wrong answer.
+5. **Flag, never block.** A mismatch raises a problem item for its owner; the counter keeps working unless truly dangerous. *For money, "truly dangerous" is defined:* a stock movement the books cannot price **or cannot count** is **refused**, never posted at zero - a flag is a visible approximation, a zero-value or zero-quantity posting is an invisible wrong answer. (The quantity half was ruled in on 27 Jul 2026, issue #122: the same decision extended to the same document.)
 6. **Calculated numbers are not typed by hand.** Profit, age, MRP come from formulas.
 7. **Outside systems need written rules + daily checks.** POS, Tally, banks, WhatsApp: documented contract + matching key + daily reconcile.
 8. **AI only reads and suggests.** Never writes stock, vendor balance, cash, or Tally.

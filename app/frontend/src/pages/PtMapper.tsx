@@ -439,6 +439,12 @@ interface PtRowT {
   // hint so a steward can see what the file actually said behind a mapped cell.
   raw: Record<string, any>;
 }
+// What `POST /ptmapper/files/{id}/post` reports about the inward it just wrote.
+interface PostResultT {
+  doc_number: string;
+  entries: number;
+  skipped_rows: number;
+}
 interface PtFileDetailT extends PtFileT {
   meta: {
     sheet?: string; header_row?: number; source_rows?: number; headers?: string[];
@@ -629,9 +635,13 @@ export function PtFileDetailPage() {
   const [ctxBrand, setCtxBrand] = useState("");
   const [ctxDate, setCtxDate] = useState("");
   const [showRerun, setShowRerun] = useState(false);
+  // What the last "Push into system" actually wrote - kept so the rows the post
+  // skipped for having no quantity are stated on screen, not left invisible.
+  const [postResult, setPostResult] = useState<PostResultT | null>(null);
 
   function load() {
     setLoading(true);
+    setPostResult(null); // the page is reused across files - never carry one file's count onto another
     api.get(`/ptmapper/files/${id}`).then((r) => {
       setFile(r.data);
       setCtxBrand(r.data?.meta?.context?.brand ?? "");
@@ -721,6 +731,7 @@ export function PtFileDetailPage() {
     try {
       const { data } = await api.post(`/ptmapper/files/${id}/${path}`, body ?? {});
       setFile(data);
+      setPostResult(data.post_result ?? null);
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {
@@ -1010,6 +1021,11 @@ export function PtFileDetailPage() {
 
       {error && <div className="warn-note" data-testid="ptfile-action-error">{error}</div>}
       {priceNote && <div className="ok-note" data-testid="ptfile-price-note"><CheckCircle2 size={14} /> {priceNote}</div>}
+      {postResult && postResult.skipped_rows > 0 && (
+        <div className="warn-note" data-testid="ptfile-skipped-rows-note">
+          <AlertTriangle size={14} /> {postResult.entries} row(s) posted into stock · {postResult.skipped_rows} row(s) carried no quantity and were not stocked. Check they really were filler or summary lines.
+        </div>
+      )}
 
       {file.source === "invoice" && file.stage !== "posted" && file.stage !== "reversed" && (
         <AuthoringPanel
