@@ -641,6 +641,7 @@ export function PtFileDetailPage() {
 
   function load() {
     setLoading(true);
+    setPostResult(null); // the page is reused across files - never carry one file's count onto another
     api.get(`/ptmapper/files/${id}`).then((r) => {
       setFile(r.data);
       setCtxBrand(r.data?.meta?.context?.brand ?? "");

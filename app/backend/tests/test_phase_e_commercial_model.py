@@ -239,6 +239,56 @@ def test_unreadable_nag_falls_back_to_a_readable_qty(world):
     assert StockLedgerEntry.objects.get(pt_file=pt).qty == 3
 
 
+def test_a_clean_zero_does_not_excuse_an_unreadable_cell(world):
+    """The NAG → QTY fallback rescues a row that has a *real* quantity elsewhere. An
+    explicit 0 is not that: it cannot vouch for a cell we already failed to read, so
+    the row still blocks instead of passing as a filler line."""
+    booking = _booking(world, world["owned"], number="BK-QTY-8")
+    pt = _pt_with_rows({"NAG": "-3", "QTY": "0"})
+
+    with pytest.raises(PtPostingError) as caught:
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert "row 1" in str(caught.value)
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+
+
+def test_a_leading_zero_quantity_still_wins_over_a_later_column(world):
+    """A clean NAG of 0 with nothing dubious beside it keeps its old meaning: the
+    first readable column settles the row, and this one says there is no stock."""
+    booking = _booking(world, world["owned"], number="BK-QTY-9")
+    pt = _pt_with_rows({"NAG": "0", "QTY": "2"})
+
+    result = post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert result["entries"] == 0
+    assert result["skipped_rows"] == 1
+
+
+def test_fractional_quantity_blocks_the_post(world):
+    """Stock moves in whole pieces. `2.9` truncating to 2 would lose 0.9 of a unit
+    with nothing said, and `0.4` would be reported as a row that carried none."""
+    booking = _booking(world, world["owned"], number="BK-QTY-10")
+    pt = _pt_with_rows({"NAG": "2.9", "QTY": "2.9"})
+
+    with pytest.raises(PtPostingError):
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+
+
+def test_absurdly_large_quantity_is_refused_not_crashed(world):
+    """A number the ledger's own quantity column cannot hold is a bad cell. It has to
+    be refused up front, not raised as a database error after the voucher is minted."""
+    booking = _booking(world, world["owned"], number="BK-QTY-11")
+    pt = _pt_with_rows({"NAG": "1E30", "QTY": "1E30"})
+
+    with pytest.raises(PtPostingError):
+        post_pt_inward(pt, world["actor"], booking=booking)
+
+    assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
+
+
 def test_negative_quantity_blocks_the_post(world):
     """A PT brings goods in - a negative inward quantity is a data defect, not a
     filler row, so it must not be quietly counted among the skipped."""

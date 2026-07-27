@@ -41,6 +41,10 @@ from stockledger.models import StockLedgerEntry, StockOnHand
 WAREHOUSE_CODE = "RAN-WH"
 DOC_TYPE = "PT"
 OWNED = Brand.Ownership.OWNED
+# What `StockLedgerEntry.qty` (a Postgres integer column) can actually hold. A bigger
+# number is a bad cell, not a quantity, and must be refused before a voucher is minted
+# rather than blowing up as a database error afterwards.
+MAX_LEDGER_QTY = 2_147_483_647
 
 
 class PtPostingError(Exception):
@@ -100,10 +104,12 @@ def _row_qty(data: dict, line_no: int) -> int:
     """Quantity from NAG, falling back to QTY. A blank cell means "no quantity here"
     and yields 0 - the caller skips such a row and counts it.
 
-    A cell that *has* a value but yields no number anywhere raises: strict money on
-    the quantity axis, the same rule the cost side already follows. It must never
-    become a silent 0 that drops the line from the stock ledger. A negative inward
-    quantity is unreadable in the same sense - a PT brings goods in."""
+    A cell that *has* a value the ledger cannot take raises: strict money on the
+    quantity axis, the same rule the cost side already follows. It must never become
+    a silent 0 that drops the line from the stock ledger. Unreadable means garbage
+    text, but also a negative (a PT brings goods in), a fraction (stock moves in whole
+    pieces) and anything too large for the ledger's own quantity column - each of
+    those otherwise ends as a dropped or truncated line nobody is told about."""
     unreadable: list[str] = []
     for key in ("NAG", "QTY"):
         raw = data.get(key)
@@ -111,14 +117,23 @@ def _row_qty(data: dict, line_no: int) -> int:
         if not text:  # blank / whitespace-only cell - genuinely no quantity
             continue
         try:
-            qty = int(Decimal(text))
+            qty = Decimal(text)
         except (ArithmeticError, ValueError):
             unreadable.append(f"{key} = {raw!r}")
             continue
-        if qty < 0:
-            unreadable.append(f"{key} = {raw!r} (negative)")
+        # `inf` is integral by `to_integral_value`, so it needs its own guard.
+        if not qty.is_finite() or qty != qty.to_integral_value():
+            unreadable.append(f"{key} = {raw!r}")
             continue
-        return qty
+        if qty < 0 or qty > MAX_LEDGER_QTY:
+            unreadable.append(f"{key} = {raw!r} (out of range)")
+            continue
+        if qty > 0:
+            return int(qty)  # a real quantity - it settles the row
+        if not unreadable:
+            return 0  # a clean explicit zero and nothing dubious seen: a filler row
+        # An explicit zero cannot vouch for a cell we already failed to read, so keep
+        # looking for a real quantity and fall through to the raise if there is none.
     if unreadable:
         raise PtPostingError(f"row {line_no}: unreadable quantity cell ({', '.join(unreadable)})")
     return 0
