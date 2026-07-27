@@ -80,7 +80,7 @@ def _outbound_scaffold(db):
         return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(name="Test Vendor", code="tvnd")
-    role = Role.objects.create(code="test-admin", name="Test Admin")
+    role = Role.objects.create(code="accounts", name="Accounts")
     user = User.objects.create_user(
         username="outtest", password=TEST_PASSWORD, role=role, entity=entity, scope_type="all"
     )

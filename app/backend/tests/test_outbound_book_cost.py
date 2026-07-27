@@ -138,10 +138,10 @@ def books(db):
             scope_type=ScopeType.ALL,
         )
 
-    # The warehouse is the one role that makes all four document families under
-    # the section gates (#94): `return_to_brand: operate`, `stock_count: operate`
-    # and `stock: manage`. Owner checks, and is never the maker.
+    # Warehouse makes each draft; Accounts executes the approved V-flip; Owner
+    # checks. These remain three different people.
     maker = _user("bc_maker", "warehouse")
+    executor = _user("bc_executor", "accounts")
     checker = _user("bc_checker", "owner")
 
     for doc_type in ["WRO", "VFL", "ADJ", "RTV", "STO"]:
@@ -165,6 +165,7 @@ def books(db):
         "brand_sor": brand_sor,
         "vendor": vendor,
         "maker": maker,
+        "executor": executor,
         "checker": checker,
     }
 
@@ -510,7 +511,7 @@ def test_vflip_posts_both_legs_and_the_gl_reclass(books):
     assert create.data["lines"][0]["unit_cost_paise"] == AVERAGE_COST
 
     _approve(books, "vflip", create.data["id"])
-    submit = _client(books["maker"]).post(f"/api/outbound/vflips/{create.data['id']}/submit")
+    submit = _client(books["executor"]).post(f"/api/outbound/vflips/{create.data['id']}/submit")
     assert submit.status_code == 200, submit.data
     doc_number = submit.data["doc_number"]
 

@@ -21,6 +21,12 @@ SEEDED_POLICIES = (
         ["warehouse", "data_steward"],
         "Price PTs and resolve mapping review items.",
     ),
+    (
+        "outbound.execute_vflip",
+        "Execute a V-flip",
+        ["accounts", "owner"],
+        "Post an approved ownership flip and its value entries.",
+    ),
 )
 
 

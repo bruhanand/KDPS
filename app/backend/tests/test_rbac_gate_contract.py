@@ -122,7 +122,6 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         f"/api/outbound/writeoffs/{ABSENT}/request-approval",
     ),
     ("vflip create", "stock", CAP_MANAGE, "post", "/api/outbound/vflips"),
-    ("vflip submit", "stock", CAP_MANAGE, "post", f"/api/outbound/vflips/{ABSENT}/submit"),
     (
         "vflip ask again",
         "stock",
@@ -197,7 +196,8 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
 
     Accounts holds ``view`` on transfer, stock count, return to brand and stock,
     and ``manage`` on money alone. It must not create, submit, dispatch, receive,
-    convert ownership or destroy stock on any of them.
+    create an ownership flip or destroy stock on any of them. Executing an
+    already-approved V-flip is a separate stored actor policy.
     """
     client = _client(_user("acc", _role("accounts")))
     for label, _section, _minimum, method, path in GATED_ENDPOINTS:
@@ -209,6 +209,18 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
             assert status != 403, label
         else:
             assert status == 403, label
+
+
+@pytest.mark.parametrize(
+    ("role_code", "allowed"),
+    [("accounts", True), ("owner", True), ("warehouse", False), ("it_admin", False)],
+)
+def test_vflip_execution_uses_the_stored_actor_policy(db, role_code, allowed):
+    client = _client(_user(f"vflip_execute_{role_code}", _role(role_code)))
+
+    response = client.post(f"/api/outbound/vflips/{ABSENT}/submit", {}, format="json")
+
+    assert (response.status_code != 403) is allowed
 
 
 def test_the_two_store_roles_get_identical_answers_on_outbound(db):
@@ -376,6 +388,7 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 #: decision, which is exactly what the test is here to force.
 EXPECTED_EXCEPTIONS = {
     "accounts.access_administrators_floor",
+    "accounts.head_office_value_actors_floor",
 }
 
 

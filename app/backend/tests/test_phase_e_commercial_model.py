@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from accounts.models import User
+from accounts.models import Role, User
 from core.gl import GLAccount, account_balance, trial_balance
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
@@ -45,10 +45,12 @@ def world(db):
         return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(code="v-abfrl", name="ABFRL")
+    accounts_role = Role.objects.create(code="accounts", name="Accounts")
     actor = User.objects.create(
         username="phase-e-head-office",
         full_name="Phase E Head Office",
         scope_type="all",
+        role=accounts_role,
     )
     return {
         "wh": wh,

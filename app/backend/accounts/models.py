@@ -20,6 +20,7 @@ from django.db import models
 from django.utils import timezone
 
 from accounts.managers import UserManager
+from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
 from core.base import TimeStampedModel
 
 # Legacy nav groups — the five architecture layers that named the old sidebar.
@@ -173,6 +174,11 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     def __str__(self) -> str:
         return self.full_name or self.username
+
+    @property
+    def may_post_pt_or_vflip_floor(self) -> bool:
+        """Immutable segregation-of-duties answer consumed by the GL engine."""
+        return getattr(self.role, "code", "") in HEAD_OFFICE_VALUE_ACTORS
 
 
 class LoginAttempt(models.Model):

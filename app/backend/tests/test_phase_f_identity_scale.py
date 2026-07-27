@@ -43,10 +43,12 @@ def world(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
     vendor = Vendor.objects.create(code="v1", name="V1")
+    accounts_role = Role.objects.create(code="accounts", name="Accounts")
     actor = User.objects.create(
         username="phase-f-head-office",
         full_name="Phase F Head Office",
         scope_type="all",
+        role=accounts_role,
     )
     return {
         "entity": entity,
@@ -101,10 +103,12 @@ def _user(role_code: str, scope: str = "all") -> User:
     # Seed the role's section access from the RBAC matrix exactly as
     # `seed_foundation` does — the API gates on `Role.section_access`, so a role
     # built without it would be denied everything and prove nothing.
-    role = Role.objects.create(
+    role, _ = Role.objects.update_or_create(
         code=role_code,
-        name=role_code.title(),
-        section_access=section_access_for(role_code),
+        defaults={
+            "name": role_code.title(),
+            "section_access": section_access_for(role_code),
+        },
     )
     return User.objects.create(username=f"u_{role_code}", role=role, scope_type=scope)
 

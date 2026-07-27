@@ -66,3 +66,13 @@ ACCESS_ADMINISTRATORS = declare_role_list(
         "same policy configure the floor away."
     ),
 )
+
+HEAD_OFFICE_VALUE_ACTORS = declare_role_list(
+    "accounts.head_office_value_actors_floor",
+    ("accounts", "owner"),
+    reason=(
+        "PT inwarding and V-flip create or change brand liability. The ratified "
+        "segregation-of-duties floor reserves those postings to Accounts or Owner; "
+        "an editable actor policy may narrow this pair but cannot add another role."
+    ),
+)

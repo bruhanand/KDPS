@@ -7,11 +7,15 @@ shape of the permission helpers that produce those answers.
 
 from __future__ import annotations
 
+from importlib import import_module
+
+import pytest
+from django.apps import apps as django_apps
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.test import APIClient
 
 from accounts.models import ActorPolicy, Role, User
-from approvals.models import Approval
+from approvals.models import Approval, ApprovalPolicy
 from core.gl import GLAccount, GLEntry
 from core.posting import PostingFloorError, PostingRef, cr, dr, post_entries
 from vendors.models import Vendor
@@ -69,6 +73,25 @@ def test_actor_policy_change_takes_effect_on_the_next_request(db):
     assert admitted.status_code != 403
 
 
+def test_policy_migration_retunes_only_untouched_existing_defaults(db):
+    migration = import_module("approvals.migrations.0004_seed_approval_policies")
+    writeoff = ApprovalPolicy.objects.get(kind="writeoff")
+    for field, value in migration.SUPERSEDED["writeoff"].items():
+        setattr(writeoff, field, value)
+    writeoff.save()
+    custom = ApprovalPolicy.objects.get(kind="vflip")
+    custom.band_roles = ["brand_manager"]
+    custom.save(update_fields=["band_roles"])
+
+    migration.seed_policies(django_apps, None)
+
+    writeoff.refresh_from_db()
+    custom.refresh_from_db()
+    assert writeoff.band_paise == 25_00_000
+    assert writeoff.band_roles == ["store_manager", "ho_ops", "owner"]
+    assert custom.band_roles == ["brand_manager"]
+
+
 def test_store_scope_cannot_post_value_even_when_policy_grants_money_manage(db):
     actor = _user(
         "store_bookkeeper",
@@ -90,7 +113,7 @@ def test_store_scope_cannot_post_value_even_when_policy_grants_money_manage(db):
 
 
 def test_brand_liability_cannot_post_without_a_named_head_office_person(db):
-    voucher = PostingRef(doc_type="PT", doc_number="26-27/HO/PT/131")
+    voucher = PostingRef(doc_type="BILL", doc_number="26-27/HO/BILL/131")
 
     try:
         post_entries(
@@ -109,6 +132,24 @@ def test_brand_liability_cannot_post_without_a_named_head_office_person(db):
         assert "head-office" in str(exc).lower()
     else:  # pragma: no cover - the assertion explains the required failure
         raise AssertionError("vendor liability posted without a named head-office person")
+
+    assert not GLEntry.objects.exists()
+
+
+@pytest.mark.parametrize("doc_type", ["PT", "VFL"])
+def test_pt_and_vflip_cannot_post_without_a_named_head_office_person(db, doc_type):
+    voucher = PostingRef(doc_type=doc_type, doc_number=f"26-27/HO/{doc_type}/131")
+    actor = _user(f"{doc_type.lower()}_warehouse", "warehouse")
+
+    with pytest.raises(PostingFloorError, match="Accounts or Owner"):
+        post_entries(
+            voucher,
+            [
+                dr(GLAccount.INVENTORY, 125_000),
+                cr(GLAccount.CASH, 125_000),
+            ],
+            posted_by=actor,
+        )
 
     assert not GLEntry.objects.exists()
 

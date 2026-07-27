@@ -629,9 +629,7 @@ class PtFilePostView(APIView):
 
     def post(self, request: Request, pk: int) -> Response:
         if not user_may_act(request.user, PT_INWARD_ACTION):
-            return _forbidden(
-                "Only Patna HO (accounts / owner / IT admin) can post a PT into the system."
-            )
+            return _forbidden("Only Accounts or Owner can post a PT into the system.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -675,9 +673,7 @@ class PtFileReverseView(APIView):
 
     def post(self, request: Request, pk: int) -> Response:
         if not user_may_act(request.user, PT_INWARD_ACTION):
-            return _forbidden(
-                "Only Patna HO (accounts / owner / IT admin) can reverse a posted PT."
-            )
+            return _forbidden("Only Accounts or Owner can reverse a posted PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -963,9 +959,7 @@ class ReviewResolveView(APIView):
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
         if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
-            return _forbidden(
-                "Only mapping stewards (warehouse/data steward/HO ops) can resolve review items."
-            )
+            return _forbidden("Only Warehouse or the HO Data Steward can resolve review items.")
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)

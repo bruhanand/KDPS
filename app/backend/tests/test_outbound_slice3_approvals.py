@@ -323,6 +323,12 @@ def test_a_vflip_needs_a_second_person_too(mc):
         role=mc["packer"].role,
         scope_type=ScopeType.ALL,
     )
+    executor = User.objects.create_user(
+        username="mc_vflip_executor",
+        password=TEST_PASSWORD,
+        role=mc["outsider"].role,
+        scope_type=ScopeType.ALL,
+    )
     created = _client(head_office_packer).post(
         "/api/outbound/vflips",
         {
@@ -336,7 +342,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
     assert created.status_code == 201, created.data
     vflip_id = created.data["id"]
 
-    blocked = _client(head_office_packer).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    blocked = _client(executor).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert blocked.status_code == 400
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id is None
 
@@ -345,7 +351,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
         f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
     )
 
-    posted = _client(head_office_packer).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    posted = _client(executor).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert posted.status_code == 200, posted.data
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id == mc["checker"].id
 

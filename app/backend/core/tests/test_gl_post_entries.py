@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 from django.db import DatabaseError, connection, transaction
 
-from accounts.models import User
+from accounts.models import Role, User
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.posting import PostingError, PostingRef, UnbalancedError, cr, dr, post_entries
 
@@ -19,8 +19,12 @@ TABLE = GLEntry._meta.db_table
 
 
 def _head_office_actor() -> User:
+    role, _ = Role.objects.get_or_create(code="accounts", defaults={"name": "Accounts"})
     return User.objects.create(
-        username="gl-head-office", full_name="GL Head Office", scope_type="all"
+        username="gl-head-office",
+        full_name="GL Head Office",
+        scope_type="all",
+        role=role,
     )
 
 

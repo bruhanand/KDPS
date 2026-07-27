@@ -23,14 +23,13 @@ from typing import Any
 
 from django.db import models
 
-from approvals.models import Approval, ApprovalStatus
+from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from approvals.services import (
     AlreadyPendingError,
     ApprovalRequired,
     approval_for,
     assert_approved,
     holds_approver_role,
-    policy_for,
     record_no_approval_needed,
     request_approval,
 )
@@ -41,25 +40,12 @@ from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VF
 
 @dataclass(frozen=True)
 class ApprovalKind:
-    """One wired document family, and the thresholds it starts life with.
-
-    The four policy numbers are *seed* values: they are written into an
-    ``ApprovalPolicy`` row the first time the kind is used, and the business
-    tunes them there afterwards. Editing them here changes nothing that is
-    already running — which is the point (Rule 12).
-    """
+    """The stable wiring between a model and its stored approval policy."""
 
     code: str
     label: str
-    approver_roles: tuple[str, ...]
     #: The document's own approver column, stamped from the approval at post time.
     approver_field: str
-    #: Value at stake at or below which no checker is asked. 0 = always ask.
-    tolerance_paise: int = 0
-    #: Value up to which the in-charge may approve. 0 = always HO.
-    band_paise: int = 0
-    #: Who may approve within the band (in-charge + HO).
-    band_roles: tuple[str, ...] = ()
     #: Whether this family asks for a second person on the **rung** instead of
     #: on the value: a maker who already holds the approving rung clears their
     #: own document, and everyone else waits however little is at stake. Who
@@ -68,48 +54,16 @@ class ApprovalKind:
     self_clearing: bool = False
 
 
-#: Stock adjustments alone carry a tolerance: they are the output of counting,
-#: where "book vs counted" is never going to agree to the piece, and the design
-#: is explicit that a small variance auto-adjusts and is logged rather than
-#: queueing behind a second person. Write-offs and V-flips have no tolerance —
-#: stock leaving the books, or changing owner, always needs a second person.
-_ADJ_TOLERANCE_PAISE = 2_00_000  # ₹2,000 at stake
-_ADJ_BAND_PAISE = 25_00_000  # ₹25,000 — above this, HO only
-
 KINDS: dict[type[models.Model], ApprovalKind] = {
-    WriteOff: ApprovalKind(
-        "writeoff",
-        "Write-off",
-        ("ho_ops", "owner"),
-        "approved_by",
-        band_paise=_ADJ_BAND_PAISE,
-        band_roles=("store_manager", "ho_ops", "owner"),
-    ),
-    VFlip: ApprovalKind(
-        "vflip",
-        "V-flip",
-        ("owner",),
-        "authorized_by",
-        band_paise=_ADJ_BAND_PAISE,
-        band_roles=("accounts", "owner"),
-    ),
-    StockAdjustment: ApprovalKind(
-        "adjustment",
-        "Stock adjustment",
-        ("ho_ops", "owner"),
-        "approved_by",
-        tolerance_paise=_ADJ_TOLERANCE_PAISE,
-        band_paise=_ADJ_BAND_PAISE,
-        band_roles=("store_manager", "ho_ops", "owner"),
-    ),
+    WriteOff: ApprovalKind("writeoff", "Write-off", "approved_by"),
+    VFlip: ApprovalKind("vflip", "V-flip", "authorized_by"),
+    StockAdjustment: ApprovalKind("adjustment", "Stock adjustment", "approved_by"),
     # No tolerance and no band: a gap closure decides what became of pieces that
     # went missing between two locations, and it is HO/warehouse work whatever it
     # is worth. The rule that the *receiving* store cannot be either party is
     # about entitlement rather than role, so it lives in
     # ``posting._refuse_self_closure`` — this table only says who is senior.
-    TransferGapClosure: ApprovalKind(
-        "gap_closure", "Gap closure", ("ho_ops", "owner"), "approved_by"
-    ),
+    TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", "approved_by"),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
     # on its own say-so. The rung does — hence ``self_clearing``, which lets a
@@ -117,7 +71,6 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     MarkDamaged: ApprovalKind(
         "damage",
         "Damage flag",
-        ("warehouse", "owner"),
         "confirmed_by",
         self_clearing=True,
     ),
@@ -181,17 +134,14 @@ def _inr(paise: int) -> str:
     return f"₹{rupees}"
 
 
-def _policy(kind: ApprovalKind) -> Any:
-    """The live thresholds for this family, seeded from ``kind`` on first use."""
-    return policy_for(
-        kind.code,
-        defaults={
-            "tolerance_paise": kind.tolerance_paise,
-            "band_paise": kind.band_paise,
-            "band_roles": list(kind.band_roles or kind.approver_roles),
-            "escalated_roles": list(kind.approver_roles),
-        },
-    )
+def _policy(kind: ApprovalKind) -> ApprovalPolicy:
+    """Read the live row; missing policy is a closed gate, never a code fallback."""
+    try:
+        return ApprovalPolicy.objects.get(kind=kind.code)
+    except ApprovalPolicy.DoesNotExist as exc:
+        raise ApprovalRequired(
+            f"No approval policy is configured for {kind.label.lower()}."
+        ) from exc
 
 
 def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None:

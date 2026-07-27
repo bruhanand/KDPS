@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from django.db.models import Sum
 
-from accounts.models import User
+from accounts.models import Role, User
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.posting import PostingRef, cr, dr, post_entries
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
@@ -31,8 +31,12 @@ from vendors.models import Vendor
 
 
 def _head_office_actor() -> User:
+    role, _ = Role.objects.get_or_create(code="accounts", defaults={"name": "Accounts"})
     return User.objects.create(
-        username="f1-head-office", full_name="F1 Head Office", scope_type="all"
+        username="f1-head-office",
+        full_name="F1 Head Office",
+        scope_type="all",
+        role=role,
     )
 
 

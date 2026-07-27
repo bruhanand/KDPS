@@ -131,12 +131,15 @@ def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> N
             "a named head-office person must perform this action."
         )
     raises_brand_liability = any(leg.account == GLAccount.VENDOR_PAYABLE for leg in legs)
-    requires_named_head_office_actor = raises_brand_liability or doc_type in {"PT", "VFL"}
     actor_name = getattr(actor, "full_name", "") or getattr(actor, "username", "") if actor else ""
-    if requires_named_head_office_actor and (not getattr(actor, "pk", None) or not actor_name):
+    if doc_type in {"PT", "VFL"} and not getattr(actor, "may_post_pt_or_vflip_floor", False):
         raise PostingFloorError(
-            "PT inwarding, V-flip, and money owed to a brand cannot post without "
-            "a named head-office person."
+            "Only a named Accounts or Owner head-office person may post PT inwarding "
+            "or V-flip value."
+        )
+    if raises_brand_liability and (not getattr(actor, "pk", None) or not actor_name):
+        raise PostingFloorError(
+            "Money owed to a brand cannot post without a named head-office person."
         )
 
 

@@ -40,7 +40,9 @@ on every write, so holding the rung never means holding it *everywhere*.
 from __future__ import annotations
 
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import BasePermission
 
+from accounts.actor_policies import user_may_act
 from accounts.permissions import require_section
 from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE, CAP_VIEW
 from masters.scoping import actionable_store_ids
@@ -74,6 +76,15 @@ CanWriteStockCount = require_section("stock_count", CAP_OPERATE)
 #: V-flip relabels who owns stock that never moves — an action on Stock itself,
 #: at the rung that owns the section rather than merely operates in it.
 CanFlipOwnership = require_section("stock", CAP_MANAGE)
+
+
+class CanExecuteVFlip(BasePermission):
+    """Live policy above the immutable Accounts/Owner value-posting floor."""
+
+    message = "Only an allowed Accounts or Owner user may execute a V-flip."
+
+    def has_permission(self, request, view):
+        return user_may_act(request.user, "outbound.execute_vflip")
 
 
 def enforce_store_scope(user, store_id: int) -> None:
