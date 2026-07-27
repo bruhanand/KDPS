@@ -439,9 +439,14 @@ def post_transfer_dispatch(
         line.save()
         dispatch_lines.append(line)
 
-    # Set dispatch metadata BEFORE post() (submitted docs are DB-immutable)
+    # Set dispatch metadata BEFORE post() (submitted docs are DB-immutable), and
+    # persist it: `post()` writes only the four FSM columns with `update_fields`,
+    # so an in-memory-only assignment here left `dispatch_date` and
+    # `dispatched_by` NULL for good — the screen has always shown a blank
+    # "dispatched by" on every transfer ever sent.
     transfer.dispatch_date = timezone.now()
     transfer.dispatched_by = user
+    transfer.save(update_fields=["dispatch_date", "dispatched_by"])
 
     # Post the document (mint number, set SUBMITTED — saves everything atomically)
     transfer.post()

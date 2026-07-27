@@ -29,7 +29,7 @@ from outbound.maker_checker import request_document_approval
 CHECKER_USERNAME = "transfer_checker"
 
 
-def a_checker(entity: Any = None, role_code: str = "owner") -> User:
+def a_checker(entity: Any = None) -> User:
     """The second person on a transfer — the Owner, who overrides everything.
 
     Network-scoped, because a checker who cannot see the sending store would
@@ -40,7 +40,7 @@ def a_checker(entity: Any = None, role_code: str = "owner") -> User:
         user = User.objects.create_user(
             username=CHECKER_USERNAME,
             password=TEST_PASSWORD,
-            role=make_role(role_code),
+            role=make_role("owner"),
             entity=entity,
             scope_type=ScopeType.ALL,
         )

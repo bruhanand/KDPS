@@ -474,8 +474,10 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         # carton cannot legally travel without an e-way bill. The screen has
         # always said so; saying it here too means the API refuses as well, and
         # a transfer created any other way cannot skip the number (#137).
-        cross_state = bool(src and dst and src.gstin_id != dst.gstin_id)
-        if cross_state and not (data.get("eway_bill_number") or "").strip():
+        if (
+            StoreTransfer.crosses_a_state_line(src, dst)
+            and not (data.get("eway_bill_number") or "").strip()
+        ):
             raise serializers.ValidationError(
                 {"eway_bill_number": "E-way bill number is required for cross-state transfers."}
             )
@@ -488,11 +490,13 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         families do: a transfer is *born* waiting, so a maker can neither forget
         to ask nor dispatch in the gap before asking (#137).
 
-        The plan is priced off the source store's books here rather than reusing
-        ``_create_with_approval``: a transfer's lines carry no cost until the
-        pieces are scanned out, so what the approver is shown is what the plan is
-        worth today, and a plan-less scan-to-build draft is worth "unknown" —
-        which the policy reads as escalate.
+        Not ``_create_with_approval``, which prices every line onto the draft as
+        it is made: a transfer's lines deliberately carry no cost until the
+        pieces are scanned out (#68), so freezing one here would be inventing a
+        number the dispatch is then free to contradict. The plan is stored bare
+        and sized for the inbox off the source store's books at the moment the
+        request is raised; a plan-less scan-to-build draft sizes to nothing,
+        which the policy reads as "unknown" and escalates.
         """
         lines_data = validated_data.pop("lines", [])
         request = self.context.get("request", None)

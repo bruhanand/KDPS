@@ -447,6 +447,136 @@ def test_a_plan_less_transfer_is_worth_unknown_and_unknown_escalates(gate):
     assert _approval(data["id"]).approver_roles == ["owner"]
 
 
+# ---------------------------------------------------------------------------
+# The plan is what the checker sees; the scan is what leaves
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_scanning_fewer_pieces_than_the_plan_still_dispatches(gate):
+    """Rule 5: a plan/scan gap is flagged, never blocked."""
+    g = gate
+    data = _draft(g, plan=(("TG001", 6),))
+    _decide(g, data["id"], g["ops"])
+
+    resp = _dispatch(g, data["id"], scans=(("TG001", 2),))
+    assert resp.status_code == 200, resp.data
+    assert resp.data["dispatch_mismatch"] is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_carton_may_be_bigger_than_the_plan_the_checker_approved(gate):
+    """Locked here because it is a *decision*, not an accident, and the next
+    reader should not have to guess which.
+
+    A transfer is approved on its plan and posts what was scanned, so the pieces
+    that leave can exceed the pieces the Operations Head saw. Under the ratified
+    transfer policy that costs nothing: there is no band, so every transfer —
+    one shirt or a truckload — goes to the same desk, and a bigger carton could
+    never have gone to a different one.
+
+    It would start to matter if a band were configured in Setup, which #137
+    explicitly invites: a cheap plan cleared in-band could then be loaded past
+    the band on that signature. Closing that needs a ruling this ticket does not
+    carry — whether a transfer should be approved on its plan at all, or asked
+    for at the scanner — so it is raised on the PR rather than invented here.
+    """
+    g = gate
+    data = _draft(g, plan=(("TG001", 1),))
+    _decide(g, data["id"], g["ops"])
+
+    resp = _dispatch(g, data["id"], scans=(("TG001", 9),))
+    assert resp.status_code == 200, resp.data
+    assert resp.data["lines"][0]["qty_dispatched"] == 9
+    assert resp.data["dispatch_mismatch"] is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_dispatch_records_when_it_left_and_who_sent_it(gate):
+    """The stamps survive the post: ``post()`` writes only the FSM columns, so
+    these have to be saved in their own right."""
+    g = gate
+    data = _draft(g)
+    _decide(g, data["id"], g["ops"])
+    assert _dispatch(g, data["id"]).status_code == 200
+
+    transfer = StoreTransfer.objects.get(pk=data["id"])
+    assert transfer.dispatch_date is not None
+    assert transfer.dispatched_by_id == g["sender"].pk
+
+
+# ---------------------------------------------------------------------------
+# Drafts that predate the gate
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_draft_made_before_the_gate_is_backfilled_into_the_inbox(gate):
+    """Without the backfill an existing alpha draft is bricked in both
+    directions — it cannot dispatch (no approval) and cannot be sent for one
+    (``ask_again`` is the rejected-only route). It must land in the inbox and
+    then behave like any other transfer.
+
+    The migration function is called the way ``conftest`` calls the policy seed:
+    the rows it writes are the point, not the schema editor.
+    """
+    from importlib import import_module
+
+    from django.apps import apps as django_apps
+
+    g = gate
+    stranded = StoreTransfer.objects.create(
+        source_store=g["warehouse"],
+        destination_store=g["store"],
+        transfer_type="store_split",
+        created_by=g["sender"],
+    )
+    StoreTransferLine.objects.create(
+        transfer=stranded, sku_code="TG001", qty_planned=3, unit_cost_paise=45000
+    )
+    assert _dispatch(g, stranded.pk, scans=(("TG001", 3),)).status_code == 400
+
+    backfill = import_module("outbound.migrations.0017_backfill_transfer_approvals")
+    backfill.raise_pending_approvals(django_apps, None)
+
+    raised = _approval(stranded.pk)
+    assert raised.status == ApprovalStatus.PENDING
+    assert raised.made_by_id == g["sender"].pk
+    assert raised.store_id == g["warehouse"].pk
+    assert raised.value_paise == 3 * 45000
+    assert raised.approver_roles == ["ho_ops", "owner"]
+
+    # It is now an ordinary transfer: the Operations Head clears it and it goes.
+    assert _decide(g, stranded.pk, g["ops"]).status_code == 200
+    assert _dispatch(g, stranded.pk, scans=(("TG001", 3),)).status_code == 200
+
+    # And running it twice does not double-raise.
+    backfill.raise_pending_approvals(django_apps, None)
+    assert Approval.objects.filter(kind="transfer", object_id=stranded.pk).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_backfill_leaves_posted_transfers_and_live_requests_alone(gate):
+    """It may not invent a signature for stock that already moved, and it may
+    not raise a second request beside one a person is already looking at."""
+    from importlib import import_module
+
+    from django.apps import apps as django_apps
+
+    g = gate
+    posted = _draft(g)
+    _decide(g, posted["id"], g["ops"])
+    assert _dispatch(g, posted["id"]).status_code == 200
+    waiting = _draft(g, plan=(("TG001", 1),))
+
+    before = Approval.objects.filter(kind="transfer").count()
+    import_module("outbound.migrations.0017_backfill_transfer_approvals").raise_pending_approvals(
+        django_apps, None
+    )
+    assert Approval.objects.filter(kind="transfer").count() == before
+    assert Approval.objects.filter(kind="transfer", object_id=waiting["id"]).count() == 1
+
+
 @pytest.mark.django_db(transaction=True)
 def test_a_transfer_built_outside_the_api_cannot_dispatch_either(gate):
     """The wall is in the posting layer, so a shell or a management command hits

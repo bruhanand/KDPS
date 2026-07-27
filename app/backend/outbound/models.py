@@ -198,12 +198,24 @@ class StoreTransfer(Document):
             "STO",
         )
 
+    @staticmethod
+    def crosses_a_state_line(source: Any, destination: Any) -> bool:
+        """Would a move between these two locations be a taxable supply?
+
+        Two GSTINs are two distinct persons under GST, so this decides whether
+        an e-way bill is required and whether an IGST invoice must be raised.
+        A ``staticmethod`` because the question is asked of a *proposed* move —
+        while validating a payload, before any transfer exists — as well as of a
+        saved one, and the answer must be the same both times.
+        """
+        return bool(source and destination and source.gstin_id != destination.gstin_id)
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         # Auto-compute cross-state flag from GSTIN state codes
         if self.source_store_id and self.destination_store_id:
-            src_gstin = self.source_store.gstin_id
-            dst_gstin = self.destination_store.gstin_id
-            self.is_cross_state = src_gstin != dst_gstin
+            self.is_cross_state = self.crosses_a_state_line(
+                self.source_store, self.destination_store
+            )
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
