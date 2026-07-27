@@ -47,6 +47,7 @@ from masters.scoping import (
     scope_by_store_and_brand,
 )
 from outbound.models import ReturnToVendor, StockAdjustment, StoreTransfer, VFlip, WriteOff
+from outbound.scoping import transfer_at_stores
 from ptmapper.models import PtFile
 from stockledger.models import StockOnHand
 from vendors.models import Booking
@@ -83,8 +84,11 @@ def _scope_grn_store(qs: QuerySet[Any], ids: list[int]) -> QuerySet[Any]:
 
 
 def _scope_transfer(qs: QuerySet[Any], ids: list[int]) -> QuerySet[Any]:
-    # A transfer is visible to both ends of the movement.
-    return qs.filter(Q(source_store_id__in=ids) | Q(destination_store_id__in=ids))
+    # A transfer is visible to both ends of the movement. The predicate itself
+    # belongs to `outbound`, which applies the same one to the transfer list and
+    # detail endpoints (#141) — written twice it would drift, and search would
+    # answer with rows the screen it links to refuses to open.
+    return qs.filter(transfer_at_stores(ids))
 
 
 def _scope_booking(qs: QuerySet[Any], ids: list[int]) -> QuerySet[Any]:

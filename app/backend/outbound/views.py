@@ -1,7 +1,11 @@
 """Outbound API views — list, create, dispatch, receive, submit.
 
 Every endpoint requires authentication. RBAC:
-  - Read (GET list/detail): any authenticated user (store scoping via queryset)
+  - Read (GET list/detail): any authenticated user, narrowed at the queryset to
+    the caller's own stores — `masters.scoping` for the documents that carry a
+    `store_id`, `outbound.scoping` for the transfer, which belongs to both ends
+    of its move (#141). A document out of scope answers 404, never 403: a 403
+    would confirm it exists, which is the thing being withheld (ADR-0003)
   - Write (POST create/submit/dispatch/receive): the endpoint group's section
     gate — see the table in ``outbound.permissions``, which is the one place
     the mapping lives
@@ -25,6 +29,7 @@ from rest_framework.views import APIView
 
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
+from masters.scoping import scope_by_entitlement, scope_by_store
 from outbound.counting import (
     CountError,
     MovedMidCountError,
@@ -72,6 +77,7 @@ from outbound.posting import (
     post_writeoff,
     raise_gap_closure,
 )
+from outbound.scoping import scope_transfers
 from outbound.serializers import (
     ApplyVarianceInputSerializer,
     CountScanInputSerializer,
@@ -133,6 +139,14 @@ TRANSFER_SEARCH_FIELDS = (
 )
 
 
+def _transfers():
+    """The transfer read shape, before scope — one join list for the list and the
+    detail, so the two cannot drift into two different response costs."""
+    return StoreTransfer.objects.select_related(
+        "source_store", "destination_store", "created_by"
+    ).prefetch_related("lines")
+
+
 class TransferListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -140,17 +154,9 @@ class TransferListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # NOTE: this list is not store-scoped on read — only transfer *writes*
-        # are (`enforce_store_scope`). The search below therefore narrows the
-        # whole network's transfers rather than the caller's own. Search does not
-        # widen anything (it is a filter on the same base set a store person can
-        # already scroll), but the gate itself is missing: issue #141, which also
-        # covers the detail endpoint below and the rest of outbound, and carries
-        # the open question a fix has to answer first (a brand-scoped caller has
-        # no store to gate on, and a transfer carries no brand).
-        qs = StoreTransfer.objects.select_related(
-            "source_store", "destination_store", "created_by"
-        ).prefetch_related("lines")
+        # Scoped before anything else narrows it, so the typed term filters the
+        # caller's own transfers rather than the network's (#141, #102).
+        qs = scope_transfers(_transfers(), self.request.user)
         ttype = self.request.query_params.get("type")
         if ttype:
             qs = qs.filter(transfer_type=ttype)
@@ -174,13 +180,13 @@ class TransferListCreateView(generics.ListCreateAPIView):
 
 
 class TransferDetailView(generics.RetrieveAPIView):
+    #: Scoped, so a transfer between two other stores is a 404 — knowing the id
+    #: is not a way in, and the answer must not tell you the document is real.
     permission_classes = [IsAuthenticated]
     serializer_class = StoreTransferReadSerializer
 
     def get_queryset(self):
-        return StoreTransfer.objects.select_related(
-            "source_store", "destination_store", "created_by"
-        ).prefetch_related("lines")
+        return scope_transfers(_transfers(), self.request.user)
 
 
 class TransferDispatchView(APIView):
@@ -420,8 +426,6 @@ class TransferGapListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        from masters.scoping import scope_by_store
-
         return scope_by_store(_open_gap_transfers(), self.request.user, "source_store_id")
 
 
@@ -566,7 +570,6 @@ class ScanLookupView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from masters.scoping import scope_by_entitlement
         from stockledger.models import StockOnHand, merch_dims
 
         store_id = request.query_params.get("store")
@@ -625,8 +628,6 @@ class MarkDamagedView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        from masters.scoping import scope_by_store
-
         qs = MarkDamaged.objects.select_related(
             "store", "created_by", "confirmed_by"
         ).prefetch_related(
@@ -664,6 +665,14 @@ class MarkDamagedView(generics.ListCreateAPIView):
 # ---------------------------------------------------------------------------
 
 
+def _rtvs(user):
+    """Returns to brand at the caller's own stores (#141), in the read shape."""
+    qs = ReturnToVendor.objects.select_related(
+        "store", "vendor", "brand", "created_by"
+    ).prefetch_related("lines")
+    return scope_by_store(qs, user, "store_id")
+
+
 class RTVListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -671,10 +680,7 @@ class RTVListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = ReturnToVendor.objects.select_related(
-            "store", "vendor", "brand", "created_by"
-        ).prefetch_related("lines")
-        qs = _filter_docstatus(qs, self.request)
+        qs = _filter_docstatus(_rtvs(self.request.user), self.request)
         rt = self.request.query_params.get("return_type")
         if rt:
             qs = qs.filter(return_type=rt)
@@ -701,9 +707,7 @@ class RTVDetailView(generics.RetrieveAPIView):
     serializer_class = ReturnToVendorReadSerializer
 
     def get_queryset(self):
-        return ReturnToVendor.objects.select_related(
-            "store", "vendor", "brand", "created_by"
-        ).prefetch_related("lines")
+        return _rtvs(self.request.user)
 
 
 class RTVSubmitView(APIView):
@@ -743,6 +747,16 @@ class RTVSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
+def _adjustments(user):
+    """Stock adjustments at the caller's own stores (#141), in the read shape."""
+    qs = StockAdjustment.objects.select_related(
+        "store", "approved_by", "created_by"
+    ).prefetch_related(
+        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+    )
+    return scope_by_store(qs, user, "store_id")
+
+
 class AdjustmentListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -750,13 +764,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = StockAdjustment.objects.select_related(
-            "store", "approved_by", "created_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
-        qs = _filter_docstatus(qs, self.request)
-        return qs
+        return _filter_docstatus(_adjustments(self.request.user), self.request)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -779,11 +787,7 @@ class AdjustmentDetailView(generics.RetrieveAPIView):
     serializer_class = StockAdjustmentReadSerializer
 
     def get_queryset(self):
-        return StockAdjustment.objects.select_related(
-            "store", "approved_by", "created_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
+        return _adjustments(self.request.user)
 
 
 class AdjustmentSubmitView(APIView):
@@ -821,6 +825,14 @@ class AdjustmentSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
+def _writeoffs(user):
+    """Write-offs at the caller's own stores (#141), in the read shape."""
+    qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
+        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+    )
+    return scope_by_store(qs, user, "store_id")
+
+
 class WriteOffListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -828,11 +840,7 @@ class WriteOffListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
-        qs = _filter_docstatus(qs, self.request)
-        return qs
+        return _filter_docstatus(_writeoffs(self.request.user), self.request)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -855,11 +863,7 @@ class WriteOffDetailView(generics.RetrieveAPIView):
     serializer_class = WriteOffReadSerializer
 
     def get_queryset(self):
-        return WriteOff.objects.select_related(
-            "store", "approved_by", "created_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
+        return _writeoffs(self.request.user)
 
 
 class WriteOffSubmitView(APIView):
@@ -895,6 +899,21 @@ class WriteOffSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
+def _vflips(user):
+    """V-flips at the caller's own stores (#141), in the read shape.
+
+    Scoped by store like the rest, not by the brand being flipped: the document
+    is a change of ownership *at a location*, and its brand names the stock's old
+    owner rather than a caller's boundary.
+    """
+    qs = VFlip.objects.select_related(
+        "store", "original_brand", "authorized_by", "created_by"
+    ).prefetch_related(
+        "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
+    )
+    return scope_by_store(qs, user, "store_id")
+
+
 class VFlipListCreateView(generics.ListCreateAPIView):
     def get_permissions(self):
         if self.request.method == "POST":
@@ -902,13 +921,7 @@ class VFlipListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        qs = VFlip.objects.select_related(
-            "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
-        qs = _filter_docstatus(qs, self.request)
-        return qs
+        return _filter_docstatus(_vflips(self.request.user), self.request)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -931,11 +944,7 @@ class VFlipDetailView(generics.RetrieveAPIView):
     serializer_class = VFlipReadSerializer
 
     def get_queryset(self):
-        return VFlip.objects.select_related(
-            "store", "original_brand", "authorized_by", "created_by"
-        ).prefetch_related(
-            "lines", "approvals__made_by", "approvals__requested_by", "approvals__decided_by"
-        )
+        return _vflips(self.request.user)
 
 
 class VFlipSubmitView(APIView):
@@ -1029,8 +1038,6 @@ def _stocktakes(user: Any) -> Any:
     to the person counting **their own** location" rule withholds. Out of scope
     is therefore indistinguishable from not existing.
     """
-    from masters.scoping import scope_by_store
-
     qs = Stocktake.objects.select_related("store", "opened_by", "adjustment").prefetch_related(
         "sessions__lines", "sessions__counted_by"
     )
