@@ -10,12 +10,12 @@ Four properties are asserted here and none of them is about implementation:
 * **the term narrows the list, on the server** — the answer is smaller, and the
   count the screen prints comes down with it;
 * **scope survives the search** — searching is never a way around
-  ``visible_store_ids``: on stock, where the list is genuinely store-scoped, a
+  ``visible_store_ids``: on stock and on transfers, both genuinely store-scoped, a
   term that matches a row at another store answers with nothing rather than with
-  that row. Bookings and transfers are not store-scoped on read yet (#101 owns
-  the first, #141 the second), so there the same criterion is
-  asserted in the only form that is honest today — a search returns a subset of
-  what that caller already sees — and starts biting once the gates land;
+  that row. Bookings are not store-scoped on read yet (#101 owns that), so there
+  the same criterion is asserted in the only form that is honest today — a search
+  returns a subset of what that caller already sees — and starts biting once the
+  gate lands;
 * **a scan resolves** — a barcode typed by a wedge scanner into the stock box
   lands on that barcode's stock through the scan-alias model;
 * **an empty term changes nothing** — the list, its totals and the deep-link
@@ -368,19 +368,21 @@ def test_transfers_search_stays_inside_the_caller_scope(scaffold):
     """Searching never widens: whatever the caller could see unsearched is the
     ceiling, and a term only takes rows away from it.
 
-    The transfer list is **not** store-scoped on read today — only transfer
-    writes are — so the ceiling is currently the whole network and this passes
-    without proving much, exactly as the same criterion does on Bookings until
-    #101 lands. Read scope for transfers is issue #141; when it lands,
-    the assertion below starts biting on its own, and the leak-shaped test
-    (searching another store's voucher number answers with nothing) belongs with
-    that change rather than here.
+    Since #141 the ceiling is a real one — the caller's own end of the move — so
+    the leak this asserts against has somewhere to leak *from*: `IPS-` matches
+    both transfers in the fixture, and the one between two other stores stays out
+    of the answer on the strength of the gate, not of the term.
     """
     client = _client(scaffold["store_user"])
     unsearched = {t["id"] for t in client.get(TRANSFERS).json()}
     searched = {t["id"] for t in client.get(f"{TRANSFERS}?q=IPS-").json()}
     assert searched <= unsearched
-    assert scaffold["own_transfer"].id in searched
+    assert searched == {scaffold["own_transfer"].id}
+    assert scaffold["foreign_transfer"].id not in searched
+
+    # …and the same term, for someone whose scope reaches both, finds it.
+    seen = {t["id"] for t in _client(scaffold["owner"]).get(f"{TRANSFERS}?q=IPS-").json()}
+    assert scaffold["foreign_transfer"].id in seen
 
 
 @pytest.mark.django_db(transaction=True)
