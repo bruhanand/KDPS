@@ -5,7 +5,7 @@ import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-reac
 import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
-import { CommercialBadge, StatusChip } from "../lib/format";
+import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
@@ -793,6 +793,19 @@ export function UsersRolesPage() {
     }));
   }
 
+  /** Put the tables back to what the server holds, without clearing the message
+   *  that sent us here. A refused edit — a floor rule, a stale row — must not
+   *  leave the screen showing a policy that is not real. */
+  function resyncPolicies() {
+    Promise.all([
+      typedApi.get("/auth/admin/actor-policies"),
+      typedApi.get("/auth/admin/approval-policies"),
+    ]).then(([actors, approvals]) => {
+      setActorPolicies(actors.data as ActorPolicy[]);
+      setApprovalPolicies(approvals.data as ApprovalPolicy[]);
+    });
+  }
+
   async function saveActorPolicy(policy: ActorPolicy) {
     setError("");
     setOk("");
@@ -808,6 +821,7 @@ export function UsersRolesPage() {
       setOk(`${policy.label} sent for second-person approval.`);
     } catch (e) {
       setError(apiErrorMessage(e));
+      resyncPolicies();
     }
   }
 
@@ -852,9 +866,10 @@ export function UsersRolesPage() {
           escalated_roles: policy.escalated_roles,
         },
       );
-      setOk(`${policy.kind} approval policy sent for second-person approval.`);
+      setOk(`${policy.label} approvals sent for second-person approval.`);
     } catch (e) {
       setError(apiErrorMessage(e));
+      resyncPolicies();
     }
   }
 
@@ -1067,25 +1082,25 @@ export function UsersRolesPage() {
                 <tbody>
                   {approvalPolicies.map((policy) => (
                     <tr key={policy.kind} data-testid={`approval-policy-${policy.kind}`}>
-                      <td className="mono">{policy.kind}</td>
                       <td>
-                        <input
-                          className="input"
-                          type="number"
-                          min="0"
-                          value={policy.tolerance_paise / 100}
-                          onChange={(e) => setApprovalAmount(policy.kind, "tolerance_paise", e.target.value)}
-                        />
+                        <b>{policy.label}</b>
+                        <div className="mono" style={{ fontSize: 12 }}>{policy.kind}</div>
                       </td>
-                      <td>
-                        <input
-                          className="input"
-                          type="number"
-                          min="0"
-                          value={policy.band_paise / 100}
-                          onChange={(e) => setApprovalAmount(policy.kind, "band_paise", e.target.value)}
-                        />
-                      </td>
+                      {(["tolerance_paise", "band_paise"] as const).map((field) => (
+                        <td key={field}>
+                          <input
+                            className="input tabular"
+                            type="number"
+                            min="0"
+                            style={{ minWidth: 110 }}
+                            value={policy[field] / 100}
+                            onChange={(e) => setApprovalAmount(policy.kind, field, e.target.value)}
+                          />
+                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                            {policy[field] ? formatINR(policy[field]) : "no threshold"}
+                          </div>
+                        </td>
+                      ))}
                       {(["band_roles", "escalated_roles"] as const).map((field) => (
                         <td key={field}>
                           <div className="toggle-grid">

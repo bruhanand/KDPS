@@ -2172,6 +2172,7 @@ export interface components {
             readonly id: number;
             /** @description Document family this governs, e.g. 'adjustment'. */
             kind: string;
+            readonly label: string;
             /**
              * Format: int64
              * @description Value at stake at or below which no second person is asked — the document posts and the decision is logged. 0 disables the tolerance: every document of this kind needs a checker.
@@ -2677,6 +2678,7 @@ export interface components {
             readonly id?: number;
             /** @description Document family this governs, e.g. 'adjustment'. */
             kind?: string;
+            readonly label?: string;
             /**
              * Format: int64
              * @description Value at stake at or below which no second person is asked — the document posts and the decision is logged. 0 disables the tolerance: every document of this kind needs a checker.

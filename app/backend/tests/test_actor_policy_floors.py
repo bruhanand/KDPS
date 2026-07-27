@@ -154,6 +154,54 @@ def test_pt_and_vflip_cannot_post_without_a_named_head_office_person(db, doc_typ
     assert not GLEntry.objects.exists()
 
 
+def test_break_glass_passes_the_pt_floor_but_never_the_store_one(db):
+    """The emergency key inwards a PT; it still cannot post value from a store.
+
+    Rule 3 asks for a *named head-office human*, and break-glass is one — the
+    ruling says so in the same breath as removing IT Admin from PT inwarding.
+    Rule 2 has no such exemption, so the same superuser scoped to a store is
+    refused.
+    """
+    role = Role.objects.create(code="it_admin", name="IT Admin")
+    breakglass = User.objects.create(
+        username="superadmin",
+        full_name="System Superadmin (break-glass)",
+        role=role,
+        scope_type="all",
+        is_superuser=True,
+    )
+
+    post_entries(
+        PostingRef(doc_type="PT", doc_number="26-27/HO/PT/BREAKGLASS"),
+        [dr(GLAccount.INVENTORY, 100), cr(GLAccount.CASH, 100)],
+        posted_by=breakglass,
+    )
+    assert GLEntry.objects.count() == 2
+
+    breakglass.scope_type = "store"
+    breakglass.save(update_fields=["scope_type"])
+    with pytest.raises(PostingFloorError, match="store-scoped"):
+        post_entries(
+            PostingRef(doc_type="PT", doc_number="26-27/HO/PT/BREAKGLASS-2"),
+            [dr(GLAccount.INVENTORY, 100), cr(GLAccount.CASH, 100)],
+            posted_by=breakglass,
+        )
+    assert GLEntry.objects.count() == 2
+
+
+def test_unsaved_accounts_actor_is_not_a_named_head_office_person(db):
+    role = Role.objects.create(code="accounts", name="Accounts")
+    actor = User(username="synthetic_accounts", role=role, scope_type="all")
+    voucher = PostingRef(doc_type="PT", doc_number="26-27/HO/PT/SYNTHETIC")
+
+    with pytest.raises(PostingFloorError, match="named Accounts or Owner"):
+        post_entries(
+            voucher,
+            [dr(GLAccount.INVENTORY, 100), cr(GLAccount.CASH, 100)],
+            posted_by=actor,
+        )
+
+
 def test_policy_cannot_make_a_document_maker_their_own_checker(db):
     maker = _user("self_checker", "owner")
     subject = Role.objects.create(code="subject-role", name="Subject role")
@@ -253,3 +301,18 @@ def test_attempt_to_configure_away_a_floor_rule_is_refused_clearly(db):
 
     assert response.status_code == 400
     assert "cannot be configured" in response.json()["detail"].lower()
+
+
+def test_actor_policy_cannot_add_a_role_outside_the_value_floor(db):
+    owner = _user("value_floor_editor", "owner")
+    Role.objects.create(code="accounts", name="Accounts")
+    Role.objects.create(code="warehouse", name="Warehouse")
+
+    response = _client(owner).patch(
+        "/api/auth/admin/actor-policies/outbound.execute_vflip",
+        {"roles": ["accounts", "owner", "warehouse"]},
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert "floor rule" in str(response.json()).lower()

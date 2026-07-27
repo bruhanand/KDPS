@@ -247,12 +247,46 @@ def test_superuser_break_glass_passes_every_gate(db):
 
 
 # --- 2. The approvers ------------------------------------------------------
-def test_every_wired_family_has_a_stored_actor_policy(db):
+#: Who the #104 ruling puts on each document family, in-band and above it. Once
+#: approvers became data (#131) the matrix stopped being their source of truth —
+#: the ruling deliberately overrides it (IT Admin off every money family,
+#: Accounts onto V-flip, the Brand Manager onto returns). So the alarm that used
+#: to compare defaults against the matrix compares the *seeded* rows against the
+#: ruling instead: retuning a live install is data, but shipping a different
+#: default is a decision, and this is where it gets made.
+RATIFIED_APPROVERS = {
+    "writeoff": (["store_manager", "ho_ops", "owner"], ["ho_ops", "owner"]),
+    "adjustment": (["store_manager", "ho_ops", "owner"], ["ho_ops", "owner"]),
+    "vflip": (["accounts", "owner"], ["owner"]),
+    "return_to_brand": (["brand_manager", "owner"], ["owner"]),
+    "transfer": (["ho_ops", "owner"], ["ho_ops", "owner"]),
+    "pt_reverse": (["accounts", "owner"], ["accounts", "owner"]),
+    "gap_closure": (["ho_ops", "owner"], ["ho_ops", "owner"]),
+    "damage": (["warehouse", "owner"], ["warehouse", "owner"]),
+}
+
+
+def test_every_wired_family_reads_its_approvers_from_the_ratified_row(db):
     """The live answer is stored policy, not a role list frozen in code."""
     for kind in KINDS.values():
         policy = ApprovalPolicy.objects.get(kind=kind.code)
-        assert policy.band_roles, kind.code
-        assert policy.escalated_roles, kind.code
+        band, escalated = RATIFIED_APPROVERS[kind.code]
+        assert policy.band_roles == band, kind.code
+        assert policy.escalated_roles == escalated, kind.code
+
+
+def test_no_seeded_family_lets_admin_or_a_cashier_approve():
+    """Two cells of the ratified table, asserted across every family at once.
+
+    Admin has no Money — IT Admin was taken off these lists by the ruling and a
+    later retune of one row must not quietly put it back. And the only store
+    seat that approves anything is the Store Manager, inside the band: a cashier
+    never signs off what their own store lost.
+    """
+    for code, (band, escalated) in RATIFIED_APPROVERS.items():
+        assert "it_admin" not in set(band) | set(escalated), code
+        assert "store_cashier" not in set(band) | set(escalated), code
+        assert "store_manager" not in escalated, code
 
 
 def test_a_freshly_raised_approval_names_no_view_only_role(db):

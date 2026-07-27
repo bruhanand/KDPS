@@ -9,6 +9,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from accounts.models import NAV_GROUPS, ActorPolicy, Role, User
 from accounts.permissions import visible_sections
+from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
 from accounts.sections import CAPABILITY_ORDER, is_valid_capability, is_valid_section
 from approvals.models import ApprovalPolicy
 from masters.models import Brand, Store
@@ -84,19 +85,35 @@ class ActorPolicySerializer(serializers.ModelSerializer):
         fields = ["id", "action", "label", "description", "roles"]
         read_only_fields = ["action"]
 
+    #: The two actions floor rule 3 owns. Policy may *narrow* who inwards a PT
+    #: or executes a V-flip; it may never widen the pair, because the GL engine
+    #: refuses anyone else anyway and a Setup screen must not promise otherwise.
+    FLOOR_BOUND_ACTIONS = ("ptmapper.post_and_reverse_pt", "outbound.execute_vflip")
+
     def validate_roles(self, value: list[str]) -> list[str]:
-        unknown = sorted(set(value) - set(Role.objects.values_list("code", flat=True)))
+        names = dict(Role.objects.values_list("code", "name"))
+        unknown = sorted(set(value) - set(names))
         if unknown:
             raise serializers.ValidationError(f"Unknown role(s): {', '.join(unknown)}")
+        outside_floor = sorted(set(value) - HEAD_OFFICE_VALUE_ACTORS)
+        if getattr(self.instance, "action", "") in self.FLOOR_BOUND_ACTIONS and outside_floor:
+            refused = ", ".join(names[code] for code in outside_floor)
+            raise serializers.ValidationError(
+                "Floor rule: PT inwarding and V-flip execution are limited to "
+                f"Accounts or Owner. {refused} cannot be added."
+            )
         return sorted(set(value))
 
 
 class ApprovalPolicyAdminSerializer(serializers.ModelSerializer):
+    label = serializers.CharField(read_only=True)
+
     class Meta:
         model = ApprovalPolicy
         fields = [
             "id",
             "kind",
+            "label",
             "tolerance_paise",
             "band_paise",
             "band_roles",

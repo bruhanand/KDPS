@@ -22,6 +22,7 @@ import {
 } from "../components/approval";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
+import { announceApprovalsChanged } from "../shell/AppShell";
 
 // ---------------------------------------------------------------------------
 // The inbox
@@ -52,6 +53,7 @@ export function ApprovalsPage() {
       setRejecting(null);
       setReason("");
       reload();
+      announceApprovalsChanged();
     } catch (e) {
       setError(apiErrorMessage(e));
     } finally {

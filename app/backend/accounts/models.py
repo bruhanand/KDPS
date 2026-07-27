@@ -177,8 +177,14 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     @property
     def may_post_pt_or_vflip_floor(self) -> bool:
-        """Immutable segregation-of-duties answer consumed by the GL engine."""
-        return getattr(self.role, "code", "") in HEAD_OFFICE_VALUE_ACTORS
+        """Immutable segregation-of-duties answer consumed by the GL engine.
+
+        Break-glass passes, as the ruling says it must: a half-powered emergency
+        key fails at the moment it is needed. What break-glass does *not* buy is
+        the rest of the floor — the actor is still refused unless they are a
+        named, saved person who is not scoped to a store.
+        """
+        return self.is_superuser or getattr(self.role, "code", "") in HEAD_OFFICE_VALUE_ACTORS
 
 
 class LoginAttempt(models.Model):
