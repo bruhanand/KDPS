@@ -167,25 +167,17 @@ def scope_by_store_predicate(qs: Any, user: Any, predicate: Callable[[list[int]]
 
     A store transfer has two of them — it belongs to the sender and to the
     receiver alike — so the *rule* it needs is this module's, but the *shape* of
-    the match is the owning module's. This takes that shape as a callable and
-    keeps the rule here, where the fail-closed branch a brand-scoped user takes
-    is written once and cannot be fixed in one gate and forgotten in another.
+    the match is the owning module's. This takes that shape as a callable; the
+    rule stays here, in `_scoped` with every other spelling of it.
 
     `predicate` receives the store ids this request may read and returns the `Q`
     matching rows at them.
     """
-    if is_brand_scoped(user):
-        return qs.none()
-    ids = active_store_ids(user)
-    return qs if ids is None else qs.filter(predicate(ids))
+    return _scoped(user, [(qs, predicate)])[0]
 
 
 def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:
     """`scope_by_store` over several querysets, resolving the scope once.
-
-    The rule lives here and `scope_by_store` is the one-queryset case of it, so
-    the fail-closed branch a brand-scoped user takes cannot be fixed in one and
-    forgotten in the other.
 
     A screen built from two lists gates both against the same person in the same
     request, so the two answers cannot differ — but `active_store_ids` is not
@@ -194,12 +186,29 @@ def scope_by_store_many(user: Any, *targets: tuple[Any, str]) -> list[Any]:
 
     Each target is `(queryset, field)`; the results come back in the same order.
     """
+    return _scoped(user, [(qs, _at_store_field(field)) for qs, field in targets])
+
+
+def _at_store_field(field: str) -> Callable[[list[int]], Q]:
+    """The ordinary match: the row's own store column is one of these ids."""
+    return lambda ids: Q(**{f"{field}__in": ids})
+
+
+def _scoped(user: Any, targets: list[tuple[Any, Callable[[list[int]], Q]]]) -> list[Any]:
+    """The reading rule itself, and the only copy of it.
+
+    Every reading gate above is this function with a different match shape, so
+    the fail-closed branch a brand-scoped user takes is written once and cannot
+    be fixed in one gate and forgotten in another. Three answers, in order:
+    a brand-scoped caller gets nothing, an unrestricted one gets everything, and
+    everyone else gets the rows their predicate matches.
+    """
     if is_brand_scoped(user):
         return [qs.none() for qs, _ in targets]
     ids = active_store_ids(user)
     if ids is None:
         return [qs for qs, _ in targets]
-    return [qs.filter(**{f"{field}__in": ids}) for qs, field in targets]
+    return [qs.filter(predicate(ids)) for qs, predicate in targets]
 
 
 def scope_by_store_and_brand(

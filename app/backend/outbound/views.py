@@ -694,7 +694,7 @@ class MarkDamagedView(generics.ListCreateAPIView):
 # ---------------------------------------------------------------------------
 
 
-def _rtvs(user):
+def _rtvs(user: Any) -> Any:
     """Returns to brand at the caller's own stores (#141), in the read shape."""
     qs = ReturnToVendor.objects.select_related(
         "store", "vendor", "brand", "created_by"
@@ -776,7 +776,7 @@ class RTVSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _adjustments(user):
+def _adjustments(user: Any) -> Any:
     """Stock adjustments at the caller's own stores (#141), in the read shape."""
     qs = StockAdjustment.objects.select_related(
         "store", "approved_by", "created_by"
@@ -852,7 +852,7 @@ class AdjustmentSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _writeoffs(user):
+def _writeoffs(user: Any) -> Any:
     """Write-offs at the caller's own stores (#141), in the read shape."""
     qs = WriteOff.objects.select_related("store", "approved_by", "created_by").prefetch_related(
         "lines", *APPROVAL_JOINS
@@ -926,7 +926,7 @@ class WriteOffSubmitView(APIView):
 # ---------------------------------------------------------------------------
 
 
-def _vflips(user):
+def _vflips(user: Any) -> Any:
     """V-flips at the caller's own stores (#141), in the read shape.
 
     Scoped by store like the rest, not by the brand being flipped: the document
