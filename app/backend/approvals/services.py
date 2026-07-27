@@ -24,7 +24,7 @@ from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
 from approvals.hooks import run_on_approved
-from approvals.models import CLEARED_STATUSES, Approval, ApprovalPolicy, ApprovalStatus
+from approvals.models import CLEARED_STATUSES, Approval, ApprovalStatus
 from masters.scoping import scope_by_store
 
 
@@ -58,22 +58,6 @@ def display_name(user: Any) -> str:
     if user is None:
         return ""
     return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
-
-
-# ---------------------------------------------------------------------------
-# Policy
-# ---------------------------------------------------------------------------
-
-
-def policy_for(kind: str, *, defaults: dict[str, Any]) -> ApprovalPolicy:
-    """The live thresholds for a document family.
-
-    Materialised from the owning module's defaults the first time that kind is
-    used, so every wired family shows up in the admin ready to be retuned —
-    thresholds are business data, not a constant someone has to redeploy.
-    """
-    policy, _ = ApprovalPolicy.objects.get_or_create(kind=kind, defaults=defaults)
-    return policy
 
 
 # ---------------------------------------------------------------------------

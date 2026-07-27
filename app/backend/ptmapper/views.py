@@ -21,7 +21,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.role_lists import declare_role_list
+from accounts.actor_policies import user_may_act
 from core.documents import DocStatus
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
@@ -126,34 +126,8 @@ def _parse_context(data: Any) -> tuple[dict, Response | None]:
     return ctx, None
 
 
-# Two gates the capability ladder cannot express, kept as role lists on purpose
-# and registered with their reasons (#94).
-PATNA_ROLES = declare_role_list(
-    "ptmapper.post_and_reverse_pt",
-    ("accounts", "owner", "it_admin"),
-    reason=(
-        "Pushing a PT into the system, and reversing it, writes the stock ledger "
-        "and raises vendor liability — the design reserves that inward action for "
-        "Patna HO. 'Patna' is a place, not a sidebar section: gating it on "
-        "`receive_goods: operate` would both add the warehouse, which the design "
-        "forbids, and drop Owner, who holds only `receive_goods: view`. The actor "
-        "question is parked in #104."
-    ),
-)
-MAPPING_STEWARD_ROLES = declare_role_list(
-    "ptmapper.mapping_stewardship",
-    ("warehouse", "data_steward", "ho_ops", "owner", "it_admin"),
-    reason=(
-        "Making a PT, pricing it and resolving review items grow the master "
-        "lookup tables. Mapping stewardship is not a rung on any section — the "
-        "nearest, `receive_goods`, is about arrivals, and data_steward holds no "
-        "capability on it at all. Parked in #104."
-    ),
-)
-
-
-def _role_code(user: Any) -> str:
-    return getattr(getattr(user, "role", None), "code", "")
+PT_INWARD_ACTION = "ptmapper.post_and_reverse_pt"
+MAPPING_STEWARDSHIP_ACTION = "ptmapper.mapping_stewardship"
 
 
 def _forbidden(detail: str) -> Response:
@@ -241,7 +215,7 @@ class PtFileFromGrnView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, grn_id: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only warehouse/HO mapping stewards can make a PT from a GRN.")
         with transaction.atomic():
             # The row lock serialises concurrent make-PT clicks on one arrival
@@ -654,10 +628,8 @@ class PtFilePostView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden(
-                "Only Patna HO (accounts / owner / IT admin) can post a PT into the system."
-            )
+        if not user_may_act(request.user, PT_INWARD_ACTION):
+            return _forbidden("Only Accounts or Owner can post a PT into the system.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -700,10 +672,8 @@ class PtFileReverseView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in PATNA_ROLES:
-            return _forbidden(
-                "Only Patna HO (accounts / owner / IT admin) can reverse a posted PT."
-            )
+        if not user_may_act(request.user, PT_INWARD_ACTION):
+            return _forbidden("Only Accounts or Owner can reverse a posted PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
             return Response({"detail": "Not found."}, status=404)
@@ -746,7 +716,7 @@ class PtFilePriceView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only warehouse/HO mapping stewards can price an authored PT.")
         pt = PtFile.objects.filter(pk=pk).first()
         if not pt:
@@ -988,10 +958,8 @@ class ReviewResolveView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
-            return _forbidden(
-                "Only mapping stewards (warehouse/data steward/HO ops) can resolve review items."
-            )
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
+            return _forbidden("Only Warehouse or the HO Data Steward can resolve review items.")
         item = ReviewItem.objects.filter(pk=pk).first()
         if not item:
             return Response({"detail": "Not found."}, status=404)
@@ -1043,7 +1011,7 @@ class LookupProposalDecideView(APIView):
 
     @transaction.atomic
     def post(self, request: Request, pk: int) -> Response:
-        if _role_code(request.user) not in MAPPING_STEWARD_ROLES:
+        if not user_may_act(request.user, MAPPING_STEWARDSHIP_ACTION):
             return _forbidden("Only mapping stewards can decide learning proposals.")
         proposal = LookupProposal.objects.filter(pk=pk).first()
         if not proposal:

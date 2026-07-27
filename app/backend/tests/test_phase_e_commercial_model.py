@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pytest
 
+from accounts.models import Role, User
 from core.gl import GLAccount, account_balance, trial_balance
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
@@ -44,12 +45,20 @@ def world(db):
         return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(code="v-abfrl", name="ABFRL")
+    accounts_role = Role.objects.create(code="accounts", name="Accounts")
+    actor = User.objects.create(
+        username="phase-e-head-office",
+        full_name="Phase E Head Office",
+        scope_type="all",
+        role=accounts_role,
+    )
     return {
         "wh": wh,
         "season": season,
         "owned": owned_brand,
         "sor": sor_brand,
         "vendor": vendor,
+        "actor": actor,
     }
 
 
@@ -92,7 +101,7 @@ def test_owned_brand_raises_payable_with_balanced_inventory_gl(world):
     booking = _booking(world, world["owned"], number="BK-OWNED-1")
     pt = _pt_with_row(prate="100", mrp="200", qty="2")
 
-    result = post_pt_inward(pt, None, booking=booking)
+    result = post_pt_inward(pt, world["actor"], booking=booking)
 
     assert result["commercial_model"] == "Outright"
     assert result["vendor_bill"] is not None
@@ -110,7 +119,7 @@ def test_brand_owned_sor_raises_no_payable_and_posts_off_book(world):
     booking = _booking(world, world["sor"], number="BK-SOR-1")
     pt = _pt_with_row(prate="150", mrp="500", qty="4")
 
-    result = post_pt_inward(pt, None, booking=booking)
+    result = post_pt_inward(pt, world["actor"], booking=booking)
 
     assert result["commercial_model"] == "SOR"
     assert result["vendor_bill"] is None
@@ -127,7 +136,7 @@ def test_stock_is_valued_at_p_rate_not_basic(world):
     booking = _booking(world, world["owned"], number="BK-OWNED-2")
     pt = _pt_with_row(prate="100", basic="80", mrp="200", qty="2")
 
-    post_pt_inward(pt, None, booking=booking)
+    post_pt_inward(pt, world["actor"], booking=booking)
 
     entry = StockLedgerEntry.objects.get(pt_file=pt, kind=StockLedgerEntry.Kind.PT_INWARD)
     # P RATE (100) × qty (2) = ₹200 = 20000 paise — NOT the ex-GST BASIC (80 → 16000)
@@ -140,7 +149,7 @@ def test_p_rate_above_mrp_blocks_the_post(world):
     pt = _pt_with_row(prate="300", mrp="200", qty="1")
 
     with pytest.raises(PtPostingError):
-        post_pt_inward(pt, None, booking=booking)
+        post_pt_inward(pt, world["actor"], booking=booking)
 
     # all-or-none: nothing landed in any book
     assert StockLedgerEntry.objects.filter(pt_file=pt).count() == 0
@@ -151,9 +160,9 @@ def test_p_rate_above_mrp_blocks_the_post(world):
 def test_reversal_unwinds_stock_payable_and_value_gl(world):
     booking = _booking(world, world["owned"], number="BK-OWNED-4")
     pt = _pt_with_row(prate="100", mrp="200", qty="2")
-    post_pt_inward(pt, None, booking=booking)
+    post_pt_inward(pt, world["actor"], booking=booking)
 
-    rev = reverse_pt_inward(pt, None)
+    rev = reverse_pt_inward(pt, world["actor"])
 
     assert rev["vendor_reversed"] == 1
     # stock nets to zero (inward + negative mirror); value GL nets to zero
@@ -174,7 +183,7 @@ def test_reversal_unwinds_stock_payable_and_value_gl(world):
 def test_stock_on_hand_projection_reflects_inward(world):
     booking = _booking(world, world["owned"], number="BK-OH-1")
     pt = _pt_with_row(prate="100", mrp="200", qty="2")
-    post_pt_inward(pt, None, booking=booking)
+    post_pt_inward(pt, world["actor"], booking=booking)
 
     soh = StockOnHand.objects.get(sku_code="B1")
     assert soh.net_qty == 2

@@ -147,9 +147,34 @@ export const typedApi = {
   },
 };
 
+/** Flatten one DRF error value — a string, or a list/dict of them — to a sentence. */
+function firstSentence(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstSentence(item);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = firstSentence(nested);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
 export function apiErrorMessage(e: unknown): string {
-  const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (detail) return JSON.stringify(detail);
-  return "Something went wrong. Please try again.";
+  const data = (e as { response?: { data?: unknown } })?.response?.data;
+  // `detail` is what a refusal raised by a view or permission carries, and it
+  // is the sentence written for the user, so it wins. A serializer refusal
+  // arrives keyed by field instead (`{"roles": ["Floor rule: …"]}`) — the
+  // message is just as deliberate, and falling through to "something went
+  // wrong" would tell the user nothing about a rule they just hit.
+  const detail = (data as { detail?: unknown })?.detail;
+  return (
+    firstSentence(detail) || firstSentence(data) || "Something went wrong. Please try again."
+  );
 }

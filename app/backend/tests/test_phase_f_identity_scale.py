@@ -43,6 +43,13 @@ def world(db):
         return_terms=Brand.ReturnTerms.NONE,
     )
     vendor = Vendor.objects.create(code="v1", name="V1")
+    accounts_role = Role.objects.create(code="accounts", name="Accounts")
+    actor = User.objects.create(
+        username="phase-f-head-office",
+        full_name="Phase F Head Office",
+        scope_type="all",
+        role=accounts_role,
+    )
     return {
         "entity": entity,
         "gstin": gstin,
@@ -50,6 +57,7 @@ def world(db):
         "season": season,
         "owned": owned,
         "vendor": vendor,
+        "actor": actor,
     }
 
 
@@ -95,10 +103,12 @@ def _user(role_code: str, scope: str = "all") -> User:
     # Seed the role's section access from the RBAC matrix exactly as
     # `seed_foundation` does — the API gates on `Role.section_access`, so a role
     # built without it would be denied everything and prove nothing.
-    role = Role.objects.create(
+    role, _ = Role.objects.update_or_create(
         code=role_code,
-        name=role_code.title(),
-        section_access=section_access_for(role_code),
+        defaults={
+            "name": role_code.title(),
+            "section_access": section_access_for(role_code),
+        },
     )
     return User.objects.create(username=f"u_{role_code}", role=role, scope_type=scope)
 
@@ -116,7 +126,11 @@ def test_moneyfield_rejects_float_on_paise_column(world):
 
 
 def test_post_registers_sku_and_cohort_with_locked_cost(world):
-    post_pt_inward(_pt(qty="3", prate="100", mrp="200"), None, booking=_booking(world))
+    post_pt_inward(
+        _pt(qty="3", prate="100", mrp="200"),
+        world["actor"],
+        booking=_booking(world),
+    )
 
     sku = Sku.objects.get(barcode="B1")
     assert sku.brand == "Mufti" and sku.mrp_paise == 20000 and sku.first_doc_number
@@ -144,12 +158,12 @@ def test_cohort_db_check_blocks_cost_over_mrp(world):
 
 def test_stock_on_hand_materialises_and_zeroes_on_reversal(world):
     pt = _pt(qty="3", prate="100", mrp="200")
-    post_pt_inward(pt, None, booking=_booking(world))
+    post_pt_inward(pt, world["actor"], booking=_booking(world))
 
     oh = StockOnHand.objects.get(store=world["wh"], sku_code="B1")
     assert oh.net_qty == 3 and oh.net_value_paise == 30000
 
-    reverse_pt_inward(pt, None)
+    reverse_pt_inward(pt, world["actor"])
     oh.refresh_from_db()
     assert oh.net_qty == 0 and oh.net_value_paise == 0
 
@@ -176,7 +190,7 @@ def test_pt_reader_not_truncated_for_small_file(db, monkeypatch):
 
 
 def test_books_health_reports_balanced_books_after_post(world):
-    post_pt_inward(_pt(), None, booking=_booking(world))
+    post_pt_inward(_pt(), world["actor"], booking=_booking(world))
     client = APIClient()
     client.force_authenticate(_user("owner"))
     r = client.get("/api/finledger/health")

@@ -14,19 +14,9 @@ from typing import Any
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.request import Request
 
-from accounts.role_lists import declare_role_list
+from accounts.actor_policies import user_may_act
 
-STEWARD_ROLES = declare_role_list(
-    "masters.writes",
-    ("owner", "it_admin", "data_steward"),
-    reason=(
-        "The matrix's Setup grants are *scoped* — the warehouse holds "
-        "'Products only' and a brand manager 'Edit assigned products', both at "
-        "`setup: operate`. One Setup rung cannot carry per-model or per-brand "
-        "scope, so widening master-data writes to `setup: operate` would hand "
-        "them store, GSTIN, vendor and legal-entity edits. Parked in #104."
-    ),
-)
+MASTER_WRITES = "masters.writes"
 
 
 class IsMasterSteward(BasePermission):
@@ -45,5 +35,4 @@ class IsMasterSteward(BasePermission):
         user = request.user
         if not (user and user.is_authenticated):
             return False
-        role = getattr(getattr(user, "role", None), "code", "")
-        return bool(user.is_superuser or role in STEWARD_ROLES)
+        return user_may_act(user, MASTER_WRITES)

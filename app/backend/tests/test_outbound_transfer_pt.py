@@ -25,14 +25,13 @@ from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
+from accounts.models import ActorPolicy, Role, ScopeType, User
 from core.documents import DocStatus, VoucherSeries
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import StoreTransfer, StoreTransferLine, TransferPT
 from outbound.transfer_pt import KDPS_COLUMNS, build_transfer_pt_rows
 from ptmapper.models import PtFile
-from ptmapper.views import MAPPING_STEWARD_ROLES, PATNA_ROLES
 from stockledger.models import StockLedgerEntry, StockOnHand
 
 FY = "26-27"
@@ -333,8 +332,12 @@ def test_store_gets_its_transfer_pt_without_any_inbound_pt_right(pt_scaffold):
     """
     s = pt_scaffold
     role_code = s["user"].role.code
-    assert role_code not in PATNA_ROLES  # may not inward a PT
-    assert role_code not in MAPPING_STEWARD_ROLES  # may not make an inbound PT
+    assert not ActorPolicy.objects.filter(
+        action="ptmapper.post_and_reverse_pt", roles__contains=[role_code]
+    ).exists()
+    assert not ActorPolicy.objects.filter(
+        action="ptmapper.mapping_stewardship", roles__contains=[role_code]
+    ).exists()
 
     transfer = _draft(s)
     _dispatch(s, transfer, [("BC001", 3)])

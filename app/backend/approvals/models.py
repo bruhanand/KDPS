@@ -24,6 +24,8 @@ Design notes
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField
@@ -224,8 +226,29 @@ class ApprovalPolicy(TimeStampedModel):
         ordering = ["kind"]
         verbose_name_plural = "approval policies"
 
+    #: What each family is called in the business's own words. A Setup screen
+    #: shows the *family*, not its slug — an owner retuning who signs off a
+    #: return to brand should not have to read ``return_to_brand``. Kept here
+    #: beside the codes rather than in the PWA so one name serves every surface,
+    #: and it stays a plain dict so this module still imports nothing (ADR-0002).
+    FAMILY_LABELS: ClassVar[dict[str, str]] = {
+        "adjustment": "Stock adjustment",
+        "damage": "Damage flag",
+        "gap_closure": "Transfer gap closure",
+        "pt_reverse": "PT reversal",
+        "return_to_brand": "Return to brand",
+        "transfer": "Transfer",
+        "vflip": "V-flip",
+        "writeoff": "Write-off",
+    }
+
     def __str__(self) -> str:
         return f"{self.kind} policy"
+
+    @property
+    def label(self) -> str:
+        """The family in the business's words; an unknown code reads as itself."""
+        return self.FAMILY_LABELS.get(self.kind, self.kind.replace("_", " ").capitalize())
 
     # -- the two questions the policy answers --------------------------------
 

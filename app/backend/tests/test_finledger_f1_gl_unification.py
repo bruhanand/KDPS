@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from django.db.models import Sum
 
+from accounts.models import Role, User
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.posting import PostingRef, cr, dr, post_entries
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
@@ -27,6 +28,16 @@ from finledger.posting import (
     reverse_vendor_entry,
 )
 from vendors.models import Vendor
+
+
+def _head_office_actor() -> User:
+    role, _ = Role.objects.get_or_create(code="accounts", defaults={"name": "Accounts"})
+    return User.objects.create(
+        username="f1-head-office",
+        full_name="F1 Head Office",
+        scope_type="all",
+        role=role,
+    )
 
 
 def _vendor_subledger_total() -> int:
@@ -49,7 +60,7 @@ def _assert_reconciled() -> None:
 
 def test_manual_bill_posts_balanced_payable_and_reconciles(db):
     vendor = Vendor.objects.create(code="f1v1", name="F1 Vendor 1")
-    post_vendor_bill(vendor, 12345, "manual bill", None)
+    post_vendor_bill(vendor, 12345, "manual bill", _head_office_actor())
 
     # Balanced voucher: Dr SUSPENSE / Cr VENDOR_PAYABLE.
     assert account_balance(GLAccount.VENDOR_PAYABLE) == -12345
@@ -60,8 +71,9 @@ def test_manual_bill_posts_balanced_payable_and_reconciles(db):
 
 def test_payment_clears_payable_against_cash_and_reconciles(db):
     vendor = Vendor.objects.create(code="f1v2", name="F1 Vendor 2")
-    post_vendor_bill(vendor, 50000, "bill", None)
-    post_vendor_payment(vendor, 20000, "part payment", None)
+    actor = _head_office_actor()
+    post_vendor_bill(vendor, 50000, "bill", actor)
+    post_vendor_payment(vendor, 20000, "part payment", actor)
 
     # Payment fans Dr VENDOR_PAYABLE / Cr CASH on ONE voucher; a paired cash-out
     # row lands in the cash subledger (detail only — GL cash leg is on this voucher).
@@ -75,8 +87,9 @@ def test_payment_clears_payable_against_cash_and_reconciles(db):
 
 def test_payment_without_cash_leg_uses_suspense(db):
     vendor = Vendor.objects.create(code="f1v3", name="F1 Vendor 3")
-    post_vendor_bill(vendor, 40000, "bill", None)
-    post_vendor_payment(vendor, 40000, "settled off-cash", None, also_cash=False)
+    actor = _head_office_actor()
+    post_vendor_bill(vendor, 40000, "bill", actor)
+    post_vendor_payment(vendor, 40000, "settled off-cash", actor, also_cash=False)
 
     # No cash movement: the GL credit lands in SUSPENSE, cash untouched, books still tie.
     assert account_balance(GLAccount.VENDOR_PAYABLE) == 0
@@ -100,12 +113,13 @@ def test_standalone_cash_movement_reconciles(db):
 
 def test_reversal_mirrors_gl_and_keeps_books_tied(db):
     vendor = Vendor.objects.create(code="f1v4", name="F1 Vendor 4")
-    bill = post_vendor_bill(vendor, 60000, "bill", None)
-    payment = post_vendor_payment(vendor, 60000, "payment", None)
+    actor = _head_office_actor()
+    bill = post_vendor_bill(vendor, 60000, "bill", actor)
+    payment = post_vendor_payment(vendor, 60000, "payment", actor)
     _assert_reconciled()
 
-    reverse_vendor_entry(payment, None)  # unwind the payment (and its paired cash row)
-    reverse_vendor_entry(bill, None)  # unwind the bill
+    reverse_vendor_entry(payment, actor)  # unwind the payment (and its paired cash row)
+    reverse_vendor_entry(bill, actor)  # unwind the bill
 
     # Everything nets back to zero across both books.
     assert account_balance(GLAccount.VENDOR_PAYABLE) == 0
@@ -119,6 +133,7 @@ def test_pt_auto_bill_does_not_double_book_the_payable(db):
     """The PT inward books Dr INVENTORY / Cr VENDOR_PAYABLE itself; the finledger
     auto-bill is subledger detail only (`gl=False`) so the payable is booked once."""
     vendor = Vendor.objects.create(code="f1v5", name="F1 Vendor 5")
+    actor = _head_office_actor()
 
     # Simulate the PT inward value voucher (as stockledger.post_value_gl would).
     ref = PostingRef(doc_type="PT", doc_number="PT-0001")
@@ -128,9 +143,12 @@ def test_pt_auto_bill_does_not_double_book_the_payable(db):
             dr(GLAccount.INVENTORY, 90000, brand="ACME", season="SS26"),
             cr(GLAccount.VENDOR_PAYABLE, 90000, party_type="vendor", party_code=vendor.code),
         ],
+        posted_by=actor,
     )
     # The finledger auto-bill for the same goods — MUST NOT post its own GL voucher.
-    entry = post_vendor_bill(vendor, 90000, "PT inward auto-bill", None, reference="BK-1", gl=False)
+    entry = post_vendor_bill(
+        vendor, 90000, "PT inward auto-bill", actor, reference="BK-1", gl=False
+    )
     assert GLEntry.objects.filter(doc_number=entry.doc_number).count() == 0
 
     # Payable booked exactly once (−90000), inventory once (+90000), books tie,

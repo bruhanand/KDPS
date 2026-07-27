@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from accounts.models import User
@@ -278,9 +278,11 @@ class Command(BaseCommand):
             )
             return
 
-        user = User.objects.filter(is_superuser=True).first()
+        user = User.objects.filter(role__code="owner", scope_type="all").first()
         if not user:
-            user = User.objects.first()
+            raise CommandError(
+                "seed_foundation must provide a network-wide Owner for PT inwarding."
+            )
         self.stdout.write(f"Seeding as user: {user.username}")
 
         # Ensure VoucherSeries exist for all outbound doc types at all stores.

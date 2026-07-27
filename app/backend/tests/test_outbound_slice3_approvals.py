@@ -317,7 +317,19 @@ def test_a_vflip_needs_a_second_person_too(mc):
     The warehouse makes it: relabelling ownership is `stock: manage` (#94), a
     rung HO ops does not hold.
     """
-    created = _client(mc["packer"]).post(
+    head_office_packer = User.objects.create_user(
+        username="mc_ho_packer",
+        password=TEST_PASSWORD,
+        role=mc["packer"].role,
+        scope_type=ScopeType.ALL,
+    )
+    executor = User.objects.create_user(
+        username="mc_vflip_executor",
+        password=TEST_PASSWORD,
+        role=mc["outsider"].role,
+        scope_type=ScopeType.ALL,
+    )
+    created = _client(head_office_packer).post(
         "/api/outbound/vflips",
         {
             "store": mc["store"].id,
@@ -330,7 +342,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
     assert created.status_code == 201, created.data
     vflip_id = created.data["id"]
 
-    blocked = _client(mc["packer"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    blocked = _client(executor).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert blocked.status_code == 400
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id is None
 
@@ -339,7 +351,7 @@ def test_a_vflip_needs_a_second_person_too(mc):
         f"/api/approvals/{approval.id}/decide", {"action": "approve"}, format="json"
     )
 
-    posted = _client(mc["packer"]).post(f"/api/outbound/vflips/{vflip_id}/submit")
+    posted = _client(executor).post(f"/api/outbound/vflips/{vflip_id}/submit")
     assert posted.status_code == 200, posted.data
     assert VFlip.objects.get(pk=vflip_id).authorized_by_id == mc["checker"].id
 
@@ -598,8 +610,14 @@ def test_a_large_adjustment_goes_straight_to_ho(mc):
 def test_the_tolerance_is_data_the_business_can_retune(mc):
     """Rule 12: the threshold is a row, not a constant. Drop it to zero and the
     same small adjustment needs a checker again — with no redeploy."""
-    ApprovalPolicy.objects.create(
-        kind="adjustment", tolerance_paise=0, escalated_roles=["owner", "ho_ops"]
+    ApprovalPolicy.objects.update_or_create(
+        kind="adjustment",
+        defaults={
+            "tolerance_paise": 0,
+            "band_paise": 25_00_000,
+            "band_roles": ["store_manager", "owner", "ho_ops"],
+            "escalated_roles": ["owner", "ho_ops"],
+        },
     )
 
     adj_id = _create_adjustment(mc, adj_qty=-2)["id"]

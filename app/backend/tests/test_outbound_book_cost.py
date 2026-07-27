@@ -20,7 +20,7 @@ from _creds import TEST_PASSWORD
 from _rbac import make_role
 from rest_framework.test import APIClient
 
-from accounts.models import ScopeType, User
+from accounts.models import ActorPolicy, ScopeType, User
 from approvals.models import Approval, ApprovalStatus
 from core.gl import GLAccount, GLEntry
 from finledger.models import VendorLedgerEntry
@@ -29,6 +29,7 @@ from outbound.models import (
     ReturnToVendor,
     ReturnToVendorLine,
     StockAdjustment,
+    VFlip,
     WriteOff,
 )
 from outbound.posting import OutboundPostingError, post_writeoff
@@ -138,10 +139,10 @@ def books(db):
             scope_type=ScopeType.ALL,
         )
 
-    # The warehouse is the one role that makes all four document families under
-    # the section gates (#94): `return_to_brand: operate`, `stock_count: operate`
-    # and `stock: manage`. Owner checks, and is never the maker.
+    # Warehouse makes each draft; Accounts executes the approved V-flip; Owner
+    # checks. These remain three different people.
     maker = _user("bc_maker", "warehouse")
+    executor = _user("bc_executor", "accounts")
     checker = _user("bc_checker", "owner")
 
     for doc_type in ["WRO", "VFL", "ADJ", "RTV", "STO"]:
@@ -165,6 +166,7 @@ def books(db):
         "brand_sor": brand_sor,
         "vendor": vendor,
         "maker": maker,
+        "executor": executor,
         "checker": checker,
     }
 
@@ -510,7 +512,7 @@ def test_vflip_posts_both_legs_and_the_gl_reclass(books):
     assert create.data["lines"][0]["unit_cost_paise"] == AVERAGE_COST
 
     _approve(books, "vflip", create.data["id"])
-    submit = _client(books["maker"]).post(f"/api/outbound/vflips/{create.data['id']}/submit")
+    submit = _client(books["executor"]).post(f"/api/outbound/vflips/{create.data['id']}/submit")
     assert submit.status_code == 200, submit.data
     doc_number = submit.data["doc_number"]
 
@@ -530,6 +532,32 @@ def test_vflip_posts_both_legs_and_the_gl_reclass(books):
     on_hand = StockOnHand.objects.get(store=books["store"], sku_code="BC-AVG")
     assert (on_hand.net_qty, on_hand.net_value_paise) == (10, 10 * AVERAGE_COST)
     assert on_hand.brand == "V BcSOR"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_zero_cost_vflip_still_hits_the_immutable_actor_floor(books):
+    create = _client(books["maker"]).post(
+        "/api/outbound/vflips",
+        {
+            "store": books["store"].id,
+            "original_brand": books["brand_sor"].id,
+            "season": "SS26",
+            "lines": [{"sku_code": "BC-AVG", "qty": 1}],
+        },
+        format="json",
+    )
+    assert create.status_code == 201, create.data
+    _approve(books, "vflip", create.data["id"])
+    vflip = VFlip.objects.get(pk=create.data["id"])
+    vflip.lines.update(unit_cost_paise=0)  # legacy/malformed row: no GL legs
+    ActorPolicy.objects.filter(action="outbound.execute_vflip").update(roles=["warehouse"])
+
+    response = _client(books["maker"]).post(f"/api/outbound/vflips/{vflip.pk}/submit")
+
+    assert response.status_code == 403
+    vflip.refresh_from_db()
+    assert vflip.docstatus == 0
+    assert not StockLedgerEntry.objects.filter(kind__startswith="vflip_").exists()
 
 
 # ---------------------------------------------------------------------------

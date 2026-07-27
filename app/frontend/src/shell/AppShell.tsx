@@ -143,6 +143,17 @@ function UserMenu() {
   );
 }
 
+/** Anyone who decides an approval says so here, so the bell can recount.
+ *
+ *  A DOM event rather than a store: the bell and the inbox are the only two
+ *  things that care, they are never mounted together outside the shell, and one
+ *  line beats a context for a fact this small. */
+export const APPROVALS_CHANGED = "kdps:approvals-changed";
+
+export function announceApprovalsChanged() {
+  window.dispatchEvent(new Event(APPROVALS_CHANGED));
+}
+
 /** The bell, told what it is ringing about.
  *
  *  It used to be a dead button with a permanent red dot: nothing to click, and a
@@ -151,12 +162,21 @@ function UserMenu() {
  *  inbox — and shows nothing at all when there is nothing to show. */
 function ApprovalsBell() {
   const [waiting, setWaiting] = useState<number | null>(null);
+  // Re-counted on every navigation *and* whenever a decision is made, not once
+  // per session: clearing the last item used to leave the bell insisting one
+  // document was still waiting, right beside a page saying nothing was.
+  const { pathname } = useLocation();
   useEffect(() => {
-    api
-      .get("/approvals/inbox")
-      .then((r) => setWaiting(r.data?.length ?? 0))
-      .catch(() => setWaiting(null));
-  }, []);
+    function count() {
+      api
+        .get("/approvals/inbox")
+        .then((r) => setWaiting(r.data?.length ?? 0))
+        .catch(() => setWaiting(null));
+    }
+    count();
+    window.addEventListener(APPROVALS_CHANGED, count);
+    return () => window.removeEventListener(APPROVALS_CHANGED, count);
+  }, [pathname]);
   const label = waiting
     ? `${waiting} document${waiting === 1 ? "" : "s"} waiting for your approval`
     : "Approvals inbox — nothing waiting for you";

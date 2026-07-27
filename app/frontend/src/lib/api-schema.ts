@@ -4,6 +4,127 @@
  */
 
 export interface paths {
+    "/api/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description History across every document type, store-scoped (ADR-0003). Includes the
+         *     caller's own requests — the maker must be able to watch their own decision.
+         */
+        get: operations["approvals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approvals/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: approve or reject one approval as the signed-in user. */
+        post: operations["approvals_decide_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approvals/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The one "waiting for you" screen. Never lists the caller's own requests —
+         *     a self-approval can't succeed, so it is never offered.
+         */
+        get: operations["approvals_inbox_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin/actor-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_admin_actor_policies_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin/actor-policies/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_admin_actor_policies_retrieve"];
+        put: operations["auth_admin_actor_policies_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["auth_admin_actor_policies_partial_update"];
+        trace?: never;
+    };
+    "/api/auth/admin/approval-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_admin_approval_policies_list"];
+        put?: never;
+        post: operations["auth_admin_approval_policies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin/approval-policies/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth_admin_approval_policies_retrieve"];
+        put: operations["auth_admin_approval_policies_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["auth_admin_approval_policies_partial_update"];
+        trace?: never;
+    };
     "/api/auth/admin/meta": {
         parameters: {
             query?: never;
@@ -184,6 +305,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bookings/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description End a booking: short-close what will not arrive, or cancel one nothing came against.
+         *
+         *     The reason is mandatory. An open order report is only worth reading if every
+         *     row on it is expected — and "why did the other 60 pieces never come?" is a
+         *     question the vendor conversation needs answered six months later.
+         */
+        post: operations["bookings_close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bookings/draft": {
         parameters: {
             query?: never;
@@ -193,7 +337,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Read an uploaded receiving doc into a draft booking (not saved). */
+        /**
+         * @description Read an uploaded receiving doc into a draft booking (not saved).
+         *
+         *     Nothing is saved, but the draft is the first half of placing a booking and it
+         *     burns an AI read on an upload - so it sits at the same rung as the create,
+         *     not at ``view``.
+         */
         post: operations["bookings_draft_create"];
         delete?: never;
         options?: never;
@@ -273,6 +423,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["finledger_cash_summary_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/finledger/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /api/finledger/health` — trial balance + equation-of-state snapshot. */
+        get: operations["finledger_health_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -443,6 +610,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/inbound/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The inbound work queue (Q9: in-app is the system of record; WhatsApp nudge is
+         *     a later phase). Derived, never stored: an arrival is *awaiting* while it has no
+         *     live PT (a reversed PT re-opens it); a PT in the warehouse/Patna pipeline shows
+         *     as in-progress. GET only.
+         *
+         *     Gated on ``receive_goods: view`` rather than a role list (#94), so the queue
+         *     opens for exactly the people the sidebar already shows Receive Goods to — the
+         *     store person included, whose own arrivals are their work. Both halves are then
+         *     narrowed to the unit in the top-bar switcher, the same gate ``GrnListView``
+         *     uses, so a store sees its own queue and nobody else's.
+         */
+        get: operations["inbound_queue_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/masters/brands": {
         parameters: {
             query?: never;
@@ -452,11 +647,27 @@ export interface paths {
         };
         get: operations["masters_brands_list"];
         put?: never;
-        post?: never;
+        post: operations["masters_brands_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/masters/brands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["masters_brands_retrieve"];
+        put: operations["masters_brands_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["masters_brands_partial_update"];
         trace?: never;
     };
     "/api/masters/entities": {
@@ -484,11 +695,27 @@ export interface paths {
         };
         get: operations["masters_gstins_list"];
         put?: never;
-        post?: never;
+        post: operations["masters_gstins_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/masters/gstins/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["masters_gstins_retrieve"];
+        put: operations["masters_gstins_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["masters_gstins_partial_update"];
         trace?: never;
     };
     "/api/masters/seasons": {
@@ -499,6 +726,47 @@ export interface paths {
             cookie?: never;
         };
         get: operations["masters_seasons_list"];
+        put?: never;
+        post: operations["masters_seasons_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/masters/seasons/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["masters_seasons_retrieve"];
+        put: operations["masters_seasons_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["masters_seasons_partial_update"];
+        trace?: never;
+    };
+    "/api/masters/skus/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Registry reuse at authoring time (D2 Q16/Q41): has this vendor+style+size been
+         *     seen before? Exact-match filters over the SKU master; the PT editor shows "seen
+         *     before — reusing barcode X" and copies barcode/colour/HSN/MRP from the registry
+         *     instead of minting a duplicate identity. Pure read.
+         *
+         *     ``GET /masters/skus/lookup?design=&size=&brand=&barcode=`` — at least one of
+         *     ``design``/``barcode`` is required (never dump the registry).
+         */
+        get: operations["masters_skus_lookup_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -516,11 +784,27 @@ export interface paths {
         };
         get: operations["masters_stores_list"];
         put?: never;
-        post?: never;
+        post: operations["masters_stores_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/masters/stores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["masters_stores_retrieve"];
+        put: operations["masters_stores_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["masters_stores_partial_update"];
         trace?: never;
     };
     "/api/masters/summary": {
@@ -539,6 +823,754 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/outbound/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_adjustments_list"];
+        put?: never;
+        post: operations["outbound_adjustments_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/adjustments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_adjustments_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/adjustments/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for all three wired families — the only thing that differs is
+         *     which model to load and who may ask, both supplied by the URL conf. The
+         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_adjustments_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/adjustments/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: Submit (post) a draft stock adjustment. */
+        post: operations["outbound_adjustments_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/count-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET ?store=&barcode= — what a scanned piece *is*, during a blind count.
+         *
+         *     Deliberately not ``ScanLookupView``: that one answers with the location's
+         *     available quantity, which is the very number a blind count may not show, and
+         *     it 404s on a piece the books hold none of — which in a count is not a wrong
+         *     piece at all but the surplus the count exists to find. So this returns dims
+         *     only, and finds the piece in the SKU master when the location holds none.
+         */
+        get: operations["outbound_count_lookup_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/count-sessions/{id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: record scanned pieces on an open session.
+         *
+         *     The response is the session as it stands — counted pieces only. No book
+         *     quantity exists to return yet, which is what makes the count blind (#76).
+         */
+        post: operations["outbound_count_sessions_scan_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/count-sessions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: close a session and take its book snapshot. */
+        post: operations["outbound_count_sessions_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/gap-closures/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_gap_closures_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Correct a draft closure — a new reason, a new note, lines re-read.
+         *
+         *     The way back from a rejection or a stale draft, so one wrong reason code
+         *     cannot strand the pieces in transit for good.
+         */
+        patch: operations["outbound_gap_closures_partial_update"];
+        trace?: never;
+    };
+    "/api/outbound/gap-closures/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for all three wired families — the only thing that differs is
+         *     which model to load and who may ask, both supplied by the URL conf. The
+         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_gap_closures_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/gap-closures/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: post an approved gap closure — the resolving entries land here.
+         *
+         *     The rules that matter (approved by a second, senior person; never anybody
+         *     entitled to the receiving store; the bucket still holds what the draft says)
+         *     all live in ``posting.post_gap_closure``, so a shell or a management command
+         *     hits the same wall this endpoint does.
+         */
+        post: operations["outbound_gap_closures_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/mark-damaged": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET: list mark-damaged documents — ``?docstatus=0`` for the reports still
+         *     waiting on someone. POST: the global mark-damaged action — create a DMG
+         *     document from scanned pieces.
+         *
+         *     Whether that document *posts* depends on who is asking (#138). A store
+         *     person is reporting damage: it stays a draft in the approvals inbox and the
+         *     pieces stay sellable until a warehouse or HO person confirms it. Someone who
+         *     holds the confirming rung reports and confirms in the one call, so the pieces
+         *     move from free-to-sell into quarantine here. ``flag_status`` on the response
+         *     says which happened.
+         *
+         *     Any outbound writer (including store-level roles) may mark damaged from any
+         *     stock view — damage is caught everywhere. store_staff is read-only.
+         */
+        get: operations["outbound_mark_damaged_list"];
+        put?: never;
+        /**
+         * @description GET: list mark-damaged documents — ``?docstatus=0`` for the reports still
+         *     waiting on someone. POST: the global mark-damaged action — create a DMG
+         *     document from scanned pieces.
+         *
+         *     Whether that document *posts* depends on who is asking (#138). A store
+         *     person is reporting damage: it stays a draft in the approvals inbox and the
+         *     pieces stay sellable until a warehouse or HO person confirms it. Someone who
+         *     holds the confirming rung reports and confirms in the one call, so the pieces
+         *     move from free-to-sell into quarantine here. ``flag_status`` on the response
+         *     says which happened.
+         *
+         *     Any outbound writer (including store-level roles) may mark damaged from any
+         *     stock view — damage is caught everywhere. store_staff is read-only.
+         */
+        post: operations["outbound_mark_damaged_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/rtvs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_rtvs_list"];
+        put?: never;
+        post: operations["outbound_rtvs_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/rtvs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_rtvs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/rtvs/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: Submit (post) a draft RTV — stock exits, GL posts. */
+        post: operations["outbound_rtvs_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/scan-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET ?store=&barcode= — per-scan validation for the scan screen.
+         *
+         *     Returns the piece's identity + available qty at the location (for the
+         *     right-piece beep and scan-to-build), 404 when the location holds no such
+         *     stock (the wrong-piece beep).
+         */
+        get: operations["outbound_scan_lookup_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: counts at the stores this user can see. POST: open a new one. */
+        get: operations["outbound_stocktakes_retrieve"];
+        put?: never;
+        /** @description GET: counts at the stores this user can see. POST: open a new one. */
+        post: operations["outbound_stocktakes_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_stocktakes_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes/{id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: apply the variance as one stock adjustment.
+         *
+         *     409 when stock moved between the count and now, naming the lines: the person
+         *     deciding confirms those barcodes and posts again. Never a blind overwrite.
+         */
+        post: operations["outbound_stocktakes_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes/{id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: add one counter's scoped pass to an open count. */
+        post: operations["outbound_stocktakes_sessions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes/{id}/variance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET: book against counted for the whole count, in pieces and in value.
+         *
+         *     Value is not masked. Whoever counted is counting their own location's stock
+         *     and can already read the PT that carries the rate, so withholding the number
+         *     only stops them sizing their own problem (#76).
+         */
+        get: operations["outbound_stocktakes_variance_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_transfers_list"];
+        put?: never;
+        post: operations["outbound_transfers_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_transfers_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/dispatch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: Dispatch a draft transfer from scanned lines only (#68).
+         *
+         *     Payload: ``{"scans": [{"barcode": ..., "qty": ...}, ...]}`` — the scanned
+         *     quantities are the only quantities; typed dispatch is gone. Stock moves
+         *     source → in-transit bucket under this transfer.
+         */
+        post: operations["outbound_transfers_dispatch_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/gap-closure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: raise the closure for a transfer's gap — reason + optional note.
+         *
+         *     Creating it does not close anything: the draft goes straight into the
+         *     approvals inbox, and only a senior's approval lets it post. The lines are
+         *     read off the transfer's in-transit remainder, so the person raising it
+         *     cannot restate how much went missing.
+         */
+        post: operations["outbound_transfers_gap_closure_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/pt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: the transfer's PT, whole — the shape the print screen renders. */
+        get: operations["outbound_transfers_pt_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/pt.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: the PT as CSV, in KDPS column order. */
+        get: operations["outbound_transfers_pt.csv_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/pt.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description GET: the PT as a real .xlsx — the file a brand or a store opens. */
+        get: operations["outbound_transfers_pt.xlsx_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/{id}/receive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: Receive a dispatched transfer from scanned lines only (#68, #71).
+         *
+         *     Payload: ``{"scans": [...], "damaged": [...], "extras": [...], "notes": ""}``
+         *     — each list of ``{"barcode", "qty"}``. Everything that turned up moves
+         *     in-transit → destination, broken pieces included, and a damage document is
+         *     raised for those: quarantined on the spot if the receiver holds the
+         *     confirming rung, otherwise flagged and left in stock (#138). Extras (not on
+         *     the transfer) are accepted in with a flag; a short receive leaves the
+         *     remainder in-transit and opens a gap. The notes reach the server and are
+         *     stored.
+         */
+        post: operations["outbound_transfers_receive_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/transfers/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET: the gaps list — every open gap, for the warehouse/HO screen.
+         *
+         *     Scoped on the *source* store: the sender is answerable for the pieces until
+         *     the receiver scans them in, so a gap is the sender's to explain. That also
+         *     means the receiving store does not find its own gap on this list.
+         */
+        get: operations["outbound_transfers_gaps_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/vflips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_vflips_list"];
+        put?: never;
+        post: operations["outbound_vflips_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/vflips/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_vflips_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/vflips/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for all three wired families — the only thing that differs is
+         *     which model to load and who may ask, both supplied by the URL conf. The
+         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_vflips_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/vflips/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: Submit (post) a draft V-flip. */
+        post: operations["outbound_vflips_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/writeoffs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_writeoffs_list"];
+        put?: never;
+        post: operations["outbound_writeoffs_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/writeoffs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_writeoffs_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/writeoffs/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for all three wired families — the only thing that differs is
+         *     which model to load and who may ask, both supplied by the URL conf. The
+         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_writeoffs_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/writeoffs/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST: Submit (post) a draft write-off. */
+        post: operations["outbound_writeoffs_submit_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ptmapper/controlled": {
         parameters: {
             query?: never;
@@ -546,6 +1578,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description The Master-Sheet vocabulary. ``?dimension=<dim>`` → one dimension's values
+         *     (the original form); no param → every dimension + the ITEM → (SUB CATEGORY,
+         *     TYPE) helper map, so the editor loads its dropdowns in one request.
+         */
         get: operations["ptmapper_controlled_retrieve"];
         put?: never;
         post?: never;
@@ -640,6 +1677,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ptmapper/files/{id}/price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Price the blank rows of an authored PT deterministically (D2 Q7): for every
+         *     row with a purchase rate but no MRP, derive MRP / taxes / margin via
+         *     ``ptmapper.pricing`` — margin from the ``CategoryMargin`` master (row ITEM,
+         *     falling back to the global default), GST from the date-effective ``GstSlab``.
+         *     ``{"margin_pct": …}`` overrides the margin, validated server-side against each
+         *     priced row's category band; one out-of-band row rejects the whole call.
+         *     Written cells carry provenance ``derived``. Source-gated: never a brand file.
+         */
+        post: operations["ptmapper_files_price_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ptmapper/files/{id}/recall": {
         parameters: {
             query?: never;
@@ -666,6 +1728,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description Re-map a mapping-stage file. By default (D2) hand-edited cells are **preserved**
+         *     — the engine re-runs and the human's manual cells are re-applied on top, so a fresh
+         *     seed/rule fills the remaining blanks without clobbering a manual fix. Passing
+         *     ``{"discard_edits": true}`` is the explicit full wipe (today's behaviour).
+         */
         post: operations["ptmapper_files_rerun_create"];
         delete?: never;
         options?: never;
@@ -683,8 +1751,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Append-only correction: reverse a posted PT inward (negative mirror rows),
-         *     returning the file to 'sent' so it can be fixed and re-posted.
+         * @description Append-only correction: reverse a posted PT inward (negative mirror stock + GL
+         *     rows, vendor-bill reversal) and `cancel()` the file (reversal-as-cancel) — the
+         *     posted fact is frozen forever; you re-upload to re-post.
          */
         post: operations["ptmapper_files_reverse_create"];
         delete?: never;
@@ -706,7 +1775,18 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Warehouse hand-edits the mapped KDPS rows before sending to Patna. */
+        /**
+         * @description Warehouse hand-edits the mapped KDPS rows before sending to Patna.
+         *
+         *     Body: ``{"rows": [{"id", "data": {col: val}}], "fills": [{"column", "value",
+         *     "scope": "blank" | "all" | {"match_raw": <raw>}}], "remember": [{"row_id",
+         *     "column"}]}`` — all optional. Every edited controlled cell (the 9 Master columns
+         *     + the two tax columns) must hold an allowed Master-Sheet value or be blank;
+         *     anything else is a 400 with per-cell errors and nothing is written. Fills run
+         *     first, then row edits. A ``remember`` entry stages a brand-scoped learning
+         *     proposal from that cell's raw source → its (post-edit) value (D1: it promotes to
+         *     a live rule when the file is sent to Patna, or immediately if it is already sent).
+         */
         patch: operations["ptmapper_files_rows_partial_update"];
         trace?: never;
     };
@@ -721,6 +1801,69 @@ export interface paths {
         put?: never;
         /** @description Warehouse → Patna: hand the mapped draft over for review/posting. */
         post: operations["ptmapper_files_send_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ptmapper/files/from-grn/{grn_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Start the non-brand PT for an arrival: seed a DRAFT ``PtFile(source=invoice)``
+         *     from the GRN's counted lines, then best-effort AI-prefill money cells from the
+         *     stored invoice. One live PT per GRN — a second call returns 409 pointing at it
+         *     (a reversed PT frees the slot; you author again, never edit).
+         */
+        post: operations["ptmapper_files_from_grn_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ptmapper/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The staged-learning queue. ``?status=`` (default ``proposed``) filters by status;
+         *     ``all`` returns every proposal, newest first.
+         */
+        get: operations["ptmapper_proposals_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ptmapper/proposals/{id}/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description Approve (promote to a live ``Lookup`` via the one write-path) or reject a staged
+         *     proposal — a mapping-steward action (Rule 8: only a human decision reaches a live
+         *     rule). Approve runs the shadow check; a conflict returns 409 with the detail.
+         */
+        post: operations["ptmapper_proposals_decide_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -753,10 +1896,57 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * @description Resolve one queue item → write a lookup row / taxonomy rule, then re-map
-         *     every file still needing review (the resolution is remembered forever).
+         * @description Resolve one queue item → stage + promote a lookup row (via ``learning``, the one
+         *     write-path) or write a taxonomy rule, then re-map every file still needing review.
+         *
+         *     A single-dimension resolution routes through ``learning.propose(origin="review") +
+         *     approve`` — the steward's decision *is* the gate, so it is shadow-checked on the way
+         *     in (a conflict with a human-confirmed cell returns 409 and writes nothing). It
+         *     defaults to **brand scope** when the miss came from exactly one resolved brand (D4);
+         *     ``brand`` in the payload overrides (``""`` = explicit global).
          */
         post: operations["ptmapper_review_resolve_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ptmapper/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Deterministic pre-fill suggestions for a raw value (no LLM). Exact ``Lookup``
+         *     hits (brand-scoped first, then global) rank above Master values by trigram
+         *     similarity (``>= 0.25``, top 5). Pure read — it only pre-fills a dropdown; a human
+         *     still picks and only the review/edit write-path commits anything (Rule 8).
+         *
+         *     ``GET /ptmapper/suggest?dimension=<dim>&q=<raw>&brand=<brand>``
+         */
+        get: operations["ptmapper_suggest_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description `GET /api/search?q=` — one grouped, scope-enforced answer for the top bar. */
+        get: operations["search_retrieve"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -779,6 +1969,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stockledger/in-transit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The in-transit bucket — the third honest stock number (at-warehouse /
+         *     in-transit / at-store). Served from the materialised `InTransitStock`
+         *     projection; rows are keyed to the transfer holding the pieces. The sender
+         *     is answerable until the receiver scans in, so scoping rides on the
+         *     source store.
+         */
+        get: operations["stockledger_in_transit_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stockledger/on-hand": {
         parameters: {
             query?: never;
@@ -787,12 +2000,37 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * @description Net stock currently on hand (Σqty > 0) grouped by SKU / brand / store.
+         * @description Net stock on hand (Σqty > 0) grouped by SKU / brand / store, served from the
+         *     **materialised** `StockOnHand` projection (maintained inside each post/reverse,
+         *     rebuildable via `manage.py rebuild_stock_on_hand`).
          *
-         *     Computed live from the append-only ledger: inward (+) minus reversals (−),
-         *     so a fully-reversed posting simply drops out of the on-hand view.
+         *     Large result sets are capped to `MAX_LINES` for payload safety, but the true
+         *     line count and a `truncated` flag are ALWAYS reported — the previous silent
+         *     `[:2000]` drop is gone.
          */
         get: operations["stockledger_on_hand_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stockledger/quarantine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The quarantine filter inside inventory (issue #69) — damaged / held stock
+         *     that is NOT free-to-sell. Served from the materialised ``QuarantineStock``
+         *     projection, each row carrying who marked it and when (Rule 10). Scoped by
+         *     store, filterable by brand (the ownership filter) and store.
+         */
+        get: operations["stockledger_quarantine_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -824,8 +2062,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * @description The vendor master. Reads stay open (every booking form needs the list);
+         *     writes are the master-data steward's, the same gate stores, brands, seasons
+         *     and GSTINs have carried since D8.
+         *
+         *     Until this review the whole endpoint sat on a bare ``IsAuthenticated``: a
+         *     store cashier could mint the supplier that every future booking, GRN and
+         *     payable then hangs off, and nothing could correct one afterwards because
+         *     there was no detail route at all.
+         */
         get: operations["vendors_list"];
         put?: never;
+        /**
+         * @description The vendor master. Reads stay open (every booking form needs the list);
+         *     writes are the master-data steward's, the same gate stores, brands, seasons
+         *     and GSTINs have carried since D8.
+         *
+         *     Until this review the whole endpoint sat on a bare ``IsAuthenticated``: a
+         *     store cashier could mint the supplier that every future booking, GRN and
+         *     payable then hangs off, and nothing could correct one afterwards because
+         *     there was no detail route at all.
+         */
         post: operations["vendors_create"];
         delete?: never;
         options?: never;
@@ -833,10 +2091,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vendors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Correct a vendor, or retire one. Never deleted — bookings and payables
+         *     point at it (masters are referenced by append-only rows).
+         */
+        get: operations["vendors_retrieve"];
+        /**
+         * @description Correct a vendor, or retire one. Never deleted — bookings and payables
+         *     point at it (masters are referenced by append-only rows).
+         */
+        put: operations["vendors_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * @description Correct a vendor, or retire one. Never deleted — bookings and payables
+         *     point at it (masters are referenced by append-only rows).
+         */
+        patch: operations["vendors_partial_update"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActorPolicy: {
+            readonly id: number;
+            readonly action: string;
+            label: string;
+            description?: string;
+            roles?: string[];
+        };
         AdminRole: {
             readonly id: number;
             code: string;
@@ -862,6 +2155,8 @@ export interface components {
             readonly entity_name: string;
             readonly stores: components["schemas"]["StoreMini"][];
             store_ids?: number[];
+            readonly brands: components["schemas"]["BrandMini"][];
+            brand_ids?: number[];
             is_active?: boolean;
             is_staff?: boolean;
             /**
@@ -873,6 +2168,69 @@ export interface components {
             readonly date_joined: string;
             password?: string;
         };
+        ApprovalPolicyAdmin: {
+            readonly id: number;
+            /** @description Document family this governs, e.g. 'adjustment'. */
+            kind: string;
+            readonly label: string;
+            /**
+             * Format: int64
+             * @description Value at stake at or below which no second person is asked — the document posts and the decision is logged. 0 disables the tolerance: every document of this kind needs a checker.
+             */
+            tolerance_paise?: number;
+            /**
+             * Format: int64
+             * @description Up to this value the in-charge roles may approve; above it, only the escalated roles. 0 sends every one straight to HO.
+             */
+            band_paise?: number;
+            /** @description Role codes that may approve within the band (in-charge + HO). */
+            band_roles?: string[];
+            /** @description Role codes that may approve above the band (HO only). */
+            escalated_roles?: string[];
+        };
+        /** @description One inbox row / one document's approval block. */
+        ApprovalRead: {
+            readonly id: number;
+            /** @description Machine code of the document family, e.g. 'writeoff'. The client maps it to a route; the server never branches on it. */
+            readonly kind: string;
+            readonly kind_label: string;
+            /** @description Snapshot one-liner shown in the inbox (store, lines, pieces). */
+            readonly title: string;
+            readonly object_id: number;
+            /** @description Scopes the inbox for store-scoped users (ADR-0003). */
+            readonly store: number | null;
+            /** @default  */
+            readonly store_code: string;
+            /** @default  */
+            readonly store_name: string;
+            /** @description Value at stake, snapshotted — the input to value-banded approval. */
+            readonly value_paise: number;
+            readonly status: components["schemas"]["ApprovalReadStatusEnum"];
+            /** @description Who created the document. Snapshotted once and never rewritten, so re-asking after a rejection cannot launder the maker out of the way and let them approve their own document. */
+            readonly made_by: number;
+            readonly made_by_name: string;
+            /** @description Who asked, this time round. Usually the maker; after a rejection it may be whoever picked the document back up. */
+            readonly requested_by: number;
+            readonly requested_by_name: string;
+            /** Format: date-time */
+            readonly requested_at: string;
+            readonly decided_by: number | null;
+            readonly decided_by_name: string;
+            /** Format: date-time */
+            readonly decided_at: string | null;
+            /** @description Required on reject; free for approve; the policy note on 'not_required'. */
+            readonly reason: string;
+        };
+        /**
+         * @description * `pending` - Waiting for approval
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `not_required` - No second person needed
+         * @enum {string}
+         */
+        ApprovalReadStatusEnum: "pending" | "approved" | "rejected" | "not_required";
+        /** @enum {unknown} */
+        BlankEnum: "";
         Booking: {
             readonly id: number;
             number: string;
@@ -897,6 +2255,11 @@ export interface components {
             readonly lines: components["schemas"]["BookingLine"][];
             readonly booked_total: number;
             readonly received_total: number;
+            readonly open_qty: number;
+            close_reason?: string;
+            /** Format: date-time */
+            closed_at?: string | null;
+            readonly closed_by_name: string;
             /** Format: date-time */
             readonly created_at: string;
         };
@@ -910,6 +2273,9 @@ export interface components {
             mrp_paise?: number | null;
             received_qty?: number;
             inwarded_qty?: number;
+            /** @description Destination store for this line (multi-store booking). Null = use the booking's default destination_store (else warehouse/HO). */
+            store?: number | null;
+            readonly store_name: string;
         };
         /**
          * @description * `draft` - Draft
@@ -929,6 +2295,11 @@ export interface components {
             return_terms?: components["schemas"]["ReturnTermsEnum"];
             readonly commercial_label: string;
             is_active?: boolean;
+        };
+        BrandMini: {
+            id: number;
+            code: string;
+            name: string;
         };
         CashLedgerEntry: {
             readonly id: number;
@@ -958,9 +2329,74 @@ export interface components {
             username: string;
             password: string;
         };
+        /**
+         * @description * `0` - draft
+         *     * `1` - submitted
+         *     * `2` - cancelled
+         * @enum {integer}
+         */
+        DocstatusEnum: 0 | 1 | 2;
+        GapClosureLine: {
+            readonly id: number;
+            readonly sku_code: string;
+            readonly design: string;
+            readonly color: string;
+            readonly size: string;
+            readonly brand: string;
+            readonly season: string;
+            readonly item: string;
+            readonly hsn: string;
+            readonly qty: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description A gap closure and everything a reviewer needs to judge it — which
+         *     transfer, which pieces, whose reason, and who signed it off.
+         */
+        GapClosureRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            transfer: number;
+            readonly transfer_doc_number: string;
+            store: number;
+            readonly store_code: string;
+            readonly source_store_code: string;
+            readonly destination_store_code: string;
+            reason: components["schemas"]["GapClosureReadReasonEnum"];
+            readonly reason_label: string;
+            note?: string;
+            /** @description Stamped by the approvals inbox on approve — never typed (#70). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["GapClosureLine"][];
+        };
+        /**
+         * @description * `found_later` - Found later — the pieces did arrive
+         *     * `lost_in_transit` - Lost in transit — written off
+         *     * `wrongly_scanned` - Wrongly scanned — never left the sender
+         * @enum {string}
+         */
+        GapClosureReadReasonEnum: "found_later" | "lost_in_transit" | "wrongly_scanned";
         Grn: {
             readonly id: number;
-            number: string;
+            readonly number: string | null;
             booking?: number | null;
             readonly booking_number: string;
             vendor?: number | null;
@@ -969,17 +2405,25 @@ export interface components {
             readonly store_code: string;
             readonly store_name: string;
             received_at?: components["schemas"]["ReceivedAtEnum"];
-            status?: components["schemas"]["GrnStatusEnum"];
+            kind?: components["schemas"]["GrnKindEnum"];
+            readonly status: string;
             readonly status_label: string;
             is_direct?: boolean;
             invoice_number?: string;
             invoice_file?: number | null;
             notes?: string;
             readonly lines: components["schemas"]["GrnLine"][];
+            readonly pt_files: components["schemas"]["GrnPtFile"][];
             readonly received_total: number;
             /** Format: date-time */
             readonly created_at: string;
         };
+        /**
+         * @description * `branded` - Branded
+         *     * `non_branded` - Non-branded
+         * @enum {string}
+         */
+        GrnKindEnum: "branded" | "non_branded";
         GrnLine: {
             readonly id: number;
             booking_line?: number | null;
@@ -993,12 +2437,19 @@ export interface components {
             remark?: string;
         };
         /**
-         * @description * `received` - Received
-         *     * `sent_to_ho` - Sent to HO (Patna)
-         *     * `inwarded` - Inwarded
-         * @enum {string}
+         * @description A linked PT file, as the GRN screens need it (duck-typed off ``PtFile`` —
+         *     inbound never imports ptmapper models).
          */
-        GrnStatusEnum: "received" | "sent_to_ho" | "inwarded";
+        GrnPtFile: {
+            readonly id: number;
+            readonly original_filename: string;
+            readonly source: string;
+            readonly stage: string;
+            readonly stage_label: string;
+            readonly doc_number: string | null;
+            readonly blank_cell_count: number;
+            readonly row_count: number;
+        };
         Gstin: {
             readonly id: number;
             gstin: string;
@@ -1015,6 +2466,118 @@ export interface components {
             pan?: string;
             is_active?: boolean;
         };
+        /**
+         * @description * `store_pickup` - Brand collects from store (Madura)
+         *     * `warehouse` - Consolidated at warehouse
+         * @enum {string}
+         */
+        LogisticsRouteEnum: "store_pickup" | "warehouse";
+        LookupProposal: {
+            readonly id: number;
+            dimension: string;
+            source_key: string;
+            target_value: string;
+            /** @default  */
+            brand: string;
+            readonly scope: string;
+            origin: components["schemas"]["OriginEnum"];
+            readonly origin_label: string;
+            /** @default proposed */
+            status: components["schemas"]["LookupProposalStatusEnum"];
+            readonly status_label: string;
+            evidence?: unknown;
+            validation?: unknown;
+            /** @default  */
+            readonly proposed_by_name: string;
+            /** @default  */
+            readonly decided_by_name: string;
+            /** Format: date-time */
+            decided_at?: string | null;
+            /** Format: date-time */
+            applied_at?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `proposed` - Proposed
+         *     * `approved` - Approved
+         *     * `rejected` - Rejected
+         *     * `auto_rejected` - Auto-rejected (shadow conflict)
+         * @enum {string}
+         */
+        LookupProposalStatusEnum: "proposed" | "approved" | "rejected" | "auto_rejected";
+        /**
+         * @description The global mark-damaged action: a store + scanned pieces (+ optional
+         *     note). Quantities are scanned, dims/cost enriched from the store's stock —
+         *     never typed.
+         */
+        MarkDamagedInput: {
+            store: number;
+            scans: components["schemas"]["ScanLine"][];
+            /** @default  */
+            note: string;
+        };
+        MarkDamagedLine: {
+            readonly id: number;
+            readonly sku_code: string;
+            readonly design: string;
+            readonly color: string;
+            readonly size: string;
+            readonly brand: string;
+            readonly season: string;
+            readonly item: string;
+            readonly hsn: string;
+            readonly qty: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description A damage report and where it has got to (#138).
+         *
+         *     The maker-checker half — who reported it, who confirmed it, the live
+         *     approval and its reason — is the base's, read off one prefetch. ``flag_status``
+         *     is the word only this family needs: the store that reported the damage has
+         *     to see its report is still waiting, and the person who can confirm it needs
+         *     the same row to say what they are being asked.
+         */
+        MarkDamagedRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            /** @description Confirmed once it has posted; otherwise whatever the inbox says. */
+            readonly flag_status: string;
+            store: number;
+            readonly store_code: string;
+            readonly store_name: string;
+            note?: string;
+            /** @description Who reported the damage — kept for good, on the piece (#138). */
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** @description Stamped by the approvals inbox on confirm — never typed (#138). */
+            confirmed_by?: number | null;
+            readonly confirmed_by_name: string;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly lines: components["schemas"]["MarkDamagedLine"][];
+        };
+        /**
+         * @description * `review` - Review resolution
+         *     * `remember` - Remember this
+         *     * `mined` - Deterministic miner
+         *     * `llm` - LLM miner
+         * @enum {string}
+         */
+        OriginEnum: "review" | "remember" | "mined" | "llm";
         /**
          * @description * `owned` - KDPS-owned
          *     * `brand_owned` - Brand-owned
@@ -1066,6 +2629,13 @@ export interface components {
             previous?: string | null;
             results: components["schemas"]["VendorLedgerEntry"][];
         };
+        PatchedActorPolicy: {
+            readonly id?: number;
+            readonly action?: string;
+            label?: string;
+            description?: string;
+            roles?: string[];
+        };
         PatchedAdminRole: {
             readonly id?: number;
             code?: string;
@@ -1091,6 +2661,8 @@ export interface components {
             readonly entity_name?: string;
             readonly stores?: components["schemas"]["StoreMini"][];
             store_ids?: number[];
+            readonly brands?: components["schemas"]["BrandMini"][];
+            brand_ids?: number[];
             is_active?: boolean;
             is_staff?: boolean;
             /**
@@ -1102,26 +2674,144 @@ export interface components {
             readonly date_joined?: string;
             password?: string;
         };
+        PatchedApprovalPolicyAdmin: {
+            readonly id?: number;
+            /** @description Document family this governs, e.g. 'adjustment'. */
+            kind?: string;
+            readonly label?: string;
+            /**
+             * Format: int64
+             * @description Value at stake at or below which no second person is asked — the document posts and the decision is logged. 0 disables the tolerance: every document of this kind needs a checker.
+             */
+            tolerance_paise?: number;
+            /**
+             * Format: int64
+             * @description Up to this value the in-charge roles may approve; above it, only the escalated roles. 0 sends every one straight to HO.
+             */
+            band_paise?: number;
+            /** @description Role codes that may approve within the band (in-charge + HO). */
+            band_roles?: string[];
+            /** @description Role codes that may approve above the band (HO only). */
+            escalated_roles?: string[];
+        };
+        PatchedBrand: {
+            readonly id?: number;
+            code?: string;
+            name?: string;
+            ownership?: components["schemas"]["OwnershipEnum"];
+            return_terms?: components["schemas"]["ReturnTermsEnum"];
+            readonly commercial_label?: string;
+            is_active?: boolean;
+        };
+        /**
+         * @description A gap closure and everything a reviewer needs to judge it — which
+         *     transfer, which pieces, whose reason, and who signed it off.
+         */
+        PatchedGapClosureRead: {
+            readonly id?: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            transfer?: number;
+            readonly transfer_doc_number?: string;
+            store?: number;
+            readonly store_code?: string;
+            readonly source_store_code?: string;
+            readonly destination_store_code?: string;
+            reason?: components["schemas"]["GapClosureReadReasonEnum"];
+            readonly reason_label?: string;
+            note?: string;
+            /** @description Stamped by the approvals inbox on approve — never typed (#70). */
+            approved_by?: number | null;
+            readonly approved_by_name?: string;
+            readonly approval?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history?: {
+                [key: string]: unknown;
+            }[];
+            created_by?: number | null;
+            readonly created_by_name?: string;
+            /** Format: date-time */
+            readonly created_at?: string;
+            /** Format: date-time */
+            readonly updated_at?: string;
+            readonly lines?: components["schemas"]["GapClosureLine"][];
+        };
+        PatchedGstin: {
+            readonly id?: number;
+            gstin?: string;
+            state_code?: string;
+            state_name?: string;
+            legal_entity?: number;
+            readonly legal_entity_name?: string;
+            is_active?: boolean;
+        };
+        PatchedSeason: {
+            readonly id?: number;
+            code?: string;
+            name?: string;
+            status?: components["schemas"]["SeasonStatusEnum"];
+            sort_order?: number;
+        };
+        PatchedStore: {
+            readonly id?: number;
+            code?: string;
+            name?: string;
+            store_type?: components["schemas"]["StoreTypeEnum"];
+            city?: string;
+            gstin?: number;
+            readonly gstin_number?: string;
+            readonly state_name?: string;
+            readonly state_code?: string;
+            is_active?: boolean;
+        };
+        PatchedVendor: {
+            readonly id?: number;
+            code?: string;
+            name?: string;
+            city?: string;
+            gstin?: string;
+            state_code?: string;
+            state_name?: string;
+            pan?: string;
+            payment_terms?: string;
+            brands?: number[];
+            readonly brand_names?: string[];
+            is_active?: boolean;
+        };
         PtFileDetail: {
             readonly id: number;
             original_filename: string;
+            source?: components["schemas"]["SourceEnum"];
             brand_guess?: string;
             profile_code?: string;
             profile_name?: string;
             archetype?: string;
             status?: components["schemas"]["StatusC39Enum"];
             readonly status_label: string;
-            stage?: components["schemas"]["StageEnum"];
+            /**
+             * @description The lifecycle stage the UI/API speak, derived from docstatus: a cancelled
+             *     file reads 'reversed', a submitted one 'posted', else the draft sub-stage.
+             */
+            readonly stage: string;
             readonly stage_label: string;
             manually_edited?: boolean;
             /** Format: date-time */
             sent_at?: string | null;
             /** Format: date-time */
             posted_at?: string | null;
-            inward_doc_number?: string;
+            doc_number?: string | null;
+            readonly inward_doc_number: string;
             booking?: number | null;
             /** @default  */
             readonly booking_number: string;
+            grn?: number | null;
+            /** @default  */
+            readonly grn_number: string;
             row_count?: number;
             blank_cell_count?: number;
             unresolved_count?: number;
@@ -1134,23 +2824,32 @@ export interface components {
         PtFileList: {
             readonly id: number;
             original_filename: string;
+            source?: components["schemas"]["SourceEnum"];
             brand_guess?: string;
             profile_code?: string;
             profile_name?: string;
             archetype?: string;
             status?: components["schemas"]["StatusC39Enum"];
             readonly status_label: string;
-            stage?: components["schemas"]["StageEnum"];
+            /**
+             * @description The lifecycle stage the UI/API speak, derived from docstatus: a cancelled
+             *     file reads 'reversed', a submitted one 'posted', else the draft sub-stage.
+             */
+            readonly stage: string;
             readonly stage_label: string;
             manually_edited?: boolean;
             /** Format: date-time */
             sent_at?: string | null;
             /** Format: date-time */
             posted_at?: string | null;
-            inward_doc_number?: string;
+            doc_number?: string | null;
+            readonly inward_doc_number: string;
             booking?: number | null;
             /** @default  */
             readonly booking_number: string;
+            grn?: number | null;
+            /** @default  */
+            readonly grn_number: string;
             row_count?: number;
             blank_cell_count?: number;
             unresolved_count?: number;
@@ -1163,7 +2862,59 @@ export interface components {
             line_no?: number;
             data?: unknown;
             blanks?: unknown;
+            provenance?: unknown;
+            raw?: unknown;
         };
+        /**
+         * @description * `shrinkage` - Shrinkage
+         *     * `miscount` - Miscount
+         *     * `damage` - Damage
+         *     * `surplus_found` - Surplus found
+         *     * `other` - Other
+         * @enum {string}
+         */
+        Reason4c0Enum: "shrinkage" | "miscount" | "damage" | "surplus_found" | "other";
+        /**
+         * @description * `sister_store_request` - Sister store request
+         *     * `slow_mover` - Slow mover
+         *     * `seasonal_swap` - Seasonal swap
+         *     * `free_floor_space` - Free floor space
+         *     * `customer_waiting` - Customer waiting
+         *     * `other` - Other
+         * @enum {string}
+         */
+        Reason783Enum: "sister_store_request" | "slow_mover" | "seasonal_swap" | "free_floor_space" | "customer_waiting" | "other";
+        /** @description One short / extra / damaged outcome, as recorded at receive (#71). */
+        ReceiptException: {
+            readonly id: number;
+            readonly kind: components["schemas"]["ReceiptExceptionKindEnum"];
+            readonly kind_label: string;
+            readonly sku_code: string;
+            readonly design: string;
+            readonly color: string;
+            readonly size: string;
+            readonly brand: string;
+            readonly season: string;
+            readonly item: string;
+            readonly hsn: string;
+            readonly qty: number;
+            readonly unit_cost_paise: number;
+            readonly note: string;
+        };
+        /**
+         * @description * `short` - Short — sent but not scanned in
+         *     * `extra` - Extra / wrong item — not on this transfer
+         *     * `damaged` - Damaged on arrival — raised as a damage flag
+         * @enum {string}
+         */
+        ReceiptExceptionKindEnum: "short" | "extra" | "damaged";
+        /**
+         * @description * `pending` - Pending
+         *     * `complete` - Complete
+         *     * `shortfall` - Shortfall
+         * @enum {string}
+         */
+        ReceiptStatusEnum: "pending" | "complete" | "shortfall";
         /**
          * @description * `store` - Store
          *     * `warehouse` - Warehouse
@@ -1178,6 +2929,72 @@ export interface components {
          * @enum {string}
          */
         ReturnTermsEnum: "none" | "capped" | "uncapped" | "rolling";
+        /**
+         * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
+         *     books, never from the payload (#103) — same rule as a transfer line.
+         */
+        ReturnToVendorLine: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            qty: number;
+            readonly unit_cost_paise: number;
+        };
+        ReturnToVendorRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            store: number;
+            readonly store_code: string;
+            readonly store_name: string;
+            vendor: number;
+            brand?: number | null;
+            return_type: components["schemas"]["ReturnTypeEnum"];
+            logistics_route?: components["schemas"]["LogisticsRouteEnum"] | components["schemas"]["BlankEnum"];
+            season?: string;
+            /**
+             * Format: date
+             * @description Deadline for seasonal return (alerts at 30/15/7 days).
+             */
+            return_window_date?: string | null;
+            credit_note_received?: boolean;
+            /** Format: date */
+            credit_note_date?: string | null;
+            notes?: string;
+            created_by?: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["ReturnToVendorLine"][];
+        };
+        ReturnToVendorWrite: {
+            store: number;
+            vendor: number;
+            brand?: number | null;
+            return_type: components["schemas"]["ReturnTypeEnum"];
+            logistics_route?: components["schemas"]["LogisticsRouteEnum"] | components["schemas"]["BlankEnum"];
+            season?: string;
+            /**
+             * Format: date
+             * @description Deadline for seasonal return (alerts at 30/15/7 days).
+             */
+            return_window_date?: string | null;
+            notes?: string;
+            lines: components["schemas"]["ReturnToVendorLine"][];
+        };
+        /**
+         * @description * `defective` - Defective / GR return
+         *     * `seasonal` - Season-end return
+         * @enum {string}
+         */
+        ReturnTypeEnum: "defective" | "seasonal";
         ReviewItem: {
             readonly id: number;
             dimension: string;
@@ -1207,15 +3024,21 @@ export interface components {
             is_system?: boolean;
             is_active?: boolean;
         };
+        /** @description One scanned (barcode × count) pair from the scan screen. */
+        ScanLine: {
+            barcode: string;
+            qty: number;
+        };
         /**
          * @description * `all` - All (network-wide)
          *     * `entity` - Legal entity
          *     * `region` - Region / state
          *     * `store_group` - Store group
          *     * `store` - Single store
+         *     * `brand` - Assigned brands (across stores)
          * @enum {string}
          */
-        ScopeTypeEnum: "all" | "entity" | "region" | "store_group" | "store";
+        ScopeTypeEnum: "all" | "entity" | "region" | "store_group" | "store" | "brand";
         Season: {
             readonly id: number;
             code: string;
@@ -1231,12 +3054,11 @@ export interface components {
          */
         SeasonStatusEnum: "open" | "eoss" | "closed";
         /**
-         * @description * `mapping` - Mapping (Warehouse)
-         *     * `sent` - Sent to Patna
-         *     * `posted` - Posted to system
+         * @description * `brand_file` - Brand PT file
+         *     * `invoice` - Authored from GRN / invoice
          * @enum {string}
          */
-        StageEnum: "mapping" | "sent" | "posted";
+        SourceEnum: "brand_file" | "invoice";
         /**
          * @description * `needs_review` - Needs review
          *     * `ready` - Ready
@@ -1244,6 +3066,82 @@ export interface components {
          * @enum {string}
          */
         StatusC39Enum: "needs_review" | "ready" | "failed";
+        /**
+         * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
+         *     books, never from the payload (#103) — same rule as a transfer line.
+         *
+         *     So are ``book_qty`` and ``adj_qty`` (#76). The variance is the *books*
+         *     against what was counted, and only the count comes from outside: a client
+         *     that could send the book number, or the subtraction, could post a correction
+         *     the books never agreed to. Send ``counted_qty``; the server does the rest.
+         */
+        StockAdjustmentLine: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            readonly book_qty: number;
+            counted_qty: number;
+            /** @description counted − book; + surplus, − shrinkage */
+            readonly adj_qty: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description Base read shape for a document that needs a second person.
+         *
+         *     Every such document answers the same three questions on its own page, for
+         *     good: **made by** whom, **approved by** whom, and **when** — plus the live
+         *     approval record (pending / approved / rejected, with the reject reason).
+         *
+         *     The approver is read from the approval, not from the document's own column:
+         *     the column is a denormalised copy stamped at post time (for Tally), so on a
+         *     still-unposted draft only the approval knows the answer.
+         */
+        StockAdjustmentRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            store: number;
+            readonly store_code: string;
+            readonly store_name: string;
+            reason: components["schemas"]["Reason4c0Enum"];
+            /** @description Stamped by the approvals inbox on approve — never typed (#70). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            notes?: string;
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["StockAdjustmentLine"][];
+        };
+        /**
+         * @description ``approved_by`` is not accepted: the approver is stamped by whoever
+         *     clears the approvals inbox, and can never be the maker (#70).
+         */
+        StockAdjustmentWrite: {
+            store: number;
+            reason: components["schemas"]["Reason4c0Enum"];
+            notes?: string;
+            lines: components["schemas"]["StockAdjustmentLine"][];
+        };
         StockLedgerEntry: {
             readonly id: number;
             /** Format: date-time */
@@ -1276,9 +3174,22 @@ export interface components {
         /**
          * @description * `pt_inward` - PT inward
          *     * `pt_reversal` - PT reversal
+         *     * `transfer_out` - Transfer out
+         *     * `transfer_in` - Transfer in
+         *     * `transit_in` - Transit in
+         *     * `transit_out` - Transit out
+         *     * `damage_out` - Damaged out of sellable
+         *     * `quarantine_in` - Quarantine in
+         *     * `quarantine_out` - Quarantine out
+         *     * `rtv_out` - RTV out
+         *     * `seasonal_ret` - Seasonal return
+         *     * `adjustment` - Adjustment
+         *     * `write_off` - Write-off
+         *     * `vflip_out` - V-flip out
+         *     * `vflip_in` - V-flip in
          * @enum {string}
          */
-        StockLedgerEntryKindEnum: "pt_inward" | "pt_reversal";
+        StockLedgerEntryKindEnum: "pt_inward" | "pt_reversal" | "transfer_out" | "transfer_in" | "transit_in" | "transit_out" | "damage_out" | "quarantine_in" | "quarantine_out" | "rtv_out" | "seasonal_ret" | "adjustment" | "write_off" | "vflip_out" | "vflip_in";
         Store: {
             readonly id: number;
             code: string;
@@ -1301,18 +3212,212 @@ export interface components {
             gstin_number: string;
         };
         /**
+         * @description Read shape. Quantities are scan-derived: ``qty_planned`` is the plan,
+         *     ``qty_dispatched``/``qty_received`` are what was scanned, ``qty_resolved``
+         *     is what a posted gap closure accounted for, and ``qty_in_transit`` is derived
+         *     from the three, never stored.
+         */
+        StoreTransferLine: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            qty_planned?: number | null;
+            readonly qty_dispatched: number;
+            readonly qty_received: number;
+            /** @description Pieces a posted gap closure accounted for (#71) — found later, returned to the sender, or written off as lost. Deliberately not folded into qty_received: only two of those three ever reached the destination, and the receipt must keep saying what was actually scanned in. */
+            readonly qty_resolved: number;
+            readonly qty_in_transit: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description Write shape for a draft's *plan* line. Only the plan quantity is
+         *     accepted — dispatched/received quantities come from scanning, never typing
+         *     (#68). Dims and cost are enriched from the source stock at dispatch.
+         */
+        StoreTransferPlanLine: {
+            sku_code: string;
+            qty_planned: number;
+        };
+        StoreTransferRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            transfer_type?: components["schemas"]["TransferTypeEnum"];
+            /** @description Auto-set: True when source & destination GSTINs differ. */
+            is_cross_state?: boolean;
+            source_store: number;
+            readonly source_store_code: string;
+            readonly source_store_name: string;
+            destination_store: number;
+            readonly destination_store_code: string;
+            readonly destination_store_name: string;
+            reason?: components["schemas"]["Reason783Enum"] | components["schemas"]["BlankEnum"];
+            transport_mode?: components["schemas"]["TransportModeEnum"] | components["schemas"]["BlankEnum"];
+            /** @description Bus number / courier AWB / vehicle plate */
+            transport_ref?: string;
+            dispatcher_name?: string;
+            expected_arrival_note?: string;
+            /** @description Mandatory for cross-state (Bihar ↔ Jharkhand). */
+            eway_bill_number?: string;
+            /** Format: date-time */
+            dispatch_date?: string | null;
+            dispatched_by?: number | null;
+            created_by?: number | null;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            /**
+             * @description Derived, never stored: a dispatched transfer whose scanned
+             *     quantities differ from its plan (Rule 5 — flagged, not blocked).
+             */
+            readonly dispatch_mismatch: boolean;
+            /** @description Pieces still on the road (or missing) under this transfer. */
+            readonly qty_in_transit: number;
+            /**
+             * @description Where this transfer stands, derived from its documents — never stored
+             *     (the architecture's rule: a lifecycle is read off the record, not set).
+             *
+             *     ``in_transit`` nothing received yet · ``received`` all of it landed ·
+             *     ``gap`` received short, still open · ``closed`` a senior said what became
+             *     of the shortfall.
+             */
+            readonly gap_state: string;
+            /**
+             * @description When this transfer's PT was cut — the screen's cue that there is a
+             *     document to print. A draft has none: nothing has been scanned (#72).
+             */
+            readonly pt_generated_at: string | null;
+            readonly lines: components["schemas"]["StoreTransferLine"][];
+            readonly receipt: components["schemas"]["TransferReceipt"];
+            readonly gap_closure: components["schemas"]["GapClosureRead"];
+        };
+        /**
+         * @description Creates a draft transfer. ``lines`` (the plan) is optional — a
+         *     store→store transfer builds its lines by scanning at dispatch.
+         */
+        StoreTransferWrite: {
+            source_store: number;
+            destination_store: number;
+            transfer_type?: components["schemas"]["TransferTypeEnum"];
+            reason?: components["schemas"]["Reason783Enum"] | components["schemas"]["BlankEnum"];
+            transport_mode?: components["schemas"]["TransportModeEnum"] | components["schemas"]["BlankEnum"];
+            /** @description Bus number / courier AWB / vehicle plate */
+            transport_ref?: string;
+            dispatcher_name?: string;
+            expected_arrival_note?: string;
+            /** @description Mandatory for cross-state (Bihar ↔ Jharkhand). */
+            eway_bill_number?: string;
+            lines?: components["schemas"]["StoreTransferPlanLine"][];
+        };
+        /**
          * @description * `store` - Store
          *     * `warehouse` - Warehouse
          * @enum {string}
          */
         StoreTypeEnum: "store" | "warehouse";
+        TransferReceipt: {
+            readonly id: number;
+            received_by?: number | null;
+            readonly received_by_name: string;
+            /** Format: date-time */
+            readonly receipt_date: string;
+            receipt_status?: components["schemas"]["ReceiptStatusEnum"];
+            /** @description What the receiver typed about the shortfall. The screen has always asked for it; until #71 the payload dropped it before the server saw it, so the one sentence explaining a gap was thrown away. */
+            shortfall_notes?: string;
+            readonly exceptions: components["schemas"]["ReceiptException"][];
+        };
+        /**
+         * @description * `store_split` - Store split (warehouse → store)
+         *     * `inter_store` - Inter-store transfer
+         * @enum {string}
+         */
+        TransferTypeEnum: "store_split" | "inter_store";
+        /**
+         * @description * `public_bus` - Public bus
+         *     * `courier` - Courier
+         *     * `own_vehicle` - Own vehicle
+         *     * `hand_carried` - Hand-carried
+         * @enum {string}
+         */
+        TransportModeEnum: "public_bus" | "courier" | "own_vehicle" | "hand_carried";
+        /**
+         * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
+         *     books, never from the payload (#103) — same rule as a transfer line.
+         */
+        VFlipLine: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            qty: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description V-flip's own approver column is ``authorized_by``; it still answers the
+         *     common "approved by whom" question through ``approved_by_name``.
+         */
+        VFlipRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            store: number;
+            readonly store_code: string;
+            readonly store_name: string;
+            original_brand: number;
+            readonly original_brand_name: string;
+            season?: string;
+            /** @description Stamped by the approvals inbox on approve — never typed (#70). */
+            authorized_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["VFlipLine"][];
+        };
+        /**
+         * @description ``authorized_by`` is not accepted: the authoriser is stamped by whoever
+         *     clears the approvals inbox, and can never be the maker (#70).
+         */
+        VFlipWrite: {
+            store: number;
+            original_brand: number;
+            season?: string;
+            lines: components["schemas"]["VFlipLine"][];
+        };
         Vendor: {
             readonly id: number;
             code: string;
             name: string;
             city?: string;
             gstin?: string;
+            state_code?: string;
             state_name?: string;
+            pan?: string;
             payment_terms?: string;
             brands?: number[];
             readonly brand_names: string[];
@@ -1344,6 +3449,72 @@ export interface components {
          * @enum {string}
          */
         VendorLedgerEntryKindEnum: "bill" | "payment" | "reversal";
+        /**
+         * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
+         *     books, never from the payload (#103) — same rule as a transfer line.
+         */
+        WriteOffLine: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            qty: number;
+            readonly unit_cost_paise: number;
+        };
+        /**
+         * @description Base read shape for a document that needs a second person.
+         *
+         *     Every such document answers the same three questions on its own page, for
+         *     good: **made by** whom, **approved by** whom, and **when** — plus the live
+         *     approval record (pending / approved / rejected, with the reject reason).
+         *
+         *     The approver is read from the approval, not from the document's own column:
+         *     the column is a denormalised copy stamped at post time (for Tally), so on a
+         *     still-unposted draft only the approval knows the answer.
+         */
+        WriteOffRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            store: number;
+            readonly store_code: string;
+            readonly store_name: string;
+            reason?: string;
+            /** @description Stamped by the approvals inbox on approve — never typed (#70). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["WriteOffLine"][];
+        };
+        /**
+         * @description ``approved_by`` is not accepted: the approver is stamped by whoever
+         *     clears the approvals inbox, and can never be the maker (#70).
+         */
+        WriteOffWrite: {
+            store: number;
+            reason?: string;
+            lines: components["schemas"]["WriteOffLine"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -1353,6 +3524,277 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    approvals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRead"][];
+                };
+            };
+        };
+    };
+    approvals_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    approvals_inbox_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRead"][];
+                };
+            };
+        };
+    };
+    auth_admin_actor_policies_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorPolicy"][];
+                };
+            };
+        };
+    };
+    auth_admin_actor_policies_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorPolicy"];
+                };
+            };
+        };
+    };
+    auth_admin_actor_policies_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActorPolicy"];
+                "application/x-www-form-urlencoded": components["schemas"]["ActorPolicy"];
+                "multipart/form-data": components["schemas"]["ActorPolicy"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorPolicy"];
+                };
+            };
+        };
+    };
+    auth_admin_actor_policies_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                action: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedActorPolicy"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedActorPolicy"];
+                "multipart/form-data": components["schemas"]["PatchedActorPolicy"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActorPolicy"];
+                };
+            };
+        };
+    };
+    auth_admin_approval_policies_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicyAdmin"][];
+                };
+            };
+        };
+    };
+    auth_admin_approval_policies_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                "application/x-www-form-urlencoded": components["schemas"]["ApprovalPolicyAdmin"];
+                "multipart/form-data": components["schemas"]["ApprovalPolicyAdmin"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                };
+            };
+        };
+    };
+    auth_admin_approval_policies_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                };
+            };
+        };
+    };
+    auth_admin_approval_policies_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                "application/x-www-form-urlencoded": components["schemas"]["ApprovalPolicyAdmin"];
+                "multipart/form-data": components["schemas"]["ApprovalPolicyAdmin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                };
+            };
+        };
+    };
+    auth_admin_approval_policies_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedApprovalPolicyAdmin"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedApprovalPolicyAdmin"];
+                "multipart/form-data": components["schemas"]["PatchedApprovalPolicyAdmin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalPolicyAdmin"];
+                };
+            };
+        };
+    };
     auth_admin_meta_retrieve: {
         parameters: {
             query?: never;
@@ -1753,6 +4195,26 @@ export interface operations {
             };
         };
     };
+    bookings_close_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     bookings_draft_create: {
         parameters: {
             query?: never;
@@ -1854,6 +4316,24 @@ export interface operations {
         };
     };
     finledger_cash_summary_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    finledger_health_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -2088,6 +4568,24 @@ export interface operations {
             };
         };
     };
+    inbound_queue_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     masters_brands_list: {
         parameters: {
             query?: never;
@@ -2103,6 +4601,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Brand"][];
+                };
+            };
+        };
+    };
+    masters_brands_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+                "application/x-www-form-urlencoded": components["schemas"]["Brand"];
+                "multipart/form-data": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+        };
+    };
+    masters_brands_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+        };
+    };
+    masters_brands_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+                "application/x-www-form-urlencoded": components["schemas"]["Brand"];
+                "multipart/form-data": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+        };
+    };
+    masters_brands_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedBrand"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedBrand"];
+                "multipart/form-data": components["schemas"]["PatchedBrand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
                 };
             };
         };
@@ -2145,6 +4743,106 @@ export interface operations {
             };
         };
     };
+    masters_gstins_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Gstin"];
+                "application/x-www-form-urlencoded": components["schemas"]["Gstin"];
+                "multipart/form-data": components["schemas"]["Gstin"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstin"];
+                };
+            };
+        };
+    };
+    masters_gstins_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstin"];
+                };
+            };
+        };
+    };
+    masters_gstins_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Gstin"];
+                "application/x-www-form-urlencoded": components["schemas"]["Gstin"];
+                "multipart/form-data": components["schemas"]["Gstin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstin"];
+                };
+            };
+        };
+    };
+    masters_gstins_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGstin"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGstin"];
+                "multipart/form-data": components["schemas"]["PatchedGstin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstin"];
+                };
+            };
+        };
+    };
     masters_seasons_list: {
         parameters: {
             query?: never;
@@ -2161,6 +4859,124 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Season"][];
                 };
+            };
+        };
+    };
+    masters_seasons_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Season"];
+                "application/x-www-form-urlencoded": components["schemas"]["Season"];
+                "multipart/form-data": components["schemas"]["Season"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Season"];
+                };
+            };
+        };
+    };
+    masters_seasons_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Season"];
+                };
+            };
+        };
+    };
+    masters_seasons_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Season"];
+                "application/x-www-form-urlencoded": components["schemas"]["Season"];
+                "multipart/form-data": components["schemas"]["Season"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Season"];
+                };
+            };
+        };
+    };
+    masters_seasons_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedSeason"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedSeason"];
+                "multipart/form-data": components["schemas"]["PatchedSeason"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Season"];
+                };
+            };
+        };
+    };
+    masters_skus_lookup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2183,11 +4999,1039 @@ export interface operations {
             };
         };
     };
+    masters_stores_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Store"];
+                "application/x-www-form-urlencoded": components["schemas"]["Store"];
+                "multipart/form-data": components["schemas"]["Store"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
+    masters_stores_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
+    masters_stores_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Store"];
+                "application/x-www-form-urlencoded": components["schemas"]["Store"];
+                "multipart/form-data": components["schemas"]["Store"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
+    masters_stores_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedStore"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedStore"];
+                "multipart/form-data": components["schemas"]["PatchedStore"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Store"];
+                };
+            };
+        };
+    };
     masters_summary_retrieve: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_adjustments_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockAdjustmentRead"][];
+                };
+            };
+        };
+    };
+    outbound_adjustments_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockAdjustmentWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["StockAdjustmentWrite"];
+                "multipart/form-data": components["schemas"]["StockAdjustmentWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockAdjustmentWrite"];
+                };
+            };
+        };
+    };
+    outbound_adjustments_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockAdjustmentRead"];
+                };
+            };
+        };
+    };
+    outbound_adjustments_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_adjustments_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_count_lookup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_count_sessions_scan_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_count_sessions_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_gap_closures_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GapClosureRead"];
+                };
+            };
+        };
+    };
+    outbound_gap_closures_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedGapClosureRead"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedGapClosureRead"];
+                "multipart/form-data": components["schemas"]["PatchedGapClosureRead"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GapClosureRead"];
+                };
+            };
+        };
+    };
+    outbound_gap_closures_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_gap_closures_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_mark_damaged_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkDamagedRead"][];
+                };
+            };
+        };
+    };
+    outbound_mark_damaged_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkDamagedInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["MarkDamagedInput"];
+                "multipart/form-data": components["schemas"]["MarkDamagedInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkDamagedInput"];
+                };
+            };
+        };
+    };
+    outbound_rtvs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnToVendorRead"][];
+                };
+            };
+        };
+    };
+    outbound_rtvs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnToVendorWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReturnToVendorWrite"];
+                "multipart/form-data": components["schemas"]["ReturnToVendorWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnToVendorWrite"];
+                };
+            };
+        };
+    };
+    outbound_rtvs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnToVendorRead"];
+                };
+            };
+        };
+    };
+    outbound_rtvs_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_scan_lookup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_sessions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_variance_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreTransferRead"][];
+                };
+            };
+        };
+    };
+    outbound_transfers_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoreTransferWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["StoreTransferWrite"];
+                "multipart/form-data": components["schemas"]["StoreTransferWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreTransferWrite"];
+                };
+            };
+        };
+    };
+    outbound_transfers_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreTransferRead"];
+                };
+            };
+        };
+    };
+    outbound_transfers_dispatch_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_gap_closure_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_pt_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "outbound_transfers_pt.csv_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    "outbound_transfers_pt.xlsx_retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_receive_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_gaps_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoreTransferRead"][];
+                };
+            };
+        };
+    };
+    outbound_vflips_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VFlipRead"][];
+                };
+            };
+        };
+    };
+    outbound_vflips_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VFlipWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["VFlipWrite"];
+                "multipart/form-data": components["schemas"]["VFlipWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VFlipWrite"];
+                };
+            };
+        };
+    };
+    outbound_vflips_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VFlipRead"];
+                };
+            };
+        };
+    };
+    outbound_vflips_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_vflips_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_writeoffs_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOffRead"][];
+                };
+            };
+        };
+    };
+    outbound_writeoffs_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteOffWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["WriteOffWrite"];
+                "multipart/form-data": components["schemas"]["WriteOffWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOffWrite"];
+                };
+            };
+        };
+    };
+    outbound_writeoffs_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WriteOffRead"];
+                };
+            };
+        };
+    };
+    outbound_writeoffs_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_writeoffs_submit_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2364,6 +6208,26 @@ export interface operations {
             };
         };
     };
+    ptmapper_files_price_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ptmapper_files_recall_create: {
         parameters: {
             query?: never;
@@ -2464,6 +6328,65 @@ export interface operations {
             };
         };
     };
+    ptmapper_files_from_grn_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grn_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ptmapper_proposals_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LookupProposal"][];
+                };
+            };
+        };
+    };
+    ptmapper_proposals_decide_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ptmapper_review_list: {
         parameters: {
             query?: never;
@@ -2503,6 +6426,42 @@ export interface operations {
             };
         };
     };
+    ptmapper_suggest_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     stockledger_entries_list: {
         parameters: {
             query?: {
@@ -2527,7 +6486,43 @@ export interface operations {
             };
         };
     };
+    stockledger_in_transit_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     stockledger_on_hand_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stockledger_quarantine_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -2598,6 +6593,81 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vendor"];
+                };
+            };
+        };
+    };
+    vendors_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vendor"];
+                };
+            };
+        };
+    };
+    vendors_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vendor"];
+                "application/x-www-form-urlencoded": components["schemas"]["Vendor"];
+                "multipart/form-data": components["schemas"]["Vendor"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vendor"];
+                };
+            };
+        };
+    };
+    vendors_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedVendor"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedVendor"];
+                "multipart/form-data": components["schemas"]["PatchedVendor"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

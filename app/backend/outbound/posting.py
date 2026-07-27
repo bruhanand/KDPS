@@ -17,7 +17,7 @@ from django.utils import timezone
 
 from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
-from core.posting import PostingRef, cr, dr, post_entries
+from core.posting import PostingRef, assert_pt_or_vflip_actor, cr, dr, post_entries
 from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.maker_checker import request_document_approval, require_approved
 from stockledger.models import (
@@ -1649,6 +1649,9 @@ def post_vflip(vflip: VFlip, user=None) -> list[StockLedgerEntry]:
         raise OutboundPostingError("V-flip has no lines.")
 
     require_approved(vflip)  # maker ≠ checker (#70)
+    # Runs even when legacy/malformed lines total ₹0 and therefore produce no GL
+    # legs. Ownership itself cannot move past the immutable people floor.
+    assert_pt_or_vflip_actor(user)
 
     for line in lines:
         _check_stock(vflip.store_id, line.sku_code, line.qty)

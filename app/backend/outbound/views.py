@@ -51,6 +51,7 @@ from outbound.models import (
 )
 from outbound.permissions import (
     CanCloseTransferGap,
+    CanExecuteVFlip,
     CanFlipOwnership,
     CanReadTransferPT,
     CanWriteReturnToBrand,
@@ -940,7 +941,7 @@ class VFlipDetailView(generics.RetrieveAPIView):
 class VFlipSubmitView(APIView):
     """POST: Submit (post) a draft V-flip."""
 
-    permission_classes = [CanFlipOwnership]
+    permission_classes = [CanExecuteVFlip]
 
     def post(self, request, pk):
         try:

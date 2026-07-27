@@ -122,7 +122,6 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         f"/api/outbound/writeoffs/{ABSENT}/request-approval",
     ),
     ("vflip create", "stock", CAP_MANAGE, "post", "/api/outbound/vflips"),
-    ("vflip submit", "stock", CAP_MANAGE, "post", f"/api/outbound/vflips/{ABSENT}/submit"),
     (
         "vflip ask again",
         "stock",
@@ -197,7 +196,8 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
 
     Accounts holds ``view`` on transfer, stock count, return to brand and stock,
     and ``manage`` on money alone. It must not create, submit, dispatch, receive,
-    convert ownership or destroy stock on any of them.
+    create an ownership flip or destroy stock on any of them. Executing an
+    already-approved V-flip is a separate stored actor policy.
     """
     client = _client(_user("acc", _role("accounts")))
     for label, _section, _minimum, method, path in GATED_ENDPOINTS:
@@ -209,6 +209,18 @@ def test_accounts_cannot_write_anything_it_may_only_view(db):
             assert status != 403, label
         else:
             assert status == 403, label
+
+
+@pytest.mark.parametrize(
+    ("role_code", "allowed"),
+    [("accounts", True), ("owner", True), ("warehouse", False), ("it_admin", False)],
+)
+def test_vflip_execution_uses_the_stored_actor_policy(db, role_code, allowed):
+    client = _client(_user(f"vflip_execute_{role_code}", _role(role_code)))
+
+    response = client.post(f"/api/outbound/vflips/{ABSENT}/submit", {}, format="json")
+
+    assert (response.status_code != 403) is allowed
 
 
 def test_the_two_store_roles_get_identical_answers_on_outbound(db):
@@ -235,28 +247,79 @@ def test_superuser_break_glass_passes_every_gate(db):
 
 
 # --- 2. The approvers ------------------------------------------------------
-def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
-    """No approver default names a role the matrix gives only ``view``."""
+#: Who the #104 ruling puts on each document family, in-band and above it. Once
+#: approvers became data (#131) the matrix stopped being their source of truth —
+#: the ruling deliberately overrides it (IT Admin off every money family,
+#: Accounts onto V-flip, the Brand Manager onto returns). So the alarm that used
+#: to compare defaults against the matrix compares the *seeded* rows against the
+#: ruling instead: retuning a live install is data, but shipping a different
+#: default is a decision, and this is where it gets made.
+RATIFIED_APPROVERS = {
+    "writeoff": (["store_manager", "ho_ops", "owner"], ["ho_ops", "owner"]),
+    "adjustment": (["store_manager", "ho_ops", "owner"], ["ho_ops", "owner"]),
+    "vflip": (["accounts", "owner"], ["owner"]),
+    "return_to_brand": (["brand_manager", "owner"], ["owner"]),
+    "transfer": (["ho_ops", "owner"], ["ho_ops", "owner"]),
+    "pt_reverse": (["accounts", "owner"], ["accounts", "owner"]),
+    "gap_closure": (["ho_ops", "owner"], ["ho_ops", "owner"]),
+    "damage": (["warehouse", "owner"], ["warehouse", "owner"]),
+}
+
+
+def test_every_wired_family_reads_its_approvers_from_the_ratified_row(db):
+    """The live answer is stored policy, not a role list frozen in code."""
     for kind in KINDS.values():
-        section = APPROVAL_SECTION[kind.code]
-        can_approve = set(roles_with_capability(section, CAP_APPROVE))
-        # Nobody the matrix trusts is ever dropped…
-        assert can_approve <= set(kind.approver_roles), kind.code
-        # …and exactly one kind adds anyone: damage flags, whose confirmer holds
-        # the same `return_to_brand: operate` rung as the store person who
-        # raises them (#138), so the ladder cannot tell the two apart. Named per
-        # kind, so no *other* family can quietly inherit the widening.
-        allowed_extra = (
-            REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles
-            if kind.code == "damage"
-            else frozenset()
-        )
-        assert set(kind.approver_roles) - can_approve <= allowed_extra, kind.code
-        # The band may add the in-charge, and nothing else — that one addition
-        # is the registered exception, so it is named here rather than assumed.
-        extra = set(kind.band_roles) - can_approve
-        assert extra <= {"store_manager"}, kind.code
-        assert "accounts" not in set(kind.approver_roles) | set(kind.band_roles), kind.code
+        policy = ApprovalPolicy.objects.get(kind=kind.code)
+        band, escalated = RATIFIED_APPROVERS[kind.code]
+        assert policy.band_roles == band, kind.code
+        assert policy.escalated_roles == escalated, kind.code
+
+
+def test_no_seeded_family_lets_admin_or_a_cashier_approve():
+    """Two cells of the ratified table, asserted across every family at once.
+
+    Admin has no Money — IT Admin was taken off these lists by the ruling and a
+    later retune of one row must not quietly put it back. And the only store
+    seat that approves anything is the Store Manager, inside the band: a cashier
+    never signs off what their own store lost.
+    """
+    for code, (band, escalated) in RATIFIED_APPROVERS.items():
+        assert "it_admin" not in set(band) | set(escalated), code
+        assert "store_cashier" not in set(band) | set(escalated), code
+        assert "store_manager" not in escalated, code
+
+
+#: Where the ruling deliberately seats an approver the sheet gives less than
+#: ``approve`` on that family's own section. Each is a decision from #104, named
+#: here so it stays one — the alarm below is what stops a *sixth* appearing by
+#: accident when somebody retunes a seed.
+RULING_OVERRIDES_THE_SHEET = {
+    ("writeoff", "store_manager"): "the in-charge clears a small loss without going to HO",
+    ("adjustment", "store_manager"): "same band, on the variance counting produces",
+    ("vflip", "accounts"): "Accounts executes the flip, so Accounts signs the small ones",
+    ("damage", "warehouse"): "a store reports damage; the warehouse confirms it (#138)",
+}
+
+
+def test_every_seeded_approver_is_trusted_by_the_sheet_or_named_as_a_ruling():
+    """The drift alarm, pointed at the ruling instead of only at the sheet.
+
+    Approvers used to be read straight off the RBAC matrix, and a test asserted
+    they never named a role the sheet gives only ``view``. #104 overrides the
+    sheet on purpose in four places, so the assertion cannot simply be dropped —
+    it becomes: an approver either holds ``approve`` on that family's section,
+    or it is one of the four the ruling put there, with the reason written down.
+    """
+    for code, (band, escalated) in RATIFIED_APPROVERS.items():
+        section = APPROVAL_SECTION.get(code)
+        if section is None:
+            continue  # a family the outbound slices have not wired yet
+        trusted = set(roles_with_capability(section, CAP_APPROVE))
+        for role in set(band) | set(escalated):
+            if role in trusted:
+                continue
+            reason = RULING_OVERRIDES_THE_SHEET.get((code, role))
+            assert reason, f"{code}: {role!r} approves but the sheet does not trust it"
 
 
 def test_a_freshly_raised_approval_names_no_view_only_role(db):
@@ -277,6 +340,7 @@ def test_a_freshly_raised_approval_names_no_view_only_role(db):
 
     assert approval is not None
     trusted = set(roles_with_capability(APPROVAL_SECTION["writeoff"], CAP_APPROVE))
+    trusted.add("store_manager")  # the ratified within-band in-charge
     assert set(approval.approver_roles) <= trusted
     assert "accounts" not in approval.approver_roles
 
@@ -316,9 +380,10 @@ def test_the_migration_corrects_a_running_install(db):
     decided keeps the list it was decided under, because that is history.
     """
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
-    policy = ApprovalPolicy.objects.create(
-        kind="writeoff", band_roles=STALE_APPROVERS, escalated_roles=STALE_APPROVERS
-    )
+    policy = ApprovalPolicy.objects.get(kind="writeoff")
+    policy.band_roles = STALE_APPROVERS
+    policy.escalated_roles = STALE_APPROVERS
+    policy.save(update_fields=["band_roles", "escalated_roles"])
     maker = _user("maker", _role("warehouse"))
     checker = _user("checker", _role("accounts"))
     store = _store("DEO", "10AAACK1234M1Z5")
@@ -347,18 +412,18 @@ def test_the_migration_does_not_invent_policy_rows(db):
     defaults create it correctly on first use."""
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
 
+    before = set(ApprovalPolicy.objects.values_list("kind", flat=True))
     migration.correct_stored_approvers(django_apps, None)
+    assert set(ApprovalPolicy.objects.values_list("kind", flat=True)) == before
 
-    assert not ApprovalPolicy.objects.exists()
 
+def test_the_migration_leaves_a_small_pending_adjustment_with_the_in_charge(db):
+    """Correcting a running install must not take the store manager off a
+    variance the design says is his.
 
-def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
-    """The lazy-row case: a small one must still be the in-charge's to clear.
-
-    ``ApprovalPolicy`` is materialised on first use, so an install can carry
-    pending adjustments and no row at all. Reading the missing band as zero
-    would push every one of them to HO and quietly take the store manager off
-    a variance the design says is his — so the default band stands in.
+    The migration rewrites the approver list frozen onto every pending
+    approval. Reading the band as zero while it did so would push every small
+    adjustment to HO — so the ₹25,000 band decides, and ₹5,000 stays local.
     """
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
     maker = _user("adj_maker", _role("warehouse"))
@@ -386,14 +451,13 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 
 
 # --- 3. The declared exceptions -------------------------------------------
-#: The five gates the ladder provably cannot express. A change to this set is a
-#: decision, which is exactly what the test is here to force.
+#: The two gates that stayed in code once who-may-act became data (#131) —
+#: both are floor rules, and a floor stored in editable policy could configure
+#: itself away. A change to this set is a decision, which is exactly what the
+#: test is here to force.
 EXPECTED_EXCEPTIONS = {
-    "outbound.adjustment_band_in_charge",
-    "outbound.damage_confirmers",
-    "ptmapper.post_and_reverse_pt",
-    "ptmapper.mapping_stewardship",
-    "masters.writes",
+    "accounts.access_administrators_floor",
+    "accounts.head_office_value_actors_floor",
 }
 
 

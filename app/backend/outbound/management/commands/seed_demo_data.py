@@ -1156,7 +1156,7 @@ class Command(BaseCommand):
         approval = approval_for(vf)
         if approval is not None and approval.status == ApprovalStatus.PENDING:
             decide(approval, actor=self.users["owner"], action="approve")
-        post_vflip(vf, user=ops1)
+        post_vflip(vf, user=self.users["owner"])
         self.stdout.write(f"  V-flip {vf.doc_number} @ DEO: LP stock flipped to owned")
 
     # ------------------------------------------------------------------

@@ -52,20 +52,66 @@ def accounts_auth() -> dict[str, Any]:
     return _login("accounts1", "Acct@123")
 
 
+def _apply_access_change(
+    maker: dict[str, str], checker: dict[str, str], method: str, path: str, payload: dict[str, Any]
+) -> None:
+    """Put one user/role change through the two people #131 requires.
+
+    Every write under ``/auth/admin`` now answers 202 and waits: nobody changes
+    who may do what on their own say-so. So the live suite proposes as one
+    administrator and decides as another, which is also the only way to prove
+    the rule holds against a real server rather than a test client.
+    """
+    proposal = requests.request(method, f"{API}{path}", headers=maker, json=payload, timeout=30)
+    assert proposal.status_code == 202, (
+        f"{method} {path} should wait for a second person: "
+        f"{proposal.status_code} {proposal.text[:250]}"
+    )
+    approval_id = proposal.json()["approval_id"]
+
+    refused = requests.post(
+        f"{API}/approvals/{approval_id}/decide",
+        headers=maker,
+        json={"action": "approve"},
+        timeout=30,
+    )
+    assert refused.status_code == 403, "the maker must never be able to apply their own change"
+
+    decision = requests.post(
+        f"{API}/approvals/{approval_id}/decide",
+        headers=checker,
+        json={"action": "approve"},
+        timeout=30,
+    )
+    assert decision.status_code == 200, (
+        f"apply failed: {decision.status_code} {decision.text[:250]}"
+    )
+
+
+def _fetch_one(headers: dict[str, str], collection: str, key: str, value: str) -> dict[str, Any]:
+    listing = requests.get(f"{API}/auth/admin/{collection}", headers=headers, timeout=30)
+    assert listing.status_code == 200
+    match = [row for row in listing.json() if row.get(key) == value]
+    assert match, f"{collection} has no row with {key}={value}"
+    return match[0]
+
+
 @pytest.fixture(scope="module")
-def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
+def created_entities(owner_auth: dict[str, Any], admin_auth: dict[str, Any]) -> dict[str, Any]:
     """Create TEST role + user for CRUD checks; deactivate them in teardown."""
-    access = owner_auth["access"]
-    headers = _auth_headers(access)
+    headers = _auth_headers(owner_auth["access"])
+    checker = _auth_headers(admin_auth["access"])
 
     ts = int(time.time())
     role_code = f"test_auto_role_{ts}"
     username = f"test.auto.{ts}"
 
-    role_resp = requests.post(
-        f"{API}/auth/admin/roles",
-        headers=headers,
-        json={
+    _apply_access_change(
+        headers,
+        checker,
+        "post",
+        "/auth/admin/roles",
+        {
             "code": role_code,
             "name": f"TEST AUTO ROLE {ts}",
             "description": "Automation role",
@@ -73,12 +119,8 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
             "nav_groups": ["home", "documents"],
             "is_active": True,
         },
-        timeout=30,
     )
-    assert role_resp.status_code == 201, (
-        f"role create failed: {role_resp.status_code} {role_resp.text[:250]}"
-    )
-    role = role_resp.json()
+    role = _fetch_one(headers, "roles", "code", role_code)
 
     meta = requests.get(f"{API}/auth/admin/meta", headers=headers, timeout=30)
     assert meta.status_code == 200
@@ -86,10 +128,12 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
     assert stores, "No active stores returned in admin meta"
     store_id = stores[0]["id"]
 
-    user_resp = requests.post(
-        f"{API}/auth/admin/users",
-        headers=headers,
-        json={
+    _apply_access_change(
+        headers,
+        checker,
+        "post",
+        "/auth/admin/users",
+        {
             "username": username,
             "full_name": "TEST AUTO USER",
             "role_id": role["id"],
@@ -99,26 +143,23 @@ def created_entities(owner_auth: dict[str, Any]) -> dict[str, Any]:
             "is_staff": False,
             "password": "TestAuto@123",
         },
-        timeout=30,
     )
-    assert user_resp.status_code == 201, (
-        f"user create failed: {user_resp.status_code} {user_resp.text[:250]}"
-    )
-    user = user_resp.json()
+    user = _fetch_one(headers, "users", "username", username)
 
-    yield {"role": role, "user": user, "store_id": store_id, "username": username}
+    yield {
+        "role": role,
+        "user": user,
+        "store_id": store_id,
+        "username": username,
+        "maker": headers,
+        "checker": checker,
+    }
 
-    requests.patch(
-        f"{API}/auth/admin/users/{user['id']}",
-        headers=headers,
-        json={"is_active": False},
-        timeout=30,
+    _apply_access_change(
+        headers, checker, "patch", f"/auth/admin/users/{user['id']}", {"is_active": False}
     )
-    requests.patch(
-        f"{API}/auth/admin/roles/{role['id']}",
-        headers=headers,
-        json={"is_active": False},
-        timeout=30,
+    _apply_access_change(
+        headers, checker, "patch", f"/auth/admin/roles/{role['id']}", {"is_active": False}
     )
 
 
@@ -172,40 +213,62 @@ def test_rbac_lists_access_control(
     assert denied.status_code == 403
 
 
-def test_rbac_create_and_edit_role_and_user(
-    owner_auth: dict[str, Any], created_entities: dict[str, Any]
-):
-    access = owner_auth["access"]
-    headers = _auth_headers(access)
+def test_rbac_create_and_edit_role_and_user(created_entities: dict[str, Any]):
+    headers = created_entities["maker"]
+    checker = created_entities["checker"]
     role_id = created_entities["role"]["id"]
     user_id = created_entities["user"]["id"]
 
-    patch_role = requests.patch(
-        f"{API}/auth/admin/roles/{role_id}",
-        headers=headers,
-        json={"description": "Automation role edited", "nav_groups": ["home", "ledgers"]},
-        timeout=30,
+    _apply_access_change(
+        headers,
+        checker,
+        "patch",
+        f"/auth/admin/roles/{role_id}",
+        {"description": "Automation role edited", "nav_groups": ["home", "ledgers"]},
     )
-    assert patch_role.status_code == 200
-    role_body = patch_role.json()
+    get_role = requests.get(f"{API}/auth/admin/roles/{role_id}", headers=headers, timeout=30)
+    assert get_role.status_code == 200
+    role_body = get_role.json()
     assert role_body["description"] == "Automation role edited"
     assert "ledgers" in (role_body.get("nav_groups") or [])
 
-    patch_user = requests.patch(
-        f"{API}/auth/admin/users/{user_id}",
-        headers=headers,
-        json={"full_name": "TEST AUTO USER EDITED", "is_staff": True},
-        timeout=30,
+    _apply_access_change(
+        headers,
+        checker,
+        "patch",
+        f"/auth/admin/users/{user_id}",
+        {"full_name": "TEST AUTO USER EDITED", "is_staff": True},
     )
-    assert patch_user.status_code == 200
-    user_body = patch_user.json()
-    assert user_body["full_name"] == "TEST AUTO USER EDITED"
-    assert user_body["is_staff"] is True
-
     get_user = requests.get(f"{API}/auth/admin/users/{user_id}", headers=headers, timeout=30)
     assert get_user.status_code == 200
     user_fetched = get_user.json()
     assert user_fetched["full_name"] == "TEST AUTO USER EDITED"
+    assert user_fetched["is_staff"] is True
+
+
+def test_a_pending_access_change_has_not_happened_yet(created_entities: dict[str, Any]):
+    """The half of the rule the flow above cannot show: waiting means unchanged."""
+    headers = created_entities["maker"]
+    role_id = created_entities["role"]["id"]
+    before = requests.get(f"{API}/auth/admin/roles/{role_id}", headers=headers, timeout=30).json()
+
+    proposal = requests.patch(
+        f"{API}/auth/admin/roles/{role_id}",
+        headers=headers,
+        json={"description": "never applied"},
+        timeout=30,
+    )
+    assert proposal.status_code == 202
+
+    after = requests.get(f"{API}/auth/admin/roles/{role_id}", headers=headers, timeout=30).json()
+    assert after["description"] == before["description"]
+
+    requests.post(
+        f"{API}/approvals/{proposal.json()['approval_id']}/decide",
+        headers=created_entities["checker"],
+        json={"action": "reject", "reason": "raised only to prove nothing moved"},
+        timeout=30,
+    )
 
 
 def test_store_scope_requires_store_ids(owner_auth: dict[str, Any]):

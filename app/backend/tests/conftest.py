@@ -47,6 +47,7 @@ unaffected.
 from __future__ import annotations
 
 import os
+from importlib import import_module
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -54,6 +55,7 @@ import pytest
 import requests
 from _creds import SEED_OWNER_PASSWORD
 from _live_gate import mismatch_reason
+from django.apps import apps as django_apps
 
 _BACKEND_URL_ENV = "REACT_APP_BACKEND_URL"
 _DEFAULT_BASE_URL = "http://localhost:8001"
@@ -92,6 +94,26 @@ if not os.environ.get(_BACKEND_URL_ENV, "").strip():
     os.environ[_BACKEND_URL_ENV] = BASE_URL
 
 IS_LOCAL_TARGET = (urlsplit(BASE_URL).hostname or "") in ("localhost", "127.0.0.1")
+
+
+@pytest.fixture(autouse=True)
+def _restore_migration_seeded_policy_rows(
+    request: pytest.FixtureRequest,
+    django_db_setup,
+    django_db_blocker,
+):
+    """Transaction tests flush rows; restore policy data each migrated DB starts with."""
+    if request.node.get_closest_marker("django_db") is None:
+        yield
+        return
+    with django_db_blocker.unblock():
+        import_module("accounts.migrations.0009_actor_policy").seed_actor_policies(
+            django_apps, None
+        )
+        import_module("approvals.migrations.0004_seed_approval_policies").seed_policies(
+            django_apps, None
+        )
+    yield
 
 
 def _live_api_unready_reason() -> str | None:

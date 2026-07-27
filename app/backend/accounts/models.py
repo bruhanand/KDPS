@@ -15,10 +15,12 @@ from __future__ import annotations
 from typing import ClassVar
 
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.utils import timezone
 
 from accounts.managers import UserManager
+from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
 from core.base import TimeStampedModel
 
 # Legacy nav groups — the five architecture layers that named the old sidebar.
@@ -59,6 +61,69 @@ class Role(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.name
+
+
+class ActorPolicy(TimeStampedModel):
+    """The live role set allowed to perform one named business action.
+
+    Sections answer whether a user may enter and operate a part of the product.
+    Actor policies answer the narrower questions the capability ladder cannot:
+    for example, who may inward a PT versus who may prepare one.  The immutable
+    floor rules are intentionally absent from this row and remain engine rules.
+    """
+
+    action = models.CharField(max_length=100, unique=True)
+    label = models.CharField(max_length=120)
+    description = models.CharField(max_length=300, blank=True, default="")
+    roles = ArrayField(models.CharField(max_length=40), default=list)
+
+    class Meta:
+        ordering = ["action"]
+        db_table = "accounts_actor_policy"
+        verbose_name_plural = "actor policies"
+
+    def __str__(self) -> str:
+        return self.label
+
+
+class AccessChange(TimeStampedModel):
+    """A proposed Setup mutation that only a second administrator may apply."""
+
+    class Resource(models.TextChoices):
+        ROLE = "role", "Role"
+        USER = "user", "User"
+        ACTOR_POLICY = "actor_policy", "Actor policy"
+        APPROVAL_POLICY = "approval_policy", "Approval policy"
+
+    class Operation(models.TextChoices):
+        CREATE = "create", "Create"
+        UPDATE = "update", "Update"
+
+    resource = models.CharField(max_length=24, choices=Resource.choices)
+    operation = models.CharField(max_length=12, choices=Operation.choices)
+    target_id = models.BigIntegerField(null=True, blank=True)
+    payload = models.JSONField(default=dict)
+    summary = models.CharField(max_length=240)
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="access_changes_created",
+    )
+    applied_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="access_changes_applied",
+    )
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        db_table = "accounts_access_change"
+
+    def __str__(self) -> str:
+        return self.summary
 
 
 class ScopeType(models.TextChoices):
@@ -109,6 +174,17 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
     def __str__(self) -> str:
         return self.full_name or self.username
+
+    @property
+    def may_post_pt_or_vflip_floor(self) -> bool:
+        """Immutable segregation-of-duties answer consumed by the GL engine.
+
+        Break-glass passes, as the ruling says it must: a half-powered emergency
+        key fails at the moment it is needed. What break-glass does *not* buy is
+        the rest of the floor — the actor is still refused unless they are a
+        named, saved person who is not scoped to a store.
+        """
+        return self.is_superuser or getattr(self.role, "code", "") in HEAD_OFFICE_VALUE_ACTORS
 
 
 class LoginAttempt(models.Model):

@@ -80,9 +80,9 @@ def _outbound_scaffold(db):
         return_terms=Brand.ReturnTerms.UNCAPPED,
     )
     vendor = Vendor.objects.create(name="Test Vendor", code="tvnd")
-    role = Role.objects.create(code="test-admin", name="Test Admin")
+    role = Role.objects.create(code="accounts", name="Accounts")
     user = User.objects.create_user(
-        username="outtest", password=TEST_PASSWORD, role=role, entity=entity
+        username="outtest", password=TEST_PASSWORD, role=role, entity=entity, scope_type="all"
     )
     # The second person every write-off / V-flip / adjustment now needs (#70).
     checker = User.objects.create_user(
@@ -90,6 +90,7 @@ def _outbound_scaffold(db):
         password=TEST_PASSWORD,
         role=Role.objects.create(code="owner", name="Owner"),
         entity=entity,
+        scope_type="all",
     )
 
     # Seed stock: 10 units of SKU "SKU001" at store_a and warehouse, 100 paise/unit

@@ -5,7 +5,7 @@ import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-reac
 import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
-import { CommercialBadge, StatusChip } from "../lib/format";
+import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
@@ -526,6 +526,19 @@ type AdminUser = Omit<ApiSchemas["AdminUser"], "scope_type"> & {
   brands?: BrandMini[];
 };
 type StoreMini = ApiSchemas["StoreMini"];
+type ActorPolicy = Omit<ApiSchemas["ActorPolicy"], "description" | "roles"> & {
+  description: string;
+  roles: string[];
+};
+type ApprovalPolicy = Omit<
+  ApiSchemas["ApprovalPolicyAdmin"],
+  "tolerance_paise" | "band_paise" | "band_roles" | "escalated_roles"
+> & {
+  tolerance_paise: number;
+  band_paise: number;
+  band_roles: string[];
+  escalated_roles: string[];
+};
 
 interface AdminMeta {
   nav_groups: string[];
@@ -608,10 +621,12 @@ function normalizeNavGroups(value: unknown): string[] {
 
 export function UsersRolesPage() {
   const { user } = useAuth();
-  const canEdit = Boolean(user?.is_superuser || ["owner", "it_admin"].includes(user?.role?.code ?? ""));
-  const [tab, setTab] = useState<"users" | "roles">("users");
+  const canEdit = ["owner", "it_admin"].includes(user?.role?.code ?? "");
+  const [tab, setTab] = useState<"users" | "roles" | "policies">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [actorPolicies, setActorPolicies] = useState<ActorPolicy[]>([]);
+  const [approvalPolicies, setApprovalPolicies] = useState<ApprovalPolicy[]>([]);
   const [meta, setMeta] = useState<AdminMeta>({
     nav_groups: [],
     sections: [],
@@ -638,11 +653,15 @@ export function UsersRolesPage() {
       typedApi.get("/auth/admin/users"),
       typedApi.get("/auth/admin/roles"),
       typedApi.get("/auth/admin/meta"),
+      typedApi.get("/auth/admin/actor-policies"),
+      typedApi.get("/auth/admin/approval-policies"),
     ])
-      .then(([u, r, m]) => {
+      .then(([u, r, m, actors, approvals]) => {
         setUsers(u.data as AdminUser[]);
         setRoles(r.data as AdminRole[]);
         setMeta(m.data as AdminMeta);
+        setActorPolicies(actors.data as ActorPolicy[]);
+        setApprovalPolicies(approvals.data as ApprovalPolicy[]);
       })
       .catch((e) => setError(apiErrorMessage(e)))
       .finally(() => setLoading(false));
@@ -733,8 +752,7 @@ export function UsersRolesPage() {
       if (userForm.id) await typedApi.patch(`/auth/admin/users/${userForm.id}` as "/auth/admin/users/{id}", payload);
       else await typedApi.post("/auth/admin/users", payload);
       setUserForm(blankUser);
-      setOk("User saved.");
-      loadAll();
+      setOk("User change sent for second-person approval.");
     } catch (e) {
       setError(apiErrorMessage(e));
     }
@@ -759,10 +777,99 @@ export function UsersRolesPage() {
       else await typedApi.post("/auth/admin/roles", payload);
       setRoleForm(blankRole);
       setLoadedAccess({});
-      setOk("Role saved.");
-      loadAll();
+      setOk("Role change sent for second-person approval.");
     } catch (e) {
       setError(apiErrorMessage(e));
+    }
+  }
+
+  function togglePolicyRole(action: string, roleCode: string) {
+    setActorPolicies((policies) => policies.map((policy) => {
+      if (policy.action !== action) return policy;
+      const roles = policy.roles.includes(roleCode)
+        ? policy.roles.filter((code) => code !== roleCode)
+        : [...policy.roles, roleCode];
+      return { ...policy, roles };
+    }));
+  }
+
+  /** Put the tables back to what the server holds, without clearing the message
+   *  that sent us here. A refused edit — a floor rule, a stale row — must not
+   *  leave the screen showing a policy that is not real. */
+  function resyncPolicies() {
+    Promise.all([
+      typedApi.get("/auth/admin/actor-policies"),
+      typedApi.get("/auth/admin/approval-policies"),
+    ]).then(([actors, approvals]) => {
+      setActorPolicies(actors.data as ActorPolicy[]);
+      setApprovalPolicies(approvals.data as ApprovalPolicy[]);
+    });
+  }
+
+  async function saveActorPolicy(policy: ActorPolicy) {
+    setError("");
+    setOk("");
+    try {
+      await typedApi.patch(
+        `/auth/admin/actor-policies/${policy.action}` as "/auth/admin/actor-policies/{action}",
+        {
+          label: policy.label,
+          description: policy.description,
+          roles: policy.roles,
+        },
+      );
+      setOk(`${policy.label} sent for second-person approval.`);
+    } catch (e) {
+      setError(apiErrorMessage(e));
+      resyncPolicies();
+    }
+  }
+
+  function setApprovalAmount(
+    kind: string,
+    field: "tolerance_paise" | "band_paise",
+    rupees: string,
+  ) {
+    const paise = Math.max(0, Math.round((Number(rupees) || 0) * 100));
+    setApprovalPolicies((policies) =>
+      policies.map((policy) => (policy.kind === kind ? { ...policy, [field]: paise } : policy)),
+    );
+  }
+
+  function toggleApprovalRole(
+    kind: string,
+    field: "band_roles" | "escalated_roles",
+    roleCode: string,
+  ) {
+    setApprovalPolicies((policies) =>
+      policies.map((policy) => {
+        if (policy.kind !== kind) return policy;
+        const held = policy[field];
+        const next = held.includes(roleCode)
+          ? held.filter((code) => code !== roleCode)
+          : [...held, roleCode];
+        return { ...policy, [field]: next };
+      }),
+    );
+  }
+
+  async function saveApprovalPolicy(policy: ApprovalPolicy) {
+    setError("");
+    setOk("");
+    try {
+      await typedApi.patch(
+        `/auth/admin/approval-policies/${policy.kind}` as "/auth/admin/approval-policies/{kind}",
+        {
+          tolerance_paise: policy.tolerance_paise,
+          band_paise: policy.band_paise,
+          band_roles: policy.band_roles,
+          escalated_roles: policy.escalated_roles,
+        },
+      );
+      setOk(`${policy.label} approvals sent for second-person approval.`);
+    } catch (e) {
+      setError(apiErrorMessage(e));
+      resyncPolicies();
     }
   }
 
@@ -783,6 +890,7 @@ export function UsersRolesPage() {
           <div className="seg" data-testid="rbac-tabs">
             <button className={`seg-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")} data-testid="rbac-users-tab"><Users size={14} /> Users</button>
             <button className={`seg-btn ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")} data-testid="rbac-roles-tab"><ShieldCheck size={14} /> Roles</button>
+            <button className={`seg-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")} data-testid="actor-policies-tab"><ShieldCheck size={14} /> Policies</button>
           </div>
         }
       />
@@ -847,7 +955,7 @@ export function UsersRolesPage() {
             </table>
           </div>
         </>
-      ) : (
+      ) : tab === "roles" ? (
         <>
           <div className="card section-card" data-testid="role-editor-card">
             <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -913,6 +1021,112 @@ export function UsersRolesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="card section-card" data-testid="actor-policies-card">
+            <div className="form-note" style={{ marginBottom: 12 }}>
+              Who may perform each gated action is live Setup data. Every change waits
+              for a different Owner or IT Admin; the four floor rules remain locked.
+            </div>
+            <div className="table-wrap">
+              <table className="data" data-testid="actor-policies-table">
+                <thead><tr><th>Action</th><th>Allowed roles</th><th /></tr></thead>
+                <tbody>
+                  {loading ? <tr><td colSpan={3}>Loading…</td></tr> : actorPolicies.map((policy) => (
+                    <tr key={policy.action} data-testid={`actor-policy-${policy.action}`}>
+                      <td>
+                        <b>{policy.label}</b>
+                        <div className="mono" style={{ fontSize: 12 }}>{policy.action}</div>
+                        <div className="muted">{policy.description}</div>
+                      </td>
+                      <td>
+                        <div className="toggle-grid">
+                          {roles.map((role) => (
+                            <button
+                              key={role.code}
+                              type="button"
+                              className={`toggle-chip ${policy.roles.includes(role.code) ? "active" : ""}`}
+                              onClick={() => togglePolicyRole(policy.action, role.code)}
+                              data-testid={`actor-policy-${policy.action}-${role.code}`}
+                            >
+                              {role.name}
+                            </button>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <button className="btn btn-cta" onClick={() => saveActorPolicy(policy)}>
+                          <Save size={14} /> Propose
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card section-card" data-testid="approval-policies-card">
+            <h3 className="h3">Approval bands</h3>
+            <div className="form-note" style={{ marginBottom: 12 }}>
+              Tolerance skips the second person up to that value. The band sets where
+              approval escalates from in-charge roles to head-office roles.
+            </div>
+            <div className="table-wrap">
+              <table className="data" data-testid="approval-policies-table">
+                <thead>
+                  <tr><th>Document family</th><th>Tolerance ₹</th><th>Band ₹</th><th>Within band</th><th>Above band</th><th /></tr>
+                </thead>
+                <tbody>
+                  {approvalPolicies.map((policy) => (
+                    <tr key={policy.kind} data-testid={`approval-policy-${policy.kind}`}>
+                      <td>
+                        <b>{policy.label}</b>
+                        <div className="mono" style={{ fontSize: 12 }}>{policy.kind}</div>
+                      </td>
+                      {(["tolerance_paise", "band_paise"] as const).map((field) => (
+                        <td key={field}>
+                          <input
+                            className="input tabular"
+                            type="number"
+                            min="0"
+                            style={{ minWidth: 110 }}
+                            value={policy[field] / 100}
+                            onChange={(e) => setApprovalAmount(policy.kind, field, e.target.value)}
+                          />
+                          <div className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                            {policy[field] ? formatINR(policy[field]) : "no threshold"}
+                          </div>
+                        </td>
+                      ))}
+                      {(["band_roles", "escalated_roles"] as const).map((field) => (
+                        <td key={field}>
+                          <div className="toggle-grid">
+                            {roles.map((role) => (
+                              <button
+                                key={role.code}
+                                type="button"
+                                className={`toggle-chip ${policy[field].includes(role.code) ? "active" : ""}`}
+                                onClick={() => toggleApprovalRole(policy.kind, field, role.code)}
+                              >
+                                {role.name}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      ))}
+                      <td>
+                        <button className="btn btn-cta" onClick={() => saveApprovalPolicy(policy)}>
+                          <Save size={14} /> Propose
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}

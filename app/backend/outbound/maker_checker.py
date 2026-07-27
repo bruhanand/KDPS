@@ -23,17 +23,13 @@ from typing import Any
 
 from django.db import models
 
-from accounts.rbac_matrix import roles_with_capability
-from accounts.role_lists import declare_role_list
-from accounts.sections import CAP_APPROVE
-from approvals.models import Approval, ApprovalStatus
+from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
 from approvals.services import (
     AlreadyPendingError,
     ApprovalRequired,
     approval_for,
     assert_approved,
     holds_approver_role,
-    policy_for,
     record_no_approval_needed,
     request_approval,
 )
@@ -44,25 +40,12 @@ from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VF
 
 @dataclass(frozen=True)
 class ApprovalKind:
-    """One wired document family, and the thresholds it starts life with.
-
-    The four policy numbers are *seed* values: they are written into an
-    ``ApprovalPolicy`` row the first time the kind is used, and the business
-    tunes them there afterwards. Editing them here changes nothing that is
-    already running — which is the point (Rule 12).
-    """
+    """The stable wiring between a model and its stored approval policy."""
 
     code: str
     label: str
-    approver_roles: tuple[str, ...]
     #: The document's own approver column, stamped from the approval at post time.
     approver_field: str
-    #: Value at stake at or below which no checker is asked. 0 = always ask.
-    tolerance_paise: int = 0
-    #: Value up to which the in-charge may approve. 0 = always HO.
-    band_paise: int = 0
-    #: Who may approve within the band (in-charge + HO).
-    band_roles: tuple[str, ...] = ()
     #: Whether this family asks for a second person on the **rung** instead of
     #: on the value: a maker who already holds the approving rung clears their
     #: own document, and everyone else waits however little is at stake. Who
@@ -71,112 +54,25 @@ class ApprovalKind:
     self_clearing: bool = False
 
 
-#: Who may clear a correction, and who may clear an ownership flip — the roles
-#: the matrix puts at ``approve`` or above on that document's own section, read
-#: from the sheet rather than hand-listed here (#94). These are *seed* values;
-#: the live answer is the ``ApprovalPolicy`` row, which the business retunes.
-_COUNT_APPROVERS = roles_with_capability("stock_count", CAP_APPROVE)
-_STOCK_APPROVERS = roles_with_capability("stock", CAP_APPROVE)
-
-#: Who may clear a transfer gap: the roles at ``transfer: approve``, read from the
-#: same place every other approver list is, rather than the hand-kept admin list
-#: #94 deleted (which named ``it_admin`` and ``accounts``, whom the sheet gives
-#: only *view* on transfers, and omitted the brand manager it gives *approve*).
-#:
-#: One caveat worth stating: ``ho_ops`` — the Operations Head the design actually
-#: names for this decision — holds its ``approve`` through ``DERIVED_ACCESS``,
-#: which ``rbac_matrix`` is explicit is *not* the ratified sheet and may be
-#: retuned as data. So the one role the design names is the one whose seat here is
-#: least ratified. That is an argument for giving Operations Head a sheet row, not
-#: for hand-listing roles again. Seniority is all this expresses; the entitlement
-#: rule barring anyone tied to the receiving store is a separate gate in
-#: ``posting._refuse_self_closure``.
-_GAP_APPROVERS = roles_with_capability("transfer", CAP_APPROVE)
-
-#: Who may confirm a damage flag (#138). The ladder gives the ratified half —
-#: the roles the sheet puts at ``return_to_brand: approve`` or above (Owner, and
-#: Admin at ``manage``) — and cannot give the other half: the sheet puts the
-#: warehouse and the store person on the *same* rung, ``return_to_brand:
-#: operate``, and separates them only in the cell's words ("Create & execute" vs
-#: "Mark damage only"). Anand's 26 July ruling turns that wording into a real
-#: gate, so the warehouse is declared here rather than promoted to ``approve``,
-#: which would hand it every other return-to-brand decision as well.
-#:
-#: ``ho_ops`` — the HO seat the ruling names alongside the warehouse — is
-#: deliberately *not* here: the matrix gives it ``return_to_brand: view``, and a
-#: viewer must not move stock. The seat that carries HO on this section is the
-#: Owner. If the business wants Operations Head confirming damage, the answer is
-#: the ``ApprovalPolicy`` row (data, Rule 12) or a sheet row for HO Ops — not a
-#: wider list here.
-_DAMAGE_CONFIRMERS = tuple(
-    sorted(
-        {
-            *roles_with_capability("return_to_brand", CAP_APPROVE),
-            *declare_role_list(
-                "outbound.damage_confirmers",
-                ("warehouse",),
-                reason=(
-                    "A store person reports damage; a warehouse or HO person confirms it "
-                    "and that confirmation is what posts the piece to quarantine (#138). "
-                    "Both hold `return_to_brand: operate` on the ratified sheet — the "
-                    "ladder has no rung between 'may report' and 'may post', and widening "
-                    "the warehouse to `approve` would also hand it RTV approval."
-                ),
-            ),
-        }
-    )
-)
-
-#: The one role the band adds on top of the approvers — a declared exception,
-#: because the ladder cannot express it.
-_BAND_IN_CHARGE = declare_role_list(
-    "outbound.adjustment_band_in_charge",
-    ("store_manager",),
-    reason=(
-        "The design lets the store in-charge clear a small counting variance "
-        "without going to HO. That is seniority *within* a section — the manager "
-        "and the cashier both hold `stock_count: operate`, and the ladder has no "
-        "rung between operate and approve to separate them. Widening it to "
-        "`stock_count: approve` would hand every counter the band."
-    ),
-)
-
-#: Within the band, the store in-charge may clear it too (a *different* person
-#: from the maker — the self-approval rule still binds).
-_IN_CHARGE_ROLES = tuple(sorted({*_COUNT_APPROVERS, *_BAND_IN_CHARGE}))
-
-#: Stock adjustments alone carry a tolerance: they are the output of counting,
-#: where "book vs counted" is never going to agree to the piece, and the design
-#: is explicit that a small variance auto-adjusts and is logged rather than
-#: queueing behind a second person. Write-offs and V-flips have no tolerance —
-#: stock leaving the books, or changing owner, always needs a second person.
-_ADJ_TOLERANCE_PAISE = 2_00_000  # ₹2,000 at stake
-_ADJ_BAND_PAISE = 25_00_000  # ₹25,000 — above this, HO only
-
 KINDS: dict[type[models.Model], ApprovalKind] = {
-    WriteOff: ApprovalKind("writeoff", "Write-off", _COUNT_APPROVERS, "approved_by"),
-    VFlip: ApprovalKind("vflip", "V-flip", _STOCK_APPROVERS, "authorized_by"),
-    StockAdjustment: ApprovalKind(
-        "adjustment",
-        "Stock adjustment",
-        _COUNT_APPROVERS,
-        "approved_by",
-        tolerance_paise=_ADJ_TOLERANCE_PAISE,
-        band_paise=_ADJ_BAND_PAISE,
-        band_roles=_IN_CHARGE_ROLES,
-    ),
+    WriteOff: ApprovalKind("writeoff", "Write-off", "approved_by"),
+    VFlip: ApprovalKind("vflip", "V-flip", "authorized_by"),
+    StockAdjustment: ApprovalKind("adjustment", "Stock adjustment", "approved_by"),
     # No tolerance and no band: a gap closure decides what became of pieces that
     # went missing between two locations, and it is HO/warehouse work whatever it
     # is worth. The rule that the *receiving* store cannot be either party is
     # about entitlement rather than role, so it lives in
     # ``posting._refuse_self_closure`` — this table only says who is senior.
-    TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", _GAP_APPROVERS, "approved_by"),
+    TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", "approved_by"),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
     # on its own say-so. The rung does — hence ``self_clearing``, which lets a
     # warehouse or HO person flag and confirm in the one action.
     MarkDamaged: ApprovalKind(
-        "damage", "Damage flag", _DAMAGE_CONFIRMERS, "confirmed_by", self_clearing=True
+        "damage",
+        "Damage flag",
+        "confirmed_by",
+        self_clearing=True,
     ),
 }
 
@@ -238,17 +134,14 @@ def _inr(paise: int) -> str:
     return f"₹{rupees}"
 
 
-def _policy(kind: ApprovalKind) -> Any:
-    """The live thresholds for this family, seeded from ``kind`` on first use."""
-    return policy_for(
-        kind.code,
-        defaults={
-            "tolerance_paise": kind.tolerance_paise,
-            "band_paise": kind.band_paise,
-            "band_roles": list(kind.band_roles or kind.approver_roles),
-            "escalated_roles": list(kind.approver_roles),
-        },
-    )
+def _policy(kind: ApprovalKind) -> ApprovalPolicy:
+    """Read the live row; missing policy is a closed gate, never a code fallback."""
+    try:
+        return ApprovalPolicy.objects.get(kind=kind.code)
+    except ApprovalPolicy.DoesNotExist as exc:
+        raise ApprovalRequired(
+            f"No approval policy is configured for {kind.label.lower()}."
+        ) from exc
 
 
 def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None:

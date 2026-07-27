@@ -3,7 +3,11 @@ from __future__ import annotations
 from django.urls import path
 
 from accounts.views import (
+    ActorPolicyDetailView,
+    ActorPolicyListView,
     AdminMetaView,
+    ApprovalPolicyDetailView,
+    ApprovalPolicyListCreateView,
     CookieRefreshView,
     LoginView,
     LogoutView,
@@ -24,4 +28,20 @@ urlpatterns = [
     path("admin/roles/<int:pk>", RoleDetailView.as_view(), name="rbac-role-detail"),
     path("admin/users", UserListCreateView.as_view(), name="rbac-user-list"),
     path("admin/users/<int:pk>", UserDetailView.as_view(), name="rbac-user-detail"),
+    path("admin/actor-policies", ActorPolicyListView.as_view(), name="actor-policy-list"),
+    path(
+        "admin/actor-policies/<path:action>",
+        ActorPolicyDetailView.as_view(),
+        name="actor-policy-detail",
+    ),
+    path(
+        "admin/approval-policies",
+        ApprovalPolicyListCreateView.as_view(),
+        name="approval-policy-list",
+    ),
+    path(
+        "admin/approval-policies/<str:kind>",
+        ApprovalPolicyDetailView.as_view(),
+        name="approval-policy-detail",
+    ),
 ]
