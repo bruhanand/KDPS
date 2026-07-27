@@ -112,7 +112,7 @@ export default function StockLedger() {
         placeholder="Search movements — doc number, style, barcode"
         label="Search movement history"
         testId="stock-search"
-        noun="entry"
+        noun="movement"
         count={count}
         loading={loading}
       />

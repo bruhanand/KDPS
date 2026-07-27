@@ -230,7 +230,7 @@ export default function VendorLedger() {
         placeholder="Search entries — doc number, party"
         label="Search vendor ledger entries"
         testId="vl-entries-search"
-        noun="entry"
+        noun="posting"
         count={count}
         loading={entriesLoading}
       />

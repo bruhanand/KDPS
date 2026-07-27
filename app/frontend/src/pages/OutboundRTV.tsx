@@ -149,7 +149,7 @@ export function RTVListPage() {
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="rtv-empty">
           {q
-            ? `No ${RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} return matches “${q}”.`
+            ? `No ${RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} matches “${q}”.`
             : `No ${RETURN_TYPE_LABEL[tab]?.toLowerCase() || tab} returns yet.`}
         </div>
       ) : (
