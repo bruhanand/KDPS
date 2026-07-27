@@ -110,8 +110,21 @@ env_set() {
   printf '%s=%s\n' "$key" "$value" >> "$tmp"
   mv "$tmp" "$file"
 }
+env_drop() {
+  local file="$1" key="$2" tmp
+  [ -f "$file" ] || return 0
+  tmp="$(mktemp)"
+  grep -v "^${key}=" "$file" > "$tmp" || true
+  mv "$tmp" "$file"
+}
 env_set "$ENV_FILE"       DATABASE_URL          "$KDPS_DATABASE_URL"
 env_set "$FRONTEND/.env"  REACT_APP_BACKEND_URL "$KDPS_BACKEND_URL"
+# The frontend's API base belongs to the frontend's own .env, and only there.
+# A copy of it in the *backend* .env is sourced below with `set -a`, so it
+# reaches Vite as a process env var — which outranks the file we just wrote, and
+# points the PWA at another workspace's port. Older workspaces carry exactly
+# that stale key, so drop it rather than trust it.
+env_drop "$ENV_FILE"      REACT_APP_BACKEND_URL
 
 set -a; . "$ENV_FILE"; set +a
 : "${DATABASE_URL:?DATABASE_URL missing from $ENV_FILE}"
