@@ -21,8 +21,16 @@ from approvals.models import Approval, ApprovalPolicy
 @admin.register(ApprovalPolicy)
 class ApprovalPolicyAdmin(admin.ModelAdmin):
     list_display = ("kind", "tolerance_paise", "band_paise", "band_roles", "escalated_roles")
-    list_editable = ("tolerance_paise", "band_paise")
     readonly_fields = ("created_at", "updated_at")
+
+    def has_add_permission(self, request: Any) -> bool:
+        return False
+
+    def has_change_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
 
 
 @admin.register(Approval)

@@ -17,9 +17,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
-from core.gl import GLEntry
+from core.gl import GLAccount, GLEntry
 
 
 class PostingError(Exception):
@@ -28,6 +29,10 @@ class PostingError(Exception):
 
 class UnbalancedError(PostingError):
     """The legs of a posting do not sum to zero in paise (or there are fewer than two)."""
+
+
+class PostingFloorError(PostingError, PermissionDenied):
+    """A non-configurable people rule refused an otherwise valid posting."""
 
 
 @dataclass(frozen=True)
@@ -89,6 +94,7 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     legs = list(legs)
     _refuse_unpostable(doc, legs)
     doc_type, doc_number, default_store, default_gstin, actor = _posting_context(doc, posted_by)
+    _refuse_actor_outside_floor(actor, legs, doc_type)
 
     rows = [
         GLEntry(
@@ -111,6 +117,27 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     ]
     GLEntry.objects.bulk_create(rows)
     return rows
+
+
+def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> None:
+    """A store may move pieces, but it never writes rupees into the books.
+
+    This sits in the sole GL writer, below every API and business module, so a
+    Setup grant, shell call or future endpoint cannot route around it.
+    """
+    if getattr(actor, "scope_type", "") == "store":
+        raise PostingFloorError(
+            "A store-scoped user cannot post value to the books; "
+            "a named head-office person must perform this action."
+        )
+    raises_brand_liability = any(leg.account == GLAccount.VENDOR_PAYABLE for leg in legs)
+    requires_named_head_office_actor = raises_brand_liability or doc_type in {"PT", "VFL"}
+    actor_name = getattr(actor, "full_name", "") or getattr(actor, "username", "") if actor else ""
+    if requires_named_head_office_actor and (not getattr(actor, "pk", None) or not actor_name):
+        raise PostingFloorError(
+            "PT inwarding, V-flip, and money owed to a brand cannot post without "
+            "a named head-office person."
+        )
 
 
 def _refuse_unpostable(doc: Any, legs: list[Leg]) -> None:

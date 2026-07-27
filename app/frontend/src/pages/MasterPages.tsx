@@ -526,6 +526,13 @@ type AdminUser = Omit<ApiSchemas["AdminUser"], "scope_type"> & {
   brands?: BrandMini[];
 };
 type StoreMini = ApiSchemas["StoreMini"];
+interface ActorPolicy {
+  id: number;
+  action: string;
+  label: string;
+  description: string;
+  roles: string[];
+}
 
 interface AdminMeta {
   nav_groups: string[];
@@ -608,10 +615,11 @@ function normalizeNavGroups(value: unknown): string[] {
 
 export function UsersRolesPage() {
   const { user } = useAuth();
-  const canEdit = Boolean(user?.is_superuser || ["owner", "it_admin"].includes(user?.role?.code ?? ""));
-  const [tab, setTab] = useState<"users" | "roles">("users");
+  const canEdit = ["owner", "it_admin"].includes(user?.role?.code ?? "");
+  const [tab, setTab] = useState<"users" | "roles" | "policies">("users");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
+  const [actorPolicies, setActorPolicies] = useState<ActorPolicy[]>([]);
   const [meta, setMeta] = useState<AdminMeta>({
     nav_groups: [],
     sections: [],
@@ -638,11 +646,13 @@ export function UsersRolesPage() {
       typedApi.get("/auth/admin/users"),
       typedApi.get("/auth/admin/roles"),
       typedApi.get("/auth/admin/meta"),
+      api.get("/auth/admin/actor-policies"),
     ])
-      .then(([u, r, m]) => {
+      .then(([u, r, m, p]) => {
         setUsers(u.data as AdminUser[]);
         setRoles(r.data as AdminRole[]);
         setMeta(m.data as AdminMeta);
+        setActorPolicies(p.data as ActorPolicy[]);
       })
       .catch((e) => setError(apiErrorMessage(e)))
       .finally(() => setLoading(false));
@@ -733,8 +743,7 @@ export function UsersRolesPage() {
       if (userForm.id) await typedApi.patch(`/auth/admin/users/${userForm.id}` as "/auth/admin/users/{id}", payload);
       else await typedApi.post("/auth/admin/users", payload);
       setUserForm(blankUser);
-      setOk("User saved.");
-      loadAll();
+      setOk("User change sent for second-person approval.");
     } catch (e) {
       setError(apiErrorMessage(e));
     }
@@ -759,8 +768,32 @@ export function UsersRolesPage() {
       else await typedApi.post("/auth/admin/roles", payload);
       setRoleForm(blankRole);
       setLoadedAccess({});
-      setOk("Role saved.");
-      loadAll();
+      setOk("Role change sent for second-person approval.");
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    }
+  }
+
+  function togglePolicyRole(action: string, roleCode: string) {
+    setActorPolicies((policies) => policies.map((policy) => {
+      if (policy.action !== action) return policy;
+      const roles = policy.roles.includes(roleCode)
+        ? policy.roles.filter((code) => code !== roleCode)
+        : [...policy.roles, roleCode];
+      return { ...policy, roles };
+    }));
+  }
+
+  async function saveActorPolicy(policy: ActorPolicy) {
+    setError("");
+    setOk("");
+    try {
+      await api.patch(`/auth/admin/actor-policies/${policy.action}`, {
+        label: policy.label,
+        description: policy.description,
+        roles: policy.roles,
+      });
+      setOk(`${policy.label} sent for second-person approval.`);
     } catch (e) {
       setError(apiErrorMessage(e));
     }
@@ -783,6 +816,7 @@ export function UsersRolesPage() {
           <div className="seg" data-testid="rbac-tabs">
             <button className={`seg-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")} data-testid="rbac-users-tab"><Users size={14} /> Users</button>
             <button className={`seg-btn ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")} data-testid="rbac-roles-tab"><ShieldCheck size={14} /> Roles</button>
+            <button className={`seg-btn ${tab === "policies" ? "active" : ""}`} onClick={() => setTab("policies")} data-testid="actor-policies-tab"><ShieldCheck size={14} /> Actor policies</button>
           </div>
         }
       />
@@ -847,7 +881,7 @@ export function UsersRolesPage() {
             </table>
           </div>
         </>
-      ) : (
+      ) : tab === "roles" ? (
         <>
           <div className="card section-card" data-testid="role-editor-card">
             <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -915,6 +949,49 @@ export function UsersRolesPage() {
             </table>
           </div>
         </>
+      ) : (
+        <div className="card section-card" data-testid="actor-policies-card">
+          <div className="form-note" style={{ marginBottom: 12 }}>
+            Who may perform each gated action is live Setup data. Every change waits
+            for a different Owner or IT Admin; the four floor rules remain locked.
+          </div>
+          <div className="table-wrap">
+            <table className="data" data-testid="actor-policies-table">
+              <thead><tr><th>Action</th><th>Allowed roles</th><th /></tr></thead>
+              <tbody>
+                {loading ? <tr><td colSpan={3}>Loading…</td></tr> : actorPolicies.map((policy) => (
+                  <tr key={policy.action} data-testid={`actor-policy-${policy.action}`}>
+                    <td>
+                      <b>{policy.label}</b>
+                      <div className="mono" style={{ fontSize: 12 }}>{policy.action}</div>
+                      <div className="muted">{policy.description}</div>
+                    </td>
+                    <td>
+                      <div className="toggle-grid">
+                        {roles.map((role) => (
+                          <button
+                            key={role.code}
+                            type="button"
+                            className={`toggle-chip ${policy.roles.includes(role.code) ? "active" : ""}`}
+                            onClick={() => togglePolicyRole(policy.action, role.code)}
+                            data-testid={`actor-policy-${policy.action}-${role.code}`}
+                          >
+                            {role.name}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
+                    <td>
+                      <button className="btn btn-cta" onClick={() => saveActorPolicy(policy)}>
+                        <Save size={14} /> Propose
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );

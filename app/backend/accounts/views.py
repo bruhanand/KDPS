@@ -14,7 +14,7 @@ from typing import Any
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,15 +23,27 @@ from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from accounts.models import NAV_GROUPS, LoginAttempt, Role, ScopeType, User
+from accounts.access_changes import is_access_administrator, propose_access_change
+from accounts.models import (
+    NAV_GROUPS,
+    AccessChange,
+    ActorPolicy,
+    LoginAttempt,
+    Role,
+    ScopeType,
+    User,
+)
 from accounts.permissions import require_section
 from accounts.sections import CAP_MANAGE, CAPABILITY_ORDER, SECTIONS
 from accounts.serializers import (
+    ActorPolicySerializer,
     AdminRoleSerializer,
     AdminUserSerializer,
+    ApprovalPolicyAdminSerializer,
     CustomTokenObtainPairSerializer,
     UserProfileSerializer,
 )
+from approvals.models import ApprovalPolicy
 from masters.models import Brand, Store
 
 MAX_FAILURES = 5
@@ -42,6 +54,15 @@ LOCK_MINUTES = 15
 # Owner and Admin hold `setup: manage` in the RBAC matrix, so this is
 # behaviour-identical to the old role check but now retunable as data (#85).
 IsRbacAdmin = require_section("setup", CAP_MANAGE)
+
+
+class IsAccessAdministrator(BasePermission):
+    """Floor rule: editable Setup grants cannot grant permission to edit Setup."""
+
+    message = "Only Owner or IT Admin may propose user, role, or permission changes."
+
+    def has_permission(self, request: Request, view: Any) -> bool:
+        return is_access_administrator(request.user)
 
 
 class LoginView(TokenObtainPairView):
@@ -188,21 +209,78 @@ class AdminMetaView(APIView):
         )
 
 
-class RoleListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsRbacAdmin]
+FLOOR_OVERRIDE_FIELDS = {
+    "allow_self_approval",
+    "allow_store_value_posting",
+    "allow_unnamed_brand_liability",
+    "apply_immediately",
+    "floor_overrides",
+}
+
+
+def _pending_response(change: AccessChange, approval: Any) -> Response:
+    return Response(
+        {
+            "change_id": change.pk,
+            "approval_id": approval.pk,
+            "status": "pending_approval",
+            "detail": "A different Owner or IT Admin must approve this change.",
+        },
+        status=status.HTTP_202_ACCEPTED,
+    )
+
+
+class PendingAccessChangeMixin:
+    access_resource: str
+
+    def _propose(self, request: Request, *, target: Any = None, partial: bool = False) -> Response:
+        forbidden = sorted(set(request.data) & FLOOR_OVERRIDE_FIELDS)
+        if forbidden:
+            return Response(
+                {
+                    "detail": "Floor rules cannot be configured or bypassed.",
+                    "fields": forbidden,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        change, approval = propose_access_change(
+            resource=self.access_resource,
+            actor=request.user,
+            data=request.data,
+            target=target,
+            partial=partial,
+        )
+        return _pending_response(change, approval)
+
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return self._propose(request)
+
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        return self._propose(
+            request,
+            target=self.get_object(),
+            partial=bool(kwargs.get("partial", False)),
+        )
+
+
+class RoleListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     queryset = Role.objects.all().order_by("name")
+    access_resource = AccessChange.Resource.ROLE
 
 
-class RoleDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsRbacAdmin]
+class RoleDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
     serializer_class = AdminRoleSerializer
     queryset = Role.objects.all()
+    access_resource = AccessChange.Resource.ROLE
 
 
-class UserListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated, IsRbacAdmin]
+class UserListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
+    access_resource = AccessChange.Resource.USER
 
     def get_queryset(self) -> Any:
         return (
@@ -212,9 +290,41 @@ class UserListCreateView(generics.ListCreateAPIView):
         )
 
 
-class UserDetailView(generics.RetrieveUpdateAPIView):
-    permission_classes = [IsAuthenticated, IsRbacAdmin]
+class UserDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
     serializer_class = AdminUserSerializer
+    access_resource = AccessChange.Resource.USER
 
     def get_queryset(self) -> Any:
         return User.objects.select_related("role", "entity").prefetch_related("stores", "brands")
+
+
+class ActorPolicyListView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    serializer_class = ActorPolicySerializer
+    queryset = ActorPolicy.objects.all()
+
+
+class ActorPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    serializer_class = ActorPolicySerializer
+    queryset = ActorPolicy.objects.all()
+    access_resource = AccessChange.Resource.ACTOR_POLICY
+    lookup_field = "action"
+    lookup_url_kwarg = "action"
+
+
+class ApprovalPolicyListCreateView(PendingAccessChangeMixin, generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    serializer_class = ApprovalPolicyAdminSerializer
+    queryset = ApprovalPolicy.objects.all()
+    access_resource = AccessChange.Resource.APPROVAL_POLICY
+
+
+class ApprovalPolicyDetailView(PendingAccessChangeMixin, generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated, IsAccessAdministrator]
+    serializer_class = ApprovalPolicyAdminSerializer
+    queryset = ApprovalPolicy.objects.all()
+    access_resource = AccessChange.Resource.APPROVAL_POLICY
+    lookup_field = "kind"
+    lookup_url_kwarg = "kind"

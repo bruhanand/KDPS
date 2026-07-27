@@ -267,7 +267,7 @@ def test_seeding_stores_exactly_the_table(db):
 
 
 # --- Access is data, not code (Rule 12) -----------------------------------
-def test_retuning_section_access_is_a_data_change(db):
+def test_setup_manage_cannot_configure_away_the_access_admin_floor(db):
     role = _make_role("accounts")
     user = _make_user("acc2", role)
     # Before: accounts can't manage Setup.
@@ -277,7 +277,7 @@ def test_retuning_section_access_is_a_data_change(db):
     role.section_access["setup"] = {"capability": "manage", "label": "Granted"}
     role.save(update_fields=["section_access"])
 
-    assert _client(user).get("/api/auth/admin/roles").status_code == 200
+    assert _client(user).get("/api/auth/admin/roles").status_code == 403
     body = _client(user).get("/api/auth/me").json()
     assert body["capabilities"]["setup"] == "manage"
 

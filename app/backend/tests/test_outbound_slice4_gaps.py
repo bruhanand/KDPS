@@ -463,7 +463,7 @@ def test_a_priceable_extra_is_accepted_in_with_a_flag(gap_scaffold):
     s = gap_scaffold
     transfer = _dispatched(s, plan=(("GB001", 2),))
 
-    resp = _client(s["receiver"]).post(
+    resp = _client(s["wh_receiver"]).post(
         f"/api/outbound/transfers/{transfer.pk}/receive",
         {
             "scans": [{"barcode": "GB001", "qty": 2}],
@@ -523,7 +523,7 @@ def test_a_brand_owned_extra_never_lands_in_our_inventory(gap_scaffold):
     s = gap_scaffold
     transfer = _dispatched(s, plan=(("GB001", 1),))
 
-    resp = _client(s["receiver"]).post(
+    resp = _client(s["wh_receiver"]).post(
         f"/api/outbound/transfers/{transfer.pk}/receive",
         {
             "scans": [{"barcode": "GB001", "qty": 1}],

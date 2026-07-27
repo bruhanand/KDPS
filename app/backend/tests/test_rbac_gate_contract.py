@@ -235,28 +235,12 @@ def test_superuser_break_glass_passes_every_gate(db):
 
 
 # --- 2. The approvers ------------------------------------------------------
-def test_code_default_approvers_hold_only_roles_the_matrix_trusts():
-    """No approver default names a role the matrix gives only ``view``."""
+def test_every_wired_family_has_a_stored_actor_policy(db):
+    """The live answer is stored policy, not a role list frozen in code."""
     for kind in KINDS.values():
-        section = APPROVAL_SECTION[kind.code]
-        can_approve = set(roles_with_capability(section, CAP_APPROVE))
-        # Nobody the matrix trusts is ever dropped…
-        assert can_approve <= set(kind.approver_roles), kind.code
-        # …and exactly one kind adds anyone: damage flags, whose confirmer holds
-        # the same `return_to_brand: operate` rung as the store person who
-        # raises them (#138), so the ladder cannot tell the two apart. Named per
-        # kind, so no *other* family can quietly inherit the widening.
-        allowed_extra = (
-            REGISTERED_ROLE_LISTS["outbound.damage_confirmers"].roles
-            if kind.code == "damage"
-            else frozenset()
-        )
-        assert set(kind.approver_roles) - can_approve <= allowed_extra, kind.code
-        # The band may add the in-charge, and nothing else — that one addition
-        # is the registered exception, so it is named here rather than assumed.
-        extra = set(kind.band_roles) - can_approve
-        assert extra <= {"store_manager"}, kind.code
-        assert "accounts" not in set(kind.approver_roles) | set(kind.band_roles), kind.code
+        policy = ApprovalPolicy.objects.get(kind=kind.code)
+        assert policy.band_roles, kind.code
+        assert policy.escalated_roles, kind.code
 
 
 def test_a_freshly_raised_approval_names_no_view_only_role(db):
@@ -277,6 +261,7 @@ def test_a_freshly_raised_approval_names_no_view_only_role(db):
 
     assert approval is not None
     trusted = set(roles_with_capability(APPROVAL_SECTION["writeoff"], CAP_APPROVE))
+    trusted.add("store_manager")  # the ratified within-band in-charge
     assert set(approval.approver_roles) <= trusted
     assert "accounts" not in approval.approver_roles
 
@@ -316,9 +301,10 @@ def test_the_migration_corrects_a_running_install(db):
     decided keeps the list it was decided under, because that is history.
     """
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
-    policy = ApprovalPolicy.objects.create(
-        kind="writeoff", band_roles=STALE_APPROVERS, escalated_roles=STALE_APPROVERS
-    )
+    policy = ApprovalPolicy.objects.get(kind="writeoff")
+    policy.band_roles = STALE_APPROVERS
+    policy.escalated_roles = STALE_APPROVERS
+    policy.save(update_fields=["band_roles", "escalated_roles"])
     maker = _user("maker", _role("warehouse"))
     checker = _user("checker", _role("accounts"))
     store = _store("DEO", "10AAACK1234M1Z5")
@@ -347,9 +333,9 @@ def test_the_migration_does_not_invent_policy_rows(db):
     defaults create it correctly on first use."""
     migration = import_module("outbound.migrations.0008_rbac_approver_roles")
 
+    before = set(ApprovalPolicy.objects.values_list("kind", flat=True))
     migration.correct_stored_approvers(django_apps, None)
-
-    assert not ApprovalPolicy.objects.exists()
+    assert set(ApprovalPolicy.objects.values_list("kind", flat=True)) == before
 
 
 def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
@@ -389,11 +375,7 @@ def test_a_small_pending_adjustment_keeps_the_in_charge_with_no_policy_row(db):
 #: The five gates the ladder provably cannot express. A change to this set is a
 #: decision, which is exactly what the test is here to force.
 EXPECTED_EXCEPTIONS = {
-    "outbound.adjustment_band_in_charge",
-    "outbound.damage_confirmers",
-    "ptmapper.post_and_reverse_pt",
-    "ptmapper.mapping_stewardship",
-    "masters.writes",
+    "accounts.access_administrators_floor",
 }
 
 

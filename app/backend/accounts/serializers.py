@@ -7,9 +7,10 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from accounts.models import NAV_GROUPS, Role, User
+from accounts.models import NAV_GROUPS, ActorPolicy, Role, User
 from accounts.permissions import visible_sections
 from accounts.sections import CAPABILITY_ORDER, is_valid_capability, is_valid_section
+from approvals.models import ApprovalPolicy
 from masters.models import Brand, Store
 from masters.scoping import BRAND_SCOPE, scoped_brands, scoped_stores, visible_store_ids
 
@@ -58,9 +59,6 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         return value
 
     def validate_section_access(self, value: dict[str, Any]) -> dict[str, Any]:
-        # Retuning access is a data edit (Rule 12) — but keep it well-formed so a
-        # typo can't silently open or hide a section. Every key must be a known
-        # section and every capability a known rung.
         if not isinstance(value, dict):
             raise serializers.ValidationError("section_access must be an object.")
         unknown = sorted(k for k in value if not is_valid_section(k))
@@ -78,6 +76,40 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.is_system and value != self.instance.code:
             raise serializers.ValidationError("System role codes cannot be changed.")
         return value
+
+
+class ActorPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActorPolicy
+        fields = ["id", "action", "label", "description", "roles"]
+        read_only_fields = ["action"]
+
+    def validate_roles(self, value: list[str]) -> list[str]:
+        unknown = sorted(set(value) - set(Role.objects.values_list("code", flat=True)))
+        if unknown:
+            raise serializers.ValidationError(f"Unknown role(s): {', '.join(unknown)}")
+        return sorted(set(value))
+
+
+class ApprovalPolicyAdminSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ApprovalPolicy
+        fields = [
+            "id",
+            "kind",
+            "tolerance_paise",
+            "band_paise",
+            "band_roles",
+            "escalated_roles",
+        ]
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        known = set(Role.objects.values_list("code", flat=True))
+        supplied = set(attrs.get("band_roles", [])) | set(attrs.get("escalated_roles", []))
+        unknown = sorted(supplied - known)
+        if unknown:
+            raise serializers.ValidationError({"roles": f"Unknown role(s): {', '.join(unknown)}"})
+        return attrs
 
 
 class BrandMiniSerializer(serializers.Serializer):

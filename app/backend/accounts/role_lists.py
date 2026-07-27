@@ -52,3 +52,17 @@ def declare_role_list(name: str, roles: tuple[str, ...], *, reason: str) -> froz
     frozen = frozenset(roles)
     REGISTERED_ROLE_LISTS[name] = RoleListException(name=name, roles=frozen, reason=reason)
     return frozen
+
+
+# Floor rule #4 is deliberately the one role list Setup cannot edit.  It stays
+# in this registry so the existing contract requires the written reason.
+ACCESS_ADMINISTRATORS = declare_role_list(
+    "accounts.access_administrators_floor",
+    ("owner", "it_admin"),
+    reason=(
+        "Changing users, roles or permission policy is itself the power to grant "
+        "power. The ratified floor reserves proposals and second-person decisions "
+        "to Owner or IT Admin; storing this list in editable policy would let that "
+        "same policy configure the floor away."
+    ),
+)

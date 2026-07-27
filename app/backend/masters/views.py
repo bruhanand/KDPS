@@ -20,7 +20,7 @@ from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store
 # Re-exported: the gate moved to `masters.permissions` so the vendor master —
 # which lives in `vendors` because it carries bookings — is gated by the same
 # rule. Imported here so `from masters.views import IsMasterSteward` still reads.
-from masters.permissions import STEWARD_ROLES, IsMasterSteward  # noqa: F401
+from masters.permissions import IsMasterSteward
 from masters.scoping import scoped_stores
 from masters.serializers import (
     BrandSerializer,

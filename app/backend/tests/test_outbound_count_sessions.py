@@ -113,11 +113,23 @@ def count_scaffold(db):
         username="cnt_b", password=TEST_PASSWORD, role=role, scope_type=ScopeType.STORE
     )
     second.stores.add(store)
+    applier = User.objects.create_user(
+        username="cnt_ho",
+        password=TEST_PASSWORD,
+        role=make_role("owner", "Owner (count test)"),
+        scope_type=ScopeType.ALL,
+    )
 
     VoucherSeries.objects.create(
         fy=FY, store_code="C-A", doc_type="ADJ", prefix=f"C-A/ADJ/{FY}/", next_seq=1
     )
-    return {"store": store, "gstin": gstin, "counter": counter, "second": second}
+    return {
+        "store": store,
+        "gstin": gstin,
+        "counter": counter,
+        "second": second,
+        "applier": applier,
+    }
 
 
 def _client(user) -> APIClient:
@@ -298,7 +310,7 @@ def _count_and_apply(scaffold, *, shirt_counted: int, confirm: list[str] | None 
     if shirt_counted:
         _scan(scaffold, session, SHIRT["barcode"], shirt_counted)
     _submit(scaffold, session)
-    return take, _client(scaffold["counter"]).post(
+    return take, _client(scaffold["applier"]).post(
         f"/api/outbound/stocktakes/{take}/apply", {"confirm": confirm or []}, format="json"
     )
 
@@ -391,14 +403,14 @@ def test_stock_that_moved_mid_count_is_never_overwritten_blind(count_scaffold):
     on_hand.net_value_paise = 9 * SHIRT["cost"]
     on_hand.save()
 
-    refused = _client(count_scaffold["counter"]).post(
+    refused = _client(count_scaffold["applier"]).post(
         f"/api/outbound/stocktakes/{take}/apply", {}, format="json"
     )
     assert refused.status_code == 409, refused.data
     assert [line["sku_code"] for line in refused.data["moved"]] == [SHIRT["barcode"]]
     assert StockAdjustment.objects.count() == 0
 
-    confirmed = _client(count_scaffold["counter"]).post(
+    confirmed = _client(count_scaffold["applier"]).post(
         f"/api/outbound/stocktakes/{take}/apply",
         {"confirm": [SHIRT["barcode"]]},
         format="json",
