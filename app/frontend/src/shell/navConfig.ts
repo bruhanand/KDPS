@@ -32,6 +32,7 @@ import {
   Undo2,
   Users,
   Wallet,
+  Warehouse,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -429,4 +430,208 @@ export function itemVisible(
   if (item.minCapability && !meetsCapability(held, item.minCapability)) return false;
   if (item.roles && !item.roles.includes(roleCode)) return false;
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Persona layouts (#96) — how one persona's sidebar is *arranged*.
+//
+// The sections above are shared vocabulary and the server decides which of them
+// a person gets. Neither changes here. What changes is the order they are drawn
+// in and which heading they sit under, because a store person asked — twice, a
+// month apart — for their own screen: Home, Sell, one "Inventory" heading over
+// the goods work, Reports, Staff, Stock Count, Money, Offers & Price.
+//
+// Three rules this must not break, all of them tested below in navConfig.test:
+//   · Grouping runs *after* access, over whatever the server's section list
+//     leaves standing. It can only ever draw less, never more.
+//   · An entry's gate travels with the entry. Attendance drawn under Home is
+//     still Staff's entry with Staff's gate; moving it changes nobody's access.
+//   · Names never change. Grouping is allowed, renaming is not (#84 as amended)
+//     — a store person and the warehouse both say "Transfer" on the phone.
+//
+// A role with no layout gets the flat list, which is what keeps every other
+// persona byte-identical to before this file grew this section.
+
+/** A heading with sections nested under it. It owns no route, no section code,
+ *  no capability and no server counterpart — it is a label and an order. */
+export interface NavGroupDef {
+  heading: string;
+  icon: LucideIcon;
+  /** CSS `--layer-*` token suffix, as on a section. */
+  layer: string;
+  /** Section codes drawn under this heading, in this order. */
+  sections: string[];
+}
+
+/** One row of a persona's sidebar: a section code, or a grouping heading. */
+export type LayoutRow = string | NavGroupDef;
+
+export interface PersonaLayout {
+  /** The rows, top to bottom. A section held but named nowhere here is still
+   *  drawn — appended after these rows — so retuning somebody's access can
+   *  never silently lose them a section. */
+  rows: LayoutRow[];
+  /** Sections this persona does not get a heading for. The capability is
+   *  untouched and the URL still opens; only the menu line goes. Use it with an
+   *  entry in `relocate` for anything that must stay one click away. */
+  hide: string[];
+  /** Entries drawn under a heading other than their own section's, keyed by the
+   *  entry's `to`. `after` places it directly below that entry in the host, else
+   *  it goes last. If the host section is not held, the entry stays where it is
+   *  — the move is presentation, so it can never be the reason something goes
+   *  missing. */
+  relocate: Record<string, { under: string; after?: string }>;
+}
+
+// The store's own screen, from the 30 June and 25 July store notes.
+//
+// Two entries move, and both moves are named by Anand's ruling of 26 July:
+// Attendance is drawn under Home ("Home only"), and Damage / Quarantine is
+// drawn under Stock, which is the section that already owns that screen. That
+// second move is what lets Return to Brand leave the sidebar without anything
+// becoming unreachable — a store person keeps "mark damage only" and reaches it
+// in one click, they just no longer see a Returns heading they cannot use.
+const STORE_LAYOUT: PersonaLayout = {
+  rows: [
+    "home",
+    "sell",
+    {
+      heading: "Inventory",
+      icon: Warehouse,
+      layer: "store",
+      sections: ["receive_goods", "transfer", "stock"],
+    },
+    "reports",
+    // Reads "Staff" until #118 renames it; with Attendance moved to Home it
+    // holds one visible item (Members, for a manager) and so draws as one line.
+    "staff",
+    "stock_count",
+    "money",
+    "offers_price",
+  ],
+  hide: ["return_to_brand"],
+  relocate: {
+    "/staff/attendance": { under: "home", after: "/" },
+    "/stock?view=quarantine": { under: "stock" },
+  },
+};
+
+/** Role code → its sidebar arrangement. Absent ⇒ the flat list. Both store role
+ *  codes share the store's screen: a manager and a cashier differ only in what
+ *  the server grants them, and the layout does not need to know about that. */
+export const PERSONA_LAYOUTS: Record<string, PersonaLayout> = {
+  store_manager: STORE_LAYOUT,
+  store_staff: STORE_LAYOUT,
+};
+
+/** A section the signed-in user actually gets, with its visible items. The
+ *  server decides *which* sections (#85); the manifest says what is in one; an
+ *  item gate can still hide an individual line. */
+export interface VisibleSection {
+  def: NavSectionDef;
+  label: string;
+  items: NavItem[];
+}
+
+const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
+
+/** The sections this person gets, with their visible items — the one access
+ *  filter, and the only authority on what may be drawn. Everything below it
+ *  (arranging, grouping, collapsing) consumes its output and can only subtract.
+ *
+ *  Typed structurally rather than against `User`, so the manifest keeps no
+ *  dependency on the auth module. */
+export function visibleSections(user: {
+  role?: { code?: string } | null;
+  is_superuser: boolean;
+  sections?: { code: string; label?: string; capability: string }[];
+}): VisibleSection[] {
+  const roleCode = user.role?.code ?? "";
+  const out: VisibleSection[] = [];
+  // Server order, not manifest order — the payload is the authority on both
+  // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
+  for (const granted of user.sections ?? []) {
+    const def = SECTION_DEFS.get(granted.code);
+    if (!def) continue; // a section the server knows and this build doesn't
+    // Item gates are finer than the section: the rung held on *this* section
+    // (`minCapability`) or, where the ladder can't express it, a role list. The
+    // break-glass superuser passes both.
+    const items = def.items.filter(
+      (i) => !i.action && itemVisible(i, granted.capability, roleCode, user.is_superuser),
+    );
+    // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
+    if (items.length) out.push({ def, label: granted.label || def.label, items });
+  }
+  return out;
+}
+
+/** A row of the rendered sidebar. */
+export type NavRow =
+  | { kind: "section"; key: string; section: VisibleSection }
+  | { kind: "group"; key: string; group: NavGroupDef; sections: VisibleSection[] };
+
+/** Arrange the sections this person holds into their persona's rows.
+ *
+ *  Takes the *output* of the access filter and only ever reorders, nests or
+ *  drops what is already in it — so no arrangement can put a section in front
+ *  of somebody the server did not send it to. */
+export function applyLayout(sections: VisibleSection[], roleCode: string): NavRow[] {
+  const layout = PERSONA_LAYOUTS[roleCode];
+  if (!layout) {
+    return sections.map((s) => ({ kind: "section", key: s.def.code, section: s }));
+  }
+
+  // Copy before moving anything: the caller's list is derived from the login
+  // payload and other screens read it.
+  const byCode = new Map(sections.map((s) => [s.def.code, { ...s, items: [...s.items] }]));
+
+  for (const [to, target] of Object.entries(layout.relocate)) {
+    const host = byCode.get(target.under);
+    if (!host) continue;
+    for (const source of byCode.values()) {
+      if (source === host) continue;
+      const at = source.items.findIndex((i) => i.to === to);
+      if (at < 0) continue;
+      const [entry] = source.items.splice(at, 1);
+      const after = target.after ? host.items.findIndex((i) => i.to === target.after) : -1;
+      host.items.splice(after < 0 ? host.items.length : after + 1, 0, entry);
+    }
+  }
+
+  /** The section, if this person holds it and it still has a line to show.
+   *  Relocation can empty a section (a cashier's Staff is Attendance and
+   *  nothing else), and an empty heading is a dead end. */
+  function drawable(code: string): VisibleSection | null {
+    const s = byCode.get(code);
+    return s && s.items.length ? s : null;
+  }
+
+  const rows: NavRow[] = [];
+  const spokenFor = new Set<string>(layout.hide);
+  for (const row of layout.rows) {
+    if (typeof row === "string") {
+      spokenFor.add(row);
+      const s = drawable(row);
+      if (s) rows.push({ kind: "section", key: row, section: s });
+      continue;
+    }
+    const inner: VisibleSection[] = [];
+    for (const code of row.sections) {
+      spokenFor.add(code);
+      const s = drawable(code);
+      if (s) inner.push(s);
+    }
+    if (inner.length) rows.push({ kind: "group", key: `group:${row.heading}`, group: row, sections: inner });
+  }
+
+  // Held, but named nowhere in the layout — an admin can retune access, so this
+  // is a real case and not a defect. Appended in the server's order rather than
+  // dropped: a sidebar that quietly loses a section somebody was just granted is
+  // worse than one whose last row is in an unexpected place.
+  for (const s of sections) {
+    if (spokenFor.has(s.def.code)) continue;
+    const d = drawable(s.def.code);
+    if (d) rows.push({ kind: "section", key: s.def.code, section: d });
+  }
+  return rows;
 }

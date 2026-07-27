@@ -4,12 +4,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
-import type { User } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { SECTIONS, isActiveItem, itemPath, itemVisible } from "./navConfig";
-import type { NavItem, NavSectionDef } from "./navConfig";
+import { SECTIONS, applyLayout, isActiveItem, itemPath, visibleSections } from "./navConfig";
+import type { NavItem, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
@@ -224,37 +223,6 @@ function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[
   ];
 }
 
-/** A section the signed-in user actually gets, with its visible items.
- *  The server decides *which* sections (#85); the manifest says what is in one;
- *  a role gate can still hide an individual item (finance-only ledgers). */
-interface VisibleSection {
-  def: NavSectionDef;
-  label: string;
-  items: NavItem[];
-}
-
-const SECTION_DEFS = new Map(SECTIONS.map((s) => [s.code, s]));
-
-export function visibleSections(user: User): VisibleSection[] {
-  const roleCode = user.role?.code ?? "";
-  const out: VisibleSection[] = [];
-  // Server order, not manifest order — the payload is the authority on both
-  // which sections and in what order. Fail-closed: no payload ⇒ no sidebar.
-  for (const granted of user.sections ?? []) {
-    const def = SECTION_DEFS.get(granted.code);
-    if (!def) continue; // a section the server knows and this build doesn't
-    // Item gates are finer than the section: the rung held on *this* section
-    // (`minCapability`) or, where the ladder can't express it, a role list. The
-    // break-glass superuser passes both.
-    const items = def.items.filter(
-      (i) => !i.action && itemVisible(i, granted.capability, roleCode, user.is_superuser),
-    );
-    // Every item gated away ⇒ nothing to navigate to; don't show an empty head.
-    if (items.length) out.push({ def, label: granted.label || def.label, items });
-  }
-  return out;
-}
-
 function Sidebar({
   width,
   onResizeStart,
@@ -286,7 +254,10 @@ function Sidebar({
   }, [pathname, collapsed]);
 
   if (!user) return null;
-  const sections = visibleSections(user);
+  // Access first, arrangement second: `visibleSections` decides what may be
+  // drawn, `applyLayout` only decides where. A role with no layout of its own —
+  // everyone but the store — gets that same list back, flat and unchanged.
+  const rows = applyLayout(visibleSections(user), user.role?.code ?? "");
 
   function toggleSection(code: string) {
     setCollapsed((current) => {
@@ -313,6 +284,82 @@ function Sidebar({
     localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
   }
 
+  /** One section: its head, plus its items when it has more than one. */
+  function renderSection(s: VisibleSection) {
+    const Icon = s.def.icon;
+    const items = orderedItems(s.def.code, s.items, navOrder);
+    // One visible item ⇒ the section *is* that link, because a heading you must
+    // open to reach a single line is a click that buys nothing. It is a tidying,
+    // not a shaping: what a persona's sidebar *contains* is the layout's job
+    // (`applyLayout` in the manifest), never this.
+    const single = items.length === 1;
+    const open = !collapsed[s.def.code];
+    const holdsActive = items.some((i) => isActiveItem(i, pathname));
+    return (
+      <div className="nav-group" key={s.def.code}>
+        {single ? (
+          <div className="nav-group-head">
+            <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+              <Icon size={16} />
+            </span>
+            <Link
+              to={items[0].to}
+              onClick={onNavigate}
+              aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
+              className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
+              data-testid={`nav-${s.def.code}`}
+            >
+              {s.label}
+            </Link>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="nav-group-head nav-group-toggle"
+            aria-expanded={open}
+            onClick={() => toggleSection(s.def.code)}
+            data-testid={`nav-section-${s.def.code}`}
+          >
+            <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+              <Icon size={16} />
+            </span>
+            <span className={`nav-group-label ${holdsActive ? "holds-active" : ""}`}>
+              {s.label}
+            </span>
+            <ChevronDown size={14} className={`nav-chev ${open ? "open" : ""}`} />
+          </button>
+        )}
+        {!single && open && (
+          <div className="nav-items">
+            {items.map((it) => {
+              const active = isActiveItem(it, pathname);
+              return (
+                <Link
+                  key={it.to}
+                  to={it.to}
+                  draggable
+                  onDragStart={() => setDragged({ sectionCode: s.def.code, to: it.to })}
+                  onDragEnd={() => setDragged(null)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    moveItem(s, it.to);
+                  }}
+                  onClick={onNavigate}
+                  aria-current={active ? "page" : undefined}
+                  className={`nav-item ${active ? "active" : ""}`}
+                  data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
+                >
+                  {it.label}
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
@@ -323,75 +370,24 @@ function Sidebar({
         </span>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
-        {sections.map((s) => {
-          const Icon = s.def.icon;
-          const items = orderedItems(s.def.code, s.items, navOrder);
-          // One visible item ⇒ the section *is* that link. This is what keeps a
-          // store person's sidebar at the seven-line scale of the KDPS sketch.
-          const single = items.length === 1;
-          const open = !collapsed[s.def.code];
-          const holdsActive = items.some((i) => isActiveItem(i, pathname));
+        {rows.map((row) => {
+          if (row.kind === "section") return renderSection(row.section);
+          // A grouping heading: a label and an order, nothing else. It owns no
+          // route and no capability, so it is not a link and does not collapse —
+          // the sections beneath it keep their own heads and their own gates.
+          const GroupIcon = row.group.icon;
+          const slug = row.group.heading.toLowerCase();
           return (
-            <div className="nav-group" key={s.def.code}>
-              {single ? (
-                <div className="nav-group-head">
-                  <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-                    <Icon size={16} />
-                  </span>
-                  <Link
-                    to={items[0].to}
-                    onClick={onNavigate}
-                    aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
-                    className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
-                    data-testid={`nav-${s.def.code}`}
-                  >
-                    {s.label}
-                  </Link>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="nav-group-head nav-group-toggle"
-                  aria-expanded={open}
-                  onClick={() => toggleSection(s.def.code)}
-                  data-testid={`nav-section-${s.def.code}`}
-                >
-                  <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-                    <Icon size={16} />
-                  </span>
-                  <span className={`nav-group-label ${holdsActive ? "holds-active" : ""}`}>
-                    {s.label}
-                  </span>
-                  <ChevronDown size={14} className={`nav-chev ${open ? "open" : ""}`} />
-                </button>
-              )}
-              {!single && open && (
-                <div className="nav-items">
-                  {items.map((it) => {
-                    const active = isActiveItem(it, pathname);
-                    return (
-                      <Link
-                        key={it.to}
-                        to={it.to}
-                        draggable
-                        onDragStart={() => setDragged({ sectionCode: s.def.code, to: it.to })}
-                        onDragEnd={() => setDragged(null)}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          moveItem(s, it.to);
-                        }}
-                        onClick={onNavigate}
-                        aria-current={active ? "page" : undefined}
-                        className={`nav-item ${active ? "active" : ""}`}
-                        data-testid={`nav-${s.def.code}-${itemPath(it).split("/").pop() || "home"}`}
-                      >
-                        {it.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
+            <div className="nav-group nav-supergroup" key={row.key}>
+              <div className="nav-group-head">
+                <span className="nav-ic" style={{ color: `var(--layer-${row.group.layer})` }}>
+                  <GroupIcon size={16} />
+                </span>
+                <span className="nav-group-label" data-testid={`nav-heading-${slug}`}>
+                  {row.group.heading}
+                </span>
+              </div>
+              <div className="nav-subsections">{row.sections.map(renderSection)}</div>
             </div>
           );
         })}
