@@ -37,6 +37,7 @@ const KIND_ROUTE: Record<string, string> = {
   adjustment: "/stock-count/adjustments",
   transfer: "/transfer",
   stock_request: "/transfer/requests",
+  return_to_brand: "/return-to-brand",
 };
 
 /** Kinds with no page of their own — the approver reads them where the work is.

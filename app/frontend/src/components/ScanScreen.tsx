@@ -54,6 +54,11 @@ interface ScanScreenProps {
    *  not a transfer, and telling a counter their shirt is "not on this
    *  transfer" tells them nothing about what to do with it. */
   rejectReason?: string;
+  /** What `available` counts, in this flow's words. A return is capped by what
+   *  is *returnable*, which on a defect claim is the quarantine bucket and not
+   *  the shelf — telling the operator there are only 2 "in stock" while 10 sit
+   *  in front of them reads as a bug. */
+  availableNoun?: string;
   /** Receive: never allow scanning past `expected` (server rejects too). */
   strictExpected?: boolean;
   /** Receive: offer the damaged mode, accept off-document pieces as extras,
@@ -125,6 +130,7 @@ export function ScanScreen({
   targets,
   lookup,
   rejectReason = "not on this transfer",
+  availableNoun = "in stock here",
   strictExpected = false,
   exceptions = false,
   confirmLabel,
@@ -214,7 +220,7 @@ export function ScanScreen({
         return;
       }
       if (line.available != null && already >= line.available) {
-        showResult("bad", `${code} — only ${line.available} in stock here`);
+        showResult("bad", `${code} — only ${line.available} ${availableNoun}`);
         return;
       }
 
@@ -233,6 +239,7 @@ export function ScanScreen({
       busy,
       lookup,
       rejectReason,
+      availableNoun,
       strictExpected,
       exceptions,
       asDamaged,
