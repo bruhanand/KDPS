@@ -138,18 +138,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   },
 
   // ---- Transfer -----------------------------------------------------------
-  "/transfer/requests": {
-    summary: "A store asks for stock instead of waiting to be sent it.",
-    contains: [
-      "A store asks the warehouse, or another store, for stock",
-      "The request goes through approval",
-      "Honest status all the way — asked, approved, sent, received",
-    ],
-    notes: [
-      "Dispatch and receive are the transfer work in test now. This part has not been started.",
-    ],
-    module: TRANSFERS,
-  },
   "/transfer/distribution": {
     summary: "The warehouse decides how newly arrived stock is split across the stores.",
     contains: [

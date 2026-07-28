@@ -16,6 +16,7 @@ import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
 import { PtProposalsPage } from "./pages/PtProposals";
 import { TransferListPage, TransferNewPage, TransferDetailPage, TransferPtPage } from "./pages/OutboundTransfers";
+import { StockRequestListPage, StockRequestNewPage, StockRequestDetailPage } from "./pages/OutboundStockRequests";
 import { InTransitPage } from "./pages/OutboundInTransit";
 import { RTVListPage, RTVNewPage, RTVDetailPage } from "./pages/OutboundRTV";
 import { AdjustmentListPage, AdjustmentDetailPage } from "./pages/OutboundAdjustments";
@@ -52,8 +53,11 @@ const BUILT: Screen[] = [
   // Transfer
   { id: "transfer-list", path: "/transfer", element: <TransferListPage /> },
   { id: "transfer-new", path: "/transfer/new", element: <TransferNewPage /> },
-  // Before /transfer/:id, or "in-transit" would be read as a transfer id (#71).
+  // Before /transfer/:id, or "in-transit"/"requests" would be read as a transfer id (#71).
   { id: "transfer-in-transit", path: "/transfer/in-transit", element: <InTransitPage /> },
+  { id: "stock-request-list", path: "/transfer/requests", element: <StockRequestListPage /> },
+  { id: "stock-request-new", path: "/transfer/requests/new", element: <StockRequestNewPage /> },
+  { id: "stock-request-detail", path: "/transfer/requests/:id", element: <StockRequestDetailPage /> },
   { id: "transfer-detail", path: "/transfer/:id", element: <TransferDetailPage /> },
   // The printable PT the carton travels with (#72).
   { id: "transfer-pt", path: "/transfer/:id/pt", element: <TransferPtPage /> },
