@@ -393,6 +393,11 @@ def post_transfer_dispatch(
     the scans *become* the lines, enriched from the source stock.
 
     Stock move only, no GL (cross-state IGST invoice is manual by decision).
+
+    Refuses unless the Operations Head (or the Owner, overriding) has approved
+    the transfer — ``require_approved``, at the posting layer rather than the
+    view, so a shell, a management command and the API all hit the same wall
+    (#137). Nothing leaves the shelf on the sender's own say-so.
     """
     from core.documents import DocStatus
     from masters.models import Sku
@@ -403,6 +408,10 @@ def post_transfer_dispatch(
     locked = StoreTransfer.objects.select_for_update().get(pk=transfer.pk)
     if locked.docstatus != DocStatus.DRAFT:
         raise OutboundPostingError("Transfer already dispatched.")
+
+    # Before a single piece is validated: an unapproved transfer is not a
+    # dispatch with a problem, it is not a dispatch.
+    require_approved(transfer)
 
     plan_lines = {line.sku_code: line for line in transfer.lines.all()}
     _validate_scans(scans, set(plan_lines) if plan_lines else None, "Dispatch")
@@ -430,9 +439,14 @@ def post_transfer_dispatch(
         line.save()
         dispatch_lines.append(line)
 
-    # Set dispatch metadata BEFORE post() (submitted docs are DB-immutable)
+    # Set dispatch metadata BEFORE post() (submitted docs are DB-immutable), and
+    # persist it: `post()` writes only the four FSM columns with `update_fields`,
+    # so an in-memory-only assignment here left `dispatch_date` and
+    # `dispatched_by` NULL for good — the screen has always shown a blank
+    # "dispatched by" on every transfer ever sent.
     transfer.dispatch_date = timezone.now()
     transfer.dispatched_by = user
+    transfer.save(update_fields=["dispatch_date", "dispatched_by"])
 
     # Post the document (mint number, set SUBMITTED — saves everything atomically)
     transfer.post()

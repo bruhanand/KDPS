@@ -155,7 +155,7 @@ def _transfers(user: Any) -> Any:
     """
     qs = StoreTransfer.objects.select_related(
         "source_store", "destination_store", "created_by"
-    ).prefetch_related("lines")
+    ).prefetch_related("lines", *APPROVAL_JOINS)
     return scope_transfers(qs, user)
 
 
@@ -1012,18 +1012,25 @@ class VFlipSubmitView(APIView):
 class RequestApprovalView(APIView):
     """POST: send a rejected draft back for approval.
 
-    One view for all three wired families — the only thing that differs is
-    which model to load and who may ask, both supplied by the URL conf. The
-    rules (draft only, rejected only, and who stays the maker) live in
+    One view for every wired family — the only things that differ are which
+    model to load, who may ask, and which of the document's own columns names
+    the location it answers to, all supplied by the URL conf. The rules (draft
+    only, rejected only, and who stays the maker) live in
     ``maker_checker.ask_again``, not here.
     """
 
     model: Any = None
     read_serializer: Any = None
+    #: Joins the read shape needs beyond the approval trail. A transfer has two
+    #: ends and no ``store`` column, so this cannot be one fixed list.
+    related: tuple[str, ...] = ("store", "created_by")
+    #: The column holding the location the caller must be entitled to — the
+    #: *source* for a transfer, the store for everything else.
+    scope_field: str = "store_id"
 
     def _load(self, pk):
         return (
-            self.model.objects.select_related("store", "created_by")
+            self.model.objects.select_related(*self.related)
             .prefetch_related("lines", *APPROVAL_JOINS)
             .get(pk=pk)
         )
@@ -1034,7 +1041,7 @@ class RequestApprovalView(APIView):
         except self.model.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        enforce_store_scope(request.user, doc.store_id)
+        enforce_store_scope(request.user, getattr(doc, self.scope_field))
 
         try:
             ask_again(doc, requested_by=request.user)

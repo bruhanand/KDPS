@@ -7,8 +7,9 @@ The rules themselves (maker ≠ checker, reason on reject, one decision) live in
 ``approvals.services`` and are shared with every other module that wires in.
 
 Wired: write-offs, V-flips, stock adjustments — the three that used to stamp
-their own creator as approver — plus transfer gap closures (#71) and damage
-flags (#138), which reach the inbox the same way as everything else.
+their own creator as approver — plus transfer gap closures (#71), damage
+flags (#138) and store transfers (#137), which reach the inbox the same way as
+everything else.
 
 Damage is the one family where the second person is asked for on a *rung*
 rather than on a value: a store person may report damage but not move the
@@ -35,7 +36,14 @@ from approvals.services import (
 )
 from core.documents import DocStatus
 from outbound.costing import OutboundPostingError, book_unit_cost
-from outbound.models import MarkDamaged, StockAdjustment, TransferGapClosure, VFlip, WriteOff
+from outbound.models import (
+    MarkDamaged,
+    StockAdjustment,
+    StoreTransfer,
+    TransferGapClosure,
+    VFlip,
+    WriteOff,
+)
 
 
 @dataclass(frozen=True)
@@ -46,6 +54,11 @@ class ApprovalKind:
     label: str
     #: The document's own approver column, stamped from the approval at post time.
     approver_field: str
+    #: Which location the document — and so its inbox row and its store scope —
+    #: hangs off. Every family but one calls it ``store``; a transfer has two
+    #: ends and hangs off the *source*, because the sender is answerable for the
+    #: pieces until the receiver scans them in (#137).
+    store_field: str = "store"
     #: Whether this family asks for a second person on the **rung** instead of
     #: on the value: a maker who already holds the approving rung clears their
     #: own document, and everyone else waits however little is at stake. Who
@@ -64,6 +77,14 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     # about entitlement rather than role, so it lives in
     # ``posting._refuse_self_closure`` — this table only says who is senior.
     TransferGapClosure: ApprovalKind("gap_closure", "Gap closure", "approved_by"),
+    # Every transfer, whatever it is worth and whichever way it goes: the PRD
+    # (#104) puts the Operations Head in front of all of them, because a
+    # cross-state move is a taxable supply between two distinct persons and a
+    # within-state one still empties a shelf on one person's say-so. The
+    # seeded policy row says so with a zero tolerance; who approves and above
+    # what value stay retunable in Setup (Rule 12) — this table only says the
+    # family exists and which end of the move answers for it.
+    StoreTransfer: ApprovalKind("transfer", "Transfer", "approved_by", store_field="source_store"),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
     # on its own say-so. The rung does — hence ``self_clearing``, which lets a
@@ -83,11 +104,26 @@ def approver_field(doc_class: type[models.Model]) -> str:
     return kind.approver_field if kind else "approved_by"
 
 
-def _line_totals(doc: Any) -> tuple[int, int, int]:
+def _line_qty(line: Any) -> int:
+    """How many pieces this line puts at stake — magnitude, never sign.
+
+    Three spellings, because the quantity a document is *sized* by is the one it
+    knows at draft time: an adjustment carries a signed ``adj_qty``, a transfer
+    carries its plan (``qty_planned``, NULL on a scan-to-build draft, where the
+    pieces are not chosen until the scanner is in someone's hand), and everything
+    else a plain ``qty``.
+    """
+    for field in ("adj_qty", "qty", "qty_planned"):
+        if hasattr(line, field):
+            return abs(getattr(line, field) or 0)
+    return 0
+
+
+def _line_totals(doc: Any, store_id: int) -> tuple[int, int, int]:
     """(line count, pieces, value in paise) over the document's lines.
 
-    Adjustment lines carry a signed ``adj_qty``; the others a plain ``qty``.
-    Value is what is at stake, so the magnitude is what counts.
+    Value is what is at stake, so the magnitude is what counts, and ``store_id``
+    is the location whose books price it — the source for a transfer.
 
     The unit cost is the one **frozen onto the line** when the draft was made,
     which is the same number the posting engine will use — read it rather than
@@ -106,11 +142,11 @@ def _line_totals(doc: Any) -> tuple[int, int, int]:
     pieces = 0
     value = 0
     for line in lines:
-        qty = abs(line.adj_qty) if hasattr(line, "adj_qty") else line.qty
+        qty = _line_qty(line)
         pieces += qty
         frozen = getattr(line, "unit_cost_paise", 0) or 0
         value += qty * (
-            frozen or book_unit_cost(doc.store_id, line.sku_code, getattr(line, "season", ""))
+            frozen or book_unit_cost(store_id, line.sku_code, getattr(line, "season", ""))
         )
     return len(lines), pieces, value
 
@@ -157,8 +193,9 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     if kind is None:
         return None
 
-    line_count, pieces, value = _line_totals(doc)
-    title = f"{doc.store.code} · {line_count} line{'' if line_count == 1 else 's'} · {pieces} pcs"
+    store = getattr(doc, kind.store_field)
+    line_count, pieces, value = _line_totals(doc, store.id)
+    title = f"{store.code} · {line_count} line{'' if line_count == 1 else 's'} · {pieces} pcs"
     # A document may add what the store code alone cannot say — a gap closure is
     # meaningless in the inbox without naming the transfer it closes. Optional,
     # so nothing else has to know this hook exists.
@@ -179,7 +216,7 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
         # the API (a shell or a management command), which has no creator.
         "made_by": doc.created_by or requested_by,
         "requested_by": requested_by,
-        "store": doc.store,
+        "store": store,
         "value_paise": value,
     }
 

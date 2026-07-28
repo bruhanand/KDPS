@@ -335,7 +335,7 @@ class TransferPTSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class StoreTransferReadSerializer(serializers.ModelSerializer):
+class StoreTransferReadSerializer(ApprovedDocumentSerializer):
     lines = StoreTransferLineSerializer(many=True, read_only=True)
     receipt = TransferReceiptSerializer(read_only=True)
     gap_closure = GapClosureReadSerializer(read_only=True)
@@ -347,6 +347,14 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
     qty_in_transit = serializers.SerializerMethodField()
     gap_state = serializers.SerializerMethodField()
     pt_generated_at = serializers.SerializerMethodField()
+    dispatched_by_name = serializers.SerializerMethodField()
+
+    def get_dispatched_by_name(self, obj: StoreTransfer) -> str:
+        """Who actually sent the pieces. Distinct from ``dispatcher_name``,
+        which is the free-text person carrying the carton — the trail wants the
+        user who pressed the button (#137)."""
+
+        return display_name(obj.dispatched_by)
 
     def get_pt_generated_at(self, obj: StoreTransfer) -> str | None:
         """When this transfer's PT was cut — the screen's cue that there is a
@@ -414,7 +422,13 @@ class StoreTransferReadSerializer(serializers.ModelSerializer):
             "eway_bill_number",
             "dispatch_date",
             "dispatched_by",
+            "dispatched_by_name",
             "created_by",
+            "created_by_name",
+            "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "created_at",
             "updated_at",
             "dispatch_mismatch",
@@ -465,17 +479,43 @@ class StoreTransferWriteSerializer(serializers.ModelSerializer):
         dst = data.get("destination_store")
         if src and dst and src == dst:
             raise serializers.ValidationError("Source and destination must differ.")
+        # Bihar ↔ Jharkhand is a supply between two distinct persons, so the
+        # carton cannot legally travel without an e-way bill. The screen has
+        # always said so; saying it here too means the API refuses as well, and
+        # a transfer created any other way cannot skip the number (#137).
+        if (
+            StoreTransfer.crosses_a_state_line(src, dst)
+            and not (data.get("eway_bill_number") or "").strip()
+        ):
+            raise serializers.ValidationError(
+                {"eway_bill_number": "E-way bill number is required for cross-state transfers."}
+            )
         return data
 
     def create(self, validated_data):
+        """Create the draft and put it straight in the Operations Head's inbox.
+
+        One transaction, at creation time, exactly as the other maker-checker
+        families do: a transfer is *born* waiting, so a maker can neither forget
+        to ask nor dispatch in the gap before asking (#137).
+
+        Not ``_create_with_approval``, which prices every line onto the draft as
+        it is made: a transfer's lines deliberately carry no cost until the
+        pieces are scanned out (#68), so freezing one here would be inventing a
+        number the dispatch is then free to contradict. The plan is stored bare
+        and sized for the inbox off the source store's books at the moment the
+        request is raised; a plan-less scan-to-build draft sizes to nothing,
+        which the policy reads as "unknown" and escalates.
+        """
         lines_data = validated_data.pop("lines", [])
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
+        request = self.context.get("request", None)
+        user = request.user if request else None
         validated_data["created_by"] = user
-        transfer = StoreTransfer.objects.create(**validated_data)
-        for ld in lines_data:
-            StoreTransferLine.objects.create(transfer=transfer, **ld)
+        with transaction.atomic():
+            transfer = StoreTransfer.objects.create(**validated_data)
+            for ld in lines_data:
+                StoreTransferLine.objects.create(transfer=transfer, **ld)
+            request_document_approval(transfer, requested_by=user)
         return transfer
 
 

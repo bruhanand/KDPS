@@ -26,6 +26,7 @@ from __future__ import annotations
 import pytest
 from _creds import TEST_PASSWORD
 from _rbac import make_role
+from _transfers import approve_transfer
 from rest_framework.test import APIClient
 
 from accounts.models import ScopeType, User
@@ -234,6 +235,7 @@ def _dispatched(s, plan=(("GB001", 4),)) -> StoreTransfer:
     )
     for barcode, qty in plan:
         StoreTransferLine.objects.create(transfer=transfer, sku_code=barcode, qty_planned=qty)
+    approve_transfer(transfer)  # nothing leaves without the Operations Head (#137)
     resp = _client(s["maker"]).post(
         f"/api/outbound/transfers/{transfer.pk}/dispatch",
         {"scans": [{"barcode": b, "qty": q} for b, q in plan]},

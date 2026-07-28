@@ -887,6 +887,29 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # 2. transfers
     # ------------------------------------------------------------------
+    def _draft_transfer(
+        self,
+        source: Store,
+        dest: Store,
+        ttype: str,
+        reason: str,
+        user: User,
+        eway: str = "",
+    ) -> StoreTransfer:
+        """A transfer waiting in the Operations Head's inbox (#137)."""
+        t = StoreTransfer.objects.create(
+            source_store=source,
+            destination_store=dest,
+            transfer_type=ttype,
+            reason=reason,
+            transport_mode=TransportMode.OWN_VEHICLE,
+            transport_ref=f"KDPS-VAN-{dest.code}",
+            eway_bill_number=eway,
+            created_by=user,
+        )
+        request_document_approval(t, requested_by=user)
+        return t
+
     def _transfer(
         self,
         source: Store,
@@ -895,16 +918,13 @@ class Command(BaseCommand):
         reason: str,
         scans: dict[str, int],
         user: User,
+        eway: str = "",
     ) -> StoreTransfer:
-        t = StoreTransfer.objects.create(
-            source_store=source,
-            destination_store=dest,
-            transfer_type=ttype,
-            reason=reason,
-            transport_mode=TransportMode.OWN_VEHICLE,
-            transport_ref=f"KDPS-VAN-{dest.code}",
-            created_by=user,
-        )
+        """A dispatched transfer — approved by the Operations Head first (#137)."""
+        t = self._draft_transfer(source, dest, ttype, reason, user, eway)
+        approval = approval_for(t)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=self.users["ops1"], action="approve")
         post_transfer_dispatch(t, scans, user)
         return t
 
@@ -991,12 +1011,24 @@ class Command(BaseCommand):
             TransferReason.SISTER_STORE_REQUEST,
             {"LP-CHN-KHA-34": 5, "PE-FRM-LAV-42": 6},
             wh_user,
+            eway="EWB-2026-551204",
         )
         post_transfer_receipt(
             t5, {"LP-CHN-KHA-34": 5, "PE-FRM-LAV-42": 6}, self.users["banka.manager"]
         )
         state = "cross-state" if t5.is_cross_state else "intra-state"
         self.stdout.write(f"  Transfer {t5.doc_number}: RAN-WH → BANKA, received ({state})")
+
+        # T6: a draft still sitting in the Operations Head's inbox — the state
+        # every transfer now starts in, and the one the demo had no example of.
+        self._draft_transfer(
+            wh,
+            self.stores["DUM"],
+            TransferType.STORE_SPLIT,
+            TransferReason.FREE_FLOOR_SPACE,
+            wh_user,
+        )
+        self.stdout.write("  Transfer draft: RAN-WH → DUM, awaiting the Operations Head")
 
     # ------------------------------------------------------------------
     # 3. damage

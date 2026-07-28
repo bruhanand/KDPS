@@ -19,6 +19,7 @@ from __future__ import annotations
 import pytest
 from _creds import TEST_PASSWORD
 from _rbac import make_role
+from _transfers import approve_transfer
 from rest_framework.test import APIClient
 
 from accounts.models import ScopeType, User
@@ -151,6 +152,7 @@ def _make_planned_transfer(s, plan=(("BC001", 3),)) -> StoreTransfer:
         StoreTransferLine.objects.create(
             transfer=transfer, sku_code=barcode, qty_planned=qty, qty_dispatched=0
         )
+    approve_transfer(transfer)  # nothing leaves without the Operations Head (#137)
     return transfer
 
 
@@ -297,6 +299,7 @@ def test_store_to_store_builds_lines_by_scanning(scan_scaffold):
     assert resp.status_code == 201, resp.data
     assert resp.data["lines"] == []
     tid = resp.data["id"]
+    approve_transfer(StoreTransfer.objects.get(pk=tid))
 
     resp = c.post(
         f"/api/outbound/transfers/{tid}/dispatch",
@@ -327,6 +330,7 @@ def test_scan_to_build_unknown_barcode_rejected(scan_scaffold):
         transfer_type="inter_store",
         created_by=s["user"],
     )
+    approve_transfer(transfer)
     resp = c.post(
         f"/api/outbound/transfers/{transfer.pk}/dispatch",
         {"scans": [{"barcode": "NO-SUCH", "qty": 1}]},
