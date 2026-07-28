@@ -27,11 +27,12 @@ Ratified corrections to the client's original Sheet-1 matrix, baked in here:
     cell says nothing about *which* bookings - narrowing them to the store's own
     is the record-scope axis, and #101's work.
 
-One section has **no sheet row at all**: ``staff``. The sheet predates KDPS's
-hand-drawn store sidebar, which puts attendance in the store person's daily
-screen (spec #84, user story 27), so #87 adds the section with derived access —
-marked ``(derived)`` in the label so nobody mistakes it for the sheet. It is
-data like every other cell: retune it on the Role row, no release.
+One section has **no sheet row at all**: ``hrms`` (named ``staff`` until #118
+renamed it in place). The sheet predates KDPS's hand-drawn store sidebar, which
+puts attendance in the store person's daily screen (spec #84, user story 27),
+so #87 adds the section with derived access — marked ``(derived)`` in the label
+so nobody mistakes it for the sheet. It is data like every other cell: retune
+it on the Role row, no release.
 
 That same sheetless section is where the two store roles part company. The sheet
 has one "Store Person" persona covering both, but the sketch's "Member Details"
@@ -76,7 +77,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full (all locations)"),
         "money": (CAP_MANAGE, "Full"),
         "offers_price": (CAP_APPROVE, "Approve / Override"),
-        "staff": (CAP_MANAGE, "Full (derived)"),
+        "hrms": (CAP_MANAGE, "Full (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_MANAGE, "Full"),
     },
@@ -95,9 +96,9 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "money": (CAP_OPERATE, "Expenses only (create)"),
         "offers_price": (CAP_VIEW, "View"),
         # The hand-drawn store sidebar puts biometric check-in in the daily
-        # screen — so the store person *operates* Staff (own attendance), even
+        # screen — so the store person *operates* HRMS (own attendance), even
         # though employee records and payroll stay a back-office promise.
-        "staff": (CAP_OPERATE, "Own attendance (derived)"),
+        "hrms": (CAP_OPERATE, "Own attendance (derived)"),
         "reports": (CAP_VIEW, "Own store only"),
         "setup": (CAP_NONE, "No"),
     },
@@ -112,7 +113,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full"),
         "money": (CAP_OPERATE, "Expenses only (create)"),
         "offers_price": (CAP_VIEW, "View"),
-        "staff": (CAP_OPERATE, "Own attendance (derived)"),
+        "hrms": (CAP_OPERATE, "Own attendance (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_OPERATE, "Products only"),
     },
@@ -128,7 +129,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_APPROVE, "Recommend + approve within limit"),
         # A brand manager's scope is brands, not people — no staff surface.
-        "staff": (CAP_NONE, "No (derived)"),
+        "hrms": (CAP_NONE, "No (derived)"),
         "reports": (CAP_VIEW, "Own brands only"),
         "setup": (CAP_OPERATE, "Edit assigned products"),
     },
@@ -144,7 +145,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "money": (CAP_MANAGE, "Full"),
         "offers_price": (CAP_VIEW, "View"),
         # Payroll inputs and sales incentives are an Accounts read, not an edit.
-        "staff": (CAP_VIEW, "View (payroll inputs) (derived)"),
+        "hrms": (CAP_VIEW, "View (payroll inputs) (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_VIEW, "View"),
     },
@@ -159,7 +160,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_MANAGE, "Full"),
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_MANAGE, "Configure"),
-        "staff": (CAP_MANAGE, "Full (derived)"),
+        "hrms": (CAP_MANAGE, "Full (derived)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_MANAGE, "Full (incl. Users & Roles)"),
     },
@@ -178,7 +179,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_VIEW, "All locations"),
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_OPERATE, "Plan"),
-        "staff": (CAP_VIEW, "All (network)"),
+        "hrms": (CAP_VIEW, "All (network)"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_NONE, "No"),
     },
@@ -197,7 +198,7 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "stock": (CAP_VIEW, "All locations"),
         "money": (CAP_NONE, "No"),
         "offers_price": (CAP_NONE, "No"),
-        "staff": (CAP_NONE, "No"),
+        "hrms": (CAP_NONE, "No"),
         "reports": (CAP_VIEW, "All"),
         "setup": (CAP_OPERATE, "Masters"),
     },
@@ -221,7 +222,7 @@ ROLE_PERSONA = {
 
 # Sections the SIDEBAR RBAC sheet never covered. Only these may be overridden
 # per role code — everything else is the sheet's ratified word.
-SHEETLESS_SECTIONS = frozenset({"staff"})
+SHEETLESS_SECTIONS = frozenset({"hrms"})
 
 # Per-role-code cells layered *on top of* the persona row, for the case where two
 # seeded roles share a persona but genuinely differ.
@@ -232,12 +233,12 @@ SHEETLESS_SECTIONS = frozenset({"staff"})
 # target vs achievement, growth/de-growth — in the store's own daily list
 # (settled 25 Jul 2026: members are staff scorecards, not loyalty customers; the
 # POS still owns the customer). Managing people is the manager's job, so the
-# manager holds ``staff: manage`` while the cashier keeps ``operate`` — their own
+# manager holds ``hrms: manage`` while the cashier keeps ``operate`` — their own
 # attendance and nothing else. Scope stays "own store" through the separate
 # ``scope_type`` dimension (ADR-0003), never the capability.
 ROLE_OVERRIDES: dict[str, dict[str, tuple[str, str]]] = {
     "store_manager": {
-        "staff": (CAP_MANAGE, "Own store members + attendance (derived)"),
+        "hrms": (CAP_MANAGE, "Own store members + attendance (derived)"),
     },
 }
 

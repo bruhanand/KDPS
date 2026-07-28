@@ -57,13 +57,13 @@ function asRole(code: keyof typeof RBAC_MATRIX, over: Partial<User> = {}): User 
 }
 
 // The store cashier and the manager are one persona, "Store Person", diverging
-// on `staff` alone: the sketch makes managing their own store's members the
+// on `hrms` alone: the sketch makes managing their own store's members the
 // manager's job (ROLE_OVERRIDES, issue #96).
 const storePerson = asRole("store_staff");
 const storeManager = asRole("store_manager");
 const warehouse = asRole("warehouse");
 // Accounts reads the whole operating floor and writes only the books - including
-// "View (payroll inputs)" on staff, which is why it sits at `view` and not
+// "View (payroll inputs)" on hrms, which is why it sits at `view` and not
 // higher. Admin runs the system but keeps no books: the sheet's note (2) gives
 // it_admin `money: none` deliberately, so every Money URL must be shut to it.
 const accounts = asRole("accounts");
@@ -149,12 +149,12 @@ describe("canAccess", () => {
     expect(canAccess("/stock", admin)).toBe(true);
   });
 
-  it("Staff opens attendance for the floor, records and salary for the back office", () => {
-    // The store person holds staff:operate for their *own* attendance only.
+  it("HRMS opens attendance for the floor, records and salary for the back office", () => {
+    // The store person holds hrms:operate for their *own* attendance only.
     expect(canAccess("/staff/attendance", storePerson)).toBe(true);
     expect(canAccess("/staff/members", storePerson)).toBe(false);
     expect(canAccess("/staff/payroll", storePerson)).toBe(false);
-    // Accounts sits *lower* on the ladder (staff:view) yet owns payroll inputs —
+    // Accounts sits *lower* on the ladder (hrms:view) yet owns payroll inputs —
     // the case the ordinal ladder cannot express, so Payroll keeps a role list.
     expect(canAccess("/staff/payroll", accounts)).toBe(true);
     expect(canAccess("/staff/members", accounts)).toBe(false);
@@ -162,17 +162,18 @@ describe("canAccess", () => {
     expect(canAccess("/staff/payroll", admin)).toBe(true);
   });
 
-  it("Members opens for the store manager and stays shut for the cashier", () => {
-    // Settled 25 Jul 2026 (#96): "Member Details" on the hand-drawn Store Ops
-    // screen means staff scorecards — bank details, monthly target vs
-    // achievement — so the manager manages their store's people and the cashier
-    // keeps their own attendance. Same persona, one overridden cell.
+  it("Member Details opens for the store manager and stays shut for the cashier", () => {
+    // Settled 25 Jul 2026 (#96), renamed 28 Jul 2026 (#118): "Member Details"
+    // on the hand-drawn Store Ops screen means staff scorecards — bank
+    // details, monthly target vs achievement — so the manager manages their
+    // store's people and the cashier keeps their own attendance. Same
+    // persona, one overridden cell.
     expect(canAccess("/staff/members", storeManager)).toBe(true);
     expect(canAccess("/staff/members", storePerson)).toBe(false);
     expect(canAccess("/staff/attendance", storeManager)).toBe(true);
     // Managing people is not running payroll — that stays back-office.
     expect(canAccess("/staff/payroll", storeManager)).toBe(false);
-    // And the lift is confined to Staff: the books stay shut.
+    // And the lift is confined to HRMS: the books stay shut.
     expect(canAccess("/money/vendor", storeManager)).toBe(false);
     expect(canAccess("/setup/users", storeManager)).toBe(false);
   });

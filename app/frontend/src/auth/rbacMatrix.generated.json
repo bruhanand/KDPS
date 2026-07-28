@@ -2,6 +2,7 @@
   "accounts": {
     "booking": "view",
     "home": "view",
+    "hrms": "view",
     "money": "manage",
     "offers_price": "view",
     "receive_goods": "view",
@@ -9,7 +10,6 @@
     "return_to_brand": "view",
     "sell": "view",
     "setup": "view",
-    "staff": "view",
     "stock": "view",
     "stock_count": "view",
     "transfer": "view"
@@ -36,11 +36,11 @@
   "ho_ops": {
     "booking": "operate",
     "home": "view",
+    "hrms": "view",
     "offers_price": "operate",
     "receive_goods": "view",
     "reports": "view",
     "return_to_brand": "view",
-    "staff": "view",
     "stock": "view",
     "stock_count": "approve",
     "transfer": "approve"
@@ -48,13 +48,13 @@
   "it_admin": {
     "booking": "manage",
     "home": "view",
+    "hrms": "manage",
     "offers_price": "manage",
     "receive_goods": "manage",
     "reports": "view",
     "return_to_brand": "manage",
     "sell": "manage",
     "setup": "manage",
-    "staff": "manage",
     "stock": "manage",
     "stock_count": "manage",
     "transfer": "view"
@@ -62,6 +62,7 @@
   "owner": {
     "booking": "approve",
     "home": "view",
+    "hrms": "manage",
     "money": "manage",
     "offers_price": "approve",
     "receive_goods": "view",
@@ -69,7 +70,6 @@
     "return_to_brand": "approve",
     "sell": "view",
     "setup": "manage",
-    "staff": "manage",
     "stock": "manage",
     "stock_count": "approve",
     "transfer": "approve"
@@ -77,13 +77,13 @@
   "store_manager": {
     "booking": "view",
     "home": "view",
+    "hrms": "manage",
     "money": "operate",
     "offers_price": "view",
     "receive_goods": "operate",
     "reports": "view",
     "return_to_brand": "operate",
     "sell": "operate",
-    "staff": "manage",
     "stock": "view",
     "stock_count": "operate",
     "transfer": "operate"
@@ -91,13 +91,13 @@
   "store_staff": {
     "booking": "view",
     "home": "view",
+    "hrms": "operate",
     "money": "operate",
     "offers_price": "view",
     "receive_goods": "operate",
     "reports": "view",
     "return_to_brand": "operate",
     "sell": "operate",
-    "staff": "operate",
     "stock": "view",
     "stock_count": "operate",
     "transfer": "operate"
@@ -105,13 +105,13 @@
   "warehouse": {
     "booking": "operate",
     "home": "view",
+    "hrms": "operate",
     "money": "operate",
     "offers_price": "view",
     "receive_goods": "operate",
     "reports": "view",
     "return_to_brand": "operate",
     "setup": "operate",
-    "staff": "operate",
     "stock": "manage",
     "stock_count": "operate",
     "transfer": "operate"

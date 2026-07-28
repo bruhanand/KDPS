@@ -9,6 +9,10 @@ identity — migrate, roll back, and the access matrix is where it started.
 The functions are called directly (as ``tests/test_inbound_pt_authoring.py``
 does for ``inbound.0005``); the schema is unchanged by this migration, so
 running the data functions is the whole of it.
+
+``SEEDED``/``GRANTED`` come from the migration module's own frozen constants,
+not a live ``rbac_matrix`` lookup — #118 renamed the ``staff`` section to
+``hrms``, so a live lookup no longer has a ``staff`` key to give.
 """
 
 from __future__ import annotations
@@ -20,18 +24,22 @@ from django.apps import apps as django_apps
 from django.db import connection
 
 from accounts.models import Role
-from accounts.rbac_matrix import MATRIX, section_access_for
+from accounts.rbac_matrix import section_access_for
 
 pytestmark = pytest.mark.django_db
 
 MIGRATION = importlib.import_module("accounts.migrations.0006_store_manager_staff_manage")
 
-SEEDED = dict(zip(("capability", "label"), MATRIX["store_person"]["staff"], strict=True))
-GRANTED = section_access_for("store_manager")["staff"]
+SEEDED = MIGRATION.SEEDED_CELL
+GRANTED = MIGRATION.GRANTED_CELL
 
 
 def _role(code: str, staff: dict[str, str] | None) -> Role:
     access = section_access_for(code)
+    # This test simulates DB state before #118's 0011 renamed the section —
+    # strip the live table's ``hrms`` key so only ``staff`` is present, as it
+    # would have been when 0006 first ran.
+    access.pop("hrms", None)
     if staff is None:
         access.pop("staff", None)
     else:
