@@ -125,7 +125,7 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Tally** — the statutory book of record; KDPS feeds it one-way via a deterministic voucher number.
 
 **POS & edges**
-- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson per bill, distinct from the till login (#107).
+- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson chosen per bill, distinct from the till login, and **mandatory**: a Sale without one is refused, never posted (append-only means a bill written without a seller can never be given one afterwards). Points at the staff identity — today that's `accounts.User` (no dedicated Staff model exists); a future Staff record, if designed, becomes the target instead. (Ruled 26 Jul 2026 in #104; pinned down 28 Jul 2026 in #107.)
 - **KDPS POS** — our own counter, and the only writer of a Sale. Offline-first, idempotent. **Decided 26 Jul 2026: KDPS builds its own POS; the third-party-POS route is dropped**, so there is no external sales feed to ingest or reconcile against. The source-agnostic Sale shape is kept anyway — it costs nothing and keeps a future importer (or a migration load) from touching posting logic.
 - **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till.
 - **Idempotency key** — client-UUID per sale; retries return the same Sale-ID.
