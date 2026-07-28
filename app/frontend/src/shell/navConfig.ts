@@ -67,8 +67,8 @@ export function userCan(
 }
 
 // Payroll is the one gate the ladder cannot express: Accounts must see it on
-// `staff: view` ("payroll inputs") while a store person must not, and the store
-// person sits *higher* on the ladder at `staff: operate` ("own attendance").
+// `hrms: view` ("payroll inputs") while a store person must not, and the store
+// person sits *higher* on the ladder at `hrms: operate` ("own attendance").
 // An ordinal threshold can't separate them, so this stays an explicit role list.
 export const PAYROLL_ROLES = ["owner", "it_admin", "accounts"];
 
@@ -246,18 +246,23 @@ export const SECTIONS: NavSectionDef[] = [
     ],
   },
   {
-    code: "staff",
-    label: "Staff",
+    code: "hrms",
+    label: "HRMS",
     icon: Users,
     layer: "edges",
     items: [
       { label: "Attendance", to: "/staff/attendance", planned: true },
-      // A cashier holds Staff for their *own* attendance ("Own attendance
+      // A cashier holds HRMS for their *own* attendance ("Own attendance
       // (derived)"), so employee records and salary stay off their menu. A store
-      // *manager* holds `staff: manage` for their own store — the sketch makes
-      // managing the store's members their job — so Members appears for them and
-      // not for the cashier, from the same server-sent capability.
-      { label: "Members", to: "/staff/members", minCapability: "manage", planned: true },
+      // *manager* holds `hrms: manage` for their own store — the sketch makes
+      // managing the store's members their job — so Member Details appears for
+      // them and not for the cashier, from the same server-sent capability.
+      {
+        label: "Member Details",
+        to: "/staff/members",
+        minCapability: "manage",
+        planned: true,
+      },
       { label: "Payroll", to: "/staff/payroll", roles: PAYROLL_ROLES, planned: true },
     ],
   },
@@ -502,9 +507,10 @@ const STORE_LAYOUT: PersonaLayout = {
       sections: ["receive_goods", "transfer", "stock"],
     },
     "reports",
-    // Reads "Staff" until #118 renames it; with Attendance moved to Home it
-    // holds one visible item (Members, for a manager) and so draws as one line.
-    "staff",
+    // Reads "HRMS" (#118 renamed it from "Staff"); with Attendance moved to
+    // Home it holds one visible item (Member Details, for a manager) and so
+    // draws as one line.
+    "hrms",
     "stock_count",
     "money",
     "offers_price",

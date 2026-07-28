@@ -9,11 +9,13 @@ screens behind it.
 
 Twelve of the thirteen sections are the SIDEBAR RBAC sheet
 (``docs/data-from-kdps/scope-dashboard-detail/ERP_DASHBOARD_V1.xlsx`` →
-"SIDEBAR RBAC", 24 Jul 2026). ``staff`` is the thirteenth: it has no row in that
-sheet, but spec #84 puts Staff → Attendance in the store person's daily sidebar,
-so #87 adds it with clearly-derived access (see ``rbac_matrix``). Members stays
-parked pending KDPS's staff-vs-customer answer — the section exists, that
-subsection is only a planned page.
+"SIDEBAR RBAC", 24 Jul 2026). ``hrms`` is the thirteenth: it has no row in that
+sheet, but spec #84 puts Attendance in the store person's daily sidebar, so #87
+added it (as ``staff``) with clearly-derived access (see ``rbac_matrix``); #118
+renamed the code and label in place once "Member Details" (not "Members", and
+not a customer loyalty scheme) settled who the section is for. The code is
+renamed, not replaced — one migration moves each role's existing cell, no
+window with two live codes.
 
 These section codes replaced the legacy ``NAV_GROUPS`` (the five architecture
 layers) as the shell's authority in #87: the sidebar, the client route guards
@@ -61,7 +63,7 @@ SECTIONS: list[tuple[str, str]] = [
     ("stock", "Stock"),
     ("money", "Money"),
     ("offers_price", "Offers & Price"),
-    ("staff", "Staff"),
+    ("hrms", "HRMS"),
     ("reports", "Reports"),
     ("setup", "Setup"),
 ]

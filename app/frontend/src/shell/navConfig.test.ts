@@ -69,7 +69,7 @@ describe("the thirteen sections", () => {
       "stock",
       "money",
       "offers_price",
-      "staff",
+      "hrms",
       "reports",
       "setup",
     ]);
@@ -196,7 +196,7 @@ describe("the highlighted menu line", () => {
 
 describe("a persona's sidebar shape (#96)", () => {
   // What the server sends today, from `accounts/rbac_matrix.py`: the sheet's
-  // "Store Person" row, plus #97's `staff: manage` for a manager. Written out
+  // "Store Person" row, plus #97's `hrms: manage` for a manager. Written out
   // here rather than imported because the point of these tests is that the
   // *arrangement* obeys whatever the server says - including values an admin
   // retunes later, which is why several tests below change them.
@@ -211,10 +211,10 @@ describe("a persona's sidebar shape (#96)", () => {
     stock: "view",
     money: "operate",
     offers_price: "view",
-    staff: "operate",
+    hrms: "operate",
     reports: "view",
   };
-  const MANAGER_CAPS = { ...STORE_CAPS, staff: "manage" };
+  const MANAGER_CAPS = { ...STORE_CAPS, hrms: "manage" };
   const WAREHOUSE_CAPS: Record<string, string> = {
     home: "view",
     booking: "operate",
@@ -225,7 +225,7 @@ describe("a persona's sidebar shape (#96)", () => {
     stock: "manage",
     money: "operate",
     offers_price: "view",
-    staff: "operate",
+    hrms: "operate",
     reports: "view",
     setup: "operate",
   };
@@ -249,33 +249,33 @@ describe("a persona's sidebar shape (#96)", () => {
     ]);
   });
 
-  it("gives a store manager the same, plus the one Staff row", () => {
+  it("gives a store manager the same, plus the one HRMS row", () => {
     const rows = rowsFor("store_manager", MANAGER_CAPS);
     expect(headings(rows)).toEqual([
       "Home",
       "Sell",
       "Inventory > Receive Goods, Transfer, Stock",
       "Reports",
-      "Staff",
+      "HRMS",
       "Stock Count",
       "Money",
       "Offers & Price",
       "Booking",
     ]);
-    // Attendance has moved to Home, so Staff is Members alone and draws as one
-    // line. A cashier has no Members and so no Staff row at all.
-    expect(itemsUnder(rows, "staff")).toEqual(["Members"]);
-    expect(headings(rowsFor("store_staff", STORE_CAPS))).not.toContain("Staff");
+    // Attendance has moved to Home, so HRMS is Member Details alone and draws
+    // as one line. A cashier has no Member Details and so no HRMS row at all.
+    expect(itemsUnder(rows, "hrms")).toEqual(["Member Details"]);
+    expect(headings(rowsFor("store_staff", STORE_CAPS))).not.toContain("HRMS");
   });
 
-  it("draws Attendance under Home for a store person and under Staff for everyone else", () => {
+  it("draws Attendance under Home for a store person and under HRMS for everyone else", () => {
     const store = rowsFor("store_staff", STORE_CAPS);
     expect(itemsUnder(store, "home")).toEqual(["Dashboard", "Attendance", "Approvals", "Alerts"]);
-    expect(itemsUnder(store, "staff")).toEqual([]);
+    expect(itemsUnder(store, "hrms")).toEqual([]);
 
     const warehouse = rowsFor("warehouse", WAREHOUSE_CAPS);
     expect(itemsUnder(warehouse, "home")).toEqual(["Dashboard", "Approvals", "Alerts"]);
-    expect(itemsUnder(warehouse, "staff")).toEqual(["Attendance"]);
+    expect(itemsUnder(warehouse, "hrms")).toEqual(["Attendance"]);
   });
 
   it("leaves Return to Brand off the store's sidebar, with damage still one click away", () => {
@@ -313,9 +313,9 @@ describe("a persona's sidebar shape (#96)", () => {
 
   it("unfolds the heading a screen is actually drawn under", () => {
     // The sidebar must be able to show where you are. For a store person on
-    // Attendance that heading is Home, not the Staff section that owns it.
+    // Attendance that heading is Home, not the HRMS section that owns it.
     expect(headingOwning("/staff/attendance", "store_staff")).toBe("home");
-    expect(headingOwning("/staff/attendance", "warehouse")).toBe("staff");
+    expect(headingOwning("/staff/attendance", "warehouse")).toBe("hrms");
     expect(headingOwning("/receive/pt", "store_staff")).toBe("receive_goods");
     expect(headingOwning("/nobody-built-this", "store_staff")).toBeNull();
   });
@@ -377,7 +377,7 @@ describe("arranging a sidebar can never widen it", () => {
   });
 
   it("never draws a relocated entry for somebody who does not hold its section", () => {
-    // Attendance belongs to Staff and keeps Staff's gate wherever it is drawn.
+    // Attendance belongs to HRMS and keeps HRMS's gate wherever it is drawn.
     const labels = allLabels(
       sidebarRows(user("store_staff", { home: "view", stock: "view", sell: "operate" })),
     );

@@ -121,11 +121,11 @@ def test_sheet_specific_cells_are_honoured(db):
     # Only Owner and Accounts fully manage money.
     assert caps["owner"]["money"] == "manage"
     assert caps["accounts"]["money"] == "manage"
-    # Staff (#87, derived — no sheet row): the store person's daily attendance
-    # surface is real, and a brand manager — whose scope is brands, not people —
-    # has none.
-    assert caps["store_person"]["staff"] == "operate"
-    assert "staff" not in caps["brand_manager"]
+    # HRMS (#87, derived — no sheet row; renamed from "staff" by #118): the
+    # store person's daily attendance surface is real, and a brand manager —
+    # whose scope is brands, not people — has none.
+    assert caps["store_person"]["hrms"] == "operate"
+    assert "hrms" not in caps["brand_manager"]
 
 
 # --- Fail-closed ----------------------------------------------------------
@@ -282,26 +282,26 @@ def test_setup_manage_cannot_configure_away_the_access_admin_floor(db):
     assert body["capabilities"]["setup"] == "manage"
 
 
-def test_store_manager_and_cashier_differ_only_on_staff(db):
+def test_store_manager_and_cashier_differ_only_on_hrms(db):
     """The one place the two store roles part company (#96).
 
     Both are the "Store Person" persona and must agree on all twelve ratified
     sheet cells. The sketch's "Member Details" — bank details, monthly target vs
-    achievement — is manager work, so the manager holds `staff: manage` and the
+    achievement — is manager work, so the manager holds `hrms: manage` and the
     cashier keeps `operate` (own attendance). An override may only touch a
     section the sheet never covered, which is what keeps the rest identical.
     """
     manager = section_access_for("store_manager")
     cashier = section_access_for("store_staff")
 
-    assert manager["staff"]["capability"] == "manage"
-    assert cashier["staff"]["capability"] == "operate"
+    assert manager["hrms"]["capability"] == "manage"
+    assert cashier["hrms"]["capability"] == "operate"
     differing = {s for s in SECTION_CODES if manager[s] != cashier[s]}
-    assert differing == {"staff"}
+    assert differing == {"hrms"}
 
     # And the lift reaches the live payload, not just the seed table.
     body = _client(_make_user("mgr", _make_role("store_manager"))).get("/api/auth/me").json()
-    assert body["capabilities"]["staff"] == "manage"
+    assert body["capabilities"]["hrms"] == "manage"
     # Managing people is not managing money or users — the override is confined.
     assert body["capabilities"]["money"] == "operate"
     assert "setup" not in body["capabilities"]

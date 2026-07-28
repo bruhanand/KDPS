@@ -17,12 +17,25 @@ exactly what I wrote?" — capability **and** label, because a bare ``manage`` i
 also what an admin would set by hand, and only the derived label tells the two
 apart. So migrate-then-rollback is an identity, and a rollback never eats an
 admin's grant.
+
+Both cells are frozen literally below rather than imported live from
+``rbac_matrix`` — #118 later renames this very section, and a live import
+would make a fresh replay compare against whatever the table says *today*
+instead of the pair this migration actually wrote.
 """
 
 from django.db import migrations
 
 SEEDED_DEFAULT = "operate"
 ROLE_CODE = "store_manager"
+
+#: The cell 0005 seeds before this migration runs, and the cell this
+#: migration moves it to.
+SEEDED_CELL = {"capability": "operate", "label": "Own attendance (derived)"}
+GRANTED_CELL = {
+    "capability": "manage",
+    "label": "Own store members + attendance (derived)",
+}
 
 
 def _retune(apps, cell: dict[str, str], *, only_if: dict[str, str]) -> None:
@@ -43,26 +56,21 @@ def _retune(apps, cell: dict[str, str], *, only_if: dict[str, str]) -> None:
 
 
 def grant_members(apps, schema_editor):
-    from accounts.rbac_matrix import section_access_for
-
     _retune(
         apps,
-        section_access_for(ROLE_CODE)["staff"],
+        GRANTED_CELL,
         only_if={"capability": SEEDED_DEFAULT},
     )
 
 
 def revoke_members(apps, schema_editor):
-    from accounts.rbac_matrix import MATRIX, section_access_for
-
-    capability, label = MATRIX["store_person"]["staff"]
     _retune(
         apps,
-        {"capability": capability, "label": label},
+        SEEDED_CELL,
         # The whole cell this migration writes. If the override's wording ever
         # drifts from what was written here, the match fails and the row is
         # preserved — the safe way to be wrong.
-        only_if=section_access_for(ROLE_CODE)["staff"],
+        only_if=GRANTED_CELL,
     )
 
 
