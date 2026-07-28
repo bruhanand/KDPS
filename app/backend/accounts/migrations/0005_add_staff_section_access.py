@@ -17,10 +17,14 @@ would make a fresh replay of this migration write whatever the table says
 
 from django.db import migrations
 
-#: Every ratified role code's ``staff`` cell as #87 shipped it — the same
-#: answer ``section_access_for(code)["staff"]`` gave before #118 renamed the
-#: key away. A role code this table does not know gets ``none`` / ``"No"``,
-#: matching ``section_access_for``'s own fail-closed default.
+#: Every ratified role code's ``staff`` cell, frozen at its final pre-#118
+#: value (``store_manager`` carries #96/#97's later override, not #87's
+#: original) — the same answer ``section_access_for(code)["staff"]`` gave
+#: before #118 renamed the key away. On a fresh replay this makes 0006 a
+#: no-op for ``store_manager`` (already at the value 0006 would grant), which
+#: converges to the same end state as the original history. A role code this
+#: table does not know gets ``none`` / ``"No"``, matching
+#: ``section_access_for``'s own fail-closed default.
 STAFF_CELL_BY_ROLE: dict[str, tuple[str, str]] = {
     "owner": ("manage", "Full (derived)"),
     "store_manager": ("manage", "Own store members + attendance (derived)"),
