@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { CheckCircle2, Inbox, ShieldCheck, XCircle } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import { useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import {
@@ -39,7 +40,8 @@ const ACTIONS_CELL: CSSProperties = {
 };
 
 export function ApprovalsPage() {
-  const { data, loading, reload } = useList<ApprovalT>("/approvals/inbox");
+  const [q, setQ] = useState("");
+  const { data, loading, reload } = useList<ApprovalT>("/approvals/inbox", { q });
   const [rejecting, setRejecting] = useState<number | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<number | null>(null);
@@ -73,6 +75,17 @@ export function ApprovalsPage() {
         </div>
       )}
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search approvals — doc number, type, requester"
+        label="Search approvals"
+        testId="approvals-search"
+        noun="approval"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
@@ -80,7 +93,7 @@ export function ApprovalsPage() {
           <p className="eyebrow">
             <Inbox size={15} /> All clear
           </p>
-          Nothing is waiting for you.
+          {q ? `No approval matches “${q}”.` : "Nothing is waiting for you."}
         </div>
       ) : (
         <div className="table-wrap">

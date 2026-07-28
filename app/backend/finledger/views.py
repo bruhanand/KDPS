@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section, user_can
 from accounts.sections import CAP_MANAGE
 from core.money import paise_to_rupees_str
+from core.textsearch import search_term, text_filter
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
 from finledger.posting import (
     AlreadyReversedError,
@@ -56,6 +57,10 @@ class LedgerPagination(PageNumberPagination):
 # --- Vendor ledger ---------------------------------------------------------
 
 
+#: Vendor Ledger (#106) — the document number and the party (the vendor).
+VENDOR_ENTRY_SEARCH_FIELDS = ("doc_number", "vendor__name", "vendor__code")
+
+
 class VendorEntriesView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = VendorLedgerEntrySerializer
@@ -66,7 +71,8 @@ class VendorEntriesView(generics.ListAPIView):
         vendor = self.request.query_params.get("vendor")
         if vendor:
             qs = qs.filter(vendor_id=vendor)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), VENDOR_ENTRY_SEARCH_FIELDS)
 
 
 class VendorBalancesView(APIView):
@@ -265,6 +271,11 @@ class VendorReverseView(APIView):
 # --- Cash ledger -----------------------------------------------------------
 
 
+#: Cash Ledger (#106) — the document number and the party (a cash-out that pays
+#: a vendor carries one; a plain expense doesn't, and the description covers it).
+CASH_ENTRY_SEARCH_FIELDS = ("doc_number", "description", "vendor__name")
+
+
 class CashEntriesView(generics.ListAPIView):
     permission_classes = [IsAuthenticated, IsBooksKeeper]
     serializer_class = CashLedgerEntrySerializer
@@ -275,7 +286,8 @@ class CashEntriesView(generics.ListAPIView):
         account = self.request.query_params.get("account")
         if account:
             qs = qs.filter(account=account)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), CASH_ENTRY_SEARCH_FIELDS)
 
 
 class CashSummaryView(APIView):

@@ -14,6 +14,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -76,7 +77,8 @@ interface StoreT { id: number; code: string; name: string; store_type: string; }
 
 export function WriteOffListPage() {
   const { user } = useAuth();
-  const { data, loading } = useList<WOT>("/outbound/writeoffs");
+  const [q, setQ] = useState("");
+  const { data, loading } = useList<WOT>("/outbound/writeoffs", { q });
   const writable = canWriteStockCount(user);
 
   return (
@@ -91,11 +93,24 @@ export function WriteOffListPage() {
         }
       />
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search write-offs — doc number, reason, store"
+        label="Search write-offs"
+        testId="writeoff-search"
+        noun="write-off"
+        count={data.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : data.length === 0 ? (
         <div className="card section-card" data-testid="writeoff-empty">
-          No write-offs yet. Create one for dead stock or refused defectives.
+          {q
+            ? `No write-off matches “${q}”.`
+            : "No write-offs yet. Create one for dead stock or refused defectives."}
         </div>
       ) : (
         <div className="table-wrap">

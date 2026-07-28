@@ -7,6 +7,8 @@ import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
+import { SearchBox } from "../components/SearchBox";
+import { withQuery, type QueryParams } from "../lib/query";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
 
@@ -15,21 +17,22 @@ function useSteward(): boolean {
   return Boolean(user?.is_superuser || STEWARD_ROLES.includes(user?.role?.code ?? ""));
 }
 
-function useList<T>(url: string) {
+function useList<T>(url: string, params?: QueryParams) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
+  const full = withQuery(url, params);
   useEffect(() => {
     let live = true;
     setLoading(true);
     api
-      .get(url)
+      .get(full)
       .then((r) => live && setData(r.data))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
-  }, [url, tick]);
+  }, [full, tick]);
   return { data, loading, reload: () => setTick((t) => t + 1) };
 }
 
@@ -81,7 +84,8 @@ const blankStore = { id: 0, code: "", name: "", store_type: "store", city: "", g
 
 export function StoresPage() {
   const canEdit = useSteward();
-  const { data, loading, reload } = useList<Store>("/masters/stores");
+  const [q, setQ] = useState("");
+  const { data, loading, reload } = useList<Store>("/masters/stores", { q });
   const { data: gstins } = useList<GstinOpt>("/masters/gstins");
   const [form, setForm] = useState(blankStore);
   const [open, setOpen] = useState(false);
@@ -104,6 +108,7 @@ export function StoresPage() {
     <Screen title="Stores" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="store-new-button"><Plus size={15} /> New store</button>}>
       <Feedback error={error} ok={ok} />
+      <SearchBox value={q} onChange={setQ} placeholder="Search stores — name, code" label="Search stores" testId="store-search" />
       {canEdit && open && (
         <div className="card section-card" data-testid="store-editor">
           <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -134,7 +139,11 @@ export function StoresPage() {
             <tr><th>Code</th><th>Name</th><th>Type</th><th>City</th><th>State</th><th>GSTIN</th><th>Status</th>{canEdit && <th />}</tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan={8}>Loading…</td></tr> : data.map((s) => (
+            {loading ? (
+              <tr><td colSpan={8}>Loading…</td></tr>
+            ) : data.length === 0 ? (
+              <tr data-testid="stores-empty"><td colSpan={8}>{q ? `No store matches “${q}”.` : "No stores yet."}</td></tr>
+            ) : data.map((s) => (
               <tr key={s.id} data-testid={`store-row-${s.code}`}>
                 <td><b className="mono">{s.code}</b></td>
                 <td>{s.name}</td>
@@ -161,7 +170,8 @@ const blankBrand = { id: 0, code: "", name: "", ownership: "owned", return_terms
 
 export function BrandsPage() {
   const canEdit = useSteward();
-  const { data, loading, reload } = useList<Brand>("/masters/brands");
+  const [q, setQ] = useState("");
+  const { data, loading, reload } = useList<Brand>("/masters/brands", { q });
   const [form, setForm] = useState(blankBrand);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -183,6 +193,7 @@ export function BrandsPage() {
     <Screen title="Brands" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="brand-new-button"><Plus size={15} /> New brand</button>}>
       <Feedback error={error} ok={ok} />
+      <SearchBox value={q} onChange={setQ} placeholder="Search brands — name, code" label="Search brands" testId="brand-search" />
       {canEdit && open && (
         <div className="card section-card" data-testid="brand-editor">
           <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -212,7 +223,11 @@ export function BrandsPage() {
         <table className="data" data-testid="brands-table">
           <thead><tr><th>Brand</th><th>Ownership</th><th>Return terms</th><th>Commercial model</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6}>Loading…</td></tr> : data.map((b) => (
+            {loading ? (
+              <tr><td colSpan={6}>Loading…</td></tr>
+            ) : data.length === 0 ? (
+              <tr data-testid="brands-empty"><td colSpan={6}>{q ? `No brand matches “${q}”.` : "No brands yet."}</td></tr>
+            ) : data.map((b) => (
               <tr key={b.id} data-testid={`brand-row-${b.code}`}>
                 <td><b>{b.name}</b></td>
                 <td>{b.ownership === "owned" ? "KDPS-owned" : "Brand-owned"}</td>
@@ -237,7 +252,8 @@ const blankSeason = { id: 0, code: "", name: "", status: "open", sort_order: 0 }
 
 export function SeasonsPage() {
   const canEdit = useSteward();
-  const { data, loading, reload } = useList<Season>("/masters/seasons");
+  const [q, setQ] = useState("");
+  const { data, loading, reload } = useList<Season>("/masters/seasons", { q });
   const [form, setForm] = useState(blankSeason);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -259,6 +275,7 @@ export function SeasonsPage() {
     <Screen title="Seasons" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="season-new-button"><Plus size={15} /> New season</button>}>
       <Feedback error={error} ok={ok} />
+      <SearchBox value={q} onChange={setQ} placeholder="Search seasons — name, code" label="Search seasons" testId="season-search" />
       {canEdit && open && (
         <div className="card section-card" data-testid="season-editor">
           <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -283,7 +300,11 @@ export function SeasonsPage() {
         <table className="data" data-testid="seasons-table">
           <thead><tr><th>Code</th><th>Name</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={4}>Loading…</td></tr> : data.map((s) => (
+            {loading ? (
+              <tr><td colSpan={4}>Loading…</td></tr>
+            ) : data.length === 0 ? (
+              <tr data-testid="seasons-empty"><td colSpan={4}>{q ? `No season matches “${q}”.` : "No seasons yet."}</td></tr>
+            ) : data.map((s) => (
               <tr key={s.id} data-testid={`season-row-${s.code}`}>
                 <td><b className="mono">{s.code}</b></td>
                 <td>{s.name}</td>
@@ -307,7 +328,8 @@ const blankGstin = { id: 0, gstin: "", state_code: "", state_name: "", legal_ent
 
 export function GstinsPage() {
   const canEdit = useSteward();
-  const { data, loading, reload } = useList<Gstin>("/masters/gstins");
+  const [q, setQ] = useState("");
+  const { data, loading, reload } = useList<Gstin>("/masters/gstins", { q });
   const { data: entities } = useList<EntityOpt>("/masters/entities");
   const [form, setForm] = useState(blankGstin);
   const [open, setOpen] = useState(false);
@@ -330,6 +352,7 @@ export function GstinsPage() {
     <Screen title="GSTINs" count={data.length}
       action={canEdit && <button className="btn btn-cta" onClick={add} data-testid="gstin-new-button"><Plus size={15} /> New GSTIN</button>}>
       <Feedback error={error} ok={ok} />
+      <SearchBox value={q} onChange={setQ} placeholder="Search GSTINs — number, state, legal entity" label="Search GSTINs" testId="gstin-search" />
       {canEdit && open && (
         <div className="card section-card" data-testid="gstin-editor">
           <div className="toolbar" style={{ marginBottom: 12 }}>
@@ -354,7 +377,11 @@ export function GstinsPage() {
         <table className="data" data-testid="gstins-table">
           <thead><tr><th>GSTIN</th><th>State</th><th>State code</th><th>Legal entity</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={6}>Loading…</td></tr> : data.map((g) => (
+            {loading ? (
+              <tr><td colSpan={6}>Loading…</td></tr>
+            ) : data.length === 0 ? (
+              <tr data-testid="gstins-empty"><td colSpan={6}>{q ? `No GSTIN matches “${q}”.` : "No GSTINs yet."}</td></tr>
+            ) : data.map((g) => (
               <tr key={g.id} data-testid={`gstin-row-${g.state_code}`}>
                 <td className="mono"><b>{g.gstin}</b></td>
                 <td><span className={`chip chip-${g.state_name === "Bihar" ? "amber" : "blue"}`}>{g.state_name}</span></td>
@@ -623,6 +650,7 @@ export function UsersRolesPage() {
   const { user } = useAuth();
   const canEdit = ["owner", "it_admin"].includes(user?.role?.code ?? "");
   const [tab, setTab] = useState<"users" | "roles" | "policies">("users");
+  const [q, setQ] = useState("");
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [actorPolicies, setActorPolicies] = useState<ActorPolicy[]>([]);
@@ -650,8 +678,8 @@ export function UsersRolesPage() {
     setLoading(true);
     setError("");
     Promise.all([
-      typedApi.get("/auth/admin/users"),
-      typedApi.get("/auth/admin/roles"),
+      typedApi.get("/auth/admin/users", { params: { q } }),
+      typedApi.get("/auth/admin/roles", { params: { q } }),
       typedApi.get("/auth/admin/meta"),
       typedApi.get("/auth/admin/actor-policies"),
       typedApi.get("/auth/admin/approval-policies"),
@@ -667,7 +695,7 @@ export function UsersRolesPage() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(loadAll, []);
+  useEffect(loadAll, [q]);
 
   function editUser(u: AdminUser) {
     setTab("users");
@@ -898,6 +926,16 @@ export function UsersRolesPage() {
       {error && <div className="warn-note" data-testid="rbac-error">{error}</div>}
       {ok && <div className="ok-note" data-testid="rbac-ok">{ok}</div>}
 
+      {tab !== "policies" && (
+        <SearchBox
+          value={q}
+          onChange={setQ}
+          placeholder={tab === "users" ? "Search users — name, username" : "Search roles — name, code"}
+          label={tab === "users" ? "Search users" : "Search roles"}
+          testId={tab === "users" ? "user-search" : "role-search"}
+        />
+      )}
+
       {tab === "users" ? (
         <>
           <div className="card section-card" data-testid="user-editor-card">
@@ -941,7 +979,11 @@ export function UsersRolesPage() {
             <table className="data" data-testid="users-table">
               <thead><tr><th>User</th><th>Role</th><th>Scope</th><th>Stores</th><th>Status</th><th /></tr></thead>
               <tbody>
-                {loading ? <tr><td colSpan={6}>Loading…</td></tr> : users.map((u) => (
+                {loading ? (
+                  <tr><td colSpan={6}>Loading…</td></tr>
+                ) : users.length === 0 ? (
+                  <tr data-testid="users-empty"><td colSpan={6}>{q ? `No user matches “${q}”.` : "No users yet."}</td></tr>
+                ) : users.map((u) => (
                   <tr key={u.id} data-testid={`user-row-${u.username}`}>
                     <td><b>{u.full_name || u.username}</b><div className="mono" style={{ fontSize: 12 }}>{u.username}</div></td>
                     <td>{u.role?.name ?? "—"}</td>
@@ -1009,7 +1051,11 @@ export function UsersRolesPage() {
             <table className="data" data-testid="roles-table">
               <thead><tr><th>Role</th><th>Landing</th><th>Sections</th><th className="num">Users</th><th>Status</th><th /></tr></thead>
               <tbody>
-                {loading ? <tr><td colSpan={6}>Loading…</td></tr> : roles.map((r) => (
+                {loading ? (
+                  <tr><td colSpan={6}>Loading…</td></tr>
+                ) : roles.length === 0 ? (
+                  <tr data-testid="roles-empty"><td colSpan={6}>{q ? `No role matches “${q}”.` : "No roles yet."}</td></tr>
+                ) : roles.map((r) => (
                   <tr key={r.id} data-testid={`role-row-${r.code}`}>
                     <td><b>{r.name}</b><div className="mono" style={{ fontSize: 12 }}>{r.code}{r.is_system ? " · system" : ""}</div></td>
                     <td className="mono">{r.landing_page}</td>

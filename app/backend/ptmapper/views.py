@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 
 from accounts.actor_policies import user_may_act
 from core.documents import DocStatus
+from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
 from inbound.models import Grn
 from masters.models import CategoryMargin, GstSlab, Store
@@ -134,6 +135,11 @@ def _forbidden(detail: str) -> Response:
     return Response({"detail": detail}, status=status.HTTP_403_FORBIDDEN)
 
 
+#: PT Files (#106) — the file's own name, the brand the engine read off it, and
+#: its review status.
+PT_FILE_SEARCH_FIELDS = ("original_filename", "brand_guess", "status")
+
+
 class PtFileListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
@@ -141,7 +147,10 @@ class PtFileListCreateView(generics.ListCreateAPIView):
         # Fail-closed store scoping by the linked GRN's store, mirroring /inbound/grns.
         # An unrestricted user (scope=all) is unaffected; a scoped user never sees
         # another store's PT (a NULL-grn legacy upload has no store → out of scope).
-        return scope_by_store(PtFile.objects.all(), self.request.user, "grn__store_id")
+        qs = scope_by_store(PtFile.objects.all(), self.request.user, "grn__store_id")
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the scope above already allows.
+        return text_filter(qs, search_term(self.request), PT_FILE_SEARCH_FIELDS)
 
     def get_serializer_class(self):
         return PtFileListSerializer
@@ -855,6 +864,13 @@ class PtFileExportView(APIView):
         return resp
 
 
+#: Review queue (#106) — this model carries no file name or brand column (those
+#: live inside the JSON `context` blob, which `text_filter` cannot safely
+#: traverse); the nearest stand-ins are the raw value a person recognises and
+#: the dimension/status they're triaging by.
+REVIEW_ITEM_SEARCH_FIELDS = ("dimension", "raw_value", "resolved_value", "status")
+
+
 class ReviewListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ReviewItemSerializer
@@ -867,7 +883,8 @@ class ReviewListView(generics.ListAPIView):
         dim = self.request.query_params.get("dimension")
         if dim:
             qs = qs.filter(dimension=dim)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), REVIEW_ITEM_SEARCH_FIELDS)
 
 
 class ReviewResolveView(APIView):
@@ -987,6 +1004,12 @@ class ReviewResolveView(APIView):
         return Response(ReviewItemSerializer(item).data)
 
 
+#: Proposals (#106) — this model has no file name column either; `source_key` is
+#: the raw value a proposal was mined from, the closest thing a steward
+#: half-remembers, alongside the brand it's scoped to and its status.
+LOOKUP_PROPOSAL_SEARCH_FIELDS = ("source_key", "target_value", "brand", "status")
+
+
 class LookupProposalListView(generics.ListAPIView):
     """The staged-learning queue. ``?status=`` (default ``proposed``) filters by status;
     ``all`` returns every proposal, newest first."""
@@ -999,7 +1022,8 @@ class LookupProposalListView(generics.ListAPIView):
         st = self.request.query_params.get("status", "proposed")
         if st != "all":
             qs = qs.filter(status=st)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), LOOKUP_PROPOSAL_SEARCH_FIELDS)
 
 
 class LookupProposalDecideView(APIView):

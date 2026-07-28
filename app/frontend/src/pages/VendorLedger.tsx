@@ -5,6 +5,7 @@ import { AlertTriangle, IndianRupee, Plus, ReceiptText, RotateCcw, Send, TimerRe
 import { useAuth } from "../auth/AuthContext";
 import { userCan } from "../shell/navConfig";
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import "./PtMapper.css";
 import { PageHeader } from "../components/PageHeader";
@@ -64,6 +65,8 @@ export default function VendorLedger() {
   const [hasNext, setHasNext] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [entriesLoading, setEntriesLoading] = useState(true);
+  const [q, setQ] = useState("");
 
   const [mode, setMode] = useState<Mode>(null);
   const [form, setForm] = useState({ vendor_id: "", amount: "", description: "", reference: "", payMode: "cash" });
@@ -72,14 +75,17 @@ export default function VendorLedger() {
   function loadAll() {
     api.get("/finledger/vendor/balances").then((r) => setBalances(r.data));
     api.get("/finledger/vendor/ageing").then((r) => setAgeing(r.data));
-    const q = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
-    api.get(`/finledger/vendor/entries?${q}`).then((r) => {
+    setEntriesLoading(true);
+    const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+    if (q.trim()) params.set("q", q.trim());
+    api.get(`/finledger/vendor/entries?${params}`).then((r) => {
       setEntries(r.data.results);
       setCount(r.data.count);
       setHasNext(Boolean(r.data.next));
-    });
+    }).finally(() => setEntriesLoading(false));
   }
-  useEffect(loadAll, [page]);
+  useEffect(loadAll, [page, q]);
+  useEffect(() => setPage(1), [q]);
   useEffect(() => { if (isFinance) api.get("/vendors").then((r) => setVendors(r.data)).catch(() => {}); }, [isFinance]);
 
   async function submit() {
@@ -218,8 +224,20 @@ export default function VendorLedger() {
       )}
 
       <h3 className="h3" style={{ margin: "22px 0 8px" }}>All entries</h3>
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search entries — doc number, party"
+        label="Search vendor ledger entries"
+        testId="vl-entries-search"
+        noun="posting"
+        count={count}
+        loading={entriesLoading}
+      />
       {entries.length === 0 ? (
-        <div className="card section-card" data-testid="vl-entries-empty">No vendor ledger entries yet.</div>
+        <div className="card section-card" data-testid="vl-entries-empty">
+          {q ? `No entry matches “${q}”.` : "No vendor ledger entries yet."}
+        </div>
       ) : (
         <div className="table-wrap">
           <table className="data" data-testid="vl-entries-table">

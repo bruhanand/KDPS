@@ -17,6 +17,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { useMakePt } from "../components/InboundQueueCard";
+import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
 
@@ -95,7 +96,8 @@ export function InboundPage() {
   const tab = params.get("tab") === "nonbranded" ? "nonbranded" : "branded";
   const kind = tab === "nonbranded" ? "non_branded" : "branded";
 
-  const { data: grns, loading } = useList<GrnListItemT>(`/inbound/grns?kind=${kind}`);
+  const [q, setQ] = useState("");
+  const { data: grns, loading } = useList<GrnListItemT>("/inbound/grns", { kind, q });
   const { data: pending } = useList<PendingBookingT>("/inbound/pending");
 
   function setTab(next: "branded" | "nonbranded") {
@@ -169,13 +171,26 @@ export function InboundPage() {
         </div>
       )}
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search receipts — GRN number, vendor, brand"
+        label="Search receipts"
+        testId="grn-search"
+        noun="receipt"
+        count={grns.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : grns.length === 0 ? (
         <div className="card section-card" data-testid="grn-empty">
-          {tab === "branded"
-            ? "No branded goods received yet. Start a new receipt against a booking."
-            : "No non-branded goods received yet. Start a direct receipt at a warehouse."}
+          {q
+            ? `No receipt matches “${q}”.`
+            : tab === "branded"
+              ? "No branded goods received yet. Start a new receipt against a booking."
+              : "No non-branded goods received yet. Start a direct receipt at a warehouse."}
         </div>
       ) : (
         <div className="table-wrap">

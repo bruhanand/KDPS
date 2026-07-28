@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
+import { ListSearchBar } from "../components/SearchBox";
 import { useList } from "../lib/hooks";
 import "./PtMapper.css";
 
@@ -35,7 +36,8 @@ interface ProposalT {
 
 export function PtProposalsPage() {
   const [status, setStatus] = useState("proposed");
-  const { data: items, loading, reload } = useList<ProposalT>(`/ptmapper/proposals?status=${status}`);
+  const [q, setQ] = useState("");
+  const { data: items, loading, reload } = useList<ProposalT>("/ptmapper/proposals", { status, q });
 
   return (
     <div className="page-pad">
@@ -67,11 +69,23 @@ export function PtProposalsPage() {
         </div>
       </div>
 
+      <ListSearchBar
+        value={q}
+        onChange={setQ}
+        placeholder="Search proposals — raw value, target, brand, status"
+        label="Search learning proposals"
+        testId="proposals-search"
+        noun="proposal"
+        count={items.length}
+        loading={loading}
+      />
+
       {loading ? (
         <p className="lead">Loading…</p>
       ) : items.length === 0 ? (
         <div className="ok-note" data-testid="proposals-empty">
-          <CheckCircle2 size={14} /> Nothing here — no proposals in this state.
+          <CheckCircle2 size={14} />{" "}
+          {q ? `No proposal matches “${q}”.` : "Nothing here — no proposals in this state."}
         </div>
       ) : (
         <div className="review-list" data-testid="proposals-list">

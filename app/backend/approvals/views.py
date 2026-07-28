@@ -30,7 +30,19 @@ from approvals.services import (
     decide,
     inbox_for,
 )
+from core.textsearch import search_term, text_filter
 from masters.scoping import scope_by_entitlement, scope_by_store
+
+#: Approvals (#106) — this model has no `doc_number` column of its own; `title`
+#: is the requesting module's snapshot one-liner and the nearest stand-in.
+#: "Type" is `kind_label` (the human label; `kind` is the machine code the
+#: client routes on). "Requester" is `requested_by`.
+APPROVAL_SEARCH_FIELDS = (
+    "title",
+    "kind_label",
+    "requested_by__full_name",
+    "requested_by__username",
+)
 
 
 class ApprovalInboxView(generics.ListAPIView[Approval]):
@@ -42,7 +54,10 @@ class ApprovalInboxView(generics.ListAPIView[Approval]):
     pagination_class = None
 
     def get_queryset(self) -> Any:
-        return inbox_for(self.request.user)
+        qs = inbox_for(self.request.user)
+        # The screen's own search box (#102), applied last so it can only
+        # narrow what the inbox's own scoping already allows.
+        return text_filter(qs, search_term(self.request), APPROVAL_SEARCH_FIELDS)
 
 
 class ApprovalListView(generics.ListAPIView[Approval]):
@@ -62,7 +77,8 @@ class ApprovalListView(generics.ListAPIView[Approval]):
         kind = self.request.query_params.get("kind")
         if kind:
             qs = qs.filter(kind=kind)
-        return qs
+        # The screen's own search box (#102), applied last.
+        return text_filter(qs, search_term(self.request), APPROVAL_SEARCH_FIELDS)
 
 
 class ApprovalDecideView(APIView):
