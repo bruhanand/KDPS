@@ -38,6 +38,7 @@ from core.documents import DocStatus
 from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.models import (
     MarkDamaged,
+    ReturnToVendor,
     StockAdjustment,
     StockRequest,
     StoreTransfer,
@@ -60,6 +61,12 @@ class ApprovalKind:
     #: ends and hangs off the *source*, because the sender is answerable for the
     #: pieces until the receiver scans them in (#137).
     store_field: str = "store"
+    #: Which brand the decision is about, where it is about one. Only the return
+    #: families set it, and only they need to: the approver a return's policy
+    #: names is the brand manager, whose scope is brands rather than stores, so
+    #: without this snapshot the inbox would scope them out of the one thing they
+    #: are there to decide (#75).
+    brand_field: str = ""
     #: Whether this family asks for a second person on the **rung** instead of
     #: on the value: a maker who already holds the approving rung clears their
     #: own document, and everyone else waits however little is at stake. Who
@@ -104,6 +111,17 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
         "Damage flag",
         "confirmed_by",
         self_clearing=True,
+    ),
+    # A return to brand is the one family whose approver is bounded by brands
+    # rather than by stores: the PRD (#104) gives the brand manager sign-off on
+    # their own brands up to a value and the owner above it, which is exactly
+    # what the seeded policy row says. Hence ``brand_field`` — the decision is
+    # about a brand, and the inbox has to be able to see that (#75).
+    ReturnToVendor: ApprovalKind(
+        "return_to_brand",
+        "Return to brand",
+        "approved_by",
+        brand_field="brand",
     ),
 }
 
@@ -217,10 +235,15 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     holds_the_rung = kind.self_clearing and holds_approver_role(
         requested_by, policy.approver_roles_for(value)
     )
+    # The brand *name*, because that is how every brand travels through the
+    # scoping gates (a ledger row carries the printed name, not a key), and
+    # ``approvals`` must not learn what a Brand is (ADR-0002).
+    brand = getattr(doc, kind.brand_field, None) if kind.brand_field else None
     common = {
         "kind": kind.code,
         "kind_label": kind.label,
         "title": title,
+        "brand": getattr(brand, "name", "") or "",
         # The document's creator, not whoever is asking this time — see
         # ``ask_again``. Falls back to the asker for a document made outside
         # the API (a shell or a management command), which has no creator.

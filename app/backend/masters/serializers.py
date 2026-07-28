@@ -78,6 +78,9 @@ class SeasonSerializer(serializers.ModelSerializer):
 
 class BrandSerializer(serializers.ModelSerializer):
     commercial_label = serializers.CharField(read_only=True)
+    #: Derived, so the return screen never re-implements the two-axis rules.
+    takes_returns = serializers.BooleanField(read_only=True)
+    cap_applies = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Brand
@@ -88,5 +91,9 @@ class BrandSerializer(serializers.ModelSerializer):
             "ownership",
             "return_terms",
             "commercial_label",
+            "return_window_days",
+            "return_cap_percent",
+            "takes_returns",
+            "cap_applies",
             "is_active",
         ]

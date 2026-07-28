@@ -11,13 +11,18 @@ Two layers, deliberately separate (issue #88):
     brand) they picked in the top-bar switcher for *this* request. Always the
     intersection with scope, so the header can only ever narrow.
 
-Four gates sit on top, and which one you want depends on two questions — is the
-caller reading or acting, and do the rows carry a brand?
+Six gates sit on top, and which one you want depends on two questions — is the
+caller reading or acting, and how do the rows say whose they are?
 
-  · `scope_by_store` — reading rows with no brand (approvals, documents), and
+  · `scope_by_store` — reading rows with no brand (documents), and
     `scope_by_store_predicate` for rows whose store is not one plain field.
-  · `scope_by_store_and_brand` — reading rows that carry one (stock).
-  · `scope_by_entitlement` — fetching a row in order to *act* on it.
+  · `scope_by_store_and_brand` — reading rows that carry one (stock): everyone
+    is narrowed by both.
+  · `scope_by_store_or_brand` — reading rows where either axis alone is the whole
+    boundary (approvals): a brand-scoped caller is narrowed by brand, everyone
+    else by store.
+  · `scope_by_entitlement` / `scope_by_entitlement_or_brand` — fetching a row in
+    order to *act* on it.
   · `actionable_store_ids` — the "may I operate at this store?" check.
 
 The two acting gates ignore the switcher on purpose: it narrows what you read,
@@ -227,6 +232,49 @@ def scope_by_store_and_brand(
     if ids is not None:
         qs = qs.filter(**{f"{store_field}__in": ids})
     return scope_by_brand(qs, user, brand_field)
+
+
+def scope_by_store_or_brand(
+    qs: Any, user: Any, store_field: str = "store_id", brand_field: str = "brand"
+) -> Any:
+    """The reading gate for rows that belong to a store *or* to a brand.
+
+    Deliberately not `scope_by_store_and_brand`, which narrows everyone by both:
+    these are rows where one axis or the other is the whole boundary. An approval
+    is the case that made it necessary — a return to brand is a store's document
+    and a brand manager's decision, and `scope_by_store` fails a brand-scoped
+    caller closed, so before this the person the policy names as the approver
+    could not see the thing they were meant to approve (#75).
+
+    A brand-scoped caller is narrowed by brand alone; a row carrying no brand is
+    not theirs, which keeps the fail-closed reading — "stores are the wrong
+    question" never becomes "so show them everything". Everyone else is narrowed
+    by store, exactly as before, and is not narrowed by brand at all: the top-bar
+    brand filter must not hide work from somebody's inbox.
+    """
+    if is_brand_scoped(user):
+        return scope_by_brand(qs.exclude(**{brand_field: ""}), user, brand_field)
+    return scope_by_store(qs, user, store_field)
+
+
+def scope_by_entitlement_or_brand(
+    qs: Any, user: Any, store_field: str = "store_id", brand_field: str = "brand"
+) -> Any:
+    """`scope_by_store_or_brand` for a row fetched in order to *act* on it.
+
+    Same split, and the same reason the acting gates ignore the switcher: what
+    you are looking at must never decide what you may do. A brand manager
+    entitled to two brands may decide either one's return whichever is on screen.
+    """
+    if is_brand_scoped(user):
+        names = visible_brand_names(user)
+        if not names:
+            return qs.none()
+        match = Q()
+        for name in names:
+            match |= Q(**{f"{brand_field}__iexact": name})
+        return qs.exclude(**{brand_field: ""}).filter(match)
+    return scope_by_entitlement(qs, user, store_field)
 
 
 def scope_by_entitlement(qs: Any, user: Any, field: str = "store_id") -> Any:

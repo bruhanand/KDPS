@@ -115,8 +115,33 @@ class ReturnType(models.TextChoices):
 
 
 class LogisticsRoute(models.TextChoices):
-    STORE_PICKUP = "store_pickup", "Brand collects from store (Madura)"
+    """How the carton physically gets back to the brand (#75).
+
+    Three answers, because they are three different jobs for three different
+    people: the brand's own van turns up (nobody ships anything), the store
+    couriers it itself, or the pieces are consolidated at the warehouse first —
+    and that last one is not a route the return invents, it is an ordinary
+    store-to-warehouse transfer that has to have happened already. The return
+    names that transfer (``via_transfer``) so the trail runs both ways.
+    """
+
+    STORE_PICKUP = "store_pickup", "Brand collects from store"
+    STORE_DISPATCH = "store_dispatch", "Store sends to brand"
     WAREHOUSE_CONSOLIDATION = "warehouse", "Consolidated at warehouse"
+
+
+class ReturnSource(models.TextChoices):
+    """Which bucket a return line's pieces come out of (#75).
+
+    Not a label: it is the instruction to the posting engine. A quarantine line
+    drains ``QuarantineStock`` — the pieces left free-to-sell when the damage was
+    confirmed — while a season-end line comes out of ``StockOnHand``. Posting the
+    wrong one would take good stock off the shelf and leave the damaged pieces
+    in the bucket for ever.
+    """
+
+    QUARANTINE = "quarantine", "Confirmed damaged (quarantine)"
+    SEASON_END = "season_end", "Season-end unsold stock"
 
 
 # ---------------------------------------------------------------------------
@@ -817,7 +842,20 @@ class MarkDamagedLine(TimeStampedModel):
 
 
 class ReturnToVendor(Document):
-    """RTV — stock going back to the brand (defective or seasonal return)."""
+    """RTV — stock going back to the brand (defective or seasonal return).
+
+    Built from the **returnable pool** (#75): the brand is picked first and the
+    lines are scanned out of what that brand will actually take back — confirmed
+    quarantine, plus in-window season-end stock for the three models that take
+    returns at all. Outright stock never reaches this document, because it never
+    reaches the pool.
+
+    The cap columns are a snapshot, not a calculation (Rule 2). A Correction
+    brand's allowance moves every time goods arrive or go back, so the numbers
+    the approver was shown must be frozen onto the return: months later "was this
+    inside the allowance?" has to have the answer it had on the day, not the one
+    today's ledger would give.
+    """
 
     store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="rtvs")
     vendor = models.ForeignKey("vendors.Vendor", on_delete=models.PROTECT, related_name="rtvs")
@@ -832,18 +870,56 @@ class ReturnToVendor(Document):
     logistics_route = models.CharField(
         max_length=16, choices=LogisticsRoute.choices, blank=True, default=""
     )
+    via_transfer = models.ForeignKey(
+        StoreTransfer,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="consolidated_returns",
+        help_text="The store→warehouse transfer that brought these pieces here, "
+        "for the consolidated route. Required for it: 'via warehouse' is a claim "
+        "that a movement already happened, and a claim with nothing behind it is "
+        "how stock goes missing between two documents (#75).",
+    )
     season = models.CharField(max_length=120, blank=True, default="")
     return_window_date = models.DateField(
         null=True,
         blank=True,
-        help_text="Deadline for seasonal return (alerts at 30/15/7 days).",
+        help_text="The earliest deadline on this return's lines, snapshotted at "
+        "draft time (alerts at 30/15/7 days).",
     )
 
-    # Credit note tracking (full recon in Sprint 5)
-    credit_note_received = models.BooleanField(default=False)
-    credit_note_date = models.DateField(null=True, blank=True)
+    # --- the Correction allowance, as it stood when this return was drafted ---
+    cap_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="The brand's negotiated allowance percentage on the day. 0 for "
+        "the three models that have no cap.",
+    )
+    cap_allowance_paise = MoneyField(default=0)
+    cap_used_before_paise = MoneyField(default=0)
+    cap_exceeded_by_paise = MoneyField(
+        default=0,
+        help_text="How far past the allowance this return goes. Flagged, never "
+        "blocked (Rule 5) — the pieces are already defective or already unsold, "
+        "and refusing the document would only mean nobody records where they went.",
+    )
+
+    # The brand's credit note is *not* a column here — it arrives days or weeks
+    # after the return posts, and a posted document is immutable at the kernel.
+    # It lives on the companion `ReturnCreditNote`, the same shape and the same
+    # reason as `TransferReceipt`.
 
     notes = models.TextField(blank=True, default="")
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rtvs_approved",
+        help_text="Stamped by the approvals inbox on approve — never typed (#75).",
+    )
     created_by = models.ForeignKey(
         "accounts.User",
         null=True,
@@ -851,10 +927,23 @@ class ReturnToVendor(Document):
         on_delete=models.SET_NULL,
         related_name="rtvs_created",
     )
+    approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
         db_table = "outbound_return_to_vendor"
         ordering = ["-created_at"]
+
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with.
+
+        The brand, because the person being asked is that brand's manager and the
+        one thing they must see is that it is theirs. The route rides along: who
+        is carrying the carton changes what approving it commits the brand to.
+        """
+        brand = self.brand.name if self.brand else "Return"
+        route = self.get_logistics_route_display() if self.logistics_route else ""
+        return f"{brand} · {route}" if route else brand
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()
@@ -865,9 +954,17 @@ class ReturnToVendor(Document):
 
 
 class ReturnToVendorLine(TimeStampedModel):
-    """One line on an RTV document."""
+    """One line on an RTV document — a (barcode × qty) drawn from one pool source.
+
+    ``source`` decides which bucket the posting drains, so it is enriched from
+    the pool at draft time and never sent by the client (#75); ``unit_cost_paise``
+    is read from the books for the same reason (#103).
+    """
 
     rtv = models.ForeignKey(ReturnToVendor, on_delete=models.CASCADE, related_name="lines")
+    source = models.CharField(
+        max_length=12, choices=ReturnSource.choices, default=ReturnSource.SEASON_END
+    )
     sku_code = models.CharField(max_length=64)
     design = models.CharField(max_length=120, blank=True, default="")
     color = models.CharField(max_length=60, blank=True, default="")
@@ -885,6 +982,50 @@ class ReturnToVendorLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sku_code} × {self.qty}"
+
+
+class ReturnCreditNote(TimeStampedModel):
+    """The brand's acknowledgement of a return (#75) — status, not money.
+
+    A companion record rather than columns on the return, for the same reason
+    ``TransferReceipt`` is one: the credit note arrives days or weeks after the
+    return posts, and a posted document is immutable at the kernel. Writing it
+    onto the document would mean either editing frozen history or never
+    recording the note at all.
+
+    The money already moved when the return posted — KDPS's own debit note
+    reduced the payable. This is the paper saying the brand agrees, which is what
+    Accounts reconciles against.
+    """
+
+    rtv = models.OneToOneField(ReturnToVendor, on_delete=models.CASCADE, related_name="credit_note")
+    received_on = models.DateField(help_text="The date on the brand's credit note.")
+    reference = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="The brand's own credit-note number, where the paper carries one.",
+    )
+    amount_paise = MoneyField(
+        default=0,
+        help_text="What the brand actually credited, where it differs from what "
+        "the return was worth. 0 means 'they agreed the return's own value' — a "
+        "short credit is a conversation, and Payments (D4) is where it is had.",
+    )
+    recorded_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="credit_notes_recorded",
+    )
+
+    class Meta:
+        db_table = "outbound_return_credit_note"
+        ordering = ["-received_on"]
+
+    def __str__(self) -> str:
+        return f"Credit note for {self.rtv}"
 
 
 # ---------------------------------------------------------------------------

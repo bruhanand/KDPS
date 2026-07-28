@@ -1249,6 +1249,29 @@ LINE_NO_DAMAGE_OUT = 0
 LINE_NO_QUARANTINE_IN = 500
 
 
+def _check_quarantine(store_id: int, sku_code: str, required_qty: int) -> None:
+    """Block if the quarantine bucket holds too few of these pieces (#75).
+
+    The ``_check_stock`` of the other bucket, and there for the same reason: a
+    return that drains more than the bucket holds would push a projection
+    negative and send the brand pieces the books say were never quarantined.
+    Row-locked, so two returns of the same damaged pieces serialize.
+    """
+    try:
+        bucket = QuarantineStock.objects.select_for_update().get(
+            store_id=store_id, sku_code=sku_code
+        )
+        available = bucket.qty
+    except QuarantineStock.DoesNotExist:
+        available = 0
+    if available < required_qty:
+        raise OutboundPostingError(
+            f"Quarantine at store {store_id} holds {available} of {sku_code}, "
+            f"and this return needs {required_qty}. Only confirmed-damaged pieces "
+            "go back as defective."
+        )
+
+
 def _write_quarantine_entry(
     *,
     store,
@@ -1257,14 +1280,16 @@ def _write_quarantine_entry(
     qty: int,
     doc_number: str,
     line_no: int,
+    kind: str = StockLedgerEntry.Kind.QUARANTINE_IN,
     posted_by=None,
 ) -> StockLedgerEntry:
-    """One ``quarantine_in`` ledger leg + the QuarantineStock projection update.
+    """One quarantine ledger leg + the QuarantineStock projection update.
 
     Deliberately does NOT touch StockOnHand — the quarantine bucket lives in
     QuarantineStock, keyed by (store × barcode). ``marked_by``/``marked_at`` on
     the bucket record the most-recent mark-damaged actor + time for the
-    inventory quarantine filter.
+    inventory quarantine filter, so they are stamped only on the way *in*: a
+    return draining the bucket (#75) must not rewrite who found the damage.
     """
     amount_paise = _line_amount(line, qty, doc_number)
     entry = StockLedgerEntry.objects.create(
@@ -1274,7 +1299,7 @@ def _write_quarantine_entry(
         **merch_dims(line),
         qty=qty,
         amount=amount_paise,
-        kind=StockLedgerEntry.Kind.QUARANTINE_IN,
+        kind=kind,
         doc_number=doc_number,
         line_no=line_no,
         posted_by=posted_by,
@@ -1291,11 +1316,13 @@ def _write_quarantine_entry(
     )
     bucket.qty += qty
     bucket.value_paise += amount_paise
-    bucket.marked_by = posted_by
-    bucket.marked_at = entry.created_at
+    if qty > 0:
+        bucket.marked_by = posted_by
+        bucket.marked_at = entry.created_at
     if bucket.qty == 0:
-        # A fully-cleared quarantine (later slice: return / release) leaves no
-        # row — matching the rebuild command, which emits no zero-qty row.
+        # A fully-cleared quarantine (the whole bucket returned to the brand)
+        # leaves no row — matching the rebuild command, which emits no zero-qty
+        # row. Its value goes with it, which is the point: the pieces are gone.
         bucket.delete()
     else:
         bucket.save()
@@ -1410,23 +1437,154 @@ def post_mark_damaged(mark: MarkDamaged, user=None) -> list[StockLedgerEntry]:
 # ---------------------------------------------------------------------------
 # 2. Return to Vendor (RTV) — stock out + conditional GL
 # ---------------------------------------------------------------------------
+#
+# A return drains whichever bucket its lines came out of (#75). A quarantine
+# line writes ``quarantine_out`` against QuarantineStock — the pieces already
+# left free-to-sell when the damage was confirmed, so taking them off the shelf
+# a second time would destroy stock that isn't there. A season-end line is
+# ordinary free-to-sell stock leaving, ``seasonal_ret`` against StockOnHand. One
+# RTV doc number carries both, so each gets its own line_no band.
+#
+# Which retires ``rtv_out``: it was the kind a defective return used to write
+# against free-to-sell stock, and a defective return now drains quarantine
+# instead. The bucket's rebuild reads ``quarantine_in``/``quarantine_out`` and
+# nothing else (``rebuild_stock_on_hand``), so a return that drained it under any
+# other name would rebuild to the wrong position. The kind stays in the choices
+# for the entries already posted under it.
+LINE_NO_RETURN_OUT = 0
+LINE_NO_QUARANTINE_RETURN = 500
+
+
+def _consolidating_transfer(route: str, via_transfer: Any, store: Any) -> Any:
+    """Check the movement a consolidated return claims already happened (#75).
+
+    "Via warehouse" is not a shipping preference, it is an assertion that these
+    pieces were transferred here first — and an assertion with nothing behind it
+    is how stock goes missing between two documents. So the transfer must exist,
+    must have actually posted, and must have ended *here*. The other two routes
+    carry no transfer at all, and quietly keeping one somebody sent would leave
+    a return pointing at a movement it has nothing to do with.
+    """
+    from core.documents import DocStatus
+    from outbound.models import LogisticsRoute
+
+    if route != LogisticsRoute.WAREHOUSE_CONSOLIDATION:
+        return None
+    if via_transfer is None:
+        raise OutboundPostingError(
+            "A consolidated return has to name the store-to-warehouse transfer "
+            "that brought the pieces here."
+        )
+    if via_transfer.destination_store_id != store.id:
+        raise OutboundPostingError(
+            f"{via_transfer.doc_number or 'That transfer'} did not arrive at "
+            f"{store.code}, so this return cannot be the consolidation of it."
+        )
+    if via_transfer.docstatus != DocStatus.SUBMITTED:
+        raise OutboundPostingError(
+            f"{via_transfer.doc_number or 'That transfer'} has not been dispatched, "
+            "so the pieces are not here to consolidate."
+        )
+    return via_transfer
+
+
+@transaction.atomic
+def raise_return_to_brand(
+    *,
+    store: Any,
+    vendor: Any,
+    brand: Any,
+    return_type: str,
+    route: str,
+    scans: dict[str, int],
+    user: User | None = None,
+    via_transfer: Any = None,
+    notes: str = "",
+) -> ReturnToVendor:
+    """Build a return to brand from scans, against the brand's returnable pool.
+
+    The whole document is server-built (Rule 6): the client sends barcodes and
+    quantities, and every other field on every line — dims, source bucket, unit
+    cost — is read off the pool row the server matched the scan to. Nothing that
+    decides money comes from the payload.
+
+    Born with its answer to the approval question, like every other wired
+    family, and born with the allowance snapshot the approver will be shown.
+    One transaction, so a scan the pool refuses leaves no half-built draft.
+    """
+    from outbound.models import ReturnToVendor, ReturnToVendorLine
+    from outbound.returnable import NotReturnable, allocate, cap_for, pool_for, returnable_pool
+
+    if not brand.takes_returns:
+        raise OutboundPostingError(
+            f"{brand.name} is {brand.commercial_label} — KDPS bought this stock "
+            "outright, so none of it goes back to the brand."
+        )
+
+    via_transfer = _consolidating_transfer(route, via_transfer, store)
+
+    try:
+        pool = pool_for(returnable_pool(user, brand, store_id=store.id), return_type, store.id)
+        allocations = allocate(scans, pool)
+    except NotReturnable as exc:
+        raise OutboundPostingError(str(exc)) from exc
+
+    this_return_paise = sum(a.value_paise for a in allocations)
+    cap = cap_for(brand)
+    # The earliest deadline on the return: a carton goes back as one carton, so
+    # the date that matters is the first one to expire, not the last.
+    deadlines = [a.row.window_date for a in allocations if a.row.window_date]
+    seasons = {a.row.dims.get("season", "") for a in allocations}
+
+    rtv = ReturnToVendor.objects.create(
+        store=store,
+        vendor=vendor,
+        brand=brand,
+        return_type=return_type,
+        logistics_route=route,
+        via_transfer=via_transfer,
+        season=seasons.pop() if len(seasons) == 1 else "",
+        return_window_date=min(deadlines) if deadlines else None,
+        cap_percent=cap.percent,
+        cap_allowance_paise=cap.allowance_paise,
+        cap_used_before_paise=cap.used_paise,
+        cap_exceeded_by_paise=cap.exceeded_by(this_return_paise),
+        notes=notes,
+        created_by=user,
+    )
+    for allocation in allocations:
+        ReturnToVendorLine.objects.create(rtv=rtv, **allocation.as_line_kwargs())
+
+    request_document_approval(rtv, requested_by=user)
+    return rtv
 
 
 @transaction.atomic
 def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
-    """Post an RTV: stock exits, GL posts for owned stock only.
+    """Post an RTV: stock exits its bucket, GL posts for owned stock only.
 
     - Owned (Outright/Correction): Dr VENDOR_PAYABLE / Cr INVENTORY
     - Brand-owned (SOR/Consignment): stock out only, no GL
+
+    Refuses unless a second person has cleared it (``require_approved``) — the
+    ledger seam behind the return's approval, so no caller, API or shell, can
+    send a brand's stock back on one person's say-so (#75).
     """
     from masters.models import Brand
+    from outbound.models import ReturnSource
 
     lines = list(rtv.lines.all())
     if not lines:
         raise OutboundPostingError("RTV has no lines.")
 
+    # Also what stamps ``approved_by`` — on every route in, not just the API.
+    require_approved(rtv)
+
     for line in lines:
-        _check_stock(rtv.store_id, line.sku_code, line.qty)
+        if line.source == ReturnSource.QUARANTINE:
+            _check_quarantine(rtv.store_id, line.sku_code, line.qty)
+        else:
+            _check_stock(rtv.store_id, line.sku_code, line.qty)
 
     # Block RTVs on V-flipped stock: ownership has transferred to KDPS,
     # so returning it to the brand is no longer valid.
@@ -1447,19 +1605,30 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
 
     entries = []
     total_value_paise = 0
-    kind = "rtv_out" if rtv.return_type == "defective" else "seasonal_ret"
 
     for i, line in enumerate(lines, start=1):
-        entry = _write_stock_entry(
-            store=rtv.store,
-            gstin=rtv.store.gstin,
-            line=line,
-            qty=-line.qty,
-            kind=kind,
-            doc_number=rtv.doc_number,
-            line_no=i,
-            posted_by=user,
-        )
+        if line.source == ReturnSource.QUARANTINE:
+            entry = _write_quarantine_entry(
+                store=rtv.store,
+                gstin=rtv.store.gstin,
+                line=line,
+                qty=-line.qty,
+                kind=StockLedgerEntry.Kind.QUARANTINE_OUT,
+                doc_number=rtv.doc_number,
+                line_no=LINE_NO_QUARANTINE_RETURN + i,
+                posted_by=user,
+            )
+        else:
+            entry = _write_stock_entry(
+                store=rtv.store,
+                gstin=rtv.store.gstin,
+                line=line,
+                qty=-line.qty,
+                kind=StockLedgerEntry.Kind.SEASONAL_RET,
+                doc_number=rtv.doc_number,
+                line_no=LINE_NO_RETURN_OUT + i,
+                posted_by=user,
+            )
         entries.append(entry)
         total_value_paise += line.qty * line.unit_cost_paise
 

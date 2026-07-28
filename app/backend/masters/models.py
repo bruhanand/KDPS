@@ -113,6 +113,20 @@ class Brand(TimeStampedModel):
     return_terms = models.CharField(
         max_length=12, choices=ReturnTerms.choices, default=ReturnTerms.NONE
     )
+    return_window_days = models.IntegerField(
+        default=0,
+        help_text="How long after a piece arrives the brand will still take it back "
+        "(60–120 days, negotiated per brand). 0 means nobody has agreed one yet — "
+        "the return screen says so rather than guessing a deadline.",
+    )
+    return_cap_percent = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text="The Correction goods-return allowance, as a percentage of the "
+        "brand's delivered value (the 10 of 25-18-10, stretchable to 12/15). Read "
+        "only for Correction brands — the other three models have no cap.",
+    )
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -128,6 +142,26 @@ class Brand(TimeStampedModel):
         if o == self.Ownership.OWNED:
             return "Correction" if r == self.ReturnTerms.CAPPED else "Outright"
         return "Consignment" if r == self.ReturnTerms.ROLLING else "SOR"
+
+    @property
+    def takes_returns(self) -> bool:
+        """Will this brand take stock back at all?
+
+        Three of the four commercial models will: SOR and Consignment because the
+        goods were never ours, Correction because a capped allowance was
+        negotiated. Outright bought the stock outright, so nothing goes back and
+        its pieces never reach the returnable pool (#75).
+        """
+        return self.commercial_label != "Outright"
+
+    @property
+    def cap_applies(self) -> bool:
+        """Is this brand's return room a finite, negotiated number?
+
+        Only Correction's is. SOR and Consignment return everything unsold with
+        no cap, so showing them a percentage of anything would be an invention.
+        """
+        return self.commercial_label == "Correction"
 
 
 class GstSlab(TimeStampedModel):

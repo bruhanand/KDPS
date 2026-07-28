@@ -31,7 +31,7 @@ from approvals.services import (
     inbox_for,
 )
 from core.textsearch import search_term, text_filter
-from masters.scoping import scope_by_entitlement, scope_by_store
+from masters.scoping import scope_by_entitlement_or_brand, scope_by_store_or_brand
 
 #: Approvals (#106) — this model has no `doc_number` column of its own; `title`
 #: is the requesting module's snapshot one-liner and the nearest stand-in.
@@ -70,7 +70,7 @@ class ApprovalListView(generics.ListAPIView[Approval]):
 
     def get_queryset(self) -> Any:
         qs = Approval.objects.select_related("store", "requested_by", "decided_by")
-        qs = scope_by_store(qs, self.request.user, "store_id")
+        qs = scope_by_store_or_brand(qs, self.request.user)
         st = self.request.query_params.get("status")
         if st:
             qs = qs.filter(status=st)
@@ -89,8 +89,10 @@ class ApprovalDecideView(APIView):
     def post(self, request: Request, pk: int) -> Response:
         # Scope first: an out-of-scope approval must look like it doesn't exist.
         # By entitlement, not by the switcher — deciding is an act, and the unit
-        # on screen must not narrow what the caller may act on.
-        visible = scope_by_entitlement(Approval.objects.all(), request.user, "store_id")
+        # on screen must not narrow what the caller may act on. Or-brand, because
+        # the brand manager the return policy names is bounded by brands and
+        # would otherwise be scoped out of every row (#75).
+        visible = scope_by_entitlement_or_brand(Approval.objects.all(), request.user)
         try:
             approval = visible.get(pk=pk)
         except Approval.DoesNotExist:
