@@ -12,8 +12,10 @@ from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 from django.utils import timezone
 
+from approvals.models import ApprovalStatus
+from approvals.services import approval_for
 from core.base import TimeStampedModel
-from core.documents import Document
+from core.documents import DocStatus, Document
 from core.fiscal import financial_year
 from core.money import MoneyField
 
@@ -85,6 +87,26 @@ class GapReason(models.TextChoices):
 class TransferType(models.TextChoices):
     STORE_SPLIT = "store_split", "Store split (warehouse → store)"
     INTER_STORE = "inter_store", "Inter-store transfer"
+
+
+class StockRequestStatus(models.TextChoices):
+    """The honest status a store sees on its ask (#74) — derived, never stored.
+
+    A stock request posts nothing of its own (the transfer it pre-fills is what
+    moves stock), so none of this lives on the document row: after ``post()``
+    the kernel FSM freezes every column on it, and the story keeps changing for
+    weeks after that (a transfer dispatches, arrives, or a second one follows).
+    ``StockRequest.status`` derives it fresh from the approval plus whatever
+    transfers now point at it, the same way a transfer's own ``gap_state`` is
+    read off its receipt rather than stored.
+    """
+
+    PENDING_APPROVAL = "pending_approval", "Pending approval"
+    APPROVED = "approved", "Approved"
+    DECLINED = "declined", "Declined"
+    BEING_FULFILLED = "being_fulfilled", "Being fulfilled"
+    PARTLY_FULFILLED = "partly_fulfilled", "Partly fulfilled"
+    CLOSED = "closed", "Closed"
 
 
 class ReturnType(models.TextChoices):
@@ -171,6 +193,16 @@ class StoreTransfer(Document):
         on_delete=models.SET_NULL,
         related_name="transfers_created",
     )
+    fulfils_request = models.ForeignKey(
+        "StockRequest",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="fulfilling_transfers",
+        help_text="The store's ask this transfer answers, if any (#74). Set once, "
+        "at creation — approving a request approves the ask, never the move, so "
+        "this transfer still needs its own gate (#137) before anything dispatches.",
+    )
     approvals = GenericRelation("approvals.Approval")
 
     class Meta(Document.Meta):
@@ -232,6 +264,15 @@ class StoreTransferLine(TimeStampedModel):
     """
 
     transfer = models.ForeignKey(StoreTransfer, on_delete=models.CASCADE, related_name="lines")
+    request_line = models.ForeignKey(
+        "StockRequestLine",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="transfer_lines",
+        help_text="Which line of the store's ask this line fulfils (#74) — how a "
+        "request's honest status reads how much of it has actually arrived.",
+    )
     sku_code = models.CharField(max_length=64)
     design = models.CharField(max_length=120, blank=True, default="")
     color = models.CharField(max_length=60, blank=True, default="")
@@ -382,6 +423,182 @@ class TransferReceiptException(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.kind} {self.sku_code} × {self.qty}"
+
+
+# ---------------------------------------------------------------------------
+# 1a. Stock request — the pull side of a transfer (#74)
+# ---------------------------------------------------------------------------
+
+
+class StockRequest(Document):
+    """A store's ask for stock held at another location.
+
+    Two gates, not one (Anand's ruling of 26 July): approving *this* document
+    approves the ask — that the fulfilling store may commit to sending the
+    stock. The transfer it later pre-fills is a separate draft, still gated by
+    the Operations Head before anything actually leaves a shelf (#137). This
+    document posts no ledger of its own; it is a coordination record the
+    fulfilling store answers, not a movement.
+
+    The inbox hangs off the *fulfilling* store, not the store asking: that
+    location's stock is what is being committed, so its own person is the one
+    who says yes or no (mirroring ``StoreTransfer``, which hangs off its
+    *source* for the same reason — see ``outbound.maker_checker``).
+    """
+
+    requesting_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="stock_requests_out"
+    )
+    fulfilling_store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="stock_requests_in"
+    )
+    notes = models.CharField(max_length=240, blank=True, default="")
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stock_requests_approved",
+        help_text="Stamped from the approvals inbox once fulfilment starts — never typed (#74).",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stock_requests_created",
+    )
+    approvals = GenericRelation("approvals.Approval")
+
+    class Meta(Document.Meta):
+        db_table = "outbound_stock_request"
+        ordering = ["-created_at"]
+
+    @property
+    def approval_subject(self) -> str:
+        """What the approvals inbox leads the row with — the fulfilling store is
+        being asked to send stock *to* somewhere, so that somewhere is the fact
+        that cannot wait for the line below it (mirrors ``StoreTransfer``'s own
+        "To <destination>", read from the other end of the same move)."""
+        return f"For {self.requesting_store.code}"
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        dt = self.created_at or timezone.now()
+        return (
+            financial_year(dt.date() if hasattr(dt, "date") else dt),
+            self.requesting_store.code,
+            "SRQ",
+        )
+
+    @property
+    def status(self) -> StockRequestStatus:
+        """The honest status a store sees, derived fresh every read.
+
+        Ordered like the story actually unfolds: an undecided or rejected
+        approval settles it outright. Past that, the fulfilling transfers this
+        request has spawned (never cancelled ones) say the rest — none in
+        flight yet is merely *approved*; full coverage received is *closed*;
+        anything less, once the fulfilling store has said no more is coming
+        (``closure``), is *partly fulfilled* rather than stuck "being
+        fulfilled" forever.
+        """
+        approval = approval_for(self)
+        if approval is None or approval.status == ApprovalStatus.PENDING:
+            return StockRequestStatus.PENDING_APPROVAL
+        if approval.status == ApprovalStatus.REJECTED:
+            return StockRequestStatus.DECLINED
+
+        requested_total = sum(line.qty for line in self.lines.all())
+        transfers = [
+            t for t in self.fulfilling_transfers.all() if t.docstatus != DocStatus.CANCELLED
+        ]
+        received_total = sum(
+            tl.qty_received
+            for t in transfers
+            for tl in t.lines.all()
+            if tl.request_line_id is not None
+        )
+        if requested_total and received_total >= requested_total:
+            return StockRequestStatus.CLOSED
+        if hasattr(self, "closure"):
+            return StockRequestStatus.PARTLY_FULFILLED
+        if transfers:
+            return StockRequestStatus.BEING_FULFILLED
+        return StockRequestStatus.APPROVED
+
+    def __str__(self) -> str:
+        return self.doc_number or f"StockRequest(draft #{self.pk})"
+
+
+class StockRequestLine(TimeStampedModel):
+    """One SKU × qty a store is asking for.
+
+    No cost field, deliberately: the requesting store is asking for stock it
+    does not hold, and the one place this feature shows another location's
+    stock at all (the cross-location search that builds this line) is exactly
+    the place cost stays hidden (#74). What the ask is worth still sizes the
+    approval — ``outbound.maker_checker._line_totals`` prices an unpriced line
+    from the *fulfilling* store's own books, same as a scan-to-build transfer
+    plan prices from the source.
+    """
+
+    request = models.ForeignKey(StockRequest, on_delete=models.CASCADE, related_name="lines")
+    sku_code = models.CharField(max_length=64)
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    season = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField(help_text="Pieces asked for.")
+
+    class Meta:
+        db_table = "outbound_stock_request_line"
+        ordering = ["id"]
+
+    @property
+    def qty_fulfilled(self) -> int:
+        """Pieces actually received against this line so far — derived from
+        every non-cancelled fulfilling transfer's receipt, never stored."""
+        return sum(
+            tl.qty_received
+            for tl in self.transfer_lines.all()
+            if tl.transfer.docstatus != DocStatus.CANCELLED
+        )
+
+    def __str__(self) -> str:
+        return f"{self.sku_code} × {self.qty}"
+
+
+class StockRequestClosure(TimeStampedModel):
+    """The fulfilling store's "no more is coming" — the one signal a request's
+    derived status cannot read off a transfer.
+
+    Full coverage closes a request automatically; a partial one would
+    otherwise sit "being fulfilled" forever, since another transfer could
+    always follow. This is that decision, recorded once (one row, like a
+    transfer's receipt) rather than a column rewritten on a document the
+    kernel FSM may have already frozen.
+    """
+
+    request = models.OneToOneField(StockRequest, on_delete=models.CASCADE, related_name="closure")
+    closed_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="stock_request_closures",
+    )
+    closed_at = models.DateTimeField(auto_now_add=True)
+    note = models.CharField(max_length=240, blank=True, default="")
+
+    class Meta:
+        db_table = "outbound_stock_request_closure"
+        ordering = ["-closed_at"]
+
+    def __str__(self) -> str:
+        return f"Closure for {self.request}"
 
 
 # ---------------------------------------------------------------------------

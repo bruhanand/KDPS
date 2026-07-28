@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
-from masters.scoping import scope_by_entitlement, scope_by_store
+from masters.scoping import actionable_store_ids, scope_by_entitlement, scope_by_store
 from outbound.counting import (
     CountError,
     MovedMidCountError,
@@ -47,6 +47,7 @@ from outbound.models import (
     ReceiptStatus,
     ReturnToVendor,
     StockAdjustment,
+    StockRequest,
     Stocktake,
     StoreTransfer,
     TransferGapClosure,
@@ -67,6 +68,8 @@ from outbound.permissions import (
 from outbound.posting import (
     OutboundPostingError,
     amend_gap_closure,
+    close_stock_request,
+    fulfil_stock_request,
     mark_damaged,
     post_adjustment,
     post_gap_closure,
@@ -77,7 +80,7 @@ from outbound.posting import (
     post_writeoff,
     raise_gap_closure,
 )
-from outbound.scoping import scope_transfers
+from outbound.scoping import scope_stock_requests, scope_transfers
 from outbound.serializers import (
     ApplyVarianceInputSerializer,
     CountScanInputSerializer,
@@ -91,6 +94,10 @@ from outbound.serializers import (
     ReturnToVendorWriteSerializer,
     StockAdjustmentReadSerializer,
     StockAdjustmentWriteSerializer,
+    StockRequestCloseInputSerializer,
+    StockRequestFulfilInputSerializer,
+    StockRequestReadSerializer,
+    StockRequestWriteSerializer,
     StocktakeCreateSerializer,
     StocktakeReadSerializer,
     StoreTransferReadSerializer,
@@ -104,6 +111,7 @@ from outbound.serializers import (
     WriteOffWriteSerializer,
 )
 from outbound.transfer_pt import KDPS_COLUMNS
+from stockledger.views import _search_on_hand
 
 #: The people on a document's approval trail. Every maker-checker document's read
 #: shape joins all three, and a response that forgets one N+1s on names.
@@ -630,6 +638,194 @@ class ScanLookupView(APIView):
                 "available_qty": on_hand.net_qty,
             }
         )
+
+
+class CrossLocationStockSearchView(APIView):
+    """GET ?q=&store= — stock across *every* location, for a store building a
+    pull request (#74).
+
+    The one place in outbound a person sees stock that is not theirs: identity
+    and quantity are shown for every active store and warehouse — Anand's
+    ruling of 26 July says the search is the whole point — but cost, landed
+    value and margin show only for the caller's own location(s). Deliberately
+    not ``scope_by_entitlement``/``scope_by_store``, which would hide other
+    locations' rows entirely; only the money fields are gated here, per-row.
+    """
+
+    permission_classes = [IsAuthenticated]
+    MAX_LINES = 500
+
+    def get(self, request):
+        from masters.models import Sku
+        from stockledger.models import StockOnHand, merch_dims
+
+        qs = StockOnHand.objects.filter(net_qty__gt=0, store__is_active=True).select_related(
+            "store"
+        )
+        if store_code := request.query_params.get("store"):
+            qs = qs.filter(store__code=store_code)
+        qs = _search_on_hand(qs, search_term(request))
+        qs = qs.order_by("store__code", "sku_code")
+
+        rows = list(qs[: self.MAX_LINES])
+        mrps = dict(
+            Sku.objects.filter(barcode__in={r.sku_code for r in rows}).values_list(
+                "barcode", "mrp_paise"
+            )
+        )
+        # None (not a list) reads as "unrestricted" — a network role sees cost
+        # everywhere, same as it already does on every other stock screen.
+        own_ids = actionable_store_ids(request.user)
+
+        data = []
+        for row in rows:
+            is_own = own_ids is None or row.store_id in own_ids
+            entry = {
+                "store_code": row.store.code,
+                "store_name": row.store.name,
+                "sku_code": row.sku_code,
+                **merch_dims(row),
+                "qty": row.net_qty,
+                "is_own": is_own,
+            }
+            if is_own:
+                mrp = mrps.get(row.sku_code) or 0
+                entry["unit_cost_paise"] = row.net_value_paise // row.net_qty
+                entry["landed_value_paise"] = row.net_value_paise
+                entry["margin_paise"] = (mrp * row.net_qty) - row.net_value_paise if mrp else None
+            data.append(entry)
+
+        return Response(
+            {
+                "rows": data,
+                "truncated": qs.count() > len(rows),
+            }
+        )
+
+
+# ---------------------------------------------------------------------------
+# Stock requests — the pull side of a transfer (#74)
+# ---------------------------------------------------------------------------
+
+
+#: What a typed term looks through — the voucher number, and either end of the
+#: ask by code or by name (mirrors ``TRANSFER_SEARCH_FIELDS``).
+STOCK_REQUEST_SEARCH_FIELDS = (
+    "doc_number",
+    "requesting_store__code",
+    "requesting_store__name",
+    "fulfilling_store__code",
+    "fulfilling_store__name",
+)
+
+
+def _stock_requests(user: Any) -> Any:
+    """Stock requests the caller is an end of (#74), in the read shape."""
+    qs = StockRequest.objects.select_related(
+        "requesting_store", "fulfilling_store", "created_by"
+    ).prefetch_related(
+        "lines",
+        "fulfilling_transfers__source_store",
+        "fulfilling_transfers__destination_store",
+        "fulfilling_transfers__lines",
+        *APPROVAL_JOINS,
+    )
+    return scope_stock_requests(qs, user)
+
+
+class StockRequestListCreateView(generics.ListCreateAPIView):
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [CanWriteTransfer()]
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        qs = _stock_requests(self.request.user)
+        return text_filter(qs, search_term(self.request), STOCK_REQUEST_SEARCH_FIELDS)
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return StockRequestWriteSerializer
+        return StockRequestReadSerializer
+
+    def create(self, request, *args, **kwargs):
+        ser = StockRequestWriteSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        # A store may only ask on its own behalf — the same rule that gates
+        # every other outbound write.
+        enforce_store_scope(request.user, ser.validated_data["requesting_store"].id)
+        instance = ser.save()
+        return Response(
+            StockRequestReadSerializer(instance).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StockRequestDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = StockRequestReadSerializer
+
+    def get_queryset(self):
+        return _stock_requests(self.request.user)
+
+
+class StockRequestFulfilView(APIView):
+    """POST: build the draft transfer a request pre-fills.
+
+    Only the fulfilling store may act — the location whose stock this commits.
+    The transfer itself is a fresh draft; it still needs the Operations Head
+    before dispatch (#137), unchanged.
+    """
+
+    permission_classes = [CanWriteTransfer]
+
+    def post(self, request, pk):
+        try:
+            stock_request = StockRequest.objects.select_related(
+                "requesting_store", "fulfilling_store"
+            ).get(pk=pk)
+        except StockRequest.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, stock_request.fulfilling_store_id)
+
+        ser = StockRequestFulfilInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            transfer = fulfil_stock_request(
+                stock_request, ser.validated_data["lines"], user=request.user
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(StoreTransferReadSerializer(transfer).data, status=status.HTTP_201_CREATED)
+
+
+class StockRequestCloseView(APIView):
+    """POST: the fulfilling store says no more is coming — the request settles
+    as partly fulfilled rather than sitting "being fulfilled" forever."""
+
+    permission_classes = [CanWriteTransfer]
+
+    def post(self, request, pk):
+        try:
+            stock_request = StockRequest.objects.select_related("fulfilling_store").get(pk=pk)
+        except StockRequest.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, stock_request.fulfilling_store_id)
+
+        ser = StockRequestCloseInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+
+        try:
+            close_stock_request(stock_request, user=request.user, note=ser.validated_data["note"])
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        stock_request = _stock_requests(request.user).get(pk=pk)
+        return Response(StockRequestReadSerializer(stock_request).data)
 
 
 # ---------------------------------------------------------------------------

@@ -237,6 +237,7 @@ class ApprovalPolicy(TimeStampedModel):
         "gap_closure": "Transfer gap closure",
         "pt_reverse": "PT reversal",
         "return_to_brand": "Return to brand",
+        "stock_request": "Stock request",
         "transfer": "Transfer",
         "vflip": "V-flip",
         "writeoff": "Write-off",

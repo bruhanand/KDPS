@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         MarkDamaged,
         ReturnToVendor,
         StockAdjustment,
+        StockRequest,
         StoreTransfer,
         StoreTransferLine,
         TransferGapClosure,
@@ -1640,6 +1641,108 @@ def post_writeoff(wo: WriteOff, user=None) -> list[StockLedgerEntry]:
         )
 
     return entries
+
+
+# ---------------------------------------------------------------------------
+# 4b. Stock request fulfilment — the ask becoming a transfer draft (#74)
+# ---------------------------------------------------------------------------
+
+
+@transaction.atomic
+def fulfil_stock_request(
+    stock_request: StockRequest, lines: list[dict[str, int]], user: Any = None
+) -> StoreTransfer:
+    """Turn an approved ask into a draft transfer, pre-filled from its lines.
+
+    ``lines`` is ``[{"line_id": ..., "qty": ...}]`` — how much of *this* pass
+    the fulfilling store is committing, which may be less than what remains
+    requested (a partial fulfilment; another pass can follow later against the
+    same request). The new transfer is a bare plan — sku + qty only, like any
+    scan-to-build draft — because dims and cost come from the scan at
+    dispatch, never invented here.
+
+    Approving the request approves the ask, never the move: the transfer this
+    creates is still only a draft, and asks the Operations Head separately,
+    same as every other transfer (#137). Refuses unless the request itself has
+    cleared its own approval — ``require_approved``, at the posting layer so a
+    shell hits the same wall as the API.
+    """
+    from core.documents import DocStatus
+    from outbound.models import (
+        StockRequestStatus,
+        StoreTransfer,
+        StoreTransferLine,
+        TransferReason,
+        TransferType,
+    )
+
+    locked = type(stock_request).objects.select_for_update().get(pk=stock_request.pk)
+    require_approved(locked)  # unapproved requests cannot be fulfilled
+
+    if locked.status == StockRequestStatus.CLOSED:
+        raise OutboundPostingError("This request is already closed.")
+
+    by_id = {line.id: line for line in locked.lines.all()}
+    to_build: list[tuple[Any, int]] = []
+    for item in lines:
+        line = by_id.get(item["line_id"])
+        if line is None:
+            raise OutboundPostingError("That line is not on this request.")
+        qty = item["qty"]
+        remaining = line.qty - line.qty_fulfilled
+        if qty < 1 or qty > remaining:
+            raise OutboundPostingError(
+                f"{line.sku_code}: at most {remaining} left to fulfil on this line."
+            )
+        to_build.append((line, qty))
+    if not to_build:
+        raise OutboundPostingError("Select at least one line to fulfil.")
+
+    # Mint the request's own number on the first pass that commits to
+    # fulfilling it — not at raise, and not at approval, because until now
+    # nothing has actually happened yet that a Tally-facing number should mark.
+    if locked.docstatus == DocStatus.DRAFT:
+        locked.post()
+
+    transfer_type = (
+        TransferType.STORE_SPLIT
+        if locked.fulfilling_store.store_type == locked.fulfilling_store.StoreType.WAREHOUSE
+        else TransferType.INTER_STORE
+    )
+    transfer = StoreTransfer.objects.create(
+        source_store=locked.fulfilling_store,
+        destination_store=locked.requesting_store,
+        transfer_type=transfer_type,
+        reason=TransferReason.SISTER_STORE_REQUEST,
+        fulfils_request=locked,
+        created_by=user,
+    )
+    for line, qty in to_build:
+        StoreTransferLine.objects.create(
+            transfer=transfer, sku_code=line.sku_code, qty_planned=qty, request_line=line
+        )
+    request_document_approval(transfer, requested_by=user)
+    return transfer
+
+
+@transaction.atomic
+def close_stock_request(stock_request: StockRequest, *, user: Any = None, note: str = "") -> Any:
+    """The fulfilling store says no more is coming.
+
+    The only way a partly-covered request stops reading as "being fulfilled"
+    forever — see ``StockRequest.status``. Refuses on a request nothing has
+    been approved for yet (there is nothing to stop being fulfilled) and on one
+    already closed (one closure per request, like a transfer's one receipt).
+    """
+    from outbound.models import StockRequestClosure, StockRequestStatus
+
+    locked = type(stock_request).objects.select_for_update().get(pk=stock_request.pk)
+    require_approved(locked)
+    if locked.status == StockRequestStatus.CLOSED:
+        raise OutboundPostingError("This request is already closed.")
+    if hasattr(locked, "closure"):
+        raise OutboundPostingError("This request has already been closed.")
+    return StockRequestClosure.objects.create(request=locked, closed_by=user, note=note)
 
 
 # ---------------------------------------------------------------------------

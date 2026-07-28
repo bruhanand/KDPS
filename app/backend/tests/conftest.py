@@ -113,6 +113,9 @@ def _restore_migration_seeded_policy_rows(
         import_module("approvals.migrations.0004_seed_approval_policies").seed_policies(
             django_apps, None
         )
+        import_module("approvals.migrations.0005_seed_stock_request_policy").seed_policy(
+            django_apps, None
+        )
     yield
 
 

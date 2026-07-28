@@ -46,3 +46,15 @@ def scope_transfers(qs: Any, user: Any) -> Any:
     show every store" (ADR-0003). #110 replaces that interim with cross-by-brand.
     """
     return scope_by_store_predicate(qs, user, transfer_at_stores)
+
+
+def stock_request_at_stores(store_ids: list[int]) -> Q:
+    """A stock request belongs to **both ends of the ask** — the store that
+    raised it and the store answering it — same shape as a transfer, and for
+    the same reason (#74)."""
+    return Q(requesting_store_id__in=store_ids) | Q(fulfilling_store_id__in=store_ids)
+
+
+def scope_stock_requests(qs: Any, user: Any) -> Any:
+    """`scope_transfers`'s rule, for a stock request's two ends."""
+    return scope_by_store_predicate(qs, user, stock_request_at_stores)
