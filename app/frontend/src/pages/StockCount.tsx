@@ -294,7 +294,7 @@ export function StockCountListPage() {
 export function StockCountDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { data: take, loading } = useDoc<StocktakeT>(`/outbound/stocktakes/${id}`);
+  const { data: take, loading, error: loadError } = useDoc<StocktakeT>(`/outbound/stocktakes/${id}`);
   const writable = canWriteStockCount(user);
 
   const [scope, setScope] = useState("store");
@@ -308,7 +308,29 @@ export function StockCountDetailPage() {
   const [recountQty, setRecountQty] = useState("");
   const [recountReason, setRecountReason] = useState("");
 
-  if (loading || !take) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+  if (loading) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+
+  // A count at somebody else's store answers 404 by design — knowing the id is
+  // not a way in, and the answer must not confirm the count is real (ADR-0003).
+  // Say so, rather than spinning: a screen still loading a document the server
+  // has already refused reads as a broken page, and the person typing the URL
+  // waits for something that is never coming.
+  if (loadError || !take) {
+    return (
+      <div className="page-pad" data-testid="count-not-found">
+        <Link to="/stock-count" className="btn" style={{ marginBottom: 16 }}>
+          <ArrowLeft size={15} /> Stock counts
+        </Link>
+        <div className="card section-card">
+          <p className="eyebrow">Not found</p>
+          <h3 className="h3">There is no count here for you</h3>
+          <p className="lead">
+            Either this count does not exist, or it belongs to a location you do not cover.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const submitted = take.sessions.filter((s) => s.status !== "open");
   const awaiting = variance?.awaiting_recount ?? [];
@@ -444,7 +466,14 @@ export function StockCountDetailPage() {
         <StatusPill status={take.status} />
       </div>
 
-      {error && <div className="login-error" style={{ maxWidth: 560 }} data-testid="count-detail-error">{error}</div>}
+      {/* Shown here only while the variance is not on screen. Once it is, the
+        * page is long enough to scroll and the buttons that fail are all down
+        * beside the report, so the same message is rendered there instead — a
+        * refusal a screen-height away from the button that caused it reads as
+        * nothing happening at all. */}
+      {error && !variance && (
+        <div className="login-error" style={{ maxWidth: 560 }} data-testid="count-detail-error">{error}</div>
+      )}
 
       {writable && take.status === "open" && (
         <div className="card section-card" data-testid="new-session-card">
@@ -658,6 +687,16 @@ export function StockCountDetailPage() {
                   </tbody>
                 </table>
               </div>
+
+              {error && (
+                <div
+                  className="login-error"
+                  style={{ maxWidth: 560, marginTop: 14 }}
+                  data-testid="count-variance-error"
+                >
+                  {error}
+                </div>
+              )}
 
               {canApply && (
                 <button
