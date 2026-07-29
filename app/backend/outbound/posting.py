@@ -1690,19 +1690,22 @@ def fulfil_stock_request(
     # Running total per line across *this* payload — two entries for the same
     # line_id in one call must share the same "left to fulfil" ceiling, or a
     # duplicated line_id would let one call over-commit past what remains.
-    committed: dict[int, int] = {}
+    claimed_this_call: dict[int, int] = {}
     for item in lines:
         line = by_id.get(item["line_id"])
         if line is None:
             raise OutboundPostingError("That line is not on this request.")
         qty = item["qty"]
-        already_this_call = committed.get(line.id, 0)
-        remaining = line.qty - line.qty_fulfilled - already_this_call
+        already_this_call = claimed_this_call.get(line.id, 0)
+        # ``qty_committed``, not ``qty_fulfilled`` — an earlier pass's transfer
+        # may still be an unreceived draft, and its promise must count here or
+        # a second pass made before the first is received could over-commit.
+        remaining = line.qty - line.qty_committed - already_this_call
         if qty < 1 or qty > remaining:
             raise OutboundPostingError(
                 f"{line.sku_code}: at most {remaining} left to fulfil on this line."
             )
-        committed[line.id] = already_this_call + qty
+        claimed_this_call[line.id] = already_this_call + qty
         to_build.append((line, qty))
     if not to_build:
         raise OutboundPostingError("Select at least one line to fulfil.")

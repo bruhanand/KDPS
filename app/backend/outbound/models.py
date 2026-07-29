@@ -567,6 +567,19 @@ class StockRequestLine(TimeStampedModel):
             if tl.transfer.docstatus != DocStatus.CANCELLED
         )
 
+    @property
+    def qty_committed(self) -> int:
+        """Pieces already promised on some still-standing fulfilling transfer,
+        dispatched or not — the ceiling a further fulfil call must respect.
+        ``qty_fulfilled`` only counts what has actually arrived, so a second
+        pass made before the first transfer is received would otherwise not
+        see the first pass's promise and could commit past what was asked."""
+        return sum(
+            tl.qty_planned or 0
+            for tl in self.transfer_lines.all()
+            if tl.transfer.docstatus != DocStatus.CANCELLED
+        )
+
     def __str__(self) -> str:
         return f"{self.sku_code} × {self.qty}"
 

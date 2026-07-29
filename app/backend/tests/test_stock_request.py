@@ -342,6 +342,24 @@ def test_a_duplicated_line_id_cannot_double_commit_past_what_remains(rig):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_a_second_pass_cannot_over_commit_before_the_first_is_received(rig):
+    """The first fulfil's transfer is still an unreceived draft — its promise
+    must count against what a second, separate pass may still claim, or two
+    passes together could commit more than the request ever asked for (#74)."""
+    g = rig
+    data = _raise(g, qty=6)
+    _decide("stock_request", data["id"], g["ops"])
+    line_id = _line_id(data)
+
+    first = _fulfil(g, data["id"], [{"line_id": line_id, "qty": 5}])
+    assert first.status_code == 201, first.data
+
+    second = _fulfil(g, data["id"], [{"line_id": line_id, "qty": 5}])
+    assert second.status_code == 400
+    assert "at most 1 left" in str(second.data)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_full_receive_closes_automatically(rig):
     g = rig
     data = _raise(g, qty=6)

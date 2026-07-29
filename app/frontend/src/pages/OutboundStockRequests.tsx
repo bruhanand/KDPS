@@ -57,6 +57,7 @@ interface StockRequestLineT {
   hsn: string;
   qty: number;
   qty_fulfilled: number;
+  qty_committed: number;
 }
 
 interface FulfillingTransferT {
@@ -471,7 +472,10 @@ export function StockRequestNewPage() {
 // ---------------------------------------------------------------------------
 
 function FulfilPanel({ r, onDone }: { r: StockRequestT; onDone: () => void }) {
-  const remaining = r.lines.map((l) => ({ ...l, left: l.qty - l.qty_fulfilled })).filter((l) => l.left > 0);
+  // qty_committed, not qty_fulfilled: an earlier pass's transfer may still be
+  // an unreceived draft, and its promise must count here too, or the form
+  // would offer a quantity the server (correctly) refuses.
+  const remaining = r.lines.map((l) => ({ ...l, left: l.qty - l.qty_committed })).filter((l) => l.left > 0);
   const [qtys, setQtys] = useState<Record<number, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

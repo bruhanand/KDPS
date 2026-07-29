@@ -1171,6 +1171,7 @@ class ApplyVarianceInputSerializer(serializers.Serializer):
 
 class StockRequestLineReadSerializer(serializers.ModelSerializer):
     qty_fulfilled = serializers.IntegerField(read_only=True)
+    qty_committed = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = StockRequestLine
@@ -1186,6 +1187,7 @@ class StockRequestLineReadSerializer(serializers.ModelSerializer):
             "hsn",
             "qty",
             "qty_fulfilled",
+            "qty_committed",
         ]
 
 
