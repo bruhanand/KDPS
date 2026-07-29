@@ -108,7 +108,7 @@
     "hrms": "operate",
     "money": "operate",
     "offers_price": "view",
-    "receive_goods": "operate",
+    "receive_goods": "approve",
     "reports": "view",
     "return_to_brand": "operate",
     "setup": "operate",

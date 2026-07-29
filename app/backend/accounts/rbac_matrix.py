@@ -18,8 +18,12 @@ trained admin retunes access by editing a Role (data), never by shipping code
 (Rule 12); this table just says where every fresh install starts.
 
 Ratified corrections to the client's original Sheet-1 matrix, baked in here:
-  · the store person gets receive-at-own-store + PT-making for direct receipts
-    (Sheet 1 said NO on GRN; the booking-less direct-delivery decision wins);
+  · the store person gets receive-at-own-store for direct receipts (Sheet 1
+    said NO on GRN; the booking-less direct-delivery decision wins). PT-making
+    for those receipts was granted here too and withdrawn by #119: Anand ruled
+    PT-making is warehouse work, so the warehouse rose one rung on this same
+    section instead, and the store's cell was retitled to what it actually
+    keeps - the bill upload;
   · Admin gets **no** Money access - Sheet-1 note (2), kept deliberately;
   · the store person **views** bookings (Sheet 1 said "No"). A store plans space
     and staff against goods headed its way, so the section opens read-only:
@@ -88,7 +92,10 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         # store reads the bookings headed to it so it can plan space and staff.
         # Read-only - placing one stays HO's and the brand manager's job.
         "booking": (CAP_VIEW, "View bookings for own store"),
-        "receive_goods": (CAP_OPERATE, "Receive + PT (own store)"),
+        # PT making moved to the warehouse (#119, Anand's ruling of 25 Jul
+        # 2026): a store may still receive at its own store and upload the
+        # brand's bill, but it may not author or upload a PT.
+        "receive_goods": (CAP_OPERATE, "Receive + bill upload (own store)"),
         "transfer": (CAP_OPERATE, "Request / Send / Receive"),
         "stock_count": (CAP_OPERATE, "Count own store"),
         "return_to_brand": (CAP_OPERATE, "Mark damage only"),
@@ -106,7 +113,11 @@ MATRIX: dict[str, dict[str, tuple[str, str]]] = {
         "home": (CAP_VIEW, "Warehouse"),
         "sell": (CAP_NONE, "No"),
         "booking": (CAP_OPERATE, "Draft"),
-        "receive_goods": (CAP_OPERATE, "Create (GRN, PT)"),
+        # Raised one rung above the store (#119): PT-making now needs
+        # `approve` on this section, and warehouse is the only operating role
+        # that reaches it. Checked against every `receive_goods` gate in the
+        # codebase - this grants the warehouse nothing beyond PT-making.
+        "receive_goods": (CAP_APPROVE, "Create (GRN, PT)"),
         "transfer": (CAP_OPERATE, "Execute (distribute, dispatch)"),
         "stock_count": (CAP_OPERATE, "Count warehouse"),
         "return_to_brand": (CAP_OPERATE, "Create & execute"),

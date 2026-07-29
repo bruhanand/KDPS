@@ -169,6 +169,34 @@ def test_brand_pt_link_to_missing_grn_is_404(world, vocab, warehouse_client):
     assert r.status_code == 404
 
 
+def test_store_cannot_make_a_pt_file_not_even_grn_less(world, vocab, store_client):
+    """PT making left the store's Receive Goods cell for the warehouse's (#119).
+    Refused at the API, whether or not the upload names a GRN — a store person
+    must not route around the gate by leaving the link off."""
+    grn = _grn(world, lines=LINES)
+    linked = _upload_brand_pt(store_client, grn.id)
+    assert linked.status_code == 403, linked.content
+    assert not PtFile.objects.filter(grn=grn).exists()
+
+    grnless = _upload_brand_pt(store_client)
+    assert grnless.status_code == 403, grnless.content
+    assert not PtFile.objects.exists()
+
+
+def test_store_can_still_read_a_pt_file_it_made_before_the_rung_moved(
+    world, vocab, warehouse_client, store_client
+):
+    """Reading a PT and making one are different rights (#119): only making
+    moved. A PT already sitting against the store's own arrival stays open to
+    read even though the store can no longer create a new one."""
+    grn = _grn(world, lines=LINES)
+    pt_id = _upload_brand_pt(warehouse_client, grn.id).json()["id"]
+
+    r = store_client.get(f"/api/ptmapper/files/{pt_id}")
+
+    assert r.status_code == 200, r.content
+
+
 # ---------------------------------------------------------------- from-grn seeding
 
 

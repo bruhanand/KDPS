@@ -86,6 +86,15 @@ export interface NavItem {
    *  itself — e.g. the ledgers are `money: manage`, the rung only Owner and
    *  Accounts hold, so "Expenses only" roles keep the section but not the books. */
   minCapability?: Capability;
+  /** Gate for a URL strictly *under* this item's own path, when it differs from
+   *  `minCapability` — a document a caller may still open even though the
+   *  list/create screen that owns its URL prefix now needs a higher rung. PT
+   *  making rose to `approve` (#119) while reading a PT already made stays at
+   *  whatever rung holding the section at all requires — reading and making are
+   *  different rights, and only making moved. Undefined ⇒ a child shares the
+   *  item's own `minCapability`, the older and still-default behaviour (a
+   *  booking document, for instance, has no gate of its own to differ). */
+  childMinCapability?: Capability;
   /** Not built yet — routed to the planned page, which says what will live here.
    *  The promise itself is in `pages/plannedPages.ts` (#89), keyed by this
    *  item's path: navigation says what a section contains, that manifest says
@@ -158,7 +167,12 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Receive (GRN)", to: "/receive" },
       { label: "Upload Bill", to: "/receive/upload-bill", planned: true },
-      { label: "PT Files", to: "/receive/pt" },
+      // PT making moved to the warehouse's rung (#119): this line - the
+      // Mapper-upload and from-GRN authoring workspace - needs
+      // `receive_goods: approve`, so it drops off the store's sidebar on its
+      // own. A PT already made stays open to read (`/receive/pt/:id`, reached
+      // from its GRN) at whatever rung holding the section requires.
+      { label: "PT Files", to: "/receive/pt", minCapability: "approve", childMinCapability: "view" },
     ],
   },
   {
