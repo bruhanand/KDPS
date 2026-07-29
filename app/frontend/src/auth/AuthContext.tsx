@@ -54,6 +54,10 @@ export interface User {
   // New RBAC contract (may be absent when talking to an older backend).
   sections?: NavSection[];
   capabilities?: Record<string, NavSection["capability"]>;
+  /** Stored actor policies this person satisfies — the questions the capability
+   *  ladder cannot ask, because two roles can share a rung of one section and
+   *  still differ on a single action inside it (#75). */
+  actions?: string[];
   business_units?: Store[];
   all_business_units?: boolean;
   // What the top-bar switcher offers (issue #88). A brand manager works across

@@ -22,6 +22,9 @@ BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "").rstrip("/")
 ADMIN_CREDS = {"username": "admin", "password": "Admin@123"}
 OWNER_CREDS = {"username": "owner", "password": SEED_OWNER_PASSWORD}
 CASHIER_CREDS = {"username": "deo.cashier", "password": "Store@123"}  # BUG FIX 2
+# A return needs a second person, and the maker may never be the checker (#70).
+# The brand manager is the in-band approver for both brands below.
+BRAND_MANAGER_CREDS = {"username": "brand1", "password": "Brand@123"}
 
 # Store/Vendor/Brand IDs from seed data
 DEO_STORE_ID = 1
@@ -30,11 +33,6 @@ BANKA_STORE_ID = 5
 ABFRL_VENDOR_ID = 1
 PETER_ENGLAND_BRAND_ID = 4  # owned
 LOUIS_PHILIPPE_BRAND_ID = 1  # brand_owned (SOR)
-
-# SKU costs from seed data (paise)
-PE_FRM_WHT_40_COST = 85000
-PE_CHK_BLU_42_COST = 78000
-LP_POLO_BLK_L_COST = 140000
 
 
 def get_auth_token(username: str, password: str) -> str:
@@ -53,6 +51,29 @@ def get_auth_token(username: str, password: str) -> str:
 def auth_header(token: str) -> dict:
     """Return authorization header."""
     return {"Authorization": f"Bearer {token}"}
+
+
+def approve_return(rtv_id: int) -> None:
+    """Clear a return through the inbox as the brand manager, so it can post.
+
+    Since #75 a return is born asking for approval and `post_rtv` refuses an
+    uncleared one, so every live RTV test has to pass through the inbox the way
+    a person would.
+    """
+    headers = auth_header(get_auth_token(**BRAND_MANAGER_CREDS))
+    inbox = requests.get(f"{BASE_URL}/api/approvals", headers=headers, timeout=30).json()
+    rows = inbox.get("results", inbox) if isinstance(inbox, dict) else inbox
+    match = next(
+        (a for a in rows if a["kind"] == "return_to_brand" and a["object_id"] == rtv_id), None
+    )
+    assert match is not None, f"no approval waiting for RTV {rtv_id}: {rows}"
+    r = requests.post(
+        f"{BASE_URL}/api/approvals/{match['id']}/decide",
+        headers=headers,
+        json={"action": "approve"},
+        timeout=30,
+    )
+    assert r.status_code == 200, f"approve failed: {r.status_code} - {r.text}"
 
 
 class TestBugFix2CashierLogin:
@@ -216,22 +237,16 @@ class TestBugFix1OwnedRTVVendorSubledger:
             "store": DEO_STORE_ID,
             "vendor": ABFRL_VENDOR_ID,
             "brand": PETER_ENGLAND_BRAND_ID,  # owned brand
-            "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [
-                {
-                    "sku_code": "PE-FRM-WHT-40",
-                    "design": "Formal Shirt",
-                    "color": "White",
-                    "size": "40",
-                    "brand": "Peter England",
-                    "season": "SS26",
-                    "item": "shirt",
-                    "hsn": "6205",
-                    "qty": 1,
-                    "unit_cost_paise": PE_FRM_WHT_40_COST,
-                },
-            ],
+            # Season-end, because that is the source that draws on the
+            # free-to-sell stock `require_seed_stock` has just guaranteed. A
+            # defective return would need a confirmed damage flag first (#75).
+            "return_type": "seasonal",
+            # The brand collects: a direct route, so this test measures the GL
+            # rather than the consolidated route's transfer rule (#75).
+            "logistics_route": "store_pickup",
+            # Barcodes and quantities only. Since #75 the server prices the line
+            # off the books; a caller cannot send a cost (#103).
+            "scans": [{"barcode": "PE-FRM-WHT-40", "qty": 1}],
         }
 
         r = requests.post(
@@ -241,6 +256,9 @@ class TestBugFix1OwnedRTVVendorSubledger:
         rtv_data = r.json()
         rtv_id = rtv_data["id"]
         print(f"✓ Created RTV draft: id={rtv_id}")
+
+        # Step 2b: A second person clears it — the maker may never be the checker.
+        approve_return(rtv_id)
 
         # Step 3: Submit the RTV
         r = requests.post(
@@ -308,22 +326,9 @@ class TestBugFix1bSORRTVNoGL:
             "store": DEO_STORE_ID,
             "vendor": ABFRL_VENDOR_ID,
             "brand": LOUIS_PHILIPPE_BRAND_ID,  # brand_owned (SOR)
-            "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [
-                {
-                    "sku_code": "LP-POLO-BLK-L",
-                    "design": "Classic Polo",
-                    "color": "Black",
-                    "size": "L",
-                    "brand": "Louis Philippe",
-                    "season": "SS26",
-                    "item": "polo",
-                    "hsn": "6105",
-                    "qty": 1,
-                    "unit_cost_paise": LP_POLO_BLK_L_COST,
-                },
-            ],
+            "return_type": "seasonal",
+            "logistics_route": "store_pickup",
+            "scans": [{"barcode": "LP-POLO-BLK-L", "qty": 1}],
         }
 
         r = requests.post(
@@ -333,6 +338,8 @@ class TestBugFix1bSORRTVNoGL:
         rtv_data = r.json()
         rtv_id = rtv_data["id"]
         print(f"✓ Created SOR RTV draft: id={rtv_id}")
+
+        approve_return(rtv_id)
 
         # Step 3: Submit the RTV
         r = requests.post(

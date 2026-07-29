@@ -30,7 +30,7 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
-import { canWriteReturnToBrand } from "../lib/outbound-rbac";
+import { canCreateReturnToBrand, canWriteReturnToBrand } from "../lib/outbound-rbac";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import { ListSearchBar } from "../components/SearchBox";
@@ -210,7 +210,10 @@ export function RTVListPage() {
   const tab = params.get("type") === "seasonal" ? "seasonal" : "defective";
   const [q, setQ] = useState("");
   const { data, loading } = useList<RTVT>("/outbound/rtvs", { return_type: tab, q });
-  const writable = canWriteReturnToBrand(user);
+  // Reaching this section is not the same as being allowed to send stock back:
+  // a store person opens the list and marks damage, and the warehouse is the
+  // one who raises the return (#75).
+  const mayCreate = canCreateReturnToBrand(user);
 
   function setTab(next: string) {
     setParams((p) => { p.set("type", next); return p; });
@@ -220,7 +223,7 @@ export function RTVListPage() {
     <div className="page-pad">
       <PageHeader
         actions={
-          writable && (
+          mayCreate && (
             <Link className="btn btn-cta" to="/return-to-brand/new" data-testid="new-rtv-btn">
               <Plus size={16} /> New return
             </Link>
@@ -496,6 +499,24 @@ export function RTVNewPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Reached by typing the address as well as by the button, so the refusal is
+  // said here too rather than only after a whole return has been scanned.
+  if (!canCreateReturnToBrand(user)) {
+    return (
+      <div className="page-pad">
+        <Link to="/return-to-brand" className="btn" style={{ marginBottom: 16 }} data-testid="rtv-back-link">
+          <ArrowLeft size={15} /> Returns
+        </Link>
+        <div className="card section-card" data-testid="rtv-new-denied">
+          <h1 className="h1 h2-rust">New Return to Brand</h1>
+          <p className="lead">
+            A store may only mark damage; the warehouse creates and executes returns.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -795,7 +816,8 @@ export function RTVDetailPage() {
   const totalQty = r.lines.reduce((s, l) => s + l.qty, 0);
   // A draft cannot post until a second person has cleared it — the server
   // enforces it, the button only reflects it honestly.
-  const canSubmit = r.docstatus === 0 && writable && isCleared(r.approval);
+  const canSubmit =
+    r.docstatus === 0 && canCreateReturnToBrand(user) && isCleared(r.approval);
 
   async function handleSubmit() {
     setError("");
