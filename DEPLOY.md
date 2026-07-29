@@ -80,6 +80,20 @@ a live `Lookup`. Both commands are idempotent and read-mostly, safe to re-run.
 > tab (or locally against the same `DATABASE_URL`) whenever you want to fold the
 > week's corrections back in. Nothing else depends on the cron.
 
+## Alerts (in-transit aging + return-window 30/15/7)
+
+The `render.yaml` includes a **`kdps-alerts-check` cron** that runs once a day:
+
+```
+python manage.py check_alerts   # in-transit aging + return-window checks → alerts table
+```
+
+Both thresholds (aging days; the 30/15/7 return-window days) are `AlertPolicy`
+rows, retunable in the admin without a release (Rule 12). The command is
+idempotent — safe to re-run the same day, or catch up after a missed one — so
+on the **free tier**, run it by hand from the API service **Shell** tab (or
+locally against the same `DATABASE_URL`) whenever you want alerts current.
+
 ## Not done yet (before real use)
 
 - Cloud CI (`.github/workflows/ci.yml`) gates only **pytest + the frontend build**; `ruff` / `mypy` strict / `import-linter` run only in pre-commit + local `npm run ci` (not in the cloud), so this alpha carries ~54 `ruff` findings + un-run `mypy` strict. Green cloud CI ≠ green `npm run ci`.

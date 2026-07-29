@@ -103,6 +103,35 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
 
+  # --- Alerts cron -------------------------------------------------------------
+  # Daily: in-transit aging + return-window 30/15/7, synced into one shared
+  # alerts table Home's Alerts surface reads (#77). Idempotent — safe to re-run.
+  # Same free-tier caveat as the PT-mapper cron above: run by hand if not on a
+  # paid Render plan (see DEPLOY.md).
+  - type: cron
+    name: kdps-alerts-check
+    runtime: python
+    branch: client-testing     # same code line as the alpha it checks
+    plan: starter
+    schedule: "30 20 * * *"    # 20:30 UTC daily (~02:00 IST, after the PT-mapper cron)
+    region: singapore
+    rootDir: app/backend
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run python manage.py check_alerts
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true    # a management command signs nothing — any secret is fine
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kdps-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+
   # --- React PWA (static) ----------------------------------------------------
   - type: web
     name: kdps-erp-web

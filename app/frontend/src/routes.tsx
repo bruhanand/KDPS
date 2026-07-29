@@ -24,6 +24,7 @@ import { StockCountListPage, StockCountDetailPage } from "./pages/StockCount";
 import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/OutboundWriteoffs";
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
+import { AlertsPage } from "./pages/Alerts";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
 import VendorLedger from "./pages/VendorLedger";
@@ -38,6 +39,8 @@ const BUILT: Screen[] = [
   { id: "home", path: "/", element: <Home /> },
   // One approvals inbox for the whole system, listed once (#70, #87)
   { id: "approvals", path: "/approvals", element: <ApprovalsPage /> },
+  // Home's Alerts surface — in-transit aging + return-window 30/15/7 (#77)
+  { id: "alerts", path: "/alerts", element: <AlertsPage /> },
   // Booking
   { id: "booking-list", path: "/booking", element: <BookingsPage /> },
   { id: "booking-new", path: "/booking/new", element: <BookingNewPage /> },

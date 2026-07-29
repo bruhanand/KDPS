@@ -339,6 +339,7 @@ export function Home() {
   const [onHand, setOnHand] = useState<OnHandSummary | null>(null);
   const [payablePaise, setPayablePaise] = useState<number | null>(null);
   const [pendingReceipts, setPendingReceipts] = useState<number | null>(null);
+  const [alertCount, setAlertCount] = useState<number | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [dragCard, setDragCard] = useState<string | null>(null);
 
@@ -355,6 +356,7 @@ export function Home() {
     api.get("/stockledger/on-hand").then((r) => setOnHand(r.data.summary)).catch(() => undefined);
     api.get("/inbound/queue").then((r) => setQueueCounts(r.data.counts)).catch(() => undefined);
     api.get("/inbound/pending").then((r) => setPendingReceipts(r.data?.length ?? 0)).catch(() => undefined);
+    api.get("/alerts").then((r) => setAlertCount(r.data?.length ?? 0)).catch(() => undefined);
     if (canSeeMoney) {
       api
         .get("/finledger/vendor/ageing")
@@ -412,11 +414,11 @@ export function Home() {
   const exceptionsCard: DashboardCard = {
     id: "exceptions",
     icon: <AlertTriangle size={18} />,
-    label: "Open exceptions",
-    value: "—",
-    sub: "The alerts inbox is not built yet",
-    purpose: "In-transit ageing, closing return windows and till exceptions, once Alerts is built.",
-    state: "unbuilt",
+    label: "Alerts",
+    value: num(alertCount),
+    sub: "Stock stuck in transit, and return windows closing",
+    purpose: "In-transit ageing and closing return windows, raised by the daily alerts job. Till and fraud alerts arrive once billing is live.",
+    state: "live",
     to: "/alerts",
   };
 

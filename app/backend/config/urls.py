@@ -58,6 +58,7 @@ urlpatterns = [
     path("api/finledger/", include("finledger.urls")),
     path("api/outbound/", include("outbound.urls")),
     path("api/", include("approvals.urls")),
+    path("api/", include("alerts.urls")),
     path("api/", include("search.urls")),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),

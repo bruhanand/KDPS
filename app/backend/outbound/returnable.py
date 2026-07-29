@@ -40,6 +40,7 @@ Two things the design corpus left open, decided here and marked so:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -372,6 +373,38 @@ def _season_end_rows(brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date
         )
 
 
+def _pool(
+    brand: Brand,
+    store_id: int | None,
+    gate: Callable[[Any, str], Any],
+) -> list[PoolRow]:
+    """Both sources, windowed and priced — the shared body every reader of the
+    pool goes through. ``gate`` is the only thing that differs between a
+    request scoped to a signed-in user and a system job with none."""
+    if not brand.takes_returns:
+        return []
+
+    today = timezone.localdate()
+    quarantine = gate(
+        QuarantineStock.objects.filter(qty__gt=0, brand__iexact=brand.name).select_related("store"),
+        "store_id",
+    )
+    season_end = gate(
+        StockOnHand.objects.filter(net_qty__gt=0, brand__iexact=brand.name).select_related("store"),
+        "store_id",
+    )
+    if store_id is not None:
+        quarantine = quarantine.filter(store_id=store_id)
+        season_end = season_end.filter(store_id=store_id)
+
+    visible = [store_id] if store_id is not None else None
+    arrivals = _arrival_dates(brand, visible)
+    return [
+        *_quarantine_rows(quarantine, arrivals),
+        *_season_end_rows(brand, season_end, arrivals, today),
+    ]
+
+
 def returnable_pool(
     user: Any, brand: Brand, store_id: int | None = None, *, acting: bool = False
 ) -> list[PoolRow]:
@@ -392,31 +425,20 @@ def returnable_pool(
     a return document leaves from a single store, so the scan validation behind
     it is always asked about one.
     """
-    if not brand.takes_returns:
-        return []
-
     gate = scope_by_entitlement_or_brand if acting else scope_by_store_and_brand
-    today = timezone.localdate()
-    quarantine = gate(
-        QuarantineStock.objects.filter(qty__gt=0, brand__iexact=brand.name).select_related("store"),
-        user,
-        "store_id",
-    )
-    season_end = gate(
-        StockOnHand.objects.filter(net_qty__gt=0, brand__iexact=brand.name).select_related("store"),
-        user,
-        "store_id",
-    )
-    if store_id is not None:
-        quarantine = quarantine.filter(store_id=store_id)
-        season_end = season_end.filter(store_id=store_id)
+    return _pool(brand, store_id, lambda qs, field: gate(qs, user, field))
 
-    visible = [store_id] if store_id is not None else None
-    arrivals = _arrival_dates(brand, visible)
-    return [
-        *_quarantine_rows(quarantine, arrivals),
-        *_season_end_rows(brand, season_end, arrivals, today),
-    ]
+
+def returnable_pool_all(brand: Brand, store_id: int | None = None) -> list[PoolRow]:
+    """Every returnable holding for this brand, network-wide — the same two
+    sources and the same window math as ``returnable_pool``, unscoped.
+
+    For a system reader with no signed-in caller to gate by — today, the alerts
+    job (#77), which has to ask "which windows are closing anywhere" rather than
+    "which windows can this person see". Never used to answer a request: a
+    request always has a user, and must always go through ``returnable_pool``.
+    """
+    return _pool(brand, store_id, lambda qs, field: qs)
 
 
 # ---------------------------------------------------------------------------

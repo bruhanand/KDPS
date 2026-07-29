@@ -68,21 +68,6 @@ export interface PlannedScreen {
 }
 
 export const PLANNED_PAGES: Record<string, PlannedScreen> = {
-  // ---- Home ---------------------------------------------------------------
-  "/alerts": {
-    summary: "One list of what needs attention today, so nobody has to go looking for trouble.",
-    contains: [
-      "Stock sitting in transit longer than it should",
-      "Return windows closing — 30, 15 and 7 days before an SOR brand's deadline",
-      "Exception and fraud alerts",
-      "The exceptions the old exception inbox used to collect",
-    ],
-    notes: [
-      "In-transit and return-deadline alerts can be built on the ledgers the system already keeps. Fraud and till alerts read sale data, so they arrive once billing is live.",
-    ],
-    module: ANALYTICS,
-  },
-
   // ---- Sell ---------------------------------------------------------------
   "/sell": {
     summary: "The counter screen — scan, bill, take the money.",
