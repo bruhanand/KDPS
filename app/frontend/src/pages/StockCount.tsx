@@ -23,6 +23,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
+import { ADJUSTMENT_REASONS } from "../lib/adjustment-reasons";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
@@ -69,6 +70,19 @@ interface StocktakeT {
   sessions: SessionT[];
 }
 
+interface RecountT {
+  counted_qty: number;
+  first_counted_qty: number;
+  reason: string;
+  reason_label: string;
+  recounted_by_name: string;
+  recounted_at: string;
+  /** True when a counter submitted a session after this recount was given, so
+   *  it no longer answers the merge it was taken against. The piece goes back in
+   *  the queue and the old answer becomes history. */
+  stale: boolean;
+}
+
 interface VarianceLineT {
   sku_code: string;
   design: string;
@@ -76,6 +90,9 @@ interface VarianceLineT {
   size: string;
   brand: string;
   book_qty: number;
+  /** What the counting sessions merged to, before any recount. */
+  first_counted_qty: number;
+  /** The count that stands — the recount where there is one. */
   counted_qty: number;
   adj_qty: number;
   live_book_qty: number;
@@ -83,6 +100,12 @@ interface VarianceLineT {
   unit_cost_paise: number;
   variance_paise: number;
   cost_known: boolean;
+  above_tolerance: boolean;
+  needs_recount: boolean;
+  /** False when this user counted the piece — the floor rule, so the button
+   *  that would be refused is never offered. The server refuses it regardless. */
+  may_recount: boolean;
+  recount: RecountT | null;
 }
 
 interface VarianceT {
@@ -90,6 +113,8 @@ interface VarianceT {
   net_pieces: number;
   net_variance_paise: number;
   unpriced: string[];
+  awaiting_recount: string[];
+  recount_tolerance_paise: number;
 }
 
 interface StoreT { id: number; code: string; name: string; }
@@ -269,7 +294,7 @@ export function StockCountListPage() {
 export function StockCountDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
-  const { data: take, loading } = useDoc<StocktakeT>(`/outbound/stocktakes/${id}`);
+  const { data: take, loading, error: loadError } = useDoc<StocktakeT>(`/outbound/stocktakes/${id}`);
   const writable = canWriteStockCount(user);
 
   const [scope, setScope] = useState("store");
@@ -279,11 +304,38 @@ export function StockCountDetailPage() {
   const [error, setError] = useState("");
   const [variance, setVariance] = useState<VarianceT | null>(null);
   const [movedAsk, setMovedAsk] = useState<VarianceLineT[] | null>(null);
+  const [recountAsk, setRecountAsk] = useState<VarianceLineT | null>(null);
+  const [recountQty, setRecountQty] = useState("");
+  const [recountReason, setRecountReason] = useState("");
 
-  if (loading || !take) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+  if (loading) return <div className="page-pad"><p className="lead">Loading…</p></div>;
+
+  // A count at somebody else's store answers 404 by design — knowing the id is
+  // not a way in, and the answer must not confirm the count is real (ADR-0003).
+  // Say so, rather than spinning: a screen still loading a document the server
+  // has already refused reads as a broken page, and the person typing the URL
+  // waits for something that is never coming.
+  if (loadError || !take) {
+    return (
+      <div className="page-pad" data-testid="count-not-found">
+        <Link to="/stock-count" className="btn" style={{ marginBottom: 16 }}>
+          <ArrowLeft size={15} /> Stock counts
+        </Link>
+        <div className="card section-card">
+          <p className="eyebrow">Not found</p>
+          <h3 className="h3">There is no count here for you</h3>
+          <p className="lead">
+            Either this count does not exist, or it belongs to a location you do not cover.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const submitted = take.sessions.filter((s) => s.status !== "open");
-  const canApply = writable && take.status !== "closed" && submitted.length > 0;
+  const awaiting = variance?.awaiting_recount ?? [];
+  const canApply =
+    writable && take.status !== "closed" && submitted.length > 0 && awaiting.length === 0;
 
   /** Post something and show the result, which on this screen always means
    *  reloading: a count changes on the server (another counter submits, the
@@ -340,12 +392,61 @@ export function StockCountDetailPage() {
 
   const apply = (confirm: string[] = []) =>
     post(`/outbound/stocktakes/${take.id}/apply`, { confirm }, (e: any) => {
-      // 409: pieces moved between the count and now. Never overwritten blind —
-      // the person sees which piece moved, and says so line by line.
+      // Two 409s, both "not yet, and here is who does what". Pieces that moved
+      // between the count and now are confirmed line by line; pieces worth more
+      // than the tolerance wait for a second person to count them again.
       if (e?.response?.status !== 409) return false;
-      setMovedAsk(e.response.data.moved as VarianceLineT[]);
+      const body = e.response.data;
+      if (body.needs_recount) {
+        // Show the report rather than the refusal on its own: the pieces it is
+        // about are already named there, with the button that clears them.
+        setError(body.error);
+        void loadVariance();
+      } else {
+        setMovedAsk(body.moved as VarianceLineT[]);
+      }
       return true;
     });
+
+  /** Open the recount panel for one piece, blank — never pre-filled with the
+   *  first count. A recount that starts on somebody else's number is a
+   *  confirmation, not a count. */
+  function askRecount(line: VarianceLineT) {
+    setError("");
+    setRecountQty("");
+    setRecountReason("");
+    setRecountAsk(line);
+  }
+
+  /** Unlike everything else on this screen a recount does not reload: its own
+   *  answer *is* the refreshed variance, and somebody recounting five pieces
+   *  should not lose the report between each one. */
+  async function saveRecount() {
+    if (!recountAsk) return;
+    if (recountQty.trim() === "" || Number(recountQty) < 0) {
+      setError("Enter how many of this piece you found.");
+      return;
+    }
+    if (!recountReason) {
+      setError("Say why the difference is there — the correction cannot post without it.");
+      return;
+    }
+    setError("");
+    setBusy(true);
+    try {
+      const { data } = await api.post(`/outbound/stocktakes/${take!.id}/recount`, {
+        sku_code: recountAsk.sku_code,
+        counted_qty: Number(recountQty),
+        reason: recountReason,
+      });
+      setVariance(data);
+      setRecountAsk(null);
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="page-pad">
@@ -365,7 +466,14 @@ export function StockCountDetailPage() {
         <StatusPill status={take.status} />
       </div>
 
-      {error && <div className="login-error" style={{ maxWidth: 560 }} data-testid="count-detail-error">{error}</div>}
+      {/* Shown here only while the variance is not on screen. Once it is, the
+        * page is long enough to scroll and the buttons that fail are all down
+        * beside the report, so the same message is rendered there instead — a
+        * refusal a screen-height away from the button that caused it reads as
+        * nothing happening at all. */}
+      {error && !variance && (
+        <div className="login-error" style={{ maxWidth: 560 }} data-testid="count-detail-error">{error}</div>
+      )}
 
       {writable && take.status === "open" && (
         <div className="card section-card" data-testid="new-session-card">
@@ -490,6 +598,15 @@ export function StockCountDetailPage() {
                 </div>
               )}
 
+              {awaiting.length > 0 && (
+                <div className="chip chip-amber" data-testid="variance-awaiting-recount">
+                  {awaiting.length} piece{awaiting.length === 1 ? " is" : "s are"} out by more than{" "}
+                  <Money paise={variance.recount_tolerance_paise} /> — too much for one count.
+                  Somebody who did not count {awaiting.length === 1 ? "it" : "them"} has to count
+                  again before this correction can be made.
+                </div>
+              )}
+
               <div className="table-wrap" style={{ marginTop: 10 }}>
                 <table className="data" data-testid="variance-table">
                   <thead>
@@ -501,6 +618,7 @@ export function StockCountDetailPage() {
                       <th className="num">Difference</th>
                       <th className="num">Cost</th>
                       <th className="num">Value</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -514,17 +632,71 @@ export function StockCountDetailPage() {
                               moved since the count
                             </span>
                           )}
+                          {l.needs_recount && (
+                            <span className="chip chip-amber" style={{ marginLeft: 8 }} data-testid={`needs-recount-${l.sku_code}`}>
+                              needs a recount
+                            </span>
+                          )}
+                          {l.recount && !l.recount.stale && (
+                            <span className="chip chip-green" style={{ marginLeft: 8 }} data-testid={`recounted-${l.sku_code}`}>
+                              recounted by {l.recount.recounted_by_name || "—"} · {l.recount.reason_label}
+                            </span>
+                          )}
+                          {l.recount?.stale && (
+                            <span className="chip chip-grey" style={{ marginLeft: 8 }} data-testid={`recount-stale-${l.sku_code}`}>
+                              {l.recount.recounted_by_name || "—"}&rsquo;s recount is out of date — somebody
+                              counted more of this piece afterwards
+                            </span>
+                          )}
                         </td>
                         <td className="num">{l.book_qty}</td>
-                        <td className="num">{l.counted_qty}</td>
+                        <td className="num">
+                          {l.counted_qty}
+                          {l.recount && !l.recount.stale && (
+                            /* Original → recount, so the trail is on the row the
+                             * approver is looking at rather than a page away. */
+                            <div className="muted-cell" data-testid={`recount-trail-${l.sku_code}`}>
+                              first count {l.recount.first_counted_qty}
+                            </div>
+                          )}
+                        </td>
                         <td className="num"><Signed n={l.adj_qty} /></td>
                         <td className="num">{l.cost_known ? <Money paise={l.unit_cost_paise} /> : "unknown"}</td>
                         <td className="num">{l.cost_known ? <Money paise={l.variance_paise} /> : "—"}</td>
+                        <td>
+                          {l.needs_recount && writable && (
+                            l.may_recount ? (
+                              <button
+                                type="button"
+                                className="btn"
+                                disabled={busy}
+                                onClick={() => askRecount(l)}
+                                data-testid={`recount-btn-${l.sku_code}`}
+                              >
+                                <ScanLine size={15} /> Recount
+                              </button>
+                            ) : (
+                              <span className="muted-cell" data-testid={`recount-blocked-${l.sku_code}`}>
+                                you counted this
+                              </span>
+                            )
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+
+              {error && (
+                <div
+                  className="login-error"
+                  style={{ maxWidth: 560, marginTop: 14 }}
+                  data-testid="count-variance-error"
+                >
+                  {error}
+                </div>
+              )}
 
               {canApply && (
                 <button
@@ -539,6 +711,58 @@ export function StockCountDetailPage() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {recountAsk && (
+        <div className="card section-card" data-testid="recount-card">
+          <p className="eyebrow">A second count · {recountAsk.sku_code}</p>
+          <h3 className="h3">Count {skuLabel(recountAsk)} again</h3>
+          <p className="lead">
+            The books say {recountAsk.book_qty}. What the first count found is not shown — count
+            what is there, then say why it is out. Both answers are kept.
+          </p>
+          <div className="form-row" style={{ marginTop: 10 }}>
+            <div className="field">
+              <label>How many are actually there</label>
+              <input
+                className="input"
+                type="number"
+                min={0}
+                value={recountQty}
+                onChange={(e) => setRecountQty(e.target.value)}
+                placeholder="0"
+                data-testid="recount-qty"
+              />
+            </div>
+            <div className="field">
+              <label>Why is it out?</label>
+              <select
+                className="select"
+                value={recountReason}
+                onChange={(e) => setRecountReason(e.target.value)}
+                data-testid="recount-reason"
+              >
+                <option value="">Select a reason…</option>
+                {ADJUSTMENT_REASONS.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() => void saveRecount()}
+              data-testid="save-recount-btn"
+            >
+              {busy ? "Saving…" : "Save this recount"}
+            </button>
+            <button className="btn" onClick={() => setRecountAsk(null)} data-testid="cancel-recount-btn">
+              Not now
+            </button>
+          </div>
         </div>
       )}
 

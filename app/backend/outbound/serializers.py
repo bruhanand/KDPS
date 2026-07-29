@@ -15,6 +15,7 @@ from core.documents import DocStatus
 from masters.models import Brand, Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
+    AdjustmentReason,
     CountScope,
     CountSession,
     CountSessionLine,
@@ -842,6 +843,10 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
     against what was counted, and only the count comes from outside: a client
     that could send the book number, or the subtraction, could post a correction
     the books never agreed to. Send ``counted_qty``; the server does the rest.
+
+    ``reason`` is read-only for the same family of reasons (#78): where a line
+    carries one, it came from a recount by a second person, and a typed
+    adjustment says why on the document rather than piece by piece.
     """
 
     class Meta:
@@ -860,8 +865,9 @@ class StockAdjustmentLineSerializer(serializers.ModelSerializer):
             "counted_qty",
             "adj_qty",
             "unit_cost_paise",
+            "reason",
         ]
-        read_only_fields = ["id", "book_qty", "adj_qty", "unit_cost_paise"]
+        read_only_fields = ["id", "book_qty", "adj_qty", "unit_cost_paise", "reason"]
 
 
 class StockAdjustmentReadSerializer(ApprovedDocumentSerializer):
@@ -1227,6 +1233,20 @@ class ApplyVarianceInputSerializer(serializers.Serializer):
     confirm = serializers.ListField(
         child=serializers.CharField(max_length=64), required=False, default=list
     )
+
+
+class RecountInputSerializer(serializers.Serializer):
+    """A second person's count of one piece, and why it is out (#78).
+
+    Three fields and no fourth. There is deliberately no cost and no variance
+    here: both are read from the books, and the value that picks the approval
+    band is the value that posts (#103). A recount that could price itself could
+    route itself away from the Operations Head.
+    """
+
+    sku_code = serializers.CharField(max_length=64)
+    counted_qty = serializers.IntegerField(min_value=0)
+    reason = serializers.ChoiceField(choices=AdjustmentReason.choices)
 
 
 # ---------------------------------------------------------------------------

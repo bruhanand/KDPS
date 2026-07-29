@@ -54,6 +54,7 @@ from outbound.views import (
     StocktakeApplyView,
     StocktakeDetailView,
     StocktakeListCreateView,
+    StocktakeRecountView,
     StocktakeVarianceView,
     TransferDetailView,
     TransferDispatchView,
@@ -172,6 +173,8 @@ urlpatterns = [
     path(
         "stocktakes/<int:pk>/variance", StocktakeVarianceView.as_view(), name="stocktake-variance"
     ),
+    # A second person on a big difference, before it may be corrected (#78)
+    path("stocktakes/<int:pk>/recount", StocktakeRecountView.as_view(), name="stocktake-recount"),
     path("stocktakes/<int:pk>/apply", StocktakeApplyView.as_view(), name="stocktake-apply"),
     path("count-sessions/<int:pk>/scan", CountSessionScanView.as_view(), name="count-session-scan"),
     path(

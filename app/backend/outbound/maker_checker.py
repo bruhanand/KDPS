@@ -15,6 +15,10 @@ Damage is the one family where the second person is asked for on a *rung*
 rather than on a value: a store person may report damage but not move the
 stock, so their document waits, while a warehouse or HO person's own document
 clears itself (``self_clearing``).
+
+A document may also override the value question from its own side, by answering
+``approval_is_mandatory``. One does: a stock correction a recount produced
+(#78), which is never small enough to clear itself however the recount came out.
 """
 
 from __future__ import annotations
@@ -268,6 +272,20 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
                 ),
                 **common,
             )
+        return request_approval(doc, approver_roles=policy.approver_roles_for(value), **common)
+
+    # A document may say the tolerance is not its to be cleared by. A stock
+    # correction a recount produced does (#78): the line was big enough to make a
+    # second person count it, and letting the *recounted* total decide would hand
+    # that second person a way to post it alone — count it down to just under the
+    # tolerance and no approver is ever asked. Optional, so nothing else has to
+    # know this hook exists.
+    #
+    # Asked of the *class* and then read off the instance, never through a
+    # defaulting ``getattr``: this is an approval gate, and a ``getattr`` default
+    # would turn any error raised inside the property into a silent "no approver
+    # needed" — the one direction a gate may not fail.
+    if hasattr(type(doc), "approval_is_mandatory") and doc.approval_is_mandatory:
         return request_approval(doc, approver_roles=policy.approver_roles_for(value), **common)
 
     if not policy.needs_checker(value):

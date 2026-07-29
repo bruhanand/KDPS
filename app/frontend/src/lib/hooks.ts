@@ -33,14 +33,23 @@ export function useList<T = any>(url: string | null, params?: QueryParams) {
 export function useDoc<T = any>(url: string | null) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let live = true;
     if (!url) return;
     setLoading(true);
+    setError(null);
     api
       .get(url)
       .then((r) => live && setData(r.data))
+      // A refused document is an *answer*, not a crash. Out-of-scope reads 404
+      // by design (ADR-0003), so this is the ordinary path for "not yours", and
+      // without a catch the rejection went unhandled: the console filled with
+      // AxiosErrors while `loading` went false with `data` still null, leaving
+      // every screen that renders `loading || !doc` spinning for ever on a
+      // question the server had already answered.
+      .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
@@ -49,5 +58,5 @@ export function useDoc<T = any>(url: string | null) {
   // `reload` for the screens that act on the document they are showing (ending a
   // booking, deciding an approval): refetch rather than patch local state, so
   // what is on screen is always what the server says.
-  return { data, loading, reload: useCallback(() => setTick((t) => t + 1), []) };
+  return { data, loading, error, reload: useCallback(() => setTick((t) => t + 1), []) };
 }
