@@ -41,10 +41,14 @@ from outbound.costing import on_hand_valuation
 from outbound.counting import (
     CountError,
     MovedMidCountError,
+    RecountRequiredError,
+    SameCounterError,
     apply_variance,
     open_session,
     open_stocktake,
+    record_recount,
     record_scans,
+    recount_tolerance,
     submit_session,
     variance_report,
 )
@@ -103,6 +107,7 @@ from outbound.serializers import (
     GapClosureReadSerializer,
     MarkDamagedInputSerializer,
     MarkDamagedReadSerializer,
+    RecountInputSerializer,
     ReturnToBrandCreateSerializer,
     ReturnToVendorReadSerializer,
     StockAdjustmentReadSerializer,
@@ -1567,6 +1572,32 @@ def _load_session(pk: int) -> CountSession | None:
     )
 
 
+def _variance_payload(stocktake: Stocktake, user: Any) -> dict[str, Any]:
+    """The merged variance as the screen reads it.
+
+    Shared by the report and the recount, because a recount *changes* the
+    variance: returning anything less would leave the screen showing one half of
+    a number that has moved, and a second round-trip to fetch the other.
+
+    ``may_recount`` is this user's own answer to the floor rule, resolved here so
+    the screen offers only the button that would work. It is a courtesy: the
+    engine asks the same question again before it writes anything.
+    """
+    report = variance_report(stocktake)
+    lines = [{**v.as_dict(), "may_recount": v.may_be_recounted_by(user)} for v in report]
+    return {
+        "stocktake": stocktake.pk,
+        "store_code": stocktake.store.code,
+        "status": stocktake.status,
+        "recount_tolerance_paise": recount_tolerance(),
+        "lines": lines,
+        "net_pieces": sum(v["adj_qty"] for v in lines),
+        "net_variance_paise": sum(v["variance_paise"] for v in lines),
+        "unpriced": [v["sku_code"] for v in lines if not v["cost_known"] and v["adj_qty"]],
+        "awaiting_recount": [v["sku_code"] for v in lines if v["needs_recount"]],
+    }
+
+
 class StocktakeVarianceView(APIView):
     """GET: book against counted for the whole count, in pieces and in value.
 
@@ -1582,26 +1613,51 @@ class StocktakeVarianceView(APIView):
             stocktake = _load_stocktake(pk, request.user)
         except Stocktake.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        return Response(_variance_payload(stocktake, request.user))
 
-        lines = [v.as_dict() for v in variance_report(stocktake)]
-        return Response(
-            {
-                "stocktake": pk,
-                "store_code": stocktake.store.code,
-                "status": stocktake.status,
-                "lines": lines,
-                "net_pieces": sum(v["adj_qty"] for v in lines),
-                "net_variance_paise": sum(v["variance_paise"] for v in lines),
-                "unpriced": [v["sku_code"] for v in lines if not v["cost_known"] and v["adj_qty"]],
-            }
-        )
+
+class StocktakeRecountView(APIView):
+    """POST: a second person's count of one piece, and why it is out (#78).
+
+    403 rather than 400 when the caller counted the piece themselves: the request
+    is well formed and this person may never make it, whatever the tolerance and
+    the bands are retuned to.
+    """
+
+    permission_classes = [CanWriteStockCount]
+
+    def post(self, request, pk):
+        try:
+            stocktake = _load_stocktake(pk, request.user)
+        except Stocktake.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        enforce_store_scope(request.user, stocktake.store_id)
+
+        ser = RecountInputSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        try:
+            record_recount(
+                stocktake,
+                sku_code=ser.validated_data["sku_code"],
+                counted_qty=ser.validated_data["counted_qty"],
+                reason=ser.validated_data["reason"],
+                user=request.user,
+            )
+        except SameCounterError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except (CountError, OutboundPostingError) as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_variance_payload(stocktake, request.user))
 
 
 class StocktakeApplyView(APIView):
     """POST: apply the variance as one stock adjustment.
 
-    409 when stock moved between the count and now, naming the lines: the person
-    deciding confirms those barcodes and posts again. Never a blind overwrite.
+    Two 409s, both meaning "not refused forever, refused until a named person
+    does a named thing": stock moved between the count and now (confirm those
+    barcodes and post again), or a difference is too big for one person's count
+    (a second person recounts it). Never a blind overwrite, and never a big
+    variance on one pair of eyes.
     """
 
     permission_classes = [CanWriteStockCount]
@@ -1620,6 +1676,17 @@ class StocktakeApplyView(APIView):
                 stocktake,
                 user=request.user,
                 confirm_skus=frozenset(ser.validated_data["confirm"]),
+            )
+        except RecountRequiredError as e:
+            return Response(
+                {
+                    "error": str(e),
+                    "needs_recount": [
+                        {**v.as_dict(), "may_recount": v.may_be_recounted_by(request.user)}
+                        for v in e.lines
+                    ],
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         except MovedMidCountError as e:
             return Response(

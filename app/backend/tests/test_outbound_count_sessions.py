@@ -14,6 +14,9 @@ The seams this suite holds, one test apiece:
   and no cost the caller sends is ever used.
 - **Mid-count movement**: a piece that moved between submit and apply refuses to
   apply until that barcode is confirmed by name.
+- **Above tolerance**: a difference too big for one person's count refuses to
+  become a document until a second person has recounted the piece (#78; the
+  recount and its banded approval are held in ``test_outbound_recount_bands``).
 - **Server-side variance**: the adjustment API derives ``book_qty`` and
   ``adj_qty`` itself; a client that sends its own is ignored.
 """
@@ -370,9 +373,29 @@ def test_the_auto_adjustment_posts_at_the_books_cost_never_at_zero(count_scaffol
 
 def test_a_big_variance_waits_for_a_person(count_scaffold):
     """Ten shirts and nothing found is ₹3,000 at stake — over the tolerance, so
-    the document is made and left for a checker rather than posted. Recount and
-    banded approval above tolerance are #78."""
-    _, resp = _count_and_apply(count_scaffold, shirt_counted=0)
+    it is nobody's to correct alone.
+
+    Slice 10 left this at "the document is made and left for a checker". #78 put
+    a second *counter* in front of that: the correction is not written at all
+    until somebody else has counted the piece again. Once they have, the draft
+    lands exactly where it used to — waiting for an approver, posting nothing.
+    The recount half of the rule is held in ``test_outbound_recount_bands``.
+    """
+    take, refused = _count_and_apply(count_scaffold, shirt_counted=0)
+
+    assert refused.status_code == 409, refused.data
+    assert [v["sku_code"] for v in refused.data["needs_recount"]] == [SHIRT["barcode"]]
+    assert StockAdjustment.objects.count() == 0
+
+    recount = _client(count_scaffold["second"]).post(
+        f"/api/outbound/stocktakes/{take}/recount",
+        {"sku_code": SHIRT["barcode"], "counted_qty": 0, "reason": "shrinkage"},
+        format="json",
+    )
+    assert recount.status_code == 200, recount.data
+    resp = _client(count_scaffold["applier"]).post(
+        f"/api/outbound/stocktakes/{take}/apply", {}, format="json"
+    )
 
     assert resp.status_code == 201, resp.data
     adjustment = StockAdjustment.objects.get(pk=resp.data["id"])

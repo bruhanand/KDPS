@@ -1064,6 +1064,23 @@ class StockAdjustment(Document):
         dt = self.created_at or timezone.now()
         return financial_year(dt.date() if hasattr(dt, "date") else dt), self.store.code, "ADJ"
 
+    @property
+    def approval_is_mandatory(self) -> bool:
+        """No tolerance clears a correction a recount produced (#78).
+
+        A line only carries its own ``reason`` when a second person recounted
+        that piece and said why — which only happens above the tolerance. So the
+        marker is the correction's own lines, not a flag somebody has to set:
+        once a difference has been big enough to pull a second person in, the
+        question of *whether* an approver is asked is already settled, and only
+        which approver is left to the band.
+
+        Without this, a recount could count a ₹3,000 shortage down to ₹1,900 and
+        the document would clear itself on the tolerance — the second person's
+        word posting stock off the books with nobody asked.
+        """
+        return any(line.reason for line in self.lines.all())
+
     def __str__(self) -> str:
         return self.doc_number or f"Adjustment(draft #{self.pk})"
 
@@ -1084,6 +1101,16 @@ class StockAdjustmentLine(TimeStampedModel):
     counted_qty = models.IntegerField()
     adj_qty = models.IntegerField(help_text="counted − book; + surplus, − shrinkage")
     unit_cost_paise = MoneyField(default=0)
+    reason = models.CharField(
+        max_length=16,
+        choices=AdjustmentReason.choices,
+        blank=True,
+        default="",
+        help_text="Why *this* piece is off, where a recount said so (#78). The "
+        "document's own reason is the whole correction's; one count can find a "
+        "theft on one rail and a miscount on the next, and a single column would "
+        "have to lose one of them.",
+    )
 
     class Meta:
         db_table = "outbound_stock_adjustment_line"
@@ -1375,3 +1402,62 @@ class CountSessionLine(models.Model):
 
     def __str__(self) -> str:
         return f"{self.sku_code} counted={self.counted_qty}"
+
+
+class Recount(models.Model):
+    """A second person's answer on one piece the count found a big difference on
+    (#78) — and the audit trail that keeps the first answer beside it.
+
+    A row exists only once somebody has actually recounted. *Which* pieces need
+    one is not stored: it is derived from the merged variance against the live
+    tolerance, the same way a stock request's status and a transfer's gap state
+    are derived rather than kept. Storing it would let a placeholder row outlive
+    the count it described — another counter submits, the variance moves, and the
+    worklist is answering about a difference that no longer exists.
+
+    Three numbers survive on the row: the books' ``book_qty``, what the first
+    count merged to (``first_counted_qty``), and what the recount settled on
+    (``counted_qty``). That is the original, the recount and the final, which is
+    exactly what the correction has to be defensible against months later.
+
+    The cost is frozen here for the same reason it is frozen on every other
+    document line: it is the number that picks the approval band *and* the number
+    that posts, and those two must be one number (#103).
+    """
+
+    stocktake = models.ForeignKey(Stocktake, on_delete=models.CASCADE, related_name="recounts")
+    sku_code = models.CharField(max_length=64)
+    book_qty = models.IntegerField(
+        help_text="The book snapshot the first count was measured against."
+    )
+    first_counted_qty = models.IntegerField(help_text="What the first count merged to.")
+    counted_qty = models.IntegerField(help_text="What the recount found — the number that posts.")
+    unit_cost_paise = MoneyField(
+        default=0,
+        help_text="The books' cost at recount time. Never from the payload (#103).",
+    )
+    reason = models.CharField(
+        max_length=16,
+        choices=AdjustmentReason.choices,
+        help_text="Why the difference is there — theft, miscount, damage or found.",
+    )
+    recounted_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="recounts",
+        help_text="Never anyone who counted this piece the first time — a floor rule (#78).",
+    )
+    recounted_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "outbound_recount"
+        ordering = ["sku_code"]
+        constraints = [
+            models.UniqueConstraint(fields=["stocktake", "sku_code"], name="uq_recount_sku"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Recount {self.sku_code}: {self.first_counted_qty} → {self.counted_qty}"
