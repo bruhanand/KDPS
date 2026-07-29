@@ -36,7 +36,7 @@ from approvals.models import Approval, ApprovalStatus
 from core.documents import DocStatus, VoucherSeries
 from masters.models import Brand, Cohort, Gstin, LegalEntity, Sku, Store
 from outbound.models import LogisticsRoute, ReturnSource, ReturnToVendor, ReturnType
-from outbound.returnable import cap_for, returnable_pool
+from outbound.returnable import cap_for, pool_for, returnable_pool
 from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
 from vendors.models import Vendor
 
@@ -147,6 +147,15 @@ def rtb(db):
             Brand.ReturnTerms.UNCAPPED,
             return_window_days=60,
         ),
+        # Consignment: brand-owned + rolling. Everything unsold goes back, with
+        # no cap and no deadline — the fourth model, and the one whose "no
+        # window" case would otherwise go unmeasured.
+        "consignment": _brand(
+            "rtb-con",
+            "ConsignmentBrand",
+            Brand.Ownership.BRAND_OWNED,
+            Brand.ReturnTerms.ROLLING,
+        ),
     }
     vendor = Vendor.objects.create(code="rtb-vend", name="RTB Vendor")
 
@@ -154,6 +163,7 @@ def rtb(db):
         ("RTB-COR-1", "CorrectionBrand"),
         ("RTB-OUT-1", "OutrightBrand"),
         ("RTB-SOR-1", "SorBrand"),
+        ("RTB-CON-1", "ConsignmentBrand"),
     ]:
         sku = Sku.objects.create(
             barcode=barcode,
@@ -300,13 +310,35 @@ def test_an_unconfirmed_damage_flag_is_not_returnable(rtb):
     assert QuarantineStock.objects.filter(sku_code="RTB-COR-1").count() == 0
 
 
-def test_season_end_stock_past_its_window_is_not_offered(rtb):
-    """Past the deadline the brand will not take it, so the screen never does."""
+def test_season_end_stock_past_its_window_is_shown_expired_and_never_offered(rtb):
+    """Past the deadline the brand will not take it — but it is *said*, not made
+    to vanish, because the window starts at first arrival and a barcode delivered
+    twice can expire on a date from the older delivery. A row that disappeared
+    would read as missing stock."""
     brand = rtb["brands"]["sor"]
     brand.return_window_days = 5  # the fixture's stock arrived 10 days ago
     brand.save(update_fields=["return_window_days"])
 
-    assert returnable_pool(rtb["wh_user"], brand) == []
+    rows = returnable_pool(rtb["wh_user"], brand)
+
+    assert rows and all(row.expired for row in rows)
+    assert pool_for(rows, ReturnType.SEASONAL, rtb["wh"].id) == []
+
+
+def test_an_expired_holding_cannot_be_scanned_onto_a_return(rtb):
+    brand = rtb["brands"]["sor"]
+    brand.return_window_days = 5
+    brand.save(update_fields=["return_window_days"])
+
+    response = _create_return(
+        rtb,
+        brand=brand,
+        return_type=ReturnType.SEASONAL,
+        scans=[{"barcode": "RTB-SOR-1", "qty": 1}],
+    )
+
+    assert response.status_code == 400
+    assert "returnable pool" in str(response.data)
 
 
 def test_a_brand_with_no_negotiated_window_still_shows_its_stock(rtb):
@@ -351,12 +383,48 @@ def test_the_cap_is_a_percentage_of_what_the_books_took_delivery_of(rtb):
 
 @pytest.mark.parametrize(
     ("commercial_model", "applies"),
-    [("correction", True), ("sor", False), ("outright", False)],
+    [("correction", True), ("sor", False), ("consignment", False), ("outright", False)],
 )
 def test_only_correction_brands_carry_a_cap(rtb, commercial_model, applies):
     """SOR and Consignment return everything unsold, so a percentage of anything
     would be an invention."""
     assert cap_for(rtb["brands"][commercial_model]).applies is applies
+
+
+@pytest.mark.parametrize("commercial_model", ["sor", "consignment"])
+def test_unsold_stock_goes_back_uncapped_for_sor_and_consignment(rtb, commercial_model):
+    """What is unsold is what goes back, and no percentage stands in the way.
+
+    Only the window bites — and Consignment, being rolling, has not even that."""
+    brand = rtb["brands"][commercial_model]
+    barcode = "RTB-SOR-1" if commercial_model == "sor" else "RTB-CON-1"
+
+    rows = returnable_pool(rtb["wh_user"], brand, store_id=rtb["wh"].id)
+
+    season_end = [row for row in rows if row.source == ReturnSource.SEASON_END]
+    assert [(row.sku_code, row.qty) for row in season_end] == [(barcode, 10)]
+    assert cap_for(brand).applies is False
+
+    response = _create_return(
+        rtb,
+        brand=brand,
+        return_type=ReturnType.SEASONAL,
+        scans=[{"barcode": barcode, "qty": 10}],
+    )
+
+    assert response.status_code == 201, response.data
+    assert response.data["cap_exceeded_by_paise"] == 0
+    assert response.data["cap_allowance_paise"] == 0
+
+
+def test_a_rolling_brand_offers_its_stock_with_no_deadline(rtb):
+    """Consignment stock has no negotiated window, so the countdown is blank
+    rather than an invented number of days."""
+    rows = returnable_pool(rtb["wh_user"], rtb["brands"]["consignment"], store_id=rtb["wh"].id)
+
+    season_end = [row for row in rows if row.source == ReturnSource.SEASON_END]
+    assert season_end and all(row.days_left is None for row in season_end)
+    assert all(row.window_date is None for row in season_end)
 
 
 def test_the_cap_warns_as_it_fills_and_flags_when_it_is_crossed(rtb):
@@ -369,6 +437,9 @@ def test_the_cap_warns_as_it_fills_and_flags_when_it_is_crossed(rtb):
     assert cap.exceeded_by(allowance + 5_000) == 5_000
     # Once it is crossed the answer is the flag, not a warning about it.
     assert cap.warns_at(allowance + 5_000) is False
+    # And the threshold itself travels to the screen as a value, so the warning
+    # is drawn from one number rather than a second copy of the percentage.
+    assert cap.as_json()["warn_at_paise"] == allowance * 80 // 100
 
 
 def test_crossing_the_cap_flags_the_return_and_never_blocks_it(rtb):
@@ -597,6 +668,49 @@ def test_the_used_allowance_grows_by_what_actually_posted(rtb):
 # ---------------------------------------------------------------------------
 # 6. Who may do what
 # ---------------------------------------------------------------------------
+
+
+def test_the_warehouse_raises_a_return_for_stock_sitting_in_a_retail_store(rtb):
+    """The split is who acts, not where the pieces are. Damage confirmed at a
+    shop is still the warehouse's return to make, from the shop's own pool."""
+    _stock(rtb["store"], rtb["gstin"], "RTB-COR-1", "CorrectionBrand", 4, days_ago=5)
+    marked = _mark_damaged(rtb, "RTB-COR-1", 3, store=rtb["store"])
+    assert marked.status_code in (200, 201), marked.data
+
+    response = _create_return(
+        rtb, store=rtb["store"].id, scans=[{"barcode": "RTB-COR-1", "qty": 3}]
+    )
+
+    assert response.status_code == 201, response.data
+    assert response.data["store"] == rtb["store"].id
+    assert response.data["lines"][0]["qty"] == 3
+
+
+def test_the_top_bar_unit_does_not_empty_the_pool_a_return_is_built_from(rtb):
+    """ADR-0003: the switcher narrows what you read, never what you may do.
+
+    Building a return goes through the *acting* gate, so a warehouse user whose
+    header is parked on another unit still scans against the store the document
+    names — otherwise every barcode would beep "not in the pool" and blame the
+    stock for what the header did."""
+    _mark_damaged(rtb, "RTB-COR-1", 2)
+    client = _client(rtb["wh_user"])
+
+    response = client.post(
+        "/api/outbound/rtvs",
+        {
+            "store": rtb["wh"].id,
+            "vendor": rtb["vendor"].id,
+            "brand": rtb["brands"]["correction"].id,
+            "return_type": ReturnType.DEFECTIVE,
+            "logistics_route": LogisticsRoute.STORE_PICKUP,
+            "scans": [{"barcode": "RTB-COR-1", "qty": 2}],
+        },
+        format="json",
+        HTTP_X_KDPS_UNIT=rtb["store"].code,
+    )
+
+    assert response.status_code == 201, response.data
 
 
 def test_a_store_person_cannot_create_a_return(rtb):

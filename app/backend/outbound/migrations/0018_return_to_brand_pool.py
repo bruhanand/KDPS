@@ -134,7 +134,7 @@ class Migration(migrations.Migration):
             name="return_window_date",
             field=models.DateField(
                 blank=True,
-                help_text="The earliest deadline on this return's lines, snapshotted at draft time (alerts at 30/15/7 days).",
+                help_text="The earliest deadline on this return's lines, snapshotted at draft time. The screen counts down to it and turns amber inside the last fortnight.",
                 null=True,
             ),
         ),
@@ -157,13 +157,6 @@ class Migration(migrations.Migration):
                         default="",
                         help_text="The brand's own credit-note number, where the paper carries one.",
                         max_length=120,
-                    ),
-                ),
-                (
-                    "amount_paise",
-                    core.money.MoneyField(
-                        default=0,
-                        help_text="What the brand actually credited, where it differs from what the return was worth. 0 means 'they agreed the return's own value' — a short credit is a conversation, and Payments (D4) is where it is had.",
                     ),
                 ),
                 (

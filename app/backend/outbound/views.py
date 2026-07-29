@@ -940,7 +940,13 @@ class ReturnablePoolView(APIView):
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
 
         store_id = request.query_params.get("store")
-        rows = returnable_pool(request.user, brand, store_id=int(store_id) if store_id else None)
+        try:
+            store_pk = int(store_id) if store_id else None
+        except ValueError:
+            return Response(
+                {"error": f"'{store_id}' is not a store."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        rows = returnable_pool(request.user, brand, store_id=store_pk)
         cap = cap_for(brand)
         return Response(
             {

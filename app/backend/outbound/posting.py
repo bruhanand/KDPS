@@ -1304,7 +1304,7 @@ def _write_quarantine_entry(
         line_no=line_no,
         posted_by=posted_by,
     )
-    bucket, _ = QuarantineStock.objects.get_or_create(
+    QuarantineStock.objects.get_or_create(
         store=store,
         sku_code=line.sku_code,
         defaults={
@@ -1314,6 +1314,12 @@ def _write_quarantine_entry(
             "value_paise": 0,
         },
     )
+    # Re-read under a row lock before the read-modify-write. Both writers of this
+    # bucket have to serialize on *this* row: mark-damaged locks the shelf and a
+    # return locks the bucket, so without this a confirm and a return of the same
+    # barcode take different locks, never conflict, and one of the two updates is
+    # lost — leaving the projection saying something the ledger does not.
+    bucket = QuarantineStock.objects.select_for_update().get(store=store, sku_code=line.sku_code)
     bucket.qty += qty
     bucket.value_paise += amount_paise
     if qty > 0:
@@ -1524,7 +1530,9 @@ def raise_return_to_brand(
     via_transfer = _consolidating_transfer(route, via_transfer, store)
 
     try:
-        pool = pool_for(returnable_pool(user, brand, store_id=store.id), return_type, store.id)
+        pool = pool_for(
+            returnable_pool(user, brand, store_id=store.id, acting=True), return_type, store.id
+        )
         allocations = allocate(scans, pool)
     except NotReturnable as exc:
         raise OutboundPostingError(str(exc)) from exc
@@ -1637,6 +1645,14 @@ def post_rtv(rtv: ReturnToVendor, user=None) -> list[StockLedgerEntry]:
     if rtv.brand:
         is_owned = rtv.brand.ownership == Brand.Ownership.OWNED
 
+    # NOTE (#75, for a human ruling): brand-owned stock going home leaves the
+    # SOR memo pair written at inward standing, and nothing else takes it down —
+    # so SOR_STOCK overstates what KDPS holds for the brand by the value of every
+    # return ever made. `post_gap_closure` reverses exactly this pair when
+    # brand-owned stock is lost in transit, so the posting exists; whether a
+    # *return* should make it is a money decision the design corpus has not taken
+    # and four existing tests currently assert the opposite. Left alone here on
+    # purpose rather than changed under a slice that was not asked to change it.
     if is_owned and total_value_paise > 0:
         doc_ref = PostingRef(
             doc_type="RTV",

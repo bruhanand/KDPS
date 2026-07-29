@@ -49,7 +49,7 @@ from django.db.models import F, Min, Sum
 from django.utils import timezone
 
 from masters.models import Brand
-from masters.scoping import scope_by_store_and_brand
+from masters.scoping import scope_by_entitlement_or_brand, scope_by_store_and_brand
 from outbound.costing import book_unit_costs
 from outbound.models import ReturnSource
 from stockledger.models import (
@@ -100,6 +100,12 @@ class PoolRow:
     arrived_on: date | None
     window_date: date | None
     days_left: int | None
+    #: Past its deadline. Kept in the answer rather than dropped from it, so the
+    #: screen can say *why* a holding is not offered — the window anchors on the
+    #: earliest arrival, so a barcode re-delivered this season can expire on a
+    #: date from last season, and a row that simply vanished would look like
+    #: missing stock instead of an expired window.
+    expired: bool = False
 
     @property
     def value_paise(self) -> int:
@@ -123,6 +129,7 @@ class PoolRow:
             "arrived_on": self.arrived_on,
             "window_date": self.window_date,
             "days_left": self.days_left,
+            "expired": self.expired,
         }
 
 
@@ -163,6 +170,19 @@ class CapReading:
         used = Decimal(self.used_paise + this_return_paise)
         return used >= CAP_WARN_AT * Decimal(self.allowance_paise)
 
+    @property
+    def warn_at_paise(self) -> int:
+        """The used-value at which the screen starts warning.
+
+        Sent to the client so the threshold stays one number in one place
+        (Rule 12): a screen that recomputed ``CAP_WARN_AT`` itself would be a
+        second copy, and retuning the constant here would leave the on-screen
+        warning where it was.
+        """
+        if not self.applies:
+            return 0
+        return int(CAP_WARN_AT * Decimal(self.allowance_paise))
+
     def as_json(self, this_return_paise: int = 0) -> dict[str, Any]:
         return {
             "applies": self.applies,
@@ -171,6 +191,7 @@ class CapReading:
             "allowance_paise": self.allowance_paise,
             "used_paise": self.used_paise,
             "remaining_paise": self.remaining_paise,
+            "warn_at_paise": self.warn_at_paise,
             "this_return_paise": this_return_paise,
             "exceeded_by_paise": self.exceeded_by(this_return_paise),
             "warn": self.warns_at(this_return_paise),
@@ -286,12 +307,16 @@ def _quarantine_rows(qs: Any, arrivals: dict[tuple[int, str], date]):
     for store_id in {row.store_id for row in holdings}:
         by_store[store_id] = _priced(store_id, [r for r in holdings if r.store_id == store_id])
     for row in holdings:
-        # A piece wholly in quarantine may leave no on-hand row and no cohort to
-        # read, and then the books can only price it through the bucket it is
-        # sitting in — which holds the value that was moved into it when the
-        # damage was confirmed, itself a book number. Still never the payload.
-        unit_cost = by_store[row.store_id].get(row.sku_code) or (
-            row.value_paise // row.qty if row.qty else 0
+        # Priced from the **bucket**, not from today's books. The value moved
+        # into quarantine when the damage was confirmed, and that is the value
+        # the return has to take back out again: re-deriving it here would drain
+        # a quantity at one price and leave the difference stranded in a bucket
+        # that is then deleted at zero — the same reason ``build_gap_closure_lines``
+        # carries the in-transit cost forward rather than re-reading it. The
+        # books are the fallback only where the bucket cannot say (a legacy row
+        # carrying quantity but no value). Never the payload.
+        unit_cost = (row.value_paise // row.qty if row.qty else 0) or by_store[row.store_id].get(
+            row.sku_code, 0
         )
         arrived_on = arrivals.get((row.store_id, row.sku_code))
         yield PoolRow(
@@ -316,6 +341,12 @@ def _season_end_rows(brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date
     its stock, with the countdown blank: hiding the pool because nobody has typed
     a number would look like "this brand takes nothing back", which is a
     different and wrong answer. The screen says the window is not set.
+
+    Past the deadline the holding is still yielded, marked ``expired``. It is not
+    offered — ``pool_for`` drops it and a scan of it is refused — but it is *said*,
+    because the window anchors on the earliest arrival and a barcode delivered
+    twice can expire on the older date. A row that quietly disappeared would read
+    as stock gone missing rather than as a window that closed.
     """
     holdings = list(qs.order_by("store__code", "sku_code"))
     by_store: dict[int, dict[str, int]] = {}
@@ -325,8 +356,6 @@ def _season_end_rows(brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date
         unit_cost = by_store[row.store_id].get(row.sku_code) or 0
         arrived_on = arrivals.get((row.store_id, row.sku_code))
         window_date, days_left = _window(arrived_on, brand.return_window_days, today)
-        if days_left is not None and days_left < 0:
-            continue  # past the deadline — the brand will not take it
         yield PoolRow(
             source=ReturnSource.SEASON_END,
             store_id=row.store_id,
@@ -339,15 +368,25 @@ def _season_end_rows(brand: Brand, qs: Any, arrivals: dict[tuple[int, str], date
             arrived_on=arrived_on,
             window_date=window_date,
             days_left=days_left,
+            expired=days_left is not None and days_left < 0,
         )
 
 
-def returnable_pool(user: Any, brand: Brand, store_id: int | None = None) -> list[PoolRow]:
+def returnable_pool(
+    user: Any, brand: Brand, store_id: int | None = None, *, acting: bool = False
+) -> list[PoolRow]:
     """Everything this brand will take back, at the locations ``user`` may see.
 
-    Store-scoped through ``scope_by_store_and_brand``, which is the gate for rows
-    that carry a brand: a brand manager's boundary is brands rather than stores,
-    so they see their own brands' pool across the network and nobody else's.
+    Scoped through ``masters.scoping``, and *which* gate is the point. Reading
+    the pool goes through ``scope_by_store_and_brand``, so the top-bar switcher
+    narrows it like every other list. Building a return from it passes
+    ``acting=True`` and goes through ``scope_by_entitlement_or_brand`` instead,
+    because the acting gates ignore the switcher on purpose (ADR-0003): what a
+    warehouse user happens to have on screen must not empty the pool underneath
+    a scan and make the beep blame the stock for a header.
+
+    Either way a brand manager's boundary is brands rather than stores, so they
+    see their own brands' pool across the network and nobody else's.
 
     ``store_id`` narrows further to the one location a return is being built at —
     a return document leaves from a single store, so the scan validation behind
@@ -356,13 +395,14 @@ def returnable_pool(user: Any, brand: Brand, store_id: int | None = None) -> lis
     if not brand.takes_returns:
         return []
 
+    gate = scope_by_entitlement_or_brand if acting else scope_by_store_and_brand
     today = timezone.localdate()
-    quarantine = scope_by_store_and_brand(
+    quarantine = gate(
         QuarantineStock.objects.filter(qty__gt=0, brand__iexact=brand.name).select_related("store"),
         user,
         "store_id",
     )
-    season_end = scope_by_store_and_brand(
+    season_end = gate(
         StockOnHand.objects.filter(net_qty__gt=0, brand__iexact=brand.name).select_related("store"),
         user,
         "store_id",
@@ -419,11 +459,17 @@ SOURCE_FOR_RETURN_TYPE = {
 
 
 def pool_for(rows: list[PoolRow], return_type: str, store_id: int) -> list[PoolRow]:
-    """The slice of the pool one return may be built from — its store, its source."""
+    """The slice of the pool one return may be built from — its store, its source.
+
+    Expired holdings are shown but never offered, so they are dropped here rather
+    than in the reader: one place decides what may be scanned.
+    """
     source = SOURCE_FOR_RETURN_TYPE.get(return_type)
     if source is None:
         raise NotReturnable(f"'{return_type}' is not a kind of return.")
-    return [row for row in rows if row.store_id == store_id and row.source == source]
+    return [
+        row for row in rows if row.store_id == store_id and row.source == source and not row.expired
+    ]
 
 
 def allocate(scans: dict[str, int], rows: list[PoolRow]) -> list[Allocation]:
@@ -453,5 +499,15 @@ def allocate(scans: dict[str, int], rows: list[PoolRow]) -> list[Allocation]:
             )
         if wanted > row.qty:
             raise NotReturnable(f"{barcode}: the pool holds {row.qty}, this return asks {wanted}.")
+        if row.unit_cost_paise <= 0:
+            # 0 out of ``book_unit_costs`` means "the books cannot price this",
+            # never "free" (#103). Letting it through would understate the
+            # allowance the approver is shown *and* build a document the posting
+            # engine refuses, with no amend path out of it. Refused here, where
+            # the message can say what to fix.
+            raise NotReturnable(
+                f"{barcode}: the books carry no cost for this piece, so it cannot be "
+                "valued for a return. Price the cohort first."
+            )
         allocations.append(Allocation(row, wanted))
     return allocations

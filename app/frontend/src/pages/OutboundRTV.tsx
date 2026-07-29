@@ -106,7 +106,6 @@ interface CreditNoteT {
   id: number;
   received_on: string;
   reference: string;
-  amount_paise: number;
   recorded_by_name: string;
 }
 
@@ -164,6 +163,8 @@ interface PoolRowT {
   arrived_on: string | null;
   window_date: string | null;
   days_left: number | null;
+  /** Past its window. Sent so the screen can say so; never scannable. */
+  expired: boolean;
 }
 
 interface CapT {
@@ -173,6 +174,9 @@ interface CapT {
   allowance_paise: number;
   used_paise: number;
   remaining_paise: number;
+  /** Used-value at which to start warning. The server owns the threshold; this
+   *  screen must never carry its own copy of the percentage (Rule 12). */
+  warn_at_paise: number;
   this_return_paise: number;
   exceeded_by_paise: number;
   warn: boolean;
@@ -331,7 +335,10 @@ function CapMeter({ cap, thisReturnPaise }: { cap: CapT; thisReturnPaise: number
   const used = cap.used_paise + thisReturnPaise;
   const pct = cap.allowance_paise > 0 ? Math.min(100, Math.round((used / cap.allowance_paise) * 100)) : 100;
   const over = cap.allowance_paise > 0 && used > cap.allowance_paise;
-  const warn = !over && cap.allowance_paise > 0 && used >= cap.allowance_paise * 0.8;
+  // The threshold is the server's (`CAP_WARN_AT`), sent down as a value rather
+  // than a percentage — recomputing it here would be a second copy that a
+  // retune on the server would silently leave behind.
+  const warn = !over && cap.allowance_paise > 0 && used >= cap.warn_at_paise;
   const tone = over ? "red" : warn ? "amber" : "green";
 
   return (
@@ -419,7 +426,15 @@ export function RTVNewPage() {
   // claim reaches quarantine, a season-end sweep reaches the shelf.
   const wanted = returnType === "defective" ? "quarantine" : "season_end";
   const rows = useMemo(
-    () => (pool?.rows ?? []).filter((r) => r.source === wanted),
+    () => (pool?.rows ?? []).filter((r) => r.source === wanted && !r.expired),
+    [pool, wanted],
+  );
+  // Shown as a count rather than dropped in silence: the window starts at the
+  // barcode's first arrival here, so a piece delivered again this season can be
+  // past a deadline set last season, and "it is simply not in the list" reads as
+  // missing stock instead of a closed window.
+  const expiredCount = useMemo(
+    () => (pool?.rows ?? []).filter((r) => r.source === wanted && r.expired).length,
     [pool, wanted],
   );
 
@@ -631,6 +646,14 @@ export function RTVNewPage() {
                 </div>
               )}
 
+              {expiredCount > 0 && (
+                <p className="lead" style={{ fontSize: 13 }} data-testid="rtv-pool-expired">
+                  {expiredCount} more {expiredCount === 1 ? "holding is" : "holdings are"} past the
+                  return window and cannot go back. The window starts at the piece's first arrival
+                  here.
+                </p>
+              )}
+
               {rows.length > 0 && (
                 <button
                   type="button"
@@ -704,7 +727,6 @@ function CreditNoteCard({ rtv, writable }: { rtv: RTVT; writable: boolean }) {
       await api.post(`/outbound/rtvs/${rtv.id}/credit-note`, {
         received_on: receivedOn,
         reference,
-        amount_paise: rtv.value_paise,
       });
       window.location.reload();
     } catch (e) {
@@ -719,8 +741,7 @@ function CreditNoteCard({ rtv, writable }: { rtv: RTVT; writable: boolean }) {
         <p className="eyebrow">Credit note</p>
         <h3 className="h3">Received {fmtDate(rtv.credit_note.received_on)}</h3>
         <p className="lead" style={{ fontSize: 13 }}>
-          {rtv.credit_note.reference || "No reference"} ·{" "}
-          <Money paise={rtv.credit_note.amount_paise} /> · recorded by{" "}
+          {rtv.credit_note.reference || "No reference"} · recorded by{" "}
           {rtv.credit_note.recorded_by_name || "—"}
         </p>
       </div>

@@ -890,7 +890,6 @@ def test_rtv_credit_note_tracking(_outbound_scaffold):
         rtv=rtv,
         received_on="2026-07-15",
         reference="CN/2026/0042",
-        amount_paise=200,
         recorded_by=s["user"],
     )
 

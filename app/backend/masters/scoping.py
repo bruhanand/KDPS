@@ -246,15 +246,31 @@ def scope_by_store_or_brand(
     caller closed, so before this the person the policy names as the approver
     could not see the thing they were meant to approve (#75).
 
-    A brand-scoped caller is narrowed by brand alone; a row carrying no brand is
-    not theirs, which keeps the fail-closed reading — "stores are the wrong
-    question" never becomes "so show them everything". Everyone else is narrowed
-    by store, exactly as before, and is not narrowed by brand at all: the top-bar
-    brand filter must not hide work from somebody's inbox.
+    A brand-scoped caller is narrowed by their *entitled* brands alone — not by
+    the switcher, which is why this reaches for `visible_brand_names` rather than
+    `scope_by_brand`. A row carrying no brand is not theirs, which keeps the
+    fail-closed reading: "stores are the wrong question" never becomes "so show
+    them everything". Everyone else is narrowed by store, exactly as before.
+
+    Nobody is narrowed by the top-bar brand here, and that is the point: an
+    inbox that hid work behind the header would leave a brand manager able to
+    decide a return they cannot see, because the acting gate below ignores the
+    header too.
     """
     if is_brand_scoped(user):
-        return scope_by_brand(qs.exclude(**{brand_field: ""}), user, brand_field)
+        return _by_entitled_brands(qs, user, brand_field)
     return scope_by_store(qs, user, store_field)
+
+
+def _by_entitled_brands(qs: Any, user: Any, brand_field: str) -> Any:
+    """Rows whose brand is one this person is entitled to, switcher ignored."""
+    names = visible_brand_names(user)
+    if not names:
+        return qs.none()
+    match = Q()
+    for name in names:
+        match |= Q(**{f"{brand_field}__iexact": name})
+    return qs.exclude(**{brand_field: ""}).filter(match)
 
 
 def scope_by_entitlement_or_brand(
@@ -267,13 +283,7 @@ def scope_by_entitlement_or_brand(
     entitled to two brands may decide either one's return whichever is on screen.
     """
     if is_brand_scoped(user):
-        names = visible_brand_names(user)
-        if not names:
-            return qs.none()
-        match = Q()
-        for name in names:
-            match |= Q(**{f"{brand_field}__iexact": name})
-        return qs.exclude(**{brand_field: ""}).filter(match)
+        return _by_entitled_brands(qs, user, brand_field)
     return scope_by_entitlement(qs, user, store_field)
 
 

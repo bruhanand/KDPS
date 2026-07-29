@@ -886,7 +886,8 @@ class ReturnToVendor(Document):
         null=True,
         blank=True,
         help_text="The earliest deadline on this return's lines, snapshotted at "
-        "draft time (alerts at 30/15/7 days).",
+        "draft time. The screen counts down to it and turns amber inside the "
+        "last fortnight.",
     )
 
     # --- the Correction allowance, as it stood when this return was drafted ---
@@ -996,6 +997,11 @@ class ReturnCreditNote(TimeStampedModel):
     The money already moved when the return posted — KDPS's own debit note
     reduced the payable. This is the paper saying the brand agrees, which is what
     Accounts reconciles against.
+
+    So it carries no amount, on purpose (#75): a credited value that differs from
+    what the return was worth is a settlement question, and Payments (D4) is
+    where it is asked. A money column here that posts nothing would be a second
+    number for the same liability with no ledger behind it.
     """
 
     rtv = models.OneToOneField(ReturnToVendor, on_delete=models.CASCADE, related_name="credit_note")
@@ -1005,12 +1011,6 @@ class ReturnCreditNote(TimeStampedModel):
         blank=True,
         default="",
         help_text="The brand's own credit-note number, where the paper carries one.",
-    )
-    amount_paise = MoneyField(
-        default=0,
-        help_text="What the brand actually credited, where it differs from what "
-        "the return was worth. 0 means 'they agreed the return's own value' — a "
-        "short credit is a conversation, and Payments (D4) is where it is had.",
     )
     recorded_by = models.ForeignKey(
         "accounts.User",

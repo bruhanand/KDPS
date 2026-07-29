@@ -825,7 +825,7 @@ class CreditNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ReturnCreditNote
-        fields = ["id", "received_on", "reference", "amount_paise", "recorded_by_name"]
+        fields = ["id", "received_on", "reference", "recorded_by_name"]
         read_only_fields = ["id", "recorded_by_name"]
 
 
