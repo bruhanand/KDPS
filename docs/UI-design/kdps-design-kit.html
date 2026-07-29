@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Loom - the KDPS design language</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   LOOM - the KDPS design language
+   v0.1 - first draft for iteration
+   Light + dark themes via CSS custom properties.
+   ============================================================ */
+
+:root{
+  /* ---------- Ink (text) ---------- */
+  --ink:        #1E2433;
+  --ink-2:      #5A6275;
+  --ink-3:      #8A92A6;
+  --ink-invert: #FFFFFF;
+
+  /* ---------- Surfaces ---------- */
+  --canvas:     #F5F6F8;
+  --surface:    #FFFFFF;
+  --surface-2:  #F8F9FB;
+  --line:       #E8EBF1;
+  --line-strong:#D9DEE8;
+
+  /* ---------- Frost (glass) ---------- */
+  --frost-bg:     rgba(255,255,255,.60);
+  --frost-bg-2:   rgba(255,255,255,.42);
+  --frost-line:   rgba(255,255,255,.80);
+  --frost-shadow: 0 8px 32px rgba(30,36,51,.10);
+
+  /* ---------- Brand accent: terracotta ---------- */
+  --accent:      #DF6349;
+  --accent-hover:#CE5540;
+  --accent-ink:  #A93F2B;
+  --accent-soft: #FBEAE5;
+
+  /* ---------- Pastel family (bg / ink / dot) ---------- */
+  --peach-bg:#FFEAD9;   --peach-ink:#A34E1F;   --peach-dot:#F09A5E;
+  --butter-bg:#FBF1CF;  --butter-ink:#866414;  --butter-dot:#E4BE4A;
+  --mint-bg:#DDF4E4;    --mint-ink:#17724A;    --mint-dot:#4EC186;
+  --sky-bg:#DFEDFB;     --sky-ink:#21619E;     --sky-dot:#5EA1E0;
+  --lavender-bg:#E9E5FB;--lavender-ink:#5D46B4;--lavender-dot:#9C8AE0;
+  --rose-bg:#FCE4EE;    --rose-ink:#AD3168;    --rose-dot:#E77FAC;
+  --stone-bg:#EFEDE7;   --stone-ink:#6B6455;   --stone-dot:#B0A890;
+
+  /* ---------- Semantic ---------- */
+  --ok:      var(--mint-ink);
+  --warn:    var(--butter-ink);
+  --danger:  var(--rose-ink);
+  --focus:   #6D9EE8;
+
+  /* ---------- Geometry ---------- */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --shadow-1: 0 1px 2px rgba(30,36,51,.05), 0 1px 3px rgba(30,36,51,.06);
+  --shadow-2: 0 4px 16px rgba(30,36,51,.08);
+  --shadow-3: 0 12px 40px rgba(30,36,51,.14);
+
+  /* ---------- Type ---------- */
+  --font-display:'Manrope',system-ui,sans-serif;
+  --font-ui:'Inter',system-ui,sans-serif;
+  --font-mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,monospace;
+
+  /* ---------- Background wash ---------- */
+  --wash:
+    radial-gradient(900px 500px at 8% -5%,  rgba(240,154,94,.14), transparent 60%),
+    radial-gradient(900px 600px at 96% 4%,  rgba(94,161,224,.13), transparent 55%),
+    radial-gradient(700px 500px at 55% 110%,rgba(156,138,224,.11), transparent 60%);
+}
+
+[data-theme="dark"]{
+  --ink:        #ECEEF4;
+  --ink-2:      #A6ADBF;
+  --ink-3:      #6E7688;
+  --ink-invert: #14161C;
+
+  --canvas:     #0F1116;
+  --surface:    #171A21;
+  --surface-2:  #1D212B;
+  --line:       #272C38;
+  --line-strong:#333A49;
+
+  --frost-bg:     rgba(23,26,34,.62);
+  --frost-bg-2:   rgba(23,26,34,.45);
+  --frost-line:   rgba(255,255,255,.09);
+  --frost-shadow: 0 8px 32px rgba(0,0,0,.42);
+
+  --accent:      #E97D62;
+  --accent-hover:#F08D74;
+  --accent-ink:  #F5A98F;
+  --accent-soft: rgba(233,125,98,.15);
+
+  --peach-bg:rgba(240,154,94,.16);   --peach-ink:#F3B183;
+  --butter-bg:rgba(228,190,74,.14);  --butter-ink:#E8CD7A;
+  --mint-bg:rgba(78,193,134,.15);    --mint-ink:#7DD8A8;
+  --sky-bg:rgba(94,161,224,.16);     --sky-ink:#8FBEEC;
+  --lavender-bg:rgba(156,138,224,.17);--lavender-ink:#B7A8EC;
+  --rose-bg:rgba(231,127,172,.15);   --rose-ink:#EFA3C4;
+  --stone-bg:rgba(176,168,144,.13);  --stone-ink:#BDB6A3;
+
+  --focus: #6D9EE8;
+
+  --shadow-1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px rgba(0,0,0,.3);
+  --shadow-2: 0 4px 16px rgba(0,0,0,.35);
+  --shadow-3: 0 12px 40px rgba(0,0,0,.5);
+
+  --wash:
+    radial-gradient(900px 500px at 8% -5%,  rgba(240,154,94,.08), transparent 60%),
+    radial-gradient(900px 600px at 96% 4%,  rgba(94,161,224,.08), transparent 55%),
+    radial-gradient(700px 500px at 55% 110%,rgba(156,138,224,.07), transparent 60%);
+}
+
+/* ============ base ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font-ui);
+  background:var(--canvas);
+  background-image:var(--wash);
+  background-attachment:fixed;
+  color:var(--ink);
+  font-size:14px;
+  line-height:1.55;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4{font-family:var(--font-display);letter-spacing:-.01em}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--font-mono);font-size:.92em}
+
+/* ============ kit page chrome ============ */
+.kit-header{
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(20px) saturate(1.5);
+  -webkit-backdrop-filter:blur(20px) saturate(1.5);
+  background:var(--frost-bg);
+  border-bottom:1px solid var(--line);
+  padding:14px 40px;
+  display:flex;align-items:center;gap:24px;
+}
+.kit-logo{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:800;font-size:17px}
+.kit-logo .mark{
+  width:30px;height:30px;border-radius:9px;
+  background:linear-gradient(135deg,var(--accent),#F09A5E);
+  display:grid;place-items:center;color:#fff;font-size:15px;font-weight:800;
+}
+.kit-nav{display:flex;gap:4px;flex:1;overflow-x:auto}
+.kit-nav a{
+  color:var(--ink-2);text-decoration:none;font-size:13px;font-weight:500;
+  padding:6px 12px;border-radius:var(--r-pill);white-space:nowrap;
+}
+.kit-nav a:hover{background:var(--surface-2);color:var(--ink)}
+.theme-toggle{
+  display:flex;align-items:center;gap:8px;
+  border:1px solid var(--line-strong);border-radius:var(--r-pill);
+  background:var(--surface);padding:5px 14px;cursor:pointer;
+  font:inherit;font-size:13px;font-weight:600;color:var(--ink);
+  box-shadow:var(--shadow-1);
+}
+.theme-toggle:hover{border-color:var(--ink-3)}
+
+.kit-body{max-width:1240px;margin:0 auto;padding:48px 40px 120px}
+
+.kit-hero{padding:36px 0 8px}
+.kit-hero .eyebrow{color:var(--accent-ink);font-weight:700;font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+.kit-hero h1{font-size:46px;font-weight:800;margin:6px 0 14px;letter-spacing:-.02em}
+.kit-hero p{max-width:720px;color:var(--ink-2);font-size:15.5px}
+
+section.kit-section{margin-top:72px}
+.section-head{margin-bottom:26px}
+.section-head .no{
+  font-family:var(--font-mono);font-size:12px;color:var(--accent-ink);
+  background:var(--accent-soft);border-radius:var(--r-pill);padding:3px 10px;font-weight:600;
+}
+.section-head h2{font-size:28px;font-weight:800;margin-top:10px}
+.section-head p{color:var(--ink-2);margin-top:6px;max-width:760px}
+
+.spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px}
+.spec{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-1);overflow:hidden;
+}
+.spec.wide{grid-column:1/-1}
+.spec-title{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  padding:14px 18px;border-bottom:1px solid var(--line);
+}
+.spec-title h3{font-size:14.5px;font-weight:700}
+.spec-title span{font-size:12px;color:var(--ink-3)}
+.spec-body{padding:20px 18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.spec-note{padding:0 18px 16px;font-size:12.5px;color:var(--ink-3)}
+.spec-note b{color:var(--ink-2);font-weight:600}
+
+/* ============ principles ============ */
+.principles{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.principle{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:20px;box-shadow:var(--shadow-1);
+}
+.principle .pnum{
+  width:30px;height:30px;border-radius:10px;display:grid;place-items:center;
+  font-family:var(--font-display);font-weight:800;font-size:14px;margin-bottom:12px;
+}
+.principle h3{font-size:15px;margin-bottom:6px}
+.principle p{font-size:13px;color:var(--ink-2)}
+
+/* ============ swatches ============ */
+.swatch-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px}
+.swatch{border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.swatch .chip{height:64px;display:flex;align-items:flex-end;padding:8px}
+.swatch .meta{padding:10px 12px}
+.swatch .meta b{display:block;font-size:12.5px;font-weight:600}
+.swatch .meta span{font-family:var(--font-mono);font-size:11px;color:var(--ink-3)}
+
+/* ============ typography ============ */
+.type-row{display:flex;align-items:baseline;gap:20px;padding:12px 0;border-bottom:1px dashed var(--line)}
+.type-row:last-child{border-bottom:none}
+.type-row .label{width:150px;flex-shrink:0;font-size:11.5px;color:var(--ink-3);font-family:var(--font-mono)}
+
+/* ============ buttons ============ */
+.btn{
+  font-family:var(--font-ui);font-size:13.5px;font-weight:600;
+  border:none;border-radius:var(--r-pill);padding:9px 18px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:8px;line-height:1.2;
+  transition:background .15s,box-shadow .15s,transform .05s;
+}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+.btn-primary{background:var(--accent);color:#fff;box-shadow:0 2px 8px rgba(223,99,73,.28)}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-soft{background:var(--accent-soft);color:var(--accent-ink)}
+.btn-soft:hover{filter:brightness(.97)}
+[data-theme="dark"] .btn-soft:hover{filter:brightness(1.15)}
+.btn-frost{
+  background:var(--frost-bg);border:1px solid var(--frost-line);color:var(--ink);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  box-shadow:var(--shadow-1);
+}
+.btn-frost:hover{background:var(--surface)}
+.btn-quiet{background:transparent;color:var(--ink-2)}
+.btn-quiet:hover{background:var(--surface-2);color:var(--ink)}
+.btn-outline{background:var(--surface);border:1px solid var(--line-strong);color:var(--ink)}
+.btn-outline:hover{border-color:var(--ink-3)}
+.btn-mint{background:var(--mint-bg);color:var(--mint-ink)}
+.btn-rose{background:var(--rose-bg);color:var(--rose-ink)}
+.btn-sky{background:var(--sky-bg);color:var(--sky-ink)}
+.btn-sm{font-size:12.5px;padding:6px 13px}
+.btn-lg{font-size:14.5px;padding:12px 24px}
+.btn-icon{width:36px;height:36px;padding:0;justify-content:center;border-radius:var(--r-pill)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* segmented pill */
+.seg{
+  display:inline-flex;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r-pill);padding:3px;gap:2px;
+}
+.seg button{
+  font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);
+  background:transparent;border:none;border-radius:var(--r-pill);
+  padding:6px 16px;cursor:pointer;
+}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-1)}
+.seg.seg-accent button.on{background:var(--accent);color:#fff}
+
+/* ============ chips / badges ============ */
+.chip-status{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:12.5px;font-weight:600;border-radius:var(--r-pill);padding:4px 12px;
+}
+.chip-status .dot{width:7px;height:7px;border-radius:50%}
+.c-peach{background:var(--peach-bg);color:var(--peach-ink)} .c-peach .dot{background:var(--peach-dot)}
+.c-butter{background:var(--butter-bg);color:var(--butter-ink)} .c-butter .dot{background:var(--butter-dot)}
+.c-mint{background:var(--mint-bg);color:var(--mint-ink)} .c-mint .dot{background:var(--mint-dot)}
+.c-sky{background:var(--sky-bg);color:var(--sky-ink)} .c-sky .dot{background:var(--sky-dot)}
+.c-lavender{background:var(--lavender-bg);color:var(--lavender-ink)} .c-lavender .dot{background:var(--lavender-dot)}
+.c-rose{background:var(--rose-bg);color:var(--rose-ink)} .c-rose .dot{background:var(--rose-dot)}
+.c-stone{background:var(--stone-bg);color:var(--stone-ink)} .c-stone .dot{background:var(--stone-dot)}
+.chip-outline{background:transparent;border:1px solid var(--line-strong);color:var(--ink-2)}
+.count-badge{
+  min-width:19px;height:19px;border-radius:var(--r-pill);
+  background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+  display:inline-grid;place-items:center;padding:0 6px;
+}
+
+/* ============ forms ============ */
+.field{display:flex;flex-direction:column;gap:6px;min-width:220px}
+.field label{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.input,.select{
+  font:inherit;font-size:13.5px;color:var(--ink);
+  background:var(--surface);border:1px solid var(--line-strong);
+  border-radius:var(--r-md);padding:9px 13px;width:100%;
+}
+.input::placeholder{color:var(--ink-3)}
+.input:focus,.select:focus{outline:none;border-color:var(--focus);box-shadow:0 0 0 3px rgba(109,158,232,.18)}
+.field.error .input{border-color:var(--rose-dot);box-shadow:0 0 0 3px rgba(231,127,172,.15)}
+.field .help{font-size:12px;color:var(--ink-3)}
+.field.error .help{color:var(--rose-ink)}
+.search-pill{
+  display:flex;align-items:center;gap:9px;
+  background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r-pill);padding:8px 16px;min-width:260px;color:var(--ink-3);
+  font-size:13px;
+}
+.search-pill .kbd{
+  margin-left:auto;font-family:var(--font-mono);font-size:11px;
+  border:1px solid var(--line-strong);border-radius:6px;padding:1px 6px;
+  background:var(--surface);color:var(--ink-3);
+}
+.toggle{position:relative;width:40px;height:23px;flex-shrink:0}
+.toggle input{opacity:0;width:100%;height:100%;position:absolute;cursor:pointer;margin:0;z-index:1}
+.toggle .track{
+  position:absolute;inset:0;background:var(--line-strong);border-radius:var(--r-pill);
+  transition:background .18s;
+}
+.toggle .track::after{
+  content:'';position:absolute;top:2.5px;left:3px;width:18px;height:18px;
+  background:#fff;border-radius:50%;box-shadow:var(--shadow-1);transition:transform .18s;
+}
+.toggle input:checked + .track{background:var(--accent)}
+.toggle input:checked + .track::after{transform:translateX(16px)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line-strong);border-radius:var(--r-pill);overflow:hidden;background:var(--surface)}
+.stepper button{font:inherit;font-size:15px;border:none;background:transparent;color:var(--ink-2);width:32px;height:32px;cursor:pointer}
+.stepper button:hover{background:var(--surface-2)}
+.stepper .val{min-width:38px;text-align:center;font-weight:600;font-size:13.5px}
+.checkline{display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer}
+.checkline input{width:16px;height:16px;accent-color:var(--accent)}
+
+/* scan input */
+.scan-box{
+  background:var(--surface);border:1.5px dashed var(--line-strong);border-radius:var(--r-lg);
+  padding:22px;display:flex;flex-direction:column;gap:12px;align-items:center;width:100%;
+}
+.scan-box .scan-input{
+  font-family:var(--font-mono);font-size:19px;text-align:center;letter-spacing:.08em;
+  background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:13px 18px;width:100%;max-width:380px;color:var(--ink);
+}
+.scan-box .scan-input:focus{outline:none;border-color:var(--focus);box-shadow:0 0 0 3px rgba(109,158,232,.18)}
+.scan-tally{display:flex;gap:26px}
+.scan-tally .t{text-align:center}
+.scan-tally .t b{display:block;font-family:var(--font-display);font-size:26px;font-weight:800}
+.scan-tally .t span{font-size:12px;color:var(--ink-3)}
+
+/* ============ cards / KPI ============ */
+.kpi{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:18px 20px;box-shadow:var(--shadow-1);min-width:210px;flex:1;
+}
+.kpi .k-label{font-size:12.5px;color:var(--ink-2);font-weight:500;display:flex;align-items:center;gap:8px}
+.kpi .k-icon{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:14px}
+.kpi .k-value{font-family:var(--font-display);font-size:27px;font-weight:800;margin-top:8px;letter-spacing:-.01em}
+.kpi .k-delta{font-size:12.5px;font-weight:600;margin-top:4px}
+.k-up{color:var(--mint-ink)} .k-down{color:var(--rose-ink)} .k-flat{color:var(--ink-3)}
+
+/* ============ table ============ */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{
+  text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-3);padding:10px 14px;border-bottom:1px solid var(--line);
+  background:var(--surface-2);
+}
+.tbl td{padding:12px 14px;border-bottom:1px solid var(--line)}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover{background:var(--surface-2)}
+.tbl .r{text-align:right}
+.tbl th.r{text-align:right}
+.tbl .voucher{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-2)}
+
+/* avatars */
+.avatar{
+  width:32px;height:32px;border-radius:50%;display:inline-grid;place-items:center;
+  font-size:12px;font-weight:700;flex-shrink:0;
+}
+.avatar-stack{display:flex}
+.avatar-stack .avatar{margin-left:-8px;border:2px solid var(--surface)}
+.avatar-stack .avatar:first-child{margin-left:0}
+
+/* progress */
+.bar{height:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-pill);overflow:hidden;flex:1}
+.bar i{display:block;height:100%;border-radius:var(--r-pill)}
+.ring{transform:rotate(-90deg)}
+.ring .bg{stroke:var(--line)}
+.ring text{transform:rotate(90deg);transform-origin:center;font-family:var(--font-display);font-weight:800;fill:var(--ink)}
+
+/* ============ overlays ============ */
+.demo-modal{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);
+  box-shadow:var(--shadow-3);max-width:400px;width:100%;overflow:hidden;
+}
+.demo-modal .m-head{padding:20px 22px 0;display:flex;justify-content:space-between;align-items:flex-start}
+.demo-modal h3{font-size:17px}
+.demo-modal .m-sub{color:var(--ink-3);font-size:13px;margin-top:3px}
+.demo-modal .m-body{padding:18px 22px}
+.demo-modal .m-foot{padding:16px 22px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
+.toast{
+  display:inline-flex;align-items:center;gap:11px;
+  background:var(--frost-bg);border:1px solid var(--frost-line);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-radius:var(--r-lg);padding:12px 18px;box-shadow:var(--shadow-2);
+  font-size:13.5px;font-weight:500;
+}
+.toast .t-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px}
+.menu{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:var(--shadow-2);padding:6px;min-width:190px;font-size:13.5px;
+}
+.menu a{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;color:var(--ink);text-decoration:none}
+.menu a:hover{background:var(--surface-2)}
+.menu a.danger{color:var(--rose-ink)}
+.menu hr{border:none;border-top:1px solid var(--line);margin:5px 0}
+
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line)}
+.tabs a{
+  padding:9px 16px;font-size:13.5px;font-weight:600;color:var(--ink-2);
+  text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;
+}
+.tabs a.on{color:var(--accent-ink);border-bottom-color:var(--accent)}
+.tabs a:hover{color:var(--ink)}
+
+/* empty & skeleton */
+.empty{
+  text-align:center;padding:36px 20px;border:1.5px dashed var(--line-strong);
+  border-radius:var(--r-lg);width:100%;
+}
+.empty .e-ic{font-size:30px;margin-bottom:10px}
+.empty h4{font-size:15px;margin-bottom:4px}
+.empty p{font-size:13px;color:var(--ink-3);margin-bottom:14px}
+.skel{border-radius:8px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--line) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:shimmer 1.6s infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+
+/* ============ app-frame mock ============ */
+.app-frame{
+  border:1px solid var(--line);border-radius:var(--r-xl);overflow:hidden;
+  box-shadow:var(--shadow-2);display:flex;min-height:640px;
+  background:var(--canvas);background-image:var(--wash);
+  position:relative;
+}
+.mock-side{
+  width:232px;flex-shrink:0;display:flex;flex-direction:column;
+  background:var(--frost-bg);
+  backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);
+  border-right:1px solid var(--frost-line);
+  padding:18px 12px;gap:2px;
+}
+.mock-side .brand{display:flex;align-items:center;gap:10px;padding:4px 10px 16px}
+.mock-side .brand .mark{
+  width:32px;height:32px;border-radius:10px;
+  background:linear-gradient(135deg,var(--accent),#F09A5E);
+  display:grid;place-items:center;color:#fff;font-family:var(--font-display);font-weight:800;font-size:14px;
+}
+.mock-side .brand b{font-family:var(--font-display);font-size:15px;font-weight:800}
+.mock-side .brand span{display:block;font-size:10.5px;color:var(--ink-3);font-weight:500}
+.nav-group{font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);padding:14px 12px 5px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:11px;
+  font-size:13px;font-weight:500;color:var(--ink-2);text-decoration:none;
+}
+.nav-item .ic{width:17px;text-align:center;font-size:14px;opacity:.85}
+.nav-item:hover{background:var(--frost-bg-2);color:var(--ink)}
+.nav-item.on{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:var(--shadow-1)}
+.nav-item .count-badge{margin-left:auto}
+.mock-side .side-foot{margin-top:auto;padding:12px 10px 4px;border-top:1px solid var(--frost-line);display:flex;align-items:center;gap:10px}
+.mock-main{flex:1;display:flex;flex-direction:column;min-width:0}
+.mock-topbar{
+  display:flex;align-items:center;gap:14px;padding:14px 24px;
+  border-bottom:1px solid var(--line);
+  background:var(--frost-bg-2);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+}
+.crumb{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-3)}
+.crumb b{color:var(--ink);font-weight:600}
+.mock-content{padding:26px 28px;display:flex;flex-direction:column;gap:20px;overflow:hidden}
+.page-head .eyebrow{font-size:12.5px;color:var(--ink-3);font-weight:500}
+.page-head h1{font-size:27px;font-weight:800;letter-spacing:-.015em;margin-top:2px}
+.card{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-1);
+}
+.card .card-head{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
+.card .card-head h3{font-size:14.5px;font-weight:700}
+
+/* doc header pattern */
+.doc-head{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:18px 22px;box-shadow:var(--shadow-1);width:100%;
+}
+.doc-head .dh-top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.doc-head .dh-no{font-family:var(--font-mono);font-size:15px;font-weight:600}
+.doc-head .dh-meta{display:flex;gap:26px;margin-top:14px;flex-wrap:wrap}
+.doc-head .dh-meta .m b{display:block;font-size:13.5px;font-weight:600}
+.doc-head .dh-meta .m span{font-size:11.5px;color:var(--ink-3)}
+
+/* approval bar */
+.approve-bar{
+  display:flex;align-items:center;gap:14px;width:100%;
+  background:var(--butter-bg);border:1px solid rgba(228,190,74,.45);
+  border-radius:var(--r-lg);padding:13px 18px;
+}
+[data-theme="dark"] .approve-bar{border-color:rgba(228,190,74,.25)}
+.approve-bar .a-text{flex:1;font-size:13.5px;color:var(--butter-ink);font-weight:500}
+
+/* review queue card */
+.review-card{
+  background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--peach-dot);
+  border-radius:var(--r-md);padding:14px 16px;width:100%;box-shadow:var(--shadow-1);
+}
+
+/* calendar chips */
+.event-chip{
+  display:inline-flex;align-items:center;gap:9px;border-radius:12px;padding:8px 13px;font-size:12.5px;
+}
+.event-chip .e-ic{width:24px;height:24px;border-radius:8px;background:var(--surface);display:grid;place-items:center;font-size:12px;box-shadow:var(--shadow-1)}
+.event-chip b{display:block;font-weight:600}
+.event-chip span{display:block;font-size:11px;opacity:.75}
+
+/* pagination */
+.pager{display:inline-flex;align-items:center;gap:4px}
+.pager button{
+  min-width:30px;height:30px;border-radius:9px;border:none;background:transparent;
+  font:inherit;font-size:13px;font-weight:600;color:var(--ink-2);cursor:pointer;
+}
+.pager button:hover{background:var(--surface-2)}
+.pager button.on{background:var(--ink);color:var(--ink-invert)}
+
+/* do/dont */
+.dd{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.dd .d{border-radius:var(--r-lg);padding:16px 18px;font-size:13px}
+.dd .do{background:var(--mint-bg);color:var(--mint-ink)}
+.dd .dont{background:var(--rose-bg);color:var(--rose-ink)}
+.dd b{display:block;margin-bottom:6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.dd ul{margin-left:16px;display:flex;flex-direction:column;gap:5px}
+
+.src{font-size:12.5px;color:var(--ink-3)}
+.src a{color:var(--sky-ink)}
+
+@media (max-width:900px){
+  .kit-body{padding:32px 20px 80px}
+  .app-frame{flex-direction:column}
+  .mock-side{width:100%;flex-direction:row;flex-wrap:wrap}
+  .dd{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="kit-header">
+  <div class="kit-logo"><span class="mark">L</span> Loom <span style="color:var(--ink-3);font-weight:500;font-size:13px">· KDPS design language · v0.1</span></div>
+  <nav class="kit-nav">
+    <a href="#principles">Principles</a>
+    <a href="#foundations">Foundations</a>
+    <a href="#shell">App shell</a>
+    <a href="#components">Components</a>
+    <a href="#patterns">ERP patterns</a>
+    <a href="#mock">Full mock</a>
+    <a href="#rules">Rules</a>
+  </nav>
+  <button class="theme-toggle" onclick="toggleTheme()"><span id="themeIcon">🌙</span> <span id="themeLabel">Dark</span></button>
+</header>
+
+<div class="kit-body">
+
+<div class="kit-hero">
+  <div class="eyebrow">Design language kit · for the KDPS operating system</div>
+  <h1>Loom</h1>
+  <p>
+    A fashion-retail ERP should feel like the brands it sells: light, warm, and put together.
+    Loom pairs a <b>frosted glass sidebar</b> floating over a soft pastel wash with a <b>clean white working canvas</b>,
+    and replaces heavy black buttons with <b>muted terracotta and pastel tints</b>.
+    Color is spent on meaning - statuses, brands, alerts - never on decoration that competes with the numbers.
+    Toggle dark mode from the header; every token below has a dark counterpart.
+  </p>
+</div>
+
+<!-- ================= PRINCIPLES ================= -->
+<section class="kit-section" id="principles">
+  <div class="section-head">
+    <span class="no">01</span>
+    <h2>Principles</h2>
+    <p>Distilled from current dashboard and ERP design research, filtered through what a 50-store Indian retail chain actually needs day to day.</p>
+  </div>
+  <div class="principles">
+    <div class="principle"><div class="pnum" style="background:var(--peach-bg);color:var(--peach-ink)">1</div>
+      <h3>Calm canvas, colorful meaning</h3>
+      <p>The working surface stays white/neutral so dense tables and forms stay readable. Pastel color appears only where it carries meaning: status, category, alert, brand.</p></div>
+    <div class="principle"><div class="pnum" style="background:var(--sky-bg);color:var(--sky-ink)">2</div>
+      <h3>Frost frames, never floods</h3>
+      <p>Glass effects live on the frame - sidebar, topbar, toasts, overlays. Never behind data tables or forms, where blur wrecks contrast and scanning speed.</p></div>
+    <div class="principle"><div class="pnum" style="background:var(--mint-bg);color:var(--mint-ink)">3</div>
+      <h3>Numbers are the heroes</h3>
+      <p>₹ values in tabular numerals, lakh/crore grouping, right-aligned. Voucher numbers in mono. A store person should read a ledger row in one glance.</p></div>
+    <div class="principle"><div class="pnum" style="background:var(--lavender-bg);color:var(--lavender-ink)">4</div>
+      <h3>Soft geometry, firm hierarchy</h3>
+      <p>Pill buttons, 12-22px radii, generous padding - friendly like the screenshots you liked. But hierarchy stays strict: one page title, one primary action per screen.</p></div>
+    <div class="principle"><div class="pnum" style="background:var(--butter-bg);color:var(--butter-ink)">5</div>
+      <h3>Show what matters now</h3>
+      <p>Progressive disclosure: the default view answers today's question (sales, pending reviews, expiring SOR windows); detail lives one click behind.</p></div>
+    <div class="principle"><div class="pnum" style="background:var(--rose-bg);color:var(--rose-ink)">6</div>
+      <h3>Accessible by default</h3>
+      <p>Every pastel chip pairs a tinted background with a dark ink of the same hue (WCAG AA). Focus rings on everything. Frost always has a solid-color fallback.</p></div>
+  </div>
+</section>
+
+<!-- ================= FOUNDATIONS ================= -->
+<section class="kit-section" id="foundations">
+  <div class="section-head">
+    <span class="no">02</span>
+    <h2>Foundations</h2>
+    <p>Tokens first. Every component below is built only from these - no ad-hoc colors, radii, or shadows anywhere in the app.</p>
+  </div>
+
+  <div class="spec-grid">
+    <div class="spec wide">
+      <div class="spec-title"><h3>Brand accent - Terracotta</h3><span>--accent</span></div>
+      <div class="spec-body">
+        <div class="swatch-row" style="width:100%">
+          <div class="swatch"><div class="chip" style="background:var(--accent)"></div><div class="meta"><b>Accent</b><span>#DF6349</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--accent-hover)"></div><div class="meta"><b>Accent hover</b><span>#CE5540</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--accent-soft)"></div><div class="meta"><b>Accent soft</b><span>#FBEAE5</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--accent-ink)"></div><div class="meta"><b>Accent ink</b><span>#A93F2B</span></div></div>
+          <div class="swatch"><div class="chip" style="background:linear-gradient(135deg,var(--accent),#F09A5E)"></div><div class="meta"><b>Brand gradient</b><span>logo / marks only</span></div></div>
+        </div>
+      </div>
+      <div class="spec-note"><b>Why terracotta:</b> warm and fashion-forward without being loud; distinct from the blue/black every other ERP uses; sits naturally beside the pastel family. Used sparingly - the one primary action per screen, active nav, the logo.</div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Pastel family - the meaning palette</h3><span>status · categories · events</span></div>
+      <div class="spec-body">
+        <div class="swatch-row" style="width:100%">
+          <div class="swatch"><div class="chip" style="background:var(--peach-bg)"><span class="chip-status c-peach"><span class="dot"></span>Peach</span></div><div class="meta"><b>Flagged · attention</b><span>damage, mismatch</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--butter-bg)"><span class="chip-status c-butter"><span class="dot"></span>Butter</span></div><div class="meta"><b>Waiting · pending</b><span>approvals, review</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--mint-bg)"><span class="chip-status c-mint"><span class="dot"></span>Mint</span></div><div class="meta"><b>Done · posted</b><span>success, in stock</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--sky-bg)"><span class="chip-status c-sky"><span class="dot"></span>Sky</span></div><div class="meta"><b>Moving · info</b><span>transit, outright</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--lavender-bg)"><span class="chip-status c-lavender"><span class="dot"></span>Lavender</span></div><div class="meta"><b>Special terms</b><span>SOR, consignment</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--rose-bg)"><span class="chip-status c-rose"><span class="dot"></span>Rose</span></div><div class="meta"><b>Stopped · error</b><span>cancelled, rejected</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--stone-bg)"><span class="chip-status c-stone"><span class="dot"></span>Stone</span></div><div class="meta"><b>Neutral · draft</b><span>inactive, archived</span></div></div>
+        </div>
+      </div>
+      <div class="spec-note"><b>Rule:</b> each pastel = tinted background + dark ink of the same hue. Never white text on pastel. Meanings are fixed app-wide so color becomes a language the staff learns once.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Neutrals</h3><span>surfaces · ink · lines</span></div>
+      <div class="spec-body">
+        <div class="swatch-row" style="width:100%">
+          <div class="swatch"><div class="chip" style="background:var(--canvas)"></div><div class="meta"><b>Canvas</b><span>page bg + wash</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--surface);border-bottom:1px solid var(--line)"></div><div class="meta"><b>Surface</b><span>cards, tables</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--surface-2)"></div><div class="meta"><b>Surface 2</b><span>wells, th, hover</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--ink)"></div><div class="meta"><b>Ink</b><span>primary text</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--ink-2)"></div><div class="meta"><b>Ink 2</b><span>secondary</span></div></div>
+          <div class="swatch"><div class="chip" style="background:var(--ink-3)"></div><div class="meta"><b>Ink 3</b><span>hints, labels</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Frost recipe</h3><span>sidebar · topbar · toasts</span></div>
+      <div class="spec-body" style="background:var(--wash),var(--canvas);border-radius:0 0 var(--r-lg) var(--r-lg)">
+        <div style="background:var(--frost-bg);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);border:1px solid var(--frost-line);border-radius:var(--r-lg);padding:18px 22px;box-shadow:var(--frost-shadow);width:100%">
+          <b style="font-family:var(--font-display)">Frosted panel</b>
+          <div style="font-size:12.5px;color:var(--ink-2);margin-top:4px">rgba surface at 60% + blur(22px) saturate(1.5) + 1px frost line + soft shadow. Solid <span class="mono">var(--surface)</span> fallback when backdrop-filter is unsupported.</div>
+        </div>
+      </div>
+      <div class="spec-note"><b>Where:</b> sidebar, topbar, toasts, command palette. <b>Never:</b> behind tables, forms, or ledgers.</div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Typography</h3><span>Manrope display · Inter UI · mono numbers</span></div>
+      <div class="spec-body" style="display:block">
+        <div class="type-row"><span class="label">display / 46 · 800</span><span style="font-family:var(--font-display);font-size:38px;font-weight:800;letter-spacing:-.02em">Good morning, Deoghar</span></div>
+        <div class="type-row"><span class="label">h1 / 27 · 800</span><span style="font-family:var(--font-display);font-size:27px;font-weight:800">Goods received notes</span></div>
+        <div class="type-row"><span class="label">h2 / 20 · 700</span><span style="font-family:var(--font-display);font-size:20px;font-weight:700">Pending PT review</span></div>
+        <div class="type-row"><span class="label">h3 / 15 · 700</span><span style="font-family:var(--font-display);font-size:15px;font-weight:700">Card and section titles</span></div>
+        <div class="type-row"><span class="label">body / 14 · 400</span><span>Inter for everything staff read and type. Line height 1.55, never justified.</span></div>
+        <div class="type-row"><span class="label">small / 12.5 · 500</span><span style="font-size:12.5px;color:var(--ink-2);font-weight:500">Labels, chips, table headers, helper text.</span></div>
+        <div class="type-row"><span class="label">money / tabular</span><span class="num" style="font-size:19px;font-weight:700">₹28,50,000 · ₹1,24,500 · ₹950</span></div>
+        <div class="type-row"><span class="label">voucher / mono</span><span class="mono">26-27/DEO/SAL/74 &nbsp; GRN-RAN-0182 &nbsp; PT-2026-0834</span></div>
+      </div>
+      <div class="spec-note"><b>Numbers rule:</b> all quantities and money use <span class="mono">font-variant-numeric: tabular-nums</span>; money always in Indian grouping (lakh/crore); document numbers always mono so they scan like codes, not words.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Geometry & elevation</h3><span>radius · shadow · spacing</span></div>
+      <div class="spec-body">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;width:100%">
+          <div style="width:76px;height:56px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-sm);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">8 sm</div>
+          <div style="width:76px;height:56px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-md);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">12 md</div>
+          <div style="width:76px;height:56px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-lg);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">16 lg</div>
+          <div style="width:76px;height:56px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-xl);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">22 xl</div>
+          <div style="width:76px;height:56px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:var(--r-pill);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">pill</div>
+        </div>
+        <div style="display:flex;gap:14px;width:100%;margin-top:8px">
+          <div style="flex:1;height:56px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-1);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">shadow-1 cards</div>
+          <div style="flex:1;height:56px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-2);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">shadow-2 popovers</div>
+          <div style="flex:1;height:56px;background:var(--surface);border-radius:var(--r-md);box-shadow:var(--shadow-3);display:grid;place-items:center;font-size:11px;color:var(--ink-3)">shadow-3 modals</div>
+        </div>
+      </div>
+      <div class="spec-note"><b>Spacing scale:</b> 4 · 8 · 12 · 16 · 20 · 24 · 32 · 48. Inputs and buttons share a 36px base height (44px on touch screens in stores).</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= APP SHELL ================= -->
+<section class="kit-section" id="shell">
+  <div class="section-head">
+    <span class="no">03</span>
+    <h2>App shell</h2>
+    <p>The frame every screen lives in: frosted sidebar over the pastel wash, frosted topbar, white content canvas. The sidebar is role-scoped - a store person sees their store's sections only.</p>
+  </div>
+
+  <div class="app-frame" style="min-height:560px">
+    <aside class="mock-side">
+      <div class="brand">
+        <span class="mark">K</span>
+        <div><b>KDPS</b><span>Operating System</span></div>
+      </div>
+      <div class="nav-group">Daily</div>
+      <a class="nav-item on"><span class="ic">◧</span> Overview</a>
+      <a class="nav-item"><span class="ic">⌁</span> Sell / POS</a>
+      <a class="nav-item"><span class="ic">⤓</span> Inbound <span class="count-badge">3</span></a>
+      <a class="nav-item"><span class="ic">⇄</span> Transfers</a>
+      <div class="nav-group">Stock & money</div>
+      <a class="nav-item"><span class="ic">▤</span> Stock ledger</a>
+      <a class="nav-item"><span class="ic">₹</span> Cash & vendors</a>
+      <a class="nav-item"><span class="ic">✓</span> Approvals <span class="count-badge">2</span></a>
+      <div class="nav-group">Setup</div>
+      <a class="nav-item"><span class="ic">◈</span> Master data</a>
+      <a class="nav-item"><span class="ic">◔</span> Insights</a>
+      <div class="side-foot">
+        <span class="avatar" style="background:var(--lavender-bg);color:var(--lavender-ink)">RS</span>
+        <div style="min-width:0">
+          <b style="font-size:12.5px;display:block">Ravi Shankar</b>
+          <span style="font-size:11px;color:var(--ink-3)">Store manager · DEO</span>
+        </div>
+      </div>
+    </aside>
+    <div class="mock-main">
+      <div class="mock-topbar">
+        <div class="crumb">Inbound <span>›</span> <b>GRN-DEO-0182</b></div>
+        <div style="flex:1"></div>
+        <div class="search-pill" style="min-width:220px">⌕ Search anything <span class="kbd">⌘K</span></div>
+        <span class="chip-status c-sky"><span class="dot"></span>Vaishnavi Deoghar</span>
+        <span class="avatar" style="background:var(--peach-bg);color:var(--peach-ink)">RS</span>
+      </div>
+      <div class="mock-content">
+        <div class="page-head">
+          <div class="eyebrow">Tuesday, 29 July 2026</div>
+          <h1>The shell: frost frames a white canvas</h1>
+        </div>
+        <div class="card" style="padding:20px 22px;font-size:13.5px;color:var(--ink-2)">
+          Content cards sit on the washed canvas as clean white surfaces.
+          The sidebar glass picks up the peach / sky / lavender wash behind it, which gives the app its personality
+          without ever placing color behind the data itself.
+          Active nav item lifts to a solid white pill; badge counts use the accent.
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <span class="chip-status c-butter"><span class="dot"></span>Pending approval</span>
+          <span class="chip-status c-mint"><span class="dot"></span>Posted</span>
+          <span class="chip-status c-lavender"><span class="dot"></span>SOR</span>
+          <span class="chip-status c-peach"><span class="dot"></span>Flagged</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= COMPONENTS ================= -->
+<section class="kit-section" id="components">
+  <div class="section-head">
+    <span class="no">04</span>
+    <h2>Components</h2>
+    <p>Every interactive element in the current app, redesigned. This is the component inventory the PWA needs: buttons, segmented pills, chips, forms, scan input, tables, KPIs, overlays, navigation aids.</p>
+  </div>
+
+  <div class="spec-grid">
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Buttons</h3><span>no heavy black pills - muted, tinted, frosted</span></div>
+      <div class="spec-body">
+        <button class="btn btn-primary">Post GRN</button>
+        <button class="btn btn-soft">Save draft</button>
+        <button class="btn btn-outline">Export</button>
+        <button class="btn btn-frost">Frosted · on wash</button>
+        <button class="btn btn-quiet">Cancel</button>
+        <button class="btn btn-mint">✓ Approve</button>
+        <button class="btn btn-rose">✕ Reject</button>
+        <button class="btn btn-sky">⇄ Transfer</button>
+        <button class="btn btn-primary" disabled>Disabled</button>
+        <button class="btn btn-icon btn-soft">＋</button>
+        <button class="btn btn-icon btn-outline">⋯</button>
+      </div>
+      <div class="spec-body" style="padding-top:0">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large · touch / POS</button>
+      </div>
+      <div class="spec-note"><b>Rules:</b> one terracotta primary per screen, and it is always the money/posting action. Approve is always mint, reject always rose - staff learn the colors, not the labels. Frosted buttons only on frosted or washed surfaces.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Segmented control</h3><span>view switching</span></div>
+      <div class="spec-body">
+        <div class="seg">
+          <button class="on">Today</button><button>Week</button><button>Month</button>
+        </div>
+        <div class="seg seg-accent">
+          <button class="on">All stores</button><button>Bihar</button><button>Jharkhand</button>
+        </div>
+      </div>
+      <div class="spec-note">Soft well with a lifted white (or accent) pill for the active option - replaces the black pill from the reference shots.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Tabs & filter pills</h3><span>within-page sections</span></div>
+      <div class="spec-body" style="display:block">
+        <div class="tabs">
+          <a class="on">Lines (24)</a><a>Attachments</a><a>Audit trail</a><a>Postings</a>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+          <span class="chip-status c-stone" style="cursor:pointer">All</span>
+          <span class="chip-status c-lavender" style="cursor:pointer"><span class="dot"></span>SOR only</span>
+          <span class="chip-status chip-outline" style="cursor:pointer">Peter England</span>
+          <span class="chip-status chip-outline" style="cursor:pointer">Season: AW26 ✕</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Status chips - the fixed vocabulary</h3><span>docstatus · commercial model · movement</span></div>
+      <div class="spec-body">
+        <span class="chip-status c-stone"><span class="dot"></span>Draft</span>
+        <span class="chip-status c-butter"><span class="dot"></span>Pending approval</span>
+        <span class="chip-status c-mint"><span class="dot"></span>Posted</span>
+        <span class="chip-status c-rose"><span class="dot"></span>Cancelled</span>
+        <span class="chip-status c-peach"><span class="dot"></span>Flagged · damage</span>
+        <span class="chip-status c-sky"><span class="dot"></span>In transit</span>
+        <span class="chip-status c-mint"><span class="dot"></span>Received</span>
+        <span class="chip-status c-lavender"><span class="dot"></span>SOR</span>
+        <span class="chip-status c-sky"><span class="dot"></span>Outright</span>
+        <span class="chip-status c-butter"><span class="dot"></span>Hybrid</span>
+        <span class="chip-status chip-outline">GSTIN · Bihar</span>
+        <span class="chip-status chip-outline">GSTIN · Jharkhand</span>
+      </div>
+      <div class="spec-note"><b>Vocabulary is locked:</b> stone=draft, butter=waiting, mint=done, rose=stopped, peach=needs attention, sky=moving/info, lavender=special terms (SOR). The same word never appears in two colors.</div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Form fields</h3><span>inputs · selects · toggles · errors</span></div>
+      <div class="spec-body">
+        <div class="field">
+          <label>Vendor</label>
+          <input class="input" value="Aditya Birla Fashion & Retail" />
+        </div>
+        <div class="field">
+          <label>Commercial model</label>
+          <select class="select"><option>SOR · 90-day return window</option><option>Outright</option><option>Hybrid</option></select>
+        </div>
+        <div class="field">
+          <label>PT date</label>
+          <input class="input" value="29 Jul 2026" />
+        </div>
+        <div class="field error">
+          <label>Quantity</label>
+          <input class="input" value="−4" />
+          <span class="help">Quantity cannot be negative.</span>
+        </div>
+      </div>
+      <div class="spec-body" style="padding-top:0">
+        <div class="search-pill">⌕ Search style, barcode, voucher… <span class="kbd">⌘K</span></div>
+        <label class="toggle"><input type="checkbox" checked><span class="track"></span></label>
+        <div class="stepper"><button>−</button><span class="val num">12</span><button>＋</button></div>
+        <label class="checkline"><input type="checkbox" checked> Include EOSS items</label>
+        <label class="checkline"><input type="radio" name="r1" checked> By style</label>
+        <label class="checkline"><input type="radio" name="r1"> By SKU</label>
+      </div>
+      <div class="spec-note"><b>Rules:</b> labels above fields, always visible (no floating labels). Errors turn the border rose and speak in plain sentences. 36px height desktop, 44px on store touch screens.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Scan input</h3><span>the wedge-scanner pattern</span></div>
+      <div class="spec-body">
+        <div class="scan-box">
+          <div class="scan-tally">
+            <div class="t"><b class="num">148</b><span>scanned</span></div>
+            <div class="t"><b class="num" style="color:var(--mint-ink)">144</b><span>matched</span></div>
+            <div class="t"><b class="num" style="color:var(--peach-ink)">4</b><span>flagged</span></div>
+          </div>
+          <input class="scan-input" placeholder="Scan barcode…" value="890435216␍">
+          <span style="font-size:12px;color:var(--ink-3)">Scanner types here · Enter commits the line</span>
+        </div>
+      </div>
+      <div class="spec-note">Big mono input, huge tallies readable from arm's length. Reused by GRN, transfers, stocktake, and later POS.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>KPI stat tiles</h3><span>dashboard numbers</span></div>
+      <div class="spec-body">
+        <div class="kpi">
+          <div class="k-label"><span class="k-icon" style="background:var(--mint-bg);color:var(--mint-ink)">₹</span> Today's sale</div>
+          <div class="k-value num">₹1,24,500</div>
+          <div class="k-delta k-up">▲ 12% vs last Tuesday</div>
+        </div>
+        <div class="kpi">
+          <div class="k-label"><span class="k-icon" style="background:var(--lavender-bg);color:var(--lavender-ink)">◷</span> SOR expiring in 15 days</div>
+          <div class="k-value num">238 <span style="font-size:14px;font-weight:600;color:var(--ink-3)">pcs</span></div>
+          <div class="k-delta k-down">▼ ₹4,80,250 at stake</div>
+        </div>
+      </div>
+      <div class="spec-note">Pastel icon squares carry the category color; number is the largest element; delta line says the "so what".</div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Data table</h3><span>the ledger workhorse</span></div>
+      <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>Voucher</th><th>Date</th><th>Party / Store</th><th>Type</th><th>Status</th><th class="r">Qty</th><th class="r">Amount</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="voucher">26-27/DEO/GRN/182</td><td>29 Jul</td>
+            <td style="display:flex;align-items:center;gap:9px"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--sky-bg);color:var(--sky-ink)">PE</span>Peter England</td>
+            <td>GRN</td><td><span class="chip-status c-mint"><span class="dot"></span>Posted</span></td>
+            <td class="r num">148</td><td class="r num" style="font-weight:600">₹2,14,600</td>
+          </tr>
+          <tr>
+            <td class="voucher">26-27/DEO/PT/834</td><td>29 Jul</td>
+            <td style="display:flex;align-items:center;gap:9px"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--lavender-bg);color:var(--lavender-ink)">MU</span>Mufti</td>
+            <td>PT</td><td><span class="chip-status c-butter"><span class="dot"></span>Pending review</span></td>
+            <td class="r num">96</td><td class="r num" style="font-weight:600">₹1,82,340</td>
+          </tr>
+          <tr>
+            <td class="voucher">26-27/RAN/TRF/091</td><td>28 Jul</td>
+            <td style="display:flex;align-items:center;gap:9px"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--peach-bg);color:var(--peach-ink)">RW</span>Ranchi WH → Deoghar</td>
+            <td>Transfer</td><td><span class="chip-status c-sky"><span class="dot"></span>In transit</span></td>
+            <td class="r num">64</td><td class="r num" style="font-weight:600">₹98,120</td>
+          </tr>
+          <tr>
+            <td class="voucher">26-27/DEO/SAL/74</td><td>28 Jul</td>
+            <td style="display:flex;align-items:center;gap:9px"><span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--stone-bg);color:var(--stone-ink)">C</span>Counter sale</td>
+            <td>Sale</td><td><span class="chip-status c-rose"><span class="dot"></span>Cancelled</span></td>
+            <td class="r num">2</td><td class="r num" style="font-weight:600">₹3,890</td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+      <div class="spec-body" style="justify-content:space-between">
+        <span style="font-size:12.5px;color:var(--ink-3)">Showing 1-4 of 212</span>
+        <div class="pager"><button>‹</button><button class="on">1</button><button>2</button><button>3</button><button>…</button><button>53</button><button>›</button></div>
+      </div>
+      <div class="spec-note"><b>Rules:</b> uppercase micro-headers on a soft well; vouchers mono; qty and money right-aligned tabular; status always a chip; row hover only (no zebra stripes - chips already give the rows rhythm).</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Modal</h3><span>focused decisions</span></div>
+      <div class="spec-body" style="justify-content:center;background:var(--surface-2)">
+        <div class="demo-modal">
+          <div class="m-head">
+            <div><h3>Post this GRN?</h3><div class="m-sub">148 pcs · ₹2,14,600 · Peter England</div></div>
+            <button class="btn btn-icon btn-quiet">✕</button>
+          </div>
+          <div class="m-body" style="font-size:13.5px;color:var(--ink-2)">
+            Posting writes the stock ledger and cannot be edited afterwards - only cancelled with a fresh document.
+          </div>
+          <div class="m-foot">
+            <button class="btn btn-quiet">Go back</button>
+            <button class="btn btn-primary">Post GRN</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-note">Money actions restate the numbers in the modal. Primary sits right; plain-language warning, no jargon.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Toasts & menu</h3><span>feedback · overflow actions</span></div>
+      <div class="spec-body">
+        <div class="toast"><span class="t-ic" style="background:var(--mint-bg);color:var(--mint-ink)">✓</span> GRN-DEO-0182 posted to stock ledger</div>
+        <div class="toast"><span class="t-ic" style="background:var(--rose-bg);color:var(--rose-ink)">!</span> Posting failed - voucher series locked</div>
+        <div class="menu">
+          <a>◫ View document</a>
+          <a>⎙ Print / PDF</a>
+          <a>⇄ Create transfer</a>
+          <hr>
+          <a class="danger">✕ Cancel document</a>
+        </div>
+      </div>
+      <div class="spec-note">Toasts are frosted (they float over anything). Destructive menu items are rose and sit below a divider.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Avatars & event chips</h3><span>people · calendar moments</span></div>
+      <div class="spec-body">
+        <div class="avatar-stack">
+          <span class="avatar" style="background:var(--peach-bg);color:var(--peach-ink)">RS</span>
+          <span class="avatar" style="background:var(--sky-bg);color:var(--sky-ink)">AK</span>
+          <span class="avatar" style="background:var(--mint-bg);color:var(--mint-ink)">PJ</span>
+          <span class="avatar" style="background:var(--stone-bg);color:var(--stone-ink)">+4</span>
+        </div>
+        <div class="event-chip c-lavender"><span class="e-ic">◷</span><span><b>SOR window closes</b><span>Mufti · 12 Aug</span></span></div>
+        <div class="event-chip c-mint"><span class="e-ic">✓</span><span><b>Stocktake done</b><span>DEO · 6:45 pm</span></span></div>
+        <div class="event-chip c-peach"><span class="e-ic">⤓</span><span><b>PT arrived</b><span>96 pcs · review</span></span></div>
+      </div>
+      <div class="spec-note">Event chips borrow the Techerly calendar look - pastel block, white icon square, two-line text.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Empty & loading states</h3><span>never a blank screen</span></div>
+      <div class="spec-body">
+        <div class="empty">
+          <div class="e-ic">🧵</div>
+          <h4>No pending reviews</h4>
+          <p>New PT files land here when the mapper needs a human eye.</p>
+          <button class="btn btn-soft btn-sm">Upload a PT file</button>
+        </div>
+        <div style="width:100%;display:flex;flex-direction:column;gap:9px">
+          <div class="skel" style="height:14px;width:60%"></div>
+          <div class="skel" style="height:14px;width:85%"></div>
+          <div class="skel" style="height:14px;width:72%"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Progress</h3><span>bars · rings</span></div>
+      <div class="spec-body">
+        <div style="width:100%;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:90px;color:var(--ink-2)">Mapped</span><div class="bar"><i style="width:76%;background:var(--mint-dot)"></i></div><b class="num">76%</b></div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:90px;color:var(--ink-2)">In review</span><div class="bar"><i style="width:18%;background:var(--butter-dot)"></i></div><b class="num">18%</b></div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:90px;color:var(--ink-2)">Failed</span><div class="bar"><i style="width:6%;background:var(--rose-dot)"></i></div><b class="num">6%</b></div>
+        </div>
+        <svg class="ring" width="76" height="76" viewBox="0 0 76 76">
+          <circle class="bg" cx="38" cy="38" r="32" fill="none" stroke-width="8"/>
+          <circle cx="38" cy="38" r="32" fill="none" stroke="var(--sky-dot)" stroke-width="8" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="56"/>
+          <text x="38" y="43" text-anchor="middle" font-size="16">72%</text>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ================= ERP PATTERNS ================= -->
+<section class="kit-section" id="patterns">
+  <div class="section-head">
+    <span class="no">05</span>
+    <h2>ERP patterns</h2>
+    <p>Compositions the app repeats everywhere: the document header, the maker-checker bar, the review queue card. Get these right once and every module inherits them.</p>
+  </div>
+
+  <div class="spec-grid">
+    <div class="spec wide">
+      <div class="spec-title"><h3>Document header</h3><span>every voucher screen starts with this</span></div>
+      <div class="spec-body">
+        <div class="doc-head">
+          <div class="dh-top">
+            <span class="dh-no">26-27/DEO/GRN/182</span>
+            <span class="chip-status c-mint"><span class="dot"></span>Posted</span>
+            <span class="chip-status c-lavender"><span class="dot"></span>SOR · 90 days</span>
+            <span style="flex:1"></span>
+            <button class="btn btn-outline btn-sm">⎙ Print</button>
+            <button class="btn btn-soft btn-sm">⇄ Create transfer</button>
+            <button class="btn btn-icon btn-quiet">⋯</button>
+          </div>
+          <div class="dh-meta">
+            <div class="m"><span>Vendor</span><b>Peter England (ABFRL)</b></div>
+            <div class="m"><span>Store</span><b>Vaishnavi Deoghar · JH</b></div>
+            <div class="m"><span>PT reference</span><b class="mono" style="font-weight:600">PT-2026-0834</b></div>
+            <div class="m"><span>Received</span><b>29 Jul 2026, 11:42 am</b></div>
+            <div class="m"><span>Quantity</span><b class="num">148 pcs</b></div>
+            <div class="m"><span>Value</span><b class="num">₹2,14,600</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="spec-note">Mono voucher number + status chips on the first line, then a quiet meta row. The FSM status is always visible at the top of a document, never buried.</div>
+    </div>
+
+    <div class="spec wide">
+      <div class="spec-title"><h3>Maker-checker approval bar</h3><span>appears on any document awaiting a checker</span></div>
+      <div class="spec-body">
+        <div class="approve-bar">
+          <span style="font-size:17px">◷</span>
+          <span class="a-text"><b>Waiting for Operations Head.</b> Transfer of 64 pcs (₹98,120) from Ranchi WH to Deoghar. Submitted by Ravi · 2 hrs ago.</span>
+          <button class="btn btn-rose btn-sm">✕ Reject</button>
+          <button class="btn btn-mint btn-sm">✓ Approve</button>
+        </div>
+      </div>
+      <div class="spec-note">Butter background = waiting, always. The bar restates quantity and money so the checker never approves blind.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Review queue card</h3><span>PT-mapper human queue</span></div>
+      <div class="spec-body">
+        <div class="review-card">
+          <div style="display:flex;align-items:center;gap:10px">
+            <b style="font-size:13.5px">MUFTI COLOR unmapped</b>
+            <span class="chip-status c-peach" style="margin-left:auto"><span class="dot"></span>Needs a human</span>
+          </div>
+          <div style="font-size:12.5px;color:var(--ink-2);margin-top:6px">
+            Row 34 · <span class="mono">"DENIM LT BLU"</span> did not match any color. Suggested: <b>Light Blue</b> (92%).
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn btn-mint btn-sm">Accept suggestion</button>
+            <button class="btn btn-outline btn-sm">Pick another</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-note">Peach left border = attention. The card shows the raw value, the guess, and the confidence - decide in one glance.</div>
+    </div>
+
+    <div class="spec">
+      <div class="spec-title"><h3>Audit trail</h3><span>who did what, when</span></div>
+      <div class="spec-body" style="display:block">
+        <div style="display:flex;flex-direction:column;gap:0">
+          <div style="display:flex;gap:12px;padding:8px 0">
+            <span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--mint-bg);color:var(--mint-ink)">OP</span>
+            <div style="font-size:13px"><b>Approved</b> by Operations Head <div style="font-size:11.5px;color:var(--ink-3)">29 Jul, 2:10 pm</div></div>
+          </div>
+          <div style="display:flex;gap:12px;padding:8px 0;border-top:1px dashed var(--line)">
+            <span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--butter-bg);color:var(--butter-ink)">RS</span>
+            <div style="font-size:13px"><b>Submitted</b> by Ravi Shankar <div style="font-size:11.5px;color:var(--ink-3)">29 Jul, 11:58 am</div></div>
+          </div>
+          <div style="display:flex;gap:12px;padding:8px 0;border-top:1px dashed var(--line)">
+            <span class="avatar" style="width:26px;height:26px;font-size:10.5px;background:var(--stone-bg);color:var(--stone-ink)">RS</span>
+            <div style="font-size:13px"><b>Created</b> draft from PT-2026-0834 <div style="font-size:11.5px;color:var(--ink-3)">29 Jul, 11:42 am</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FULL MOCK ================= -->
+<section class="kit-section" id="mock">
+  <div class="section-head">
+    <span class="no">06</span>
+    <h2>Full-page mock - store overview</h2>
+    <p>Everything assembled: the morning screen a store manager opens. Flip the theme toggle in the header to judge both modes.</p>
+  </div>
+
+  <div class="app-frame">
+    <aside class="mock-side">
+      <div class="brand">
+        <span class="mark">K</span>
+        <div><b>KDPS</b><span>Operating System</span></div>
+      </div>
+      <div class="nav-group">Daily</div>
+      <a class="nav-item on"><span class="ic">◧</span> Overview</a>
+      <a class="nav-item"><span class="ic">⌁</span> Sell / POS</a>
+      <a class="nav-item"><span class="ic">⤓</span> Inbound <span class="count-badge">3</span></a>
+      <a class="nav-item"><span class="ic">⇄</span> Transfers</a>
+      <a class="nav-item"><span class="ic">▦</span> Stocktake</a>
+      <div class="nav-group">Stock & money</div>
+      <a class="nav-item"><span class="ic">▤</span> Stock ledger</a>
+      <a class="nav-item"><span class="ic">₹</span> Cash & vendors</a>
+      <a class="nav-item"><span class="ic">✓</span> Approvals <span class="count-badge">2</span></a>
+      <div class="nav-group">Setup</div>
+      <a class="nav-item"><span class="ic">◈</span> Master data</a>
+      <a class="nav-item"><span class="ic">◔</span> Insights</a>
+      <div class="side-foot">
+        <span class="avatar" style="background:var(--lavender-bg);color:var(--lavender-ink)">RS</span>
+        <div style="min-width:0">
+          <b style="font-size:12.5px;display:block">Ravi Shankar</b>
+          <span style="font-size:11px;color:var(--ink-3)">Store manager · DEO</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="mock-main">
+      <div class="mock-topbar">
+        <div class="crumb"><b>Overview</b></div>
+        <div style="flex:1"></div>
+        <div class="search-pill" style="min-width:230px">⌕ Search anything <span class="kbd">⌘K</span></div>
+        <button class="btn btn-icon btn-frost">🔔</button>
+        <span class="avatar" style="background:var(--peach-bg);color:var(--peach-ink)">RS</span>
+      </div>
+
+      <div class="mock-content">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap">
+          <div class="page-head">
+            <div class="eyebrow">Tuesday, 29 July 2026 · Vaishnavi Deoghar</div>
+            <h1>Good morning, Ravi</h1>
+          </div>
+          <div class="seg">
+            <button class="on">Today</button><button>Week</button><button>Month</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div class="kpi">
+            <div class="k-label"><span class="k-icon" style="background:var(--mint-bg);color:var(--mint-ink)">₹</span> Sale so far</div>
+            <div class="k-value num">₹1,24,500</div>
+            <div class="k-delta k-up">▲ 12% vs last Tuesday</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label"><span class="k-icon" style="background:var(--sky-bg);color:var(--sky-ink)">◫</span> Bills</div>
+            <div class="k-value num">86</div>
+            <div class="k-delta k-flat">avg ₹1,448 / bill</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label"><span class="k-icon" style="background:var(--butter-bg);color:var(--butter-ink)">◷</span> Waiting on you</div>
+            <div class="k-value num">5</div>
+            <div class="k-delta k-flat">2 approvals · 3 PT reviews</div>
+          </div>
+          <div class="kpi">
+            <div class="k-label"><span class="k-icon" style="background:var(--lavender-bg);color:var(--lavender-ink)">▤</span> Stock on hand</div>
+            <div class="k-value num">12,480 <span style="font-size:14px;font-weight:600;color:var(--ink-3)">pcs</span></div>
+            <div class="k-delta k-down">238 pcs in SOR windows closing</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.7fr 1fr;gap:16px;align-items:start">
+          <div class="card">
+            <div class="card-head">
+              <h3>Recent documents</h3>
+              <button class="btn btn-quiet btn-sm">View all ›</button>
+            </div>
+            <table class="tbl">
+              <tbody>
+                <tr>
+                  <td class="voucher">GRN/182</td><td>Peter England</td>
+                  <td><span class="chip-status c-mint"><span class="dot"></span>Posted</span></td>
+                  <td class="r num" style="font-weight:600">₹2,14,600</td>
+                </tr>
+                <tr>
+                  <td class="voucher">PT/834</td><td>Mufti</td>
+                  <td><span class="chip-status c-butter"><span class="dot"></span>In review</span></td>
+                  <td class="r num" style="font-weight:600">₹1,82,340</td>
+                </tr>
+                <tr>
+                  <td class="voucher">TRF/091</td><td>Ranchi WH → here</td>
+                  <td><span class="chip-status c-sky"><span class="dot"></span>In transit</span></td>
+                  <td class="r num" style="font-weight:600">₹98,120</td>
+                </tr>
+                <tr>
+                  <td class="voucher">SAL/74</td><td>Counter sale</td>
+                  <td><span class="chip-status c-rose"><span class="dot"></span>Cancelled</span></td>
+                  <td class="r num" style="font-weight:600">₹3,890</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card">
+              <div class="card-head"><h3>Needs your eye</h3><span class="count-badge">5</span></div>
+              <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+                <div class="event-chip c-butter" style="width:100%"><span class="e-ic">✓</span><span><b>Approve transfer TRF/091</b><span>64 pcs · ₹98,120</span></span></div>
+                <div class="event-chip c-peach" style="width:100%"><span class="e-ic">⤓</span><span><b>3 PT rows unmapped</b><span>Mufti · PT/834</span></span></div>
+                <div class="event-chip c-lavender" style="width:100%"><span class="e-ic">◷</span><span><b>SOR window closes 12 Aug</b><span>238 pcs · Mufti</span></span></div>
+              </div>
+            </div>
+            <div class="card" style="padding:16px 18px">
+              <h3 style="font-size:14.5px;margin-bottom:12px">PT mapping health</h3>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:70px;color:var(--ink-2)">Auto</span><div class="bar"><i style="width:76%;background:var(--mint-dot)"></i></div><b class="num">76%</b></div>
+                <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:70px;color:var(--ink-2)">Review</span><div class="bar"><i style="width:18%;background:var(--butter-dot)"></i></div><b class="num">18%</b></div>
+                <div style="display:flex;align-items:center;gap:12px;font-size:12.5px"><span style="width:70px;color:var(--ink-2)">Failed</span><div class="bar"><i style="width:6%;background:var(--rose-dot)"></i></div><b class="num">6%</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= RULES ================= -->
+<section class="kit-section" id="rules">
+  <div class="section-head">
+    <span class="no">07</span>
+    <h2>Rules of the language</h2>
+    <p>The short contract every screen must honor. If a screen needs to break one, we change the rule here first - same discipline as the architecture doc.</p>
+  </div>
+  <div class="dd">
+    <div class="d do">
+      <b>Always</b>
+      <ul>
+        <li>Frost on the frame only: sidebar, topbar, toasts, palette.</li>
+        <li>One terracotta primary per screen - the posting/money action.</li>
+        <li>Approve = mint, reject = rose, waiting = butter, everywhere.</li>
+        <li>Money in ₹ lakh/crore, tabular, right-aligned. Vouchers in mono.</li>
+        <li>Pastel chip = tinted bg + same-hue dark ink (AA contrast).</li>
+        <li>Focus ring on every interactive element; 44px targets on touch.</li>
+        <li>Every empty state says what the screen is for and offers a next step.</li>
+      </ul>
+    </div>
+    <div class="d dont">
+      <b>Never</b>
+      <ul>
+        <li>No blur behind tables, forms, or any dense data.</li>
+        <li>No solid black pill buttons; no pure-white text on pastels.</li>
+        <li>No zebra striping; hover highlight only.</li>
+        <li>No second accent color per screen; pastel ≠ decoration.</li>
+        <li>No status meaning expressed by color alone - always dot + word.</li>
+        <li>No floating labels, no placeholder-as-label.</li>
+        <li>No new tokens, radii, or shadows outside this kit.</li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="src" style="margin-top:28px">
+    Research behind the principles:
+    <a href="https://www.uxpin.com/studio/blog/dashboard-design-principles/">UXPin - Dashboard design principles</a> ·
+    <a href="https://fuselabcreative.com/top-dashboard-design-trends-2025/">Fuselab - Dashboard trends 2026</a> ·
+    <a href="https://axesslab.com/glassmorphism-meets-accessibility-can-frosted-glass-be-inclusive/">Axess Lab - Glassmorphism & accessibility</a> ·
+    <a href="https://www.orizon.co/blog/glassmorphism-in-2026-how-to-use-frosted-glass-without-killing-ux">Orizon - Frosted glass without killing UX</a> ·
+    <a href="https://uxpilot.ai/blogs/glassmorphism-ui">UX Pilot - Glassmorphism best practices</a>
+  </p>
+</section>
+
+</div>
+
+<script>
+function toggleTheme(){
+  var html=document.documentElement;
+  var dark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',dark?'light':'dark');
+  document.getElementById('themeIcon').textContent=dark?'🌙':'☀️';
+  document.getElementById('themeLabel').textContent=dark?'Dark':'Light';
+}
+</script>
+</body>
+</html>
