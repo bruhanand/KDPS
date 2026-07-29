@@ -142,6 +142,11 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
     ("booking detail", "booking", CAP_VIEW, "get", f"/api/bookings/{ABSENT}"),
     ("booking create", "booking", CAP_OPERATE, "post", "/api/bookings"),
     ("booking draft", "booking", CAP_OPERATE, "post", "/api/bookings/draft"),
+    # PT making moved to the warehouse rung (#119): the list still opens at
+    # `view`, but only `approve` and up may create — not from a screen, and
+    # not from the API either.
+    ("pt file list", "receive_goods", CAP_VIEW, "get", "/api/ptmapper/files"),
+    ("pt file create", "receive_goods", CAP_APPROVE, "post", "/api/ptmapper/files"),
 ]
 
 #: Which section each wired approval kind belongs to — the section whose
@@ -572,7 +577,6 @@ UNGATED_VIEWS = {
     # would actually need to protect — cost, landed value, margin — is masked
     # per row instead, against the caller's own stores, not behind a section.
     "outbound/views.py:CrossLocationStockSearchView",
-    "ptmapper/views.py:PtFileListCreateView",
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",
     "ptmapper/views.py:PtFileRerunView",

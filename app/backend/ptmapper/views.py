@@ -22,6 +22,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.actor_policies import user_may_act
+from accounts.permissions import require_section
+from accounts.sections import CAP_APPROVE, CAP_VIEW
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
 from files.models import StoredFile, UploadTooLarge
@@ -139,9 +141,23 @@ def _forbidden(detail: str) -> Response:
 #: its review status.
 PT_FILE_SEARCH_FIELDS = ("original_filename", "brand_guess", "status")
 
+#: Reading a PT and making one are different rights (#119): the list opens at
+#: whatever `receive_goods` rung the caller holds, making one needs `approve` —
+#: the rung PT-making rose to when it moved off the store. A store keeps
+#: `operate` and can still see this list; it can no longer write to it.
+#:
+#: This view carried no section gate at all before #119 (bare `IsAuthenticated`,
+#: recorded in `UNGATED_VIEWS`) — closing it closes both halves, list included,
+#: which is `require_section`'s only shape for "one view that both lists and
+#: creates". The one role this newly shuts out of the list is `data_steward`
+#: (`receive_goods: none` on the ratified sheet); its actual work — proposal and
+#: correction review — is `ReviewListView`/`ReviewResolveView`, neither touched
+#: here.
+CanReadOrMakePtFile = require_section("receive_goods", CAP_VIEW, write_minimum=CAP_APPROVE)
+
 
 class PtFileListCreateView(generics.ListCreateAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, CanReadOrMakePtFile]
 
     def get_queryset(self) -> Any:
         # Fail-closed store scoping by the linked GRN's store, mirroring /inbound/grns.

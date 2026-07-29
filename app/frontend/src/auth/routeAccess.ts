@@ -10,7 +10,7 @@
 // its section's items, so what the sidebar hides, the URL bar hides too, and
 // the two can't drift. Whether the user holds a section is the server's answer
 // (`capabilities`, the SIDEBAR RBAC contract #85), never inferred here.
-import { itemOwning, itemVisible } from "../shell/navConfig";
+import { itemOwning, itemPath, itemVisible, normalizePath } from "../shell/navConfig";
 import type { User } from "./AuthContext";
 
 export function canAccess(pathname: string, user: User): boolean {
@@ -25,5 +25,13 @@ export function canAccess(pathname: string, user: User): boolean {
   if (!screen) return true;
   const held = user.capabilities?.[screen.section];
   if ((held ?? "none") === "none") return false;
-  return itemVisible(screen, held, user.role?.code ?? "", false);
+  // A URL strictly under the item's own path — a document, not the list/create
+  // screen itself — answers to `childMinCapability` where the item sets one
+  // (#119: a PT stays readable below the rung its own making screen needs).
+  const isChild = itemPath(screen) !== normalizePath(pathname);
+  const gate =
+    isChild && screen.childMinCapability
+      ? { ...screen, minCapability: screen.childMinCapability }
+      : screen;
+  return itemVisible(gate, held, user.role?.code ?? "", false);
 }

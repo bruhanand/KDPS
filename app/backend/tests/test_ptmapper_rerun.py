@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from accounts.models import Role, User
+from accounts.models import User
 from ptmapper.models import ControlledValue, LookupProposal, PtFile, PtRow
 from ptmapper.processing import _reapply_manual
 
@@ -34,16 +35,22 @@ def vocab(db):
 @pytest.fixture
 def client(db):
     c = APIClient()
-    c.force_authenticate(User.objects.create_user(username="wh", password=TEST_PASSWORD))
+    c.force_authenticate(
+        User.objects.create_user(username="wh", password=TEST_PASSWORD, role=make_role("warehouse"))
+    )
     return c
 
 
 @pytest.fixture
 def steward_client(db):
-    role = Role.objects.create(code="data_steward", name="Data Steward")
+    # Data Steward: mapping-stewardship rights (proposal decide/review), never
+    # PT-making rights (receive_goods:none) - the ratified matrix and #119 both
+    # keep those apart, so this client never uploads a file itself.
     c = APIClient()
     c.force_authenticate(
-        User.objects.create_user(username="steward", password=TEST_PASSWORD, role=role)
+        User.objects.create_user(
+            username="steward", password=TEST_PASSWORD, role=make_role("data_steward")
+        )
     )
     return c
 
@@ -94,8 +101,8 @@ def test_discard_edits_resets_to_the_engine_mapping(client, vocab):
 # ---------------------------------------------------------------- no-clobber invariant
 
 
-def test_approved_rule_fills_blanks_without_touching_manual_cells(steward_client, vocab):
-    pt_id, row_id = _upload(steward_client, vocab, b"BARCODE,COLOR,QTY,MRP\nB1,MISTYX,2,100\n")
+def test_approved_rule_fills_blanks_without_touching_manual_cells(client, steward_client, vocab):
+    pt_id, row_id = _upload(client, vocab, b"BARCODE,COLOR,QTY,MRP\nB1,MISTYX,2,100\n")
     steward_client.patch(  # hand-fix FIT (COLOR is still an unmapped blank)
         f"/api/ptmapper/files/{pt_id}/rows",
         {"rows": [{"id": row_id, "data": {"FIT": "SLIM"}}]},

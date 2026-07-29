@@ -153,7 +153,11 @@ def test_pt_posting_reconcile_vendor_bill_reverse_append_only_and_booking_varian
     season_id = _pick_id("/masters/seasons", h)
 
     assert Path(PT_SAMPLE).exists(), f"missing PT sample file: {PT_SAMPLE}"
-    uploaded = _upload_pt(access, PT_SAMPLE)
+    # PT-making needs the warehouse's raised rung (#119) - Owner only reads
+    # Receive Goods, so the upload goes through the warehouse seat; posting,
+    # sending and reversing below stay on the owner token unaffected.
+    warehouse_access = _login("wh.patna", "Wh@123")["access"]
+    uploaded = _upload_pt(warehouse_access, PT_SAMPLE)
     pt_id = int(uploaded["id"])
     detail = _wait_pt(access, pt_id)
     rows = detail.get("rows") or []

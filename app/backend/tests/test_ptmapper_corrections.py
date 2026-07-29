@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APIClient
 
@@ -37,8 +38,14 @@ def vocab(db):
 
 @pytest.fixture
 def user(db):
+    # Warehouse: this file's one create call (test_rerun_keeps_events_after_rows_die)
+    # needs the PT-making rung (#119); every other test here only reads/patches
+    # an already-created file, which the role makes no difference to.
     return User.objects.create_user(
-        username="editor", password=TEST_PASSWORD, full_name="Editor One"
+        username="editor",
+        password=TEST_PASSWORD,
+        full_name="Editor One",
+        role=make_role("warehouse"),
     )
 
 

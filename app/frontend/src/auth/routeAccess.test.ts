@@ -117,6 +117,21 @@ describe("canAccess", () => {
     expect(canAccess("/booking/new", accounts)).toBe(false);
   });
 
+  it("PT making rose to the warehouse's rung; reading a PT did not (#119)", () => {
+    // The store's cell kept its rung (`operate`) and lost only the making
+    // screen - the list+upload+authoring workspace at /receive/pt itself.
+    expect(canAccess("/receive/pt", storePerson)).toBe(false);
+    expect(canAccess("/receive/pt", warehouse)).toBe(true); // raised to `approve`
+    expect(canAccess("/receive/pt", admin)).toBe(true); // already `manage`
+    // A PT already made, reached from its GRN, stays open to read - the
+    // making screen's raised rung does not travel onto its own documents.
+    expect(canAccess("/receive/pt/64", storePerson)).toBe(true);
+    expect(canAccess("/receive/pt/review", storePerson)).toBe(true);
+    expect(canAccess("/receive/pt/proposals", storePerson)).toBe(true);
+    // And it changes nothing else about the store's day.
+    expect(canAccess("/receive", storePerson)).toBe(true);
+  });
+
   it("Money is one section but its books stay finance-only", () => {
     // The store person holds money:operate — "Expenses only" on the sheet. The
     // section opens, the vendor/cash books do not: those need money:manage, the

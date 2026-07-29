@@ -16,11 +16,12 @@ from datetime import date
 
 import pytest
 from _creds import TEST_PASSWORD
+from _rbac import make_role
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from rest_framework.test import APIClient
 
-from accounts.models import Role, ScopeType, User
+from accounts.models import ScopeType, User
 from core.documents import VoucherSeries
 from files.models import StoredFile
 from inbound.models import Grn, GrnLine
@@ -63,8 +64,9 @@ def vocab(db):
 
 
 def _user(username: str, role_code: str, *, scope: str, stores: list[Store] | None = None) -> User:
-    role, _ = Role.objects.get_or_create(code=role_code, defaults={"name": role_code})
-    user = User.objects.create_user(username=username, password=TEST_PASSWORD, role=role)
+    user = User.objects.create_user(
+        username=username, password=TEST_PASSWORD, role=make_role(role_code)
+    )
     user.scope_type = scope
     user.save(update_fields=["scope_type"])
     if stores:
@@ -133,7 +135,10 @@ def test_scoped_user_can_link_pt_to_in_scope_grn(world, vocab):
 
 def test_unrestricted_user_can_link_any_grn(world, vocab):
     grn = _grn(world["wh2"])
-    client = _client(_user("boss", "owner", scope=ScopeType.ALL))
+    # Scope, not role, is what this test measures - "owner" only reads Receive
+    # Goods (#119), so an unrestricted warehouse user stands in for "no store
+    # scope" without also tripping the PT-making gate.
+    client = _client(_user("boss", "warehouse", scope=ScopeType.ALL))
     r = _upload_brand_pt(client, grn.id)
     assert r.status_code == 201, r.content
 

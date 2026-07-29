@@ -40,6 +40,13 @@ def owner_token():
 
 
 @pytest.fixture(scope="module")
+def warehouse_token():
+    # PT-making needs the warehouse's raised rung (#119) - Owner only reads
+    # Receive Goods, so the upload itself must go through the warehouse seat.
+    return _login("wh.patna", "Wh@123")
+
+
+@pytest.fixture(scope="module")
 def cashier_token():
     return _login("deo.cashier", "Store@123")
 
@@ -84,8 +91,8 @@ def _wait_processed(
     return last or {}
 
 
-def test_mufti_xlsx_maps_with_populated_prices(owner_token):
-    info = _upload_pt(owner_token, f"{PT_DIR}/MUFTI.xlsx")
+def test_mufti_xlsx_maps_with_populated_prices(owner_token, warehouse_token):
+    info = _upload_pt(warehouse_token, f"{PT_DIR}/MUFTI.xlsx")
     fid = info["id"]
     final = _wait_processed(owner_token, fid, want_rows=90)
     assert final.get("row_count", 0) >= 90, f"MUFTI row_count={final.get('row_count')}"
@@ -115,8 +122,8 @@ def test_mufti_xlsx_maps_with_populated_prices(owner_token):
     assert have_color, "no COLOR populated -> _map_taxonomy regression"
 
 
-def test_jockey852_xls_maps_jockey_sap_archetype_d(owner_token):
-    info = _upload_pt(owner_token, f"{PT_DIR}/JOCKEY 852.xls")
+def test_jockey852_xls_maps_jockey_sap_archetype_d(owner_token, warehouse_token):
+    info = _upload_pt(warehouse_token, f"{PT_DIR}/JOCKEY 852.xls")
     fid = info["id"]
     final = _wait_processed(owner_token, fid, want_rows=9)
     assert final.get("row_count", 0) >= 9, f"JOCKEY row_count={final.get('row_count')}"

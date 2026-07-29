@@ -116,6 +116,10 @@ def test_sheet_specific_cells_are_honoured(db):
     assert caps["store_person"]["sell"] == "operate"
     # Warehouse can't sell.
     assert "sell" not in caps["warehouse"]
+    # PT making moved to the warehouse (#119): it rose one rung above the
+    # store on Receive Goods, and the store's cell kept its rung.
+    assert caps["warehouse"]["receive_goods"] == "approve"
+    assert caps["store_person"]["receive_goods"] == "operate"
     # Brand manager has no money either.
     assert "money" not in caps["brand_manager"]
     # Only Owner and Accounts fully manage money.
