@@ -377,14 +377,18 @@ def _pool(
     brand: Brand,
     store_id: int | None,
     gate: Callable[[Any, str], Any],
+    today: date | None = None,
 ) -> list[PoolRow]:
     """Both sources, windowed and priced — the shared body every reader of the
     pool goes through. ``gate`` is the only thing that differs between a
-    request scoped to a signed-in user and a system job with none."""
+    request scoped to a signed-in user and a system job with none. ``today``
+    defaults to the real date; a caller that needs the window measured against
+    a fixed date (the alerts job, so it can be tested deterministically) may
+    pass one."""
     if not brand.takes_returns:
         return []
 
-    today = timezone.localdate()
+    today = today or timezone.localdate()
     quarantine = gate(
         QuarantineStock.objects.filter(qty__gt=0, brand__iexact=brand.name).select_related("store"),
         "store_id",
@@ -429,7 +433,9 @@ def returnable_pool(
     return _pool(brand, store_id, lambda qs, field: gate(qs, user, field))
 
 
-def returnable_pool_all(brand: Brand, store_id: int | None = None) -> list[PoolRow]:
+def returnable_pool_all(
+    brand: Brand, store_id: int | None = None, *, today: date | None = None
+) -> list[PoolRow]:
     """Every returnable holding for this brand, network-wide — the same two
     sources and the same window math as ``returnable_pool``, unscoped.
 
@@ -438,7 +444,7 @@ def returnable_pool_all(brand: Brand, store_id: int | None = None) -> list[PoolR
     "which windows can this person see". Never used to answer a request: a
     request always has a user, and must always go through ``returnable_pool``.
     """
-    return _pool(brand, store_id, lambda qs, field: qs)
+    return _pool(brand, store_id, lambda qs, field: qs, today)
 
 
 # ---------------------------------------------------------------------------

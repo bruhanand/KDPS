@@ -90,17 +90,20 @@ def check_in_transit_aging(today: date) -> list[AlertHit]:
 
 
 def check_return_window(today: date) -> list[AlertHit]:
-    """Season-end holdings inside a brand's negotiated return window, at each
-    of the configured days-left thresholds (30/15/7).
+    """Season-end holdings inside a brand's negotiated return window, counting
+    down through the configured days-left thresholds (30/15/7).
 
     Confirmed-damage holdings carry no window (returnable.py) and are never
     alerted here; an already-expired holding is not offered back to the brand
     at all, so it stops crossing new thresholds.
 
-    A holding may cross more than one threshold in one run — first run after
-    downtime, say, with 10 days left crosses both 30 and 15 — and each is its
-    own alert, deduped by (brand, store, sku, source, threshold) so a daily
-    re-run never doubles one still open.
+    One alert per holding, not one per threshold: a holding may have crossed
+    more than one threshold by the time the job first sees it (a first-ever
+    run, or one that missed a few days), but a countdown is one reminder that
+    tightens, not three permanent ones stacked on top of each other — so only
+    the tightest threshold already crossed is reported, and it re-fires under
+    the *same* dedupe key as the countdown continues, refreshing the alert
+    already open rather than opening a second one beside it.
     """
     thresholds = _thresholds(AlertKind.RETURN_WINDOW)
     if not thresholds:
@@ -112,32 +115,36 @@ def check_return_window(today: date) -> list[AlertHit]:
     for brand in Brand.objects.filter(is_active=True):
         if not brand.takes_returns:
             continue
-        for row in returnable_pool_all(brand):
+        for row in returnable_pool_all(brand, today=today):
             if row.source != ReturnSource.SEASON_END or row.expired or row.days_left is None:
                 continue
             crossed = [t for t in thresholds if row.days_left <= t]
-            for threshold in crossed:
-                hits.append(
-                    AlertHit(
-                        dedupe_key=(
-                            f"return_window:{brand.id}:{row.store_id}:{row.sku_code}:{threshold}"
-                        ),
-                        title=(
-                            f"{brand.name} at {row.store_code} — {row.sku_code} "
-                            f"({row.qty} pc(s)) must go back within {row.days_left} day(s)"
-                        ),
-                        store_id=row.store_id,
-                        brand=brand.name,
-                        object_id=None,
-                        due_date=row.window_date,
-                        threshold_days=threshold,
-                    )
+            if not crossed:
+                continue
+            tightest = min(crossed)
+            hits.append(
+                AlertHit(
+                    dedupe_key=f"return_window:{brand.id}:{row.store_id}:{row.sku_code}",
+                    title=(
+                        f"{brand.name} at {row.store_code} — {row.sku_code} "
+                        f"({row.qty} pc(s)) must go back within {row.days_left} day(s) — "
+                        f"past the {tightest}-day mark"
+                    ),
+                    store_id=row.store_id,
+                    brand=brand.name,
+                    object_id=None,
+                    due_date=row.window_date,
+                    threshold_days=tightest,
                 )
+            )
     return hits
 
 
 def _sync_kind(kind: str, kind_label: str, hits: list[AlertHit]) -> None:
-    """Open what's new, resolve what stopped being true, touch nothing else."""
+    """Open what's new, resolve what stopped being true, and refresh what's
+    still open — a holding's countdown moves even while its alert stays open,
+    so the title/threshold on an existing row must track it, not freeze at
+    whatever it said the day the row was born."""
     current_keys = {hit.dedupe_key for hit in hits}
     (
         Alert.objects.filter(kind=kind, status=AlertStatus.OPEN)
@@ -145,7 +152,7 @@ def _sync_kind(kind: str, kind_label: str, hits: list[AlertHit]) -> None:
         .update(status=AlertStatus.RESOLVED, resolved_at=timezone.now())
     )
     for hit in hits:
-        Alert.objects.get_or_create(
+        Alert.objects.update_or_create(
             kind=kind,
             dedupe_key=hit.dedupe_key,
             status=AlertStatus.OPEN,

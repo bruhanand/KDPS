@@ -345,15 +345,41 @@ def test_crossing_a_threshold_fires_exactly_that_alert(alerts_scaffold):
     assert hits[0].brand == "AlSorBrand"
 
 
-def test_catching_up_fires_every_threshold_already_crossed(alerts_scaffold):
+def test_catching_up_reports_only_the_tightest_threshold_crossed(alerts_scaffold):
     s = alerts_scaffold
     # 40-day window, arrived 33 days ago → 7 days left: 30, 15 and 7 are all
-    # already crossed (a first-ever run, or a job that missed a few days).
+    # already crossed (a first-ever run, or a job that missed a few days). A
+    # countdown is one reminder, not three stacked ones, so only the tightest
+    # is reported — the same holding, one hit.
     _stock(s["warehouse"], s["gstin"], "AL-SOR-1", "AlSorBrand", 6, days_ago=33)
 
     hits = check_return_window(timezone.localdate())
 
-    assert sorted(h.threshold_days for h in hits) == [7, 15, 30]
+    assert len(hits) == 1
+    assert hits[0].threshold_days == 7
+
+
+def test_the_alert_escalates_in_place_rather_than_duplicating(alerts_scaffold):
+    s = alerts_scaffold
+    # 40-day window, arrived 10 days ago (real "today") → 30 days left.
+    _stock(s["warehouse"], s["gstin"], "AL-SOR-1", "AlSorBrand", 6, days_ago=10)
+
+    run_alert_checks()
+    open_alerts = Alert.objects.filter(kind=AlertKind.RETURN_WINDOW, status=AlertStatus.OPEN)
+    assert open_alerts.count() == 1
+    first = open_alerts.get()
+    assert first.threshold_days == 30
+
+    # 16 days later the same holding has 14 days left — the 15-day mark is
+    # crossed. The countdown tightens; it must not open a second alert.
+    run_alert_checks(today=timezone.localdate() + timedelta(days=16))
+
+    open_alerts = Alert.objects.filter(kind=AlertKind.RETURN_WINDOW, status=AlertStatus.OPEN)
+    assert open_alerts.count() == 1
+    second = open_alerts.get()
+    assert second.id == first.id
+    assert second.threshold_days == 15
+    assert "14 day(s)" in second.title
 
 
 def test_quarantine_and_outright_never_fire_this_alert(alerts_scaffold):
