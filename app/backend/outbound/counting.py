@@ -284,23 +284,31 @@ class VarianceLine:
     def recount_is_live(self) -> bool:
         """Does the recount still answer the question it was asked?
 
-        A recount is a second opinion on *one* first answer, so the row records
-        the merge it was taken against. Counting is not over when a recount
-        happens: sessions stay open, and a counter who submits afterwards can add
-        pieces to this very barcode or move the book snapshot. When that happens
-        the recount is answering a question nobody is asking any more — the piece
-        goes back into the queue and somebody counts it against the merge that
-        now stands.
+        A recount is a second opinion on *one* first answer by *someone else*, so
+        it stops standing when either of those stops being true. Counting is not
+        over when a recount happens — sessions stay open — and two things a later
+        submission can change both matter:
 
-        Without this a stale recount silently outranks the later count: a
-        recounter who found 3 would still post ``3 − book`` after a second
-        counter's aisle brought the merge to 11, and eight pieces would leave the
-        books that nobody ever said were missing.
+        **The numbers.** A counter who submits afterwards can add pieces to this
+        barcode or move the book snapshot, and then the recount is answering a
+        question nobody is asking any more. Without this a stale recount silently
+        outranks the later count: a recounter who found 3 would still post
+        ``3 − book`` after another aisle brought the merge to 11, and eight
+        pieces would leave the books that nobody ever said were missing.
+
+        **The people.** A session that finds *none* of the piece moves no number
+        at all, but it does add its counter to those who have now counted it. If
+        that is the recounter, their own answer has quietly become a first count
+        checked by nobody — the floor rule this slice exists to hold, walked
+        around by doing the two halves in the other order. So the check is asked
+        of the recounter as they stand *now*, not as they stood when they
+        answered.
         """
         return (
             self.recount is not None
             and self.recount.first_counted_qty == self.first_counted_qty
             and self.recount.book_qty == self.book_qty
+            and self.recount.recounted_by_id not in self.counted_by_ids
         )
 
     @property
@@ -379,6 +387,10 @@ def _recount_dict(recount: Recount | None, *, stale: bool) -> dict[str, Any] | N
         "reason_label": recount.get_reason_display(),
         "recounted_by_name": display_name(recount.recounted_by),
         "recounted_at": recount.recounted_at,
+        # What the books said the piece was worth when they looked. Not the
+        # number the band or the posting reads — both re-derive — but what the
+        # person deciding needs in order to see what was at stake at the time.
+        "unit_cost_paise": recount.unit_cost_paise,
         "stale": stale,
     }
 
@@ -524,13 +536,21 @@ def record_recount(
     # third person, which would leave the document standing on an answer nobody
     # can find any more. A *stale* one guards nothing: the merge it answered has
     # moved, so the piece is open to whoever counts it against the one that now
-    # stands, and the old row is overwritten as the history it has become.
+    # stands.
     existing = line.live_recount
     if existing is not None and existing.recounted_by_id != getattr(user, "id", None):
         raise SameCounterError(
             f"{display_name(existing.recounted_by) or 'Somebody else'} has already recounted "
             f"{sku_code}. Only they can change their own answer."
         )
+
+    # Somebody else taking over an expired answer starts a row of their own
+    # rather than editing theirs into it: ``created_at`` means "when this answer
+    # was first given", and carrying it across would date one person's count from
+    # another person's. Only the author amending their own live answer updates in
+    # place, which is what ``created_at`` then honestly says.
+    if line.recount is not None and line.recount.recounted_by_id != getattr(user, "id", None):
+        line.recount.delete()
 
     recount, _ = Recount.objects.update_or_create(
         stocktake=stocktake,
@@ -539,9 +559,10 @@ def record_recount(
             "book_qty": line.book_qty,
             "first_counted_qty": line.first_counted_qty,
             "counted_qty": counted_qty,
-            # The books' cost, frozen at the moment the second person answered.
-            # The same number will pick the approval band and post to the ledger
-            # (#103); a caller never supplies it and never could.
+            # What the books said the piece was worth as they looked — the
+            # trail's record of what was at stake. The band and the posting
+            # re-derive it at their own moment through the one seam (#103); a
+            # caller never supplies it and never could.
             "unit_cost_paise": line.unit_cost_paise,
             "reason": reason,
             "recounted_by": user,

@@ -1420,9 +1420,18 @@ class Recount(models.Model):
     (``counted_qty``). That is the original, the recount and the final, which is
     exactly what the correction has to be defensible against months later.
 
-    The cost is frozen here for the same reason it is frozen on every other
-    document line: it is the number that picks the approval band *and* the number
-    that posts, and those two must be one number (#103).
+    The first two are also what makes a recount **expire**: it answers one
+    merge, and a counter who submits afterwards can move that merge out from
+    under it. ``VarianceLine.recount_is_live`` compares them, and a row that no
+    longer matches stops counting.
+
+    ``unit_cost_paise`` is a *record*, not a source. It says what the books said
+    the piece was worth at the moment the second person looked, so the trail can
+    show what was at stake in the decision. It is deliberately not what the
+    approval band or the posting read: both re-derive through the one
+    derive-or-refuse seam at their own moment (``book_unit_cost`` /
+    ``resolve_line_identity``), because a cost frozen here and then re-read later
+    would be two numbers where #103 says there must be one.
     """
 
     stocktake = models.ForeignKey(Stocktake, on_delete=models.CASCADE, related_name="recounts")
@@ -1434,7 +1443,9 @@ class Recount(models.Model):
     counted_qty = models.IntegerField(help_text="What the recount found — the number that posts.")
     unit_cost_paise = MoneyField(
         default=0,
-        help_text="The books' cost at recount time. Never from the payload (#103).",
+        help_text="What the books said one piece was worth when the second person "
+        "looked — the trail's record of what was at stake, never the source the "
+        "band or the posting reads. Never from the payload (#103).",
     )
     reason = models.CharField(
         max_length=16,

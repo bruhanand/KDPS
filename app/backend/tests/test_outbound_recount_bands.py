@@ -191,25 +191,32 @@ def _count(scaffold, *, found: int, user=None) -> int:
 
 
 def _another_session(scaffold, take, *, found, user):
-    """A second counter's section pass over the same piece, submitted.
+    """One more counter's pass over the same piece, submitted — "somebody was
+    still counting", which is where a stale recount comes from.
 
-    A section scope covers only what was scanned, so this adds pieces to the
-    merge without claiming anything about the rest of the store — which is
-    exactly the "somebody was still counting" shape a stale recount comes from.
+    A section pass when they found something: section scope covers only what was
+    scanned, so it adds pieces to the merge without claiming anything about the
+    rest of the store. A brand pass when they found nothing: the books hold no
+    floor plan, so an empty section session would cover no piece at all and say
+    nothing, while a brand pass honestly reports "I looked at this barcode and
+    there were none" — which moves no number but does put this person among
+    those who have counted it.
     """
+    scope = CountScope.SECTION if found else CountScope.BRAND
     resp = _client(user).post(
         f"/api/outbound/stocktakes/{take}/sessions",
-        {"scope": CountScope.SECTION, "scope_value": "Rack B"},
+        {"scope": scope, "scope_value": "Rack B" if found else SHIRT["brand"]},
         format="json",
     )
     assert resp.status_code == 201, resp.data
     session = resp.data["id"]
-    resp = _client(user).post(
-        f"/api/outbound/count-sessions/{session}/scan",
-        {"scans": [{"barcode": SHIRT["barcode"], "qty": found}]},
-        format="json",
-    )
-    assert resp.status_code == 200, resp.data
+    if found:
+        resp = _client(user).post(
+            f"/api/outbound/count-sessions/{session}/scan",
+            {"scans": [{"barcode": SHIRT["barcode"], "qty": found}]},
+            format="json",
+        )
+        assert resp.status_code == 200, resp.data
     resp = _client(user).post(f"/api/outbound/count-sessions/{session}/submit", {}, format="json")
     assert resp.status_code == 200, resp.data
 
@@ -360,6 +367,30 @@ def test_a_recount_stops_counting_once_a_later_session_moves_the_merge(recount_s
     assert line["adj_qty"] == -9
     refused = _apply(recount_scaffold, take)
     assert refused.status_code == 409, refused.data
+
+
+def test_a_recounter_who_then_counts_the_piece_stales_their_own_answer(recount_scaffold):
+    """The floor rule, walked around by doing the two halves in the other order.
+
+    A session that finds *none* of the piece moves no number, so the numeric
+    staleness test alone leaves the recount standing — but the recounter is now
+    among the people who counted it, and their answer has quietly become a first
+    count checked by nobody. The check is asked of who they are now.
+    """
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=4, user=recount_scaffold["second"])
+    assert _shirt(_variance(recount_scaffold, take))["needs_recount"] is False
+
+    # The recounter now runs their own pass over the same brand and finds none.
+    _another_session(recount_scaffold, take, found=0, user=recount_scaffold["second"])
+
+    line = _shirt(_variance(recount_scaffold, take))
+    assert line["recount"]["stale"] is True
+    assert line["needs_recount"] is True
+    assert line["counted_qty"] == 0  # the merge, not their own recount
+    refused = _apply(recount_scaffold, take)
+    assert refused.status_code == 409, refused.data
+    assert not StockLedgerEntry.objects.filter(kind="adjustment").exists()
 
 
 def test_a_stale_recount_is_open_to_whoever_counts_it_next(recount_scaffold):
