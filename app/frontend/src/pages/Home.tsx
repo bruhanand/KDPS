@@ -438,6 +438,7 @@ export function Home() {
           approvalsCard,
           stockCard,
           netSalesCard,
+          exceptionsCard,
         ]
       : variant === "warehouse"
         ? [
@@ -463,6 +464,7 @@ export function Home() {
             },
             approvalsCard,
             stockCard,
+            exceptionsCard,
           ]
         : [
             ...(canSeeMoney
