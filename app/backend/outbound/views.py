@@ -30,6 +30,7 @@ from rest_framework.views import APIView
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
 from masters.scoping import actionable_store_ids, scope_by_entitlement, scope_by_store
+from outbound.costing import on_hand_valuation
 from outbound.counting import (
     CountError,
     MovedMidCountError,
@@ -111,7 +112,7 @@ from outbound.serializers import (
     WriteOffWriteSerializer,
 )
 from outbound.transfer_pt import KDPS_COLUMNS
-from stockledger.views import _search_on_hand
+from stockledger.views import search_on_hand
 
 #: The people on a document's approval trail. Every maker-checker document's read
 #: shape joins all three, and a response that forgets one N+1s on names.
@@ -664,7 +665,7 @@ class CrossLocationStockSearchView(APIView):
         )
         if store_code := request.query_params.get("store"):
             qs = qs.filter(store__code=store_code)
-        qs = _search_on_hand(qs, search_term(request))
+        qs = search_on_hand(qs, search_term(request))
         qs = qs.order_by("store__code", "sku_code")
 
         rows = list(qs[: self.MAX_LINES])
@@ -689,10 +690,7 @@ class CrossLocationStockSearchView(APIView):
                 "is_own": is_own,
             }
             if is_own:
-                mrp = mrps.get(row.sku_code) or 0
-                entry["unit_cost_paise"] = row.net_value_paise // row.net_qty
-                entry["landed_value_paise"] = row.net_value_paise
-                entry["margin_paise"] = (mrp * row.net_qty) - row.net_value_paise if mrp else None
+                entry.update(on_hand_valuation(row, mrps.get(row.sku_code) or 0))
             data.append(entry)
 
         return Response(

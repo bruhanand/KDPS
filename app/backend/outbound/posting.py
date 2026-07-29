@@ -36,6 +36,7 @@ if TYPE_CHECKING:
         ReturnToVendor,
         StockAdjustment,
         StockRequest,
+        StockRequestClosure,
         StoreTransfer,
         StoreTransferLine,
         TransferGapClosure,
@@ -1681,19 +1682,27 @@ def fulfil_stock_request(
 
     if locked.status == StockRequestStatus.CLOSED:
         raise OutboundPostingError("This request is already closed.")
+    if hasattr(locked, "closure"):
+        raise OutboundPostingError("This request has been closed; no more can be fulfilled.")
 
     by_id = {line.id: line for line in locked.lines.all()}
     to_build: list[tuple[Any, int]] = []
+    # Running total per line across *this* payload — two entries for the same
+    # line_id in one call must share the same "left to fulfil" ceiling, or a
+    # duplicated line_id would let one call over-commit past what remains.
+    committed: dict[int, int] = {}
     for item in lines:
         line = by_id.get(item["line_id"])
         if line is None:
             raise OutboundPostingError("That line is not on this request.")
         qty = item["qty"]
-        remaining = line.qty - line.qty_fulfilled
+        already_this_call = committed.get(line.id, 0)
+        remaining = line.qty - line.qty_fulfilled - already_this_call
         if qty < 1 or qty > remaining:
             raise OutboundPostingError(
                 f"{line.sku_code}: at most {remaining} left to fulfil on this line."
             )
+        committed[line.id] = already_this_call + qty
         to_build.append((line, qty))
     if not to_build:
         raise OutboundPostingError("Select at least one line to fulfil.")
@@ -1726,7 +1735,9 @@ def fulfil_stock_request(
 
 
 @transaction.atomic
-def close_stock_request(stock_request: StockRequest, *, user: Any = None, note: str = "") -> Any:
+def close_stock_request(
+    stock_request: StockRequest, *, user: Any = None, note: str = ""
+) -> StockRequestClosure:
     """The fulfilling store says no more is coming.
 
     The only way a partly-covered request stops reading as "being fulfilled"

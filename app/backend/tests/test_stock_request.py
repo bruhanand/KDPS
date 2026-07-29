@@ -233,6 +233,9 @@ def test_an_approved_request_prefills_a_transfer_that_still_needs_its_own_gate(r
     assert transfer["source_store"] == g["warehouse"].id
     assert transfer["destination_store"] == g["store_a"].id
     assert transfer["docstatus"] == DocStatus.DRAFT
+    # The default rig asks a warehouse, not another store — the pre-filled
+    # transfer must read as a store split, not an inter-store move.
+    assert transfer["transfer_type"] == "store_split"
     # Pre-filled, not dispatched: the plan line carries the fulfiller's qty.
     assert transfer["lines"][0]["qty_planned"] == 6
     assert transfer["lines"][0]["qty_dispatched"] == 0
@@ -308,6 +311,34 @@ def test_partial_receive_then_close_reads_as_partly_fulfilled(rig):
     assert close.status_code == 200, close.data
     assert close.data["status"] == "partly_fulfilled"
     assert close.data["lines"][0]["qty_fulfilled"] == 6
+
+    # The fulfiller said no more is coming — a later fulfil attempt must not
+    # quietly reopen what closing settled.
+    again = _fulfil(g, data["id"], [{"line_id": _line_id(data), "qty": 1}])
+    assert again.status_code == 400
+    assert "closed" in str(again.data).lower()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_duplicated_line_id_cannot_double_commit_past_what_remains(rig):
+    """One fulfil call sending the same line twice must not let the two
+    entries each check against the same "remaining" figure and together
+    commit more than the request actually has left (#74)."""
+    g = rig
+    data = _raise(g, qty=6)
+    _decide("stock_request", data["id"], g["ops"])
+    line_id = _line_id(data)
+
+    resp = _fulfil(
+        g,
+        data["id"],
+        [{"line_id": line_id, "qty": 5}, {"line_id": line_id, "qty": 5}],
+    )
+    assert resp.status_code == 400
+    # The second entry sees only 1 left (6 − 5 already committed this call) —
+    # not 6, which is what a stale-snapshot bug would have allowed through.
+    assert "at most 1 left" in str(resp.data)
+    assert not StoreTransfer.objects.filter(fulfils_request_id=data["id"]).exists()
 
 
 @pytest.mark.django_db(transaction=True)
