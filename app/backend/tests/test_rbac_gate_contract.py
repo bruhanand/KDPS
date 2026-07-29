@@ -89,8 +89,12 @@ GATED_ENDPOINTS: list[tuple[str, str, str, str, str]] = [
         f"/api/outbound/gap-closures/{ABSENT}/request-approval",
     ),
     ("mark damaged", "return_to_brand", CAP_OPERATE, "post", "/api/outbound/mark-damaged"),
-    ("rtv create", "return_to_brand", CAP_OPERATE, "post", "/api/outbound/rtvs"),
-    ("rtv submit", "return_to_brand", CAP_OPERATE, "post", f"/api/outbound/rtvs/{ABSENT}/submit"),
+    # The returnable pool is a read, so it sits at `view` - Accounts and the
+    # Brand Manager open it. Creating and executing the return are *not* here:
+    # the sheet puts a store and the warehouse on the same `operate` rung, and
+    # #75 splits them, so a stored actor policy decides those two. See
+    # `test_return_creation_uses_the_stored_actor_policy`.
+    ("returnable pool", "return_to_brand", CAP_VIEW, "get", "/api/outbound/returnable-pool"),
     ("adjustment create", "stock_count", CAP_OPERATE, "post", "/api/outbound/adjustments"),
     (
         "adjustment submit",
@@ -148,6 +152,7 @@ APPROVAL_SECTION = {
     "vflip": "stock",
     "gap_closure": "transfer",
     "damage": "return_to_brand",
+    "return_to_brand": "return_to_brand",
 }
 
 
@@ -219,6 +224,37 @@ def test_vflip_execution_uses_the_stored_actor_policy(db, role_code, allowed):
     client = _client(_user(f"vflip_execute_{role_code}", _role(role_code)))
 
     response = client.post(f"/api/outbound/vflips/{ABSENT}/submit", {}, format="json")
+
+    assert (response.status_code != 403) is allowed
+
+
+@pytest.mark.parametrize(
+    ("role_code", "allowed"),
+    [
+        ("warehouse", True),
+        ("owner", True),
+        ("store_manager", False),
+        ("store_staff", False),
+        ("brand_manager", False),
+        ("accounts", False),
+    ],
+)
+@pytest.mark.parametrize(
+    ("step", "path"),
+    [("create", "/api/outbound/rtvs"), ("submit", f"/api/outbound/rtvs/{ABSENT}/submit")],
+)
+def test_return_creation_uses_the_stored_actor_policy(db, step, path, role_code, allowed):
+    """A store may only mark damage; the warehouse creates and executes returns.
+
+    This cannot be a row in ``GATED_ENDPOINTS`` because the ratified sheet gives
+    the store and the warehouse the same ``operate`` rung on this section - "Mark
+    damage only" against "Create & execute". The rung is the same, the job is
+    not, so the narrower question is asked of a stored ``ActorPolicy`` row
+    (``outbound.create_return_to_brand``) exactly as V-flip execution is.
+    """
+    client = _client(_user(f"rtb_{step}_{role_code}", _role(role_code)))
+
+    response = client.post(path, {}, format="json")
 
     assert (response.status_code != 403) is allowed
 
@@ -299,6 +335,10 @@ RULING_OVERRIDES_THE_SHEET = {
     ("adjustment", "store_manager"): "same band, on the variance counting produces",
     ("vflip", "accounts"): "Accounts executes the flip, so Accounts signs the small ones",
     ("damage", "warehouse"): "a store reports damage; the warehouse confirms it (#138)",
+    (
+        "return_to_brand",
+        "brand_manager",
+    ): "the brand's own manager signs off returns to that brand, inside the band (#75)",
 }
 
 

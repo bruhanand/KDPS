@@ -110,6 +110,9 @@ def _restore_migration_seeded_policy_rows(
         import_module("accounts.migrations.0009_actor_policy").seed_actor_policies(
             django_apps, None
         )
+        import_module("accounts.migrations.0012_return_to_brand_actor_policy").seed(
+            django_apps, None
+        )
         import_module("approvals.migrations.0004_seed_approval_policies").seed_policies(
             django_apps, None
         )

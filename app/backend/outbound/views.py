@@ -24,12 +24,19 @@ from django.http import HttpResponse
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.documents import DocStatus
 from core.textsearch import search_term, text_filter
-from masters.scoping import actionable_store_ids, scope_by_entitlement, scope_by_store
+from masters.models import Brand
+from masters.scoping import (
+    actionable_store_ids,
+    scope_by_entitlement,
+    scope_by_store,
+    scope_by_store_or_brand,
+)
 from outbound.costing import on_hand_valuation
 from outbound.counting import (
     CountError,
@@ -58,8 +65,10 @@ from outbound.models import (
 )
 from outbound.permissions import (
     CanCloseTransferGap,
+    CanCreateReturnToBrand,
     CanExecuteVFlip,
     CanFlipOwnership,
+    CanReadReturnToBrand,
     CanReadTransferPT,
     CanWriteReturnToBrand,
     CanWriteStockCount,
@@ -80,19 +89,22 @@ from outbound.posting import (
     post_vflip,
     post_writeoff,
     raise_gap_closure,
+    raise_return_to_brand,
 )
+from outbound.returnable import cap_for, returnable_pool
 from outbound.scoping import scope_stock_requests, scope_transfers
 from outbound.serializers import (
     ApplyVarianceInputSerializer,
     CountScanInputSerializer,
     CountSessionCreateSerializer,
     CountSessionReadSerializer,
+    CreditNoteSerializer,
     GapClosureInputSerializer,
     GapClosureReadSerializer,
     MarkDamagedInputSerializer,
     MarkDamagedReadSerializer,
+    ReturnToBrandCreateSerializer,
     ReturnToVendorReadSerializer,
-    ReturnToVendorWriteSerializer,
     StockAdjustmentReadSerializer,
     StockAdjustmentWriteSerializer,
     StockRequestCloseInputSerializer,
@@ -889,21 +901,87 @@ class MarkDamagedView(generics.ListCreateAPIView):
 
 
 def _rtvs(user: Any) -> Any:
-    """Returns to brand at the caller's own stores (#141), in the read shape."""
+    """Returns to brand the caller may read, in the read shape.
+
+    By store *or* brand (#75): a return is a store's document and a brand
+    manager's decision, and a brand manager is scoped to brands — the store gate
+    alone would show them nothing, including their own brands' returns.
+    """
     qs = ReturnToVendor.objects.select_related(
-        "store", "vendor", "brand", "created_by"
-    ).prefetch_related("lines")
-    return scope_by_store(qs, user, "store_id")
+        "store", "vendor", "brand", "created_by", "approved_by", "via_transfer", "credit_note"
+    ).prefetch_related("lines", *APPROVAL_JOINS)
+    return scope_by_store_or_brand(qs, user, "store_id", "brand__name")
 
 
 #: Return to Brand (#106) — the return's own number, and who it's going back to.
 RTV_SEARCH_FIELDS = ("doc_number", "brand__name", "vendor__name")
 
 
+class ReturnablePoolView(APIView):
+    """GET: what this brand will take back, and how much allowance is left (#75).
+
+    The one place the screen learns which pieces may be scanned onto a return —
+    and the same call the create endpoint validates against, so the beep on the
+    scanner and the refusal from the server can never disagree.
+    """
+
+    permission_classes = [CanReadReturnToBrand]
+
+    def get(self, request: Request) -> Response:
+        brand_id = request.query_params.get("brand")
+        if not brand_id:
+            return Response(
+                {"error": "Pick a brand first — the pool is a brand's stock."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            brand = Brand.objects.get(pk=brand_id)
+        except (Brand.DoesNotExist, ValueError):
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        store_id = request.query_params.get("store")
+        try:
+            store_pk = int(store_id) if store_id else None
+        except ValueError:
+            return Response(
+                {"error": f"'{store_id}' is not a store."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        rows = returnable_pool(request.user, brand, store_id=store_pk)
+        cap = cap_for(brand)
+        return Response(
+            {
+                "brand": {
+                    "id": brand.id,
+                    "name": brand.name,
+                    "commercial_label": brand.commercial_label,
+                    "takes_returns": brand.takes_returns,
+                    "return_window_days": brand.return_window_days,
+                },
+                # Said out loud rather than left as an empty list: "nothing is
+                # returnable today" and "nothing from this brand is ever
+                # returnable" are different answers, and the screen must not
+                # make the reader guess which one it is looking at.
+                "excluded_reason": (
+                    ""
+                    if brand.takes_returns
+                    else f"{brand.name} is {brand.commercial_label} — KDPS bought this "
+                    "stock outright, so none of it goes back to the brand."
+                ),
+                "cap": cap.as_json(),
+                "rows": [row.as_json() for row in rows],
+            }
+        )
+
+
 class RTVListCreateView(generics.ListCreateAPIView):
+    """The returns list, and the scan-built create behind it (#75)."""
+
     def get_permissions(self):
         if self.request.method == "POST":
-            return [CanWriteReturnToBrand()]
+            # Two gates, both data: the section says who reaches Return to
+            # Brand, the stored actor policy says which of them may send stock
+            # back rather than only flag it damaged.
+            return [CanWriteReturnToBrand(), CanCreateReturnToBrand()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -917,16 +995,30 @@ class RTVListCreateView(generics.ListCreateAPIView):
 
     def get_serializer_class(self):
         if self.request.method == "POST":
-            return ReturnToVendorWriteSerializer
+            return ReturnToBrandCreateSerializer
         return ReturnToVendorReadSerializer
 
     def create(self, request, *args, **kwargs):
-        ser = ReturnToVendorWriteSerializer(data=request.data, context={"request": request})
+        ser = ReturnToBrandCreateSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
-        enforce_store_scope(request.user, ser.validated_data["store"].id)
-        instance = ser.save()
+        data = ser.validated_data
+        enforce_store_scope(request.user, data["store"].id)
+        try:
+            rtv = raise_return_to_brand(
+                store=data["store"],
+                vendor=data["vendor"],
+                brand=data["brand"],
+                return_type=data["return_type"],
+                route=data["logistics_route"],
+                via_transfer=data.get("via_transfer"),
+                scans=ser.scans_by_barcode(),
+                user=request.user,
+                notes=data.get("notes", ""),
+            )
+        except OutboundPostingError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(
-            ReturnToVendorReadSerializer(instance).data,
+            ReturnToVendorReadSerializer(rtv).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -940,9 +1032,9 @@ class RTVDetailView(generics.RetrieveAPIView):
 
 
 class RTVSubmitView(APIView):
-    """POST: Submit (post) a draft RTV — stock exits, GL posts."""
+    """POST: Submit (post) an approved RTV — stock exits its bucket, GL posts."""
 
-    permission_classes = [CanWriteReturnToBrand]
+    permission_classes = [CanWriteReturnToBrand, CanCreateReturnToBrand]
 
     def post(self, request, pk):
         try:
@@ -967,6 +1059,42 @@ class RTVSubmitView(APIView):
         except OutboundPostingError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+        rtv.refresh_from_db()
+        return Response(ReturnToVendorReadSerializer(rtv).data)
+
+
+class RTVCreditNoteView(APIView):
+    """POST: record the brand's credit note against a posted return (#75).
+
+    Status, not money: the payable already moved when the return posted, and
+    this is the acknowledgement arriving days or weeks later. It writes the
+    companion record, never the document — a posted document is immutable at the
+    kernel, which is exactly why the credit note is not a column on it.
+
+    Re-postable, so a mistyped number or the wrong date can be corrected: the
+    document underneath stays frozen either way.
+    """
+
+    permission_classes = [CanWriteReturnToBrand, CanCreateReturnToBrand]
+
+    def post(self, request: Request, pk: int) -> Response:
+        try:
+            rtv = _rtvs(request.user).get(pk=pk)
+        except ReturnToVendor.DoesNotExist:
+            return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        enforce_store_scope(request.user, rtv.store_id)
+        if rtv.docstatus != DocStatus.SUBMITTED:
+            return Response(
+                {"error": "A credit note answers a return that has actually gone back."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ser = CreditNoteSerializer(
+            getattr(rtv, "credit_note", None), data=request.data, partial=True
+        )
+        ser.is_valid(raise_exception=True)
+        ser.save(rtv=rtv, recorded_by=request.user)
         rtv.refresh_from_db()
         return Response(ReturnToVendorReadSerializer(rtv).data)
 

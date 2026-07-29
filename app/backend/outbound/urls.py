@@ -3,6 +3,7 @@ from __future__ import annotations
 from django.urls import path
 
 from outbound.models import (
+    ReturnToVendor,
     StockAdjustment,
     StockRequest,
     StoreTransfer,
@@ -12,12 +13,15 @@ from outbound.models import (
 )
 from outbound.permissions import (
     CanCloseTransferGap,
+    CanCreateReturnToBrand,
     CanFlipOwnership,
+    CanWriteReturnToBrand,
     CanWriteStockCount,
     CanWriteTransfer,
 )
 from outbound.serializers import (
     GapClosureReadSerializer,
+    ReturnToVendorReadSerializer,
     StockAdjustmentReadSerializer,
     StockRequestReadSerializer,
     StoreTransferReadSerializer,
@@ -37,6 +41,8 @@ from outbound.views import (
     GapClosureSubmitView,
     MarkDamagedView,
     RequestApprovalView,
+    ReturnablePoolView,
+    RTVCreditNoteView,
     RTVDetailView,
     RTVListCreateView,
     RTVSubmitView,
@@ -138,10 +144,22 @@ urlpatterns = [
     ),
     # Mark damaged (global action → a flag, and on confirmation → quarantine)
     path("mark-damaged", MarkDamagedView.as_view(), name="mark-damaged"),
-    # Returns to Vendor (RTV)
+    # Return to Brand (#75) — the pool first, then the return built from it.
+    path("returnable-pool", ReturnablePoolView.as_view(), name="returnable-pool"),
     path("rtvs", RTVListCreateView.as_view(), name="rtv-list"),
     path("rtvs/<int:pk>", RTVDetailView.as_view(), name="rtv-detail"),
     path("rtvs/<int:pk>/submit", RTVSubmitView.as_view(), name="rtv-submit"),
+    path("rtvs/<int:pk>/credit-note", RTVCreditNoteView.as_view(), name="rtv-credit-note"),
+    path(
+        "rtvs/<int:pk>/request-approval",
+        RequestApprovalView.as_view(
+            model=ReturnToVendor,
+            read_serializer=ReturnToVendorReadSerializer,
+            permission_classes=[CanWriteReturnToBrand, CanCreateReturnToBrand],
+            related=("store", "vendor", "brand", "created_by"),
+        ),
+        name="rtv-request-approval",
+    ),
     # Stock counting — blind sessions merging into one variance report (#76)
     path("count-lookup", CountLookupView.as_view(), name="count-lookup"),
     path("stocktakes", StocktakeListCreateView.as_view(), name="stocktake-list"),

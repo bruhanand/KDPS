@@ -15,7 +15,9 @@ Transfer create / submit / dispatch / receive ``transfer: operate``
 Transfer PT read / download                   ``transfer: view``
 Transfer gap closure raise / post             ``transfer: approve``
 Mark damaged                                  ``return_to_brand: operate``
+Return to brand read / pool                   ``return_to_brand: view``
 Return to brand create / submit               ``return_to_brand: operate``
+                                              **+ stored actor policy**
 Adjustment create / submit                    ``stock_count: operate``
 Write-off create / submit                     ``stock_count: operate``
 V-flip create / submit                        ``stock: manage``
@@ -70,6 +72,11 @@ CanCloseTransferGap = require_section("transfer", CAP_APPROVE)
 #: the matrix's "Mark damage only" cell is the store person's rung on it.
 CanWriteReturnToBrand = require_section("return_to_brand", CAP_OPERATE)
 
+#: Reading the returnable pool — which of a brand's pieces would go back, and
+#: what the allowance has left. Priced, so it opens at the section's lowest rung
+#: rather than to any authenticated caller, the same reasoning as the transfer PT.
+CanReadReturnToBrand = require_section("return_to_brand", CAP_VIEW)
+
 #: Adjustments and write-offs are both corrections that a count produces.
 CanWriteStockCount = require_section("stock_count", CAP_OPERATE)
 
@@ -85,6 +92,29 @@ class CanExecuteVFlip(BasePermission):
 
     def has_permission(self, request, view):
         return user_may_act(request.user, "outbound.execute_vflip")
+
+
+class CanCreateReturnToBrand(BasePermission):
+    """Who may build and execute a return — the question the ladder cannot ask.
+
+    The matrix puts a store person and the warehouse on the *same* rung of the
+    Return to Brand section: both hold ``operate``. The cells say different
+    things — "Mark damage only" against "Create & execute" — and the ruling in
+    #75 says the same: a store may report damage, the warehouse creates and
+    executes the return. One rung, two jobs, so the capability cannot be the
+    gate, and this is exactly the narrower question stored actor policy exists
+    to answer (same shape as executing a V-flip).
+
+    Layered *above* ``CanWriteReturnToBrand``, never instead of it: the section
+    still decides who reaches the section, and this decides which of them may
+    send a brand's stock back. Both are data (Rule 12) — a missing policy row
+    fails closed.
+    """
+
+    message = "A store may only mark damage; the warehouse creates and executes returns."
+
+    def has_permission(self, request, view):
+        return user_may_act(request.user, "outbound.create_return_to_brand")
 
 
 def enforce_store_scope(user, store_id: int) -> None:

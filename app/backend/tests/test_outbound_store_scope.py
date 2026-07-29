@@ -76,6 +76,18 @@ def scope_scaffold(db):
     )
     sm_user.stores.add(store_deo)
 
+    # Warehouse person, scoped to DEO. The actor who creates and executes returns
+    # to brand (#75) — a store may only mark damage, so store scope on the return
+    # endpoints has to be measured on the role that is allowed to use them.
+    wh_user = User.objects.create_user(
+        username="scope_wh",
+        password=TEST_PASSWORD,
+        role=make_role("warehouse", "Warehouse (scope test)"),
+        entity=entity,
+        scope_type=ScopeType.STORE,
+    )
+    wh_user.stores.add(store_deo)
+
     # Admin: all scope
     admin_role = make_role("owner", "Owner (scope test)")
     admin_user = User.objects.create_user(
@@ -180,6 +192,7 @@ def scope_scaffold(db):
         "brand_sor": brand_sor,
         "vendor": vendor,
         "sm_user": sm_user,
+        "wh_user": wh_user,
         "admin_user": admin_user,
     }
 
@@ -196,43 +209,49 @@ def _client(user):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_sm_cannot_create_rtv_outside_scope(scope_scaffold):
-    """Store manager for DEO cannot create RTV against Banka."""
+def _return_payload(s, store) -> dict:
+    """A season-end return of SOR stock — what the pool actually offers (#75).
+
+    The scan carries a barcode and a quantity and no price: the unit cost is the
+    server's answer, read off the books.
+    """
+    return {
+        "store": store.id,
+        "vendor": s["vendor"].id,
+        "brand": s["brand_sor"].id,
+        "return_type": "seasonal",
+        "logistics_route": "store_pickup",
+        "scans": [{"barcode": "SC-SKU2", "qty": 1}],
+    }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_warehouse_cannot_create_rtv_outside_scope(scope_scaffold):
+    """Warehouse person for DEO cannot create a return against Banka."""
     s = scope_scaffold
-    c = _client(s["sm_user"])
-    resp = c.post(
-        "/api/outbound/rtvs",
-        {
-            "store": s["store_banka"].id,
-            "vendor": s["vendor"].id,
-            "brand": s["brand_owned"].id,
-            "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [{"sku_code": "SC-SKU1", "qty": 1, "unit_cost_paise": 10000}],
-        },
-        format="json",
-    )
+    c = _client(s["wh_user"])
+    resp = c.post("/api/outbound/rtvs", _return_payload(s, s["store_banka"]), format="json")
     assert resp.status_code == 403
 
 
 @pytest.mark.django_db(transaction=True)
-def test_sm_can_create_rtv_in_scope(scope_scaffold):
-    """Store manager for DEO can create RTV against DEO."""
+def test_warehouse_can_create_rtv_in_scope(scope_scaffold):
+    """Warehouse person for DEO can create a return against DEO."""
+    s = scope_scaffold
+    c = _client(s["wh_user"])
+    resp = c.post("/api/outbound/rtvs", _return_payload(s, s["store_deo"]), format="json")
+    assert resp.status_code == 201, resp.data
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_store_person_cannot_create_rtv_even_in_their_own_store(scope_scaffold):
+    """Scope is not the only question on this endpoint (#75). The store manager
+    is standing in their own store and is still refused: marking damage is the
+    store's part, the warehouse raises the return."""
     s = scope_scaffold
     c = _client(s["sm_user"])
-    resp = c.post(
-        "/api/outbound/rtvs",
-        {
-            "store": s["store_deo"].id,
-            "vendor": s["vendor"].id,
-            "brand": s["brand_owned"].id,
-            "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [{"sku_code": "SC-SKU1", "qty": 1, "unit_cost_paise": 10000}],
-        },
-        format="json",
-    )
-    assert resp.status_code == 201
+    resp = c.post("/api/outbound/rtvs", _return_payload(s, s["store_deo"]), format="json")
+    assert resp.status_code == 403
 
 
 @pytest.mark.django_db(transaction=True)
@@ -240,40 +259,29 @@ def test_admin_can_create_rtv_any_store(scope_scaffold):
     """Admin (all scope) can create RTV against any store."""
     s = scope_scaffold
     c = _client(s["admin_user"])
-    resp = c.post(
-        "/api/outbound/rtvs",
-        {
-            "store": s["store_banka"].id,
-            "vendor": s["vendor"].id,
-            "brand": s["brand_owned"].id,
-            "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [{"sku_code": "SC-SKU1", "qty": 1, "unit_cost_paise": 10000}],
-        },
-        format="json",
-    )
-    assert resp.status_code == 201
+    resp = c.post("/api/outbound/rtvs", _return_payload(s, s["store_banka"]), format="json")
+    assert resp.status_code == 201, resp.data
 
 
 @pytest.mark.django_db(transaction=True)
-def test_sm_cannot_submit_rtv_outside_scope(scope_scaffold):
-    """Store manager for DEO cannot submit an RTV created against Banka."""
+def test_warehouse_cannot_submit_rtv_outside_scope(scope_scaffold):
+    """Warehouse person for DEO cannot submit a return created against Banka."""
     s = scope_scaffold
     # Admin creates draft at Banka
     rtv = ReturnToVendor.objects.create(
         store=s["store_banka"],
         vendor=s["vendor"],
-        brand=s["brand_owned"],
-        return_type="defective",
+        brand=s["brand_sor"],
+        return_type="seasonal",
         created_by=s["admin_user"],
     )
     ReturnToVendorLine.objects.create(
         rtv=rtv,
-        sku_code="SC-SKU1",
+        sku_code="SC-SKU2",
         qty=1,
-        unit_cost_paise=10000,
+        unit_cost_paise=5000,
     )
-    c = _client(s["sm_user"])
+    c = _client(s["wh_user"])
     resp = c.post(f"/api/outbound/rtvs/{rtv.id}/submit")
     assert resp.status_code == 403
 

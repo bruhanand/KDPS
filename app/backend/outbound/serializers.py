@@ -5,23 +5,27 @@ from __future__ import annotations
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework import serializers
 
 from approvals.models import ApprovalStatus
 from approvals.serializers import ApprovalReadSerializer
 from approvals.services import display_name
 from core.documents import DocStatus
-from masters.models import Store
+from masters.models import Brand, Store
 from outbound.maker_checker import request_document_approval
 from outbound.models import (
     CountScope,
     CountSession,
     CountSessionLine,
     GapReason,
+    LogisticsRoute,
     MarkDamaged,
     MarkDamagedLine,
+    ReturnCreditNote,
     ReturnToVendor,
     ReturnToVendorLine,
+    ReturnType,
     StockAdjustment,
     StockAdjustmentLine,
     StockRequest,
@@ -40,6 +44,7 @@ from outbound.models import (
     WriteOffLine,
 )
 from outbound.transfer_pt import KDPS_COLUMNS
+from vendors.models import Vendor
 
 # ---------------------------------------------------------------------------
 # Maker-checker read shape (#70)
@@ -678,13 +683,16 @@ class MarkDamagedInputSerializer(serializers.Serializer):
 
 
 class ReturnToVendorLineSerializer(serializers.ModelSerializer):
-    """``unit_cost_paise`` is read-only: a money posting reads its cost from the
-    books, never from the payload (#103) — same rule as a transfer line."""
+    """Read-only, whole. A return line is built by the server from the scanned
+    barcode and the pool row it matched (#75): the source bucket decides which
+    ledger the posting drains, and the unit cost comes from the books, never from
+    the payload (#103) — so neither is a client's to send."""
 
     class Meta:
         model = ReturnToVendorLine
         fields = [
             "id",
+            "source",
             "sku_code",
             "design",
             "color",
@@ -696,13 +704,45 @@ class ReturnToVendorLineSerializer(serializers.ModelSerializer):
             "qty",
             "unit_cost_paise",
         ]
-        read_only_fields = ["id", "unit_cost_paise"]
+        read_only_fields = fields
 
 
-class ReturnToVendorReadSerializer(serializers.ModelSerializer):
+class ReturnToVendorReadSerializer(ApprovedDocumentSerializer):
     lines = ReturnToVendorLineSerializer(many=True, read_only=True)
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
+    brand_name = serializers.CharField(source="brand.name", read_only=True, default="")
+    commercial_label = serializers.CharField(
+        source="brand.commercial_label", read_only=True, default=""
+    )
+    logistics_route_label = serializers.CharField(
+        source="get_logistics_route_display", read_only=True, default=""
+    )
+    via_transfer_number = serializers.CharField(
+        source="via_transfer.doc_number", read_only=True, default=""
+    )
+    credit_note = serializers.SerializerMethodField()
+    value_paise = serializers.SerializerMethodField()
+    days_to_window = serializers.SerializerMethodField()
+
+    def get_value_paise(self, obj: Any) -> int:
+        """What this return is worth at the cost frozen on its lines — the number
+        the allowance was measured against, so it is derived from the same place
+        rather than recomputed from today's books."""
+        return sum(line.qty * line.unit_cost_paise for line in obj.lines.all())
+
+    def get_credit_note(self, obj: Any) -> dict[str, Any] | None:
+        """The brand's acknowledgement, if it has arrived. None until it does —
+        an absent credit note is a fact the returns list is chased on."""
+        note = getattr(obj, "credit_note", None)
+        return CreditNoteSerializer(note).data if note else None
+
+    def get_days_to_window(self, obj: Any) -> int | None:
+        """The countdown, as of now. None when no deadline applies — a defect
+        claim has none, and neither does a brand with no negotiated window."""
+        if obj.return_window_date is None:
+            return None
+        return (obj.return_window_date - timezone.localdate()).days
 
     class Meta:
         model = ReturnToVendor
@@ -715,53 +755,78 @@ class ReturnToVendorReadSerializer(serializers.ModelSerializer):
             "store_name",
             "vendor",
             "brand",
+            "brand_name",
+            "commercial_label",
             "return_type",
             "logistics_route",
+            "logistics_route_label",
+            "via_transfer",
+            "via_transfer_number",
             "season",
             "return_window_date",
-            "credit_note_received",
-            "credit_note_date",
+            "days_to_window",
+            "value_paise",
+            "cap_percent",
+            "cap_allowance_paise",
+            "cap_used_before_paise",
+            "cap_exceeded_by_paise",
+            "credit_note",
             "notes",
             "created_by",
+            "created_by_name",
+            "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
             "created_at",
             "updated_at",
             "lines",
         ]
 
 
-class ReturnToVendorWriteSerializer(serializers.ModelSerializer):
-    lines = ReturnToVendorLineSerializer(many=True)
+class ReturnToBrandCreateSerializer(serializers.Serializer):
+    """The scan payload behind a new return (#75).
+
+    Barcodes and quantities, and nothing else that decides money. Which bucket
+    each piece comes out of, what it is worth and whether the brand will take it
+    at all are all the server's answers, read off the returnable pool.
+    """
+
+    store = serializers.PrimaryKeyRelatedField(queryset=Store.objects.all())
+    vendor = serializers.PrimaryKeyRelatedField(queryset=Vendor.objects.all())
+    brand = serializers.PrimaryKeyRelatedField(queryset=Brand.objects.all())
+    return_type = serializers.ChoiceField(choices=ReturnType.choices)
+    logistics_route = serializers.ChoiceField(choices=LogisticsRoute.choices)
+    via_transfer = serializers.PrimaryKeyRelatedField(
+        queryset=StoreTransfer.objects.all(), required=False, allow_null=True
+    )
+    scans = ScanLineSerializer(many=True, allow_empty=False)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def scans_by_barcode(self) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for scan in self.validated_data["scans"]:
+            totals[scan["barcode"]] = totals.get(scan["barcode"], 0) + scan["qty"]
+        return totals
+
+
+class CreditNoteSerializer(serializers.ModelSerializer):
+    """Recording the brand's acknowledgement against a posted return.
+
+    Status, not money: the payable already moved when the return posted. Written
+    to the companion record rather than the document, because a posted document
+    is immutable and a credit note arrives after the fact.
+    """
+
+    recorded_by_name = serializers.SerializerMethodField()
+
+    def get_recorded_by_name(self, obj: ReturnCreditNote) -> str:
+        return display_name(obj.recorded_by)
 
     class Meta:
-        model = ReturnToVendor
-        fields = [
-            "store",
-            "vendor",
-            "brand",
-            "return_type",
-            "logistics_route",
-            "season",
-            "return_window_date",
-            "notes",
-            "lines",
-        ]
-
-    def validate(self, data):
-        if not data.get("lines"):
-            raise serializers.ValidationError("At least one line is required.")
-        return data
-
-    def create(self, validated_data):
-        lines_data = _priced_lines(validated_data)
-        user = self.context.get("request", None)
-        if user:
-            user = user.user
-        validated_data["created_by"] = user
-        with transaction.atomic():
-            rtv = ReturnToVendor.objects.create(**validated_data)
-            for ld in lines_data:
-                ReturnToVendorLine.objects.create(rtv=rtv, **ld)
-        return rtv
+        model = ReturnCreditNote
+        fields = ["id", "received_on", "reference", "recorded_by_name"]
+        read_only_fields = ["id", "recorded_by_name"]
 
 
 # ---------------------------------------------------------------------------

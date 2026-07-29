@@ -164,9 +164,20 @@ export function StoresPage() {
 
 // ---------------------------------------------------------------- Brands
 
-interface Brand { id: number; code: string; name: string; ownership: string; return_terms: string; commercial_label: string; is_active: boolean; }
+interface Brand {
+  id: number; code: string; name: string; ownership: string; return_terms: string;
+  commercial_label: string; return_window_days: number; return_cap_percent: string;
+  takes_returns: boolean; cap_applies: boolean; is_active: boolean;
+}
 
-const blankBrand = { id: 0, code: "", name: "", ownership: "owned", return_terms: "none", is_active: true };
+// The two numbers a brand negotiates on returns (#75): how long the window is
+// and, for a Correction brand, what share of what they delivered may go back.
+// Zero means nobody has agreed one yet, which the return screen says out loud
+// rather than inventing a default nobody shook hands on.
+const blankBrand = {
+  id: 0, code: "", name: "", ownership: "owned", return_terms: "none",
+  return_window_days: "0", return_cap_percent: "0", is_active: true,
+};
 
 export function BrandsPage() {
   const canEdit = useSteward();
@@ -179,14 +190,29 @@ export function BrandsPage() {
 
   async function save() {
     setError(""); setOk("");
-    const payload = { code: form.code, name: form.name, ownership: form.ownership, return_terms: form.return_terms, is_active: form.is_active };
+    const payload = {
+      code: form.code, name: form.name, ownership: form.ownership,
+      return_terms: form.return_terms,
+      return_window_days: Number(form.return_window_days) || 0,
+      return_cap_percent: form.return_cap_percent || "0",
+      is_active: form.is_active,
+    };
     try {
       if (form.id) await api.patch(`/masters/brands/${form.id}`, payload);
       else await api.post("/masters/brands", payload);
       setForm(blankBrand); setOpen(false); setOk("Brand saved."); reload();
     } catch (e) { setError(apiErrorMessage(e)); }
   }
-  function edit(b: Brand) { setOpen(true); setOk(""); setError(""); setForm({ id: b.id, code: b.code, name: b.name, ownership: b.ownership, return_terms: b.return_terms, is_active: b.is_active }); }
+  function edit(b: Brand) {
+    setOpen(true); setOk(""); setError("");
+    setForm({
+      id: b.id, code: b.code, name: b.name, ownership: b.ownership,
+      return_terms: b.return_terms,
+      return_window_days: String(b.return_window_days ?? 0),
+      return_cap_percent: String(b.return_cap_percent ?? "0"),
+      is_active: b.is_active,
+    });
+  }
   function add() { setForm(blankBrand); setOpen(true); setOk(""); setError(""); }
 
   return (
@@ -214,6 +240,8 @@ export function BrandsPage() {
               <option value="uncapped">Uncapped</option>
               <option value="rolling">Uncapped + rolling top-up</option>
             </select>
+            <input className="input" type="number" min={0} placeholder="Return window (days)" value={form.return_window_days} onChange={(e) => setForm({ ...form, return_window_days: e.target.value })} data-testid="brand-window-days-input" />
+            <input className="input" type="number" min={0} max={100} step="0.01" placeholder="Allowed return %" value={form.return_cap_percent} onChange={(e) => setForm({ ...form, return_cap_percent: e.target.value })} data-testid="brand-cap-percent-input" disabled={form.return_terms !== "capped"} title={form.return_terms === "capped" ? "The negotiated share of what this brand delivered that may go back" : "Only a capped brand has an allowance"} />
             <label className="check-row"><input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} data-testid="brand-active-checkbox" /> Active</label>
             <button className="btn btn-cta" onClick={save} disabled={!form.code || !form.name} data-testid="brand-save-button"><Save size={15} /> Save brand</button>
           </div>
@@ -221,18 +249,26 @@ export function BrandsPage() {
       )}
       <div className="table-wrap">
         <table className="data" data-testid="brands-table">
-          <thead><tr><th>Brand</th><th>Ownership</th><th>Return terms</th><th>Commercial model</th><th>Status</th>{canEdit && <th />}</tr></thead>
+          <thead><tr><th>Brand</th><th>Ownership</th><th>Return terms</th><th>Commercial model</th><th>Returns</th><th>Status</th>{canEdit && <th />}</tr></thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={6}>Loading…</td></tr>
+              <tr><td colSpan={7}>Loading…</td></tr>
             ) : data.length === 0 ? (
-              <tr data-testid="brands-empty"><td colSpan={6}>{q ? `No brand matches “${q}”.` : "No brands yet."}</td></tr>
+              <tr data-testid="brands-empty"><td colSpan={7}>{q ? `No brand matches “${q}”.` : "No brands yet."}</td></tr>
             ) : data.map((b) => (
               <tr key={b.id} data-testid={`brand-row-${b.code}`}>
                 <td><b>{b.name}</b></td>
                 <td>{b.ownership === "owned" ? "KDPS-owned" : "Brand-owned"}</td>
                 <td style={{ textTransform: "capitalize" }}>{b.return_terms}</td>
                 <td><CommercialBadge label={b.commercial_label} /></td>
+                <td data-testid={`brand-returns-${b.code}`}>
+                  {b.takes_returns ? (
+                    <>
+                      {b.return_window_days > 0 ? `${b.return_window_days}-day window` : "No window agreed"}
+                      {b.cap_applies && ` · ${b.return_cap_percent}% allowed`}
+                    </>
+                  ) : "Nothing goes back"}
+                </td>
                 <td><span className={`chip chip-${b.is_active ? "green" : "red"}`}>{b.is_active ? "Active" : "Inactive"}</span></td>
                 {canEdit && <td><button className="btn btn-sm" onClick={() => edit(b)} data-testid={`edit-brand-${b.code}`}><Pencil size={13} /> Edit</button></td>}
               </tr>

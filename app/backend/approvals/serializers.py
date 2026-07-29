@@ -46,6 +46,7 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
             "store",
             "store_code",
             "store_name",
+            "brand",
             "value_paise",
             "status",
             "made_by",

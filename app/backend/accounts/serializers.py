@@ -7,6 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from accounts.actor_policies import actions_for
 from accounts.models import NAV_GROUPS, ActorPolicy, Role, User
 from accounts.permissions import visible_sections
 from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
@@ -159,6 +160,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # the user may act in (fail-closed — empty ⇒ nothing).
     sections = serializers.SerializerMethodField()
     capabilities = serializers.SerializerMethodField()
+    actions = serializers.SerializerMethodField()
     business_units = serializers.SerializerMethodField()
     all_business_units = serializers.SerializerMethodField()
     # What the top-bar switcher offers this person (issue #88): a list of units,
@@ -185,6 +187,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "landing_page",
             "sections",
             "capabilities",
+            "actions",
             "business_units",
             "all_business_units",
             "business_unit_mode",
@@ -222,6 +225,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
         # Flat {section: capability} the client gates on — projected from the
         # already-computed sections list, not a second resolution pass.
         return {str(s["code"]): str(s["capability"]) for s in self.get_sections(obj)}
+
+    def get_actions(self, obj: User) -> list[str]:
+        # The stored actor policies this person satisfies (#75). The ladder above
+        # cannot express them: two roles can sit on the same rung of a section
+        # and still differ on one action inside it.
+        return actions_for(obj)
 
     def get_business_units(self, obj: User) -> list[dict[str, Any]]:
         # The units the user may act in are exactly their scoped stores. `all`-

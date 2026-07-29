@@ -30,9 +30,27 @@ export function canCloseTransferGap(user: User | null | undefined): boolean {
   return userCan(user, "transfer", "approve");
 }
 
-/** Mark damage, and create or submit a return to brand. */
+/** Reach the Return to Brand section at all — which for a store means marking
+ *  damage, and nothing further. */
 export function canWriteReturnToBrand(user: User | null | undefined): boolean {
   return userCan(user, "return_to_brand", "operate");
+}
+
+/**
+ * Create and execute a return — a narrower question than the rung above.
+ *
+ * The matrix puts a store and the warehouse on the same rung of this section
+ * ("Mark damage only" against "Create & execute"), so no capability can tell
+ * them apart; a stored actor policy does (#75). Read off the payload rather
+ * than restated as a role list here, for the same reason as everything else in
+ * this file. Absent `actions` means an older backend, and then the section rung
+ * is the best the client has — the API still refuses.
+ */
+export function canCreateReturnToBrand(user: User | null | undefined): boolean {
+  if (!canWriteReturnToBrand(user)) return false;
+  const actions = user?.actions;
+  if (!actions) return true;
+  return actions.includes("outbound.create_return_to_brand");
 }
 
 /** Create or submit a stock adjustment or a write-off. */

@@ -21,6 +21,8 @@ from core.gl import GLAccount, GLEntry
 from finledger.models import VendorLedgerEntry
 from masters.models import Brand, Gstin, LegalEntity, Store
 from outbound.models import (
+    ReturnCreditNote,
+    ReturnSource,
     ReturnToVendor,
     ReturnToVendorLine,
     StockAdjustment,
@@ -41,7 +43,7 @@ from outbound.posting import (
     post_vflip,
     post_writeoff,
 )
-from stockledger.models import StockLedgerEntry, StockOnHand
+from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
 from vendors.models import Vendor
 
 
@@ -211,6 +213,48 @@ def _approve(doc, s):
     if approval is not None and approval.status == ApprovalStatus.PENDING:
         decide(approval, actor=s["checker"], action="approve")
     return doc
+
+
+def _quarantine(s, store, sku_code: str, qty: int, unit_cost_paise: int) -> None:
+    """Put pieces in the quarantine bucket, where a defective return draws from.
+
+    Seeded beside the shelf rather than out of it (#75): these tests are about
+    the money a defective return posts, and leaving free-to-sell untouched lets
+    each one also assert that a quarantine line never reaches it.
+    """
+    row = StockOnHand.objects.get(store=store, sku_code=sku_code)
+    QuarantineStock.objects.create(
+        store=store,
+        gstin=row.gstin,
+        sku_code=sku_code,
+        design=row.design,
+        color=row.color,
+        size=row.size,
+        brand=row.brand,
+        season=row.season,
+        item=row.item,
+        hsn=row.hsn,
+        qty=qty,
+        value_paise=qty * unit_cost_paise,
+        marked_by=s["user"],
+    )
+    StockLedgerEntry.objects.create(
+        store=store,
+        gstin=row.gstin,
+        sku_code=sku_code,
+        design=row.design,
+        color=row.color,
+        size=row.size,
+        brand=row.brand,
+        season=row.season,
+        item=row.item,
+        hsn=row.hsn,
+        qty=qty,
+        amount=qty * unit_cost_paise,
+        kind=StockLedgerEntry.Kind.QUARANTINE_IN,
+        doc_number=f"SEED-QTN-{sku_code}",
+        line_no=1,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -406,6 +450,7 @@ def test_transfer_blocks_on_insufficient_stock(_outbound_scaffold):
 def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
     """RTV for owned brand: stock out + Dr VENDOR_PAYABLE / Cr INVENTORY."""
     s = _outbound_scaffold
+    _quarantine(s, s["store_a"], "SKU001", 2, 100)
     rtv = ReturnToVendor.objects.create(
         store=s["store_a"],
         vendor=s["vendor"],
@@ -426,14 +471,16 @@ def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
         hsn="6205",
         qty=2,
         unit_cost_paise=100,
+        source=ReturnSource.QUARANTINE,
     )
 
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
     assert rtv.docstatus == DocStatus.SUBMITTED
 
-    # Stock decreased
+    # The quarantine bucket drained; the shelf was never touched
+    assert not QuarantineStock.objects.filter(store=s["store_a"], sku_code="SKU001").exists()
     oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU001")
-    assert oh.net_qty == 8  # 10 - 2
+    assert oh.net_qty == 10
 
     # GL posted: balanced
     gl_entries = GLEntry.objects.filter(doc_number=rtv.doc_number)
@@ -460,6 +507,7 @@ def test_rtv_defective_owned_posts_gl(_outbound_scaffold):
 def test_rtv_sor_brand_no_gl(_outbound_scaffold):
     """RTV for SOR brand: stock out only, NO GL posting."""
     s = _outbound_scaffold
+    _quarantine(s, s["store_a"], "SKU002", 1, 200)
     rtv = ReturnToVendor.objects.create(
         store=s["store_a"],
         vendor=s["vendor"],
@@ -479,12 +527,14 @@ def test_rtv_sor_brand_no_gl(_outbound_scaffold):
         hsn="6203",
         qty=1,
         unit_cost_paise=200,
+        source=ReturnSource.QUARANTINE,
     )
 
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
 
+    assert not QuarantineStock.objects.filter(store=s["store_a"], sku_code="SKU002").exists()
     oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")
-    assert oh.net_qty == 4  # 5 - 1
+    assert oh.net_qty == 5
 
     # No GL entries for brand-owned
     gl_count = GLEntry.objects.filter(doc_number=rtv.doc_number).count()
@@ -526,7 +576,7 @@ def test_seasonal_return_sor(_outbound_scaffold):
         unit_cost_paise=200,
     )
 
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
 
     oh = StockOnHand.objects.get(store=s["store_a"], sku_code="SKU002")
     assert oh.net_qty == 2  # 5 - 3
@@ -558,7 +608,7 @@ def test_seasonal_return_owned_posts_gl(_outbound_scaffold):
         unit_cost_paise=100,
     )
 
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
 
     gl_entries = list(GLEntry.objects.filter(doc_number=rtv.doc_number))
     assert len(gl_entries) == 2
@@ -822,20 +872,30 @@ def test_transfer_receive_idempotent(_outbound_scaffold):
 
 @pytest.mark.django_db(transaction=True)
 def test_rtv_credit_note_tracking(_outbound_scaffold):
-    """RTV credit note fields are stored and queryable."""
+    """The credit note is a companion record, not columns on the return (#75).
+
+    It arrives days or weeks after the return posts, and a posted document is
+    immutable at the kernel — so recording one used to be impossible on the
+    document itself. Same shape as ``TransferReceipt``.
+    """
     s = _outbound_scaffold
     rtv = ReturnToVendor.objects.create(
         store=s["store_a"],
         vendor=s["vendor"],
         brand=s["brand_owned"],
         return_type="defective",
-        credit_note_received=True,
-        credit_note_date="2026-07-15",
         created_by=s["user"],
     )
+    ReturnCreditNote.objects.create(
+        rtv=rtv,
+        received_on="2026-07-15",
+        reference="CN/2026/0042",
+        recorded_by=s["user"],
+    )
+
     rtv.refresh_from_db()
-    assert rtv.credit_note_received is True
-    assert str(rtv.credit_note_date) == "2026-07-15"
+    assert str(rtv.credit_note.received_on) == "2026-07-15"
+    assert rtv.credit_note.reference == "CN/2026/0042"
 
 
 @pytest.mark.django_db(transaction=True)
@@ -852,6 +912,7 @@ def test_owned_rtv_vendor_subledger_in_sync(_outbound_scaffold):
     from django.db.models import Sum
 
     s = _outbound_scaffold
+    _quarantine(s, s["store_a"], "SKU001", 3, 100)
     rtv = ReturnToVendor.objects.create(
         store=s["store_a"],
         vendor=s["vendor"],
@@ -872,8 +933,9 @@ def test_owned_rtv_vendor_subledger_in_sync(_outbound_scaffold):
         hsn="6205",
         qty=3,
         unit_cost_paise=100,
+        source=ReturnSource.QUARANTINE,
     )
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
 
     # GL VENDOR_PAYABLE debit for this RTV
     gl_payable_dr = (
@@ -923,7 +985,7 @@ def test_sor_rtv_no_vendor_subledger_entry(_outbound_scaffold):
         qty=2,
         unit_cost_paise=200,
     )
-    post_rtv(rtv, user=s["user"])
+    post_rtv(_approve(rtv, s), user=s["user"])
 
     # No GL, no vendor subledger
     assert GLEntry.objects.filter(doc_number=rtv.doc_number).count() == 0
@@ -1067,7 +1129,7 @@ def test_rtv_blocked_for_vflipped_stock(_outbound_scaffold):
     )
 
     with pytest.raises(OutboundPostingError, match="V-flipped stock"):
-        post_rtv(rtv, user=s["user"])
+        post_rtv(_approve(rtv, s), user=s["user"])
 
 
 @pytest.mark.django_db(transaction=True)

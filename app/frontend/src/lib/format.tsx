@@ -9,8 +9,12 @@ export function formatINR(paise: number, opts: { short?: boolean } = {}): string
     if (abs >= 1e7) return `₹${(rupees / 1e7).toFixed(2)} Cr`;
     if (abs >= 1e5) return `₹${(rupees / 1e5).toFixed(2)} L`;
   }
+  // Whole rupees show no paise at all; anything with paise shows both digits.
+  // Without the minimum, ₹1,222.50 renders as "₹1,222.5", which is not money.
+  const fraction = rupees % 1 === 0 ? 0 : 2;
   const grouped = new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: rupees % 1 === 0 ? 0 : 2,
+    minimumFractionDigits: fraction,
+    maximumFractionDigits: fraction,
   }).format(rupees);
   return `₹${grouped}`;
 }

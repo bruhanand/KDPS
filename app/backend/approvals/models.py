@@ -76,6 +76,16 @@ class Approval(TimeStampedModel):
         related_name="approvals",
         help_text="Scopes the inbox for store-scoped users (ADR-0003).",
     )
+    brand = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Scopes the inbox for brand-scoped users — a brand manager, "
+        "whose boundary is brands and not stores (ADR-0003). Snapshotted as the "
+        "brand *name*, like every other brand on a ledger row, so this table "
+        "still imports no business model. Blank means the decision is not about "
+        "one brand, and a brand-scoped user never sees it (#75).",
+    )
     value_paise = MoneyField(
         default=0,
         help_text="Value at stake, snapshotted — the input to value-banded approval.",

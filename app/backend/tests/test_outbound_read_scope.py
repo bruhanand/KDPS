@@ -47,15 +47,21 @@ from outbound.models import (
 from vendors.models import Vendor
 
 TRANSFERS = "/api/outbound/transfers"
+RTVS = "/api/outbound/rtvs"
 #: The four store-owned outbound documents, as `(list url, scaffold key prefix)`.
 #: Parameterising rather than repeating keeps a fifth document type one line away
 #: and stops one of the four quietly losing its gate.
 STORE_DOCS = [
-    ("/api/outbound/rtvs", "rtv"),
+    (RTVS, "rtv"),
     ("/api/outbound/adjustments", "adj"),
     ("/api/outbound/writeoffs", "wro"),
     ("/api/outbound/vflips", "vfl"),
 ]
+#: The three that still carry no brand of their own. A return to brand names the
+#: brand it is going back to, so #75 lets a brand-scoped caller read their own —
+#: they have to approve it. For these three "stores are the wrong question" still
+#: has no answer but an empty list.
+BRANDLESS_DOCS = [row for row in STORE_DOCS if row[0] != RTVS]
 
 
 def _client(user: User) -> APIClient:
@@ -173,6 +179,24 @@ def scaffold(db):
         VFlipLine.objects.create(vflip=vfl, sku_code="RS-SKU1", qty=1, unit_cost_paise=1000)
         built[f"vfl_{key}"] = vfl
 
+    # A second brand's return, at the store nobody in this scaffold reads. The
+    # brand-scoped caller works at no store at all, so store scope decides
+    # nothing for them — what keeps this one out of their list is its brand.
+    other = Brand.objects.create(
+        code="rs-other",
+        name="OtherBrand",
+        ownership=Brand.Ownership.BRAND_OWNED,
+        return_terms=Brand.ReturnTerms.UNCAPPED,
+    )
+    other_rtv = ReturnToVendor.objects.create(
+        store=far, vendor=vendor, brand=other, return_type="defective", created_by=owner_user
+    )
+    ReturnToVendorLine.objects.create(
+        rtv=other_rtv, sku_code="RS-SKU2", qty=1, unit_cost_paise=1000
+    )
+    built["other_brand"] = other
+    built["rtv_other_brand"] = other_rtv
+
     return built
 
 
@@ -250,12 +274,12 @@ def test_a_brand_scoped_caller_gets_empty_lists_not_everything(scaffold):
     (ADR-0003). "Stores are the wrong question" must never resolve to "so show
     every store" — and an empty list is the answer, not a 403.
 
-    A deliberate interim: #110 gives outbound documents a brand dimension and
-    replaces this with cross-by-brand.
+    A deliberate interim: #110 gives the rest of them a brand dimension and
+    replaces this with cross-by-brand. Returns to brand got there first (#75).
     """
     client = _client(scaffold["brand_user"])
 
-    for url in [TRANSFERS] + [u for u, _ in STORE_DOCS]:
+    for url in [TRANSFERS] + [u for u, _ in BRANDLESS_DOCS]:
         resp = client.get(url)
         assert resp.status_code == 200, url
         assert resp.json() == [], url
@@ -266,8 +290,33 @@ def test_a_brand_scoped_caller_cannot_open_one_by_id_either(scaffold):
     client = _client(scaffold["brand_user"])
 
     assert client.get(f"{TRANSFERS}/{scaffold['out_of_deo'].id}").status_code == 404
-    for url, key in STORE_DOCS:
+    for url, key in BRANDLESS_DOCS:
         assert client.get(f"{url}/{scaffold[f'{key}_deo'].id}").status_code == 404, url
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_brand_scoped_caller_reads_returns_of_their_own_brands(scaffold):
+    """The one outbound document that answers "is this row theirs?" (#75).
+
+    A Brand Manager approves returns to the brands they look after, and an
+    approval nobody can open is a blind signature — so the return itself is
+    readable by brand, at whichever store it was raised. Store scope never
+    enters into it: this caller works at no store.
+    """
+    client = _client(scaffold["brand_user"])
+
+    assert _ids(client.get(RTVS)) == {scaffold["rtv_deo"].id, scaffold["rtv_bnk"].id}
+    assert client.get(f"{RTVS}/{scaffold['rtv_bnk'].id}").status_code == 200
+
+
+@pytest.mark.django_db(transaction=True)
+def test_another_brands_return_does_not_exist_to_a_brand_manager(scaffold):
+    """The other half of the same gate — and the half that matters, because the
+    inbox decides who may approve from the same answer."""
+    client = _client(scaffold["brand_user"])
+
+    assert client.get(f"{RTVS}/{scaffold['rtv_other_brand'].id}").status_code == 404
+    assert scaffold["rtv_other_brand"].id not in _ids(client.get(RTVS))
 
 
 # -- The routes that reach the same document another way --------------------

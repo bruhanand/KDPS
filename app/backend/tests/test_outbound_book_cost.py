@@ -33,7 +33,7 @@ from outbound.models import (
     WriteOff,
 )
 from outbound.posting import OutboundPostingError, post_writeoff
-from stockledger.models import StockLedgerEntry, StockOnHand
+from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
 from vendors.models import Vendor
 
 FY = "26-27"
@@ -63,8 +63,14 @@ def books(db):
     brand_owned = Brand.objects.create(
         code="bc-own",
         name="BcOwned",
+        # Owned *and* capped — a Correction brand. Owned is what makes a return
+        # post GL; capped is what lets it be returned at all (#75 keeps Outright
+        # stock out of the pool entirely), and the percentage is set wide so this
+        # file measures valuation rather than the cap.
         ownership=Brand.Ownership.OWNED,
-        return_terms=Brand.ReturnTerms.NONE,
+        return_terms=Brand.ReturnTerms.CAPPED,
+        return_window_days=120,
+        return_cap_percent=100,
     )
     brand_sor = Brand.objects.create(
         code="bc-sor",
@@ -191,6 +197,39 @@ def _approve(books, kind, doc_id):
 def _posted_value(doc_number, kind) -> int:
     """What the stock ledger says this document moved, in paise."""
     return sum(e.amount for e in StockLedgerEntry.objects.filter(doc_number=doc_number, kind=kind))
+
+
+def _quarantine(books, sku_code: str, qty: int, value_paise: int = 0) -> None:
+    """Put confirmed-damaged pieces in the bucket a defective return draws from.
+
+    Seeded at **no value on purpose**: the bucket is the one place a caller could
+    smuggle a price in from, so a return that priced itself off this row would
+    post at zero and this file exists to stop exactly that. The books hold a
+    cohort P-RATE for the same barcode, and that is what must reach the ledger.
+    """
+    row = StockOnHand.objects.get(store=books["store"], sku_code=sku_code)
+    QuarantineStock.objects.create(
+        store=books["store"],
+        gstin=row.gstin,
+        sku_code=sku_code,
+        brand=row.brand,
+        season=row.season,
+        qty=qty,
+        value_paise=value_paise,
+        marked_by=books["maker"],
+    )
+    StockLedgerEntry.objects.create(
+        store=books["store"],
+        gstin=row.gstin,
+        sku_code=sku_code,
+        brand=row.brand,
+        season=row.season,
+        qty=qty,
+        amount=value_paise,
+        kind=StockLedgerEntry.Kind.QUARANTINE_IN,
+        doc_number=f"BC-QTN-{sku_code}",
+        line_no=1,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +447,7 @@ def test_a_found_piece_the_books_never_bought_is_refused(books):
 def test_owned_rtv_reduces_the_payable_at_the_book_cost(books):
     """``total_value_paise == 0`` meant no GL and no vendor credit: the goods
     went back and we still owed for them."""
+    _quarantine(books, "BC-COHORT", 2)
     create = _client(books["maker"]).post(
         "/api/outbound/rtvs",
         {
@@ -415,19 +455,22 @@ def test_owned_rtv_reduces_the_payable_at_the_book_cost(books):
             "vendor": books["vendor"].id,
             "brand": books["brand_owned"].id,
             "return_type": "defective",
-            "logistics_route": "warehouse",
-            "lines": [{"sku_code": "BC-COHORT", "qty": 2}],
+            "logistics_route": "store_dispatch",
+            "scans": [{"barcode": "BC-COHORT", "qty": 2}],
         },
         format="json",
     )
     assert create.status_code == 201, create.data
     assert create.data["lines"][0]["unit_cost_paise"] == COHORT_COST
 
+    _approve(books, "return_to_brand", create.data["id"])
     submit = _client(books["maker"]).post(f"/api/outbound/rtvs/{create.data['id']}/submit")
     assert submit.status_code == 200, submit.data
     doc_number = submit.data["doc_number"]
 
-    assert _posted_value(doc_number, "rtv_out") == -2 * COHORT_COST
+    # A defective return drains the quarantine bucket, which is where the pieces
+    # went when the damage was confirmed (#75).
+    assert _posted_value(doc_number, "quarantine_out") == -2 * COHORT_COST
 
     gl = list(GLEntry.objects.filter(doc_number=doc_number))
     assert len(gl) == 2, "an owned RTV used to write no GL at all"
@@ -451,13 +494,14 @@ def test_brand_owned_rtv_still_writes_no_gl_but_relieves_value(books):
             "vendor": books["vendor"].id,
             "brand": books["brand_sor"].id,
             "return_type": "seasonal",
-            "season": "SS26",
-            "lines": [{"sku_code": "BC-AVG", "qty": 4}],
+            "logistics_route": "store_pickup",
+            "scans": [{"barcode": "BC-AVG", "qty": 4}],
         },
         format="json",
     )
     assert create.status_code == 201, create.data
 
+    _approve(books, "return_to_brand", create.data["id"])
     submit = _client(books["maker"]).post(f"/api/outbound/rtvs/{create.data['id']}/submit")
     assert submit.status_code == 200, submit.data
     doc_number = submit.data["doc_number"]

@@ -25,7 +25,7 @@ from django.utils import timezone
 
 from approvals.hooks import run_on_approved
 from approvals.models import CLEARED_STATUSES, Approval, ApprovalStatus
-from masters.scoping import scope_by_store
+from masters.scoping import scope_by_store_or_brand
 
 
 class ApprovalError(Exception):
@@ -76,6 +76,7 @@ def _create(
     requested_by: Any,
     approver_roles: list[str],
     store: Any = None,
+    brand: str = "",
     value_paise: int = 0,
     reason: str = "",
 ) -> Approval:
@@ -86,6 +87,7 @@ def _create(
         content_type=ContentType.objects.get_for_model(subject),
         object_id=subject.pk,
         store=store,
+        brand=brand,
         value_paise=value_paise,
         approver_roles=list(approver_roles),
         made_by=made_by,
@@ -105,6 +107,7 @@ def request_approval(
     requested_by: Any,
     approver_roles: list[str],
     store: Any = None,
+    brand: str = "",
     value_paise: int = 0,
 ) -> Approval:
     """Put ``subject`` in the approvals inbox, waiting for someone else.
@@ -127,6 +130,7 @@ def request_approval(
                 requested_by=requested_by,
                 approver_roles=approver_roles,
                 store=store,
+                brand=brand,
                 value_paise=value_paise,
             )
     except IntegrityError as exc:
@@ -146,6 +150,7 @@ def record_no_approval_needed(
     made_by: Any,
     requested_by: Any,
     store: Any = None,
+    brand: str = "",
     value_paise: int = 0,
     reason: str,
 ) -> Approval:
@@ -167,6 +172,7 @@ def record_no_approval_needed(
         requested_by=requested_by,
         approver_roles=[],
         store=store,
+        brand=brand,
         value_paise=value_paise,
         reason=reason,
     )
@@ -256,11 +262,12 @@ def can_decide(approval: Approval, user: Any) -> bool:
     """May ``user``'s *role* decide this one? A role gate and nothing else.
 
     Two other gates exist and neither is here. ``decide`` bars the maker and the
-    asker. Store scope (ADR-0003) is applied where the row is *found* — by
+    asker. Record scope (ADR-0003) is applied where the row is *found* — by
     ``inbox_for`` when listing, and by the decide view, which looks the approval
-    up through ``scope_by_entitlement`` so an out-of-scope pk is a 404 before any
-    of this runs. Deciding uses the entitlement, not the top-bar unit: the
-    switcher narrows what you read, never what you may act on.
+    up through ``scope_by_entitlement_or_brand`` so an out-of-scope pk is a 404
+    before any of this runs; that is also what stops a brand manager deciding
+    another brand's return (#75). Deciding uses the entitlement, not the top-bar
+    unit: the switcher narrows what you read, never what you may act on.
 
     It is deliberately not re-checked at decision time, so a caller
     that hands ``decide`` a row it fetched some other way — a shell, a
@@ -279,8 +286,10 @@ def inbox_for(user: Any) -> Any:
 
     Fail-closed on three axes: pending only, never one's own — neither made nor
     asked by this user, since a self-approval can never succeed and so is never
-    offered — role-matched, store-scoped. An approval with no store is
-    network-level: only unrestricted users see it.
+    offered — role-matched, and scoped by store or by brand depending on which
+    of the two bounds the caller. An approval with no store is network-level:
+    only unrestricted users see it, and a brand manager sees only rows carrying
+    one of their own brands (#75).
     """
     qs = (
         Approval.objects.filter(status=ApprovalStatus.PENDING)
@@ -288,7 +297,7 @@ def inbox_for(user: Any) -> Any:
         .exclude(made_by=user)
         .select_related("store", "made_by", "requested_by", "decided_by")
     )
-    qs = scope_by_store(qs, user, "store_id")
+    qs = scope_by_store_or_brand(qs, user)
     if not getattr(user, "is_superuser", False):
         role_code = getattr(getattr(user, "role", None), "code", "")
         if not role_code:
