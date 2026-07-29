@@ -260,6 +260,7 @@ RATIFIED_APPROVERS = {
     "vflip": (["accounts", "owner"], ["owner"]),
     "return_to_brand": (["brand_manager", "owner"], ["owner"]),
     "transfer": (["ho_ops", "owner"], ["ho_ops", "owner"]),
+    "stock_request": (["ho_ops", "owner"], ["ho_ops", "owner"]),
     "pt_reverse": (["accounts", "owner"], ["accounts", "owner"]),
     "gap_closure": (["ho_ops", "owner"], ["ho_ops", "owner"]),
     "damage": (["warehouse", "owner"], ["warehouse", "owner"]),
@@ -521,6 +522,16 @@ UNGATED_VIEWS = {
     "outbound/views.py:StocktakeVarianceView",
     # #76: a dims-only lookup during a blind count, same shape as ScanLookupView.
     "outbound/views.py:CountLookupView",
+    # #74: record-scoped via _stock_requests (fail-closed on the queryset, both
+    # ends of the ask) — same shape as the other detail views above.
+    "outbound/views.py:StockRequestDetailView",
+    # #74: the cross-location search is deliberately open past its own store —
+    # showing quantity and identity everywhere is the whole point (Anand's
+    # ruling of 26 July), the same "identity discloses nothing" shape as
+    # LocationListView above and StockOnHandView below. What a section gate
+    # would actually need to protect — cost, landed value, margin — is masked
+    # per row instead, against the caller's own stores, not behind a section.
+    "outbound/views.py:CrossLocationStockSearchView",
     "ptmapper/views.py:PtFileListCreateView",
     "ptmapper/views.py:PtFileFromGrnView",
     "ptmapper/views.py:PtFileDetailView",

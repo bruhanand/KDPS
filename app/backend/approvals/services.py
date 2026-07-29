@@ -172,7 +172,7 @@ def record_no_approval_needed(
     )
 
 
-def approvals_for(subject: models.Model) -> Any:
+def approvals_for(subject: models.Model) -> models.QuerySet[Approval]:
     """Every approval ever raised against ``subject``, newest first."""
     return Approval.objects.filter(
         content_type=ContentType.objects.get_for_model(subject), object_id=subject.pk

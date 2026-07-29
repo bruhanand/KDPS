@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from django.urls import path
 
-from outbound.models import StockAdjustment, StoreTransfer, TransferGapClosure, VFlip, WriteOff
+from outbound.models import (
+    StockAdjustment,
+    StockRequest,
+    StoreTransfer,
+    TransferGapClosure,
+    VFlip,
+    WriteOff,
+)
 from outbound.permissions import (
     CanCloseTransferGap,
     CanFlipOwnership,
@@ -12,6 +19,7 @@ from outbound.permissions import (
 from outbound.serializers import (
     GapClosureReadSerializer,
     StockAdjustmentReadSerializer,
+    StockRequestReadSerializer,
     StoreTransferReadSerializer,
     VFlipReadSerializer,
     WriteOffReadSerializer,
@@ -24,6 +32,7 @@ from outbound.views import (
     CountSessionCreateView,
     CountSessionScanView,
     CountSessionSubmitView,
+    CrossLocationStockSearchView,
     GapClosureDetailView,
     GapClosureSubmitView,
     MarkDamagedView,
@@ -32,6 +41,10 @@ from outbound.views import (
     RTVListCreateView,
     RTVSubmitView,
     ScanLookupView,
+    StockRequestCloseView,
+    StockRequestDetailView,
+    StockRequestFulfilView,
+    StockRequestListCreateView,
     StocktakeApplyView,
     StocktakeDetailView,
     StocktakeListCreateView,
@@ -98,6 +111,31 @@ urlpatterns = [
         name="gap-closure-request-approval",
     ),
     path("scan-lookup", ScanLookupView.as_view(), name="scan-lookup"),
+    # Stock requests — the pull side of a transfer (#74)
+    path("stock-search", CrossLocationStockSearchView.as_view(), name="stock-search"),
+    path("stock-requests", StockRequestListCreateView.as_view(), name="stock-request-list"),
+    path("stock-requests/<int:pk>", StockRequestDetailView.as_view(), name="stock-request-detail"),
+    path(
+        "stock-requests/<int:pk>/fulfil",
+        StockRequestFulfilView.as_view(),
+        name="stock-request-fulfil",
+    ),
+    path(
+        "stock-requests/<int:pk>/close",
+        StockRequestCloseView.as_view(),
+        name="stock-request-close",
+    ),
+    path(
+        "stock-requests/<int:pk>/request-approval",
+        RequestApprovalView.as_view(
+            model=StockRequest,
+            read_serializer=StockRequestReadSerializer,
+            permission_classes=[CanWriteTransfer],
+            related=("requesting_store", "fulfilling_store", "created_by"),
+            scope_field="fulfilling_store_id",
+        ),
+        name="stock-request-request-approval",
+    ),
     # Mark damaged (global action → a flag, and on confirmation → quarantine)
     path("mark-damaged", MarkDamagedView.as_view(), name="mark-damaged"),
     # Returns to Vendor (RTV)

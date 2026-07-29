@@ -85,7 +85,7 @@ from stockledger.posting import post_pt_inward
 from vendors.models import Booking, BookingLine, Vendor
 
 SEED_TAG = "demo-wave2"
-DOC_TYPES = ("GRN", "PT", "STO", "DMG", "GAP", "RTV", "ADJ", "WRO", "VFL")
+DOC_TYPES = ("GRN", "PT", "STO", "DMG", "GAP", "RTV", "ADJ", "WRO", "VFL", "SRQ")
 REAL_GSTINS = {"10AAACK1234M1Z5", "20AAACK1234M1Z3"}
 
 

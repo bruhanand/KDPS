@@ -19,6 +19,7 @@ describe("the route table", () => {
       ["/receive", "grn-list"],
       ["/receive/pt", "pt-list"],
       ["/transfer", "transfer-list"],
+      ["/transfer/requests", "stock-request-list"],
       ["/stock-count", "count-list"],
       ["/stock-count/adjustments", "adjustment-list"],
       ["/stock-count/writeoffs", "writeoff-list"],
@@ -44,6 +45,8 @@ describe("the route table", () => {
     expect(screenAt("/booking/new")).toBe("booking-new");
     expect(screenAt("/booking/12")).toBe("booking-detail");
     expect(screenAt("/transfer/new")).toBe("transfer-new");
+    expect(screenAt("/transfer/requests/new")).toBe("stock-request-new");
+    expect(screenAt("/transfer/requests/12")).toBe("stock-request-detail");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");
     expect(screenAt("/return-to-brand/new")).toBe("rtv-new");
     expect(screenAt("/return-to-brand/12")).toBe("rtv-detail");
@@ -56,9 +59,9 @@ describe("the route table", () => {
   });
 
   it("Transfer sub-screens do not swallow the Transfer document ids", () => {
-    // /transfer/requests and /transfer/distribution are planned pages, and
-    // /transfer/in-transit is now built (#71) — all three sit where ids live.
-    expect(screenAt("/transfer/requests")).toBe("planned:/transfer/requests");
+    // /transfer/distribution is still a planned page; /transfer/in-transit and
+    // /transfer/requests are now built (#71, #74) — all three sit where ids live.
+    expect(screenAt("/transfer/requests")).toBe("stock-request-list");
     expect(screenAt("/transfer/distribution")).toBe("planned:/transfer/distribution");
     expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");

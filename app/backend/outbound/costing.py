@@ -58,3 +58,21 @@ def book_unit_cost(store_id: int, sku_code: str, season: str = "") -> int:
     if on_hand is not None and on_hand.net_qty > 0:
         return int(on_hand.net_value_paise or 0) // on_hand.net_qty
     return 0
+
+
+def on_hand_valuation(row: StockOnHand, mrp_paise: int) -> dict[str, int | None]:
+    """Cost, landed value and margin for one on-hand row, in paise (#74).
+
+    Read straight off the materialised ``StockOnHand`` projection rather than
+    re-summing the ledger — the same number every other stock screen shows for
+    this row. ``mrp_paise`` comes from the item master, not the row: on-hand
+    prices what is on the shelf, never what it should sell for. A margin needs
+    an MRP to compare against; without one it is unknown, not zero.
+    """
+    unit_cost = row.net_value_paise // row.net_qty if row.net_qty else 0
+    margin = (mrp_paise * row.net_qty - row.net_value_paise) if mrp_paise else None
+    return {
+        "unit_cost_paise": unit_cost,
+        "landed_value_paise": row.net_value_paise,
+        "margin_paise": margin,
+    }

@@ -169,7 +169,7 @@ export const SECTIONS: NavSectionDef[] = [
     items: [
       { label: "Transfers", to: "/transfer" },
       { label: "Send Stock", to: "/transfer/new" },
-      { label: "Stock Request", to: "/transfer/requests", planned: true },
+      { label: "Stock Request", to: "/transfer/requests" },
       { label: "Distribution", to: "/transfer/distribution", planned: true },
       { label: "In-Transit", to: "/transfer/in-transit" },
     ],

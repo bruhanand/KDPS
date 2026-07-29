@@ -184,7 +184,7 @@ class QuarantineView(APIView):
 ON_HAND_SEARCH_FIELDS = ("sku_code", "design", "brand")
 
 
-def _search_on_hand(qs: Any, term: str) -> Any:
+def search_on_hand(qs: Any, term: str) -> Any:
     """Narrow on-hand rows by a typed term or a scanned barcode.
 
     One box takes both habits, and a whole barcode is not the same question as a
@@ -193,6 +193,10 @@ def _search_on_hand(qs: Any, term: str) -> Any:
     person scanned a tag and means that tag — answer with its stock alone, not
     with every barcode that happens to contain those digits. Anything else is
     typing, and matches as plain substring.
+
+    Public: ``outbound``'s cross-location search (#74) narrows the same
+    ``StockOnHand`` rows by the same rule, so this is shared rather than
+    reimplemented a second time under a different name.
     """
     if not term:
         return qs
@@ -235,7 +239,7 @@ class StockOnHandView(APIView):
         # The screen's own search box (#102). Applied last, on the already-scoped
         # queryset, so a term can only ever narrow — and it composes with the deep
         # link above rather than replacing it.
-        qs = _search_on_hand(qs, search_term(request))
+        qs = search_on_hand(qs, search_term(request))
 
         totals = qs.aggregate(units=Sum("net_qty"), value=Sum("net_value_paise"))
         rows, lines = self._rows(qs, group_by)

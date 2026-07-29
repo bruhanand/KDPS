@@ -24,6 +24,8 @@ from outbound.models import (
     ReturnToVendorLine,
     StockAdjustment,
     StockAdjustmentLine,
+    StockRequest,
+    StockRequestLine,
     Stocktake,
     StoreTransfer,
     StoreTransferLine,
@@ -1160,3 +1162,169 @@ class ApplyVarianceInputSerializer(serializers.Serializer):
     confirm = serializers.ListField(
         child=serializers.CharField(max_length=64), required=False, default=list
     )
+
+
+# ---------------------------------------------------------------------------
+# Stock request — the pull side of a transfer (#74)
+# ---------------------------------------------------------------------------
+
+
+class StockRequestLineReadSerializer(serializers.ModelSerializer):
+    qty_fulfilled = serializers.IntegerField(read_only=True)
+    qty_committed = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = StockRequestLine
+        fields = [
+            "id",
+            "sku_code",
+            "design",
+            "color",
+            "size",
+            "brand",
+            "season",
+            "item",
+            "hsn",
+            "qty",
+            "qty_fulfilled",
+            "qty_committed",
+        ]
+
+
+class StockRequestLineWriteSerializer(serializers.ModelSerializer):
+    """Dims come straight off the cross-location search that built this line —
+    there is no local stock to re-derive them from, unlike a transfer's plan:
+    the whole point of a request is asking for stock the requesting store does
+    not hold (#74)."""
+
+    qty = serializers.IntegerField(min_value=1)
+
+    class Meta:
+        model = StockRequestLine
+        fields = ["sku_code", "design", "color", "size", "brand", "season", "item", "hsn", "qty"]
+
+
+class FulfillingTransferSummarySerializer(serializers.ModelSerializer):
+    """What a request's page shows about each transfer answering it — enough to
+    link through, not the whole transfer."""
+
+    source_store_code = serializers.CharField(source="source_store.code", read_only=True)
+    destination_store_code = serializers.CharField(source="destination_store.code", read_only=True)
+
+    class Meta:
+        model = StoreTransfer
+        fields = [
+            "id",
+            "doc_number",
+            "docstatus",
+            "source_store_code",
+            "destination_store_code",
+            "dispatch_date",
+            "created_at",
+        ]
+
+
+class StockRequestReadSerializer(ApprovedDocumentSerializer):
+    lines = StockRequestLineReadSerializer(many=True, read_only=True)
+    requesting_store_code = serializers.CharField(source="requesting_store.code", read_only=True)
+    requesting_store_name = serializers.CharField(source="requesting_store.name", read_only=True)
+    fulfilling_store_code = serializers.CharField(source="fulfilling_store.code", read_only=True)
+    fulfilling_store_name = serializers.CharField(source="fulfilling_store.name", read_only=True)
+    status = serializers.SerializerMethodField()
+    status_display = serializers.SerializerMethodField()
+    decline_reason = serializers.SerializerMethodField()
+    fulfilling_transfers = FulfillingTransferSummarySerializer(many=True, read_only=True)
+
+    def get_status(self, obj: StockRequest) -> str:
+        return obj.status.value
+
+    def get_status_display(self, obj: StockRequest) -> str:
+        return obj.status.label
+
+    def get_decline_reason(self, obj: StockRequest) -> str:
+        """Why the fulfilling store said no — the same reason the approvals
+        inbox required on reject, read back onto the request (#74)."""
+        approval = self._approval(obj)
+        if approval is None or approval.status != ApprovalStatus.REJECTED:
+            return ""
+        return approval.reason
+
+    class Meta:
+        model = StockRequest
+        fields = [
+            "id",
+            "doc_number",
+            "docstatus",
+            "requesting_store",
+            "requesting_store_code",
+            "requesting_store_name",
+            "fulfilling_store",
+            "fulfilling_store_code",
+            "fulfilling_store_name",
+            "notes",
+            "status",
+            "status_display",
+            "decline_reason",
+            "approved_by",
+            "approved_by_name",
+            "approval",
+            "approval_history",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "updated_at",
+            "lines",
+            "fulfilling_transfers",
+        ]
+
+
+class StockRequestWriteSerializer(serializers.ModelSerializer):
+    """Raises the ask and puts it straight in the fulfilling store's inbox —
+    born waiting, same as a transfer (#137) and every other maker-checker
+    family: a maker cannot forget to ask."""
+
+    lines = StockRequestLineWriteSerializer(many=True)
+
+    class Meta:
+        model = StockRequest
+        fields = ["requesting_store", "fulfilling_store", "notes", "lines"]
+
+    def validate(self, data):
+        if not data.get("lines"):
+            raise serializers.ValidationError("At least one line is required.")
+        if data.get("requesting_store") and data.get("fulfilling_store"):
+            if data["requesting_store"] == data["fulfilling_store"]:
+                raise serializers.ValidationError("Requesting and fulfilling store must differ.")
+        return data
+
+    def create(self, validated_data):
+        lines_data = validated_data.pop("lines")
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        validated_data["created_by"] = user
+        with transaction.atomic():
+            doc = StockRequest.objects.create(**validated_data)
+            for ld in lines_data:
+                StockRequestLine.objects.create(request=doc, **ld)
+            request_document_approval(doc, requested_by=user)
+        return doc
+
+
+class StockRequestFulfilLineInputSerializer(serializers.Serializer):
+    """How much of one request line this pass is committing to send."""
+
+    line_id = serializers.IntegerField()
+    qty = serializers.IntegerField(min_value=1)
+
+
+class StockRequestFulfilInputSerializer(serializers.Serializer):
+    """Which lines, and how much of each, the fulfilling store is sending now —
+    may cover less than the full ask (a partial fulfilment)."""
+
+    lines = StockRequestFulfilLineInputSerializer(many=True, allow_empty=False)
+
+
+class StockRequestCloseInputSerializer(serializers.Serializer):
+    """The fulfilling store saying no more is coming."""
+
+    note = serializers.CharField(max_length=240, required=False, allow_blank=True, default="")

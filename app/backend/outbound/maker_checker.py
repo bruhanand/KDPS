@@ -39,6 +39,7 @@ from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.models import (
     MarkDamaged,
     StockAdjustment,
+    StockRequest,
     StoreTransfer,
     TransferGapClosure,
     VFlip,
@@ -85,6 +86,15 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     # what value stay retunable in Setup (Rule 12) — this table only says the
     # family exists and which end of the move answers for it.
     StoreTransfer: ApprovalKind("transfer", "Transfer", "approved_by", store_field="source_store"),
+    # The ask, not the move: a stock request hangs off the *fulfilling* store,
+    # because that location's stock is what a second person is committing —
+    # the transfer it later pre-fills answers to the Operations Head
+    # separately, on its own gate (#137). Zero tolerance for the same reason
+    # as a transfer: whatever it is worth, another store's stock does not
+    # leave on the asker's say-so alone (#74).
+    StockRequest: ApprovalKind(
+        "stock_request", "Stock request", "approved_by", store_field="fulfilling_store"
+    ),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
     # on its own say-so. The rung does — hence ``self_clearing``, which lets a
