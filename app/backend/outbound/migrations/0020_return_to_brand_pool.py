@@ -46,7 +46,7 @@ def return_credit_notes(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("outbound", "0017_backfill_transfer_approvals"),
+        ("outbound", "0019_stock_request_fsm"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

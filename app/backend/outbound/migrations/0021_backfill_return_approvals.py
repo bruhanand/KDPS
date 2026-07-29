@@ -92,10 +92,10 @@ def drop_backfilled_approvals(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("outbound", "0018_return_to_brand_pool"),
+        ("outbound", "0020_return_to_brand_pool"),
         # Pinned to the approvals migration that adds the brand column this
         # backfill writes, so the historical model already carries it.
-        ("approvals", "0005_approval_brand"),
+        ("approvals", "0006_approval_brand"),
     ]
 
     operations = [

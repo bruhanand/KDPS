@@ -36,6 +36,6 @@ def unseed(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [("accounts", "0010_access_change")]
+    dependencies = [("accounts", "0011_rename_staff_section_to_hrms")]
 
     operations = [migrations.RunPython(seed, unseed)]
