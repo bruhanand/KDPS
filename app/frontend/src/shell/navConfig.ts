@@ -132,7 +132,7 @@ export const SECTIONS: NavSectionDef[] = [
       // The one approvals inbox for the whole system, listed once. It used to
       // appear in two groups; Home is the group every role has, so it lives here.
       { label: "Approvals", to: "/approvals" },
-      { label: "Alerts", to: "/alerts", planned: true },
+      { label: "Alerts", to: "/alerts" },
     ],
   },
   {

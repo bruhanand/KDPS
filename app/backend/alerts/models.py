@@ -1,0 +1,125 @@
+"""One shared mechanism for time-based alerts that raise their own hand (#77).
+
+Two checks ride it today — in-transit aging and return-window countdown — and
+the shape is the point: a later alert kind (dead stock, another deadline) is
+another check function returning the same ``AlertHit`` shape, not a new table
+or a new screen. Modelled on ``approvals.Approval`` (#70) for the reason that
+one works — every field the inbox needs is snapshotted onto the row, so it
+renders without importing a business model.
+
+An alert is not a decision. Nobody approves or rejects it, so it carries no
+maker/checker — only a lifecycle: open while the condition holds, resolved the
+run it stops holding. The daily job (``alerts.checks.run_alert_checks``) is
+idempotent — re-running it the same day, or a day late, creates nothing new for
+a condition already open, and quietly resolves what no longer applies.
+"""
+
+from __future__ import annotations
+
+from django.contrib.postgres.fields import ArrayField
+from django.db import models
+
+from core.base import TimeStampedModel
+
+
+class AlertKind(models.TextChoices):
+    IN_TRANSIT_AGING = "in_transit_aging", "Transfer stuck in transit"
+    RETURN_WINDOW = "return_window", "Return window closing"
+
+
+class AlertStatus(models.TextChoices):
+    OPEN = "open", "Open"
+    RESOLVED = "resolved", "Resolved"
+
+
+class Alert(TimeStampedModel):
+    """One open-or-resolved instance of a shared alert kind."""
+
+    kind = models.CharField(max_length=32, choices=AlertKind.choices)
+    kind_label = models.CharField(max_length=64)
+    title = models.CharField(
+        max_length=240,
+        help_text="Snapshot one-liner the inbox shows — store, brand, days.",
+    )
+    dedupe_key = models.CharField(
+        max_length=160,
+        help_text="What makes this one instance of this kind — e.g. a transfer id, "
+        "or a (brand, store, sku, threshold) tuple. The job upserts on "
+        "(kind, dedupe_key) so a daily re-run never doubles an alert that is "
+        "still true.",
+    )
+    store = models.ForeignKey(
+        "masters.Store",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="alerts",
+        help_text="Scopes the inbox for store-scoped users — the same rule as "
+        "approvals (ADR-0003).",
+    )
+    brand = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Scopes the inbox for a brand-scoped user. Blank means this "
+        "alert is not about one brand.",
+    )
+    object_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="The document this alert is about, if it is about one — a "
+        "transfer id for in-transit aging. The client maps kind → route, the "
+        "same way it does for approvals; a return-window alert has none, "
+        "because it names a holding rather than a document.",
+    )
+    due_date = models.DateField(
+        null=True, blank=True, help_text="The deadline this alert is counting down to."
+    )
+    threshold_days = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Which configured threshold this crossing fired at.",
+    )
+    status = models.CharField(max_length=16, choices=AlertStatus.choices, default=AlertStatus.OPEN)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "alerts_alert"
+        ordering = ["due_date", "-created_at"]
+        constraints = [
+            # One *open* row per (kind, dedupe_key) — the same still-true
+            # condition is never listed twice. A resolved row is history, so a
+            # later recurrence of the same key opens a fresh row rather than
+            # reviving the old one.
+            models.UniqueConstraint(
+                fields=["kind", "dedupe_key"],
+                condition=models.Q(status=AlertStatus.OPEN),
+                name="uq_alert_open_kind_dedupe",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind_label}: {self.title}"
+
+
+class AlertPolicy(TimeStampedModel):
+    """The configurable thresholds one alert kind checks against (Rule 12).
+
+    One row per kind. A migration gives each a starting number; an owner
+    retunes it in the admin, never in code.
+    """
+
+    kind = models.CharField(max_length=32, unique=True, choices=AlertKind.choices)
+    thresholds_days = ArrayField(
+        models.IntegerField(),
+        help_text="Days that fire this kind. In-transit aging has one (days "
+        "overdue); return window has three (days left: 30/15/7).",
+    )
+
+    class Meta:
+        db_table = "alerts_policy"
+        ordering = ["kind"]
+        verbose_name_plural = "alert policies"
+
+    def __str__(self) -> str:
+        return f"{self.kind} policy"
