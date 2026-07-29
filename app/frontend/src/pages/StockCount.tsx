@@ -23,6 +23,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
+import { ADJUSTMENT_REASONS } from "../lib/adjustment-reasons";
 import { ScanScreen, type ScanResult, type ScanTarget } from "../components/ScanScreen";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
@@ -76,6 +77,10 @@ interface RecountT {
   reason_label: string;
   recounted_by_name: string;
   recounted_at: string;
+  /** True when a counter submitted a session after this recount was given, so
+   *  it no longer answers the merge it was taken against. The piece goes back in
+   *  the queue and the old answer becomes history. */
+  stale: boolean;
 }
 
 interface VarianceLineT {
@@ -118,16 +123,6 @@ const SCOPES = [
   { value: "store", label: "Whole store" },
   { value: "brand", label: "One brand" },
   { value: "section", label: "One section" },
-];
-
-/** Why a piece is out, in the words the business uses (#78). The codes are the
- *  server's ``AdjustmentReason``; the labels are what a store person would say. */
-const RECOUNT_REASONS = [
-  { value: "shrinkage", label: "Theft / shrinkage" },
-  { value: "miscount", label: "Miscount" },
-  { value: "damage", label: "Damage" },
-  { value: "surplus_found", label: "Found — more here than the books say" },
-  { value: "other", label: "Something else" },
 ];
 
 const STATUS_TONE: Record<string, string> = { open: "amber", submitted: "navy", closed: "green" };
@@ -613,16 +608,22 @@ export function StockCountDetailPage() {
                               needs a recount
                             </span>
                           )}
-                          {l.recount && (
+                          {l.recount && !l.recount.stale && (
                             <span className="chip chip-green" style={{ marginLeft: 8 }} data-testid={`recounted-${l.sku_code}`}>
                               recounted by {l.recount.recounted_by_name || "—"} · {l.recount.reason_label}
+                            </span>
+                          )}
+                          {l.recount?.stale && (
+                            <span className="chip chip-grey" style={{ marginLeft: 8 }} data-testid={`recount-stale-${l.sku_code}`}>
+                              {l.recount.recounted_by_name || "—"}&rsquo;s recount is out of date — somebody
+                              counted more of this piece afterwards
                             </span>
                           )}
                         </td>
                         <td className="num">{l.book_qty}</td>
                         <td className="num">
                           {l.counted_qty}
-                          {l.recount && (
+                          {l.recount && !l.recount.stale && (
                             /* Original → recount, so the trail is on the row the
                              * approver is looking at rather than a page away. */
                             <div className="muted-cell" data-testid={`recount-trail-${l.sku_code}`}>
@@ -704,7 +705,7 @@ export function StockCountDetailPage() {
                 data-testid="recount-reason"
               >
                 <option value="">Select a reason…</option>
-                {RECOUNT_REASONS.map((r) => (
+                {ADJUSTMENT_REASONS.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>

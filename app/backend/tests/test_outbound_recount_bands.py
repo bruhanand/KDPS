@@ -42,7 +42,11 @@ FY = "26-27"
 #: ₹300 a shirt, ten of them. Ten missing is ₹3,000 — over the ₹2,000 seeded
 #: adjustment tolerance, which is what makes it this suite's *big* variance.
 SHIRT = {"barcode": "RC-SHIRT", "brand": "RecountBrand", "cost": 30000}
-TOLERANCE = 2_00_000  # ₹2,000, as seeded — read back from the row where it matters
+#: What the migration seeds the adjustment tolerance to. Asserted against the
+#: live row once (``test_retuning_the_tolerance_moves_the_gate_without_a_release``)
+#: so this literal cannot drift away from the seed unnoticed; everywhere else the
+#: suite retunes the row and reads the behaviour, never this number.
+TOLERANCE = 2_00_000  # ₹2,000
 
 
 def _stock(store, gstin, spec, qty):
@@ -186,6 +190,30 @@ def _count(scaffold, *, found: int, user=None) -> int:
     return take
 
 
+def _another_session(scaffold, take, *, found, user):
+    """A second counter's section pass over the same piece, submitted.
+
+    A section scope covers only what was scanned, so this adds pieces to the
+    merge without claiming anything about the rest of the store — which is
+    exactly the "somebody was still counting" shape a stale recount comes from.
+    """
+    resp = _client(user).post(
+        f"/api/outbound/stocktakes/{take}/sessions",
+        {"scope": CountScope.SECTION, "scope_value": "Rack B"},
+        format="json",
+    )
+    assert resp.status_code == 201, resp.data
+    session = resp.data["id"]
+    resp = _client(user).post(
+        f"/api/outbound/count-sessions/{session}/scan",
+        {"scans": [{"barcode": SHIRT["barcode"], "qty": found}]},
+        format="json",
+    )
+    assert resp.status_code == 200, resp.data
+    resp = _client(user).post(f"/api/outbound/count-sessions/{session}/submit", {}, format="json")
+    assert resp.status_code == 200, resp.data
+
+
 def _recount(scaffold, take, *, qty, reason=AdjustmentReason.SHRINKAGE, user=None, **extra):
     return _client(user or scaffold["second"]).post(
         f"/api/outbound/stocktakes/{take}/recount",
@@ -307,6 +335,86 @@ def test_a_second_person_may_recount_it(recount_scaffold):
     assert resp.status_code == 200, resp.data
     assert _shirt(resp.data)["recount"]["counted_qty"] == 4
     assert _shirt(resp.data)["needs_recount"] is False
+
+
+def test_a_recount_stops_counting_once_a_later_session_moves_the_merge(recount_scaffold):
+    """A recount answers *one* first count. If a counter submits afterwards and
+    changes what the merge says about that piece, the recount is answering a
+    question nobody is asking any more.
+
+    Without this the stale answer silently outranks the later count: the first
+    pass found 0, a recounter found 4, then another counter's rack turned up 1
+    more — and the correction would post ``4 − 10`` while the sessions say 1 was
+    found. Three pieces would come back onto the books that nobody found.
+    """
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=4)
+    assert _shirt(_variance(recount_scaffold, take))["adj_qty"] == -6
+
+    _another_session(recount_scaffold, take, found=1, user=recount_scaffold["ops_head"])
+
+    line = _shirt(_variance(recount_scaffold, take))
+    assert line["recount"]["stale"] is True
+    assert line["needs_recount"] is True  # back in the queue
+    assert line["counted_qty"] == 1  # the merge, not the stale recount
+    assert line["adj_qty"] == -9
+    refused = _apply(recount_scaffold, take)
+    assert refused.status_code == 409, refused.data
+
+
+def test_a_stale_recount_is_open_to_whoever_counts_it_next(recount_scaffold):
+    """The "only its author may change it" rule guards a *live* answer. Once the
+    merge has moved the old row is history, and the piece belongs to whoever
+    counts it against the merge that now stands."""
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=4, user=recount_scaffold["second"])
+    _another_session(recount_scaffold, take, found=1, user=recount_scaffold["ops_head"])
+
+    # A third person, who counted none of it, may answer afresh.
+    resp = _recount(recount_scaffold, take, qty=6, user=recount_scaffold["applier"])
+
+    assert resp.status_code == 200, resp.data
+    line = _shirt(resp.data)
+    assert line["recount"]["stale"] is False
+    assert line["recount"]["recounted_by_name"] == "rc_applier"
+    assert line["first_counted_qty"] == 1
+    assert line["counted_qty"] == 6
+
+
+def test_a_third_person_cannot_quietly_replace_a_live_recount(recount_scaffold):
+    """Two people's answers on one piece, and no record of the first, is worse
+    than one person's answer."""
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=4, user=recount_scaffold["second"])
+
+    refused = _recount(recount_scaffold, take, qty=9, user=recount_scaffold["applier"])
+
+    assert refused.status_code == 403, refused.data
+    assert _shirt(_variance(recount_scaffold, take))["recount"]["counted_qty"] == 4
+
+
+def test_the_recounter_may_correct_their_own_answer(recount_scaffold):
+    """A fat finger on a phone is not an audit event."""
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=40)
+
+    resp = _recount(recount_scaffold, take, qty=4)
+
+    assert resp.status_code == 200, resp.data
+    assert _shirt(resp.data)["recount"]["counted_qty"] == 4
+
+
+def test_a_recount_cannot_land_after_the_count_has_been_corrected(recount_scaffold):
+    """Once the variance is a document, a later recount would describe a number
+    that has already posted."""
+    take = _count(recount_scaffold, found=0)
+    _recount(recount_scaffold, take, qty=4)
+    assert _apply(recount_scaffold, take).status_code == 201
+
+    refused = _recount(recount_scaffold, take, qty=1, user=recount_scaffold["ops_head"])
+
+    assert refused.status_code == 400, refused.data
+    assert "closed" in refused.data["error"].lower()
 
 
 def test_no_policy_retune_can_let_the_original_counter_recount(recount_scaffold):

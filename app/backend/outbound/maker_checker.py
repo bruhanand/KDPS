@@ -280,7 +280,15 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
     # that second person a way to post it alone — count it down to just under the
     # tolerance and no approver is ever asked. Optional, so nothing else has to
     # know this hook exists.
-    if not getattr(doc, "approval_is_mandatory", False) and not policy.needs_checker(value):
+    #
+    # Asked of the *class* and then read off the instance, never through a
+    # defaulting ``getattr``: this is an approval gate, and a ``getattr`` default
+    # would turn any error raised inside the property into a silent "no approver
+    # needed" — the one direction a gate may not fail.
+    if hasattr(type(doc), "approval_is_mandatory") and doc.approval_is_mandatory:
+        return request_approval(doc, approver_roles=policy.approver_roles_for(value), **common)
+
+    if not policy.needs_checker(value):
         return record_no_approval_needed(
             doc,
             reason=f"Within the {_inr(policy.tolerance)} tolerance for "

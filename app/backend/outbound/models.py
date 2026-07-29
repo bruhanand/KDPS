@@ -1449,7 +1449,14 @@ class Recount(models.Model):
         related_name="recounts",
         help_text="Never anyone who counted this piece the first time — a floor rule (#78).",
     )
-    recounted_at = models.DateTimeField(auto_now=True)
+    recounted_at = models.DateTimeField(
+        auto_now=True,
+        help_text="When the answer on this row was last given. ``auto_now``, not "
+        "``auto_now_add``, because a recounter may correct their own answer — a "
+        "fat finger on a phone is not an audit event — and the row should then "
+        "date from the answer it actually holds. ``created_at`` keeps when the "
+        "piece was first recounted.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

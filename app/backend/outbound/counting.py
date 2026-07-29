@@ -48,7 +48,7 @@ from django.utils import timezone
 from approvals.models import CLEARED_STATUSES, ApprovalPolicy
 from approvals.services import display_name
 from outbound.costing import OutboundPostingError, book_unit_cost
-from outbound.maker_checker import request_document_approval
+from outbound.maker_checker import KINDS, request_document_approval
 from outbound.models import (
     AdjustmentReason,
     CountScope,
@@ -271,7 +271,8 @@ class VarianceLine:
     #: The books' cost for one piece. 0 means the books cannot price it — unknown,
     #: never free (#103).
     unit_cost_paise: int = 0
-    #: The second person's answer, where one has been given.
+    #: The second person's answer, where one has been given. It may be **stale** —
+    #: see ``recount_is_live``; a stale one is history, not an answer.
     recount: Recount | None = None
     #: Everybody whose submitted session covered this piece. They are barred from
     #: recounting it, and the screen reads it to know whose button to hide.
@@ -280,11 +281,40 @@ class VarianceLine:
     above_tolerance: bool = False
 
     @property
+    def recount_is_live(self) -> bool:
+        """Does the recount still answer the question it was asked?
+
+        A recount is a second opinion on *one* first answer, so the row records
+        the merge it was taken against. Counting is not over when a recount
+        happens: sessions stay open, and a counter who submits afterwards can add
+        pieces to this very barcode or move the book snapshot. When that happens
+        the recount is answering a question nobody is asking any more — the piece
+        goes back into the queue and somebody counts it against the merge that
+        now stands.
+
+        Without this a stale recount silently outranks the later count: a
+        recounter who found 3 would still post ``3 − book`` after a second
+        counter's aisle brought the merge to 11, and eight pieces would leave the
+        books that nobody ever said were missing.
+        """
+        return (
+            self.recount is not None
+            and self.recount.first_counted_qty == self.first_counted_qty
+            and self.recount.book_qty == self.book_qty
+        )
+
+    @property
+    def live_recount(self) -> Recount | None:
+        """The recount that still stands, if any — what every posting path reads."""
+        return self.recount if self.recount_is_live else None
+
+    @property
     def counted_qty(self) -> int:
         """The count that stands. A recount replaces the first answer rather than
         adding to it — that is the whole difference between a second *counter*
         (whose pieces pool into the merge) and a second *count* of one piece."""
-        return self.recount.counted_qty if self.recount is not None else self.first_counted_qty
+        live = self.live_recount
+        return live.counted_qty if live is not None else self.first_counted_qty
 
     @property
     def adj_qty(self) -> int:
@@ -302,7 +332,7 @@ class VarianceLine:
     @property
     def needs_recount(self) -> bool:
         """Waiting on a second person before it may be corrected."""
-        return self.above_tolerance and self.recount is None
+        return self.above_tolerance and self.live_recount is None
 
     def may_be_recounted_by(self, user: Any) -> bool:
         """The floor rule, asked as a question so the screen can offer only the
@@ -310,7 +340,14 @@ class VarianceLine:
         this is a courtesy, never the gate."""
         return getattr(user, "id", None) not in self.counted_by_ids
 
-    def as_dict(self) -> dict[str, Any]:
+    def as_dict(self, *, for_user: Any = None) -> dict[str, Any]:
+        """The line as the API answers it.
+
+        ``for_user`` adds this caller's own answer to the floor rule, so a screen
+        offers only the button that would work. Every API path passes it: the one
+        that forgot would render a Recount button for the person the engine is
+        about to refuse.
+        """
         return {
             "sku_code": self.sku_code,
             **self.dims,
@@ -325,11 +362,14 @@ class VarianceLine:
             "cost_known": self.unit_cost_paise > 0,
             "above_tolerance": self.above_tolerance,
             "needs_recount": self.needs_recount,
-            "recount": _recount_dict(self.recount),
+            "may_recount": self.may_be_recounted_by(for_user),
+            # Shown even when stale, so the screen can say *why* a piece somebody
+            # already recounted is back in the queue.
+            "recount": _recount_dict(self.recount, stale=not self.recount_is_live),
         }
 
 
-def _recount_dict(recount: Recount | None) -> dict[str, Any] | None:
+def _recount_dict(recount: Recount | None, *, stale: bool) -> dict[str, Any] | None:
     if recount is None:
         return None
     return {
@@ -339,6 +379,7 @@ def _recount_dict(recount: Recount | None) -> dict[str, Any] | None:
         "reason_label": recount.get_reason_display(),
         "recounted_by_name": display_name(recount.recounted_by),
         "recounted_at": recount.recounted_at,
+        "stale": stale,
     }
 
 
@@ -354,8 +395,12 @@ def recount_tolerance() -> int:
 
     A missing policy row is a closed gate everywhere else in maker-checker, and
     it is one here: with no configured tolerance every difference is big.
+
+    The family code is read from the maker-checker table rather than spelled
+    again, so the number that gates the recount and the number that gates the
+    approval can never come from two different rows.
     """
-    policy = ApprovalPolicy.objects.filter(kind="adjustment").first()
+    policy = ApprovalPolicy.objects.filter(kind=KINDS[StockAdjustment].code).first()
     return policy.tolerance if policy is not None else 0
 
 
@@ -412,6 +457,19 @@ def variance_report(stocktake: Stocktake) -> list[VarianceLine]:
 # ---------------------------------------------------------------------------
 
 
+def _locked(stocktake: Stocktake) -> Stocktake:
+    """Re-read the count ``FOR UPDATE`` — the one way its two writers take turns.
+
+    Recording a recount and applying the variance both read the merged report and
+    then write against what they read. Run at the same moment they interleave:
+    two recounters each see no answer yet and one overwrites the other, or a
+    recount commits against a variance ``apply`` has already turned into a posted
+    document. One lock on the count itself serialises both, because both are
+    about the same count and nothing else contends for it.
+    """
+    return Stocktake.objects.select_for_update().get(pk=stocktake.pk)
+
+
 @transaction.atomic
 def record_recount(
     stocktake: Stocktake,
@@ -433,7 +491,14 @@ def record_recount(
     The recount *replaces* the first count for this piece rather than adding to
     it, and both numbers stay on the row: the correction that follows is
     defensible months later because it can still say what the first pass found.
+
+    The count is locked for the duration, which is what makes the read-then-write
+    below honest: two people recounting the same piece at the same moment would
+    otherwise both see no existing answer, both pass the ownership check, and one
+    would silently overwrite the other — and a recount arriving mid-``apply``
+    would land against a variance that had already been posted.
     """
+    stocktake = _locked(stocktake)
     if stocktake.status == CountStatus.CLOSED:
         raise CountError("This count is closed — its variance has already been applied.")
     if reason not in AdjustmentReason.values:
@@ -454,11 +519,13 @@ def record_recount(
         )
     if counted_qty < 0:
         raise CountError("A recounted quantity cannot be negative.")
-    # A recount already given may be corrected by whoever gave it — a fat finger
-    # on a phone is not an audit event — but never quietly replaced by a third
-    # person, which would leave the document standing on an answer nobody can
-    # find any more.
-    existing = line.recount
+    # A recount that still stands may be corrected by whoever gave it — a fat
+    # finger on a phone is not an audit event — but never quietly replaced by a
+    # third person, which would leave the document standing on an answer nobody
+    # can find any more. A *stale* one guards nothing: the merge it answered has
+    # moved, so the piece is open to whoever counts it against the one that now
+    # stands, and the old row is overwritten as the history it has become.
+    existing = line.live_recount
     if existing is not None and existing.recounted_by_id != getattr(user, "id", None):
         raise SameCounterError(
             f"{display_name(existing.recounted_by) or 'Somebody else'} has already recounted "
@@ -516,8 +583,11 @@ def apply_variance(
 
     Three steps, in this order: refuse a count that is not ready to be applied
     (`_variance_to_apply`), write the correction document (`_build_adjustment`),
-    then ask maker-checker and close the take.
+    then ask maker-checker and close the take — all under the count's own lock,
+    so a recount cannot commit against a variance that has already become a
+    document, and two appliers cannot both find nothing applied yet.
     """
+    stocktake = _locked(stocktake)
     lines = _variance_to_apply(stocktake, confirm_skus)
     adjustment = _build_adjustment(stocktake, lines, user)
 
@@ -589,7 +659,7 @@ def _document_reason(lines: list[VarianceLine]) -> str:
     is not lost: it is on the line. A count with no recount at all is a miscount,
     which is what slice 10 called it and what a small variance is.
     """
-    reasons = {v.recount.reason for v in lines if v.recount is not None}
+    reasons = {v.live_recount.reason for v in lines if v.live_recount is not None}
     if not reasons:
         return AdjustmentReason.MISCOUNT
     return reasons.pop() if len(reasons) == 1 else AdjustmentReason.OTHER
@@ -619,7 +689,7 @@ def _build_adjustment(
             # report the approver looked at.
             counted_qty=v.counted_qty,
             adj_qty=v.adj_qty,
-            reason=v.recount.reason if v.recount is not None else "",
+            reason=v.live_recount.reason if v.live_recount is not None else "",
             **identity,
         )
     return adjustment

@@ -11,6 +11,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canWriteStockCount } from "../lib/outbound-rbac";
+import { adjustmentReasonLabel } from "../lib/adjustment-reasons";
 import { ApprovalPill, ApprovalTrail, isCleared, type ApprovalT } from "../components/approval";
 import { ListSearchBar } from "../components/SearchBox";
 import "./Booking.css";
@@ -30,13 +31,6 @@ function DocPill({ ds }: { ds: number }) {
   return <span className={`chip chip-${DS_TONE[ds] ?? "grey"} status-pill`}>{DS_LABEL[ds] ?? ds}</span>;
 }
 
-const REASON_OPTIONS = [
-  { value: "shrinkage", label: "Shrinkage" },
-  { value: "miscount", label: "Miscount" },
-  { value: "damage", label: "Damage" },
-  { value: "surplus_found", label: "Surplus found" },
-  { value: "other", label: "Other" },
-];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -148,7 +142,7 @@ export function AdjustmentListPage() {
                       </Link>
                     </td>
                     <td><b className="mono">{a.store_code}</b></td>
-                    <td>{REASON_OPTIONS.find((r) => r.value === a.reason)?.label || a.reason}</td>
+                    <td>{adjustmentReasonLabel(a.reason)}</td>
                     <td className="num">{a.lines.length}</td>
                     <td className="num">
                       <span style={{ color: netAdj < 0 ? "var(--red)" : netAdj > 0 ? "var(--green)" : undefined }}>
@@ -209,7 +203,7 @@ export function AdjustmentDetailPage() {
           <p className="eyebrow">{a.doc_number || `Draft #${a.id}`}</p>
           <h1 className="h1">Stock Adjustment — {a.store_code}</h1>
           <p className="lead">
-            {a.store_name} · {REASON_OPTIONS.find((r) => r.value === a.reason)?.label || a.reason}
+            {a.store_name} · {adjustmentReasonLabel(a.reason)}
             {a.notes ? ` · ${a.notes}` : ""}
           </p>
         </div>
@@ -232,7 +226,7 @@ export function AdjustmentDetailPage() {
       <div className="form-row" style={{ marginBottom: 18 }}>
         <div className="card section-card">
           <p className="eyebrow">Reason</p>
-          <h3 className="h3">{REASON_OPTIONS.find((r) => r.value === a.reason)?.label || a.reason}</h3>
+          <h3 className="h3">{adjustmentReasonLabel(a.reason)}</h3>
         </div>
         <div className="card section-card">
           <p className="eyebrow">Net variance</p>

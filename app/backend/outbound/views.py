@@ -1578,13 +1578,8 @@ def _variance_payload(stocktake: Stocktake, user: Any) -> dict[str, Any]:
     Shared by the report and the recount, because a recount *changes* the
     variance: returning anything less would leave the screen showing one half of
     a number that has moved, and a second round-trip to fetch the other.
-
-    ``may_recount`` is this user's own answer to the floor rule, resolved here so
-    the screen offers only the button that would work. It is a courtesy: the
-    engine asks the same question again before it writes anything.
     """
-    report = variance_report(stocktake)
-    lines = [{**v.as_dict(), "may_recount": v.may_be_recounted_by(user)} for v in report]
+    lines = [v.as_dict(for_user=user) for v in variance_report(stocktake)]
     return {
         "stocktake": stocktake.pk,
         "store_code": stocktake.store.code,
@@ -1681,16 +1676,13 @@ class StocktakeApplyView(APIView):
             return Response(
                 {
                     "error": str(e),
-                    "needs_recount": [
-                        {**v.as_dict(), "may_recount": v.may_be_recounted_by(request.user)}
-                        for v in e.lines
-                    ],
+                    "needs_recount": [v.as_dict(for_user=request.user) for v in e.lines],
                 },
                 status=status.HTTP_409_CONFLICT,
             )
         except MovedMidCountError as e:
             return Response(
-                {"error": str(e), "moved": [v.as_dict() for v in e.lines]},
+                {"error": str(e), "moved": [v.as_dict(for_user=request.user) for v in e.lines]},
                 status=status.HTTP_409_CONFLICT,
             )
         except (CountError, OutboundPostingError) as e:
