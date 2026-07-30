@@ -117,6 +117,28 @@ def test_one_stores_push_never_touches_another_stores_holds(counter):
     }
 
 
+def test_a_push_carrying_another_stores_key_cannot_take_that_hold(counter):
+    """The upsert matches on (store, uuid), never on the uuid alone.
+
+    Found in review. The delete half was scoped from the first line, and the
+    *upsert* was not: a row matched by its key alone is another store's row, and
+    writing this store into it moves the hold - the other store's Dashboard count
+    goes down and its cart is overwritten, both silently. Two counters cannot
+    collide by accident here (the key is a v4 uuid), which is exactly why it
+    would have gone unnoticed.
+    """
+    other_store = build_store(code="SEL-RAN", state="20")
+    theirs = hold("Ranchi's customer")
+    other = build_cashier(other_store, username="ran_cashier")
+    client_for(other).put(URL, {"held": [theirs]}, format="json")
+
+    counter["client"].put(URL, {"held": [{**theirs, "label": "Mine now"}]}, format="json")
+
+    assert HeldBill.objects.filter(store=other_store, label="Ranchi's customer").exists()
+    assert HeldBill.objects.filter(store=counter["store"], label="Mine now").exists()
+    assert HeldBill.objects.count() == 2
+
+
 def test_a_hold_moves_no_stock_no_money_and_no_number(counter):
     before = VoucherSeries.objects.get(store_code=counter["store"].code, doc_type="SAL").next_seq
 

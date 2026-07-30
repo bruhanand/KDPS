@@ -289,18 +289,15 @@ export class TillEngine {
 
   // -- holds (#185, grill Q13) -----------------------------------------------
   //
-  // Four one-line methods over `held.ts`, and they all end the same way: write,
-  // re-read the snapshot, and *offer* the new list to the server without waiting
-  // for it. Parking a bill is a thing a cashier does with a customer waiting, so
-  // it may not depend on a network - and a hold is not money, so nothing is lost
-  // if the mirror is a minute stale.
+  // Three one-line methods over `held.ts`, all ending the same way: write, then
+  // `heldChanged`. Parking a bill is a thing a cashier does with a customer
+  // waiting, so it may not depend on a network - and a hold is not money, so
+  // nothing is lost if the mirror is a minute stale.
 
-  /** Park the cart. Returns the row so the screen can name what it just put down. */
-  async hold(hold: { held_uuid: string; label: string; payload: HeldPayload }): Promise<HeldBill> {
-    const row = await parkHold(this.db, hold);
-    await this.refresh();
-    this.mirrorHeld();
-    return row;
+  /** Park the cart. */
+  async hold(hold: { held_uuid: string; label: string; payload: HeldPayload }): Promise<void> {
+    await parkHold(this.db, hold);
+    await this.heldChanged();
   }
 
   /** Take a hold off the list - resumed into a bill, or let go at day close.
@@ -310,18 +307,20 @@ export class TillEngine {
    *  did the same delete would be two names for one row disappearing. */
   async releaseHold(heldUuid: string): Promise<void> {
     await dropHold(this.db, heldUuid);
-    await this.refresh();
-    this.mirrorHeld();
+    await this.heldChanged();
   }
 
   /** The store's day-close answer: this cart carries to tomorrow. */
   async keepHold(heldUuid: string): Promise<void> {
     await keepHold(this.db, heldUuid);
-    await this.refresh();
-    this.mirrorHeld();
+    await this.heldChanged();
   }
 
-  private mirrorHeld(): void {
+  /** Show the new list, and offer it to head office without waiting for the
+   *  answer: the screen is what the cashier is looking at, and the mirror is a
+   *  count on somebody else's. */
+  private async heldChanged(): Promise<void> {
+    await this.refresh();
     void this.attempt(() => pushHeld(this.db, this.transport));
   }
 

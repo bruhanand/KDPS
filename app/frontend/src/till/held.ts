@@ -73,10 +73,10 @@ export function heldPayload(
 export interface RestoredHold {
   cart: Cart;
   customer: { name: string; mobile: string };
-  /** Lines whose piece the counter no longer stocks - the price on them is the
-   *  one that was parked, and the screen says so rather than pretending it is
-   *  today's. */
-  stale: number;
+  /** How many lines name a piece the counter no longer stocks - the price on
+   *  those is the one that was parked, and the screen says so rather than
+   *  pretending it is today's. */
+  staleLines: number;
 }
 
 /**
@@ -94,12 +94,12 @@ export interface RestoredHold {
  * price and a word about it, not a line that vanishes.
  */
 export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
-  const payload = hold.payload as unknown as HeldPayload;
-  let stale = 0;
+  const payload = hold.payload;
+  let staleLines = 0;
   const lines: CartLine[] = (payload.lines ?? []).map((line) => {
     const found = resolveScan(line.barcode, world);
     const today = pieceInSeason(found.candidates, line.season);
-    if (!today) stale += 1;
+    if (!today) staleLines += 1;
     return {
       ...line,
       ...(today ? refreshed(today, line) : {}),
@@ -110,7 +110,7 @@ export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
   return {
     cart: { lines, tenderedPaise: payload.tendered_paise ?? 0 },
     customer: { name: payload.customer?.name ?? "", mobile: payload.customer?.mobile ?? "" },
-    stale,
+    staleLines,
   };
 }
 
@@ -160,7 +160,7 @@ export async function parkHold(
     label: hold.label,
     held_at: hold.held_at ?? new Date().toISOString(),
     expires_policy: "today",
-    payload: hold.payload as unknown as Record<string, unknown>,
+    payload: hold.payload,
   };
   await db.held.put(row);
   return row;
@@ -198,8 +198,7 @@ export function holdsToReview(holds: HeldBill[], day = localDay()): HeldBill[] {
 
 /** How a parked cart names itself in the list, when nobody labelled it. */
 export function describeHold(hold: HeldBill): string {
-  const payload = hold.payload as unknown as HeldPayload;
-  const pieces = payload?.pieces ?? 0;
+  const pieces = hold.payload?.pieces ?? 0;
   return `${pieces} ${pieces === 1 ? "piece" : "pieces"}`;
 }
 

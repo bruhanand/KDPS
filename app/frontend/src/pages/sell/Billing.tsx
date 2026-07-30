@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, Gift, KeyRound, PauseCircle, Plus, Printer, Search, X } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
@@ -103,9 +103,11 @@ export default function BillingPage() {
 
 function Counter({ storeName }: { storeName?: string }) {
   const { engine, till } = useTill();
+  const [params] = useSearchParams();
   const [cart, setCart] = useState<Cart>(emptyCart);
   const [customer, setCustomer] = useState({ name: "", mobile: "" });
   const [saving, setSaving] = useState(false);
+  const [holding, setHolding] = useState(false);
   const [note, setNote] = useState("");
   const [printProblem, setPrintProblem] = useState("");
   const [lastBill, setLastBill] = useState<{ bill: QueuedBill; receipt: string } | null>(null);
@@ -135,10 +137,11 @@ function Counter({ storeName }: { storeName?: string }) {
    */
   const [wrongPins, setWrongPins] = useState(0);
   // The hold list opens on demand, and opens itself when the Dashboard's "bills
-  // on hold" row sent somebody here to clear them (`/sell?holds=1`).
-  const [showHolds, setShowHolds] = useState(() =>
-    new URLSearchParams(window.location.search).has("holds"),
-  );
+  // on hold" row sent somebody here to clear them (`/sell?holds=1`). Read once,
+  // into state: after that the panel is the cashier's to open and close, and a
+  // value that kept re-reading the address bar would spring open again on every
+  // render behind their back.
+  const [showHolds, setShowHolds] = useState(() => params.has("holds"));
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
@@ -162,8 +165,9 @@ function Counter({ storeName }: { storeName?: string }) {
 
   // Nothing may be typed into a bill while it is being committed: the cart is
   // read once inside `save`, and a line arriving after that read would be a
-  // piece the customer paid for and the queue never heard of.
-  const locked = saving;
+  // piece the customer paid for and the queue never heard of. Parking one is the
+  // same read and the same hazard, one table down.
+  const locked = saving || holding;
 
   const suggestions = useMemo(
     () =>
@@ -258,12 +262,20 @@ function Counter({ storeName }: { storeName?: string }) {
   // Recomputed against the list rather than stored: "before today" is a fact
   // about the clock, and a flag written at park time would be wrong by morning.
   const toReview = useMemo(() => holdsToReview(holds), [holds]);
-  // A hold replaces the cart, so an open bill has to be dealt with first. Saying
-  // so is the whole guard - the alternative is a Resume button that throws away
-  // pieces somebody has already scanned.
-  const holdsBlocked = cart.lines.length
-    ? "Save, hold or clear the bill on screen before picking up another."
-    : "";
+  // Two reasons a parked bill may not be picked up yet, and both would be silent
+  // damage rather than an error:
+  //
+  //   · an open cart would be thrown away by the one that replaces it;
+  //   · a counter whose copy has not loaded would reprice every line against an
+  //     empty world - which is to say against the prices the hold was parked at -
+  //     while the hold itself disappeared. That is the exact thing grill Q13's
+  //     "reprices at that day's offers" forbids, and it is reachable: the
+  //     Dashboard's `?holds=1` opens this list at mount, before the world lands.
+  const holdsBlocked = !world.loaded
+    ? "Opening the counter… a parked bill is priced at today's rates, so it waits for the price list."
+    : cart.lines.length
+      ? "Save, hold or clear the bill on screen before picking up another."
+      : "";
 
   /**
    * Park the bill and clear the counter for the next customer.
@@ -271,9 +283,14 @@ function Counter({ storeName }: { storeName?: string }) {
    * One tap, and the customer's name is the label when the strip has one -
    * "label optional" (grill Q13) with nothing extra for a cashier to fill in. A
    * hold with no name identifies itself by what is in it.
+   *
+   * The screen locks while it writes, for the same reason Save & Print does: the
+   * cart is read once, and a piece scanned after that read is a piece that is
+   * neither on the hold nor on the screen.
    */
   async function holdBill() {
-    if (!engine || !cart.lines.length || saving) return;
+    if (!engine || !cart.lines.length || locked) return;
+    setHolding(true);
     try {
       await engine.hold({
         held_uuid: newUuid(),
@@ -283,15 +300,17 @@ function Counter({ storeName }: { storeName?: string }) {
           pieces: bill.pieces,
         }),
       });
-      setCart({ lines: [], tenderedPaise: 0 });
+      setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
       setTyped("");
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : String(error));
+      setNote(messageOf(error));
+    } finally {
+      setHolding(false);
+      scan.focus();
     }
-    scan.focus();
   }
 
   /** Pick a parked bill back up, at today's prices. */
@@ -302,15 +321,28 @@ function Counter({ storeName }: { storeName?: string }) {
     setCustomer(restored.customer);
     setShowHolds(false);
     setNote(
-      restored.stale
+      restored.staleLines
         ? "Bill picked up. Priced at today's rates - check the lines the counter no longer stocks."
         : "Bill picked up, priced at today's rates.",
     );
-    // The hold goes only after the cart is on screen: if this throws, the cart is
-    // in front of the cashier and the hold is still in the list, which is a
-    // duplicate somebody can see rather than a bill nobody has.
-    await engine.releaseHold(hold.held_uuid);
+    try {
+      // The hold goes only after the cart is on screen: if this throws, the cart
+      // is in front of the cashier and the hold is still in the list, which is a
+      // duplicate somebody can see rather than a bill nobody has.
+      await engine.releaseHold(hold.held_uuid);
+    } catch (error) {
+      setNote(`Bill picked up, but it is still on the hold list: ${messageOf(error)}`);
+    }
     scan.focus();
+  }
+
+  /** A hold answered at day close - kept for tomorrow, or let go. */
+  async function answerHold(work: Promise<void>) {
+    try {
+      await work;
+    } catch (error) {
+      setNote(messageOf(error));
+    }
   }
 
   async function print(receipt: string): Promise<void> {
@@ -351,7 +383,7 @@ function Counter({ storeName }: { storeName?: string }) {
       setNote(`Bill ${queued.doc_number} saved.`);
       await print(receipt);
     } catch (error) {
-      setNote(error instanceof Error ? error.message : String(error));
+      setNote(messageOf(error));
     } finally {
       setSaving(false);
       scan.focus();
@@ -437,8 +469,8 @@ function Counter({ storeName }: { storeName?: string }) {
           toReview={toReview}
           blocked={holdsBlocked}
           onResume={(hold) => void resumeHold(hold)}
-          onKeep={(hold) => void engine?.keepHold(hold.held_uuid)}
-          onLetGo={(hold) => void engine?.releaseHold(hold.held_uuid)}
+          onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
+          onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
         />
       )}
 
@@ -568,6 +600,11 @@ function Counter({ storeName }: { storeName?: string }) {
       </div>
     </div>
   );
+}
+
+/** Whatever went wrong, as a sentence for the counter. */
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Where the store's own registration has not landed yet. The receipt still

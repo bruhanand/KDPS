@@ -103,7 +103,7 @@ describe("parking", () => {
 
   it("keeps the cart's lines and drops what the counter can work out again", async () => {
     const held = await park(db);
-    const payload = held.payload as unknown as HeldPayload;
+    const payload = held.payload;
 
     expect(payload.lines).toHaveLength(1);
     expect(payload.lines[0].barcode).toBe("8901000000011");
@@ -137,7 +137,7 @@ describe("picking it up", () => {
     const restored = restoreHold(held, marked);
 
     expect(restored.cart.lines[0].mrp_paise).toBe(99900);
-    expect(restored.stale).toBe(0);
+    expect(restored.staleLines).toBe(0);
   });
 
   it("re-reads the shelf and the other seasons rather than trusting the hold", async () => {
@@ -172,7 +172,7 @@ describe("picking it up", () => {
     const restored = restoreHold(held, { items: [], stock: [], seasons: [] });
 
     expect(restored.cart.lines[0].mrp_paise).toBe(149900);
-    expect(restored.stale).toBe(1);
+    expect(restored.staleLines).toBe(1);
   });
 
   it("brings the customer back with the cart", async () => {
@@ -206,7 +206,7 @@ describe("day close", () => {
       label: "",
       held_at: at,
       expires_policy: "today",
-      payload: {},
+      payload: payloadOf(),
       ...over,
     };
   }
@@ -263,7 +263,7 @@ describe("the mirror", () => {
       label: "Mrs Sharma",
       held_at: "2026-07-31T09:00:00.000Z",
       expires_policy: "kept",
-      payload: { pieces: 1 },
+      payload: payloadOf(),
       reviewed_on: "2026-07-31",
     });
 

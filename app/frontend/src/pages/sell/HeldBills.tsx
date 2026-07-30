@@ -2,7 +2,6 @@ import { Clock } from "lucide-react";
 
 import { Money } from "../../lib/format";
 import { describeHold, localDay } from "../../till/held";
-import type { HeldPayload } from "../../till/held";
 import type { HeldBill } from "../../till/db";
 
 // The parked carts, as a list somebody standing at a counter can act on (#185).
@@ -52,7 +51,6 @@ export function HeldBills({ holds, toReview, blocked, onResume, onKeep, onLetGo 
       )}
       <div className="bill-holds-rows">
         {holds.map((hold) => {
-          const payload = hold.payload as unknown as HeldPayload;
           const parkedBefore = stale.has(hold.held_uuid);
           return (
             <div
@@ -69,7 +67,7 @@ export function HeldBills({ holds, toReview, blocked, onResume, onKeep, onLetGo 
                 </span>
               </div>
               <span className="bill-hold-money">
-                <Money paise={payload?.net_paise ?? 0} />
+                <Money paise={hold.payload?.net_paise ?? 0} />
               </span>
               <div className="bill-hold-actions">
                 <button

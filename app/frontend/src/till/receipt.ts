@@ -169,6 +169,32 @@ export function receiptHtml(
 </body></html>`;
 }
 
+/** One line of a posted bill, as the read serializer sends it.
+ *
+ *  The money fields are all here, and none of them is optional: a reprint that
+ *  filled a column it had not been given would print a nought against a garment
+ *  that was discounted or taxed, and the customer's two copies would disagree. */
+export interface PostedLine {
+  line_no: number;
+  direction: string;
+  barcode: string;
+  season: string;
+  brand: string;
+  item: string;
+  design: string;
+  size: string;
+  color: string;
+  manual_desc: string;
+  salesman_code: string;
+  salesman_name: string;
+  qty: number;
+  mrp_paise: number;
+  disc_paise: number;
+  net_paise: number;
+  gst_rate: string;
+  gst_paise: number;
+}
+
 /** A bill as the *server* has it - `GET /api/sell/sales/{doc_number}`. */
 export interface PostedBill {
   doc_number: string;
@@ -179,21 +205,7 @@ export interface PostedBill {
   store_gstin: string;
   customer_name: string;
   customer_mobile: string;
-  lines: {
-    line_no: number;
-    direction: string;
-    barcode: string;
-    season: string;
-    brand: string;
-    item: string;
-    design: string;
-    size: string;
-    color: string;
-    manual_desc: string;
-    qty: number;
-    mrp_paise: number;
-    net_paise: number;
-  }[];
+  lines: PostedLine[];
   tenders: { mode: string; amount_paise: number }[];
   gross_paise: number;
   discount_paise: number;
@@ -239,14 +251,10 @@ export function postedReceiptHtml(bill: PostedBill): string {
         season: line.season,
         qty: line.qty,
         mrp_paise: line.mrp_paise,
-        // The paper shows the ticket price and what was actually paid, which is
-        // the pair a customer checks. The discount is the difference between the
-        // two columns and the bill's own "You saved" line, so a per-line copy of
-        // it here would be a third place for one figure to be wrong.
-        disc_paise: 0,
+        disc_paise: line.disc_paise,
         net_paise: line.net_paise,
-        gst_rate: "",
-        gst_paise: 0,
+        gst_rate: line.gst_rate,
+        gst_paise: line.gst_paise,
         manual_desc: line.manual_desc,
       })),
       tenders: bill.tenders,

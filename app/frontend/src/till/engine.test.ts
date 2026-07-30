@@ -196,7 +196,7 @@ describe("bills on hold (#185)", () => {
     await engine.start();
     server.putHeld = async () => refuse(0, "NETWORK", "No connection to head office.");
 
-    await expect(engine.hold({ held_uuid: "h1", label: "", payload })).resolves.toBeTruthy();
+    await expect(engine.hold({ held_uuid: "h1", label: "", payload })).resolves.toBeUndefined();
 
     expect(engine.getSnapshot().counts.held).toBe(1);
   });

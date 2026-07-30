@@ -722,7 +722,7 @@ class HeldBill(TimeStampedModel):
         KEPT = "kept", "The store chose to carry it forward"
 
     store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="held_bills")
-    held_uuid = models.UUIDField(unique=True)
+    held_uuid = models.UUIDField()
     label = models.CharField(max_length=120, blank=True, default="")
     payload = models.JSONField(default=dict, blank=True)
     held_at = models.DateTimeField()
@@ -733,6 +733,16 @@ class HeldBill(TimeStampedModel):
     class Meta:
         db_table = "sell_held_bill"
         ordering = ["held_at", "id"]
+        constraints = [
+            # Unique **per store**, not across the estate. db-design says
+            # "held_uuid UUID unique" and that is a key the till mints, so estate
+            # -wide uniqueness looks free - but it makes the store part of the
+            # key optional at the upsert, and an upsert that finds a row by uuid
+            # alone would move another store's hold onto this counter. Scoping
+            # the constraint is what makes the scoped lookup the only one the
+            # database will accept.
+            models.UniqueConstraint(fields=["store", "held_uuid"], name="uq_heldbill_store_uuid"),
+        ]
         indexes = [
             models.Index(fields=["store", "held_at"], name="heldbill_store_idx"),
         ]

@@ -1,8 +1,8 @@
 """The store's mirror of what the counter has parked (#185, grill Q13).
 
 Non-financial by construction: no `Document` base, no series, no ledger. The till
-owns the list and replaces it wholesale on each push, which is why the only
-unique key here is the till's own `held_uuid`.
+owns the list and replaces it wholesale on each push, and the key is unique
+**per store** - a hold matched by its uuid alone could be another store's.
 """
 
 import django.db.models.deletion
@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('held_uuid', models.UUIDField(unique=True)),
+                ('held_uuid', models.UUIDField()),
                 ('label', models.CharField(blank=True, default='', max_length=120)),
                 ('payload', models.JSONField(blank=True, default=dict)),
                 ('held_at', models.DateTimeField()),
@@ -34,6 +34,7 @@ class Migration(migrations.Migration):
                 'db_table': 'sell_held_bill',
                 'ordering': ['held_at', 'id'],
                 'indexes': [models.Index(fields=['store', 'held_at'], name='heldbill_store_idx')],
+                'constraints': [models.UniqueConstraint(fields=('store', 'held_uuid'), name='uq_heldbill_store_uuid')],
             },
         ),
     ]

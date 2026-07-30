@@ -104,7 +104,7 @@ export default function CustomerSearchPage() {
 
   return (
     <div className="page-pad">
-      <PageHeader lead="Find a bill by mobile number, name or bill number. Print it again — a past bill is never edited." />
+      <PageHeader lead="Find a bill by mobile number, name or bill number. Print it again - a past bill is never edited." />
 
       <div className="card section-card find-bar" data-testid="find-bar">
         <div className="find-keys" role="group" aria-label="Search by">
@@ -164,7 +164,7 @@ export default function CustomerSearchPage() {
       )}
       {printProblem && (
         <div className="warn-note" data-testid="find-print-problem">
-          {printProblem} The bill is unchanged — try again when the printer is ready.
+          {printProblem} The bill is unchanged - try again when the printer is ready.
         </div>
       )}
 
@@ -183,7 +183,7 @@ export default function CustomerSearchPage() {
             {rows.length === 1 ? "1 bill" : `${rows.length} bills`}
             {/* The server caps the list rather than paging it: this is for
                 finding one customer's bill, not for exporting the day. */}
-            {rows.length === 50 ? " — the most recent 50. Narrow the search." : ""}
+            {rows.length === 50 ? " - the most recent 50. Narrow the search." : ""}
           </p>
           <table className="lines-table" data-testid="find-rows">
             <thead>
@@ -191,7 +191,7 @@ export default function CustomerSearchPage() {
                 <th>Bill</th>
                 <th>When</th>
                 <th>Customer</th>
-                <th>Pieces</th>
+                <th>What</th>
                 <th className="num">Total</th>
                 <th />
               </tr>
@@ -281,7 +281,7 @@ function BillDetail({ bill, onReprint }: { bill: PostedBill; onReprint: () => vo
               </td>
               <td className="mono">{line.barcode}</td>
               <td>{line.season || "—"}</td>
-              <td>{lineSalesman(line)}</td>
+              <td>{line.salesman_name || line.salesman_code || "—"}</td>
               <td className="num">{line.qty}</td>
               <td className="num">
                 <Money paise={line.mrp_paise} />
@@ -305,14 +305,6 @@ function BillDetail({ bill, onReprint }: { bill: PostedBill; onReprint: () => vo
       </div>
     </div>
   );
-}
-
-/** The seller's name if the server sent one - it is on the read serializer but
- *  not on the shape the receipt needs, so it is read defensively rather than
- *  widening `PostedBill` for one column. */
-function lineSalesman(line: PostedBill["lines"][number]): string {
-  const named = line as unknown as { salesman_name?: string; salesman_code?: string };
-  return named.salesman_name || named.salesman_code || "—";
 }
 
 function Figure({ label, paise, strong }: { label: string; paise: number; strong?: boolean }) {

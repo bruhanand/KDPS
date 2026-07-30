@@ -202,6 +202,11 @@ class HeldBillsView(APIView):
     Gated at `sell: operate` and to one store, exactly as the dataset is: this is
     the counter talking about its own counter. Somebody who may read yesterday's
     bills has nothing to park.
+
+    The list is keyed by **store**, which is the same one-till-per-store invariant
+    the sale series rests on (`uq_sale_store_fy_seq`). Two counters at one shop
+    would each replace the other's mirror here; that is not a new assumption, and
+    it moves when the register handover (#189) gives a till an identity.
     """
 
     permission_classes = [IsAuthenticated, CanRunTill]
@@ -216,10 +221,12 @@ class HeldBillsView(APIView):
         rows: list[dict[str, Any]] = list(form.validated_data["held"])
 
         with transaction.atomic():
-            # Scoped to this store on both halves. A hold's key is the till's own
-            # uuid, which is unique across the estate, but the *delete* is what
-            # would otherwise reach past this counter - one store's empty push
-            # must never clear another's Dashboard row.
+            # **The store is on both halves, and on the upsert's lookup rather
+            # than only in its defaults.** The delete reaching past this counter
+            # is the obvious hazard - one store's empty push clearing another's
+            # Dashboard row - but the upsert is the quieter one: matching a hold
+            # by its uuid alone would find another store's row and move it here,
+            # silently, taking that store's count down with it.
             HeldBill.objects.filter(store=store).exclude(
                 held_uuid__in=[row["held_uuid"] for row in rows]
             ).delete()
@@ -228,9 +235,9 @@ class HeldBillsView(APIView):
                 # "parked since 11am" is the fact the day-close prompt is about,
                 # and a row reborn on every push would always read as new.
                 HeldBill.objects.update_or_create(
+                    store=store,
                     held_uuid=row["held_uuid"],
                     defaults={
-                        "store": store,
                         "label": row["label"],
                         "held_at": row["held_at"],
                         "expires_policy": row["expires_policy"],
