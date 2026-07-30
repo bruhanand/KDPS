@@ -75,7 +75,7 @@ class LocationSerializer(serializers.ModelSerializer):
 class StoreTargetSerializer(serializers.ModelSerializer):
     """One cell of the target grid: which store, which month, how many paise.
 
-    `store` is the store *code* both ways round — the code is what HO says out
+    `store` is the store *code* both ways round - the code is what HO says out
     loud ("Deoghar's August") and what the Dashboard already holds, so making the
     screen carry a row id it would only ever translate back adds a lookup and a
     way to be wrong.
@@ -94,7 +94,7 @@ class StoreTargetWriteSerializer(serializers.Serializer):
     * `store` is validated as a *name* here and resolved against the caller's
       scope in the view, because "no such store" (404) and "not your store" (403)
       are different answers and a `SlugRelatedField` gives one for both;
-    * `month` is a month, so a mid-month date is refused rather than truncated —
+    * `month` is a month, so a mid-month date is refused rather than truncated -
       the same rule the table's CHECK holds, stated here so the caller gets a
       sentence instead of a database error;
     * `target_paise` is integer paise (ADR-0004). A rupee decimal reaching this

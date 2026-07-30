@@ -23,7 +23,7 @@ urlpatterns = [
     path("stores", StoreListView.as_view(), name="store-list"),
     path("stores/<int:pk>", StoreDetailView.as_view(), name="store-detail"),
     path("locations", LocationListView.as_view(), name="location-list"),
-    # Before `stores/<int:pk>` would ever be consulted, and its own path anyway —
+    # Before `stores/<int:pk>` would ever be consulted, and its own path anyway -
     # the monthly target grid is keyed by store *code*, not by a store row id.
     path("store-targets", StoreTargetView.as_view(), name="store-target-grid"),
     path("brands", BrandListView.as_view(), name="brand-list"),

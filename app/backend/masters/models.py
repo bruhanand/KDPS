@@ -78,7 +78,7 @@ class StoreTarget(TimeStampedModel):
     Set at HO by the Operations Head and read by the store Dashboard's manager
     row (month-to-date vs target). A master, not a document: nothing posts and
     nothing balances, so setting it again *corrects* it rather than appending a
-    second answer — which is what the unique key below makes true, and why the
+    second answer - which is what the unique key below makes true, and why the
     endpoint is a PUT.
 
     `month` is the month itself, stored as its first day. The CHECK is what keeps
@@ -91,7 +91,7 @@ class StoreTarget(TimeStampedModel):
     month = models.DateField(help_text="The month, as its first day (2026-08-01 = August 2026).")
     target_paise = MoneyField(
         help_text="Net sales asked of this store for the month, in integer paise. "
-        "Nought is a real answer — a store shut for the month is not an unset target."
+        "Nought is a real answer - a store shut for the month is not an unset target."
     )
     set_by = models.ForeignKey(
         "accounts.User",

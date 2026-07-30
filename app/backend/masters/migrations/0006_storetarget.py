@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('month', models.DateField(help_text='The month, as its first day (2026-08-01 = August 2026).')),
-                ('target_paise', core.money.MoneyField(help_text='Net sales asked of this store for the month, in integer paise. Nought is a real answer — a store shut for the month is not an unset target.')),
+                ('target_paise', core.money.MoneyField(help_text='Net sales asked of this store for the month, in integer paise. Nought is a real answer - a store shut for the month is not an unset target.')),
                 ('set_by', models.ForeignKey(blank=True, help_text='Who last set this number. The only route from a Dashboard figure back to the person who chose it.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='store_targets_set', to=settings.AUTH_USER_MODEL)),
                 ('store', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='targets', to='masters.store')),
             ],

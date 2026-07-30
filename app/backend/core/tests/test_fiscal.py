@@ -29,7 +29,7 @@ def test_every_month_is_its_own_first_day():
 def test_the_two_directions_agree():
     """The property that matters: label → months → label is the identity. A
     calendar-year reading of `26-27` would break on exactly the three months the
-    Indian FY moves — Jan, Feb and Mar."""
+    Indian FY moves - Jan, Feb and Mar."""
     for month in financial_year_months("26-27"):
         assert financial_year(month) == "26-27"
 
@@ -41,7 +41,7 @@ def test_january_belongs_to_the_year_that_started_the_april_before():
 
 @pytest.mark.parametrize("label", ["2026", "26/27", "26-27-28", "", "  ", "ab-cd", "26-27 "])
 def test_a_label_that_is_not_a_label_is_refused(label):
-    """`26-27 ` with a trailing space is fine — a URL is allowed to be untidy —
+    """`26-27 ` with a trailing space is fine - a URL is allowed to be untidy -
     but nothing that would change the *meaning* is guessed at."""
     if label.strip() == "26-27":
         assert financial_year_months(label) == financial_year_months("26-27")

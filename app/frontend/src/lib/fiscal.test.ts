@@ -1,6 +1,6 @@
 // The client's financial year has to agree with the server's (#171): the grid
 // draws the columns, the API keys the rows, and they meet on the month string.
-// Two things can go wrong and both are silent — the Jan–Mar tail landing in the
+// Two things can go wrong and both are silent - the Jan–Mar tail landing in the
 // wrong year, and a timezone west of Greenwich shifting every column back a day.
 import { describe, expect, it } from "vitest";
 

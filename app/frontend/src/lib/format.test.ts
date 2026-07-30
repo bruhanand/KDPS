@@ -8,7 +8,7 @@
 // rather than rounding it (ADR-0004).
 import { describe, expect, it } from "vitest";
 
-import { formatINR, formatRupeeAmount, rupeesToPaise } from "./format";
+import { formatINR, formatRupeeAmount, paiseToRupees, rupeesToPaise } from "./format";
 
 describe("formatINR", () => {
   it("groups in lakhs and crores, and drops empty paise", () => {
@@ -79,6 +79,34 @@ describe("rupeesToPaise", () => {
     for (const paise of [0, 1, 2550, 250000000, 123456789]) {
       const rendered = formatINR(paise).replace("₹", "");
       expect(rupeesToPaise(rendered)).toBe(paise);
+    }
+  });
+});
+
+describe("paiseToRupees", () => {
+  it("drops the paise when there are none", () => {
+    expect(paiseToRupees(250000000)).toBe("2500000");
+    expect(paiseToRupees(0)).toBe("0");
+  });
+
+  it("keeps both digits when there are some", () => {
+    expect(paiseToRupees(2551)).toBe("25.51");
+    expect(paiseToRupees(2550)).toBe("25.50");
+    expect(paiseToRupees(1)).toBe("0.01");
+  });
+
+  it("is the exact inverse of rupeesToPaise", () => {
+    // The property that matters: this fills the edit box, and whatever is in the
+    // box is what gets converted back and sent. A lossy pair here would let a
+    // correction that changed nothing still move the number.
+    for (const paise of [0, 1, 99, 100, 2550, 2551, 250000000, 123456789, 999999999999]) {
+      expect(rupeesToPaise(paiseToRupees(paise))).toBe(paise);
+    }
+  });
+
+  it("never renders a float artefact", () => {
+    for (let paise = 0; paise < 2000; paise += 7) {
+      expect(paiseToRupees(paise)).toMatch(/^\d+(\.\d{2})?$/);
     }
   });
 });
