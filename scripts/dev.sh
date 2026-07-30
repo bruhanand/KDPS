@@ -6,9 +6,24 @@
 #   ./scripts/dev.sh --reset      destroy this workspace's DB and rebuild it
 #   ./scripts/dev.sh --down       stop this workspace's Postgres (data kept)
 #   ./scripts/dev.sh --api        API only          --web   PWA only
-#   ./scripts/dev.sh --no-seed    skip seeding (migrations still run)
+#   ./scripts/dev.sh --seed       re-seed demo data  --no-seed  never seed
 #   ./scripts/dev.sh --free-ports kill whatever holds this workspace's ports
 #   ./scripts/dev.sh --where      print this workspace's project name and ports
+#
+# TWO JOBS, ONE SCRIPT, AND THEY NEVER FIGHT.
+#   Provision (`--setup-only`, the Conductor setup hook): create this workspace's
+#     Postgres container and volume, install deps, migrate, seed. Slow, once.
+#   Serve (no flag, the Run button): start the API and the PWA. Fast, often.
+# Serving still *checks* that the database is up and the schema current — a
+# rebase can add migrations, and a Mac reboot stops the container — but it
+# installs nothing that is already installed and re-seeds nothing already seeded.
+#
+# Both jobs take a per-workspace provisioning lock before touching Docker, deps
+# or the schema, and the serve path waits on it rather than failing. Conductor
+# runs setup when a workspace is created and Anand clicks Run seconds later, so
+# the two DO overlap — and two concurrent `docker compose up` calls on one
+# project is a hard error ("Conflict. The container name ... is already in use"),
+# not a no-op. The lock is what makes clicking Run during setup simply wait.
 #
 # EVERY WORKSPACE IS ITS OWN SYSTEM. Container, volume, database and all three
 # ports come from scripts/workspace-env.sh, keyed on the Conductor workspace, so
@@ -32,7 +47,9 @@ API_PORT="$KDPS_API_PORT"
 WEB_PORT="$KDPS_WEB_PORT"
 COMPOSE=(docker compose -p "$KDPS_PROJECT" -f "$ROOT/docker-compose.yml")
 
-RUN_API=1 RUN_WEB=1 SEED=1 RESET=0 SETUP_ONLY=0 FREE_PORTS=0 DOWN=0 WHERE=0
+# SEED=auto: seed when provisioning, and when serving finds an empty database —
+# but not on every Run click, which would re-import the master sheets for nothing.
+RUN_API=1 RUN_WEB=1 SEED=auto RESET=0 SETUP_ONLY=0 FREE_PORTS=0 DOWN=0 WHERE=0
 for arg in "$@"; do
   case "$arg" in
     --setup-only) SETUP_ONLY=1 ;;
@@ -41,9 +58,10 @@ for arg in "$@"; do
     --where)      WHERE=1 ;;
     --api)        RUN_WEB=0 ;;
     --web)        RUN_API=0 ;;
+    --seed)       SEED=1 ;;
     --no-seed)    SEED=0 ;;
     --free-ports) FREE_PORTS=1 ;;
-    -h|--help)    sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)    sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "unknown flag: $arg (try --help)" >&2; exit 2 ;;
   esac
 done
@@ -142,7 +160,70 @@ case "$db_host" in
        localhost, or use the Render dashboard for the alpha." ;;
 esac
 
-# --- 4. database -------------------------------------------------------------
+# --- 4. one provisioning at a time -------------------------------------------
+# Everything from here to the end of section 7 mutates shared state that belongs
+# to the workspace, not to this process: the Docker container, the virtualenv,
+# node_modules, the schema. Conductor's setup hook and the Run button are two
+# separate processes that routinely overlap, so this is a real race, not a
+# theoretical one — and `docker compose up` loses it loudly:
+#
+#   Conflict. The container name "/kdps-<workspace>-db-1" is already in use
+#
+# A directory is the lock: mkdir is atomic on every filesystem we care about, and
+# unlike `flock` it exists on macOS. The owner's PID goes inside so a lock left
+# behind by a SIGKILLed run can be told apart from one that is genuinely held.
+LOCK_DIR="${TMPDIR:-/tmp}/${KDPS_PROJECT}.provision.lock"
+LOCK_HELD=0
+
+release_lock() {
+  if [ "$LOCK_HELD" = 1 ]; then
+    LOCK_HELD=0
+    rm -rf "$LOCK_DIR"
+  fi
+}
+
+acquire_lock() {
+  local waited=0 pid=''
+  until mkdir "$LOCK_DIR" 2>/dev/null; do
+    pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    if [ -z "$pid" ]; then
+      # The owner creates the directory and writes its PID a moment later, so an
+      # empty lock is usually one being taken. Only call it abandoned after a few
+      # seconds of nobody claiming it.
+      if [ "$waited" -lt 5 ]; then
+        sleep 1; waited=$((waited + 1)); continue
+      fi
+      warn "Clearing an unclaimed provisioning lock at $LOCK_DIR"
+      rm -rf "$LOCK_DIR"; continue
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      warn "Clearing a stale provisioning lock — its owner (PID $pid) is gone"
+      rm -rf "$LOCK_DIR"; continue
+    fi
+    if [ "$waited" = 0 ]; then
+      say "This workspace is being provisioned by PID $pid (setup, probably) — waiting"
+    fi
+    sleep 1
+    waited=$((waited + 1))
+    if [ "$waited" -ge 900 ]; then
+      die "Waited 15 minutes for PID $pid to finish provisioning this workspace.
+       If it is wedged: kill $pid, then remove $LOCK_DIR."
+    fi
+  done
+  printf '%s\n' "$$" > "$LOCK_DIR/pid"
+  LOCK_HELD=1
+  if [ "$waited" -gt 0 ]; then
+    say "Provisioning finished after ${waited}s — carrying on"
+  fi
+}
+
+# Released explicitly once provisioning is done (section 7), so the servers do
+# not hold it for their whole life. This trap covers the `die` paths in between;
+# cleanup() replaces it in section 9 and calls release_lock itself.
+trap release_lock HUP INT TERM EXIT
+acquire_lock
+
+# --- 5. database -------------------------------------------------------------
 if [ "$RESET" = 1 ]; then
   warn "--reset: destroying this workspace's Postgres volume ($KDPS_PROJECT). Other workspaces are untouched."
   "${COMPOSE[@]}" down -v
@@ -162,26 +243,66 @@ done
   || die "Postgres did not come up. Check: docker compose -p $KDPS_PROJECT logs db
        If host port $KDPS_PG_PORT is taken, something outside Conductor is holding it."
 
-# --- 5. dependencies ---------------------------------------------------------
-say "Dependencies"
-(cd "$BACKEND" && uv sync --quiet)
+# An empty database has to be seeded whoever asked for it — a Run click on a
+# workspace whose setup never ran, or died between migrating and seeding, must
+# still end at an app you can log into. So the question is "are there users?",
+# not "is there a schema": a migrated-but-unseeded database has every table and
+# no way in, which is the more confusing of the two failures. Asked in SQL rather
+# than through Django because it costs a query, not an interpreter start.
+FRESH_DB=0
+if ! "${COMPOSE[@]}" exec -T db psql -U kdps -d kdps_dev -tAc \
+     "select count(*) from accounts_user" 2>/dev/null | grep -qE '[1-9]'; then
+  FRESH_DB=1
+fi
+
+# --- 6. dependencies ---------------------------------------------------------
+# Install when the lockfile has moved since the last install, and not otherwise.
+# The stamp lives *inside* the tree it describes, so deleting .venv or
+# node_modules invalidates it for free. This is stricter than "skip if the
+# directory exists" — a branch switch that changes a lockfile reinstalls, which
+# is the failure the old unconditional install was defending against — and it
+# costs nothing on the common path, where the lockfile has not moved.
+sha_of() {
+  if command -v shasum >/dev/null; then shasum -a 256 "$1" | cut -d' ' -f1
+  else sha256sum "$1" | cut -d' ' -f1; fi
+}
+deps_current() {   # deps_current <lockfile> <stamp>  → 0 when the install is up to date
+  local lock="$1" stamp="$2"
+  [ -f "$lock" ] || return 1
+  [ -f "$stamp" ] || return 1
+  [ "$(sha_of "$lock")" = "$(cat "$stamp")" ]
+}
+
+UV_STAMP="$BACKEND/.venv/.kdps-deps-sha"
+YARN_STAMP="$FRONTEND/node_modules/.kdps-deps-sha"
+
+if deps_current "$BACKEND/uv.lock" "$UV_STAMP"; then
+  say "Dependencies · backend up to date"
+else
+  say "Dependencies · backend (uv sync)"
+  (cd "$BACKEND" && uv sync --quiet)
+  sha_of "$BACKEND/uv.lock" > "$UV_STAMP"
+fi
+
 # The frontend is a YARN project: yarn.lock is the committed lockfile and cloud CI
 # runs `yarn install --frozen-lockfile` (.github/workflows/ci.yml:107). Do not run
 # `npm install` here — npm 7+ rewrites an existing yarn.lock in place (rewriting
 # every `resolved` URL and pruning entries), which then fails CI's --frozen-lockfile.
 # Install the same way CI does, so local and cloud resolve identical trees.
-#
-# Always install, never "skip if node_modules exists" — a present-but-stale
-# node_modules survives branch switches and leaves packages missing with no visible
-# error until tsc or vitest fails. yarn is a fast no-op when already satisfied.
 if [ -f "$FRONTEND/yarn.lock" ]; then
   command -v yarn >/dev/null || die "yarn not found, but app/frontend/yarn.lock exists (CI uses yarn). Install it: npm i -g yarn"
-  (cd "$FRONTEND" && yarn install --frozen-lockfile --silent)
+  if deps_current "$FRONTEND/yarn.lock" "$YARN_STAMP"; then
+    say "Dependencies · frontend up to date"
+  else
+    say "Dependencies · frontend (yarn install)"
+    (cd "$FRONTEND" && yarn install --frozen-lockfile --silent)
+    sha_of "$FRONTEND/yarn.lock" > "$YARN_STAMP"
+  fi
 else
   (cd "$FRONTEND" && npm install --silent --no-audit --no-fund)
 fi
 
-# --- 6. schema + seed --------------------------------------------------------
+# --- 7. schema + seed --------------------------------------------------------
 say "Migrations"
 # This database belongs to this workspace alone, so leftover schema can only be
 # your own, from an earlier branch of this same worktree. Still possible, still
@@ -191,6 +312,16 @@ if ! (cd "$BACKEND" && uv run python manage.py migrate --noinput); then
   die "Migrations failed. If this workspace's database carries leftover schema from
        an earlier branch of this worktree ('relation ... already exists'), rebuild it:
          ./scripts/dev.sh --reset"
+fi
+
+# Seeding is idempotent but not free — it re-reads the master sheets. Provisioning
+# always does it; serving only does it for a database that has nothing in it yet.
+# `--seed` forces it, `--no-seed` forbids it.
+if [ "$SEED" = auto ]; then
+  if [ "$SETUP_ONLY" = 1 ] || [ "$FRESH_DB" = 1 ]; then SEED=1; else SEED=0; fi
+fi
+if [ "$SEED" = 1 ] && [ "$SETUP_ONLY" = 0 ] && [ "$FRESH_DB" = 1 ]; then
+  warn "This workspace's database was empty — seeding it now. Normally 'npm run dev:setup' has already done this."
 fi
 
 if [ "$SEED" = 1 ]; then
@@ -205,12 +336,16 @@ if [ "$SEED" = 1 ]; then
   (cd "$BACKEND" && uv run python manage.py seed_outbound_demo) || warn "seed_outbound_demo failed - outbound/RTV suites will skip for want of stock"
 fi
 
+# Provisioning ends here, so the lock ends here. Holding it across the servers'
+# whole lifetime would block the next `--setup-only` for as long as the app runs.
+release_lock
+
 if [ "$SETUP_ONLY" = 1 ]; then
-  say "Setup complete. Run ./scripts/dev.sh to start the servers."
+  say "Setup complete. Press Run (or ./scripts/dev.sh) to start the servers."
   exit 0
 fi
 
-# --- 7. ports ----------------------------------------------------------------
+# --- 8. ports ----------------------------------------------------------------
 # These ports belong to this workspace, so a holder is most likely this
 # workspace's own orphan from a run that was SIGKILLed. Most likely is not
 # certainly, and killing another project's server would be unforgivable, so we
@@ -238,10 +373,11 @@ for port_pair in "$API_PORT:API" "$WEB_PORT:PWA"; do
   fi
 done
 
-# --- 8. run ------------------------------------------------------------------
+# --- 9. run ------------------------------------------------------------------
 pids=()
 cleanup() {
   trap - HUP INT TERM EXIT
+  release_lock   # a no-op unless we died before section 7 released it
   [ ${#pids[@]} -gt 0 ] && kill "${pids[@]}" 2>/dev/null || true
   wait 2>/dev/null || true
   say "Stopped. Postgres is still up — './scripts/dev.sh --down' stops it too."

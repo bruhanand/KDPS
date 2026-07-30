@@ -20,18 +20,35 @@
 # so a value set here would silently beat the correct one in the file.
 
 [scripts]
-# Fast-forward the root checkout so new workspaces start current, then provision
-# THIS workspace: its own Postgres container on its own port, deps, migrations
-# and seed. `--setup-only` starts no servers.
+# SETUP BUILDS THE ENVIRONMENT; RUN STARTS THE APP. Setup is the slow half and
+# happens once, when the workspace is created: fast-forward the root checkout so
+# new workspaces start current, then provision THIS workspace — its own Postgres
+# container on its own port, its dependencies, its schema and its seed data.
+# `--setup-only` starts no servers, and Run does no provisioning it can avoid.
+#
+# The two still overlap in practice, because setup takes minutes on a fresh
+# workspace and the Run button is right there. That used to fail outright: two
+# `docker compose up` calls on one project is a hard conflict, not a no-op. Both
+# now take a provisioning lock (dev.sh section 4), so an early Run waits for
+# setup instead of colliding with it.
 setup = """
 git -C "$CONDUCTOR_ROOT_PATH" fetch --prune origin && git -C "$CONDUCTOR_ROOT_PATH" pull --ff-only || true
 ./scripts/dev.sh --setup-only
 """
 
-# Archiving a workspace destroys its development environment: the Postgres
-# container AND its data volume (`down -v`), plus the regenerable, gitignored
-# build artifacts each worktree carries. `npm run setup` recreates the latter;
-# nothing recreates the database, which is the point.
+# Archiving a workspace destroys its development environment: first the servers
+# still running in it, then the Postgres container AND its data volume (`down
+# -v`), then the regenerable, gitignored build artifacts each worktree carries.
+# `npm run setup` recreates the latter; nothing recreates the database, which is
+# the point.
+#
+# The servers come first and are not optional. Without that step they outlive the
+# workspace — a Django API answering on a Conductor-allocated port, against the
+# database this hook is about to delete, from a worktree that is about to be
+# deleted. Nothing reaps them; Conductor reuses port blocks; the next workspace
+# handed that block cannot start. Ten such stacks were found alive at once, the
+# oldest more than a day. stop-stack.sh matches by working directory, so it can
+# only ever touch this workspace's own processes.
 #
 # The resolver is sourced from the ROOT checkout, not from this worktree, so a
 # workspace sitting on an old branch cannot archive itself with a stale — or
@@ -41,6 +58,9 @@ git -C "$CONDUCTOR_ROOT_PATH" fetch --prune origin && git -C "$CONDUCTOR_ROOT_PA
 # workspace-env.sh. A mismatch would leave a workspace's database behind rather
 # than delete the wrong one, since a name that matches no project deletes nothing.
 archive = """
+if [ -x "$CONDUCTOR_ROOT_PATH/scripts/stop-stack.sh" ]; then
+  "$CONDUCTOR_ROOT_PATH/scripts/stop-stack.sh" "$PWD" || true
+fi
 if [ -f "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh" ]; then
   . "$CONDUCTOR_ROOT_PATH/scripts/workspace-env.sh"
 else
@@ -56,9 +76,12 @@ rm -rf node_modules app/frontend/node_modules app/frontend/dist app/backend/.ven
 run_mode = "concurrent"
 
 # One click for the whole stack. dev.sh resolves this workspace's ports itself
-# (PWA on CONDUCTOR_PORT, API on +1, Postgres on +2), brings the database up and
-# waits for it, migrates, seeds, then runs both servers as children of one
-# process — and traps SIGHUP, which is how Conductor stops it.
+# (PWA on CONDUCTOR_PORT, API on +1, Postgres on +2), makes sure the database is
+# up and the schema current — a rebase can add migrations and a Mac reboot stops
+# the container, so this much is checked every time — and then runs both servers
+# as children of one process, trapping SIGHUP, which is how Conductor stops it.
+# It does NOT reinstall dependencies or re-seed: that is setup's job, and on a
+# provisioned workspace this path is a few seconds.
 [scripts.run.dev]
 command = "./scripts/dev.sh"
 default = true
