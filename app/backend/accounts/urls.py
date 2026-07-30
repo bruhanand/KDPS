@@ -27,7 +27,7 @@ urlpatterns = [
     path("me", MeView.as_view(), name="me"),
     path("admin/meta", AdminMetaView.as_view(), name="rbac-admin-meta"),
     # The access matrix (#173). The api-contract sketched these at
-    # `/api/accounts/...`, a prefix this project does not mount — accounts has
+    # `/api/accounts/...`, a prefix this project does not mount - accounts has
     # always lived under `/api/auth/`, and its admin surface under
     # `/api/auth/admin/`. Same endpoints, this app's own shelf.
     path("admin/access-matrix", AccessMatrixView.as_view(), name="access-matrix"),

@@ -93,8 +93,8 @@ export interface paths {
         /**
          * @description The roles x sections grid an administrator edits (#173).
          *
-         *     The answer is the **stored** matrix — ``Role.section_access`` as it is
-         *     today, not the seed table it started from — plus the cells the money floor
+         *     The answer is the **stored** matrix - ``Role.section_access`` as it is
+         *     today, not the seed table it started from - plus the cells the money floor
          *     has locked and the sentence to show over each. The grid is data all the way
          *     down: sections, rungs, roles and locks all arrive from here, so adding a
          *     section or ratifying a floor needs no front-end release (Rule 12).
@@ -223,14 +223,14 @@ export interface paths {
         };
         get?: never;
         /**
-         * @description Replace one role's row of the matrix — as a proposal, never as a save.
+         * @description Replace one role's row of the matrix - as a proposal, never as a save.
          *
          *     Two things stand between an administrator and the stored row, and both are
          *     floor rules rather than policy:
          *
          *     · the **money floor** (``accounts.floors``) refuses a cell that would put a
          *       store seat on the books or hand full Money or full Setup to a role the
-         *       ruling does not trust — cell by cell, naming each one;
+         *       ruling does not trust - cell by cell, naming each one;
          *     · **"never by one person alone"** (rule 4) makes the write a proposal a
          *       second Owner or IT Admin applies through the existing approvals
          *       machinery. The api-contract sketched an immediate 200 here; a direct write

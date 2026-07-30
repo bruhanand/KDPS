@@ -1,4 +1,4 @@
-/* Setup → Access. The grid is wide (one column per role), so the section
+/* Setup -> Access. The grid is wide (one column per role), so the section
    column pins while the rest scrolls. Every colour is a token, so the dark
    theme needs no override here. */
 
@@ -63,7 +63,7 @@ table.matrix th {
   color: var(--rust);
 }
 
-/* A cell the money floor holds shut. Greyed and never a control — the reason
+/* A cell the money floor holds shut. Greyed and never a control - the reason
    rides along in the title so the answer is one hover away, and is repeated in
    full under the grid for anyone who cannot hover. */
 .matrix-locked {

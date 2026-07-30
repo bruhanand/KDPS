@@ -16,7 +16,7 @@ Three of the four can be crossed by a *cell* of the matrix, and those are the
 ``FLOORS`` below: each names the rung a role may not reach on a section, who is
 allowed to reach it, and the sentence the screen shows over the greyed cell.
 
-Rule 1 has no cell — self-approval is refused by the approvals engine on the
+Rule 1 has no cell - self-approval is refused by the approvals engine on the
 document, and no combination of section grants can express "their own". Rule
 4's second half, "never by one person alone", has no cell either: it is why a
 matrix edit is a *proposal* a second access administrator applies
@@ -30,12 +30,12 @@ refuses a store-scoped actor underneath every API
 would only produce a role holding a button the server rejects. The one place a
 cell floor is the *only* guard is rule 3 at ``money: manage``: that rung opens
 the finledger books, and the engine's own brand-liability check asks merely for
-a named non-store person — it would let a Warehouse seat granted ``money:
+a named non-store person - it would let a Warehouse seat granted ``money:
 manage`` post what a brand is owed. So the floor is enforced here, on the way
 in, exactly as ``ActorPolicySerializer.FLOOR_BOUND_ACTIONS`` narrows who may
 inward a PT.
 
-The two role sets rules 3 and 4 turn on are **the engine's own** —
+The two role sets rules 3 and 4 turn on are **the engine's own** -
 ``HEAD_OFFICE_VALUE_ACTORS`` and ``ACCESS_ADMINISTRATORS``, reused rather than
 retyped, so the matrix floor and the posting floor cannot drift apart.
 
@@ -49,6 +49,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from accounts.matrix import capability_of
 from accounts.role_lists import (
     ACCESS_ADMINISTRATORS,
     HEAD_OFFICE_VALUE_ACTORS,
@@ -57,7 +58,6 @@ from accounts.role_lists import (
 from accounts.sections import (
     CAP_APPROVE,
     CAP_MANAGE,
-    CAP_NONE,
     CAPABILITY_ORDER,
     CAPABILITY_RANK,
     SECTION_CODES,
@@ -65,7 +65,7 @@ from accounts.sections import (
 )
 
 #: The seats that work a shop floor. Rule 2 is about a *store*, and store-ness
-#: is a property of the user's scope, not of a role — the GL engine reads
+#: is a property of the user's scope, not of a role - the GL engine reads
 #: ``scope_type`` and is the real enforcement. What the matrix can say is which
 #: role rows are the store's, and it has to say it by name: no rung, no scope
 #: field and no derived query on the role distinguishes "the seat a cashier
@@ -91,10 +91,10 @@ class Floor:
     rule: int
     section: str
     #: The rung a role outside ``held_by`` may not reach on ``section``.
-    locked_at: str
+    locked_rung: str
     #: The role codes the floor does allow to reach it. May be empty.
     held_by: frozenset[str]
-    #: The role codes the floor applies to — ``None`` means every role.
+    #: The role codes the floor applies to - ``None`` means every role.
     applies_to: frozenset[str] | None
     #: Shown on the greyed cell, in the language the business ratified it in.
     reason: str
@@ -105,8 +105,8 @@ class Floor:
         return self.applies_to is None or role_code in self.applies_to
 
     def ceiling(self) -> str:
-        """The highest rung a bound role may still hold — one below ``locked_at``."""
-        return CAPABILITY_ORDER[CAPABILITY_RANK[self.locked_at] - 1]
+        """The highest rung a bound role may still hold - one below ``locked_rung``."""
+        return CAPABILITY_ORDER[CAPABILITY_RANK[self.locked_rung] - 1]
 
 
 #: The ratified rule texts, quoted from PRD #104 (26 Jul 2026).
@@ -121,12 +121,12 @@ FLOORS: tuple[Floor, ...] = (
     Floor(
         rule=2,
         section="money",
-        locked_at=CAP_APPROVE,
+        locked_rung=CAP_APPROVE,
         held_by=frozenset(),
         applies_to=STORE_SEATS,
         reason=(
             "A store never posts value to the books. A store seat may raise its own "
-            "expenses and nothing more, so Money stops at Operate here — the books "
+            "expenses and nothing more, so Money stops at Operate here - the books "
             "refuse a store-scoped person underneath every screen anyway, and Setup "
             "must not hand out a button the server will reject."
         ),
@@ -134,36 +134,28 @@ FLOORS: tuple[Floor, ...] = (
     Floor(
         rule=3,
         section="money",
-        locked_at=CAP_MANAGE,
+        locked_rung=CAP_MANAGE,
         held_by=HEAD_OFFICE_VALUE_ACTORS,
         applies_to=None,
         reason=(
             "Money owed to a brand always requires a named head-office human. Full "
-            "Money opens the books — vendor bills, payments, the value ledgers — so "
+            "Money opens the books - vendor bills, payments, the value ledgers - so "
             "it stays with Owner and Accounts."
         ),
     ),
     Floor(
         rule=4,
         section="setup",
-        locked_at=CAP_MANAGE,
+        locked_rung=CAP_MANAGE,
         held_by=ACCESS_ADMINISTRATORS,
         applies_to=None,
         reason=(
             "Users and roles may be changed only by Owner or IT Admin. Full Setup is "
-            "the power to grant power, so no other role may be given it — a matrix "
+            "the power to grant power, so no other role may be given it - a matrix "
             "that could hand it out could configure this floor away."
         ),
     ),
 )
-
-
-def _capability_of(entry: Any) -> str:
-    """The rung an incoming cell asks for, fail-closed to ``none``."""
-    if not isinstance(entry, dict):
-        return CAP_NONE
-    capability = entry.get("capability", CAP_NONE)
-    return capability if isinstance(capability, str) else CAP_NONE
 
 
 def cell_limits(role_code: str) -> dict[str, dict[str, str]]:
@@ -195,7 +187,7 @@ def floor_violations(role_code: str, section_access: dict[str, Any]) -> list[dic
 
     Cell by cell on purpose: an administrator who moved five cells and tripped
     one is told which one and why, not handed a blanket refusal. One entry per
-    *cell*, not per floor — Money is capped twice for a store seat, and the
+    *cell*, not per floor - Money is capped twice for a store seat, and the
     screen has one square there, so the tighter ceiling answers for it.
     """
     limits = cell_limits(role_code)
@@ -204,7 +196,7 @@ def floor_violations(role_code: str, section_access: dict[str, Any]) -> list[dic
         limit = limits.get(section)
         if limit is None:
             continue
-        asked = _capability_of(section_access.get(section))
+        asked = capability_of(section_access.get(section))
         if CAPABILITY_RANK.get(asked, 0) > CAPABILITY_RANK[limit["max_capability"]]:
             violations.append({"section": section, "requested": asked, **limit})
     return violations
@@ -227,10 +219,10 @@ def _validate() -> None:
     """
     for floor in FLOORS:
         assert floor.section in SECTION_CODES, f"floor/{floor.rule}: bad section {floor.section!r}"
-        assert floor.locked_at in CAPABILITY_RANK, (
-            f"floor/{floor.rule}: bad rung {floor.locked_at!r}"
+        assert floor.locked_rung in CAPABILITY_RANK, (
+            f"floor/{floor.rule}: bad rung {floor.locked_rung!r}"
         )
-        assert CAPABILITY_RANK[floor.locked_at] > 0, (
+        assert CAPABILITY_RANK[floor.locked_rung] > 0, (
             f"floor/{floor.rule}: cannot lock the bottom rung"
         )
         assert floor.rule in RULES, f"floor/{floor.rule}: not one of the ratified rules"

@@ -86,11 +86,18 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         The access-matrix editor is the screen people will use, but this
         endpoint edits the same ``section_access`` column and would otherwise be
         the way around it. A floor with one gate is not a floor.
+
+        The **code** is checked as carefully as the access, because the floor
+        keys on it: renaming a role that holds full Money to a code the floor
+        binds would leave a row nobody could have written directly. So a rename
+        re-tests whatever access that role will hold afterwards, sent or stored.
         """
+        code = attrs.get("code") or getattr(self.instance, "code", "")
         access = attrs.get("section_access")
         if access is None:
-            return attrs
-        code = attrs.get("code") or getattr(self.instance, "code", "")
+            if "code" not in attrs or self.instance is None:
+                return attrs
+            access = self.instance.section_access or {}
         crossed = floor_violations(str(code), access)
         if crossed:
             raise serializers.ValidationError({"section_access": describe_floors(crossed)})

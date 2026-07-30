@@ -193,7 +193,7 @@ def _call(client: APIClient, method: str, path: str):
 
 # --- 1. The gates ----------------------------------------------------------
 def _stored_capability(role: Role, section: str) -> str:
-    """What the *database* says this role holds — the only authority there is.
+    """What the *database* says this role holds - the only authority there is.
 
     #173 made the matrix an admin-editable screen, so ``rbac_matrix`` is now
     starting content and nothing more. Reading the expectation from the code
@@ -230,19 +230,28 @@ def test_every_gate_answers_what_the_matrix_says(db, role_code):
     ids=[row[0] for row in GATED_ENDPOINTS if row[2] in (CAP_OPERATE, CAP_APPROVE)],
 )
 def test_a_retuned_cell_moves_its_gate_with_it(db, label, section, minimum, method, path):
-    """ "Whatever it says" — the half the old assertion could not see (#173).
+    """ "Whatever it says" - the half the old assertion could not see (#173).
 
     Comparing the API against the seed table proves the two agree on the seed.
     It cannot prove the gate is *reading* the stored row rather than the code
     one, which is the whole promise of an editable matrix. So: take a role the
-    seed denies, grant it the rung on the Role row — no release, no restart —
+    seed denies, grant it the rung on the Role row - no release, no restart -
     and the same call must stop answering 403.
+
+    This is about *where the gate reads from*, not about when a change should
+    land on someone mid-shift - that question is open and is #173's, not this
+    test's (see the PR).
     """
     denied_by_the_seed = next(
-        code
-        for code in KNOWN_ROLE_CODES
-        if not meets(section_access_for(code)[section]["capability"], minimum)
+        (
+            code
+            for code in KNOWN_ROLE_CODES
+            if not meets(section_access_for(code)[section]["capability"], minimum)
+        ),
+        "",
     )
+    if not denied_by_the_seed:
+        pytest.skip(f"every seeded role already reaches {section}:{minimum} - nothing to retune")
     role = _role(denied_by_the_seed)
     client = _client(_user(f"retune_{denied_by_the_seed}_{section}_{minimum}", role))
     assert _call(client, method, path).status_code == 403, label
@@ -254,7 +263,7 @@ def test_a_retuned_cell_moves_its_gate_with_it(db, label, section, minimum, meth
 
 
 def test_the_floors_hold_whatever_the_stored_matrix_says(db):
-    """Floors are asserted unconditionally — they are not cells (#173, PRD #104).
+    """Floors are asserted unconditionally - they are not cells (#173, PRD #104).
 
     A retuned matrix moves gates; it must never move a floor. This writes the
     most generous row the ladder can express straight onto the database, past
@@ -278,7 +287,7 @@ def test_the_floors_hold_whatever_the_stored_matrix_says(db):
     store_user.save(update_fields=["scope_type"])
     vendor = Vendor.objects.create(code="floor-gate-vendor", name="Floor Gate Vendor")
 
-    # Rule 2 — the books refuse the store, even holding `money: manage`.
+    # Rule 2 - the books refuse the store, even holding `money: manage`.
     posted = _client(store_user).post(
         "/api/finledger/vendor/bill",
         {"vendor_id": vendor.pk, "amount": "1250.00", "description": "must not post"},
@@ -287,7 +296,7 @@ def test_the_floors_hold_whatever_the_stored_matrix_says(db):
     assert posted.status_code == 403
     assert not GLEntry.objects.exists()
 
-    # Rule 4 — `setup: manage` is not the power to change users and roles.
+    # Rule 4 - `setup: manage` is not the power to change users and roles.
     assert (
         _client(_user("floor_warehouse", warehouse))
         .patch(f"/api/auth/admin/roles/{cashier.pk}", {"name": "Bypassed"}, format="json")
@@ -601,7 +610,7 @@ EXPECTED_EXCEPTIONS = {
     "accounts.head_office_value_actors_floor",
     # #173, the third and the decision this list exists to force. The access
     # matrix became editable, so rule 2 ("a store never posts value to the
-    # books") needed a *cell* floor as well as the engine one — and the matrix
+    # books") needed a *cell* floor as well as the engine one - and the matrix
     # is keyed by role while store-ness is a property of scope, so the two store
     # seats have to be named. The other two floors reuse the lists already here
     # rather than retyping them, which is why only one name is new.

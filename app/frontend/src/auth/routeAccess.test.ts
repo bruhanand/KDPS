@@ -202,7 +202,7 @@ describe("canAccess", () => {
   it("the Access grid sits on the same Setup rung as Users & Roles (#173)", () => {
     // Reading who may do what is the top Setup rung, and the four floor rules
     // mean only Owner and IT Admin can ever hold it. The screen is not the
-    // boundary — the server refuses the edit too — but a person who cannot
+    // boundary - the server refuses the edit too - but a person who cannot
     // administer access has no business browsing the grid either.
     expect(canAccess("/setup/access", owner)).toBe(true);
     expect(canAccess("/setup/access", admin)).toBe(true);

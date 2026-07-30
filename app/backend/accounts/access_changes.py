@@ -9,6 +9,8 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from django.utils import timezone
 
+from accounts.floors import describe_floors, floor_violations
+from accounts.matrix import stored_row
 from accounts.models import AccessChange, ActorPolicy, Role, User
 from accounts.role_lists import ACCESS_ADMINISTRATORS
 from accounts.serializers import (
@@ -39,7 +41,7 @@ SERIALIZERS = {
 #: Payload keys that are evidence rather than columns. The appliers below write
 #: every key of a payload onto the row, so an annotation has to be visibly not a
 #: field: the leading underscore says "kept for the audit trail, never applied".
-#: `_cells` is the access matrix's per-cell diff (#173) — the old and new rung of
+#: `_cells` is the access matrix's per-cell diff (#173) - the old and new rung of
 #: each section an edit moved, which the flat `section_access` blob cannot show.
 ANNOTATION_PREFIX = "_"
 
@@ -130,7 +132,7 @@ def _target(model: type, change: AccessChange) -> Any:
 
 
 def _columns(change: AccessChange) -> dict[str, Any]:
-    """The payload minus its audit annotations — what actually lands on the row."""
+    """The payload minus its audit annotations - what actually lands on the row."""
     return {
         key: value for key, value in change.payload.items() if not key.startswith(ANNOTATION_PREFIX)
     }
@@ -167,11 +169,46 @@ def _apply_columns(model: type) -> Callable[[AccessChange], None]:
     return apply
 
 
+def _apply_role(change: AccessChange) -> None:
+    """A role is columns, checked twice - once when proposed, once on the way in.
+
+    Validation at proposal time is not enough for this one resource. A proposal
+    can sit in the inbox for days, and three things can move underneath it: the
+    row it targets (another administrator's change lands first), the row's
+    ``code`` (which is what the money floor keys on), and the floor itself
+    (ratified in code, so a release can tighten it). Applying a frozen payload
+    without asking again is how a floor gets crossed by a change that was legal
+    when it was written.
+    """
+    role = _target(Role, change)
+    payload = _columns(change)
+    access = payload.get("section_access")
+    code = str(payload.get("code") or role.code)
+
+    before = change.payload.get(f"{ANNOTATION_PREFIX}before")
+    if before is not None and stored_row(role) != before:
+        raise AccessChangeError(
+            f"{role.name} has changed since this was proposed. "
+            "Open the access grid again and re-make the change on the current row."
+        )
+
+    for key, value in payload.items():
+        setattr(role, key, value)
+
+    crossed = floor_violations(code, access) if access is not None else []
+    if crossed:
+        raise AccessChangeError(
+            "This change now crosses a money floor rule and cannot be applied. "
+            + " ".join(describe_floors(crossed))
+        )
+    role.save()
+
+
 #: One entry per resource, keyed the same way ``SERIALIZERS`` is, so proposing
 #: and applying a new kind of access change is one pair of lines rather than a
 #: branch somebody has to remember to add.
 APPLIERS: dict[str, Callable[[AccessChange], None]] = {
-    AccessChange.Resource.ROLE: _apply_columns(Role),
+    AccessChange.Resource.ROLE: _apply_role,
     AccessChange.Resource.USER: _apply_user,
     AccessChange.Resource.ACTOR_POLICY: _apply_columns(ActorPolicy),
     AccessChange.Resource.APPROVAL_POLICY: _apply_columns(ApprovalPolicy),

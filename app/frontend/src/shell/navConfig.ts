@@ -311,7 +311,7 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Users & Roles", to: "/setup/users", minCapability: "manage" },
       // The access matrix as its own screen (#173): Users & Roles edits one role
       // at a time, this compares all nine at once and is where the money floors
-      // are visible. Same rung — reading who may do what is Setup's top rung.
+      // are visible. Same rung - reading who may do what is Setup's top rung.
       { label: "Access", to: "/setup/access", minCapability: "manage" },
       { label: "Audit Log", to: "/setup/audit", planned: true },
       { label: "Settings", to: "/setup/settings", planned: true },

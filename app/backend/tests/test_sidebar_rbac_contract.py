@@ -277,8 +277,8 @@ def test_the_payload_follows_a_retuned_row_not_the_seed_table(db):
     Every other assertion in this file builds a role *from* ``rbac_matrix`` and
     then checks the payload against ``rbac_matrix``, which agrees with itself
     whether or not `/me` ever reads the database. This one retunes the stored
-    row away from the table in both directions — a section opened, a section
-    closed — and requires the payload to follow the row.
+    row away from the table in both directions - a section opened, a section
+    closed - and requires the payload to follow the row.
     """
     role = _make_role("store_staff")
     user = _make_user("retuned_cashier", role)
@@ -294,7 +294,7 @@ def test_the_payload_follows_a_retuned_row_not_the_seed_table(db):
     assert "booking" not in retuned["capabilities"]
     assert retuned["capabilities"]["setup"] == "operate"
     assert [s["code"] for s in retuned["sections"] if s["code"] == "setup"] == ["setup"]
-    # And the table is untouched — the row moved, not the seed.
+    # And the table is untouched - the row moved, not the seed.
     assert section_access_for("store_staff")["booking"]["capability"] == "view"
 
 

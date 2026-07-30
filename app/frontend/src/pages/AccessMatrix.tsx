@@ -1,6 +1,6 @@
-// Setup → Access (#173). Who may do what, as a grid an administrator edits.
+// Setup -> Access (#173). Who may do what, as a grid an administrator edits.
 //
-// Sections down, roles across — the shape of the ratified RBAC sheet, so the
+// Sections down, roles across - the shape of the ratified RBAC sheet, so the
 // answer to "what changes if I move this?" is one column, readable at a glance.
 // Everything on screen arrives from `GET /auth/admin/access-matrix`: the
 // sections, the rungs of the ladder, the roles, the locked cells and the reason
@@ -9,8 +9,8 @@
 // (Rule 12).
 //
 // Editing is one role at a time because the endpoint replaces one role's row:
-// pick a column, move its rungs, propose. The save is a *proposal* — changing a
-// role is never one person's act (floor rule 4) — so the screen says so rather
+// pick a column, move its rungs, propose. The save is a *proposal* - changing a
+// role is never one person's act (floor rule 4) - so the screen says so rather
 // than pretending the change is live.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Lock, Save, ShieldCheck, X } from "lucide-react";
@@ -47,24 +47,24 @@ interface RoleRow {
 
 interface Matrix {
   sections: SectionMeta[];
-  capabilities: string[];
+  /** The ladder, in order, each rung with the server's own word for it. */
+  capabilities: SectionMeta[];
   rules: { rule: number; text: string }[];
   roles: RoleRow[];
 }
 
 const EMPTY: Matrix = { sections: [], capabilities: [], rules: [], roles: [] };
 
-/** The ladder in words, so a grid of "operate" does not read as jargon. */
-const RUNG_WORDS: Record<string, string> = {
-  none: "No access",
-  view: "View only",
-  operate: "Do the work",
-  approve: "Approve",
-  manage: "Full control",
-};
+/** The server's word for a rung. No fallback table lives here on purpose: the
+ *  ladder and its wording are one payload, so adding a rung is a backend
+ *  change and nothing else (Rule 12). */
+function rungLabel(matrix: Matrix, capability: string): string {
+  return matrix.capabilities.find((c) => c.code === capability)?.label ?? capability;
+}
 
-function rung(capability: string): string {
-  return RUNG_WORDS[capability] ?? capability;
+/** Where a rung sits on the ladder - the ladder is the payload's own order. */
+function rungIndex(matrix: Matrix, capability: string): number {
+  return matrix.capabilities.findIndex((c) => c.code === capability);
 }
 
 export function AccessMatrixPage() {
@@ -112,28 +112,26 @@ export function AccessMatrixPage() {
     setDraft({});
   }
 
-  /** What the column shows: the draft while editing it, the stored row otherwise. */
-  function shown(row: RoleRow, section: string): string {
-    if (row.code === editing) return draft[section] ?? "none";
+  /** The rung a role holds on a section, as stored. */
+  function stored(row: RoleRow, section: string): string {
     return row.section_access[section]?.capability ?? "none";
   }
 
-  function moved(row: RoleRow, section: string): boolean {
-    return (
-      row.code === editing && shown(row, section) !== (row.section_access[section]?.capability ?? "none")
-    );
+  /** What the column shows: the draft while editing it, the stored row otherwise. */
+  function shown(row: RoleRow, section: string): string {
+    return row.code === editing ? (draft[section] ?? "none") : stored(row, section);
   }
 
+  function moved(row: RoleRow, section: string): boolean {
+    return row.code === editing && shown(row, section) !== stored(row, section);
+  }
+
+  /** The cells the open column has moved - what the Propose button counts. */
   const changes = useMemo(() => {
     if (!role) return [];
     return matrix.sections
-      .filter((s) => moved(role, s.code))
-      .map((s) => ({
-        section: s.label,
-        from: role.section_access[s.code]?.capability ?? "none",
-        to: draft[s.code],
-      }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      .filter((s) => (draft[s.code] ?? "none") !== stored(role, s.code))
+      .map((s) => ({ section: s.label, from: stored(role, s.code), to: draft[s.code] }));
   }, [role, draft, matrix.sections]);
 
   function propose() {
@@ -160,7 +158,7 @@ export function AccessMatrixPage() {
       .finally(() => setSaving(false));
   }
 
-  // Every locked cell on the grid, said once in full — the greyed square carries
+  // Every locked cell on the grid, said once in full - the greyed square carries
   // the reason in its tooltip, and a tooltip is not an answer for someone who
   // cannot hover.
   const lockNotes = useMemo(() => {
@@ -273,19 +271,27 @@ export function AccessMatrixPage() {
                     const lock = r.locked[s.code];
                     const held = shown(r, s.code);
                     const cellId = `access-cell-${r.code}-${s.code}`;
-                    // A cell is locked when the floor forbids the rung above the
-                    // one it caps — so a role capped at `operate` still chooses
-                    // freely between none, view and operate.
+                    // A locked cell keeps every rung *below* the floor's ceiling
+                    // - a role capped at "do the work" still chooses freely
+                    // between no access, view only and that.
                     const capped = Boolean(lock);
+                    const ceiling = capped ? rungIndex(matrix, lock.max_capability) : -1;
+                    // The ratified sheet wording ("Expenses only (create)") is the
+                    // "why this role sees what it sees"; the floor's reason wins
+                    // the tooltip where there is one, because it answers the
+                    // question a greyed square provokes.
+                    const why = capped
+                      ? `${lock.rule} ${lock.reason}`
+                      : r.section_access[s.code]?.label || undefined;
                     if (r.code !== editing) {
                       return (
                         <td
                           key={r.code}
                           className={capped ? "matrix-locked" : ""}
-                          title={capped ? `${lock.rule} ${lock.reason}` : undefined}
+                          title={why}
                           data-testid={cellId}
                         >
-                          {capped && <Lock size={11} />} {rung(held)}
+                          {capped && <Lock size={11} />} {rungLabel(matrix, held)}
                         </td>
                       );
                     }
@@ -293,7 +299,7 @@ export function AccessMatrixPage() {
                       <td
                         key={r.code}
                         className={`matrix-editing ${moved(r, s.code) ? "matrix-moved" : ""}`}
-                        title={capped ? `${lock.rule} ${lock.reason}` : undefined}
+                        title={why}
                         data-testid={cellId}
                       >
                         <select
@@ -303,15 +309,10 @@ export function AccessMatrixPage() {
                           data-testid={`access-select-${r.code}-${s.code}`}
                         >
                           {matrix.capabilities
-                            .filter(
-                              (cap) =>
-                                !capped ||
-                                matrix.capabilities.indexOf(cap) <=
-                                  matrix.capabilities.indexOf(lock.max_capability),
-                            )
-                            .map((cap) => (
+                            .filter((_cap, index) => !capped || index <= ceiling)
+                            .map(({ code: cap, label: word }) => (
                               <option key={cap} value={cap}>
-                                {rung(cap)}
+                                {word}
                               </option>
                             ))}
                         </select>
@@ -350,7 +351,7 @@ export function AccessMatrixPage() {
           </ul>
           <div className="muted-cell">
             Two of them are not squares on this grid: nobody approves their own document, and no
-            role change — including one made here — takes effect until a second Owner or IT Admin
+            role change - including one made here - takes effect until a second Owner or IT Admin
             approves it.
           </div>
         </div>

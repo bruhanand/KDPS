@@ -1,8 +1,8 @@
-"""Issue #173 — an admin edits the access matrix; the money floors do not move.
+"""Issue #173 - an admin edits the access matrix; the money floors do not move.
 
 These stay at the public seams: an HTTP request is accepted, refused or parked
 for a second person, and the stored row either moved or did not. What they
-deliberately do not assert is the shape of ``accounts.floors`` — the floor is a
+deliberately do not assert is the shape of ``accounts.floors`` - the floor is a
 promise about answers, and a test that reads the constant would pass on a floor
 that had stopped binding.
 """
@@ -66,7 +66,7 @@ def admin(db) -> User:
 
 @pytest.fixture
 def checker(db) -> User:
-    """The second access administrator — rule 4's other half."""
+    """The second access administrator - rule 4's other half."""
     return _user("matrix_checker", _role("owner"))
 
 
@@ -77,7 +77,16 @@ def test_the_grid_is_roles_by_sections_plus_the_floor(admin):
     body = _client(admin).get(MATRIX_URL).json()
 
     assert [s["code"] for s in body["sections"]] == SECTION_CODES
-    assert body["capabilities"] == [CAP_NONE, CAP_VIEW, CAP_OPERATE, "approve", CAP_MANAGE]
+    # The ladder arrives with its wording, so the grid keeps no copy of what a
+    # rung means and adding one is a backend change only.
+    assert [c["code"] for c in body["capabilities"]] == [
+        CAP_NONE,
+        CAP_VIEW,
+        CAP_OPERATE,
+        "approve",
+        CAP_MANAGE,
+    ]
+    assert all(c["label"] for c in body["capabilities"])
     rows = {role["code"]: role for role in body["roles"]}
     assert set(rows) == {"it_admin", "warehouse"}
     # Every cell is stated, so "no access" is on the screen rather than inferred.
@@ -120,7 +129,7 @@ def test_the_grid_shows_the_stored_row_not_the_seed_table(admin):
 
 def test_a_short_stored_row_reads_as_no_access_not_as_a_hole(admin):
     """A hand-made role, or one seeded before a section existed, states 13 cells
-    on the grid all the same — and the missing ones read `none`, the same
+    on the grid all the same - and the missing ones read `none`, the same
     fail-closed answer the gate gives them."""
     Role.objects.create(code="hand_made", name="Hand made", section_access={})
 
@@ -141,13 +150,13 @@ def test_the_grid_is_closed_to_a_role_without_setup_manage(db):
 @pytest.mark.parametrize(
     ("role_code", "section", "capability", "expected_ceiling"),
     [
-        # Rule 2 — a store seat may raise its own expenses, never the books.
+        # Rule 2 - a store seat may raise its own expenses, never the books.
         ("store_staff", "money", CAP_MANAGE, CAP_OPERATE),
         ("store_manager", "money", "approve", CAP_OPERATE),
-        # Rule 3 — full Money is Owner's and Accounts'.
+        # Rule 3 - full Money is Owner's and Accounts'.
         ("warehouse", "money", CAP_MANAGE, "approve"),
         ("it_admin", "money", CAP_MANAGE, "approve"),
-        # Rule 4 — full Setup is the power to grant power.
+        # Rule 4 - full Setup is the power to grant power.
         ("warehouse", "setup", CAP_MANAGE, "approve"),
         ("data_steward", "setup", CAP_MANAGE, "approve"),
     ],
@@ -191,7 +200,7 @@ def test_two_crossed_floors_are_reported_together_not_one_at_a_time(admin):
 
 
 def test_the_tighter_of_two_floors_on_one_cell_wins(admin):
-    """Money is capped twice for a store seat — at `approve` by rule 3 and at
+    """Money is capped twice for a store seat - at `approve` by rule 3 and at
     `operate` by rule 2. Offering `approve` would be offering a rung the server
     refuses, so the grid and the refusal must both say `operate`."""
     _role("store_staff")
@@ -248,7 +257,7 @@ def test_an_edit_waits_for_a_second_access_administrator(admin, checker):
     role.refresh_from_db()
     assert role.section_access["transfer"]["capability"] == CAP_OPERATE
 
-    # The proposer is not the approver — rule 1, on this document too.
+    # The proposer is not the approver - rule 1, on this document too.
     approval_id = proposed.json()["approval_id"]
     assert (
         _client(admin)
@@ -286,7 +295,7 @@ def test_the_change_is_logged_cell_by_cell_old_to_new(admin, checker):
     assert change.created_by == admin
     assert change.resource == AccessChange.Resource.ROLE
     assert {c["section"] for c in change.payload["_cells"]} == {"sell", "transfer"}
-    assert "transfer operate→approve" in change.summary
+    assert "transfer operate->approve" in change.summary
 
     _client(checker).post(
         f"/api/approvals/{proposed.json()['approval_id']}/decide",
@@ -297,7 +306,7 @@ def test_the_change_is_logged_cell_by_cell_old_to_new(admin, checker):
     change.refresh_from_db()
     assert change.applied_by == checker
     assert change.applied_at is not None
-    # The diff survives application — it is the audit trail, not an instruction.
+    # The diff survives application - it is the audit trail, not an instruction.
     assert change.payload["_cells"]
 
 
@@ -335,7 +344,7 @@ def test_an_edit_that_changes_nothing_asks_nobody_to_approve_it(admin):
 
 
 def test_a_section_left_out_of_the_body_is_removed_not_kept(admin, checker):
-    """PUT replaces the row. An omission has to narrow access — the other
+    """PUT replaces the row. An omission has to narrow access - the other
     reading (keep what was there) would make a half-sent form silently grant
     whatever the role held before."""
     role = _role("warehouse")
@@ -357,9 +366,12 @@ def test_a_section_left_out_of_the_body_is_removed_not_kept(admin, checker):
     assert set(role.section_access) == set(SECTION_CODES)
 
 
-def test_a_retuned_cell_loses_the_sheet_sentence_it_no_longer_describes(admin, checker):
+def test_a_retuned_cell_loses_the_sheet_sentence_but_its_neighbours_keep_theirs(admin, checker):
+    """The ratified sheet wording is the "why this role sees what it sees", so
+    an edit erases it only where it has stopped being true."""
     role = _role("store_staff")
     assert role.section_access["money"]["label"] == "Expenses only (create)"
+    assert role.section_access["sell"]["label"] == "Create (bill, return, customer)"
 
     proposed = _client(admin).put(
         _access_url("store_staff"),
@@ -374,6 +386,95 @@ def test_a_retuned_cell_loses_the_sheet_sentence_it_no_longer_describes(admin, c
 
     role.refresh_from_db()
     assert role.section_access["money"] == {"capability": CAP_VIEW, "label": "View only"}
+    assert role.section_access["sell"]["label"] == "Create (bill, return, customer)"
+
+
+# --- PUT: the row can move underneath a pending proposal -------------------
+def test_a_proposal_is_refused_if_the_role_moved_since_it_was_written(admin, checker):
+    """The grid an administrator edited is a snapshot. A whole-row replacement
+    applied blind would silently revert whatever a second administrator changed
+    in the meantime, on cells the first one never touched."""
+    role = _role("warehouse")
+    proposed = _client(admin).put(
+        _access_url("warehouse"),
+        {"section_access": _row("warehouse", transfer="approve")},
+        format="json",
+    )
+    assert proposed.status_code == 202
+
+    # Somebody else moves a different cell first.
+    role.section_access["reports"] = {"capability": CAP_NONE, "label": "Closed"}
+    role.save(update_fields=["section_access"])
+
+    decided = _client(checker).post(
+        f"/api/approvals/{proposed.json()['approval_id']}/decide",
+        {"action": "approve"},
+        format="json",
+    )
+
+    assert decided.status_code == 400
+    assert "changed since" in str(decided.json()).lower()
+    role.refresh_from_db()
+    assert role.section_access["reports"]["capability"] == CAP_NONE
+    assert role.section_access["transfer"]["capability"] == CAP_OPERATE
+
+
+def test_a_floor_tightened_after_a_proposal_still_refuses_it(admin, checker, monkeypatch):
+    """Floors live in code and a release can tighten one. A proposal written
+    while the cell was legal must not walk in behind the new floor."""
+    from accounts import floors
+
+    role = _role("warehouse")
+    assert role.section_access["stock"]["capability"] == CAP_MANAGE  # legal today
+
+    # An ordinary edit somewhere else. Its payload is the whole row, `stock`
+    # included, which is what the tightened floor will catch on the way in.
+    proposed = _client(admin).put(
+        _access_url("warehouse"),
+        {"section_access": _row("warehouse", offers_price=CAP_OPERATE)},
+        format="json",
+    )
+    assert proposed.status_code == 202
+
+    tightened = floors.Floor(
+        rule=3,
+        section="stock",
+        locked_rung=CAP_MANAGE,
+        held_by=frozenset({"owner"}),
+        applies_to=None,
+        reason="Ratified after this proposal was written.",
+    )
+    monkeypatch.setattr(floors, "FLOORS", (*floors.FLOORS, tightened))
+
+    decided = _client(checker).post(
+        f"/api/approvals/{proposed.json()['approval_id']}/decide",
+        {"action": "approve"},
+        format="json",
+    )
+
+    assert decided.status_code == 400
+    assert "money floor" in str(decided.json()).lower()
+    role.refresh_from_db()
+    assert role.section_access["offers_price"]["capability"] == CAP_VIEW  # unmoved
+
+
+def test_renaming_a_role_onto_a_floor_is_refused(admin):
+    """The floor keys on the role code, so a rename is an access change too:
+    calling a full-Money role `warehouse` would leave a row nobody could have
+    written directly."""
+    role = Role.objects.create(
+        code="finance_helper",
+        name="Finance helper",
+        section_access={"money": {"capability": CAP_MANAGE, "label": "Full"}},
+    )
+
+    response = _client(admin).patch(
+        f"/api/auth/admin/roles/{role.pk}", {"code": "warehouse"}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert "named head-office human" in str(response.json())
+    assert not AccessChange.objects.exists()
 
 
 # --- PUT: the other refusals ----------------------------------------------
@@ -420,15 +521,22 @@ def test_an_invented_setting_is_refused_out_loud(admin):
     assert "floor rules" in response.json()["error"]
 
 
-def test_setup_manage_alone_does_not_open_the_editor(db):
-    """Both gates are asked. Rule 4 names Owner and IT Admin; the Setup rung is
-    the ladder underneath it, and holding one without the other is not enough."""
+def test_setup_manage_alone_opens_neither_half_of_the_editor(db):
+    """Both gates are asked, on the read as well as the write.
+
+    Rule 4 names Owner and IT Admin; the Setup rung is the ladder underneath it,
+    and holding one without the other is not enough. The floor means no such
+    role can exist through the editor - this writes one straight onto the
+    database, the way a legacy row or a hand-edit would, and both halves still
+    refuse. Who may do what across the whole business, with head counts, is the
+    same secret the roles list keeps.
+    """
     warehouse = _role("warehouse")
     warehouse.section_access["setup"] = {"capability": CAP_MANAGE, "label": "Granted"}
     warehouse.save(update_fields=["section_access"])
     granted = _user("setup_only", warehouse)
 
-    assert _client(granted).get(MATRIX_URL).status_code == 200  # reading is the Setup rung
+    assert _client(granted).get(MATRIX_URL).status_code == 403
     assert (
         _client(granted)
         .put(_access_url("warehouse"), {"section_access": _row("warehouse")}, format="json")
