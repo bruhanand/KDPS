@@ -91,6 +91,11 @@ It stops at the PR and never merges. Run one issue per session - but sessions no
 each other: every Conductor workspace gets its own Postgres, its own ports and its own database
 (`npm run dev:where`), so issues can be implemented and browser-QA'd in parallel.
 
+Because issues run in parallel, main may move while you work. Before pushing, rebase your branch onto
+`origin/main` and re-run the full test suite after the rebase - especially the RBAC and nav contract
+tests - even if none of your own files conflicted. Two individually green PRs have broken main at those
+tests before (the #146 hotfix); rebase-then-retest catches that class before the PR does.
+
 ### Issue tracker
 
 Issues live in **GitHub Issues** on `bruhanand/KDPS`, used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
