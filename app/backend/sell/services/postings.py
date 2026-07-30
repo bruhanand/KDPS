@@ -207,27 +207,33 @@ def supplier_of(*, barcode: str, season: str, brand: str) -> Vendor | None:
     The lookup is deliberately not store-scoped. A cohort is a (barcode, season)
     pair for the whole chain, and by the time it sells the piece may have been
     transferred twice - the store holding it has no inward of its own to read, but
-    the cohort's original one is still in the ledger.
+    the cohort's inwards are still in the ledger.
+
+    All of the cohort's booked inwards are read, not the latest one, because the
+    pieces are indistinguishable once they share a cohort: two vendors' inwards on
+    one cohort means nobody can say whose piece just sold, and the latest booking
+    is not an answer, it is a guess with a counterparty on it. A payable to the
+    wrong vendor keeps the trial balance at zero and the subledger tie green, so
+    nothing downstream would ever catch it - the line defers to a human instead,
+    exactly as it does when the *brand's* suppliers are the ambiguity.
 
     Falling back to the brand's supplier when there is only one is the paper-era
     case: a piece whose PT predates the system, or a booking-less direct receipt.
     Where the brand has two suppliers and the piece has no inward, nothing here
-    can choose between them, and `None` sends the line to the deferred queue for a
-    human rather than picking one.
+    can choose between them either.
     """
-    inward = (
+    vendor_ids = set(
         StockLedgerEntry.objects.filter(
             sku_code=barcode,
             kind=StockLedgerEntry.Kind.PT_INWARD,
             booking__isnull=False,
             **({"season": season} if season else {}),
-        )
-        .select_related("booking__vendor")
-        .order_by("-id")
-        .first()
+        ).values_list("booking__vendor_id", flat=True)
     )
-    if inward is not None and inward.booking is not None:
-        return inward.booking.vendor
+    if len(vendor_ids) > 1:
+        return None
+    if vendor_ids:
+        return Vendor.objects.get(pk=vendor_ids.pop())
     suppliers = list(Vendor.objects.filter(brands__name=brand, is_active=True).distinct()[:2])
     return suppliers[0] if len(suppliers) == 1 else None
 

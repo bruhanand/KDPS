@@ -404,11 +404,19 @@ def _returned_so_far(original: SaleLine) -> tuple[int, int]:
     the same "none returned yet", and both refund - a double refund that no
     database constraint downstream would catch, because each bill is individually
     valid. The credit-note path locks for the same reason.
+
+    A cancelled bill's returns are not counted: the books say that exchange never
+    happened, and the customer is still holding the piece and the receipt.
+    Counting them would close the refund path over a bill the books themselves
+    disown - the next legitimate return would be refused ALREADY_RETURNED, and
+    the remainder arithmetic below would under-pay the one after that.
     """
     SaleLine.objects.select_for_update().filter(pk=original.pk).first()
-    totals = SaleLine.objects.filter(
-        original_line=original, direction=SaleLine.Direction.RETURN
-    ).aggregate(qty=Sum("qty"), paise=Sum("net_paise"))
+    totals = (
+        SaleLine.objects.filter(original_line=original, direction=SaleLine.Direction.RETURN)
+        .exclude(sale__docstatus=DocStatus.CANCELLED)
+        .aggregate(qty=Sum("qty"), paise=Sum("net_paise"))
+    )
     return int(totals["qty"] or 0), int(totals["paise"] or 0)
 
 
