@@ -1,6 +1,14 @@
+// The rupee ⇄ paise boundary (#171).
+//
+// `formatINR` has been read from since K9; `rupeesToPaise` is its inverse, added
+// with the store-target grid, and it is the only place in the PWA that turns
+// something a person typed into a money value the server will store. So the one
+// property worth holding it to is that it never invents precision: a float
+// multiply would send `2551.0000000000005`, and the money column refuses that
+// rather than rounding it (ADR-0004).
 import { describe, expect, it } from "vitest";
 
-import { formatINR, formatRupeeAmount } from "./format";
+import { formatINR, formatRupeeAmount, paiseToRupees, rupeesToPaise } from "./format";
 
 describe("formatINR", () => {
   it("groups in lakhs and crores, and drops empty paise", () => {
@@ -27,5 +35,78 @@ describe("formatRupeeAmount", () => {
   it("hands back anything it cannot read, rather than showing ₹0", () => {
     expect(formatRupeeAmount("")).toBe("");
     expect(formatRupeeAmount("n/a")).toBe("n/a");
+  });
+});
+
+describe("rupeesToPaise", () => {
+  it("reads whole rupees", () => {
+    expect(rupeesToPaise("2500000")).toBe(250000000);
+  });
+
+  it("reads the paise a person typed", () => {
+    expect(rupeesToPaise("25.51")).toBe(2551);
+    expect(rupeesToPaise("25.5")).toBe(2550);
+    expect(rupeesToPaise("0.01")).toBe(1);
+  });
+
+  it("never lands on a fraction of a paise", () => {
+    // The float route (`Number(text) * 100`) fails on these; digit arithmetic
+    // does not, and an exact integer is the whole point.
+    for (const rupees of ["25.51", "1.13", "8.29", "104.15", "1234567.89"]) {
+      const paise = rupeesToPaise(rupees);
+      expect(Number.isInteger(paise)).toBe(true);
+    }
+    expect(rupeesToPaise("1234567.89")).toBe(123456789);
+  });
+
+  it("accepts the grouping it renders", () => {
+    // ₹25,00,000 is what the grid shows, so it is what gets pasted back in.
+    expect(rupeesToPaise("25,00,000")).toBe(250000000);
+    expect(rupeesToPaise(" 2,500 ")).toBe(250000);
+  });
+
+  it("treats zero as an amount, because a shut store's target is nought", () => {
+    expect(rupeesToPaise("0")).toBe(0);
+  });
+
+  it("refuses what is not an amount rather than guessing", () => {
+    for (const text of ["", "  ", "-1", "25 lakh", "1e6", "abc", "25.", ".5", "25.123", "₹25"]) {
+      expect(rupeesToPaise(text)).toBeNull();
+    }
+  });
+
+  it("round-trips what formatINR renders", () => {
+    for (const paise of [0, 1, 2550, 250000000, 123456789]) {
+      const rendered = formatINR(paise).replace("₹", "");
+      expect(rupeesToPaise(rendered)).toBe(paise);
+    }
+  });
+});
+
+describe("paiseToRupees", () => {
+  it("drops the paise when there are none", () => {
+    expect(paiseToRupees(250000000)).toBe("2500000");
+    expect(paiseToRupees(0)).toBe("0");
+  });
+
+  it("keeps both digits when there are some", () => {
+    expect(paiseToRupees(2551)).toBe("25.51");
+    expect(paiseToRupees(2550)).toBe("25.50");
+    expect(paiseToRupees(1)).toBe("0.01");
+  });
+
+  it("is the exact inverse of rupeesToPaise", () => {
+    // The property that matters: this fills the edit box, and whatever is in the
+    // box is what gets converted back and sent. A lossy pair here would let a
+    // correction that changed nothing still move the number.
+    for (const paise of [0, 1, 99, 100, 2550, 2551, 250000000, 123456789, 999999999999]) {
+      expect(rupeesToPaise(paiseToRupees(paise))).toBe(paise);
+    }
+  });
+
+  it("never renders a float artefact", () => {
+    for (let paise = 0; paise < 2000; paise += 7) {
+      expect(paiseToRupees(paise)).toMatch(/^\d+(\.\d{2})?$/);
+    }
   });
 });

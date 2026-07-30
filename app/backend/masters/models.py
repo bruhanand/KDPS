@@ -72,6 +72,55 @@ class Store(TimeStampedModel):
         return f"{self.code} · {self.name}"
 
 
+class StoreTarget(TimeStampedModel):
+    """The rupee number a store is asked to sell in one month (#171, D10).
+
+    Set at HO by the Operations Head and read by the store Dashboard's manager
+    row (month-to-date vs target). A master, not a document: nothing posts and
+    nothing balances, so setting it again *corrects* it rather than appending a
+    second answer - which is what the unique key below makes true, and why the
+    endpoint is a PUT.
+
+    `month` is the month itself, stored as its first day. The CHECK is what keeps
+    that honest: without it two callers sending the 15th and the 20th of August
+    would create two rows that both mean August, and the Dashboard would have to
+    pick one.
+    """
+
+    store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name="targets")
+    month = models.DateField(help_text="The month, as its first day (2026-08-01 = August 2026).")
+    target_paise = MoneyField(
+        help_text="Net sales asked of this store for the month, in integer paise. "
+        "Nought is a real answer - a store shut for the month is not an unset target."
+    )
+    set_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="store_targets_set",
+        help_text="Who last set this number. The only route from a Dashboard figure "
+        "back to the person who chose it.",
+    )
+
+    class Meta:
+        ordering = ["store__code", "month"]
+        constraints = [
+            models.UniqueConstraint(fields=["store", "month"], name="uq_storetarget_store_month"),
+            models.CheckConstraint(
+                condition=models.Q(month__day=1),
+                name="ck_storetarget_month_is_first_of_month",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(target_paise__gte=0),
+                name="ck_storetarget_target_not_negative",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.store.code} · {self.month:%b %Y}"
+
+
 class Season(TimeStampedModel):
     """The selling period — a name, never a date (Open → EOSS → Closed)."""
 

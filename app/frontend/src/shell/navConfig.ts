@@ -239,6 +239,15 @@ export const SECTIONS: NavSectionDef[] = [
     // everyone else.
     items: [
       { label: "Payments", to: "/money/payments", planned: true, minCapability: "manage" },
+      // The store × month rupee target the Dashboard is measured against (#171).
+      // It is a master, so Setup is where a reader might look for it - but the
+      // gate it answers to is `money: manage`, and a nav item's gate *is* its
+      // section's (routeAccess derives one from the other). Filed under Setup it
+      // would show the Data Steward a screen the API refuses them, which is the
+      // sidebar-lies-about-the-API failure #85 exists to prevent. Reading it
+      // needs only the Money section, so the item carries no `minCapability`:
+      // a store person sees their own store's number and the cells are text.
+      { label: "Store Targets", to: "/money/store-targets" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
       { label: "Bank", to: "/money/bank", planned: true, minCapability: "manage" },
