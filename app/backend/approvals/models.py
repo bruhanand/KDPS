@@ -68,6 +68,14 @@ class ApprovalRoute(TimeStampedModel):
     #:
     #: ``order``                        1-based, for humans; position decides.
     #: ``roles``                        role codes that may clear this step.
+    #: ``roles_from_policy``            instead of a list of its own, this step's
+    #:                                  approvers are whatever the family's live
+    #:                                  ``ApprovalPolicy`` says at this value.
+    #:                                  Without it a route would freeze a second
+    #:                                  copy of the approver list, and retuning
+    #:                                  the policy in Setup would silently do
+    #:                                  nothing (Rule 12 wants one editable
+    #:                                  source, not two that can disagree).
     #: ``label``                        what the screen calls it.
     #: ``later_step_may_short_circuit`` this step's approvers may also close
     #:                                  every step still waiting below them.
@@ -78,7 +86,8 @@ class ApprovalRoute(TimeStampedModel):
     )
     steps = models.JSONField(
         default=list,
-        help_text="Ordered steps: [{order, roles, label, later_step_may_short_circuit}].",
+        help_text="Ordered steps: "
+        "[{order, roles | roles_from_policy, label, later_step_may_short_circuit}].",
     )
 
     class Meta:
@@ -86,9 +95,23 @@ class ApprovalRoute(TimeStampedModel):
         ordering = ["kind"]
 
     def __str__(self) -> str:
-        return f"{self.kind} route ({len(self.ordered_steps())} steps)"
+        return f"{self.kind} route ({self.step_count()} steps)"
 
     # -- reading the chain ---------------------------------------------------
+
+    @staticmethod
+    def _position(step: dict[str, Any]) -> int:
+        """A step's place in the queue, from data that may be anything.
+
+        ``order`` is hand-written into a migration or (one day) a Setup screen,
+        so it can arrive as a string or missing entirely. A chain that raises on
+        read would 500 every inbox in the system, which is a far worse answer
+        than falling back to the order it was stored in.
+        """
+        try:
+            return int(step.get("order", 0))
+        except (TypeError, ValueError):
+            return 0
 
     def ordered_steps(self) -> list[dict[str, Any]]:
         """The steps in the order they are walked.
@@ -97,11 +120,21 @@ class ApprovalRoute(TimeStampedModel):
         data, and a chain read out of sequence would hand step 2's approver
         step 1's authority.
         """
-        steps = self.steps or []
-        return sorted(steps, key=lambda step: step.get("order", 0))
+        return sorted(self.steps or [], key=self._position)
 
     def step_count(self) -> int:
         return len(self.ordered_steps())
+
+    def clamped_step(self, index: int) -> int:
+        """``index``, brought back inside a chain that may have been shortened.
+
+        A route is editable data, and dropping a step out of one leaves every
+        request already past that point pointing at nothing. Without this they
+        would deadlock — no step to act on, so no role can ever decide them
+        again. Landing on the last step instead means the chain is *shorter*
+        than the maker was promised, never longer, and it can still be finished.
+        """
+        return max(0, min(index, self.step_count() - 1))
 
     def label_at(self, index: int) -> str:
         steps = self.ordered_steps()
@@ -109,26 +142,56 @@ class ApprovalRoute(TimeStampedModel):
             return str(steps[index].get("label") or f"Step {index + 1}")
         return ""
 
-    def active_roles(self, from_index: int) -> list[str]:
+    def roles_at(self, index: int, value_paise: int | None = 0) -> list[str]:
+        """Who may clear one step — its own list, or the live policy's.
+
+        A ``roles_from_policy`` step defers to ``ApprovalPolicy`` so the value
+        band and the Setup screen keep working on a routed family; a missing
+        policy row yields nobody, which is the closed gate ``_policy`` already
+        means elsewhere. An unset value reads as 0, which the policy escalates —
+        the same fail-closed reading it gives an unpriced document.
+        """
+        steps = self.ordered_steps()
+        if not 0 <= index < len(steps):
+            return []
+        step = steps[index]
+        if step.get("roles_from_policy"):
+            policy = ApprovalPolicy.objects.filter(kind=self.kind).first()
+            return policy.approver_roles_for(value_paise or 0) if policy else []
+        return [str(role) for role in step.get("roles") or []]
+
+    def _reachable_steps(self, from_index: int) -> list[int]:
+        """The steps someone standing at ``from_index`` may act on, in order.
+
+        The one statement of the short-circuit rule: the step now waiting, plus
+        any later step marked as allowed to close the ones below it. Both the
+        "who may act" list and the "which step is this person deciding" lookup
+        read it, so the rule cannot drift between them.
+        """
+        return [
+            index
+            for index, step in enumerate(self.ordered_steps())
+            if index == from_index
+            or (index > from_index and step.get("later_step_may_short_circuit"))
+        ]
+
+    def active_roles(self, from_index: int, value_paise: int | None = 0) -> list[str]:
         """Every role that may act *right now*, with the request at ``from_index``.
 
-        The step's own roles, plus the roles of any later step allowed to reach
-        back. This is what gets snapshotted onto ``Approval.approver_roles``, so
-        the inbox query and the decide gate keep reading one list and never learn
+        This is what gets snapshotted onto ``Approval.approver_roles``, so the
+        inbox query and the decide gate keep reading one list and never learn
         that routes exist.
         """
         roles: list[str] = []
-        for index, step in enumerate(self.ordered_steps()):
-            if index < from_index:
-                continue
-            if index > from_index and not step.get("later_step_may_short_circuit"):
-                continue
-            for role in step.get("roles") or []:
+        for index in self._reachable_steps(from_index):
+            for role in self.roles_at(index, value_paise):
                 if role not in roles:
                     roles.append(role)
         return roles
 
-    def step_for_role(self, role_code: str, from_index: int) -> int | None:
+    def step_for_role(
+        self, role_code: str, from_index: int, value_paise: int | None = 0
+    ) -> int | None:
         """Which step ``role_code`` is deciding, with the request at ``from_index``.
 
         The current step if they are on it; otherwise the *earliest* later step
@@ -137,12 +200,8 @@ class ApprovalRoute(TimeStampedModel):
         """
         if not role_code:
             return None
-        for index, step in enumerate(self.ordered_steps()):
-            if index < from_index:
-                continue
-            if index > from_index and not step.get("later_step_may_short_circuit"):
-                continue
-            if role_code in (step.get("roles") or []):
+        for index in self._reachable_steps(from_index):
+            if role_code in self.roles_at(index, value_paise):
                 return index
         return None
 
@@ -202,9 +261,14 @@ class Approval(TimeStampedModel):
         ApprovalRoute,
         null=True,
         blank=True,
-        on_delete=models.SET_NULL,
+        # PROTECT, not SET_NULL: nulling a live route would turn a two-step
+        # approval into a one-step one behind the maker's back — the next
+        # approver holding the current step's roles would finalise it and every
+        # remaining step would simply vanish. A route a request has walked is
+        # part of that request's audit trail and outlives any retune.
+        on_delete=models.PROTECT,
         related_name="approvals",
-        help_text="The chain snapshotted at request time. Null is the ordinary "
+        help_text="The chain this request walks. Null is the ordinary "
         "single-step approval every other family uses.",
     )
     current_step = models.IntegerField(
@@ -321,14 +385,18 @@ class Approval(TimeStampedModel):
         if route is None:
             return []
         decisions = {d.step_order: d for d in self.step_decisions.all()}
+        # A route shortened since this request was raised leaves ``current_step``
+        # past the end; read it clamped so the trail still marks a live step
+        # rather than showing a chain nobody is standing on.
+        here = route.clamped_step(self.current_step)
         trail: list[dict[str, Any]] = []
-        for index, step in enumerate(route.ordered_steps()):
+        for index in range(route.step_count()):
             decision = decisions.get(index)
             if decision is not None:
                 state = "done"
-            elif self.status == ApprovalStatus.REJECTED and index == self.current_step:
+            elif self.status == ApprovalStatus.REJECTED and index == here:
                 state = "rejected"
-            elif self.status == ApprovalStatus.PENDING and index == self.current_step:
+            elif self.status == ApprovalStatus.PENDING and index == here:
                 state = "current"
             else:
                 state = "waiting"
@@ -336,7 +404,7 @@ class Approval(TimeStampedModel):
                 {
                     "order": index + 1,
                     "label": route.label_at(index),
-                    "roles": list(step.get("roles") or []),
+                    "roles": route.roles_at(index, self.value_paise),
                     "state": state,
                     "decided_by_name": decision.decided_by_name if decision else "",
                     "decided_at": decision.decided_at if decision else None,

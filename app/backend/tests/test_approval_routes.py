@@ -29,7 +29,13 @@ from _rbac import make_role
 from rest_framework.test import APIClient
 
 from accounts.models import ScopeType, User
-from approvals.models import Approval, ApprovalRoute, ApprovalStatus, ApprovalStepDecision
+from approvals.models import (
+    Approval,
+    ApprovalPolicy,
+    ApprovalRoute,
+    ApprovalStatus,
+    ApprovalStepDecision,
+)
 from approvals.services import (
     NotAnApproverError,
     SelfApprovalError,
@@ -186,11 +192,65 @@ def test_the_stock_request_route_is_seeded_with_two_steps(db):
     steps = route.ordered_steps()
 
     assert [s["order"] for s in steps] == [1, 2]
-    assert "store_manager" in steps[0]["roles"]
-    assert "ho_ops" in steps[1]["roles"]
+    assert steps[0]["roles"] == ["store_manager"]
+    assert route.roles_at(0) == ["store_manager"]
+    # Step 2 keeps no list of its own — it reads the live policy, so the seeded
+    # HO approvers arrive without being frozen a second time.
+    assert route.roles_at(1) == ["ho_ops", "owner"]
     # The direct-approve ruling: the Operations Head's step closes the one below.
     assert steps[0]["later_step_may_short_circuit"] is False
     assert steps[1]["later_step_may_short_circuit"] is True
+
+
+@pytest.mark.django_db
+def test_retuning_the_policy_retunes_the_step_that_reads_it(rig):
+    """The Setup screen must not save a change that quietly does nothing.
+
+    Who signs off a stock request is editable, audited business data (Rule 12).
+    A route that froze its own copy of that list would leave an owner narrowing
+    the approvers in Setup with a chain that still let the old ones through.
+    """
+    policy = ApprovalPolicy.objects.get(kind="stock_request")
+    policy.escalated_roles = ["owner"]
+    policy.save(update_fields=["escalated_roles"])
+
+    data = _raise_request(rig)
+    approval = Approval.objects.get(kind="stock_request", object_id=data["id"])
+
+    assert approval.approver_roles == ["store_manager", "owner"]
+    with pytest.raises(NotAnApproverError):
+        decide(approval, actor=rig["ops"], action="approve")
+
+    assert decide(approval, actor=rig["owner"], action="approve").status == ApprovalStatus.APPROVED
+
+
+@pytest.mark.django_db
+def test_a_route_shortened_under_a_live_request_does_not_strand_it(rig):
+    """Routes are editable data, so a step can vanish under a request already
+    past it — leaving ``current_step`` pointing at nothing.
+
+    Reading it clamped keeps the request decidable. A deadlocked approval is a
+    document nobody can ever post and nobody can ever refuse, which is the one
+    outcome a gate must never produce.
+    """
+    data = _raise_request(rig)
+    approval = Approval.objects.get(kind="stock_request", object_id=data["id"])
+    decide(approval, actor=rig["manager"], action="approve")
+
+    route = ApprovalRoute.objects.get(kind="stock_request")
+    route.steps = [route.ordered_steps()[0]]
+    route.save(update_fields=["steps"])
+
+    approval.refresh_from_db()
+    assert [step["state"] for step in approval.step_trail()] == ["done"]
+
+    final = decide(approval, actor=rig["ops"], action="approve")
+
+    assert final.status == ApprovalStatus.APPROVED
+    # The step the manager cleared still names the manager: walking back over
+    # ground already covered never rewrites who covered it.
+    trail = list(final.step_decisions.order_by("step_order"))
+    assert [(d.step_order, d.decided_by_id) for d in trail] == [(0, rig["manager"].id)]
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +394,48 @@ def test_the_maker_cannot_clear_a_step_even_when_their_role_is_on_it(rig):
 
     with pytest.raises(SelfApprovalError):
         decide(approval, actor=rig["manager"], action="approve")
+
+
+@pytest.mark.django_db
+def test_break_glass_can_walk_the_whole_chain_alone(rig):
+    """The one exception to the between-steps rule, and it has to exist.
+
+    A superuser barred from step 2 by their own step 1 would leave the request
+    unclearable with no second superuser to call — which is the exact state
+    break-glass is for. They still clear one step per action, so the trail shows
+    two deliberate decisions rather than one silent sweep.
+    """
+    superuser = User.objects.create_superuser(
+        username="ar_break_glass", password=TEST_PASSWORD, entity=rig["entity"]
+    )
+    data = _raise_request(rig)
+    approval = Approval.objects.get(kind="stock_request", object_id=data["id"])
+
+    after_step_one = decide(approval, actor=superuser, action="approve")
+    assert after_step_one.status == ApprovalStatus.PENDING
+    assert after_step_one.current_step == 1
+
+    final = decide(after_step_one, actor=superuser, action="approve")
+    assert final.status == ApprovalStatus.APPROVED
+    assert [d.short_circuited for d in final.step_decisions.order_by("step_order")] == [
+        False,
+        False,
+    ]
+
+
+@pytest.mark.django_db
+def test_break_glass_still_cannot_approve_its_own_request(rig):
+    """Break-glass bends the chain, never maker ≠ checker — that one is a
+    database constraint and applies to everybody."""
+    superuser = User.objects.create_superuser(
+        username="ar_break_glass_maker", password=TEST_PASSWORD, entity=rig["entity"]
+    )
+    superuser.stores.add(rig["store_a"])
+    data = _raise_request(rig, actor=superuser)
+    approval = Approval.objects.get(kind="stock_request", object_id=data["id"])
+
+    with pytest.raises(SelfApprovalError):
+        decide(approval, actor=superuser, action="approve")
 
 
 @pytest.mark.django_db

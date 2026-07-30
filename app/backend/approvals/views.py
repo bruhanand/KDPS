@@ -69,7 +69,12 @@ class ApprovalListView(generics.ListAPIView[Approval]):
     pagination_class = None
 
     def get_queryset(self) -> Any:
-        qs = Approval.objects.select_related("store", "requested_by", "decided_by")
+        # The route and its cleared steps come along for the ride: the serializer
+        # renders a step trail per row and this list is unpaginated, so without
+        # them one history page is two queries per approval (#172).
+        qs = Approval.objects.select_related(
+            "store", "requested_by", "decided_by", "route"
+        ).prefetch_related("step_decisions__decided_by")
         qs = scope_by_store_or_brand(qs, self.request.user)
         st = self.request.query_params.get("status")
         if st:

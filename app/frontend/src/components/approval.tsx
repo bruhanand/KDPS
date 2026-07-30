@@ -138,7 +138,6 @@ export function ApprovalSteps({
   if (!steps || steps.length < 2) return null;
   return (
     <div
-      className="approval-steps"
       data-testid="approval-steps"
       style={{
         display: "flex",

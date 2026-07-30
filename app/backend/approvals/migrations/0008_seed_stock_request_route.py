@@ -14,8 +14,11 @@ from django.db import migrations
 #: work, not a system step — the design says so explicitly, and adding a third
 #: step for it would put a gate in front of a phone call.
 #:
-#: Roles match the seeded ``stock_request`` policy's own list at step 2, so the
-#: Owner keeps the sign-off they already had.
+#: Step 2 names no roles of its own: it reads the live ``stock_request``
+#: ``ApprovalPolicy`` (``ho_ops``/``owner``, and its value band). Freezing a
+#: second copy of that list here would mean an owner retuning who signs off a
+#: stock request in Setup — an audited, maker-checkered change — saw it saved
+#: and had it quietly do nothing. One editable source, per Rule 12.
 STEPS = [
     {
         "order": 1,
@@ -25,7 +28,7 @@ STEPS = [
     },
     {
         "order": 2,
-        "roles": ["ho_ops", "owner"],
+        "roles_from_policy": True,
         "label": "Operations Head",
         "later_step_may_short_circuit": True,
     },

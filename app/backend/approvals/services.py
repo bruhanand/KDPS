@@ -31,6 +31,10 @@ from approvals.models import (
     ApprovalStatus,
     ApprovalStepDecision,
 )
+
+# Re-exported: it lives in ``approvals.names`` now that the model layer needs it
+# for the step trail, and every caller learned it here.
+from approvals.names import display_name as display_name
 from masters.scoping import scope_by_store_or_brand
 
 
@@ -56,14 +60,6 @@ class ApprovalRequired(ApprovalError):
 
 class AlreadyPendingError(ApprovalError):
     """Asked again while a request for the same document is still waiting."""
-
-
-def display_name(user: Any) -> str:
-    """How a person is named on screen — full name, else username. The one
-    spelling, shared by the inbox and by every document's maker/checker line."""
-    if user is None:
-        return ""
-    return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
 
 
 # ---------------------------------------------------------------------------
@@ -147,7 +143,7 @@ def request_approval(
     """
     route = route_for(kind)
     if route is not None:
-        approver_roles = route.active_roles(0)
+        approver_roles = route.active_roles(0, value_paise)
     try:
         with transaction.atomic():
             return _create(
@@ -301,34 +297,57 @@ def _refuse_deciding_your_own(approval: Approval, actor: Any) -> None:
     On a chain the same rule holds *between* steps (#172): two steps means two
     people. A route may list one role on two of them, and one person walking a
     request from end to end is maker-checker with extra steps all over again.
+
+    That between-steps rule is the one thing a superuser is let past, and only
+    that one. Break-glass exists so a request can never become unclearable, and
+    a superuser barred from step 2 by their own step 1 would be exactly that —
+    stuck, with no second superuser to call. The two bars that matter, maker and
+    asker, still hold for them, and the database holds them too.
     """
     actor_id = getattr(actor, "id", None)
     if approval.made_by_id == actor_id:
         raise SelfApprovalError("You cannot approve a document you created.")
     if approval.requested_by_id == actor_id:
         raise SelfApprovalError("You cannot approve a request you raised.")
-    if approval.route_id and approval.step_decisions.filter(decided_by=actor).exists():
+    if (
+        approval.route_id
+        and not getattr(actor, "is_superuser", False)
+        and approval.step_decisions.filter(decided_by=actor).exists()
+    ):
         raise SelfApprovalError("You have already cleared a step on this request.")
 
 
 def _step_being_decided(approval: Approval, actor: Any) -> int | None:
-    """Which step of the route ``actor`` is acting on. None on an unrouted row.
+    """Which step of the route ``actor``'s approval lands on. None if unrouted.
 
-    A superuser is break-glass and holds no business role, so they act on the
-    step that is actually waiting — never reaching forward, because reaching
-    forward is a permission the *route* grants to a named role and not a way
-    around the chain.
+    Not a gate — ``can_decide`` is the gate, and it has already run. This only
+    places an allowed decision on the chain, which is why it never refuses: a
+    second role check here could disagree with the first one and leave a request
+    that nobody at all can decide.
+
+    They can disagree, because the row's ``approver_roles`` is a snapshot and the
+    route is live data somebody may have edited since. When the live route cannot
+    place this approver — their step was dropped, or the chain was reordered —
+    the decision lands on the step now waiting, which is the promise the row made
+    when it reached their inbox.
+
+    A superuser is break-glass and holds no business role, so they always act on
+    the waiting step: reaching forward is a permission the *route* grants to a
+    named role, not a way around the chain. They clear it one step per action,
+    which reads honestly in the trail.
+
+    ``current_step`` is read clamped, so a request left past the end of a route
+    someone shortened is still decidable instead of deadlocked.
     """
     route = approval.route
     if route is None:
         return None
+    here = route.clamped_step(approval.current_step)
     if getattr(actor, "is_superuser", False):
-        return approval.current_step
+        return here
     role_code = getattr(getattr(actor, "role", None), "code", "")
-    index = route.step_for_role(role_code, approval.current_step)
-    if index is None:
-        raise NotAnApproverError("Your role is not on any step still waiting on this request.")
-    return index
+    index = route.step_for_role(role_code, here, approval.value_paise)
+    return here if index is None else index
 
 
 def _advance_route(
@@ -345,10 +364,18 @@ def _advance_route(
         return None
 
     now = timezone.now()
-    # Everything between where the request stood and where this approver sits
+    # A step already cleared keeps the name of whoever cleared it. This only
+    # arises when a route is shortened under a live request and ``current_step``
+    # is clamped back onto ground already walked — but a step is cleared once,
+    # the database says so, and rewriting history to say otherwise would be a
+    # 500 at best and a forged trail at worst.
+    already = set(approval.step_decisions.values_list("step_order", flat=True))
+    # Everything between where the request stands and where this approver sits
     # closes *from above* — recorded with the actual actor and flagged, so the
     # trail never claims a manager approved something they never saw.
-    for index in range(approval.current_step, step_index + 1):
+    for index in range(route.clamped_step(approval.current_step), step_index + 1):
+        if index in already:
+            continue
         ApprovalStepDecision.objects.create(
             approval=approval,
             step_order=index,
@@ -364,7 +391,7 @@ def _advance_route(
     if next_step >= route.step_count():
         return None
 
-    approval.approver_roles = route.active_roles(next_step)
+    approval.approver_roles = route.active_roles(next_step, approval.value_paise)
     approval.save(update_fields=["current_step", "approver_roles", "updated_at"])
     return approval
 
