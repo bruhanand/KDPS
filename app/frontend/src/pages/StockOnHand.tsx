@@ -6,6 +6,7 @@ import { fmtApprovalWhen } from "../components/approval";
 import type { ApprovalT } from "../components/approval";
 import { SearchBox } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
+import { formatRupeeAmount } from "../lib/format";
 import { withQuery } from "../lib/query";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -247,12 +248,12 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
   const cards = isQuar
     ? [
         { icon: ShieldAlert, label: "Units quarantined", value: quar?.summary.units_quarantined ?? 0 },
-        { icon: IndianRupee, label: "Quarantine value (₹)", value: quar?.summary.value_rupees ?? "0.00" },
+        { icon: IndianRupee, label: "Quarantine value", value: formatRupeeAmount(quar?.summary.value_rupees ?? "0") },
         { icon: Layers, label: "Quarantine lines", value: quar?.summary.lines ?? 0 },
       ]
     : [
         { icon: Boxes, label: "Units on hand", value: data?.summary.units_on_hand ?? 0 },
-        { icon: IndianRupee, label: "Stock value (₹)", value: data?.summary.value_rupees ?? "0.00" },
+        { icon: IndianRupee, label: "Stock value", value: formatRupeeAmount(data?.summary.value_rupees ?? "0") },
         { icon: Layers, label: group === "store" ? "Stores" : group === "brand" ? "Brands" : "SKU lines", value: data?.summary.lines ?? 0 },
       ];
 
@@ -450,7 +451,7 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
                     <td className="mono">{r.sku_code}</td><td>{r.brand}</td><td>{r.design}</td>
                     <td>{r.color}</td><td>{r.size}</td><td>{r.season}</td><td>{r.store_code}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{r.qty}</td>
-                    <td className="num mono">{r.value_rupees}</td>
+                    <td className="num mono">{formatRupeeAmount(r.value_rupees)}</td>
                     <td>{r.marked_by ?? "—"}</td>
                     <td>{r.marked_at ? new Date(r.marked_at).toLocaleString("en-IN") : "—"}</td>
                   </tr>
@@ -503,7 +504,7 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
                   {group === "brand" && (<><td><b>{r.brand}</b></td><td>{r.store_code}</td><td className="num">{r.skus}</td></>)}
                   {group === "store" && (<><td className="mono">{r.store_code}</td><td>{r.store_name}</td><td className="num">{r.skus}</td></>)}
                   <td className="num" style={{ fontWeight: 700 }}>{r.net_qty}</td>
-                  <td className="num mono">{r.net_value_rupees}</td>
+                  <td className="num mono">{formatRupeeAmount(r.net_value_rupees)}</td>
                   {group === "sku" && (
                     <td>
                       <button
