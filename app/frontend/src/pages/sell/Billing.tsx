@@ -1,21 +1,35 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { AlertTriangle, Gift, Printer, X } from "lucide-react";
+import { AlertTriangle, Gift, KeyRound, Plus, Printer, X } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
 import { Money, paiseToRupees, rupeesToPaise } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
-import { addPiece, priceCart, qtyFrom, toDraft, whyItCannotClose } from "../../till/cart";
+import {
+  addPiece,
+  emptyCart,
+  priceCart,
+  qtyFrom,
+  toDraft,
+  whyItCannotClose,
+} from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
+import { whoAuthorised } from "../../till/pin";
+import type { Authorisation } from "../../till/pin";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
-import type { QueuedBill, TillItem } from "../../till/types";
+import { newNote } from "../../till/tender";
+import type { NoteStanding, Payment } from "../../till/tender";
+import type { QueuedBill, TillItem, TillManager } from "../../till/types";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
+// The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
+// screen with a dialog on it borrows from the same place.
+import "../Booking.css";
 import "./Billing.css";
 
 // ---------------------------------------------------------------------------
@@ -43,9 +57,25 @@ import "./Billing.css";
 // anything: every price, every tax rate and every stock figure comes from the
 // counter's own copy, so the screen behaves identically with the line up or down.
 //
-// What this slice does not do yet, by ticket: split tender, credit notes and the
-// manager PIN are #182, offers are #183, Hold Bill and customer search are #185,
-// the sold-before-inward manual line is #186. Each is absent rather than faked.
+// The payment panel is the four trimmed modes and a manager's PIN (#182). Three
+// things about it are also decisions.
+//
+// **Cash is the balance until somebody types in it.** An ordinary all-cash sale
+// should not need the total keyed into a box to say so, and a split should be
+// exactly as explicit as it is. `tender.ts` holds that rule.
+//
+// **A credit note is checked against this counter's own cached list**, offline,
+// same-store only (grill Q4). A note it does not recognise may still be genuine
+// and simply unsynced, with the customer standing there - so it takes a manager
+// and goes up flagged, which is what the server does with it too.
+//
+// **The manager types a PIN, not a name.** The PIN establishes who they are, and
+// the bill records it - and an authorisation only covers what the manager was
+// shown, so an exception keyed in after they walked away asks again.
+//
+// What this slice does not do yet, by ticket: offers are #183, Hold Bill and
+// customer search are #185, the sold-before-inward manual line is #186. Each is
+// absent rather than faked.
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -63,7 +93,7 @@ export default function BillingPage() {
 
 function Counter({ storeName }: { storeName?: string }) {
   const { engine, till } = useTill();
-  const [cart, setCart] = useState<Cart>({ lines: [], tenderedPaise: 0 });
+  const [cart, setCart] = useState<Cart>(emptyCart);
   const [customer, setCustomer] = useState({ name: "", mobile: "" });
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
@@ -77,8 +107,11 @@ function Counter({ storeName }: { storeName?: string }) {
   // takes over from what the dataset remembered across the session.
   const [lastPicked, setLastPicked] = useState<number | null>(null);
   // Bumped by every commit so the in-memory copy re-reads the shelf the sale
-  // just moved. The sync time covers the other direction.
+  // just moved - and, since #182, the credit notes it just spent. The sync time
+  // covers the other direction.
   const [commits, setCommits] = useState(0);
+  /** Open when a manager is being asked for their PIN, carrying what for. */
+  const [asking, setAsking] = useState<string[] | null>(null);
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
@@ -172,8 +205,12 @@ function Counter({ storeName }: { storeName?: string }) {
     scan.focus();
   }
 
+  function editPayment(patch: Partial<Payment>) {
+    setCart((current) => ({ ...current, payment: { ...current.payment, ...patch } }));
+  }
+
   function newBill() {
-    setCart({ lines: [], tenderedPaise: 0 });
+    setCart(emptyCart());
     setCustomer({ name: "", mobile: "" });
     setNote("");
     setPrintProblem("");
@@ -209,11 +246,11 @@ function Counter({ storeName }: { storeName?: string }) {
       setCommits((n) => n + 1);
       const receipt = receiptHtml(queued, world.store ?? FALLBACK_STORE, {
         storeName,
-        tenderedPaise: bill.tenderedPaise,
+        cashReceivedPaise: cart.payment.cash_received_paise,
         describe: describeFrom(bill.lines),
       });
       setLastBill({ bill: queued, receipt });
-      setCart({ lines: [], tenderedPaise: 0 });
+      setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
       setTyped("");
       setNote(`Bill ${queued.doc_number} saved.`);
@@ -308,14 +345,33 @@ function Counter({ storeName }: { storeName?: string }) {
         </section>
 
         <aside className="bill-pay">
-          <Payment
+          <PaymentPanel
             bill={bill}
+            payment={cart.payment}
             locked={locked}
-            onTendered={(paise) => setCart((c) => ({ ...c, tenderedPaise: paise }))}
+            onChange={editPayment}
+            onAsk={() => setAsking(bill.needsAuthorising)}
           />
           <CustomerStrip value={customer} locked={locked} onChange={setCustomer} />
         </aside>
       </div>
+
+      {asking && (
+        <ManagerPin
+          managers={world.managers}
+          kinds={asking}
+          onClose={() => {
+            setAsking(null);
+            scan.focus();
+          }}
+          onAuthorised={(authorisation) => {
+            setCart((current) => ({ ...current, authorisation }));
+            setAsking(null);
+            setNote(`${authorisation.name} approved this bill.`);
+            scan.focus();
+          }}
+        />
+      )}
 
       <div className="bill-foot">
         <Totals bill={bill} />
@@ -680,7 +736,7 @@ function RateCell({ line, locked, onEdit }: CellProps) {
       paise={line.mrp_paise}
       locked={locked}
       placeholder="Price"
-      onChange={(paise) => onEdit(line.key, { mrp_paise: paise })}
+      onChange={(paise) => onEdit(line.key, { mrp_paise: paise ?? 0 })}
     />
   );
 }
@@ -703,7 +759,7 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
         paise={line.disc_paise}
         locked={locked || line.cap_paise === 0}
         placeholder="0"
-        onChange={(paise) => onEdit(line.key, { disc_paise: paise })}
+        onChange={(paise) => onEdit(line.key, { disc_paise: paise ?? 0 })}
       />
       {line.over_cap && (
         <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
@@ -773,6 +829,11 @@ function QtyCell({ line, locked, onEdit }: CellProps) {
  * would delete the decimal point as the cashier types it. Only text that is
  * actually an amount reaches the cart (`rupeesToPaise`, ADR-0004 - never
  * `Number(x) * 100`).
+ *
+ * An emptied box answers `null` rather than nought, and the caller says which it
+ * means. For most boxes they are the same thing; for the cash tender they are
+ * not - nought is "this bill takes no cash" and empty is "cash takes whatever is
+ * left", and a cashier who clears the box to undo a split means the second.
  */
 function RupeeInput({
   testId,
@@ -787,7 +848,7 @@ function RupeeInput({
   paise: number;
   locked: boolean;
   placeholder: string;
-  onChange: (paise: number) => void;
+  onChange: (paise: number | null) => void;
 }) {
   const [text, setText] = useState(paise ? paiseToRupees(paise) : "");
   const shown = useRef(paise);
@@ -811,7 +872,14 @@ function RupeeInput({
       value={text}
       onChange={(e) => {
         setText(e.target.value);
-        const parsed = e.target.value.trim() === "" ? 0 : rupeesToPaise(e.target.value);
+        if (e.target.value.trim() === "") {
+          shown.current = 0;
+          onChange(null);
+          return;
+        }
+        // Text that is not an amount yet ("12.") is held on screen and kept off
+        // the cart until it is one.
+        const parsed = rupeesToPaise(e.target.value);
         if (parsed === null) return;
         shown.current = parsed;
         onChange(parsed);
@@ -822,43 +890,395 @@ function RupeeInput({
 
 // --- the payment panel -----------------------------------------------------
 
-/** Cash only in this slice; card, UPI and credit notes are #182. */
-function Payment({
+/**
+ * The four trimmed modes, the notes among them, and what is still unpaid (#182).
+ *
+ * The cash box is deliberately not a controlled copy of the derived figure: the
+ * cash tender is `null` until somebody types in it, meaning "whatever is left of
+ * the bill", so an all-cash sale needs no keystrokes and a split says out loud
+ * that it is one. Clearing the box hands the row back to the balance.
+ */
+function PaymentPanel({
   bill,
+  payment,
   locked,
-  onTendered,
+  onChange,
+  onAsk,
 }: {
   bill: ReturnType<typeof priceCart>;
+  payment: Payment;
   locked: boolean;
-  onTendered: (paise: number) => void;
+  onChange: (patch: Partial<Payment>) => void;
+  onAsk: () => void;
 }) {
+  const { split } = bill;
   return (
     <section className="card section-card bill-panel">
       <p className="eyebrow">To pay</p>
       <p className="bill-due" data-testid="bill-due">
         <Money paise={bill.net_paise} />
       </p>
-      <div className="field">
-        <label htmlFor="bill-cash">Cash taken</label>
-        <RupeeInput
+
+      <div className="bill-tenders">
+        <TenderRow
           testId="bill-cash"
-          label="Cash taken"
-          paise={bill.tenderedPaise}
+          label="Cash"
+          paise={split.cash_paise}
+          derived={payment.cash_paise === null}
+          locked={locked}
+          onChange={(paise) => onChange({ cash_paise: paise })}
+        />
+        <TenderRow
+          testId="bill-card"
+          label="Card"
+          paise={payment.card_paise}
+          locked={locked}
+          onChange={(paise) => onChange({ card_paise: paise ?? 0 })}
+        />
+        <TenderRow
+          testId="bill-upi"
+          label="UPI"
+          paise={payment.upi_paise}
+          locked={locked}
+          onChange={(paise) => onChange({ upi_paise: paise ?? 0 })}
+        />
+      </div>
+
+      <Notes
+        notes={split.notes}
+        locked={locked}
+        onChange={(index, patch) =>
+          onChange({
+            notes: payment.notes.map((note, i) => (i === index ? { ...note, ...patch } : note)),
+          })
+        }
+        onAdd={() => onChange({ notes: [...payment.notes, newNote()] })}
+        onRemove={(index) =>
+          onChange({ notes: payment.notes.filter((_, i) => i !== index) })
+        }
+      />
+
+      <div className="bill-row">
+        <span>Still to pay</span>
+        <span
+          data-testid="bill-balance"
+          className={split.balance_paise === 0 ? "" : "bill-unpaid"}
+        >
+          <Money paise={split.balance_paise} />
+        </span>
+      </div>
+
+      <div className="field">
+        <label htmlFor="bill-cash-received">Cash received</label>
+        <RupeeInput
+          testId="bill-cash-received"
+          label="Cash received"
+          paise={payment.cash_received_paise}
           locked={locked}
           placeholder="0"
-          onChange={onTendered}
+          onChange={(paise) => onChange({ cash_received_paise: paise ?? 0 })}
         />
       </div>
       <div className="bill-row">
         <span>Change</span>
         <span data-testid="bill-change">
-          <Money paise={bill.changePaise} />
+          <Money paise={split.change_paise} />
         </span>
       </div>
-      <p className="muted-cell">
-        Card, UPI and credit notes arrive with split tender; this counter takes cash.
-      </p>
+
+      <Authorised bill={bill} locked={locked} onAsk={onAsk} />
     </section>
+  );
+}
+
+/** One mode's amount. `derived` is the cash row following the balance - it shows
+ *  the figure it is about to take without pretending a person typed it. */
+function TenderRow({
+  testId,
+  label,
+  paise,
+  derived,
+  locked,
+  onChange,
+}: {
+  testId: string;
+  label: string;
+  paise: number;
+  derived?: boolean;
+  locked: boolean;
+  onChange: (paise: number | null) => void;
+}) {
+  return (
+    <div className="bill-tender">
+      <label htmlFor={testId}>
+        {label}
+        {derived && (
+          <span className="muted-cell" data-testid={`${testId}-derived`}>
+            the rest
+          </span>
+        )}
+      </label>
+      <RupeeInput
+        testId={testId}
+        label={label}
+        paise={paise}
+        locked={locked}
+        placeholder="0"
+        onChange={onChange}
+      />
+    </div>
+  );
+}
+
+/** The credit notes on this bill, and what the counter knows about each. */
+function Notes({
+  notes,
+  locked,
+  onChange,
+  onAdd,
+  onRemove,
+}: {
+  notes: NoteStanding[];
+  locked: boolean;
+  onChange: (index: number, patch: { number?: string; amount_paise?: number }) => void;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="bill-notes">
+      {notes.map((standing, index) => (
+        <div className="bill-note" key={standing.note.key}>
+          <div className="bill-note-row">
+            <input
+              className="input bill-cell"
+              data-testid={`bill-note-number-${index}`}
+              aria-label={`Credit note number, row ${index + 1}`}
+              autoComplete="off"
+              placeholder="Credit note number"
+              disabled={locked}
+              value={standing.note.number}
+              onChange={(e) => onChange(index, { number: e.target.value })}
+            />
+            <RupeeInput
+              testId={`bill-note-amount-${index}`}
+              label={`Credit note amount, row ${index + 1}`}
+              paise={standing.note.amount_paise}
+              locked={locked}
+              placeholder="0"
+              onChange={(paise) => onChange(index, { amount_paise: paise ?? 0 })}
+            />
+            <button
+              type="button"
+              className="line-del"
+              disabled={locked}
+              data-testid={`bill-note-remove-${index}`}
+              aria-label={`Take credit note row ${index + 1} off the bill`}
+              onClick={() => onRemove(index)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+          {standing.cached && !standing.doubt && (
+            <span className="muted-cell" data-testid={`bill-note-left-${index}`}>
+              <Money paise={standing.cached.remaining_paise} /> left · good to{" "}
+              {standing.cached.expires_on}
+            </span>
+          )}
+          {standing.doubt && (
+            <span className="bill-overcap" data-testid={`bill-note-doubt-${index}`}>
+              {standing.doubt}
+            </span>
+          )}
+        </div>
+      ))}
+      <button
+        type="button"
+        className="btn bill-note-add"
+        data-testid="bill-note-add"
+        disabled={locked}
+        onClick={onAdd}
+      >
+        <Plus size={14} />
+        Credit note
+      </button>
+    </div>
+  );
+}
+
+/** The manager's tap: what this bill needs, and who has agreed to it. */
+function Authorised({
+  bill,
+  locked,
+  onAsk,
+}: {
+  bill: ReturnType<typeof priceCart>;
+  locked: boolean;
+  onAsk: () => void;
+}) {
+  const needed = bill.needsAuthorising;
+  const authorisation = bill.authorisation;
+  const covered =
+    authorisation !== null && needed.every((kind) => authorisation.kinds.includes(kind));
+  if (!needed.length && !authorisation) return null;
+  return (
+    <div className="bill-authorised" data-testid="bill-authorised">
+      {authorisation && (
+        <span className="muted-cell" data-testid="bill-authorised-by">
+          Approved by {authorisation.name} at {formatClock(authorisation.at)}
+        </span>
+      )}
+      {needed.length > 0 && !covered && (
+        <button
+          type="button"
+          className="btn"
+          data-testid="bill-ask-manager"
+          disabled={locked}
+          onClick={onAsk}
+        >
+          <KeyRound size={15} />
+          Manager approval
+        </button>
+      )}
+    </div>
+  );
+}
+
+function formatClock(iso: string): string {
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime())
+    ? iso
+    : at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** What each authorisation kind is called on the shop floor. */
+const KIND_WORDS: Record<string, string> = {
+  over_cap_discount: "a discount past the cashier's limit",
+  credit_note: "a credit note this counter cannot check",
+};
+
+/**
+ * The manager's PIN (#182).
+ *
+ * Checked here, on the device, against the hash the dataset sent - the counter
+ * may have had no line for a week. The manager types a PIN and not a name:
+ * whose it is is what the PIN establishes, and it is what the bill records.
+ *
+ * No `alert`, no `confirm`, and Escape closes it. Everything else on this page
+ * is a visible button (Anand's Phase-3 ruling) and so is everything here.
+ */
+function ManagerPin({
+  managers,
+  kinds,
+  onClose,
+  onAuthorised,
+}: {
+  managers: TillManager[];
+  kinds: string[];
+  onClose: () => void;
+  onAuthorised: (authorisation: Authorisation) => void;
+}) {
+  const [pin, setPin] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [refused, setRefused] = useState("");
+  const box = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    box.current?.focus();
+  }, []);
+
+  async function check() {
+    if (checking || !pin) return;
+    setChecking(true);
+    setRefused("");
+    try {
+      const authorisation = await whoAuthorised(managers, pin, kinds);
+      if (!authorisation) {
+        // One sentence for every failure - a wrong PIN and a PIN belonging to a
+        // manager of another store are the same answer at this counter, and
+        // telling them apart would be telling whoever is standing there which.
+        setRefused("That is not a manager's PIN for this store.");
+        setPin("");
+        box.current?.focus();
+        return;
+      }
+      onAuthorised(authorisation);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" data-testid="bill-pin-modal" onClick={onClose}>
+      <div
+        className="modal bill-pin"
+        role="dialog"
+        aria-label="Manager approval"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onClose();
+        }}
+      >
+        <div className="modal-head">
+          <h3 className="h3">
+            <KeyRound size={17} style={{ verticalAlign: "-3px", marginRight: 6 }} />
+            Manager approval
+          </h3>
+          <button type="button" className="btn" data-testid="bill-pin-cancel" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+
+        <p className="lead">This bill has {kinds.map((k) => KIND_WORDS[k] ?? k).join(" and ")}.</p>
+
+        {managers.length === 0 ? (
+          <p className="warn-note" data-testid="bill-pin-nobody">
+            No manager of this store has a counter PIN yet. One is set from Till &amp; Sync, by
+            the manager themselves - and only somebody who may approve selling here can hold one.
+          </p>
+        ) : (
+          <>
+            <div className="field">
+              <label htmlFor="bill-pin">Manager PIN</label>
+              <input
+                ref={box}
+                id="bill-pin"
+                className="input"
+                data-testid="bill-pin"
+                type="password"
+                inputMode="numeric"
+                autoComplete="off"
+                disabled={checking}
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  void check();
+                }}
+              />
+            </div>
+            {refused && (
+              <p className="bill-alert" data-testid="bill-pin-refused">
+                <AlertTriangle size={15} />
+                {refused}
+              </p>
+            )}
+            <p className="muted-cell">
+              The manager types it themselves. Their name and the time go on the bill.
+            </p>
+            <button
+              type="button"
+              className="btn btn-cta"
+              data-testid="bill-pin-approve"
+              disabled={checking || !pin}
+              onClick={() => void check()}
+            >
+              {checking ? "Checking…" : "Approve"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

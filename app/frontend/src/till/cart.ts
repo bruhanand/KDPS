@@ -32,18 +32,28 @@
 
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
+import { covers } from "./pin";
+import type { Authorisation } from "./pin";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
+import { emptyPayment, splitOf, toTenders, whyPaymentCannotClose } from "./tender";
+import type { Payment, TenderSplit } from "./tender";
 import type {
   BillDraft,
   BillLine,
   NoOffer,
   OfferEvidence,
   StackedCredit,
+  TillCreditNote,
   TillGstSlab,
   TillItem,
   TillOffer,
   TillSeason,
 } from "./types";
+
+/** What a manager may be asked to authorise on a bill (#182). Two today; a
+ *  return outside its window is the third, and belongs with #184. */
+export const OVER_CAP_DISCOUNT = "over_cap_discount";
+export const UNVERIFIED_NOTE = "credit_note";
 
 /** One row of the line grid, as the cashier has it so far. */
 export interface CartLine {
@@ -80,9 +90,16 @@ export interface CartLine {
 
 export interface Cart {
   lines: CartLine[];
-  /** Cash the customer held out. Presentation only: what is *tendered* on the
-   *  bill is the bill, and the difference is change out of the drawer. */
-  tenderedPaise: number;
+  /** How the customer is paying - see `tender.ts`. */
+  payment: Payment;
+  /** The manager who authorised whatever on this bill needed authorising, as
+   *  established by their PIN at this counter (#182). */
+  authorisation: Authorisation | null;
+}
+
+/** A bill with nothing on it yet. */
+export function emptyCart(): Cart {
+  return { lines: [], payment: emptyPayment(), authorisation: null };
 }
 
 export interface PricedLine extends CartLine {
@@ -120,14 +137,21 @@ export interface PricedBill {
   gst_paise: number;
   /** The figure staff quote to the customer. */
   saved_paise: number;
-  tenderedPaise: number;
-  changePaise: number;
+  /** How the money is being put up, resolved against this counter's own notes. */
+  split: TenderSplit;
+  /** Who authorised the exceptions on this bill, if anybody has. */
+  authorisation: Authorisation | null;
+  /** What still needs a manager, as kinds - empty on an ordinary bill. */
+  needsAuthorising: string[];
 }
 
 export interface PricingWorld {
   seasons: TillSeason[];
   slabs: TillGstSlab[];
   offers: TillOffer[];
+  /** The open notes this store issued, as the last sync left them. Offline
+   *  redemption is only ever against one of these (grill Q4). */
+  creditNotes: TillCreditNote[];
 }
 
 export interface PricingOptions {
@@ -225,6 +249,7 @@ export function priceCart(
   const subtotal = lines.reduce((n, l) => n + l.net_paise, 0);
   const round = roundingOf(subtotal);
   const net = subtotal + round;
+  const split = splitOf(cart.payment, net, world.creditNotes, day);
 
   return {
     lines,
@@ -242,8 +267,9 @@ export function priceCart(
     // the rulebook's part and the cashier's - because that is the number the
     // customer is comparing with the tags in their hand.
     saved_paise: discount,
-    tenderedPaise: cart.tenderedPaise,
-    changePaise: changeFor(cart.tenderedPaise, net),
+    split,
+    authorisation: cart.authorisation,
+    needsAuthorising: authorisationsNeeded(lines, split),
   };
 }
 
@@ -298,6 +324,18 @@ export function creditsOn(evidence: OfferEvidence | NoOffer): StackedCredit[] {
   return [...credits, ...stacked];
 }
 
+/** What a manager would have to agree to before this bill can close.
+ *
+ *  Named as kinds rather than counted, because an authorisation only covers what
+ *  the manager was actually shown: a discount keyed in after they walked away is
+ *  a fresh exception and asks again (`pin.covers`). */
+function authorisationsNeeded(lines: PricedLine[], split: TenderSplit): string[] {
+  const kinds: string[] = [];
+  if (lines.some((line) => line.over_cap)) kinds.push(OVER_CAP_DISCOUNT);
+  if (split.unverified.length) kinds.push(UNVERIFIED_NOTE);
+  return kinds;
+}
+
 function priceLine(
   line: CartLine,
   line_no: number,
@@ -348,10 +386,10 @@ export function roundingOf(subtotalPaise: number): number {
   return remainder >= 50 ? 100 - remainder : -remainder;
 }
 
-/** Change out of the drawer. Never negative: cash short of the bill is a bill
- *  that does not close, not a negative change. */
-export function changeFor(tenderedPaise: number, netPaise: number): number {
-  return Math.max(0, tenderedPaise - netPaise);
+/** Change out of the drawer. Never negative: cash short of the cash tender is a
+ *  bill that does not close, not a negative change. */
+export function changeFor(receivedPaise: number, cashPaise: number): number {
+  return Math.max(0, receivedPaise - cashPaise);
 }
 
 /**
@@ -378,16 +416,17 @@ export function whyItCannotClose(bill: PricedBill): string {
     return `Line ${negative.line_no} is discounted by more than it costs.`;
   }
   const overCap = bill.lines.find((line) => line.over_cap);
-  if (overCap) {
+  if (overCap && !covers(bill.authorisation, [OVER_CAP_DISCOUNT])) {
     return (
       `Line ${overCap.line_no} discounts more than a cashier may on their own. ` +
       "A manager of this store has to approve it."
     );
   }
-  if (bill.tenderedPaise < bill.net_paise) {
-    return "The cash taken is less than the bill.";
-  }
-  return "";
+  return whyPaymentCannotClose(
+    bill.split,
+    covers(bill.authorisation, [UNVERIFIED_NOTE]),
+    bill.net_paise,
+  );
 }
 
 export interface BillIdentity {
@@ -398,10 +437,16 @@ export interface BillIdentity {
 /**
  * The bill as the till layer takes it: everything but its number.
  *
- * The tender is the **bill**, not the cash the customer held out. What goes into
- * the drawer and what the customer is owed back are the counter's business; what
- * posts to CASH is what the sale was worth, and a bill that tendered ₹2,000 for
- * a ₹1,499 sale would refuse to balance and would be ₹501 out if it did.
+ * The tenders are what each mode **took**, not what the customer held out. What
+ * goes into the drawer and what they are owed back are the counter's business;
+ * what posts to CASH is what the sale was worth, and a bill that tendered ₹2,000
+ * for a ₹1,499 sale would refuse to balance and would be ₹501 out if it did.
+ *
+ * The manager's authorisation rides along as the contract's `override`, naming
+ * who and when. Only an authorisation that actually covers what the bill needs
+ * is sent: one obtained for a credit note, on a bill that has since grown an
+ * over-cap discount, is a manager's name on something they never saw - and
+ * `whyItCannotClose` has already stopped that bill from getting here.
  */
 export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
   const lines: BillLine[] = bill.lines.map((line) => ({
@@ -432,7 +477,7 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       gstin: identity.customer?.gstin ?? "",
     },
     lines,
-    tenders: [{ mode: "cash", amount_paise: bill.net_paise }],
+    tenders: toTenders(bill.split),
     totals: {
       gross_paise: bill.gross_paise,
       discount_paise: bill.discount_paise,
@@ -440,5 +485,14 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       gst_paise: bill.gst_paise,
       round_paise: bill.round_paise,
     },
+    ...(bill.authorisation && bill.needsAuthorising.length
+      ? {
+          override: {
+            user_id: bill.authorisation.user_id,
+            kind: bill.needsAuthorising.join("+"),
+            at: bill.authorisation.at,
+          },
+        }
+      : {}),
   };
 }

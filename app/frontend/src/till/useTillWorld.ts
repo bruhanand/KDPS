@@ -20,8 +20,10 @@ import { META, readMeta } from "./db";
 import type { TillDb } from "./db";
 import { DEFAULT_POLICY } from "./sync";
 import type {
+  TillCreditNote,
   TillGstSlab,
   TillItem,
+  TillManager,
   TillOffer,
   TillPolicy,
   TillSalesman,
@@ -40,6 +42,13 @@ export interface TillWorld {
   seasons: TillSeason[];
   slabs: TillGstSlab[];
   salesmen: TillSalesman[];
+  /** The open notes this store issued, as the last sync left them, less anything
+   *  the queue has already spent (#182). Offline redemption is only ever against
+   *  one of these. */
+  creditNotes: TillCreditNote[];
+  /** Who may authorise an exception here, with the hash their PIN is checked
+   *  against. Empty until an administrator grants somebody the rung. */
+  managers: TillManager[];
   policy: TillPolicy;
   store: TillStoreIdentity | null;
   /** The salesman the counter credited last, defaulted onto the next line so a
@@ -55,6 +64,8 @@ const EMPTY: TillWorld = {
   seasons: [],
   slabs: [],
   salesmen: [],
+  creditNotes: [],
+  managers: [],
   policy: DEFAULT_POLICY,
   store: null,
   lastSalesman: null,
@@ -73,14 +84,17 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
 
   const load = useCallback(async (): Promise<TillWorld> => {
     if (!db) return EMPTY;
-    const [items, stock, offers, seasons, slabs, salesmen] = await Promise.all([
-      db.items.toArray(),
-      db.stock.toArray(),
-      db.offers.toArray(),
-      db.seasons.toArray(),
-      db.gstSlabs.toArray(),
-      db.salesmen.toArray(),
-    ]);
+    const [items, stock, offers, seasons, slabs, salesmen, creditNotes, managers] =
+      await Promise.all([
+        db.items.toArray(),
+        db.stock.toArray(),
+        db.offers.toArray(),
+        db.seasons.toArray(),
+        db.gstSlabs.toArray(),
+        db.salesmen.toArray(),
+        db.creditNotes.toArray(),
+        db.managers.toArray(),
+      ]);
     return {
       items,
       stock,
@@ -88,6 +102,11 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
       seasons,
       slabs,
       salesmen: salesmen.filter((s) => s.is_active),
+      // A note with nothing left on it stays in the cache so the counter can say
+      // "there is nothing left on that note" rather than "never heard of it",
+      // which is a different sentence with a different remedy.
+      creditNotes,
+      managers,
       policy: await readMeta<TillPolicy>(db, META.policy, DEFAULT_POLICY),
       store: await readMeta<TillStoreIdentity | null>(db, META.store, null),
       lastSalesman: await readMeta<number | null>(db, META.lastSalesman, null),

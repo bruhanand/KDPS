@@ -36,6 +36,15 @@
 
 .till-queue-heading { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
 
+/* The manager's own counter PIN (#182). A narrow card - two short boxes and a
+   button - rather than a full-width one, because it is set once and then left
+   alone, and it is not what a person opens this page to look at. */
+.till-pin-card { margin-top: 22px; max-width: 420px; }
+.till-pin-card .muted-cell { display: block; font-size: 12.5px; margin-bottom: 4px; }
+.till-pin-card .field { margin-top: 12px; }
+.till-pin-card .btn { margin-top: 14px; }
+.till-pin-card .ok-note, .till-pin-card .till-alert { margin-top: 12px; }
+
 .till-dev { margin-top: 22px; border-style: dashed; }
 .till-dev .muted-cell { display: block; font-size: 12.5px; margin-bottom: 12px; }
 .till-dev-note { font-size: 12.5px; color: var(--muted); margin: 10px 0 0; }

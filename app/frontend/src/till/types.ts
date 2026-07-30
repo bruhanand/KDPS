@@ -182,7 +182,9 @@ export interface BillLine {
 }
 
 export interface BillTender {
-  mode: string;
+  /** The four trimmed modes and no others - `SaleTender.Mode` on the server, and
+   *  a `ChoiceField` there, so a fifth string is a bill the queue halts on. */
+  mode: "cash" | "card" | "upi" | "credit_note";
   amount_paise: number;
   credit_note?: string;
 }
@@ -206,7 +208,9 @@ export interface BillDraft {
   tenders: BillTender[];
   totals: BillTotals;
   exchange?: Record<string, unknown>;
-  override?: { user_id: number; kind: string };
+  /** The manager's tap: who authorised the exceptions on this bill, what they
+   *  were shown, and when they typed the PIN (which is not Save & Print). */
+  override?: { user_id: number; kind: string; at: string };
 }
 
 /** A bill after the commit: numbered, keyed, and in the queue. This is the exact

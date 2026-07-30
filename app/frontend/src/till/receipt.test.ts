@@ -43,14 +43,53 @@ describe("the customer's copy", () => {
   });
 
   it("shows the change when the customer paid round", () => {
-    const html = receiptHtml(bill(), STORE, { tenderedPaise: 200000 });
+    const html = receiptHtml(bill(), STORE, { cashReceivedPaise: 200000 });
 
     expect(html).toContain("Change");
     expect(html).toContain("₹501.00");
   });
 
   it("leaves the change line off when there is none", () => {
-    expect(receiptHtml(bill(), STORE, { tenderedPaise: 149900 })).not.toContain("Change");
+    expect(receiptHtml(bill(), STORE, { cashReceivedPaise: 149900 })).not.toContain("Change");
+  });
+
+  it("says how the bill was paid, mode by mode (#182)", () => {
+    // The customer's copy has to name the card and the note: those are the two
+    // lines they come back to query, and a bill that only said "₹1,499" would
+    // leave the counter re-deriving a split from memory.
+    const html = receiptHtml(
+      bill({
+        tenders: [
+          { mode: "cash", amount_paise: 29900 },
+          { mode: "card", amount_paise: 100000 },
+          { mode: "credit_note", amount_paise: 20000, credit_note: "26-27/DEO/CRN/4" },
+        ],
+      }),
+      STORE,
+    );
+
+    expect(html).toContain("Card");
+    expect(html).toContain("₹1,000.00");
+    expect(html).toContain("Credit note");
+    expect(html).toContain("26-27/DEO/CRN/4");
+  });
+
+  it("gives change against the cash the bill took, not against the bill", () => {
+    // ₹1,000 on the card, ₹499 in cash, and a ₹500 note handed over for it.
+    // Change is ₹1, and a receipt that measured against the whole bill would
+    // print ₹0 - and the drawer would be a rupee up every time.
+    const html = receiptHtml(
+      bill({
+        tenders: [
+          { mode: "card", amount_paise: 100000 },
+          { mode: "cash", amount_paise: 49900 },
+        ],
+      }),
+      STORE,
+      { cashReceivedPaise: 50000 },
+    );
+
+    expect(html).toContain("₹1.00");
   });
 
   it("prints no cost and no margin, ever (H2)", () => {

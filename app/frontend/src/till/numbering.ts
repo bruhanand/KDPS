@@ -24,6 +24,7 @@ import { financialYear } from "../lib/fiscal";
 
 import { META, readMeta } from "./db";
 import type { TillDb } from "./db";
+import { notesSpentBy } from "./tender";
 import type { BillDraft, QueuedBill } from "./types";
 
 /** The document type the till numbers. The kernel accepts external numbers on
@@ -111,22 +112,27 @@ export async function commitBill(
   // the counter has ever heard of. Read-only in practice, but a Dexie
   // transaction has to declare every table it will touch, and a commit that
   // reached outside its own scope would throw at the worst possible moment.
-  return db.transaction("rw", [db.meta, db.queue, db.stock, db.items], async () => {
-    const seq = await nextBillNumber(db, fy);
-    const bill: QueuedBill = {
-      ...draft,
-      idempotency_uuid: idempotencyUuid,
-      store: storeCode,
-      fy,
-      till_seq: seq,
-      origin: draft.origin ?? (navigator.onLine ? "online" : "offline"),
-      doc_number: renderBillNumber(fy, storeCode, seq),
-      attempts: 0,
-    };
-    await db.queue.add(bill);
-    await moveStock(db, bill);
-    return bill;
-  });
+  return db.transaction(
+    "rw",
+    [db.meta, db.queue, db.stock, db.items, db.creditNotes],
+    async () => {
+      const seq = await nextBillNumber(db, fy);
+      const bill: QueuedBill = {
+        ...draft,
+        idempotency_uuid: idempotencyUuid,
+        store: storeCode,
+        fy,
+        till_seq: seq,
+        origin: draft.origin ?? (navigator.onLine ? "online" : "offline"),
+        doc_number: renderBillNumber(fy, storeCode, seq),
+        attempts: 0,
+      };
+      await db.queue.add(bill);
+      await moveStock(db, bill);
+      await moveNotes(db, bill);
+      return bill;
+    },
+  );
 }
 
 /**
@@ -175,6 +181,31 @@ async function moveStock(db: TillDb, bill: QueuedBill): Promise<void> {
     }
     const known = await db.items.where("barcode").equals(barcode).count();
     if (known) await db.stock.put({ barcode, qty: delta });
+  }
+}
+
+/**
+ * Spend the counter's own copy of every credit note this bill took (#182).
+ *
+ * In the same transaction as the bill, and for the same reason the shelf is:
+ * what the next customer is offered has to reflect what the last one just spent.
+ * The server draws the real balance down when the bill syncs, which may be days
+ * later - and until then a note whose local balance had not moved would pay for
+ * a second bill, and a third, all of them landing at head office to be refused.
+ *
+ * A note that reaches nought is left on the cache at nought rather than deleted:
+ * the next attempt to spend it should read "nothing left on it" and not "this
+ * counter has never heard of that note", which is a different sentence with a
+ * different remedy. The sync's `deleted.credit_notes` is what removes it.
+ */
+async function moveNotes(db: TillDb, bill: QueuedBill): Promise<void> {
+  for (const [number, spent] of notesSpentBy(bill.tenders)) {
+    const note = await db.creditNotes.get(number);
+    // No row means the counter never had this note: an unverified one, taken on
+    // a manager's OK. There is no local balance to move, and inventing one would
+    // be inventing money.
+    if (!note) continue;
+    await db.creditNotes.put({ ...note, remaining_paise: Math.max(0, note.remaining_paise - spent) });
   }
 }
 

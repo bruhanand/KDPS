@@ -66,6 +66,11 @@ export interface User {
   // here from the role code.
   business_unit_mode?: "units" | "brands";
   assigned_brands?: Brand[];
+  /** Whether this person has a counter PIN, and whether they are somebody who
+   *  could hold one (#182). Never the hash: that goes to a till in its dataset
+   *  and nowhere else. */
+  has_till_pin?: boolean;
+  may_hold_till_pin?: boolean;
 }
 
 interface AuthContextValue {

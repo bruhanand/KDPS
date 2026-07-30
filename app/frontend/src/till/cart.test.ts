@@ -4,14 +4,18 @@ import {
   addPiece,
   capFor,
   changeFor,
+  emptyCart,
   priceCart,
   qtyFrom,
   toDraft,
   whyItCannotClose,
 } from "./cart";
 import type { Cart } from "./cart";
+import type { Authorisation } from "./pin";
+import { newNote } from "./tender";
+import type { Payment } from "./tender";
 import { item, season } from "./testSupport";
-import type { TillGstSlab, TillOffer } from "./types";
+import type { TillCreditNote, TillGstSlab, TillOffer } from "./types";
 
 const SLAB: TillGstSlab = {
   hsn_prefix: "",
@@ -21,10 +25,27 @@ const SLAB: TillGstSlab = {
   effective_from: "2020-01-01",
 };
 
-const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [] };
+/** ₹1,200 left on it, good until January. */
+const NOTE: TillCreditNote = {
+  number: "26-27/DEO/CRN/4",
+  remaining_paise: 120000,
+  expires_on: "2027-01-30",
+};
+
+const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [], creditNotes: [NOTE] };
+
+/** A manager who has already put their PIN in for `kinds`. */
+function approved(...kinds: string[]): Authorisation {
+  return { user_id: 7, name: "R. Kumar", kinds, at: "2026-07-30T12:29:00.000Z" };
+}
 
 function cartOf(...lines: Cart["lines"]): Cart {
-  return { lines, tenderedPaise: 0 };
+  return { ...emptyCart(), lines };
+}
+
+/** The same cart, paying a particular way. */
+function paying(cart: Cart, payment: Partial<Payment>): Cart {
+  return { ...cart, payment: { ...cart.payment, ...payment } };
 }
 
 function scanned(mrp: number | null, over: Partial<Cart["lines"][number]> = {}) {
@@ -127,16 +148,44 @@ describe("the cashier's discount cap", () => {
 
     expect(bill.lines[0].cap_paise).toBe(15000);
     expect(bill.lines[0].over_cap).toBe(true);
+    expect(bill.needsAuthorising).toEqual(["over_cap_discount"]);
     expect(whyItCannotClose(bill)).toMatch(/manager/i);
   });
 
   it("lets a discount inside the cap through without a word", () => {
-    const cart = { ...cartOf(scanned(200000, { disc_paise: 15000 })), tenderedPaise: 200000 };
+    const bill = priceCart(cartOf(scanned(200000, { disc_paise: 15000 })), WORLD, "2026-07-30", {
+      capPercent: "7.50",
+    });
+
+    expect(bill.lines[0].over_cap).toBe(false);
+    expect(bill.needsAuthorising).toEqual([]);
+    expect(whyItCannotClose(bill)).toBe("");
+  });
+
+  it("closes once a manager has approved the over-cap line", () => {
+    const cart = {
+      ...cartOf(scanned(200000, { disc_paise: 20000 })),
+      authorisation: approved("over_cap_discount"),
+    };
 
     const bill = priceCart(cart, WORLD, "2026-07-30", { capPercent: "7.50" });
 
-    expect(bill.lines[0].over_cap).toBe(false);
     expect(whyItCannotClose(bill)).toBe("");
+  });
+
+  it("asks again for an exception the manager never saw", () => {
+    // They approved the credit note and walked away; the cashier then keyed in a
+    // discount past the cap. An authorisation that stretched to cover it would
+    // be that manager's name on something they never looked at.
+    const cart = paying(
+      { ...cartOf(scanned(200000, { disc_paise: 20000 })), authorisation: approved("credit_note") },
+      { notes: [{ ...newNote(), number: NOTE.number, amount_paise: 20000 }] },
+    );
+
+    const bill = priceCart(cart, WORLD, "2026-07-30", { capPercent: "7.50" });
+
+    expect(bill.needsAuthorising).toEqual(["over_cap_discount"]);
+    expect(whyItCannotClose(bill)).toMatch(/manager/i);
   });
 });
 
@@ -157,21 +206,35 @@ describe("what stops a bill closing", () => {
     expect(whyItCannotClose(bill)).toMatch(/discount/i);
   });
 
-  it("cash short of the bill", () => {
-    const cart = { ...cartOf(scanned(149900)), tenderedPaise: 100000 };
+  it("a split that leaves part of the bill unpaid", () => {
+    const cart = paying(cartOf(scanned(149900)), { cash_paise: 10000, card_paise: 10000 });
 
-    expect(whyItCannotClose(priceCart(cart, WORLD, "2026-07-30"))).toMatch(/cash/i);
+    expect(whyItCannotClose(priceCart(cart, WORLD, "2026-07-30"))).toMatch(/does not cover/i);
   });
 
-  it("nothing, when the cash covers it", () => {
-    const cart = { ...cartOf(scanned(149900)), tenderedPaise: 200000 };
+  it("a credit note this counter cannot check, until a manager approves it", () => {
+    const cart = paying(cartOf(scanned(149900)), {
+      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }],
+    });
 
-    expect(whyItCannotClose(priceCart(cart, WORLD, "2026-07-30"))).toBe("");
+    const bill = priceCart(cart, WORLD, "2026-07-30");
+
+    expect(bill.needsAuthorising).toEqual(["credit_note"]);
+    expect(whyItCannotClose(bill)).toMatch(/has to approve/i);
+    expect(
+      whyItCannotClose(
+        priceCart({ ...cart, authorisation: approved("credit_note") }, WORLD, "2026-07-30"),
+      ),
+    ).toBe("");
+  });
+
+  it("nothing, when cash quietly takes the whole bill", () => {
+    expect(whyItCannotClose(priceCart(cartOf(scanned(149900)), WORLD, "2026-07-30"))).toBe("");
   });
 });
 
 describe("the change in the drawer", () => {
-  it("is what is left of the cash after the bill", () => {
+  it("is what is left of the cash handed over, against the cash the bill took", () => {
     expect(changeFor(200000, 149900)).toBe(50100);
   });
 
@@ -182,10 +245,10 @@ describe("the change in the drawer", () => {
 });
 
 describe("the bill handed to the till", () => {
-  const cart = {
-    ...cartOf(scanned(149900, { salesman: 3 }), scanned(200000, { qty: 2, disc_paise: 5000 })),
-    tenderedPaise: 600000,
-  };
+  const cart = paying(
+    cartOf(scanned(149900, { salesman: 3 }), scanned(200000, { qty: 2, disc_paise: 5000 })),
+    { cash_received_paise: 600000 },
+  );
   const bill = priceCart(cart, WORLD, "2026-07-30");
   const drafted = toDraft(bill, {
     billedAt: "2026-07-30T12:31:00.000Z",
@@ -218,6 +281,65 @@ describe("the bill handed to the till", () => {
   it("claims no offer when no rule reached the line", () => {
     expect(drafted.lines[0].offer_evidence).toEqual({});
     expect(drafted.lines[0].offer_id ?? null).toBeNull();
+  });
+
+  it("names nobody when nobody had to authorise anything", () => {
+    expect(drafted.override).toBeUndefined();
+  });
+});
+
+describe("the bill's split, as the till hands it over", () => {
+  const split = paying(cartOf(scanned(149900, { salesman: 3 })), {
+    cash_paise: 29900,
+    card_paise: 50000,
+    upi_paise: 50000,
+    notes: [{ ...newNote(), number: NOTE.number, amount_paise: 20000 }],
+  });
+
+  it("carries a row per mode that took money", () => {
+    const drafted = toDraft(priceCart(split, WORLD, "2026-07-30"), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+    });
+
+    expect(drafted.tenders).toEqual([
+      { mode: "cash", amount_paise: 29900 },
+      { mode: "card", amount_paise: 50000 },
+      { mode: "upi", amount_paise: 50000 },
+      { mode: "credit_note", amount_paise: 20000, credit_note: NOTE.number },
+    ]);
+    expect(drafted.tenders.reduce((n, t) => n + t.amount_paise, 0)).toBe(drafted.totals.net_paise);
+  });
+
+  it("names the manager, what they saw and when they typed the PIN", () => {
+    const unknown = paying(
+      { ...cartOf(scanned(149900, { salesman: 3 })), authorisation: approved("credit_note") },
+      { notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }] },
+    );
+
+    const drafted = toDraft(priceCart(unknown, WORLD, "2026-07-30"), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+    });
+
+    expect(drafted.override).toEqual({
+      user_id: 7,
+      kind: "credit_note",
+      at: "2026-07-30T12:29:00.000Z",
+    });
+  });
+
+  it("leaves an authorisation off a bill that ended up needing none", () => {
+    // The cashier took the discount back off after the manager approved it.
+    // Sending the override anyway would put a manager's name on an ordinary bill.
+    const undone = {
+      ...cartOf(scanned(149900, { salesman: 3 })),
+      authorisation: approved("over_cap_discount"),
+    };
+
+    const drafted = toDraft(priceCart(undone, WORLD, "2026-07-30"), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+    });
+
+    expect(drafted.override).toBeUndefined();
   });
 });
 
