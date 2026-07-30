@@ -1,11 +1,11 @@
 // The store's Home (#174, D10 §2). One store's morning, top to bottom: what it
 // can do next, what it sold, what is waiting on somebody, what is live in the
-// shop right now, the week behind it, and — for a manager — the month.
+// shop right now, the week behind it, and - for a manager - the month.
 //
 // Everything here is drawn from one payload. The rule the old Home set and this
 // one keeps: a tile is either a number a ledger can answer today or an honest
 // empty state, never an invented figure. What is new is that a *zero* now has to
-// carry the same honesty — until the till lands, "₹0 today" is not a quiet
+// carry the same honesty - until the till lands, "₹0 today" is not a quiet
 // morning, and `sales_live` is what lets the card say so.
 
 import { useEffect, useState } from "react";
@@ -30,6 +30,9 @@ import {
   targetProgressPct,
   type DashboardPayload,
 } from "./storeDashboardModel";
+// The quick-action row, `.card`/`.panel`/`.net-grid` and the two-column layout
+// are Home's and index.css's; only what this screen invented lives here.
+import "./StoreDashboard.css";
 
 const QUICK_ACTIONS = [
   { label: "New Bill", to: "/sell", icon: <ShoppingCart size={20} />, cta: true },
@@ -102,7 +105,7 @@ function TodayRow({ d }: { d: DashboardPayload }) {
       {!d.sales_live && (
         // Without this the four zeros read as a store that has sold nothing.
         <p className="warn-note" data-testid="today-not-live">
-          Billing is not live here yet — these stay at nil until the Sell screen opens.
+          Billing is not live here yet - these stay at nil until the Sell screen opens.
         </p>
       )}
     </div>
@@ -178,8 +181,10 @@ function LiveInStore({ d }: { d: DashboardPayload }) {
         </p>
       ) : (
         <ul className="live-list" data-testid="live-transit">
-          {d.live.in_transit.map((t) => (
-            <li key={t.doc_number} data-testid={`live-transit-${t.doc_number}`}>
+          {d.live.in_transit.map((t, i) => (
+            // Keyed by position as well as number: a transfer posted without one
+            // would otherwise collide with the next on the empty string.
+            <li key={`${t.doc_number}-${i}`} data-testid={`live-transit-${t.doc_number}`}>
               <b className="mono">{t.doc_number}</b> · {t.pieces} pc
               {t.expected && <span className="live-when"> · {t.expected}</span>}
             </li>

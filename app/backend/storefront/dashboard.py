@@ -30,13 +30,13 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from accounts.permissions import user_can
-from accounts.sections import CAP_APPROVE
+from accounts.sections import CAP_APPROVE, CAP_VIEW
 from alerts.models import Alert, AlertKind, AlertStatus
 from approvals.services import inbox_for
 from core.documents import DocStatus
 from inbound.models import Grn
 from masters.models import Store, StoreTarget
-from masters.scoping import active_store_ids, scope_by_entitlement
+from masters.scoping import active_store_ids
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
 from ptmapper.models import PtFile
 
@@ -58,35 +58,67 @@ class InTransitTransfer:
     expected: str
 
 
-def resolve_store(user: Any, requested_code: str) -> Store | None:
-    """The one store this dashboard is about, or ``None`` when there isn't one.
+@dataclass(frozen=True)
+class StorePick:
+    """Which store this dashboard is about, or the sentence saying why none is.
 
-    Two ways in, and they gate differently on purpose. A named ``?store=`` is
-    checked against **entitlement**, not against the top-bar switcher: asking for
-    a store by name is itself the pick, and narrowing an explicit ask by an
-    implicit header would answer "you may not" about a store the person holds.
-    With no name, the switcher *is* the ask - `active_store_ids` is scope already
-    intersected with it - and the answer only exists if it comes to exactly one
-    store.
-
-    A network person who has picked no unit therefore gets ``None``, not the
-    first of their fifty stores. "The store's Home" is a question about a store;
-    with fifty in view there is no honest answer, only an arbitrary one.
+    The refusal travels with the answer rather than being reconstructed from the
+    query string afterwards: there are three different ways to end up without a
+    store and only the code that ruled each one out knows which happened.
     """
-    if requested_code:
-        return scope_by_entitlement(
-            Store.objects.filter(code__iexact=requested_code, is_active=True), user, "id"
-        ).first()
+
+    store: Store | None
+    refusal: str = ""
+
+
+def resolve_store(user: Any, requested_code: str) -> StorePick:
+    """The one store this dashboard is about.
+
+    **One gate, and every row on the screen obeys it.** Scope narrowed by the
+    top-bar switcher (`active_store_ids`) decides the store, and every count in
+    `build()` is then filtered to that one store id. Resolving the store
+    switcher-blind and counting switcher-obeying is the defect class #171 shipped
+    and #174 must not: the approvals row reads its rows through `inbox_for`,
+    which obeys the switcher, so a store picked past the switcher would show a
+    real count as nought and nobody would know a card was lying.
+
+    That is also why `?store=` narrows *within* the active unit instead of
+    overriding it. Naming a store the switcher has filtered out is a
+    contradiction, and the honest answer to a contradiction is a refusal.
+
+    A network person who has picked no unit gets no store either: "the store's
+    Home" is a question about a store, and with fifty in view there is no honest
+    answer, only an arbitrary one.
+    """
     try:
         ids = active_store_ids(user)
-    except PermissionDenied:
-        # An unknown or out-of-scope `X-KDPS-Unit`. The caller gets this endpoint's
-        # own refusal shape rather than DRF's, because the contract says this
-        # endpoint answers with `{"error", "code"}` and nothing else.
-        return None
+    except PermissionDenied as exc:
+        # An unknown or out-of-scope `X-KDPS-Unit`. Caught here, before any count
+        # runs, so the caller gets this endpoint's own refusal shape: the
+        # contract says it answers `{"error", "code"}` and nothing else, and the
+        # scoping layer's own DRF `{"detail": ...}` must not leak past it.
+        return StorePick(None, str(exc.detail))
+    if requested_code:
+        rows = Store.objects.filter(code__iexact=requested_code, is_active=True)
+        if ids is not None:
+            rows = rows.filter(id__in=ids)
+        store = rows.first()
+        if store is None:
+            # One sentence for "no such store" and for "not yours / not the unit
+            # you have picked", deliberately: the contract allows this endpoint
+            # only `SCOPE_DENIED`, and telling an outsider which of the three it
+            # was would confirm the store exists.
+            return StorePick(
+                None,
+                f"'{requested_code}' is not a store you can open. Check the code, "
+                "or the unit picked in the top bar.",
+            )
+        return StorePick(store)
     if ids is None or len(ids) != 1:
-        return None
-    return Store.objects.filter(pk=ids[0], is_active=True).first()
+        return StorePick(
+            None, "Pick a store first - this screen is one store's day, not the network's."
+        )
+    return StorePick(Store.objects.filter(pk=ids[0], is_active=True).first())
 
 
 # --- the action queue -----------------------------------------------------
@@ -239,10 +271,21 @@ def manager_block(user: Any, store: Store, today: date) -> dict[str, Any] | None
     ``None`` means the key is absent from the payload entirely, not present and
     empty: the screen decides whether to draw the row by asking whether the row
     is there, so a cashier's browser is never handed a number it must remember
-    not to render. The gate is the stored matrix (`sell >= approve`), never a
-    role name - which role holds it is admin-editable data (#173).
+    not to render.
+
+    **Two rungs, not one.** The contract names `sell >= approve` - that is who
+    the row is *for*. But what the row carries is a store's target and its
+    month-to-date, and `StoreTarget` is Money data: `/api/masters/store-targets`
+    serves the very same rows behind `money: view`. Gating on Sell alone let a
+    seat with `sell: manage` and `money: none` read the target through this
+    endpoint - the IT Admin, whose "Admin = no Money" cell is a ratified one. A
+    second door onto data with a lock on the first is not a second view of it, it
+    is a way round the lock.
+
+    Both gates read the stored matrix, never a role name - which role holds
+    either rung is admin-editable data (#173).
     """
-    if not user_can(user, "sell", CAP_APPROVE):
+    if not (user_can(user, "sell", CAP_APPROVE) and user_can(user, "money", CAP_VIEW)):
         return None
     target = StoreTarget.objects.filter(store_id=store.id, month=today.replace(day=1)).first()
     return {

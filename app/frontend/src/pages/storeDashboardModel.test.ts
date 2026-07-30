@@ -70,7 +70,7 @@ describe("the action queue", () => {
   });
 
   it("sends every row somewhere the app can actually go", () => {
-    // The acceptance criterion is "linking into the right section/tab" — a row
+    // The acceptance criterion is "linking into the right section/tab" - a row
     // pointing at a URL with no route would be a dead end nobody notices until
     // a store person taps it.
     for (const row of queueRows(payload())) {

@@ -19,6 +19,16 @@ describe("apiErrorMessage", () => {
     );
   });
 
+  it("shows a D10 refusal's sentence, not its code", () => {
+    // `core/refusals.py` answers `{error, code}`. Read by name, so a body that
+    // ever declared `code` first would still put the sentence on screen.
+    expect(
+      apiErrorMessage(
+        refusal({ code: "SCOPE_DENIED", error: "Pick a store first - this screen is one store's day." }),
+      ),
+    ).toBe("Pick a store first - this screen is one store's day.");
+  });
+
   it("shows a serializer's field error, which is where a floor refusal arrives", () => {
     expect(
       apiErrorMessage(

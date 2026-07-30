@@ -190,7 +190,47 @@ def test_an_out_of_scope_unit_header_refuses_in_this_endpoints_own_shape(cashier
     so the scoping layer's own DRF refusal must not leak through."""
     r = cashier.get(URL, headers={"X-KDPS-Unit": "DASH-RAN"})
     assert r.status_code == 403
+    assert r.json() == {"error": r.json()["error"], "code": "SCOPE_DENIED"}
+    assert "detail" not in r.json()
+
+
+def test_each_of_the_three_refusals_says_which_one_it_was(cashier, owner):
+    """One code, three causes. The sentence is the only thing telling them
+    apart, so a person who did pick a store is never told to pick one."""
+    no_pick = owner.get(URL).json()["error"]
+    bad_code = cashier.get(URL, {"store": "DASH-NOPE"}).json()["error"]
+    bad_unit = cashier.get(URL, headers={"X-KDPS-Unit": "DASH-RAN"}).json()["error"]
+    assert "Pick a store" in no_pick
+    assert "DASH-NOPE" in bad_code
+    assert "Pick a store" not in bad_unit
+    assert len({no_pick, bad_code, bad_unit}) == 3
+
+
+def test_a_named_store_may_not_outrank_the_unit_in_the_top_bar(owner, network):
+    """The whole screen is gated once, on scope narrowed by the switcher, and
+    every count then reads that one store. Letting `?store=` reach past the
+    switcher would put two scope models on one page: the approvals row counts
+    through `inbox_for`, which obeys the switcher, so it alone would read nought
+    while the other five counted the store that was asked for."""
+    r = owner.get(URL, {"store": "DASH-DEO"}, headers={"X-KDPS-Unit": "DASH-RAN"})
+    assert r.status_code == 403
     assert r.json()["code"] == "SCOPE_DENIED"
+    assert (
+        owner.get(URL, {"store": "DASH-DEO"}, headers={"X-KDPS-Unit": "DASH-DEO"}).status_code
+        == 200
+    )
+
+
+def test_every_row_counts_the_store_the_screen_says_it_is_about(owner, network):
+    """The regression the gate above prevents, asserted on the rows themselves:
+    with the switcher and `?store=` naming the same store, the approvals row is
+    not quietly nought while the rest of the queue counts."""
+    deo = network["deo"]
+    _ask(network, deo, roles=["owner"])
+    body = owner.get(URL, {"store": "DASH-DEO"}, headers={"X-KDPS-Unit": "DASH-DEO"}).json()
+    counts = {row["key"]: row["count"] for row in body["action_queue"]}
+    assert body["store"] == "DASH-DEO"
+    assert counts["approvals_pending"] == 1
 
 
 # --- a fresh store --------------------------------------------------------
@@ -420,6 +460,32 @@ def test_the_manager_row_follows_the_stored_matrix_not_the_role_name(manager, ma
     the very next request - an approved access change is live immediately."""
     assert "manager" in manager.get(URL).json()
     _retune_sell(manager_user, "operate")
+    assert "manager" not in manager.get(URL).json()
+
+
+def test_the_money_rung_guards_the_target_here_as_it_does_on_the_master(network):
+    """The row carries a store's target, and `StoreTarget` is Money data - the
+    master that serves the same rows asks for `money: view`. A second door onto
+    data with a lock on the first is not a second view of it.
+
+    The case that proved it: IT Admin holds `sell: manage` and, by a ratified
+    cell, no Money at all. Gating on Sell alone handed that seat the number.
+    """
+    StoreTarget.objects.create(
+        store=network["deo"], month=timezone.localdate().replace(day=1), target_paise=250000000
+    )
+    it_admin = _store_user(network, "dash_it", "it_admin", network["deo"])
+    assert it_admin.role.section_access["sell"]["capability"] == "manage"
+    assert it_admin.role.section_access["money"]["capability"] == "none"
+    assert "manager" not in _client(it_admin).get(URL).json()
+
+
+def test_dropping_the_money_rung_takes_the_row_with_it(manager, manager_user):
+    """The mirror of the above on the caller who does hold both: it is the Money
+    rung doing the work, not a role name."""
+    assert "manager" in manager.get(URL).json()
+    manager_user.role.section_access["money"] = {"capability": "none", "label": "Retuned by test"}
+    manager_user.role.save(update_fields=["section_access"])
     assert "manager" not in manager.get(URL).json()
 
 

@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
-from core.refusals import refuse
+from core.refusals import refusal_body
 from storefront.dashboard import build, resolve_store
 
 
@@ -34,17 +34,11 @@ class DashboardView(APIView):
     permission_classes = [IsAuthenticated, require_section("home", CAP_VIEW)]
 
     def get(self, request: Request) -> Response:
-        code = (request.query_params.get("store") or "").strip()
-        store = resolve_store(request.user, code)
-        if store is None:
-            return refuse("SCOPE_DENIED", _why(code), 403)
-        return Response(build(request.user, store))
-
-
-def _why(code: str) -> str:
-    """Two different refusals wear one code, so the sentence has to do the work
-    of telling them apart: a store you may not see, versus no store named at
-    all."""
-    if code:
-        return f"{code} is not one of your locations."
-    return "Pick a store first — this screen is one store's day, not the network's."
+        pick = resolve_store(request.user, (request.query_params.get("store") or "").strip())
+        if pick.store is None:
+            # Three refusals wear one code, so the sentence has to tell them
+            # apart. It comes back from the resolver rather than being worked out
+            # again here: only the branch that ruled a store out knows which of
+            # the three happened.
+            return Response(refusal_body("SCOPE_DENIED", pick.refusal), status=403)
+        return Response(build(request.user, pick.store))

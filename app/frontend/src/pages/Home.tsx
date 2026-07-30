@@ -558,7 +558,7 @@ export function Home() {
       </header>
 
       {variant === "store" ? (
-        // The store's Home is the D10 Dashboard (#174) — one payload, one store,
+        // The store's Home is the D10 Dashboard (#174) - one payload, one store,
         // its own shape. The configurable-tile grid below belongs to the network
         // and warehouse views and is deliberately not drawn here: a store's
         // screen is a fixed morning routine, not a board somebody rearranges.

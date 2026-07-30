@@ -47,7 +47,7 @@ export interface QueueRow {
  *
  *  Three of the contract's nine keys read `sell` tables that do not exist yet
  *  (`held_bills`, `uncosted_sale_lines`, `continuity_flags`), so they are not
- *  here either — they arrive with the screens that clear them. */
+ *  here either - they arrive with the screens that clear them. */
 const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   approvals_pending: { label: "Waiting for your approval", to: "/approvals" },
   transfers_to_receive: { label: "Cartons to receive", to: "/transfer/in-transit" },
@@ -60,7 +60,7 @@ const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
 };
 
 /** The queue as rows to draw. A key this build has no screen for is dropped
- *  rather than rendered as a dead number — a count you cannot click is a count
+ *  rather than rendered as a dead number - a count you cannot click is a count
  *  nobody can clear. */
 export function queueRows(payload: DashboardPayload): QueueRow[] {
   return payload.action_queue.flatMap((row) => {
@@ -69,14 +69,16 @@ export function queueRows(payload: DashboardPayload): QueueRow[] {
   });
 }
 
-/** Every key this side can draw — the frontend half of the contract, asserted
- *  in `storeDashboard.test.ts` against the six the server sends today. */
+/** Every key this side can draw - the frontend half of the contract, asserted
+ *  in `storeDashboardModel.test.ts` against the six the server sends today. */
 export const KNOWN_QUEUE_KEYS = Object.keys(QUEUE_MEANING);
 
 export interface SparkBar {
   date: string;
   paise: number;
-  /** Height as a percentage of the tallest day, 0 when nothing sold at all. */
+  /** Height as a percentage of the tallest day: 0 when nothing sold at all,
+   *  and never negative - a day whose returns outran its sales is a bar with
+   *  no height, not a bar drawn downwards through the axis. */
   heightPct: number;
 }
 
@@ -91,19 +93,22 @@ export function sparkBars(last7: DashboardPayload["last7"]): SparkBar[] {
   return last7.map((d) => ({
     date: d.date,
     paise: d.net_sales_paise,
-    heightPct: peak > 0 ? Math.round((d.net_sales_paise / peak) * 100) : 0,
+    heightPct: peak > 0 ? Math.max(0, Math.round((d.net_sales_paise / peak) * 100)) : 0,
   }));
 }
 
-/** How far through the month's number this store is, capped at 100 for the bar's
- *  width. A month with no target set returns `null` — no target is not 0% of a
- *  target, and a bar drawn at zero against nothing would read as failure. */
+/** How far through the month's number this store is, clamped to 0-100 for the
+ *  bar's width - the figure beside the bar is never clamped, so a store past its
+ *  target still reads what it actually did.
+ *
+ *  A month with no target set returns `null`: no target is not 0% of a target,
+ *  and a bar drawn at zero against nothing would read as failure. */
 export function targetProgressPct(mtdPaise: number, targetPaise: number): number | null {
   if (targetPaise <= 0) return null;
-  return Math.min(100, Math.round((mtdPaise / targetPaise) * 100));
+  return Math.min(100, Math.max(0, Math.round((mtdPaise / targetPaise) * 100)));
 }
 
-/** "Tue 30 Jul" — the sparkline's tick. Built from the ISO parts rather than
+/** "30 Jul" - the sparkline's tick. Built from the ISO parts rather than
  *  `new Date(iso)`, which parses a bare date as UTC and can shift it a day. */
 export function shortDay(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);

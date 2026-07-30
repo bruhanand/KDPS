@@ -25,7 +25,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section
 from accounts.sections import CAP_MANAGE, CAP_VIEW
 from core.fiscal import financial_year_months
-from core.refusals import first_message, refuse
+from core.refusals import first_message, refusal_body
 from core.textsearch import search_term, text_filter
 from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store, StoreTarget
 
@@ -248,27 +248,32 @@ class StoreTargetView(APIView):
             try:
                 months = financial_year_months(fy)
             except ValueError as exc:
-                return refuse("VALIDATION", str(exc), 400)
+                return Response(refusal_body("VALIDATION", str(exc)), status=400)
             rows = rows.filter(month__in=months)
         return Response(StoreTargetSerializer(rows, many=True).data)
 
     def put(self, request: Request) -> Response:
         form = StoreTargetWriteSerializer(data=request.data)
         if not form.is_valid():
-            return refuse("VALIDATION", first_message(form.errors), 400)
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
         code = form.validated_data["store"]
         store = Store.objects.filter(code__iexact=code, is_active=True).first()
         if store is None:
             # A closed store is not a store to plan against, so it answers the
             # same as one that never existed. The contract says only "store must
             # exist"; refusing the closed ones too is deliberate.
-            return refuse("NOT_FOUND", f"No active store with code '{code}'.", 404)
+            return Response(
+                refusal_body("NOT_FOUND", f"No active store with code '{code}'."), status=404
+            )
         # Beyond the contract's own steps, deliberately: `money: manage` says what
         # a person may do, never where. Without this, one rung would set targets
         # for stores the admin never entitled them to.
         entitled = scope_by_entitlement(Store.objects.filter(pk=store.pk), request.user, "id")
         if not entitled.exists():
-            return refuse("SCOPE_DENIED", f"{store.code} is not one of your locations.", 403)
+            return Response(
+                refusal_body("SCOPE_DENIED", f"{store.code} is not one of your locations."),
+                status=403,
+            )
         target, _ = StoreTarget.objects.update_or_create(
             store=store,
             month=form.validated_data["month"],
