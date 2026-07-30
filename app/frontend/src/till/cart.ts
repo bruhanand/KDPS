@@ -443,6 +443,17 @@ export function whyItCannotClose(bill: PricedBill): string {
       "A manager of this store has to approve it."
     );
   }
+  // Found in browser QA of #185, and it is #181's rule rather than that ticket's:
+  // `_resolve_line` refuses a line with no salesman on it, and the counter was
+  // letting one through. The bill printed, the customer paid, and the queue then
+  // halted on a `VALIDATION` that no amount of retrying could clear - taking
+  // every bill behind it with it, because the queue does not reorder itself to
+  // get past a bill the server refuses. A per-line salesman is locked in D10, so
+  // this is a question the screen has to ask before the number is spent.
+  const unattributed = bill.lines.find((line) => line.salesman == null);
+  if (unattributed) {
+    return `Line ${unattributed.line_no} has no salesman. Pick who sold the piece.`;
+  }
   const notesCovered = !bill.needsAuthorising.some((ask) => ask.kind === UNVERIFIED_NOTE);
   return whyPaymentCannotClose(bill.split, notesCovered, bill.net_paise);
 }
