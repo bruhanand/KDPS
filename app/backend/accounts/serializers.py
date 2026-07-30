@@ -13,6 +13,7 @@ from accounts.models import NAV_GROUPS, ActorPolicy, Role, User
 from accounts.permissions import visible_sections
 from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
 from accounts.sections import CAPABILITY_ORDER, is_valid_capability, is_valid_section
+from accounts.till_pin import may_hold_till_pin
 from approvals.models import ApprovalPolicy
 from masters.models import Brand, Store
 from masters.scoping import BRAND_SCOPE, scoped_brands, scoped_stores, visible_store_ids
@@ -193,6 +194,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     # the mode or the list from the role code.
     business_unit_mode = serializers.SerializerMethodField()
     assigned_brands = serializers.SerializerMethodField()
+    # Whether this person has a counter PIN, and never what it is (#182). The
+    # card that offers to set one has to be able to say "you have one already",
+    # and a hash is a credential that has no business in a profile response.
+    has_till_pin = serializers.SerializerMethodField()
+    may_hold_till_pin = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -216,7 +222,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "all_business_units",
             "business_unit_mode",
             "assigned_brands",
+            "has_till_pin",
+            "may_hold_till_pin",
         ]
+
+    def get_has_till_pin(self, obj: User) -> bool:
+        return bool(obj.till_pin_hash)
+
+    def get_may_hold_till_pin(self, obj: User) -> bool:
+        return may_hold_till_pin(obj)
 
     def get_nav_groups(self, obj: User) -> list[str]:
         if obj.is_superuser:

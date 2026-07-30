@@ -793,6 +793,13 @@ def _write_sale(
         round_paise=totals["round_paise"],
         exchange_of=original_bill,
         salesman_default=next((line.salesman for line in lines if line.salesman), None),
+        # Only a manager the pipeline actually recognised is written here. An
+        # override naming somebody who is not a manager of this store has already
+        # been discarded by `manager_for_override`, and recording the id anyway
+        # would put a name on a bill that person never authorised.
+        override_by=override,
+        override_kind=(data.get("override") or {}).get("kind", "") if override else "",
+        override_at=(data.get("override") or {}).get("at") if override else None,
         created_by=actor,
     )
     for line in lines:

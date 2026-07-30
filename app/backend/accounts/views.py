@@ -51,6 +51,7 @@ from accounts.serializers import (
     CustomTokenObtainPairSerializer,
     UserProfileSerializer,
 )
+from accounts.till_pin import hash_till_pin, may_hold_till_pin, pin_problem
 from approvals.models import ApprovalPolicy
 from core.textsearch import search_term, text_filter
 from masters.models import Brand, Store
@@ -120,6 +121,57 @@ class MeView(APIView):
 
     def get(self, request: Request) -> Response:
         return Response(UserProfileSerializer(request.user).data)
+
+
+class TillPinView(APIView):
+    """Set your own counter PIN (#182). Your own, and nobody else's.
+
+    Self-service on purpose. An override's whole value is that it names who was
+    standing at the counter, so an administrator who could set a manager's PIN
+    could authorise a discount in that manager's name - which is why the caller
+    proves who they are with their own password and the row written is their own.
+
+    Not a `PATCH` on the user admin endpoint either: that surface is the
+    two-administrator access-change path (`PendingAccessChangeMixin`), and a
+    person changing their own credential is not an access change waiting on
+    somebody else's approval - it is the same shape as changing a password.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request: Request) -> Response:
+        user = request.user
+        if not may_hold_till_pin(user):
+            return _refuse(
+                "A counter PIN authorises an exception at a till, so it belongs to "
+                "somebody who holds the second eye on selling at a store. Ask an "
+                "administrator if that should be you.",
+                "NOT_A_TILL_MANAGER",
+                status.HTTP_403_FORBIDDEN,
+            )
+        pin = str(request.data.get("pin") or "")
+        problem = pin_problem(pin)
+        if problem:
+            return _refuse(problem, "VALIDATION", status.HTTP_400_BAD_REQUEST)
+        # The password check comes second so a bad PIN is answered as a bad PIN.
+        # It comes at all because a counter is a shared machine: a screen left
+        # signed in is otherwise a way to give yourself somebody else's override.
+        if not user.check_password(str(request.data.get("current_password") or "")):
+            return _refuse(
+                "That is not your password, so the PIN was not changed.",
+                "PASSWORD_WRONG",
+                status.HTTP_403_FORBIDDEN,
+            )
+        user.till_pin_hash = hash_till_pin(pin)
+        user.save(update_fields=["till_pin_hash"])
+        # The till learns about it on its next sync, like every other fact about
+        # this store - there is no push, and there does not need to be.
+        return Response({"status": "set"})
+
+
+def _refuse(message: str, code: str, http_status: int) -> Response:
+    """The `{"error", "code"}` body every endpoint written for the till uses."""
+    return Response({"error": message, "code": code}, status=http_status)
 
 
 class LogoutView(APIView):

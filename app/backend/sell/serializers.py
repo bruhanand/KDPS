@@ -122,6 +122,11 @@ class _TotalsWriteSerializer(serializers.Serializer):
 class _OverrideWriteSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
     kind = serializers.CharField(max_length=40, allow_blank=True, required=False, default="")
+    #: When the manager's PIN was accepted at the counter. A separate moment from
+    #: `billed_at` - a manager authorises a discount and the cashier goes on
+    #: scanning - and the whole point of the evidence is the gap between the two.
+    #: Optional, because a till that predates this field is still a till.
+    at = serializers.DateTimeField(required=False, allow_null=True, default=None)
 
 
 class SaleWriteSerializer(serializers.Serializer):
@@ -241,6 +246,7 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
     flags = FlagReadSerializer(many=True, read_only=True)
     credit_notes_issued = serializers.SerializerMethodField()
     billed_by = serializers.CharField(source="created_by.username", read_only=True, default="")
+    authorised_by = serializers.CharField(source="override_by.username", read_only=True, default="")
 
     class Meta:
         model = Sale
@@ -264,6 +270,9 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
             "gst_paise",
             "round_paise",
             "billed_by",
+            "authorised_by",
+            "override_kind",
+            "override_at",
             "lines",
             "tenders",
             "flags",
