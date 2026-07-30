@@ -66,10 +66,23 @@ export function useScanBox(enabled = true): ScanBox {
   return { ref, focus };
 }
 
+/** As much of an element as this decision needs.
+ *
+ *  A structural shape rather than `Element`, so the rule can be tested as the
+ *  plain function it is: the suite runs in node, and a real element would drag
+ *  a DOM implementation in behind it. `Element` satisfies this as it stands. */
+export interface FocusTarget {
+  tagName: string;
+  isContentEditable?: boolean;
+  closest(selector: string): unknown;
+}
+
 /** Is this element one a person is legitimately typing into? */
-export function ownsTheKeyboard(active: Element | null): boolean {
+export function ownsTheKeyboard(active: FocusTarget | null): boolean {
   if (!active) return false;
   if (active.closest("[data-wedge-ignore]")) return true;
-  if (active instanceof HTMLElement && active.isContentEditable) return true;
+  // Only an `HTMLElement` carries this; on anything else it is undefined, which
+  // is the right answer anyway.
+  if (active.isContentEditable) return true;
   return ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName);
 }

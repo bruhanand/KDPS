@@ -235,8 +235,11 @@ What shipped is below, and #181 should be built against this text.
 - **Two sections were added while building the Billing screen (#181): `seasons` and `policy`.**
   Both are sent whole on every response, for the same reason `gst_slabs` and `managers` are.
   `seasons` is `[{code, name, status, sort_order}]`, the season master's own ordering.
-  A2 says a scan that does not name a season resolves to the *oldest live* one with stock, and `sell.services.resolve` makes that choice by ranking `(is_closed, sort_order)` from that master - so a till without it would fall back to sorting names, and "FW25 before SS26" is true only by the accident of the alphabet.
-  The season the till picks is the season it writes on the line, and the accept pipeline honours an exact `(barcode, season)` outright, so the till's choice is the one that reaches the books.
+  A2 says a scan that does not name a season resolves to the *oldest live* one with stock.
+  `resolve_piece` makes that choice in three steps: the season actually on this shelf first (from `StockOnHand`), then `(is_closed, sort_order)` from the season master, then the cohort's own id.
+  The till can apply the second step and not the first, because the dataset's `stock` rows are counted per barcode and carry no season - so a till without the master would fall back to sorting names, where "FW25 before SS26" is true only by the accident of the alphabet.
+  That the two differ on the first step does not matter in practice: the season the till picks is the season it writes on the line, and the accept pipeline honours an exact `(barcode, season)` outright, so the till's choice is the one that reaches the books.
+  Sending season-aware stock so the till could match step one exactly is a change to the `stock` section, and it belongs with whatever slice first needs it rather than with this screen.
   `policy` is `{"manual_discount_cap_percent": "7.50"}` from `SellPolicy`, a two-decimal string for the reason the tax rates are.
   Without it the counter cannot hold the cap it is meant to hold, and a cashier's over-cap discount would be discovered by an `OVERRIDE_REQUIRED` days later, on a bill already printed, paid for and in a customer's hand.
 

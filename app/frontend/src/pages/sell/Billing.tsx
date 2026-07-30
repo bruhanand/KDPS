@@ -7,9 +7,9 @@ import { useAuth } from "../../auth/AuthContext";
 import { Money, paiseToRupees, rupeesToPaise } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
-import { addPiece, priceCart, toDraft, whyItCannotClose } from "../../till/cart";
+import { addPiece, priceCart, qtyFrom, toDraft, whyItCannotClose } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
-import { resolveScan, searchPieces } from "../../till/lookup";
+import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
 import type { QueuedBill, TillItem } from "../../till/types";
@@ -69,6 +69,12 @@ function Counter({ storeName }: { storeName?: string }) {
   const [printProblem, setPrintProblem] = useState("");
   const [lastBill, setLastBill] = useState<{ bill: QueuedBill; receipt: string } | null>(null);
   const [typed, setTyped] = useState("");
+  // The last salesman *picked*, which is not the same as the last one saved: a
+  // bill often runs several lines before it closes, and the second piece should
+  // land on the person who sold the first (D10 §4), not on whoever sold the
+  // previous customer. Nought until somebody picks, and then the counter's copy
+  // takes over from what the dataset remembered across the session.
+  const [lastPicked, setLastPicked] = useState<number | null>(null);
   // Bumped by every commit so the in-memory copy re-reads the shelf the sale
   // just moved. The sync time covers the other direction.
   const [commits, setCommits] = useState(0);
@@ -92,9 +98,17 @@ function Counter({ storeName }: { storeName?: string }) {
   const locked = saving;
 
   const suggestions = useMemo(
-    () => (typed.trim().length >= 2 ? searchPieces(world.items, typed) : []),
-    [typed, world.items],
+    () =>
+      typed.trim().length >= 2
+        ? searchPieces(world.items, typed).map((piece) => ({
+            piece,
+            stock: world.stock.find((s) => s.barcode === piece.barcode)?.qty ?? 0,
+          }))
+        : [],
+    [typed, world.items, world.stock],
   );
+
+  const defaultSalesman = lastPicked ?? world.lastSalesman;
 
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
@@ -102,13 +116,13 @@ function Counter({ storeName }: { storeName?: string }) {
         ...current,
         lines: [
           ...current.lines,
-          { ...addPiece(piece, { stock, alternatives }), salesman: world.lastSalesman },
+          { ...addPiece(piece, { stock, alternatives }), salesman: defaultSalesman },
         ],
       }));
       setNote("");
       setTyped("");
     },
-    [world.lastSalesman],
+    [defaultSalesman],
   );
 
   const applyScan = useCallback(
@@ -135,6 +149,21 @@ function Counter({ storeName }: { storeName?: string }) {
       ...current,
       lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
     }));
+  }
+
+  /**
+   * Crediting the sale, and the cursor going home afterwards.
+   *
+   * Picking from a `<select>` leaves the keyboard inside it, so the next scan
+   * would type the barcode into the dropdown. The focus patrol deliberately
+   * will not take focus off anything a person can type into, so the screen has
+   * to hand it back at the moment the picking is done (AC 2).
+   */
+  function pickSalesman(key: string, salesman: number | null) {
+    editLine(key, { salesman });
+    setLastPicked(salesman);
+    if (salesman != null) void engine?.rememberSalesman(salesman);
+    scan.focus();
   }
 
   function removeLine(key: string) {
@@ -177,9 +206,6 @@ function Counter({ storeName }: { storeName?: string }) {
         toDraft(bill, { billedAt: new Date().toISOString(), customer }),
       );
       setCommits((n) => n + 1);
-      if (bill.lines[0]?.salesman != null) {
-        await engine.rememberSalesman(bill.lines[0].salesman);
-      }
       const receipt = receiptHtml(queued, world.store ?? FALLBACK_STORE, {
         storeName,
         tenderedPaise: bill.tenderedPaise,
@@ -238,7 +264,6 @@ function Counter({ storeName }: { storeName?: string }) {
       {suggestions.length > 0 && (
         <Suggestions
           pieces={suggestions}
-          world={world}
           onPick={(piece) => {
             const found = resolveScan(piece.barcode, world);
             takePiece(piece, found.candidates, found.stock);
@@ -254,6 +279,8 @@ function Counter({ storeName }: { storeName?: string }) {
             salesmen={world.salesmen}
             locked={locked}
             onEdit={editLine}
+            onSalesman={pickSalesman}
+            onPicked={scan.focus}
             onRemove={removeLine}
           />
         </section>
@@ -316,14 +343,8 @@ const FALLBACK_STORE = { code: "", gstin: "", state_code: "" };
 
 /** How a line reads on paper, from the cart the counter just billed. */
 function describeFrom(lines: PricedLine[]) {
-  const words = new Map(
-    lines.map((line) => [
-      line.line_no,
-      [line.brand, line.item, line.design, line.size, line.color].filter(Boolean).join(" · "),
-    ]),
-  );
-  return (line: { line_no: number; barcode: string }) =>
-    words.get(line.line_no) || line.barcode;
+  const words = new Map(lines.map((line) => [line.line_no, describePiece(line)]));
+  return (line: { line_no: number; barcode: string }) => words.get(line.line_no) || line.barcode;
 }
 
 // --- the scan box ----------------------------------------------------------
@@ -373,18 +394,16 @@ function ScanBox({
 
 function Suggestions({
   pieces,
-  world,
   onPick,
 }: {
-  pieces: TillItem[];
-  world: { stock: { barcode: string; qty: number }[] };
+  pieces: { piece: TillItem; stock: number }[];
   onPick: (piece: TillItem) => void;
 }) {
   return (
     <div className="card section-card bill-suggest" data-testid="bill-suggestions">
       <p className="eyebrow">Did you mean</p>
       <div className="bill-suggest-rows">
-        {pieces.map((piece) => (
+        {pieces.map(({ piece, stock }) => (
           <button
             key={`${piece.barcode}/${piece.season}`}
             type="button"
@@ -392,12 +411,9 @@ function Suggestions({
             data-testid={`bill-suggest-${piece.barcode}`}
             onClick={() => onPick(piece)}
           >
-            <span>
-              {piece.brand} {piece.item} · {piece.design} · {piece.size} · {piece.color}
-            </span>
+            <span>{describePiece(piece)}</span>
             <span className="muted-cell">
-              {piece.season} · {world.stock.find((s) => s.barcode === piece.barcode)?.qty ?? 0} in
-              stock
+              {piece.season} · {stock} in stock
             </span>
           </button>
         ))}
@@ -431,12 +447,16 @@ function Lines({
   salesmen,
   locked,
   onEdit,
+  onSalesman,
+  onPicked,
   onRemove,
 }: {
   lines: PricedLine[];
   salesmen: { id: number; code: string; name: string }[];
   locked: boolean;
   onEdit: (key: string, patch: Partial<CartLine>) => void;
+  onSalesman: (key: string, salesman: number | null) => void;
+  onPicked: () => void;
   onRemove: (key: string) => void;
 }) {
   if (!lines.length) {
@@ -479,7 +499,7 @@ function Lines({
               <td>
                 {line.item}
                 <br />
-                <SeasonCell line={line} locked={locked} onEdit={onEdit} />
+                <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
               </td>
               <td>{line.brand}</td>
               <td>
@@ -503,7 +523,7 @@ function Lines({
                   data-testid={`bill-qty-${line.line_no}`}
                   aria-label={`Quantity, line ${line.line_no}`}
                   value={line.qty}
-                  onChange={(e) => onEdit(line.key, { qty: Math.max(1, Number(e.target.value)) })}
+                  onChange={(e) => onEdit(line.key, { qty: qtyFrom(e.target.value) })}
                 />
               </td>
               <td className="num">
@@ -527,7 +547,7 @@ function Lines({
                   aria-label={`Salesman, line ${line.line_no}`}
                   value={line.salesman ?? ""}
                   onChange={(e) =>
-                    onEdit(line.key, { salesman: e.target.value ? Number(e.target.value) : null })
+                    onSalesman(line.key, e.target.value ? Number(e.target.value) : null)
                   }
                 >
                   <option value="">Nobody</option>
@@ -561,6 +581,13 @@ function Lines({
   );
 }
 
+/** What every editable cell in the line grid needs, and nothing more. */
+interface CellProps {
+  line: PricedLine;
+  locked: boolean;
+  onEdit: (key: string, patch: Partial<CartLine>) => void;
+}
+
 /**
  * The season, and the one-tap ask when there is a choice (A2).
  *
@@ -568,15 +595,7 @@ function Lines({
  * oldest live season, and this is how a person changes their mind. It is the
  * only question this screen is allowed to ask mid-sale.
  */
-function SeasonCell({
-  line,
-  locked,
-  onEdit,
-}: {
-  line: PricedLine;
-  locked: boolean;
-  onEdit: (key: string, patch: Partial<CartLine>) => void;
-}) {
+function SeasonCell({ line, locked, onEdit, onPicked }: CellProps & { onPicked: () => void }) {
   if (line.alternatives.length < 2) {
     return <span className="muted-cell">{line.season}</span>;
   }
@@ -590,7 +609,14 @@ function SeasonCell({
       onChange={(e) => {
         const picked = line.alternatives.find((a) => a.season === e.target.value);
         if (!picked) return;
-        onEdit(line.key, { season: picked.season, mrp_paise: picked.mrp_paise ?? 0 });
+        onEdit(line.key, {
+          season: picked.season,
+          mrp_paise: picked.mrp_paise ?? 0,
+          // The other season may be the one nobody priced, so the answer to
+          // "does this line still need a price?" moves with the season.
+          needs_price: picked.mrp_paise == null,
+        });
+        onPicked();
       }}
     >
       {line.alternatives.map((a) => (
@@ -603,17 +629,14 @@ function SeasonCell({
 }
 
 /** The ticket price. Editable only because a piece can reach a shelf with no
- *  MRP recorded (contract, step 3) - and then a human reads it off the tag. */
-function RateCell({
-  line,
-  locked,
-  onEdit,
-}: {
-  line: PricedLine;
-  locked: boolean;
-  onEdit: (key: string, patch: Partial<CartLine>) => void;
-}) {
-  if (line.mrp_paise > 0) return <Money paise={line.mrp_paise} />;
+ *  MRP recorded (contract, step 3) - and then a human reads it off the tag.
+ *
+ *  The test is `needs_price`, never the current amount. Keying off the amount
+ *  would unmount the box on the first digit typed - "1" is 100 paise, which is
+ *  a price - leaving a ₹1,499 garment stuck at ₹1 with no way back, and a bill
+ *  so internally consistent that the server would take it. */
+function RateCell({ line, locked, onEdit }: CellProps) {
+  if (!line.needs_price) return <Money paise={line.mrp_paise} />;
   return (
     <RupeeInput
       testId={`bill-rate-${line.line_no}`}
@@ -627,15 +650,7 @@ function RateCell({
 }
 
 /** A manual discount, and the cap it lives under (B2). */
-function DiscountCell({
-  line,
-  locked,
-  onEdit,
-}: {
-  line: PricedLine;
-  locked: boolean;
-  onEdit: (key: string, patch: Partial<CartLine>) => void;
-}) {
+function DiscountCell({ line, locked, onEdit }: CellProps) {
   return (
     <>
       <RupeeInput
@@ -651,6 +666,13 @@ function DiscountCell({
           over the cap
         </span>
       )}
+      {/* Information, not a gate - and deliberately so. The corpus ties
+          `no_discount` to the *offer* rulebook only ("no_discount excluded",
+          api-contract step 6), which is #183; nothing in it says a cashier's
+          keyed-in discount is barred on such a style. Enforcing one here would
+          be inventing brand policy, so the cap governs this line like any other
+          and the cashier is told what they are discounting. Whether the flag
+          should also bind a manual discount is Anand's to rule on. */}
       {line.no_discount && <span className="muted-cell">no-discount style</span>}
     </>
   );

@@ -44,6 +44,11 @@ export interface CartLine {
   /** The ticket price of one piece, GST inclusive. Nought means nobody has
    *  recorded one and the counter must ask. */
   mrp_paise: number;
+  /** The books had no price for this piece, so a human is typing one off the
+   *  tag. It stays true once the price is typed, because it is a fact about how
+   *  the line arrived rather than about what it currently says - and the price
+   *  box has to survive the first keystroke that makes the price non-nought. */
+  needs_price: boolean;
   qty: number;
   /** Keyed in by the cashier, over the whole line. */
   disc_paise: number;
@@ -120,6 +125,7 @@ export function addPiece(
     // `null` means nobody has recorded a price. It becomes a nought here and a
     // refusal to close in `whyItCannotClose` - never a free garment.
     mrp_paise: piece.mrp_paise ?? 0,
+    needs_price: piece.mrp_paise == null,
     qty: 1,
     disc_paise: 0,
     salesman: null,
@@ -132,6 +138,20 @@ let keys = 0;
 
 function newKey(): string {
   return `l${(keys += 1)}`;
+}
+
+/**
+ * A quantity as the counter may type it: whole pieces, never fewer than one.
+ *
+ * `<input type="number" step="1">` does not stop anybody typing "1.5" - `step`
+ * is a validation hint, not a filter, and `e.target.value` hands the string over
+ * regardless. A fraction here is not a display nuisance: `mrp × 1.5` puts a
+ * float on the write path (ADR-0004), and the server's `IntegerField(min_value=1)`
+ * then refuses the bill - after it has printed, with the whole queue behind it.
+ */
+export function qtyFrom(typed: string | number): number {
+  const whole = Math.trunc(Number(typed));
+  return Number.isFinite(whole) && whole >= 1 ? whole : 1;
 }
 
 /**

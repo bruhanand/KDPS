@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { addPiece, capFor, changeFor, priceCart, toDraft, whyItCannotClose } from "./cart";
+import {
+  addPiece,
+  capFor,
+  changeFor,
+  priceCart,
+  qtyFrom,
+  toDraft,
+  whyItCannotClose,
+} from "./cart";
 import type { Cart } from "./cart";
 import { item, season } from "./testSupport";
 import type { TillGstSlab } from "./types";
@@ -19,7 +27,7 @@ function cartOf(...lines: Cart["lines"]): Cart {
   return { lines, tenderedPaise: 0 };
 }
 
-function scanned(mrp: number, over: Partial<Cart["lines"][number]> = {}) {
+function scanned(mrp: number | null, over: Partial<Cart["lines"][number]> = {}) {
   return { ...addPiece(item("8901", "FW25", mrp), { stock: 3, alternatives: [] }), ...over };
 }
 
@@ -210,5 +218,58 @@ describe("the bill handed to the till", () => {
   it("claims no offer, because there is no rulebook yet (#183)", () => {
     expect(drafted.lines.every((l) => l.offer_evidence && !("saved_paise" in l.offer_evidence)));
     expect(drafted.lines[0].offer_id ?? null).toBeNull();
+  });
+});
+
+describe("a quantity as the counter may type it", () => {
+  // `step={1}` on the input is a validation hint, not a filter: the browser
+  // hands "1.5" straight to the change handler. A fraction that reached the
+  // cart would put a float on the write path and then draw a 400 from the
+  // server's `IntegerField(min_value=1)` - on a bill already in a customer's
+  // hand, with the whole queue stuck behind it.
+  it("keeps whole pieces out of a fraction", () => {
+    expect(qtyFrom("1.5")).toBe(1);
+    expect(qtyFrom("2.9")).toBe(2);
+    expect(qtyFrom(3.7)).toBe(3);
+  });
+
+  it("never lets a line go to nought or below", () => {
+    expect(qtyFrom("0")).toBe(1);
+    expect(qtyFrom("-4")).toBe(1);
+  });
+
+  it("survives a box the cashier has emptied mid-edit", () => {
+    expect(qtyFrom("")).toBe(1);
+    expect(qtyFrom("abc")).toBe(1);
+  });
+
+  it("prices a fractional entry as the whole pieces it became", () => {
+    const bill = priceCart(cartOf(scanned(149900, { qty: qtyFrom("2.6") })), WORLD, "2026-07-30");
+
+    expect(bill.lines[0].qty).toBe(2);
+    expect(bill.lines[0].gross_paise).toBe(299800);
+    expect(Number.isInteger(bill.net_paise)).toBe(true);
+  });
+});
+
+describe("a piece the books never priced", () => {
+  it("is marked as needing a price, so the box survives the first digit typed", () => {
+    // The bug this guards: keying the price box off `mrp_paise > 0` unmounts it
+    // the moment "1" becomes 100 paise, stranding a ₹1,499 garment at ₹1 on a
+    // bill so internally consistent the server would take it.
+    const line = scanned(null);
+    expect(line.needs_price).toBe(true);
+
+    const typing = { ...line, mrp_paise: 100 };
+    expect(typing.needs_price).toBe(true);
+  });
+
+  it("leaves a priced piece alone", () => {
+    expect(scanned(149900).needs_price).toBe(false);
+  });
+
+  it("refuses to close until a human types the price off the tag", () => {
+    const bill = priceCart(cartOf(scanned(null)), WORLD, "2026-07-30");
+    expect(whyItCannotClose(bill)).toContain("no price");
   });
 });

@@ -13,6 +13,7 @@
 // check, and a store person seeing it on the paper knows why head office may not
 // have this bill yet.
 
+import { changeFor } from "./cart";
 import type { BillLine, QueuedBill, TillStoreIdentity } from "./types";
 
 export interface ReceiptOptions {
@@ -66,7 +67,9 @@ export function receiptHtml(
   store: TillStoreIdentity,
   options: ReceiptOptions = {},
 ): string {
-  const change = Math.max(0, (options.tenderedPaise ?? 0) - bill.totals.net_paise);
+  // The same function the screen quoted the customer, not a second copy of the
+  // sum: the printed change and the change on the display have to agree.
+  const change = changeFor(options.tenderedPaise ?? 0, bill.totals.net_paise);
   const pieces = bill.lines.reduce((n, line) => n + line.qty, 0);
   const customer = bill.customer ?? {};
 

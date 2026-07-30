@@ -93,7 +93,7 @@ const BUILT: Screen[] = [
   // (#170). It belongs to no section: it is the store persona's arrangement of
   // three of them, and its tabs carry those sections' own gates.
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },
-  // Sell — the counter (#181) and the till layer's own surface (#180).
+  // Sell - the counter (#181) and the till layer's own surface (#180).
   //
   // `TillProvider` wraps each screen rather than the app: opening a counter's
   // local database means holding one store's price list, credit notes and

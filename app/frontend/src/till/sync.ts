@@ -101,8 +101,17 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.managers.bulkPut(payload.managers);
       await db.gstSlabs.clear();
       await db.gstSlabs.bulkPut(payload.gst_slabs);
-      await db.seasons.clear();
-      await db.seasons.bulkPut(payload.seasons ?? []);
+      // Seasons and the policy arrived after the till spine did (#181), so a
+      // server that predates them - a rolling deploy is exactly that, for a few
+      // minutes - answers without the key. Absent means "this server has nothing
+      // to say", not "the master is empty": wiping it would drop scan resolution
+      // back to sorting names, where "FW25 before SS26" is true only by the
+      // accident of the alphabet, and the till would write a season onto the
+      // line that the server would never have chosen.
+      if (payload.seasons) {
+        await db.seasons.clear();
+        await db.seasons.bulkPut(payload.seasons);
+      }
 
       // A withdrawal names a barcode and takes every season of that piece with
       // it: a cohort is a record of a purchase and is never unmade, so the only

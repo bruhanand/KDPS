@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { olderSeasonFirst, resolveScan, searchPieces } from "./lookup";
+import { describePiece, olderSeasonFirst, resolveScan, searchPieces } from "./lookup";
 import { item, season } from "./testSupport";
 
 const SEASONS = [season("SS24", 1, "closed"), season("FW25", 2), season("SS26", 3)];
@@ -126,5 +126,15 @@ describe("the tag that will not scan", () => {
     }));
 
     expect(searchPieces(many, "shirt").length).toBe(8);
+  });
+});
+
+describe("how a piece reads to a person", () => {
+  it("names the garment the way the tag does", () => {
+    expect(describePiece(item("8901", "FW25"))).toBe("MUFTI · Shirt · SHIRT-01 · M · NAVY");
+  });
+
+  it("drops what the books never filled in, rather than stranding a separator", () => {
+    expect(describePiece({ ...item("8901"), brand: "", color: "" })).toBe("Shirt · SHIRT-01 · M");
   });
 });

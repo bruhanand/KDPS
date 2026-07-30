@@ -197,7 +197,7 @@ a { color: inherit; text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 /* A button nobody may press has to look like one. Without this a disabled
    Save & Print is indistinguishable from a live one, and a cashier presses it
-   twice — which is requirement G3's whole worry. */
+   twice - which is requirement G3's whole worry. */
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 .btn:disabled:hover { background: var(--surface); filter: none; }
 .btn:disabled:active { transform: none; }

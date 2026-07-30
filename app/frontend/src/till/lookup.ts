@@ -110,6 +110,25 @@ function matchRank(row: TillItem, q: string): number | null {
   return null;
 }
 
+/**
+ * How a piece reads to a person - on the screen and on the paper alike.
+ *
+ * One function rather than two, because the receipt and the suggestion list are
+ * describing the same garment: a customer comparing the two should not have to
+ * work out that "LP Polo · LP-2231 · L · Black" and "LP Polo, LP-2231, L, Black"
+ * are the same line. Fields the books left empty drop out rather than leaving
+ * the separators stranded.
+ */
+export function describePiece(piece: {
+  brand: string;
+  item: string;
+  design: string;
+  size: string;
+  color: string;
+}): string {
+  return [piece.brand, piece.item, piece.design, piece.size, piece.color].filter(Boolean).join(" · ");
+}
+
 /** What a scanned code resolves to, and what the counter should be told about it. */
 export function resolveScan(code: string, world: ScanWorld): ScanResult {
   const barcode = code.trim();

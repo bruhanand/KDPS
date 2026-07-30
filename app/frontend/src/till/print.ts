@@ -26,8 +26,6 @@ export interface PrintOutcome {
 }
 
 export interface PrintAdapter {
-  /** A name for the screen, for when there is more than one of these. */
-  readonly name: string;
   /** Can this device print at all? */
   probe(): Promise<PrintOutcome>;
   /** Put a whole HTML document on paper. */
@@ -43,6 +41,15 @@ const OK: PrintOutcome = { ok: true, reason: "" };
  *  live document, and removing it immediately prints a blank page. */
 const TEARDOWN_MS = 1_000;
 
+/** How long to wait for the frame to paint before giving up on it.
+ *
+ *  Without a bound, a `load` that never fires is not a failed print - it is a
+ *  promise that never settles, so the caller's `finally` never runs and every
+ *  control on the counter stays disabled until somebody reloads the page. The
+ *  bill is already committed by then, so the honest outcome is "it did not
+ *  print", not a frozen till. */
+const PAINT_TIMEOUT_MS = 5_000;
+
 /**
  * Print through the browser: a hidden frame, and the browser's own dialogue.
  *
@@ -51,8 +58,6 @@ const TEARDOWN_MS = 1_000;
  * must not inherit the app's - it is 80mm of paper, not a page of the PWA.
  */
 export const browserPrintAdapter: PrintAdapter = {
-  name: "This computer's printer",
-
   async probe(): Promise<PrintOutcome> {
     if (typeof window === "undefined" || typeof window.print !== "function") {
       return { ok: false, reason: "This device cannot print. The bill will still save." };
@@ -73,11 +78,15 @@ export const browserPrintAdapter: PrintAdapter = {
       // nothing to print.
       frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;";
       frame.srcdoc = html;
-      const painted = new Promise<void>((resolve) => {
-        frame!.addEventListener("load", () => resolve(), { once: true });
+      const painted = new Promise<boolean>((resolve) => {
+        frame!.addEventListener("load", () => resolve(true), { once: true });
+        window.setTimeout(() => resolve(false), PAINT_TIMEOUT_MS);
       });
       document.body.appendChild(frame);
-      await painted;
+      if (!(await painted)) {
+        teardown(frame, 0);
+        return { ok: false, reason: "The receipt took too long to prepare." };
+      }
       const inner = frame.contentWindow;
       if (!inner) throw new Error("The receipt could not be prepared.");
       inner.focus();
