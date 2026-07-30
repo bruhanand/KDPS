@@ -130,7 +130,7 @@ def test_a_person_with_no_selling_rights_reaches_none_of_it(db):
 
 
 def test_a_reader_may_read_but_not_bill(db):
-    """`sell: view` — an accounts seat reprints a bill and cannot write one."""
+    """`sell: view` - an accounts seat reprints a bill and cannot write one."""
     from _creds import TEST_PASSWORD
     from _rbac import make_role
 

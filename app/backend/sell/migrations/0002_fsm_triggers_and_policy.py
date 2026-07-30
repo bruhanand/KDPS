@@ -7,7 +7,7 @@ ordinary table with a good docstring.
 
 The policy row is seeded here rather than by `seed_foundation`, because a
 missing one would mean the accept pipeline had no cap to check a discount
-against — and a dial that only exists on seeded machines is not a dial.
+against - and a dial that only exists on seeded machines is not a dial.
 """
 
 from __future__ import annotations

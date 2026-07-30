@@ -9,7 +9,7 @@ and a colour); the *cohort* is that barcode in a season, and it is the cohort
 that carries the cost of record. Bill a re-ordered style whose seasons the store
 holds side by side and something has to choose which one left the shelf. The till
 sends the season when it knows it; when it does not, the answer is the oldest
-live season with stock here (A2) — oldest, because that is what a store actually
+live season with stock here (A2) - oldest, because that is what a store actually
 sells first and what keeps the aging honest.
 """
 
@@ -20,16 +20,17 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
+from accounts.models import User
 from accounts.permissions import user_can
 from accounts.sections import CAP_APPROVE
 from masters.models import Cohort, GstSlab, Season, Store
 from masters.scoping import actionable_store_ids
 from sell.pricing import Slab
-from stockledger.models import StockOnHand
+from stockledger.models import MERCH_DIM_FIELDS, StockOnHand
 
 #: Where a bill's tax lands when nobody has told the system what apparel GST is.
 #: Every path that uses it says so on the bill's flag rather than pretending, and
-#: this only ever *compares* — it never re-prices what the customer already paid.
+#: this only ever *compares* - it never re-prices what the customer already paid.
 _FALLBACK_SLAB = Slab(
     threshold_paise=250000,
     rate_below=Decimal("5"),
@@ -52,21 +53,29 @@ class ResolvedPiece:
         return self.cohort is not None
 
 
+#: The merchandising dims a bill line snapshots, in the ledger's own vocabulary
+#: minus `season`, which a sale carries separately because resolving *which*
+#: season is the whole question this module answers.
+LINE_DIM_FIELDS = tuple(f for f in MERCH_DIM_FIELDS if f != "season")
+
+
+def line_dims(source: Any) -> dict[str, str]:
+    """The dims a bill line snapshots off anything that carries them (Rule 3).
+
+    One bundle, taken from `stockledger`'s own list rather than typed out, so a
+    dim added there arrives on the bill instead of being silently dropped - the
+    rule its docstring states as "copy it with `merch_dims`, never by hand-listing
+    the fields".
+    """
+    return {f: getattr(source, f, "") or "" for f in LINE_DIM_FIELDS}
+
+
 def _dims_from_cohort(cohort: Cohort) -> dict[str, str]:
-    sku = cohort.sku
-    return {
-        "design": sku.design or "",
-        "color": sku.color or "",
-        "size": sku.size or "",
-        "brand": sku.brand or "",
-        "item": sku.item or "",
-        "hsn": sku.hsn or "",
-        "season": cohort.season or "",
-    }
+    return {**line_dims(cohort.sku), "season": cohort.season or ""}
 
 
 def _season_rank(candidates: list[Cohort]) -> dict[str, tuple[int, int]]:
-    """`(is_closed, sort_order)` per season name — lower sorts older and liver.
+    """`(is_closed, sort_order)` per season name - lower sorts older and liver.
 
     Seasons are named, not dated (`masters.Season` is explicit about that), so
     "oldest" means the master's own ordering. A season the cohort names but the
@@ -87,7 +96,7 @@ def _season_rank(candidates: list[Cohort]) -> dict[str, tuple[int, int]]:
 def resolve_piece(store: Store, barcode: str, season: str) -> ResolvedPiece:
     """The cohort a scan means, and what it cost.
 
-    An exact `(barcode, season)` wins outright — the till knew, and second-guessing
+    An exact `(barcode, season)` wins outright - the till knew, and second-guessing
     it would be the system overruling the scan. Otherwise the candidates are
     ranked by what a store actually sells first: stock on this shelf, then a live
     season over a closed one, then the master's own oldest-first order.
@@ -153,19 +162,17 @@ def slab_for(hsn: str, when: date) -> Slab:
     )
 
 
-def manager_for_override(user_id: Any, store: Store) -> Any:
+def manager_for_override(user_id: Any, store: Store) -> User | None:
     """The manager behind an override, or `None` if that id does not name one.
 
     Two questions, and both have to answer yes: does this person hold the second
     eye on selling (`sell >= approve`), and do they hold it *here*. A manager from
-    another store is not a manager at this counter — the override is evidence
+    another store is not a manager at this counter - the override is evidence
     recorded on the bill and it has to name somebody who could actually have been
     standing at it.
     """
     if not user_id:
         return None
-    from accounts.models import User
-
     user = User.objects.filter(pk=user_id, is_active=True).select_related("role").first()
     if user is None or not user_can(user, "sell", CAP_APPROVE):
         return None

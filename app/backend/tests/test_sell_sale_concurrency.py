@@ -1,7 +1,7 @@
 """Two of the same bill arriving at once (#177).
 
 The single-threaded replay test proves the *sequential* case: sync, then sync
-again. This proves the case that actually breaks systems — the till's queue
+again. This proves the case that actually breaks systems - the till's queue
 retrying while the first attempt is still in flight, two tabs, a proxy that
 double-delivers. Both requests reach the pipeline before either has committed,
 so nothing either of them *reads* can tell them apart. What separates them is the
@@ -49,7 +49,7 @@ def _fresh_counter():
 
 
 def _post_in_thread(user, payload):
-    """One request on its own connection, closed after — a thread that leaves a
+    """One request on its own connection, closed after - a thread that leaves a
     connection open holds a transaction the other thread is waiting on."""
     try:
         return client_for(user).post(SALES_URL, payload, format="json")

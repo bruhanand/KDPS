@@ -1,4 +1,4 @@
-"""MRP-inclusive tax arithmetic for a bill line — pure functions, no ORM.
+"""MRP-inclusive tax arithmetic for a bill line - pure functions, no ORM.
 
 A price tag in an Indian apparel store is GST-inclusive, so the counter works
 backwards: the customer pays the tag less the offer, and the tax already sits
@@ -6,8 +6,8 @@ inside that number. Two things follow, and both are easy to get subtly wrong.
 
 **Which slab.** `CONTEXT.md` locks it: 5% at or under ₹2,500 per piece, 18% above,
 decided on the GST-**exclusive**, post-discount, per-piece price. That is
-circular on the face of it — the base depends on the rate and the rate depends on
-the base — and it resolves cleanly because the mapping is monotone: price the
+circular on the face of it - the base depends on the rate and the rate depends on
+the base - and it resolves cleanly because the mapping is monotone: price the
 piece at the lower rate first, and if the base that produces is still inside the
 threshold, the lower rate is the right one. There is no tie to break and the MRP
 can never cross the boundary its own slab was chosen by. `ptmapper.pricing`
@@ -15,7 +15,7 @@ anchors on the same base going the other way, which is what keeps a piece priced
 by head office and the same piece sold at the counter in the same slab.
 
 **Where the half-paisa goes.** The base is rounded half-up and the tax is the
-remainder, never rounded separately — so base + tax is exactly what the customer
+remainder, never rounded separately - so base + tax is exactly what the customer
 paid, on every line, with no drift to explain at the end of the day.
 
 Both functions are advisory here: the till has already priced the bill and

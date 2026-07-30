@@ -7,8 +7,8 @@
 | Admin (IT) | manage | everything |
 | Warehouse / HO ops / data steward | none | no access at all |
 
-The rungs come from `Role.section_access` — the stored matrix, which an
-administrator edits at runtime (#173) — so nothing here names a role. What is
+The rungs come from `Role.section_access` - the stored matrix, which an
+administrator edits at runtime (#173) - so nothing here names a role. What is
 *not* expressible on that ladder stays out of it: the manager's OK on an over-cap
 discount is checked person by person inside the accept pipeline, because it asks
 "could this named person have been standing at this counter", which is a question

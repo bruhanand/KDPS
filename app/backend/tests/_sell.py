@@ -1,7 +1,7 @@
 """Building a store that can sell, and a bill it could plausibly have sold.
 
-Every sale test needs the same five things standing up — a registration, a store,
-a counter person, somebody whose name goes on the line, and a priced piece — and
+Every sale test needs the same five things standing up - a registration, a store,
+a counter person, somebody whose name goes on the line, and a priced piece - and
 each one of them is boring in its own way. They live here so a test can say what
 it is actually about.
 
@@ -35,7 +35,7 @@ from stockledger.projections import post_on_hand_movement
 SALES_URL = "/api/sell/sales"
 FY = "26-27"
 
-#: ₹1,499 shirt that cost ₹700 — an ordinary KDPS line, in paise.
+#: ₹1,499 shirt that cost ₹700 - an ordinary KDPS line, in paise.
 MRP_PAISE = 149900
 COST_PAISE = 70000
 
@@ -115,7 +115,7 @@ def stock_in(
     cost_paise: int = COST_PAISE,
     doc_number: str = "26-27/SEL-DEO/PT/1",
 ) -> None:
-    """Put `qty` on the shelf the way an inward puts it there — through the ledger.
+    """Put `qty` on the shelf the way an inward puts it there - through the ledger.
 
     Writing `StockOnHand` straight would be shorter and would be a lie: the
     projection is a cache of the ledger, so a fixture that seeds one without the
@@ -153,7 +153,7 @@ def build_cashier(store: Store, username: str = "sell_cashier") -> User:
 
 
 def build_manager(store: Store, username: str = "sell_manager") -> User:
-    """A store manager holding `sell: approve` — the second eye at this counter.
+    """A store manager holding `sell: approve` - the second eye at this counter.
 
     The rung is granted here the way an access administrator grants it: by
     writing the cell on the stored role row, which is the authority every gate
@@ -163,7 +163,7 @@ def build_manager(store: Store, username: str = "sell_manager") -> User:
     It has to be granted, because the ratified sheet does not: it predates the POS
     and gives both store seats `sell: operate`, so out of the box nobody who is
     ever standing at a counter holds the rung the sale contract calls "a manager
-    of this store". That is a gap in the seed, not in this code — filed
+    of this store". That is a gap in the seed, not in this code - filed
     separately, and the pipeline is written against the contract's rung.
     """
     role = make_role("store_manager", "Store manager (sell tests)")

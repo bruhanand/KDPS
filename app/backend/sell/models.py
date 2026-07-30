@@ -3,7 +3,7 @@
 The sale is the busiest money document in the system and the only one whose
 number is assigned by the *writer* rather than by the server: the till bills
 offline, so the bill is printed and in the customer's hand before the server ever
-hears about it. `Sale.mint_number()` is where that lands — it accepts the number
+hears about it. `Sale.mint_number()` is where that lands - it accepts the number
 the till brought instead of allocating one, and the kernel
 (`VoucherSeries.accept_external`) decides whether it may be used.
 
@@ -14,22 +14,19 @@ Two shapes here are worth reading before the rest:
   down cannot live on a posted document, so `remaining_paise` is derived from
   the redemption rows appended against it. The document is the fact; the
   redemptions are the ledger of what happened to it.
-* **Flags are rows, not columns.** Everything the business can absorb — a hole in
+* **Flags are rows, not columns.** Everything the business can absorb - a hole in
   the numbering, an unrecognised credit note, a bill whose tax disagrees with
-  today's slab — becomes a `ContinuityFlag` on the store's queue and the bill
+  today's slab - becomes a `ContinuityFlag` on the store's queue and the bill
   still lands (Rule 8, flag don't block).
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from django.db import models
 from django.utils import timezone
 
 from core.base import TimeStampedModel
 from core.documents import DocStatus, Document, MintedNumber, VoucherSeries
-from core.fiscal import financial_year
 from core.money import MoneyField
 
 #: Doc types this app mints. `SAL` is till-assigned (see the kernel's
@@ -47,8 +44,8 @@ class SellPolicy(TimeStampedModel):
 
     ``manual_discount_cap_percent`` is the B2 rule: a discount the rulebook did
     not produce is a *manual* discount, and beyond the cap the bill will not close
-    without a manager's OK recorded on it. It ships at zero — no keyed-in discount
-    at all without a manager — because that is the safe end of the dial for a
+    without a manager's OK recorded on it. It ships at zero - no keyed-in discount
+    at all without a manager - because that is the safe end of the dial for a
     number nobody has decided yet: the requirements register defers the exact
     limits and the per-role grid to D4, which left them thin. Head office widens
     it; nothing widens itself.
@@ -104,7 +101,7 @@ class SellPolicy(TimeStampedModel):
 
 
 class Salesman(TimeStampedModel):
-    """A named seller at a store — the per-line credit on a bill.
+    """A named seller at a store - the per-line credit on a bill.
 
     Not a system login: the person who sold the shirt is frequently not the
     person operating the till. When HRMS lands this becomes the staff master's
@@ -132,8 +129,8 @@ class CreditNote(Document):
 
     Face value only. `remaining_paise` and `status` are **derived**, not stored,
     and that is a consequence of the kernel rather than a preference: a submitted
-    document may not be UPDATEd — the FSM trigger refuses every column change but
-    the move to cancelled — so a balance that falls as the note is spent cannot
+    document may not be UPDATEd - the FSM trigger refuses every column change but
+    the move to cancelled - so a balance that falls as the note is spent cannot
     live here. It lives where it actually happens, in the redemption rows, and
     the note reads its own balance off them. The same argument that makes ledgers
     append-only makes this the right shape anyway.
@@ -164,7 +161,7 @@ class CreditNote(Document):
         blank=True,
         on_delete=models.PROTECT,
         related_name="credit_notes_issued",
-        help_text="The bill that issued it — an exchange whose returns exceeded its sales.",
+        help_text="The bill that issued it - an exchange whose returns exceeded its sales.",
     )
     created_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
@@ -244,7 +241,7 @@ class Sale(Document):
     discount_paise = MoneyField(default=0)
     net_paise = MoneyField(
         default=0,
-        help_text="What the customer pays. May be negative — an exchange whose "
+        help_text="What the customer pays. May be negative - an exchange whose "
         "returns outweigh its sales issues a credit note for the difference.",
     )
     gst_paise = MoneyField(default=0)
@@ -304,7 +301,7 @@ class Sale(Document):
 class SaleLine(TimeStampedModel):
     """One line of a bill, with the piece described as it was at billing (Rule 3).
 
-    `direction` carries the sign — `qty` is always positive. A `return` line is
+    `direction` carries the sign - `qty` is always positive. A `return` line is
     the exchange leg: a piece coming back inside the same bill, priced at what the
     customer actually paid for it on the original (D2), never at today's price.
     """
@@ -314,8 +311,8 @@ class SaleLine(TimeStampedModel):
         RETURN = "return", "Returned (exchange leg)"
 
     class Condition(models.TextChoices):
-        GOOD = "good", "Good — back on the shelf"
-        DAMAGED = "damaged", "Damaged — into quarantine"
+        GOOD = "good", "Good - back on the shelf"
+        DAMAGED = "damaged", "Damaged - into quarantine"
 
     class CostingStatus(models.TextChoices):
         POSTED = "posted", "Costed"
@@ -430,7 +427,7 @@ class SaleTender(TimeStampedModel):
                 condition=models.Q(amount_paise__gt=0), name="ck_saletender_amount_positive"
             ),
             # One direction only: a note may only be named by a credit-note tender.
-            # The reverse does not hold — an unverified note is accepted on a
+            # The reverse does not hold - an unverified note is accepted on a
             # manager's OK and has no row to point at.
             models.CheckConstraint(
                 condition=models.Q(credit_note__isnull=True) | models.Q(mode="credit_note"),
@@ -572,9 +569,3 @@ class IrnQueueItem(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"IRN due {self.due_on} · {self.sale_id}"
-
-
-def sale_financial_year(when: Any) -> str:
-    """The Indian FY a bill belongs to, from its billing moment."""
-    moment = when or timezone.now()
-    return financial_year(moment.date() if hasattr(moment, "date") else moment)
