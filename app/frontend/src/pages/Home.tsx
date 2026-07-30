@@ -199,11 +199,11 @@ function TrialBalancePanel() {
       <div className="net-grid">
         <div className="net-cell">
           <span className="net-num mono"><Money paise={h?.assets_paise ?? 0} short /></span>
-          <span className="net-label">Inventory + SOR stock</span>
+          <span className="net-label">Stock, cash & clearing</span>
         </div>
         <div className="net-cell">
           <span className="net-num mono"><Money paise={h?.liabilities_paise ?? 0} short /></span>
-          <span className="net-label">Payables + GRNI + contra</span>
+          <span className="net-label">Payables, tax & contra</span>
         </div>
       </div>
     </div>

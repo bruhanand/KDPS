@@ -3,8 +3,10 @@
 Surfaces the kernel's balanced-posting guarantee: every voucher fans into legs
 that sum to zero, so the whole value GL's `Σ(amount)` (trial balance) is exactly
 0 when the books tie. We also present the equation of state — assets the PT slice
-builds (inventory + SOR stock + input GST + cash) against the liabilities/contra
-it raises (vendor payable + GRNI + SOR contra). Finance/owner-only (ADR-0003).
+builds (inventory + SOR stock + input GST + cash + card/UPI awaiting settlement)
+against the liabilities/contra it raises (vendor payable + GRNI + SOR contra +
+output GST + credit notes outstanding), with income and expense shown alongside
+but outside those two totals. Finance/owner-only (ADR-0003).
 
 It also answers one question the trial balance cannot: whether any stock row
 holds **zero pieces and non-zero rupees** (#103). A balanced GL says the legs
@@ -30,15 +32,31 @@ from stockledger.models import StockOnHand
 #: How many stranded rows to name before the list is just a count.
 STRANDED_SAMPLE = 20
 
+#: Every account in the chart, with the side it sits on. Exhaustive by test
+#: (`test_books_health_covers_every_gl_account`): a new code that never reaches
+#: this list would not break the trial balance — that is Σ over all legs — but it
+#: would quietly vanish from the equation of state and the account breakdown,
+#: which is a wrong number rather than a missing one.
+#:
+#: `assets_paise` and `liabilities_paise` deliberately sum only the balance-sheet
+#: sides. Income and expense are shown in the breakdown but excluded from those
+#: two totals, so they keep meaning what they meant before selling existed.
 ACCOUNTS = [
     (GLAccount.INVENTORY, "Inventory (owned stock)", "asset"),
     (GLAccount.SOR_STOCK, "SOR / consignment stock", "asset"),
     (GLAccount.INPUT_GST, "Input GST", "asset"),
     (GLAccount.CASH, "Cash & bank", "asset"),
+    (GLAccount.CARD_CLEARING, "Card, awaiting settlement", "asset"),
+    (GLAccount.UPI_CLEARING, "UPI, awaiting settlement", "asset"),
     (GLAccount.VENDOR_PAYABLE, "Vendor payable", "liability"),
     (GLAccount.GRNI, "Goods received, not invoiced", "liability"),
     (GLAccount.SOR_CONTRA, "SOR contra (off-book)", "liability"),
+    (GLAccount.OUTPUT_GST, "Output GST payable", "liability"),
+    (GLAccount.CREDIT_NOTE_LIABILITY, "Credit notes outstanding", "liability"),
     (GLAccount.SUSPENSE, "Suspense", "liability"),
+    (GLAccount.SALES_REVENUE, "Sales revenue", "income"),
+    (GLAccount.COGS, "Cost of goods sold", "expense"),
+    (GLAccount.ROUND_OFF, "Rounding", "expense"),
 ]
 
 

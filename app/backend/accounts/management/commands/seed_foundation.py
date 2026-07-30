@@ -18,8 +18,14 @@ from django.db import transaction
 
 from accounts.models import NAV_GROUPS, Role, User
 from accounts.rbac_matrix import section_access_for
+from core.documents import VoucherSeries
+from core.fiscal import financial_year, next_financial_year
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
+
+#: The selling document types, seeded per store per FY: the sale (till-assigned),
+#: the credit note it can issue, and the plain return that issues one.
+SELL_DOC_TYPES = ("SAL", "CRN", "SRT")
 
 # Demo logins (documented credentials) must NOT be (re)created on a production
 # deploy. Gate them behind SEED_DEMO (default on, so preview/CI keep working);
@@ -149,6 +155,7 @@ class Command(BaseCommand):
         self._seed_roles()
         entity, gstins = self._seed_entity_gstins()
         stores = self._seed_stores(gstins)
+        self._seed_sell_series(stores)
         self._seed_seasons()
         self._seed_brands()
         self._seed_gst_slab()
@@ -218,6 +225,31 @@ class Command(BaseCommand):
             )
             out[code] = store
         return out
+
+    def _seed_sell_series(self, stores: dict[str, Store]) -> None:
+        """The selling counters: a sale, credit-note and return series per store.
+
+        These are seeded rather than created on first use like the other document
+        types, because the sale's counter is not the server's to create lazily —
+        the till already holds a number when it calls, and a missing series row
+        would turn a printed bill into a sync failure the store cannot fix. The
+        credit-note and return series are ordinary server-allocated counters and
+        ride along so the whole selling set exists together.
+
+        Next year's rows are seeded alongside this year's, because the failure
+        this is here to prevent lands precisely at midnight on 1 April: the till
+        rolls its own financial year on its own clock and starts at bill 1, and
+        nobody is deploying at that moment to create the row it needs.
+
+        Idempotent, and only ever creates: `get_or_create` never touches
+        `next_seq` on a series that is already counting.
+        """
+        for fy in (financial_year(), next_financial_year()):
+            for store in stores.values():
+                for doc_type in SELL_DOC_TYPES:
+                    VoucherSeries.objects.get_or_create(
+                        fy=fy, store_code=store.code, doc_type=doc_type
+                    )
 
     def _seed_seasons(self) -> None:
         for code, name, status, order in [

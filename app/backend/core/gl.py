@@ -19,12 +19,16 @@ from core.ledger import LedgerEntry
 
 
 class GLAccount:
-    """The minimal chart of value accounts the inbound→PT→vendor slice posts to.
+    """The chart of value accounts every posting slice draws on.
 
     Plain stable string codes (a full account master is a later slice). Sign
-    convention is carried by the leg amount (dr +, cr −), not the account.
+    convention is carried by the leg amount (dr +, cr −), not the account. This
+    is code, not a table: an account code is a posting-catalog fact that ships
+    with the slice that posts to it, so a typo is an import error rather than a
+    silently mis-filed rupee.
     """
 
+    # -- inbound → PT → vendor (D1/D2) ---------------------------------------
     INVENTORY = "INVENTORY"  # owned stock value (asset)
     SOR_STOCK = "SOR_STOCK"  # brand-owned stock held on SOR/consignment (memo asset)
     SOR_CONTRA = "SOR_CONTRA"  # off-book contra for SOR/consignment stock
@@ -33,6 +37,20 @@ class GLAccount:
     INPUT_GST = "INPUT_GST"  # recoverable input GST (asset)
     CASH = "CASH"  # cash / bank / UPI (asset)
     SUSPENSE = "SUSPENSE"  # balancing holding account
+
+    # -- selling (D10) --------------------------------------------------------
+    # The sale's money side (event A) and cost side (event B). Card and UPI are
+    # *clearing* accounts, not CASH: the customer has paid but the money has not
+    # reached the bank, and the gap between the two is what the daily settlement
+    # reconciliation is for. Keeping them apart is the only way a store's drawer
+    # can be counted against CASH alone.
+    SALES_REVENUE = "SALES_REVENUE"  # net-of-GST, post-discount takings (income)
+    OUTPUT_GST = "OUTPUT_GST"  # GST collected on sale, payable to the state (liability)
+    COGS = "COGS"  # cost of goods sold (expense)
+    CARD_CLEARING = "CARD_CLEARING"  # card tender awaiting acquirer settlement (asset)
+    UPI_CLEARING = "UPI_CLEARING"  # UPI tender awaiting settlement (asset)
+    CREDIT_NOTE_LIABILITY = "CREDIT_NOTE_LIABILITY"  # unspent credit notes owed to customers
+    ROUND_OFF = "ROUND_OFF"  # the rupee-rounding line that makes a bill balance
 
 
 class GLEntry(LedgerEntry):

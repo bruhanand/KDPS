@@ -200,6 +200,32 @@ def test_books_health_reports_balanced_books_after_post(world):
     assert r.data["assets_paise"] == 30000  # Dr INVENTORY 300.00
 
 
+def test_books_health_covers_every_gl_account():
+    """No account may exist in the chart without a side on the equation of state.
+
+    `trial_balance()` is Σ over every leg, so it stays right whatever this list
+    says — which is exactly the danger. A code added to `GLAccount` and forgotten
+    here would silently drop out of `assets_paise`, `liabilities_paise` and the
+    account breakdown: a wrong number rather than a missing one, and nothing else
+    would notice. Selling added seven codes at once, which is when this stopped
+    being hypothetical.
+    """
+    from core.gl import GLAccount
+    from finledger.health import ACCOUNTS
+
+    chart = {
+        value
+        for name, value in vars(GLAccount).items()
+        if not name.startswith("_") and isinstance(value, str)
+    }
+    listed = {code for code, _, _ in ACCOUNTS}
+    assert chart - listed == set(), "GL accounts missing a side in finledger.health.ACCOUNTS"
+    assert listed - chart == set(), (
+        "finledger.health.ACCOUNTS names an account that is not in the chart"
+    )
+    assert {side for _, _, side in ACCOUNTS} <= {"asset", "liability", "income", "expense"}
+
+
 @pytest.mark.parametrize(
     "role_code",
     [
