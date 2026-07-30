@@ -137,6 +137,7 @@ forbidden_modules = [
     "ptmapper",
     "stockledger",
     "finledger",
+    "sell",
 ]
 
 [[tool.importlinter.contracts]]
