@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D10 · The store front — running design record</title>
+<style>
+  :root{
+    --navy:#1f2d4d; --navy2:#2c3e63; --rust:#c4623f;
+    --ink:#222; --muted:#6b7280; --line:#e3e6ec; --bg:#f7f8fa; --card:#fff;
+    --green:#1f7a4d; --green-bg:#e7f4ee; --amber:#9a6700; --amber-bg:#fdf3da;
+    --blue:#1e5fa8; --blue-bg:#e6f0fb; --grey-bg:#eef0f4;
+    --purple:#6b3fb0; --purple-bg:#efe7fb;
+    --maxw:980px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  main{max-width:var(--maxw); margin:0 auto; padding:38px 34px 110px}
+  @media(max-width:700px){ main{padding:22px 16px 80px} }
+  header.doc{border-bottom:3px solid var(--rust); padding-bottom:20px; margin-bottom:22px}
+  .eyebrow{color:var(--rust); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:12px}
+  h1{font-size:28px; line-height:1.22; margin:8px 0 6px; color:var(--navy)}
+  .sub{color:var(--muted); font-size:15px; max-width:75ch}
+  .stamp{font-size:12.5px; color:var(--muted); margin-top:8px}
+  section{margin:36px 0}
+  h2{font-size:20px; color:var(--navy); border-left:4px solid var(--rust); padding-left:12px; margin:0 0 14px}
+  h3{font-size:16px; color:var(--navy2); margin:22px 0 7px}
+  p{margin:9px 0}
+  .badge{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.04em; padding:2px 9px; border-radius:999px; vertical-align:middle; white-space:nowrap}
+  .b-lock{background:var(--green-bg); color:var(--green)}
+  .b-prop{background:var(--amber-bg); color:var(--amber)}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:15px 17px; margin:12px 0; box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  .callout{border-radius:12px; padding:13px 16px; margin:13px 0; border:1px solid}
+  .co-key{background:var(--blue-bg); border-color:#bcd6f3}
+  .co-rule{background:var(--green-bg); border-color:#bfe0cd}
+  .callout strong{color:var(--navy)}
+  table{width:100%; border-collapse:collapse; margin:13px 0; font-size:13.5px; background:#fff; border:1px solid var(--line); border-radius:10px; overflow:hidden}
+  th{background:var(--navy); color:#fff; text-align:left; padding:9px 11px; font-size:12.5px}
+  td{padding:9px 11px; border-top:1px solid var(--line); vertical-align:top}
+  tr:nth-child(even) td{background:#fafbfc}
+  ul,ol{margin:8px 0; padding-left:22px} li{margin:5px 0}
+  .note{color:var(--muted); font-style:italic}
+  .wire{background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px; margin:14px 0; font-size:13px}
+  .wire .zone{border:1.5px dashed #b9c2d4; border-radius:8px; padding:10px 12px; margin:8px 0; color:var(--navy2)}
+  .wire .zone b{color:var(--navy)}
+  .wire .row{display:grid; gap:8px}
+  .wire .cols-4{grid-template-columns:repeat(4,1fr)}
+  .wire .cols-2{grid-template-columns:3fr 2fr}
+  @media(max-width:700px){ .wire .cols-4,.wire .cols-2{grid-template-columns:1fr} }
+  footer{margin-top:50px; padding-top:18px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px}
+</style>
+</head>
+<body>
+<main>
+
+<header class="doc">
+  <div class="eyebrow">Design discussion D10 · Store front · Running record</div>
+  <h1>The store front — running design record</h1>
+  <p class="sub">The screen-by-screen design of what a store login sees, decided in conversation and recorded here as we go. Companion to <b>pos-store-requirements.html</b> (the requirements) in this folder. Store users are KDPS users — same login, same role matrix; there is no separate store app or separate user store.</p>
+  <div class="stamp">Started 30 July 2026 · grows section by section as each screen is discussed</div>
+</header>
+
+<!-- ============================================================ -->
+<section>
+<h2>1 · The sidebar — ten sections, no subsections <span class="badge b-lock">Decided 30 Jul</span></h2>
+
+<p>The store login's sidebar is a flat list of ten sections. No subsections in the sidebar, ever — anything that needs dividing divides <b>inside the page, as tabs</b>. Receive and Transfer stand as their own sections (revised 30 Jul, same day): they are the actions a store performs daily, and <b>Receive is where the data gets true</b> — the moment stock and its paper enter the system. (How the data gets true at Receive is a discussion of its own, parked for when we design that screen.)</p>
+
+<table>
+  <tr><th style="width:20%">Section</th><th>What lives inside (as in-page tabs where needed)</th></tr>
+  <tr><td><b>1 · Dashboard</b></td><td>The store's day at a glance, plus the quick actions. Approvals and alerts appear here as cards (the bell stays in the top bar). Design in section 2 below.</td></tr>
+  <tr><td><b>2 · Sell</b></td><td>Billing. Return &amp; exchange and customer search (find a past bill, reprint only) are tabs inside it.</td></tr>
+  <tr><td><b>3 · Inventory</b></td><td>One page, four tabs: <b>Stock on Hand</b> (grouped by item type, filtered by brand and season) · <b>Damage &amp; Quarantine</b> · <b>Count &amp; Adjust</b> (count sessions, adjustments) · <b>Return to Brand</b>.</td></tr>
+  <tr><td><b>4 · Receive</b></td><td>One page, tabs: GRN · Upload Bill · PT Files — the stock that came, the paper it came with. The daily action where the data gets true.</td></tr>
+  <tr><td><b>5 · Transfer</b></td><td>One page, tabs: Send · Requests (incl. cross-store stock requests, section 3) · In-Transit · Movement History.</td></tr>
+  <tr><td><b>6 · Booking</b></td><td>Bookings list + detail; create only where the role allows.</td></tr>
+  <tr><td><b>7 · Money</b></td><td>Single section. For a store: expenses and today's collections.</td></tr>
+  <tr><td><b>8 · Offers &amp; Pricing</b></td><td>Single section. Price list and the offers live in this store — read-only at the counter.</td></tr>
+  <tr><td><b>9 · Reports</b></td><td>Everything report-shaped: sales, stock, item-wise, member-wise, date-range, daily summary.</td></tr>
+  <tr><td><b>10 · HRMS</b></td><td>Attendance; Member Details visible to the manager only.</td></tr>
+</table>
+
+<div class="callout co-rule">
+  <p><strong>Mapping from the current build:</strong> today's 13-section sidebar folds down — Home→Dashboard; Stock, Stock Count and Return to Brand fold into Inventory's tabs; Receive Goods→Receive and Transfer stay as they are; Setup disappears for store logins (RBAC already hides it). The nav already renders a one-link section as just the link, so each section is one URL.</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>2 · Dashboard <span class="badge b-prop">Proposed 30 Jul — under discussion</span></h2>
+
+<p>The dashboard answers three questions the moment the store opens it: <b>how is today going, what needs my hands, and what should I know before a customer asks.</b> Everything on it is store-scoped and role-aware — a cashier and a manager see the same shape, but money-and-target cards follow the role matrix.</p>
+
+<div class="wire">
+  <div class="zone"><b>Quick actions</b> — one row of big buttons, always on top: <b>New Bill (POS)</b> · <b>Receive</b> · <b>Transfer</b> · <b>Search across stores</b>. The regulars, one tap from landing.</div>
+  <div class="row cols-4">
+    <div class="zone"><b>Today's sales</b><br>₹ net · vs yesterday</div>
+    <div class="zone"><b>Bills</b><br>count · avg bill value</div>
+    <div class="zone"><b>Pieces sold</b></div>
+    <div class="zone"><b>Collections</b><br>cash / card / UPI split</div>
+  </div>
+  <div class="row cols-2">
+    <div class="zone" style="min-height:120px"><b>Needs your action</b> — a work queue, one row per pending thing, each a link:<br>
+      approvals waiting · transfers in transit to receive · PT / GRN pending · quarantine to confirm · return-to-brand windows closing · paper bills not yet re-entered · open count session</div>
+    <div class="zone" style="min-height:120px"><b>Live in this store today</b><br>offers running now (what to tell the customer) · stock arriving (what's on the truck)</div>
+  </div>
+  <div class="row cols-2">
+    <div class="zone"><b>Last 7 days</b> — sales sparkline, best day marked</div>
+    <div class="zone"><b>Manager only</b> — yesterday's day-close (balanced / variance) · month so far vs the store's target</div>
+  </div>
+</div>
+
+<h3>The pieces, precisely</h3>
+<table>
+  <tr><th style="width:24%">Card</th><th>Content and behaviour</th></tr>
+  <tr><td><b>Quick actions</b></td><td>New Bill (opens the POS), Receive, Transfer, Search across stores. The daily verbs, reachable without touching the sidebar.</td></tr>
+  <tr><td><b>Today row</b> (4 tiles)</td><td>Net sales ₹, bill count with average bill value, pieces sold, and the collection split by mode. Live from the till's own data, so it works offline. Comparison arrow vs yesterday (same store).</td></tr>
+  <tr><td><b>Needs your action</b></td><td>The store's whole to-do in one list; every row is a count + a verb ("3 transfers to receive") linking straight into the right section/tab. Empty state says so — a clean store shows a clean queue. This card absorbs the Approvals inbox for store logins.</td></tr>
+  <tr><td><b>Live in this store</b></td><td>Offers active today (brand, rule in one line) so staff answer customers without calling HO; and in-transit stock headed here. Read-only.</td></tr>
+  <tr><td><b>Last 7 days</b></td><td>One sparkline, net sales per day. No controls — deeper cuts live in Reports.</td></tr>
+  <tr><td><b>Manager row</b></td><td>Yesterday's close state (balanced / variance, from the daily reconciliation) and <b>month-to-date vs the store's monthly target</b>. Targets are set store-wise (per-staff targets follow later with HRMS, feeding off the salesman-on-every-line field). Later, when HRMS lands: staff-in-today and per-member target vs achievement join this row. Hidden from cashiers by the role matrix.</td></tr>
+</table>
+
+<div class="callout co-rule">
+  <p><strong>Settled 30 Jul:</strong> (1) the <b>cashier sees the money tiles</b> — today's ₹ and collections; they ring the bills, hiding the number buys nothing. (2) The dashboard carries <b>month-to-date vs target from day one</b>, and targets are <b>store-wise</b> — a monthly target per store, set at HO. Per-staff targets stay parked with HRMS.</p>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>3 · Search across stores → request the stock <span class="badge b-lock">Decided 30 Jul</span></h2>
+
+<p>A store can search stock <b>across all stores</b> — a customer wants a size this store doesn't have; staff find it at a sister store and <b>ask for it</b> on the spot. Reachable from the dashboard's quick actions (and the top-bar search); the request lands in Transfer → Requests.</p>
+
+<h3>The flow</h3>
+<ol>
+  <li><b>Search.</b> Staff searches the item across stores; results show which store holds it, size by size.</li>
+  <li><b>Ask.</b> From the search result, the store raises an approval request for a transfer.</li>
+  <li><b>Own manager first.</b> The request goes to the requesting store's <b>store manager</b>.</li>
+  <li><b>Up to Operations Head.</b> The store manager sends it on to the <b>Operations Head</b> — the standing rule that the Operations Head fronts every transfer holds.</li>
+  <li><b>The conversation.</b> The Operations Head talks to the <b>holding store's manager</b> (and to the <b>brand manager</b> where the call needs one). Whatever they conclude decides the request — the holding store's manager approves out of that discussion, or the <b>Operations Head approves directly</b>. There is no hard system rule that blocks a request; "possible or not" is this human judgment.</li>
+  <li><b>Then the normal transfer.</b> The holding store makes a transfer for the piece, it goes in-transit to the requesting store, and is received there by the same scan-based receive flow already built. Both stores watch it in their Transfer tabs.</li>
+</ol>
+
+<div class="callout co-rule">
+  <p><strong>The waiting customer gets a time, not a hold.</strong> No reservation is placed on the piece. The counter tells the customer how long the stock will take and asks them to come back — this evening, tomorrow, another day. The request should therefore carry an <b>expected-arrival time</b> the counter can quote; how that time is worked out (route history vs staff-entered) is settled when the Transfer screen is designed.</p>
+</div>
+
+<p>The approval chain is stored as data (an approval route), not hard-coded — Rule 12, variation is data not code. That keeps two doors open that Anand has already flagged: <b>automating the chain later</b> (steps 3–5 collapsing where trust allows), and the Operations Head's direct-approve short-cut today.</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>4 · Sell — the POS screen <span class="badge b-lock">Decided 30 Jul</span></h2>
+
+<p>The most important screen in the store. Design brief: <b>the skeleton is the current RetailJI screen</b> (the four screenshots in current-pos/) so staff adapt in minutes, and the research below confirms that skeleton is the right one — the leading POS systems (Microsoft Dynamics 365 Commerce, Lightspeed, Oracle Xstore) all use the same anatomy: a scan/search input, a line grid, a glanceable total, a payment panel, a customer card, and an action row. We keep the shape and spend our effort where research says it pays: <b>fewer interruptions, instant feedback, and everything one scan or one key away</b>.</p>
+
+<h3>What the research says (and how it lands here)</h3>
+<table>
+  <tr><th style="width:38%">Finding</th><th>What it means for our screen</th></tr>
+  <tr><td>Cashiers work at roughly double normal speed, read the screen from ~80 cm, and split attention between screen, customer and queue.</td><td>Big fonts on the numbers that matter; the bill total must be readable at a glance; no small click targets in the hot path.</td></tr>
+  <tr><td>Every extra step, screen or confirmation slows the line; validate only where it is critical.</td><td>The hot path is scan → scan → payment key → done. No dialog boxes inside it. Confirmations only where money or stock could go wrong.</td></tr>
+  <tr><td>An error costs up to ten times the transaction time.</td><td>Prevent instead of punish: auto-applied discounts, auto GST, auto salesman default — the cashier types almost nothing.</td></tr>
+  <tr><td>POS design must assume misconduct exists (documented cashier theft patterns).</td><td>Voids, over-cap discounts and reprints are gated and logged with who/when — silently, without slowing the honest path.</td></tr>
+  <tr><td>Park / hold a sale is a standard feature of every major POS.</td><td>We add <b>Hold Bill</b> — the current POS lacks it, and its absence is felt every time a customer runs for one more item.</td></tr>
+  <tr><td>Returns and exchange handled inside the same transaction is the industry norm.</td><td>Confirms the current Return-tick-in-the-same-bill gesture we already decided to keep.</td></tr>
+  <tr><td>Layouts are assigned per register/user and kept configurable (Dynamics 365 model).</td><td>Our screen definition lives as data per store/role where cheap to do — Rule 12 again.</td></tr>
+</table>
+
+<h3>The screen, region by region (the skeleton, kept)</h3>
+<table>
+  <tr><th style="width:22%">Region</th><th>As today, plus the deliberate changes</th></tr>
+  <tr><td><b>Top bar</b></td><td>Date · store · next bill number · <b>a sync light</b> (green = synced, amber = billing offline, with a count of bills waiting to sync). The one new indicator on the screen.</td></tr>
+  <tr><td><b>Scan box</b> (top right, always focused)</td><td>As today — plus it doubles as <b>type-to-search</b>: type a name/design no. and it auto-suggests, for the tagless or unreadable-barcode piece. Cursor always returns here after every action. Lookup is local: instant, offline, never a spinner.</td></tr>
+  <tr><td><b>Line grid</b> (centre)</td><td>Same columns staff read today: item, brand, barcode, design no., size, qty, rate (MRP), disc %, disc ₹, GST, salesman, amount, net. Discount and GST fill themselves (rulebook + slab master); an <b>offer chip on the line</b> names the rule that fired. Nothing to type on a clean sale.</td></tr>
+  <tr><td><b>Salesman</b></td><td>Stays per line — but the popup <b>defaults to the last-picked salesman</b>; one keystroke to change, zero to accept. (Research: kill per-scan interruptions; the current every-scan popup is the one part of the skeleton that fights speed.)</td></tr>
+  <tr><td><b>Payment panel</b> (right)</td><td>Bill amount, large. Tender rows: <b>Cash · Card · UPI · Credit Note</b>, amounts splittable across them, must sum to the bill. Tendered cash + change at the bottom. Coupon/Sodexo/Wallet dropped or deferred per the requirements doc.</td></tr>
+  <tr><td><b>Customer strip</b> (bottom)</td><td>Mobile number first (one field, as today), name; the bill works without either. Member/wallet joins later per decision D-3.</td></tr>
+  <tr><td><b>Totals strip</b></td><td>Qty, gross, <b>"you saved ₹X"</b> (the offers' visible sum — staff quote it to the customer), net. Return-voucher no. + amount when an exchange is in the bill.</td></tr>
+  <tr><td><b>Action row</b></td><td><b>Save &amp; Print</b> (the one big button, locks + spins while working) · Print/Reprint · <b>Hold Bill</b> (new) · Search (past bills, read-only + reprint) · New Bill. <b>No F-key shortcuts</b> (revised 31 Jul): every action is cursor-selectable; browser F-keys are left alone. RetailJI contributes the skeleton placement only, not its keyboard habits.</td></tr>
+  <tr><td><b>Tabs inside Sell</b></td><td>Billing · Return &amp; Exchange · Customer Search — as locked in the sidebar. The Return tick on the scan box stays for in-bill exchange; the tab is the fuller flow (find original bill, pick lines, reason codes).</td></tr>
+</table>
+
+<h3>Behaviour rules (the invisible part)</h3>
+<ul>
+  <li><b>Scan is instant and offline</b> — local item/price/offer/stock data; stock under the barcode shows at scan, exactly as today's "Total Stock" readout.</li>
+  <li><b>Offers apply themselves</b> as lines enter; the Offer Detail area lists what fired, per brand. Manual discount within the role's cap is a keystroke; over the cap, the bill will not close without a manager's OK, recorded on the bill.</li>
+  <li><b>Ambiguous barcode</b> (several live seasons): one-tap "which season?" — the only question the screen is ever allowed to ask mid-sale, and it never blocks billing.</li>
+  <li><b>Printer checked before Save &amp; Print</b>; if it is off, the bill still saves and the screen says so, with Reprint one tap away.</li>
+  <li><b>Saved means saved</b>: append-only, reprint only, corrections by reversal — the store's own rule.</li>
+  <li><b>Hold Bill</b> parks the cart locally (name/phone optional), retrieve from a one-tap list; held bills are till-local, never touch stock or money until saved, and show on the Dashboard. At day close they are flagged and the store chooses: keep (the bill carries over and reprices at retrieval) or expire. Nothing expires silently. <span class="note">(Refined 30 Jul, grill Q13; a multi-day set-aside is a Booking, not a hold.)</span></li>
+  <li><b>Nothing on this screen shows cost or margin</b>, and it sees only this store's data (the cross-store search is its own, read-only flow).</li>
+</ul>
+
+<p class="note">Research sources: Microsoft Dynamics 365 Commerce POS screen-layout documentation (transaction-screen anatomy: receipt panel, totals panel, customer card, number pad, button grids, per-register/user layout assignment); Creative Navy's POS UX guide (the 16 UX factors: time pressure, 80 cm viewing distance, attention splitting, error cost, misconduct, training under stress); Bright Inventions and Hashmato on payment-flow speed and validation economy; Shopify POS UI principles; Lightspeed and Deal POS on park/retrieve; Dynamics 365 and StoreConnect on same-transaction returns/exchange.</p>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>5 · The grill — engineering &amp; policy decisions <span class="badge b-lock">Decided 30 Jul</span></h2>
+
+<p>The feature entered the dev process (<code>docs/features/pos-store-front/</code>). The Phase-1 grill closed every open question in fourteen decisions, validated by four research passes (B2B/GST at the counter, goods-on-approval, offer tie-breaking, offline-first POS architecture). The full record with sources is <code>docs/features/pos-store-front/grill-decisions.md</code>; the substance:</p>
+
+<table>
+  <tr><th style="width:26%">Decision</th><th>Ruling</th></tr>
+  <tr><td><b>Bill numbering offline</b></td><td>The till owns its store's gap-free counter in persistent local storage; the server verifies continuity at sync. A dead till = a <b>register handover</b>: resume from the last synced number, re-enter unsynced bills from their printed copies (the paper-bill F3 muscle).</td></tr>
+  <tr><td><b>Commit point</b></td><td>Save &amp; Print. Bill final locally (number, stock, print), synced immediately or queued with minute-level retry; server accepts any order; every bill idempotency-keyed and stamped <code>origin: offline/online</code>.</td></tr>
+  <tr><td><b>Reference-data sync</b></td><td>Offers, items, prices, slabs and credit notes auto-pull whenever online; the "offers live" notification informs, never gates. Offer start/end dates ride inside the data, so a stale till can miss a new offer but never applies a dead one.</td></tr>
+  <tr><td><b>Credit notes</b></td><td>Same-store redemption only in v1; cached at the till, offline-redeemable only against a cached open note; unknown note = manager override + flag.</td></tr>
+  <tr><td><b>Sold-before-inward</b></td><td>Bill now, post when priced: an unknown scan bills as a manual line (MRP from the tag); its postings wait in the exception queue until GRN/PT prices the piece. Sale never blocks, nothing posts at zero. GST side stays CA-gated.</td></tr>
+  <tr><td><b>Plain return (D-4)</b></td><td>Credit-note only, never cash from the drawer. Return document linked to the original bill; window/conditions as data; manager's tap on every plain return; per-employee return counts in the daily check.</td></tr>
+  <tr><td><b>B2B corner (D-5)</b></td><td>GSTIN + name at the till, nothing more; the till derives CGST/SGST-vs-IGST from the GSTIN's state code. B2B bills feed an HO queue with a hard 30-day IRN clock (mandatory at KDPS's turnover). Party A/C, Cess tab, dynamic QR: dropped.</td></tr>
+  <tr><td><b>F10 Approval/Order (D-6)</b></td><td>Almost certainly goods-on-approval (challan out, invoice on acceptance, 6-month deemed-supply clock). V1 ships without it; the stores are asked now; a ready design (non-financial Approval document, Convert-to-Sale / Return-to-shelf) follows fast if confirmed.</td></tr>
+  <tr><td><b>Offer tie-break (D-7 / O3)</b></td><td>Three layers: one brand offer per item by best-deal-wins (B2G1: dearest-first, cheapest free); storewide then bank offers stack only by explicit flag; new offers default non-combining; same cart always prices the same, and every line records which rule won.</td></tr>
+  <tr><td><b>Sidebar &amp; access</b></td><td>The ten-section sidebar is a presentation fold — the 13 permission keys underneath don't change; tabs stay gated by their original codes. The role matrix becomes admin-editable data (Setup screen, it_admin/superadmin) with the four money floors hard-coded and every change audit-logged.</td></tr>
+  <tr><td><b>Store targets</b></td><td>A small HO master, one monthly target per store, set by the Operations Head; the edit right is itself a matrix cell.</td></tr>
+  <tr><td><b>Build order</b></td><td><b>Offline-first from day one</b> (research overturned online-first-then-retrofit): sidebar+Dashboard → cross-store request → the till as one supervised money slice → the offer engine (pilot waits for it) → returns/customer-search/credit-notes → Cash Summary + the daily reconciliation gate. Riders: till standardised on Chrome (installed PWA — Safari evicts local data after 7 idle days), and an early receipt-printer hardware spike.</td></tr>
+</table>
+</section>
+
+<!-- ============================================================ -->
+<section>
+<h2>Change log</h2>
+<table>
+  <tr><th style="width:16%">Date</th><th>What was added or decided</th></tr>
+  <tr><td>30 Jul 2026</td><td>Doc started. Sidebar first cut at nine flat sections with Transfer inside Inventory; Return to Brand folded into Inventory. Dashboard design proposed (today row · action queue · live-in-store · 7-day sparkline · manager row) with two open calls: cashier's money tiles, and whether targets appear before HRMS.</td></tr>
+  <tr><td>30 Jul 2026 (later)</td><td>Dashboard shape accepted. Sidebar revised to <b>ten</b> sections: Receive and Transfer stand alone — they are the daily actions, and Receive is where the data gets true (that discussion parked for the Receive screen). Dashboard gains a quick-actions row (New Bill · Receive · Transfer · Search across stores). Cross-store stock search + request added (section 3) with the approval chain brand manager → store manager → Operations Head, and three points to confirm.</td></tr>
+  <tr><td>30 Jul 2026 (later still)</td><td>Cross-store flow settled and locked (section 3 rewritten): requesting store → its own store manager → Operations Head → discussion with the holding store's manager (brand manager consulted as needed) → approval (Ops Head may approve directly) → normal transfer send/in-transit/receive. No hard block rules — possibility is the humans' call. No hold on the piece for the waiting customer; they are quoted an expected-arrival time and asked to return. Chain stored as an approval route (data), automation possible later.</td></tr>
+  <tr><td>30 Jul 2026 (evening)</td><td>Dashboard settled: cashier sees the money tiles; month-to-date vs target ships from day one and targets are <b>store-wise</b> (per-staff waits for HRMS). Sell screen proposed (section 4) after online research: skeleton = current RetailJI screen, validated against Dynamics 365 / Lightspeed / POS-UX literature; changes limited to a sync light, type-to-search in the scan box, salesman default-to-last, auto-applied offers with a per-line chip, Hold Bill, gated+logged voids, and a "you saved ₹X" total.</td></tr>
+  <tr><td>30 Jul 2026 (close)</td><td>Sell screen <b>accepted and locked</b> as proposed — including salesman default-to-last, Hold Bill, and the trimmed payment panel (Cash · Card · UPI · Credit Note). Session paused here. Next up when the discussion resumes: the other two Sell tabs — Return &amp; Exchange, Customer Search — then Inventory's tabs and Receive.</td></tr>
+  <tr><td>31 Jul 2026</td><td>Phase-3 rulings: <b>no F-key shortcuts</b> (everything cursor-selectable; the earlier "F-keys kept" line in section 4 is superseded); the Sell screen ships as a <b>normal, design-consistent page</b> inside the app shell — no full-screen/kiosk mode or reduced top bar for now, that call waits until the functionality is built; RetailJI is a skeleton-placement reference only — we copy the region layout already listed, nothing else.</td></tr>
+  <tr><td>30 Jul 2026 (dev process)</td><td>The feature entered the dev process as <b>pos-store-front</b> (Phase 0 confirmed, Phase 1 grill run). Fourteen decisions locked — section 5 above: till-owned offline numbering + register handover, Save &amp; Print commit, auto-synced reference data, same-store credit notes, sold-before-inward bill-now-post-when-priced, credit-note-only plain returns (D-4), GSTIN-at-till B2B with HO's 30-day IRN clock (D-5), F10 out of v1 pending the stores' answer (D-6), the three-layer offer tie-break (D-7/O3), presentation-only sidebar fold, admin-editable access matrix with hard-coded money floors, store-wise target master, Hold Bill keep-or-expire at day close, and an offline-first build order with the Chrome till standard and a printer spike. Full record: <code>docs/features/pos-store-front/grill-decisions.md</code>.</td></tr>
+</table>
+</section>
+
+<footer>
+  D10 · store-front running design record · lives beside pos-store-requirements.html and the current-pos/ screenshots.
+  Next screens to design in this doc, in order: Sell · Inventory · Receive · the rest.
+</footer>
+
+</main>
+</body>
+</html>
