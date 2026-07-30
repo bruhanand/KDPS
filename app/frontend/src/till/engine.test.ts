@@ -25,6 +25,33 @@ const { TillEngine } = await import("./engine");
 const { commitBill } = await import("./numbering");
 const { dataset, fakeServer, freshTill, item, refuse } = await import("./testSupport");
 
+/** Wait for something the engine does without being awaited - Save & Print hands
+ *  the bill to the queue and lets the send happen behind the cashier. */
+async function until(ready: () => boolean, tries = 100): Promise<void> {
+  for (let i = 0; i < tries; i += 1) {
+    if (ready()) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("the engine never settled");
+}
+
+/** A bill with no lines: this file is about the engine's plumbing, and the money
+ *  on a bill is `numbering.test.ts`'s subject. */
+function emptyDraft() {
+  return {
+    billed_at: "2026-07-30T12:31:00.000Z",
+    lines: [],
+    tenders: [],
+    totals: {
+      gross_paise: 0,
+      discount_paise: 0,
+      net_paise: 0,
+      gst_paise: 0,
+      round_paise: 0,
+    },
+  };
+}
+
 let stop = () => undefined as void;
 afterEach(() => stop());
 
@@ -84,18 +111,7 @@ describe("what the screen is told", () => {
     const { engine, server, storeCode } = engineOn();
     server.datasets = [dataset({ items: [item("8901000000011")] })];
     await engine.start();
-    await commitBill(engine.db, storeCode, {
-      billed_at: "2026-07-30T12:31:00.000Z",
-      lines: [],
-      tenders: [],
-      totals: {
-        gross_paise: 0,
-        discount_paise: 0,
-        net_paise: 0,
-        gst_paise: 0,
-        round_paise: 0,
-      },
-    });
+    await commitBill(engine.db, storeCode, emptyDraft());
 
     server.postSale = async () => refuse(0, "NETWORK", "No connection to head office.");
     await engine.syncNow();
@@ -105,6 +121,22 @@ describe("what the screen is told", () => {
     expect(snapshot.status.colour).toBe("amber");
     expect(snapshot.queue[0].attempts).toBe(1);
     expect(snapshot.queue[0].last_error).toContain("No connection");
+  });
+
+  it("re-reads the register once the queue has gone up", async () => {
+    // Otherwise the two panels tell different stories: "head office has bill 7"
+    // beside "nothing waiting", to a counter that has billed 9. This is the
+    // commit path - Save & Print, then the send - which is the one a cashier
+    // watches, and it never went near `syncNow`.
+    const { engine } = engineOn();
+    await engine.start();
+    expect(engine.getSnapshot().register?.last_accepted_seq).toBe(0);
+
+    await engine.commit(emptyDraft());
+    await until(() => engine.getSnapshot().pending === 0);
+
+    // Nothing called `syncNow`: the commit's own send is what has to notice.
+    expect(engine.getSnapshot().register?.last_accepted_seq).toBe(1);
   });
 
   it("swallows nothing and throws nothing when the server is down", async () => {

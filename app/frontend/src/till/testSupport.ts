@@ -157,6 +157,9 @@ export interface FakeServer extends TillTransport {
   /** What `postSale` should do next; the default is to accept. */
   answer: (bill: QueuedBill) => AcceptedBill;
   datasets: DatasetPayload[];
+  /** Scripted register answers. Empty - the usual case - means the fake works
+   *  it out from the bills it has actually taken, which is what a real server
+   *  does and what keeps a test off the order the till happens to ask in. */
   registers: RegisterPayload[];
   /** Cursors the till asked from, in order. */
   asked: string[];
@@ -164,6 +167,7 @@ export interface FakeServer extends TillTransport {
 
 /** A server that takes every bill, unless a test says otherwise. */
 export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
+  const landed: number[] = [];
   const server: FakeServer = {
     offered: [],
     datasets: [],
@@ -175,11 +179,16 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
       return server.datasets.shift() ?? dataset();
     },
     async register() {
-      return server.registers.shift() ?? register();
+      return (
+        server.registers.shift() ??
+        register({ last_accepted_seq: landed.length ? Math.max(...landed) : 0 })
+      );
     },
     async postSale(bill: QueuedBill) {
       server.offered.push(bill);
-      return server.answer(bill);
+      const accepted = server.answer(bill);
+      landed.push(bill.till_seq);
+      return accepted;
     },
     ...over,
   };

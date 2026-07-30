@@ -233,8 +233,12 @@ export class TillEngine {
    *
    * Every step is independent and none of them throws. That is not tidiness: the
    * queue is money and the dataset is reference data, so a failed price pull must
-   * never be a reason not to send a bill that is already paid for. Three separate
-   * attempts, worst case three recorded reasons, and the light tells the story.
+   * never be a reason not to send a bill that is already paid for. Separate
+   * attempts, worst case a reason from each, and the light tells the story.
+   *
+   * The register is read first because its whole job is to stop the till issuing
+   * a number the server already holds, and that has to be settled before another
+   * bill can be numbered. `push` reads it again if it landed anything - see there.
    */
   async syncNow(options: { bootstrapIfNewDay?: boolean } = {}): Promise<void> {
     this.publish({ busy: true, lastError: "" });
@@ -289,7 +293,15 @@ export class TillEngine {
     });
   }
 
-  /** Offer the queue, and schedule the next attempt if the line was down. */
+  /**
+   * Offer the queue, and schedule the next attempt if the line was down.
+   *
+   * Re-reads the register whenever the drain landed anything. What the server
+   * had accepted was true before those bills went up, and a screen saying "head
+   * office has bill 7" beside "nothing waiting", to a counter that has billed 9,
+   * is two panels telling a store person different stories. One extra GET per
+   * successful drain, and none at all on the retries that find nothing.
+   */
   private async push(): Promise<string> {
     return this.attempt(async () => {
       const result = await drainQueue(this.db, this.transport);
@@ -298,6 +310,7 @@ export class TillEngine {
       this.retry = result.retryAfterMs
         ? setTimeout(() => void this.pushAndRefresh(), result.retryAfterMs)
         : null;
+      if (result.accepted) await reconcileRegister(this.db, this.transport);
     });
   }
 
