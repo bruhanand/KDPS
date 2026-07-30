@@ -20,6 +20,7 @@ from typing import Any
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
+from core.floors import REGISTERED_FLOOR_EXCEPTIONS
 from core.gl import GLAccount, GLEntry
 
 
@@ -124,8 +125,15 @@ def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> N
 
     This sits in the sole GL writer, below every API and business module, so a
     Setup grant, shell call or future endpoint cannot route around it.
+
+    The one carve-out — the store-native sale — is declared in `core.floors` with
+    its reason, and is narrow by construction: it names its document types and
+    the exact accounts they may touch, so a leg outside the allow-list drops back
+    onto the floor even on a document the exception covers.
     """
-    if getattr(actor, "scope_type", "") == "store":
+    if getattr(actor, "scope_type", "") == "store" and not _store_actor_within_exception(
+        legs, doc_type
+    ):
         raise PostingFloorError(
             "A store-scoped user cannot post value to the books; "
             "a named head-office person must perform this action."
@@ -138,6 +146,27 @@ def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> N
         raise PostingFloorError(
             "Money owed to a brand cannot post without a named head-office person."
         )
+
+
+def _store_actor_within_exception(legs: list[Leg], doc_type: str) -> bool:
+    """Is this posting inside a declared carve-out from the store floor?
+
+    True only when some registered exception covers `doc_type` *and* every leg
+    sits inside that exception's account allow-list — one stray account and the
+    whole posting is back on the floor. Accounts the exception marks as
+    party-required must also name their counterparty.
+    """
+    exception = next(
+        (e for e in REGISTERED_FLOOR_EXCEPTIONS.values() if e.covers(doc_type)),
+        None,
+    )
+    if exception is None:
+        return False
+    return all(
+        leg.account in exception.accounts
+        and (leg.account not in exception.party_required_accounts or bool(leg.party_code))
+        for leg in legs
+    )
 
 
 def assert_pt_or_vflip_actor(actor: Any) -> None:

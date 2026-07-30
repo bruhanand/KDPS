@@ -23,6 +23,7 @@ even the superuser CI connects as), the **ORM raises the early, clean error**.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 from django.db import connection, models, transaction
@@ -31,6 +32,20 @@ from django.db import connection, models, transaction
 TRIGGER_FUNCTION = "kdps_document_fsm"
 #: Guard function for the gap-free counter on `core_voucher_series`.
 VOUCHER_SERIES_GUARD_FUNCTION = "kdps_voucher_series_guard"
+
+#: Document types whose number is assigned by the *writer*, not by the server.
+#:
+#: Exactly one exists, and it is the till: a store bills offline, so the bill has
+#: to carry a number before the server ever sees it (D10 grill Q1 — one POS per
+#: store, so there is exactly one writer per series). Everything else allocates
+#: server-side through `VoucherSeries.allocate()`, which is the only way a number
+#: can be guaranteed gap-free at the moment it is minted.
+EXTERNAL_NUMBER_DOC_TYPES = frozenset({"SAL"})
+
+#: Transaction-local flag `accept_external` raises so the DB guard can tell a
+#: declared till accept (which may skip over unsynced bills) from a bulk UPDATE
+#: or raw SQL rewriting the counter (which may not). See `voucher_series_guard_sql`.
+EXTERNAL_ACCEPT_SETTING = "kdps.external_seq"
 
 
 class DocumentError(Exception):
@@ -43,6 +58,29 @@ class DocumentTransitionError(DocumentError):
 
 class DocumentEditError(DocumentError):
     """An attempt to edit or delete a posted/cancelled document."""
+
+
+class ExternalNumberError(DocumentError):
+    """A till-assigned number the series refuses to accept (bad seq, wrong type)."""
+
+
+@dataclass(frozen=True)
+class ExternalAllocation:
+    """The outcome of accepting one till-assigned number.
+
+    `hole_from`/`hole_count` describe numbers this accept jumped over — bills the
+    till minted earlier that have not reached the server yet, or never will. They
+    are reported, never refused: refusing would stop a store selling because an
+    *older* bill is stuck, which is the opposite of what a hole means (Rule 8,
+    flag don't block). The count is returned rather than the list because a till
+    bug could name an absurd `seq`, and the kernel must not build a
+    million-element range to describe it.
+    """
+
+    series: VoucherSeries
+    doc_number: str
+    hole_from: int | None
+    hole_count: int
 
 
 class DocStatus(models.IntegerChoices):
@@ -137,6 +175,86 @@ class VoucherSeries(models.Model):
         series_id, seq = row
         series = cls.objects.get(pk=series_id)
         return series, series.render(seq)
+
+    @classmethod
+    def accept_external(
+        cls, *, fy: str, store_code: str, doc_type: str, seq: int
+    ) -> ExternalAllocation:
+        """Accept a number the *till* assigned, exactly once.
+
+        The mirror image of `allocate()`: there, the server picks the number and
+        the caller takes it; here, the caller arrives holding one and the series
+        decides whether it may be used. A bill is printed and in the customer's
+        hand long before this runs, so the question is never "what number should
+        this be" — it is "has this number already been used, and what does it say
+        about the ones before it".
+
+        Three answers, and only three:
+
+        * `seq` is the number the series expected, or beyond it — accept, and
+          advance `next_seq` past it. Anything skipped is a **hole**: earlier
+          bills still queued on the till, or lost with a dead machine. Reported
+          on the result, never refused (Rule 8).
+        * `seq` is *behind* `next_seq` — a late arrival filling a hole. Accept;
+          the counter does not move.
+        * the number is already on a document — refused, but not here: the caller
+          writes `doc_number` in this same transaction and the unique constraint
+          on it is what makes acceptance exactly-once. That is why this MUST run
+          inside the caller's transaction, and why it refuses to run outside one:
+          without that shared transaction the row lock below is a no-op and two
+          tills could accept the same number.
+
+        Only `EXTERNAL_NUMBER_DOC_TYPES` may come this way; every other document
+        still gets its number from `allocate()`.
+        """
+        if doc_type not in EXTERNAL_NUMBER_DOC_TYPES:
+            raise ExternalNumberError(
+                f"{doc_type} numbers are allocated by the server, not assigned externally; "
+                f"only {sorted(EXTERNAL_NUMBER_DOC_TYPES)} may use accept_external()"
+            )
+        if isinstance(seq, bool) or not isinstance(seq, int) or seq <= 0:
+            raise ExternalNumberError(
+                f"an external sequence must be a positive integer, got {seq!r}"
+            )
+        if not transaction.get_connection().in_atomic_block:
+            raise ExternalNumberError(
+                "accept_external() must run inside the caller's transaction, so that the "
+                "document write which makes acceptance exactly-once commits with it"
+            )
+
+        table = cls._meta.db_table
+        with connection.cursor() as cur:
+            # Lock the series row for the rest of the caller's transaction:
+            # concurrent accepts of the same seq serialise here, and the loser's
+            # duplicate `doc_number` insert is what refuses it.
+            cur.execute(
+                f"SELECT id, next_seq FROM {table} "  # noqa: S608 — db_table is a trusted identifier
+                "WHERE fy = %s AND store_code = %s AND doc_type = %s FOR UPDATE",
+                [fy, store_code, doc_type],
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise cls.DoesNotExist(f"no VoucherSeries for {fy}/{store_code}/{doc_type}")
+            series_id, next_seq = row
+            hole_count = max(0, seq - next_seq)
+            if seq >= next_seq:
+                # Declare the accept to the DB guard, which otherwise refuses any
+                # jump; scoped to this transaction and cleared straight after, so
+                # nothing else riding the same transaction inherits the licence.
+                cur.execute(f"SELECT set_config('{EXTERNAL_ACCEPT_SETTING}', %s, true)", [str(seq)])
+                cur.execute(
+                    f"UPDATE {table} SET next_seq = %s WHERE id = %s",  # noqa: S608 — trusted identifier
+                    [seq + 1, series_id],
+                )
+                cur.execute(f"SELECT set_config('{EXTERNAL_ACCEPT_SETTING}', '', true)")
+
+        series = cls.objects.get(pk=series_id)
+        return ExternalAllocation(
+            series=series,
+            doc_number=series.render(seq),
+            hole_from=next_seq if hole_count else None,
+            hole_count=hole_count,
+        )
 
 
 class DocumentManager(models.Manager["Document"]):
@@ -238,6 +356,25 @@ class Document(models.Model):
             f"{type(self).__name__} must implement series_lookup() to be postable"
         )
 
+    def mint_number(self) -> tuple[VoucherSeries, str]:
+        """Take this document's `doc_number` from its series.
+
+        Server allocation is the default and the rule. The one document that
+        overrides this is the sale, which arrives from an offline till already
+        numbered and calls `VoucherSeries.accept_external()` instead — see
+        `EXTERNAL_NUMBER_DOC_TYPES`. The override point is here, inside `post()`'s
+        locked transaction, so an externally-numbered document still walks the
+        same FSM, writes its number under the same unique constraint, and rolls
+        back the same way.
+
+        An override runs on the *locked re-read*, not on the instance the caller
+        holds, so anything it learns along the way — a number hole, say — belongs
+        in the database (an exception row) rather than stashed on `self`, where
+        the caller would never see it.
+        """
+        fy, store_code, doc_type = self.series_lookup()
+        return VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=doc_type)
+
     # -- the FSM ---------------------------------------------------------------
     def post(self) -> None:
         """`draft → submitted`: mint the gap-free number, freeze the doc.
@@ -252,18 +389,19 @@ class Document(models.Model):
                 f"only a draft can be posted; this is {self.get_docstatus_display()}"
             )
         with transaction.atomic():
-            # Re-read the row under a lock before deriving the series (#A). The
-            # committed row is the single source of truth: a concurrent edit to the
-            # scope fields (or a concurrent post of the same draft) must not let us
-            # mint a number for a stale (fy, store, doc_type), or stamp a SAL number
-            # onto what the DB now calls a GRN. The lock also serialises double-post.
+            # Re-read the row under a lock before minting (#A). The committed row
+            # is the single source of truth, and `mint_number()` is asked of *it*,
+            # never of `self`: a concurrent edit to the scope fields (or a
+            # concurrent post of the same draft) must not let us mint a number for
+            # a stale (fy, store, doc_type), stamp a SAL number onto what the DB
+            # now calls a GRN, or accept a till sequence the row no longer carries.
+            # The lock also serialises double-post.
             locked = type(self).objects.select_for_update().get(pk=self.pk)
             if locked.docstatus != DocStatus.DRAFT:
                 raise DocumentTransitionError(
                     f"only a draft can be posted; this is {locked.get_docstatus_display()}"
                 )
-            fy, store_code, doc_type = locked.series_lookup()
-            series, number = VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=doc_type)
+            series, number = locked.mint_number()
             self.series = series
             self.doc_number = number
             self.docstatus = DocStatus.SUBMITTED
@@ -378,21 +516,44 @@ def voucher_series_guard_sql(table_name: str = "core_voucher_series") -> str:
     cannot live only in `Model.save()` — `QuerySet.update()`, raw SQL, and bulk
     writes bypass the ORM. This trigger binds even the superuser:
 
-    * `next_seq` may only *hold* (a config save of prefix/suffix) or advance by
-      exactly one (an allocation). Any rewind, skip, or arbitrary set is rejected
-      (#D) — that is what keeps numbers gap-free and collision-free.
+    * `next_seq` may never rewind. Not once, not by anybody: a rewind hands out a
+      number that is already on a posted document.
+    * otherwise `next_seq` may only *hold* (a config save of prefix/suffix) or
+      advance by exactly one (an allocation) — that is what keeps server-allocated
+      numbers gap-free (#D).
+    * the single exception is a till accept on an `EXTERNAL_NUMBER_DOC_TYPES`
+      series. Those may skip over bills that have not synced yet, so the jump has
+      to be legal — but only from `accept_external()`, which declares the sequence
+      it is accepting in `EXTERNAL_ACCEPT_SETTING` for the length of its
+      transaction, and only to exactly that sequence plus one. A bulk UPDATE or a
+      raw `SET next_seq = 999` declares nothing and is still refused, on a SAL
+      series as much as any other.
     * a *used* series (one that has already minted a number, `next_seq > 1`) has
       frozen identity: re-pointing `fy`/`store_code`/`doc_type` would strand its
       counter and let the old scope restart at 1, colliding with history (#E).
     """
     trigger_name = f"{table_name}_guard"
+    external_types = ", ".join(f"'{t}'" for t in sorted(EXTERNAL_NUMBER_DOC_TYPES))
     return f"""
     CREATE OR REPLACE FUNCTION {VOUCHER_SERIES_GUARD_FUNCTION}() RETURNS trigger AS $$
+    DECLARE
+        declared text;
     BEGIN
-        IF NEW.next_seq <> OLD.next_seq AND NEW.next_seq <> OLD.next_seq + 1 THEN
+        IF NEW.next_seq < OLD.next_seq THEN
             RAISE EXCEPTION
-                'voucher series: next_seq may only advance by one (got % from %)',
+                'voucher series: next_seq may never rewind (got % from %)',
                 NEW.next_seq, OLD.next_seq;
+        END IF;
+        IF NEW.next_seq <> OLD.next_seq AND NEW.next_seq <> OLD.next_seq + 1 THEN
+            declared := nullif(current_setting('{EXTERNAL_ACCEPT_SETTING}', true), '');
+            IF declared IS NULL
+                OR OLD.doc_type NOT IN ({external_types})
+                OR NEW.next_seq <> declared::bigint + 1
+            THEN
+                RAISE EXCEPTION
+                    'voucher series: next_seq may only advance by one (got % from %)',
+                    NEW.next_seq, OLD.next_seq;
+            END IF;
         END IF;
         IF OLD.next_seq > 1 AND (
             NEW.fy <> OLD.fy
@@ -425,12 +586,18 @@ class DocumentProbe(Document):
     the FSM trigger and the gap-free series genuinely run in the DB and the K2
     golden tests have a concrete table to post against. It carries the minimum to
     resolve a series plus a free-text `memo` to prove edit-after-post is refused.
+
+    `external_seq` gives it the till's shape too: set it and the probe posts by
+    accepting that number instead of allocating one, which is what lets the
+    anti-cheat suite prove exactly-once acceptance against a real table with a
+    real unique constraint, before any sale document exists.
     """
 
     fy = models.CharField(max_length=7)
     store_code = models.CharField(max_length=16)
     doc_type = models.CharField(max_length=16)
     memo = models.CharField(max_length=120, blank=True, default="")
+    external_seq = models.IntegerField(null=True, blank=True)
 
     class Meta(Document.Meta):
         # Subclassing the abstract Meta inherits its constraints (the #3
@@ -439,3 +606,14 @@ class DocumentProbe(Document):
 
     def series_lookup(self) -> tuple[str, str, str]:
         return self.fy, self.store_code, self.doc_type
+
+    def mint_number(self) -> tuple[VoucherSeries, str]:
+        if self.external_seq is None:
+            return super().mint_number()
+        accepted = VoucherSeries.accept_external(
+            fy=self.fy,
+            store_code=self.store_code,
+            doc_type=self.doc_type,
+            seq=self.external_seq,
+        )
+        return accepted.series, accepted.doc_number
