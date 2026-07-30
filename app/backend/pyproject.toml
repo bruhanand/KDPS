@@ -110,7 +110,7 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core", "ptmapper", "approvals", "outbound"]
+root_packages = ["config", "core", "ptmapper", "approvals", "outbound", "search", "storefront"]
 # The domain apps below aren't root packages yet, so they are "external" to the
 # graph; the approvals contract names them explicitly.
 include_external_packages = true
@@ -150,6 +150,33 @@ source_modules = [
     "ptmapper.profiles",
 ]
 forbidden_modules = ["ptmapper.views"]
+
+[[tool.importlinter.contracts]]
+# The two composition roots read across every domain app so that no domain app
+# has to read another one just to draw a screen (`search` for the top bar,
+# `storefront` for the store's Home). That only buys anything while the arrow
+# points one way: the moment a domain module imports one of them for a helper,
+# they stop being leaves and become another layer everything depends on. The
+# settings comment beside them said "imported by none of them" and nothing
+# checked it; this is the check (#174).
+name = "the composition roots are leaves: no domain module may import them"
+type = "forbidden"
+source_modules = [
+    # `config` is deliberately absent: mounting the two is its whole job.
+    "core",
+    "ptmapper",
+    "approvals",
+    "outbound",
+    "masters",
+    "accounts",
+    "inbound",
+    "vendors",
+    "stockledger",
+    "finledger",
+    "alerts",
+    "files",
+]
+forbidden_modules = ["search", "storefront"]
 
 [[tool.importlinter.contracts]]
 # `posting` imports `maker_checker` (every posting path asks whether a second

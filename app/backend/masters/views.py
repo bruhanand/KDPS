@@ -25,6 +25,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section
 from accounts.sections import CAP_MANAGE, CAP_VIEW
 from core.fiscal import financial_year_months
+from core.refusals import first_message, refuse
 from core.textsearch import search_term, text_filter
 from masters.models import Brand, Gstin, LegalEntity, Season, Sku, Store, StoreTarget
 
@@ -203,41 +204,6 @@ class SkuLookupView(APIView):
 CanReadOrSetStoreTarget = require_section("money", CAP_VIEW, write_minimum=CAP_MANAGE)
 
 
-def _refuse(code: str, message: str, status: int) -> Response:
-    """The D10 contract's refusal body: a sentence for the person, a code for the
-    caller. Deliberately not DRF's `{"detail": ...}` - the till replays writes
-    from a durable queue and has to tell "retry forever" from "this bill needs a
-    human", which it does on the code, never on the prose.
-
-    Private to this module while it is the only endpoint using it; the shape is
-    the contract's, so it moves to a shared home when the second one lands rather
-    than being copied.
-    """
-    return Response({"error": message, "code": code}, status=status)
-
-
-def _first_message(errors: Any) -> str:
-    """The first sentence out of a DRF error tree, flattened.
-
-    A refusal body carries one message, and a serializer's is keyed by field. The
-    first one is the one the person needs: these forms are three fields wide, and
-    a screen that fixes the named field re-submits and hears about the next.
-    """
-    if isinstance(errors, dict):
-        for value in errors.values():
-            found = _first_message(value)
-            if found:
-                return found
-        return ""
-    if isinstance(errors, list):
-        for item in errors:
-            found = _first_message(item)
-            if found:
-                return found
-        return ""
-    return str(errors).strip()
-
-
 class StoreTargetView(APIView):
     """`GET | PUT /api/masters/store-targets` - the store x month target grid.
 
@@ -282,27 +248,27 @@ class StoreTargetView(APIView):
             try:
                 months = financial_year_months(fy)
             except ValueError as exc:
-                return _refuse("VALIDATION", str(exc), 400)
+                return refuse("VALIDATION", str(exc), 400)
             rows = rows.filter(month__in=months)
         return Response(StoreTargetSerializer(rows, many=True).data)
 
     def put(self, request: Request) -> Response:
         form = StoreTargetWriteSerializer(data=request.data)
         if not form.is_valid():
-            return _refuse("VALIDATION", _first_message(form.errors), 400)
+            return refuse("VALIDATION", first_message(form.errors), 400)
         code = form.validated_data["store"]
         store = Store.objects.filter(code__iexact=code, is_active=True).first()
         if store is None:
             # A closed store is not a store to plan against, so it answers the
             # same as one that never existed. The contract says only "store must
             # exist"; refusing the closed ones too is deliberate.
-            return _refuse("NOT_FOUND", f"No active store with code '{code}'.", 404)
+            return refuse("NOT_FOUND", f"No active store with code '{code}'.", 404)
         # Beyond the contract's own steps, deliberately: `money: manage` says what
         # a person may do, never where. Without this, one rung would set targets
         # for stores the admin never entitled them to.
         entitled = scope_by_entitlement(Store.objects.filter(pk=store.pk), request.user, "id")
         if not entitled.exists():
-            return _refuse("SCOPE_DENIED", f"{store.code} is not one of your locations.", 403)
+            return refuse("SCOPE_DENIED", f"{store.code} is not one of your locations.", 403)
         target, _ = StoreTarget.objects.update_or_create(
             store=store,
             month=form.validated_data["month"],
