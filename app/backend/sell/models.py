@@ -22,6 +22,8 @@ Two shapes here are worth reading before the rest:
 
 from __future__ import annotations
 
+from datetime import date
+
 from django.db import models
 from django.utils import timezone
 
@@ -197,11 +199,22 @@ class CreditNote(Document):
 
     @property
     def status(self) -> str:
+        return self.status_at(self.remaining_paise, timezone.localdate())
+
+    def status_at(self, remaining_paise: int, today: date) -> str:
+        """`status`, told its two inputs instead of fetching them.
+
+        The rule lives here and only here, but a *list* of notes must not pay a
+        query per note for its balance (the till's dataset asks for every open one
+        this store issued). So the caller that already has the balance in hand -
+        annotated in SQL - and the day it is asking about hands both in, and gets
+        the same answer the property gives.
+        """
         if self.docstatus == DocStatus.CANCELLED:
             return self.Status.CANCELLED
-        if self.remaining_paise <= 0:
+        if remaining_paise <= 0:
             return self.Status.SPENT
-        if self.expires_on < timezone.localdate():
+        if self.expires_on < today:
             return self.Status.EXPIRED
         return self.Status.OPEN
 

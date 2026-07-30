@@ -16,6 +16,7 @@ from typing import Any
 
 from django.db.models import Prefetch, Q, QuerySet
 from rest_framework import status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -24,9 +25,10 @@ from rest_framework.views import APIView
 from core.refusals import first_message, refusal_body
 from masters.scoping import scope_by_store
 from sell.models import Sale, SaleLine
-from sell.permissions import CanReadOrBill, CanReadSales
+from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
 from sell.serializers import SaleReadSerializer, SaleRowSerializer, SaleWriteSerializer
 from sell.services.accept import AcceptError, accept_sale
+from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -105,6 +107,34 @@ class SaleListCreateView(APIView):
                 match |= Q(till_seq=int(doc))
             rows = rows.filter(match)
         return Response(SaleRowSerializer(rows[:SEARCH_LIMIT], many=True).data)
+
+
+class DatasetView(APIView):
+    """`GET /api/sell/dataset` - everything the counter has to know offline.
+
+    Gated at `sell: operate`, not `view`: this is not a report about selling, it is
+    the working copy a till bills from, and it carries the store's manager
+    override PIN hashes. Somebody who may read yesterday's bills has no use for it.
+
+    See `sell.services.dataset` for what is in it and why the cursor laps
+    backwards. The two refusals here are told apart by their codes because the
+    till branches on them: `TILL_SCOPE` means "this login will never be a till, a
+    human must fix the account", which is not something to retry.
+    """
+
+    permission_classes = [IsAuthenticated, CanRunTill]
+
+    def get(self, request: Request) -> Response:
+        try:
+            store = resolve_till_store(request.user)
+        except TillScopeError as exc:
+            return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
+        except PermissionDenied as exc:
+            # An unknown or out-of-scope `X-KDPS-Unit` on the way in. Caught so the
+            # till gets this endpoint's own body shape rather than the scoping
+            # layer's DRF `{"detail": ...}` leaking past it.
+            return Response(refusal_body("SCOPE_DENIED", str(exc.detail)), status=403)
+        return Response(build_dataset(store, request.query_params.get("since") or ""))
 
 
 class SaleDetailView(APIView):

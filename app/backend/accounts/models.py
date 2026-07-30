@@ -160,6 +160,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     # Empty ⇒ they see no stock at all, never every brand — the same fail-closed
     # rule as a store-scoped user with no stores.
     brands = models.ManyToManyField("masters.Brand", blank=True, related_name="users")
+    # The manager's override PIN at a till that has no network (D10, grill Q1).
+    # A *hash*, and only ever a hash: it is synced down to the store's own till in
+    # its dataset (#179) so a manager can authorise an over-cap discount with the
+    # line cut, and a secret that leaves the building on a shop-floor device must
+    # not be reversible. Blank means "this person has no counter PIN", which is
+    # the default and is not a credential - the dataset leaves them out entirely.
+    till_pin_hash = models.CharField(max_length=128, blank=True, default="")
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
