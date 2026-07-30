@@ -1,0 +1,14 @@
+26-27/SEL-DEO/SAL/2
+  event A · money
+    dr CASH                       50000
+    cr SALES_REVENUE             190381  MUFTI · FW25
+    cr OUTPUT_GST                  9519  MUFTI · FW25
+    dr SALES_REVENUE             142762  MUFTI · FW25
+    dr OUTPUT_GST                  7138  MUFTI · FW25
+    Σ 0
+  event B · cost
+    dr COGS                       80000  MUFTI · FW25
+    cr INVENTORY                  80000  MUFTI · FW25
+    cr COGS                       70000  MUFTI · FW25
+    dr INVENTORY                  70000  MUFTI · FW25
+    Σ 0

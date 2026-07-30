@@ -14,8 +14,9 @@ that one fact, and the suite is organised by what it means:
     slice, so nobody has to guess which.
   · **Nothing can edit a posted bill**, by any verb, from anywhere.
 
-Value-GL postings are #178 and are deliberately not asserted: this slice writes
-no `GLEntry` at all, which is itself a property worth pinning while it is true.
+What the value events actually post is asserted in `test_sell_sale_postings`
+(#178); all this suite pins about them is that a bill never leaves the books
+untied.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from _sell import (
 )
 
 from core.documents import DocStatus, VoucherSeries
-from core.gl import GLEntry
+from core.gl import GLEntry, trial_balance
 from masters.models import Cohort, Store
 from sell.models import (
     ContinuityFlag,
@@ -107,14 +108,18 @@ def test_the_piece_leaves_the_shelf_at_its_cost_of_record(counter):
     assert StockOnHand.objects.get(store=counter["store"], sku_code="8901000000011").net_qty == 2
 
 
-def test_this_slice_writes_no_value_gl_at_all(counter):
-    """The money and cost events are #178. Until they land, a bill touches no
-    general ledger - which is a truthful state, not a broken one, because a
-    half-posted bill would be worse than an unposted one."""
+def test_a_bill_posts_a_balanced_value_ledger(counter):
+    """The value side landed with #178; what it posts is asserted there.
+
+    Pinned here as the one thing this pipeline promises about it: whatever the
+    events contain, a bill never leaves the books untied - the accept transaction
+    either writes a balanced set or writes no bill.
+    """
     _shelf(counter["store"], 3)
     _post(counter, bill_payload(counter["store"], counter["salesman"], till_seq=1))
 
-    assert not GLEntry.objects.filter(doc_type="SAL").exists()
+    assert GLEntry.objects.filter(doc_type="SAL").exists()
+    assert trial_balance() == 0
 
 
 def test_a_store_may_not_bill_at_a_store_it_does_not_hold(counter):

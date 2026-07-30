@@ -280,6 +280,19 @@ class Sale(Document):
     def doc_type(self) -> str:
         return SALE_DOC_TYPE
 
+    @property
+    def gstin(self):  # type: ignore[no-untyped-def]
+        """The registration the bill was raised under (the store's).
+
+        A property rather than a column: a store belongs to exactly one GSTIN and
+        the store is already on the bill, so storing it again would be a second
+        copy of one fact. It exists because `post_entries` snapshots
+        `doc.store`/`doc.gstin` onto every leg, and Bihar and Jharkhand are
+        separate registered persons - a value leg that could not say which one it
+        belonged to would be no use to either return.
+        """
+        return self.store.gstin
+
     def series_lookup(self) -> tuple[str, str, str]:
         return self.fy, self.store.code, SALE_DOC_TYPE
 
@@ -521,6 +534,22 @@ class DeferredCosting(TimeStampedModel):
         WAITING = "waiting", "Waiting on inward"
         POSTED = "posted", "Posted"
 
+    class Reason(models.TextChoices):
+        """What the books are actually waiting for.
+
+        Three different waits, and the sweep has to tell them apart. An
+        `unpriced` piece has no cost of record, so nothing has moved for it yet -
+        not the cost event and not the stock leg either, since a piece that was
+        never inwarded cannot come off a shelf it was never on. The other two
+        *are* on the shelf and *did* leave it: their stock is already posted and
+        only the value is missing, so re-posting the movement would take the piece
+        out twice.
+        """
+
+        UNPRICED = "unpriced", "No cost of record - sold before inward"
+        MODEL_UNKNOWN = "model_unknown", "The masters do not know this brand"
+        VENDOR_UNKNOWN = "vendor_unknown", "Brand-owned, but no supplier of record"
+
     sale_line = models.OneToOneField(
         SaleLine, on_delete=models.CASCADE, related_name="deferred_costing"
     )
@@ -531,6 +560,7 @@ class DeferredCosting(TimeStampedModel):
     season = models.CharField(max_length=120, blank=True, default="")
     qty = models.IntegerField()
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.WAITING)
+    reason = models.CharField(max_length=16, choices=Reason.choices, default=Reason.UNPRICED)
     posted_doc_number = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
@@ -538,7 +568,7 @@ class DeferredCosting(TimeStampedModel):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.barcode} × {self.qty} ({self.status})"
+        return f"{self.barcode} × {self.qty} ({self.status} · {self.reason})"
 
 
 class IrnQueueItem(TimeStampedModel):
