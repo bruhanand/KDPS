@@ -30,6 +30,7 @@ import type {
   TillManager,
   TillOffer,
   TillSalesman,
+  TillSeason,
   TillStock,
 } from "./types";
 
@@ -68,6 +69,10 @@ export const META = {
   halt: "halt",
   /** What the server last said it had accepted from this counter. */
   register: "register",
+  /** The shop floor's money dials - see `TillPolicy`. */
+  policy: "policy",
+  /** The salesman the counter picked last, defaulted onto the next line. */
+  lastSalesman: "lastSalesman",
 } as const;
 
 export class TillDb extends Dexie {
@@ -76,6 +81,7 @@ export class TillDb extends Dexie {
   offers!: Table<TillOffer, number>;
   creditNotes!: Table<TillCreditNote, string>;
   salesmen!: Table<TillSalesman, number>;
+  seasons!: Table<TillSeason, string>;
   managers!: Table<TillManager, number>;
   gstSlabs!: Table<TillGstSlab, [string, string]>;
   meta!: Table<MetaRow, string>;
@@ -105,6 +111,12 @@ export class TillDb extends Dexie {
       queue: "++id, idempotency_uuid",
       held: "held_uuid",
     });
+    // The season master's ordering, for resolving a scan that names no season
+    // (#181). A version of its own rather than an edit to version 1: a counter
+    // that has been billing since #180 has a database on disk with unsynced
+    // money in it, and Dexie upgrades that one in place instead of asking the
+    // browser to throw it away and start again.
+    this.version(2).stores({ seasons: "code" });
   }
 }
 

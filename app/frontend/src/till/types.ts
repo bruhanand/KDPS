@@ -74,6 +74,25 @@ export interface TillManager {
   till_pin_hash: string;
 }
 
+/** A selling period, with the master's own ordering. Seasons are named, never
+ *  dated, so "older" is `sort_order` and nothing else - and a closed season sorts
+ *  behind every open one however old it is. */
+export interface TillSeason {
+  code: string;
+  name: string;
+  status: string;
+  sort_order: number;
+}
+
+/** The shop floor's money dials. One today; the shape is here so a second is a
+ *  field rather than a section. */
+export interface TillPolicy {
+  /** How much of a line's MRP a cashier may knock off on their own, as a
+   *  two-decimal string. Above it the bill needs a manager (B2), which the till
+   *  cannot yet obtain - so above it the till does not let the bill close. */
+  manual_discount_cap_percent: string;
+}
+
 export interface TillStoreIdentity {
   code: string;
   gstin: string;
@@ -92,6 +111,8 @@ export interface DatasetPayload {
   credit_notes: TillCreditNote[];
   salesmen: TillSalesman[];
   managers: TillManager[];
+  seasons: TillSeason[];
+  policy: TillPolicy;
   deleted: {
     items: string[];
     offers: number[];
