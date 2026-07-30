@@ -240,6 +240,24 @@ export function StoreTargetsPage() {
   }, [data]);
   const fyTotal = useMemo(() => data.reduce((sum, row) => sum + row.target_paise, 0), [data]);
 
+  // What the total is a total *of*, in the words that are true for this reader.
+  // A store manager sees one store, so "across every store" would be a claim
+  // about the network from a page showing one row of it.
+  const totalOf =
+    stores.length === 1 ? `at ${stores[0].code}` : `across ${stores.length} stores`;
+
+  /** Dismiss whatever the last save said. A banner that outlives the editor it
+   *  belonged to gets read against the next cell, or against the next year. */
+  function clearFeedback() {
+    setError("");
+    setOk("");
+  }
+
+  function closeEditor() {
+    setEdit(null);
+    clearFeedback();
+  }
+
   async function save() {
     if (!edit) return;
     const paise = rupeesToPaise(edit.rupees);
@@ -268,8 +286,7 @@ export function StoreTargetsPage() {
 
   function open(store: string, month: FiscalMonth) {
     const current = byCell.get(cellKey(store, month.iso));
-    setError("");
-    setOk("");
+    clearFeedback();
     setEdit({
       store,
       month: month.iso,
@@ -292,7 +309,13 @@ export function StoreTargetsPage() {
             {canEdit
               ? "Pick a cell to set that store's month for the year. "
               : "Set at head office; shown here for reference. "}
-            FY {fy} committed across every store: <b>{formatINR(fyTotal)}</b>.
+            {/* No total until there is something to total. "committed across 0
+                stores" while the grid loads is a number nobody asked for. */}
+            {stores.length > 0 && !loading && (
+              <>
+                FY {fy} committed {totalOf}: <b>{formatINR(fyTotal)}</b>.
+              </>
+            )}
           </span>
         }
         actions={
@@ -301,7 +324,7 @@ export function StoreTargetsPage() {
             value={fy}
             onChange={(e) => {
               setFy(e.target.value);
-              setEdit(null);
+              closeEditor();
             }}
             aria-label="Financial year"
             data-testid="target-fy-select"
@@ -329,11 +352,7 @@ export function StoreTargetsPage() {
               {edit.store} · {edit.label}
             </h3>
             <div className="spacer" />
-            <button
-              className="btn btn-sm"
-              onClick={() => setEdit(null)}
-              data-testid="target-editor-close"
-            >
+            <button className="btn btn-sm" onClick={closeEditor} data-testid="target-editor-close">
               <X size={14} /> Close
             </button>
           </div>
