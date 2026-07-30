@@ -460,3 +460,162 @@ def test_a_bill_priced_under_no_rulebook_at_all_is_still_clean(counter):
     assert response.status_code == 201
     assert response.json()["flags"] == []
     assert SaleLine.objects.get().net_paise == MRP_PAISE
+
+
+# --- what the review found, held down -------------------------------------
+
+
+def test_an_ended_rule_cannot_be_rewritten_either(counter):
+    """The one the `live` check on its own would have missed.
+
+    The accept pipeline consults ended rules for any bill printed inside their
+    dates, so moving an ended rule's percentage silently rewrites what the server
+    believes every un-synced offline bill was owed - and a bill that was inside
+    its cap becomes a bill over it, refused, with the store's queue behind it.
+    """
+    offer = _live_rule(counter["store"].code, status=Offer.Status.ENDED, ends_on=date(2026, 7, 20))
+
+    response = _ho().put(
+        f"{OFFERS_URL}{offer.id}",
+        _rule_body(counter["store"].code, reward_config={"percent": "90.00"}),
+        format="json",
+    )
+
+    assert response.status_code == 400
+    offer.refresh_from_db()
+    assert offer.reward_config == {"percent": "30.00"}
+
+
+def test_stopping_a_live_rule_cannot_smuggle_an_edit_alongside(counter):
+    """`{"status": "ended"}` is a stop. `{"status": "ended", "percent": 90}` is not.
+
+    The partial-update branch would have taken the second one and rewritten the
+    running row in place - the one thing this module says is impossible.
+    """
+    offer = _live_rule(counter["store"].code)
+
+    response = _ho().put(
+        f"{OFFERS_URL}{offer.id}",
+        {"status": "ended", "reward_config": {"percent": "90.00"}, "ends_on": "2026-07-01"},
+        format="json",
+    )
+
+    # Refused, because a smuggled edit is not a whole rule - and, whichever way
+    # it is refused, the running row is exactly as it was.
+    assert response.status_code == 400
+    offer.refresh_from_db()
+    assert offer.status == Offer.Status.LIVE
+    assert offer.reward_config == {"percent": "30.00"}
+    assert offer.ends_on is None
+
+
+def test_a_store_cannot_write_another_stores_rule(counter):
+    """The PUT is scoped exactly as the GET is.
+
+    A mutating path reading `Offer.objects` where its sibling reads `_visible`
+    would let anybody holding the write rung re-price another store's rule - the
+    read-scope-fails-open class this codebase has been bitten by before.
+    """
+    theirs = _live_rule("SEL-JSL", name="Theirs")
+    role = counter["cashier"].role
+    role.section_access = {**role.section_access, "offers_price": {"capability": CAP_MANAGE}}
+    role.save(update_fields=["section_access"])
+
+    response = counter["client"].put(f"{OFFERS_URL}{theirs.id}", {"status": "ended"}, format="json")
+
+    assert response.status_code == 404
+    theirs.refresh_from_db()
+    assert theirs.status == Offer.Status.LIVE
+
+
+def test_a_bill_priced_before_a_piece_was_flagged_no_discount_still_lands(counter):
+    """The refusal that would have stopped a store, turned into a flag.
+
+    The counter billed honestly under a rule it held; head office then marked the
+    piece never-discountable. `no_discount` is a live column with no history, so
+    the server's re-price now says the customer was owed nothing and the whole
+    discount looks unauthorised. Refusing would be `OVERRIDE_REQUIRED` on a
+    printed receipt, with every bill behind it stuck in the queue.
+    """
+    offer = _live_rule(counter["store"].code)
+    _shelf(counter["store"])
+    Sku.objects.filter(barcode="8901000000011").update(no_discount=True)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=44970)
+    payload["lines"][0]["offer_id"] = offer.id
+    payload["lines"][0]["offer_evidence"] = {"offer_id": offer.id, "saved_paise": 44970}
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    assert "offer_mismatch" in response.json()["flags"]
+
+
+def test_a_made_up_offer_id_cannot_lift_the_cap(counter):
+    """The door left open for rulebook drift is not a door for a tampered till.
+
+    Citing a rule the server can check is the whole gate: an id naming nothing is
+    still an unauthorised discount, and it is still refused.
+    """
+    _shelf(counter["store"])
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=44970)
+    payload["lines"][0]["offer_id"] = 987654
+    payload["lines"][0]["offer_evidence"] = {"offer_id": 987654, "saved_paise": 44970}
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+
+
+def test_an_offer_from_another_brand_cannot_lift_the_cap_either(counter):
+    """A real rule, cited on a piece it never covered. The server checks scope."""
+    Brand.objects.get_or_create(code="spykar", defaults={"name": "SPYKAR"})
+    offer = _live_rule(
+        counter["store"].code,
+        brand=Brand.objects.get(code="spykar"),
+        name="Spykar flat 30",
+    )
+    _shelf(counter["store"])  # the piece on the shelf is MUFTI
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=44970)
+    payload["lines"][0]["offer_id"] = offer.id
+    payload["lines"][0]["offer_evidence"] = {"offer_id": offer.id, "saved_paise": 44970}
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+
+
+def test_a_rule_can_aim_at_one_size_in_one_colour(counter):
+    """D5 Q2: scope reaches SKU = style x size x colour, not just the style."""
+    _live_rule(
+        counter["store"].code,
+        item_scope={"sizes": ["M"], "colors": ["NAVY"]},
+    )
+    _shelf(counter["store"])
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=44970)
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    # The fixture piece is size M, colour NAVY, so the rule reaches it and the
+    # ₹449.70 needs no manager.
+    assert response.status_code == 201, response.json()
+    assert response.json()["flags"] == []
+
+
+def test_a_money_dial_no_business_would_ever_run_is_refused(counter):
+    """JavaScript's integers stop being exact at 2^53 and Python's never do.
+
+    A ceiling nobody will meet beats a divergence nobody would see - the two
+    engines splitting an absurd lump sum differently, silently, on a real bill.
+    """
+    body = _rule_body(
+        counter["store"].code,
+        reward_type="amt_off",
+        reward_config={"amount_paise": 10**15},
+    )
+
+    response = _ho().post(OFFERS_URL, body, format="json")
+
+    assert response.status_code == 400
+    assert "larger than any offer" in response.json()["error"]

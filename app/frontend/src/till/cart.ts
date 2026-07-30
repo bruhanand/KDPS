@@ -31,7 +31,7 @@
 // revenue and no tax against a garment that left the shop.
 
 import { resolveOffers } from "./offers";
-import type { Entitlement, OfferCart } from "./offers";
+import type { Entitlement, LineOutcome, OfferCart } from "./offers";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
 import type {
   BillDraft,
@@ -254,6 +254,8 @@ function offerCart(cart: Cart, day: string): OfferCart {
       brand: line.brand,
       item: line.item,
       design: line.design,
+      size: line.size,
+      color: line.color,
       barcode: line.barcode,
       season: line.season,
       qty: line.qty,
@@ -269,7 +271,7 @@ function priceLine(
   world: PricingWorld,
   day: string,
   capPercent: string,
-  offer: { discount_paise: number; offer_id: number | null; evidence: PricedLine["offer_evidence"] } | undefined,
+  offer: LineOutcome | undefined,
 ): PricedLine {
   const gross = line.mrp_paise * line.qty;
   const offerPaise = offer?.discount_paise ?? 0;

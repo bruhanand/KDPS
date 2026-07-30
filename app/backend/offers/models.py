@@ -34,6 +34,7 @@ from django.conf import settings
 from django.db import models
 
 from core.base import TimeStampedModel
+from offers.resolution import Rule
 
 
 class OfferQuerySet(models.QuerySet["Offer"]):
@@ -173,10 +174,29 @@ class Offer(TimeStampedModel):
     def brand_name(self) -> str:
         return self.brand.name if self.brand is not None else ""
 
-    def is_live_on(self, day: date) -> bool:
-        if self.status != Offer.Status.LIVE or day < self.starts_on:
-            return False
-        return self.ends_on is None or day <= self.ends_on
+    def as_rule(self) -> Rule:
+        """This row in the engine's own terms - the one place that mapping lives.
+
+        Two callers with different reasons: the accept pipeline re-prices a bill
+        against the rules that were running when it printed, and the vector
+        loader turns the same shape back out of JSON. A second copy of this
+        mapping is a field that silently stops reaching the engine.
+        """
+        return Rule(
+            id=self.id,
+            name=self.name,
+            layer=self.layer,
+            brand=self.brand_name,
+            trigger_type=self.trigger_type,
+            trigger_config=self.trigger_config or {},
+            reward_type=self.reward_type,
+            reward_config=self.reward_config or {},
+            item_scope=self.item_scope or {},
+            starts_on=self.starts_on,
+            ends_on=self.ends_on,
+            combinable=self.combinable,
+            priority=self.priority,
+        )
 
     def as_rule_payload(self) -> dict[str, Any]:
         """The rule as it rides to the till, and as the server re-reads it.

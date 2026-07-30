@@ -60,7 +60,12 @@ from sell.services.postings import (
     post_sale_value,
     resolve_cost_plan,
 )
-from sell.services.recompute import OFFER_TOLERANCE_PAISE, BillLine, resolve_bill
+from sell.services.recompute import (
+    OFFER_TOLERANCE_PAISE,
+    BillLine,
+    resolve_bill,
+    rule_was_running,
+)
 from sell.services.resolve import (
     ResolvedPiece,
     line_dims,
@@ -549,44 +554,66 @@ def _check_totals(data: dict[str, Any], lines: list[_PreparedLine]) -> None:
         )
 
 
-def _server_resolution(
-    data: dict[str, Any], store: Store, lines: list[_PreparedLine]
-) -> Resolution:
+@dataclass(frozen=True)
+class _Rulebook:
     """What the rulebook says this bill should have cost - the server's own answer.
 
     Computed once and used twice: the cap (step 6) subtracts it to find what a
     cashier gave on their own, and the advisory check (step 12) compares it with
-    what was actually charged. Both need the *same* number or the bill could be
+    what was actually charged. Both need the *same* number, or a bill could be
     refused for a discount the daily check would then call correct.
 
-    The `no_discount` flag has to be fetched here rather than taken off the
-    payload: it is the one input to the rulebook that lives on the SKU master and
-    not on the bill, and a till that mis-stated it could discount a piece the AMM
-    sheet says is never discounted (D5 Q3).
+    The store, the day and the lines ride along because the cap needs to ask the
+    rulebook a second, narrower question - "was the rule this line cites really
+    running over this piece?" - and asking it needs all three.
     """
+
+    store: Store
+    day: date
+    resolution: Resolution
+    lines: dict[int, BillLine]
+
+    def saving_for(self, line_no: int) -> int:
+        outcome = self.resolution.by_line().get(line_no)
+        return outcome.discount_paise if outcome else 0
+
+    def was_running(self, offer_id: Any, line_no: int) -> bool:
+        line = self.lines.get(line_no)
+        return line is not None and rule_was_running(offer_id, self.store.code, self.day, line)
+
+
+def _server_resolution(data: dict[str, Any], store: Store, lines: list[_PreparedLine]) -> _Rulebook:
+    """Price this bill's sold lines against the rulebook, server-side.
+
+    The `no_discount` flag is fetched here rather than taken off the payload: it
+    is the one input to the rulebook that lives on the SKU master and not on the
+    bill, and a till that mis-stated it could discount a piece the AMM sheet says
+    is never discounted (D5 Q3).
+    """
+    day = _billed_on(data)
     sold = [line for line in lines if not line.is_return]
-    if not sold:
-        return Resolution(lines=(), entitlements=())
     barcodes = [line.payload["barcode"].strip() for line in sold]
     never_discounted = set(
         Sku.objects.filter(barcode__in=barcodes, no_discount=True).values_list("barcode", flat=True)
     )
-    return resolve_bill(
-        store.code,
-        _billed_on(data),
-        [
-            BillLine(
-                line_no=line.payload["line_no"],
-                barcode=line.payload["barcode"].strip(),
-                season=line.season,
-                qty=line.qty,
-                mrp_paise=int(line.payload["mrp_paise"]),
-                dims=line.dims,
-                no_discount=line.payload["barcode"].strip() in never_discounted,
-            )
-            for line in sold
-        ],
+    bill_lines = {
+        line.payload["line_no"]: BillLine(
+            line_no=line.payload["line_no"],
+            barcode=line.payload["barcode"].strip(),
+            season=line.season,
+            qty=line.qty,
+            mrp_paise=int(line.payload["mrp_paise"]),
+            dims=line.dims,
+            no_discount=line.payload["barcode"].strip() in never_discounted,
+        )
+        for line in sold
+    }
+    resolution = (
+        resolve_bill(store.code, day, list(bill_lines.values()))
+        if bill_lines
+        else Resolution(lines=(), entitlements=())
     )
+    return _Rulebook(store=store, day=day, resolution=resolution, lines=bill_lines)
 
 
 def _billed_on(data: dict[str, Any]) -> date:
@@ -594,7 +621,7 @@ def _billed_on(data: dict[str, Any]) -> date:
     return timezone.localdate(data["billed_at"])
 
 
-def _rulebook_saving(line: _PreparedLine, rulebook: Resolution) -> int:
+def _rulebook_saving(line: _PreparedLine, rulebook: _Rulebook) -> int:
     """How much of this line's discount the rulebook is answerable for.
 
     The server's own resolution, never the till's `offer_evidence.saved_paise`.
@@ -607,19 +634,22 @@ def _rulebook_saving(line: _PreparedLine, rulebook: Resolution) -> int:
     Capped at what was actually given, so a rulebook that was *more* generous than
     the counter was cannot manufacture headroom for a manual discount on top.
     """
-    outcome = rulebook.by_line().get(line.payload["line_no"])
-    if outcome is None:
-        return 0
-    return min(outcome.discount_paise, int(line.payload["disc_paise"]))
+    return min(rulebook.saving_for(line.payload["line_no"]), int(line.payload["disc_paise"]))
 
 
-def _check_discount_policy(lines: list[_PreparedLine], rulebook: Resolution, override: Any) -> None:
+def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, override: Any) -> None:
     """Step 6 - a discount the rulebook did not produce needs a manager past the cap.
 
     Whatever the rulebook is answerable for is the rulebook's; the remainder is a
     manual discount, and B2 caps that. Below the cap it is the cashier's to give;
     above it the bill does not close without a manager's OK recorded on it, which
     is the whole of H3.
+
+    With one door left open, and only one: a line over the cap that names a rule
+    the server can still verify was running over that piece that day is a
+    *disagreement about an amount*, not an unauthorised discount. It lands, and
+    step 12 puts it on the store's morning queue instead of stopping the store
+    (`recompute.rule_was_running` says why at length).
     """
     cap_percent = SellPolicy.current().manual_discount_cap_percent
     over: list[_PreparedLine] = []
@@ -628,9 +658,12 @@ def _check_discount_policy(lines: list[_PreparedLine], rulebook: Resolution, ove
             continue
         manual = line.payload["disc_paise"] - _rulebook_saving(line, rulebook)
         allowance = int(Decimal(line.payload["mrp_paise"] * line.qty) * cap_percent / 100)
-        if manual > allowance:
-            line.override_needed = True
-            over.append(line)
+        if manual <= allowance:
+            continue
+        line.override_needed = True
+        if rulebook.was_running(line.payload.get("offer_id"), line.payload["line_no"]):
+            continue
+        over.append(line)
     if over and override is None:
         first = over[0].payload["line_no"]
         raise AcceptError(
@@ -1095,7 +1128,7 @@ def _advisory_gst_check(sale: Sale, store: Store, lines: list[_PreparedLine]) ->
 
 
 def _advisory_offer_check(
-    sale: Sale, store: Store, lines: list[_PreparedLine], rulebook: Resolution
+    sale: Sale, store: Store, lines: list[_PreparedLine], rulebook: _Rulebook
 ) -> list[str]:
     """Step 12, the offer half - did the counter charge what the rulebook says?
 
@@ -1112,20 +1145,22 @@ def _advisory_offer_check(
     so the two would agree about nothing and report nothing.
 
     A cashier's own discount on top is the one thing that would make this cry
-    wolf, so it is subtracted out: `manual` is what step 6 already measured and
-    already let through, and it is not the rulebook's to explain.
+    wolf, so it is subtracted out. Note the asymmetry with step 6, which is the
+    point rather than an inconsistency: the *cap* refuses to credit the till's own
+    `saved_paise`, because a cap the capped party can lift is not a cap; this
+    check does credit it, because it is only deciding whether a human should read
+    the bill, and the till's account of itself is evidence towards that.
     """
-    outcomes = rulebook.by_line()
     offenders = []
     for line in lines:
         row = line.row
         if row is None or line.is_return:
             continue
-        expected = outcomes[row.line_no].discount_paise if row.line_no in outcomes else 0
+        expected = rulebook.saving_for(row.line_no)
         claimed = int((row.offer_evidence or {}).get("saved_paise") or 0)
         given = int(row.disc_paise or 0)
-        manual = max(given - max(claimed, expected), 0)
-        charged = given - manual
+        keyed_in = max(given - max(claimed, expected), 0)
+        charged = given - keyed_in
         if abs(charged - expected) > OFFER_TOLERANCE_PAISE:
             offenders.append(
                 {

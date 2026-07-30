@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { AlertTriangle, Printer, X } from "lucide-react";
+import { AlertTriangle, Gift, Printer, X } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
@@ -261,6 +261,27 @@ function Counter({ storeName }: { storeName?: string }) {
           {note}
         </p>
       )}
+      {/* A gift is earned, not deducted: it takes nothing off any line, so
+          without this row the counter has no way of knowing the customer is owed
+          a trolley - and D5 Q11 is clear that it "only counts if it was actually
+          handed to the customer". Scanning it puts it on the bill at its token
+          price like any other piece. The out-of-stock fallback the engine also
+          supports has no control here yet; that needs a decline gesture and a
+          re-price, and it is its own ticket. */}
+      {bill.entitlements.map((gift) => (
+        <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
+          <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
+          {gift.token_price_paise > 0 ? (
+            <>
+              {" "}
+              at its token price of <Money paise={gift.token_price_paise} />
+            </>
+          ) : (
+            " free of charge"
+          )}
+          , and hand it over.
+        </p>
+      ))}
 
       {suggestions.length > 0 && (
         <Suggestions

@@ -70,7 +70,7 @@ export function OffersPage() {
 
   return (
     <div className="page-pad">
-      <PageHeader lead="Every rule your counter is pricing with, and the ones on their way. The till applies these itself as each piece is scanned, offline included — nothing here needs a decision, and nothing here is edited at a store." />
+      <PageHeader lead="Every rule your counter is pricing with, and the ones on their way. The till applies these itself as each piece is scanned, offline included - nothing here needs a decision, and nothing here is edited at a store." />
 
       {loading ? (
         <p className="lead">Loading…</p>

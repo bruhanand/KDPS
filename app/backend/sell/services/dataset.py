@@ -439,7 +439,11 @@ def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:
     """
     if offer.status != Offer.Status.LIVE:
         return False
-    if store_code not in ((offer.store_scope or {}).get("stores") or []):
+    # Upper-cased on both sides: `validate_store_scope` normalises what it
+    # stores, `Store.code` is a slug with no normalisation of its own, and a
+    # lower-case store code would otherwise send this counter an empty rulebook
+    # while the dashboard and the server still found its offers.
+    if store_code.upper() not in ((offer.store_scope or {}).get("stores") or []):
         return False
     return offer.ends_on is None or offer.ends_on >= today
 
@@ -465,7 +469,7 @@ def _offers(sync: Sync) -> tuple[list[dict[str, Any]], list[int]]:
     A bootstrap has nothing cached, so it reports nothing withdrawn and simply
     omits what it will not send.
     """
-    code = sync.store.code
+    code = sync.store.code.upper()
     rows = Offer.objects.select_related("brand")
     if sync.is_bootstrap:
         live = [

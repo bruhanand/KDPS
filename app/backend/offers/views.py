@@ -33,8 +33,13 @@ from offers.serializers import OfferReadSerializer, OfferWriteSerializer
 #: carries both because GET and POST share a path.
 CanReadOrAuthor = require_section("offers_price", CAP_VIEW, write_minimum=CAP_MANAGE)
 
+#: Statuses whose content a bill may already have been priced under, and which
+#: are therefore not editable at all. `ended` is in here with `live` because the
+#: accept pipeline consults ended rules for bills printed inside their dates.
+FROZEN_STATUSES = frozenset({Offer.Status.LIVE, Offer.Status.ENDED})
 
-def _visible(user: Any) -> OfferQuerySet:
+
+def _visible(user: Any, *, include_ended: bool = False) -> OfferQuerySet:
     """The rules this caller may read, narrowed the way their screen is.
 
     Two axes, and they are asked in the caller's own terms. A store person sees
@@ -45,11 +50,13 @@ def _visible(user: Any) -> OfferQuerySet:
     brands' rules, plus the storewide ones - a storewide discount lands on their
     brand's pieces, so it is not somebody else's data being leaked to them.
     """
-    rows = (
-        OfferQuerySet(Offer)
-        .select_related("brand", "approved_by")
-        .exclude(status=Offer.Status.ENDED)
-    )
+    # The list is what is running and what is coming; a store has no use for a
+    # history of stopped promotions. One rule named directly is a different
+    # question - head office has to be able to read, and refuse to change, an
+    # offer whose bills are still syncing.
+    rows = OfferQuerySet(Offer).select_related("brand", "approved_by")
+    if not include_ended:
+        rows = rows.exclude(status=Offer.Status.ENDED)
     if is_brand_scoped(user):
         names = active_brand_names(user)
         if names is not None:
@@ -105,55 +112,103 @@ class OfferDetailView(APIView):
     permission_classes = [IsAuthenticated, CanReadOrAuthor]
 
     def get(self, request: Request, pk: int) -> Response:
-        offer = _visible(request.user).filter(pk=pk).first()
+        offer = _visible(request.user, include_ended=True).filter(pk=pk).first()
         if offer is None:
             return Response(refusal_body("NOT_FOUND", f"No offer {pk}."), status=404)
         return Response(OfferReadSerializer(offer).data)
 
     @transaction.atomic
     def put(self, request: Request, pk: int) -> Response:
-        offer = Offer.objects.select_for_update().filter(pk=pk).first()
+        # Scoped exactly as the GET is. A mutating path that read `Offer.objects`
+        # while its sibling read `_visible` would let anybody holding the write
+        # rung re-price another store's or another brand's rule, and would answer
+        # 200 where the GET answers 404 - the read-scope-fails-open class this
+        # codebase has been bitten by before.
+        # `of=("self",)` because `_visible` joins the nullable brand and approver,
+        # and Postgres will not lock the nullable side of an outer join. The row
+        # being locked is this rule's, which is the only one being written.
+        offer = (
+            _visible(request.user, include_ended=True)
+            .select_for_update(of=("self",))
+            .filter(pk=pk)
+            .first()
+        )
         if offer is None:
             return Response(refusal_body("NOT_FOUND", f"No offer {pk}."), status=404)
 
-        # A live rule's content is frozen, so an edit to one is authored as a new
-        # rule from a whole body; everything else patches the row in front of us.
-        replacing = (
-            offer.status == Offer.Status.LIVE
-            and str(request.data.get("status") or "") != Offer.Status.ENDED
-        )
-        serializer = (
-            OfferWriteSerializer(data=request.data)
-            if replacing
-            else OfferWriteSerializer(offer, data=request.data, partial=True)
-        )
+        if offer.status in FROZEN_STATUSES:
+            return self._frozen(offer, request)
+        serializer = OfferWriteSerializer(offer, data=request.data, partial=True)
         if not serializer.is_valid():
             return _bad_request(serializer.errors)
-
-        if replacing:
-            return self._end_and_replace(offer, serializer, request)
         saved = serializer.save(**_approval_stamp(offer, serializer.validated_data, request))
         return Response(OfferReadSerializer(saved).data)
+
+    def _frozen(self, offer: Offer, request: Request) -> Response:
+        """A rule the counter has already priced under: stop it, or replace it.
+
+        Nothing else. `live` is obvious - the till has it cached and bills have
+        printed under it. `ended` matters just as much and is easier to miss: the
+        accept pipeline consults ended rules for any bill printed inside their
+        dates (`sell.services.recompute`), so moving an ended rule's percentage or
+        back-dating its `ends_on` silently rewrites what the server believes every
+        un-synced offline bill was owed - and a bill that was inside its cap
+        becomes a bill over it, refused, with the store's queue stopped behind it.
+
+        So exactly two moves are legal here, and neither carries any other field:
+
+          · `{"status": "ended"}` on a live rule stops it (see `_stop`);
+          · anything else is authored as a **new** rule (see `_end_and_replace`),
+            which is the documents-snapshot discipline every posted document in
+            this system obeys.
+        """
+        wants = str(request.data.get("status") or "")
+        stopping_only = set(request.data.keys()) <= {"status"} and wants == Offer.Status.ENDED
+        if stopping_only:
+            if offer.status == Offer.Status.ENDED:
+                return Response(OfferReadSerializer(offer).data)
+            return self._stop(offer)
+        if offer.status == Offer.Status.ENDED:
+            return Response(
+                refusal_body(
+                    "VALIDATION",
+                    "This offer has already ended. Bills were priced under it, so it "
+                    "cannot be changed - write a new offer instead.",
+                ),
+                status=400,
+            )
+        serializer = OfferWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return _bad_request(serializer.errors)
+        return self._end_and_replace(offer, serializer, request)
+
+    def _stop(self, offer: Offer) -> Response:
+        """Stop a running rule, at the end of today rather than retrospectively.
+
+        `ends_on` moves to today, never to yesterday. Fifty tills are holding this
+        rule offline and will keep applying it until their own clocks pass its end
+        date; back-dating would not stop one of them, it would only make every
+        bill they printed today disagree with the server and raise an
+        `offer_mismatch` on each. The placard is still in the window, too.
+        """
+        offer.status = Offer.Status.ENDED
+        offer.ends_on = max(timezone.localdate(), offer.starts_on)
+        offer.save(update_fields=["status", "ends_on", "updated_at"])
+        return Response(OfferReadSerializer(offer).data)
 
     def _end_and_replace(
         self, offer: Offer, serializer: OfferWriteSerializer, request: Request
     ) -> Response:
-        """Stop the running rule today; start its successor as a fresh draft.
+        """Stop the running rule, and author its successor as a fresh draft.
 
-        The old rule ends **today**, not yesterday, and that one day of overlap is
-        deliberate. Fifty tills are holding the old rule offline and will keep
-        applying it until their own clocks pass its end date; back-dating the end
-        would not stop a single one of them, it would only make every bill they
-        printed today disagree with the server and raise an `offer_mismatch` on
-        each. The placard is still in the window, too. So both rules can be live
-        for a day, the engine gives the customer the better of the two, and the
-        successor takes over cleanly tomorrow.
+        The successor starts as a **draft**, not live, and that is not an
+        oversight: D5 Q9's gate is a named approver before an offer reaches a shop
+        floor, and a change big enough to need a new rule is exactly the change
+        that gate exists for. The cost is that a live promotion stops while its
+        replacement is approved, which is head office's to sequence - by dating
+        the successor's `starts_on`.
         """
-        today = timezone.localdate()
-        offer.status = Offer.Status.ENDED
-        offer.ends_on = max(today, offer.starts_on)
-        offer.save(update_fields=["status", "ends_on", "updated_at"])
-
+        self._stop(offer)
         successor = serializer.save(
             created_by=request.user,
             status=Offer.Status.DRAFT,

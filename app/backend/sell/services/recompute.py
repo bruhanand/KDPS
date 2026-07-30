@@ -28,13 +28,14 @@ running when that bill was printed, and that is the only question being asked.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
+from typing import Any
 
 from django.db.models import Q
 
 from offers.models import Offer
-from offers.resolution import Cart, CartLine, Resolution, Rule, resolve
+from offers.resolution import Cart, CartLine, Resolution, Rule, covers, resolve
 
 #: A rupee a line, matching the GST half of the same advisory step (B3). Below
 #: this the two engines are agreeing and the difference is a rounding artefact
@@ -65,54 +66,74 @@ class BillLine:
     no_discount: bool = False
 
 
-def rulebook_for(store_code: str, day: date) -> list[Rule]:
-    """The rules that were running at this store on this day, in engine terms."""
-    rows = (
+def _running_on(store_code: str, day: date) -> Any:
+    """Rows a bill printed at this store on this day could have been priced under."""
+    return (
         Offer.objects.filter(status__in=BILLABLE_STATUSES, starts_on__lte=day)
         .filter(Q(ends_on__isnull=True) | Q(ends_on__gte=day))
         .filter(store_scope__stores__contains=[store_code.upper()])
         .select_related("brand")
-        .order_by("priority", "id")
     )
-    return [_rule(offer) for offer in rows]
 
 
-def _rule(offer: Offer) -> Rule:
-    payload = offer.as_rule_payload()
-    return Rule(
-        id=offer.id,
-        name=offer.name,
-        layer=offer.layer,
-        brand=offer.brand_name,
-        trigger_type=offer.trigger_type,
-        trigger_config=payload["trigger_config"],
-        reward_type=offer.reward_type,
-        reward_config=payload["reward_config"],
-        item_scope=payload["item_scope"],
-        starts_on=offer.starts_on,
-        ends_on=offer.ends_on,
-        combinable=offer.combinable,
-        priority=offer.priority,
+def rulebook_for(store_code: str, day: date) -> list[Rule]:
+    """The rules that were running at this store on this day, in engine terms."""
+    return [offer.as_rule() for offer in _running_on(store_code, day).order_by("priority", "id")]
+
+
+def _cart_line(line: BillLine) -> CartLine:
+    return CartLine(
+        line_no=line.line_no,
+        brand=line.dims.get("brand", ""),
+        item=line.dims.get("item", ""),
+        design=line.dims.get("design", ""),
+        size=line.dims.get("size", ""),
+        color=line.dims.get("color", ""),
+        barcode=line.barcode,
+        season=line.season,
+        qty=line.qty,
+        mrp_paise=line.mrp_paise,
+        no_discount=line.no_discount,
     )
 
 
 def resolve_bill(store_code: str, day: date, lines: Sequence[BillLine]) -> Resolution:
     """Price these lines against the store's rulebook as it stood on `day`."""
-    cart = Cart(
-        lines=tuple(
-            CartLine(
-                line_no=line.line_no,
-                brand=line.dims.get("brand", ""),
-                item=line.dims.get("item", ""),
-                design=line.dims.get("design", ""),
-                barcode=line.barcode,
-                season=line.season,
-                qty=line.qty,
-                mrp_paise=line.mrp_paise,
-                no_discount=line.no_discount,
-            )
-            for line in lines
-        ),
-        day=day,
-    )
+    cart = Cart(lines=tuple(_cart_line(line) for line in lines), day=day)
     return resolve(cart, rulebook_for(store_code, day))
+
+
+def rule_was_running(offer_id: Any, store_code: str, day: date, line: BillLine) -> bool:
+    """Was the rule the counter cited genuinely running over this piece that day?
+
+    The narrow question that keeps the discount cap from stopping a store's whole
+    queue.
+
+    The server reads its rulebook live; the till read its copy whenever it last
+    synced. Between the two, head office can end a rule, take this store off one,
+    or flip a piece's no-discount flag - and a bill priced honestly under the
+    till's copy then looks, to the server, like a discount nobody authorised.
+    Refusing it would be `OVERRIDE_REQUIRED` on a receipt already in a customer's
+    hand, with every bill behind it stuck in the queue: exactly the "block what
+    the business has already absorbed" this pipeline exists not to do.
+
+    So the citation is checked for the three things the server *can* still settle
+    - the rule exists, it belonged to this store, and it covered this piece on the
+    day the bill printed. What it cannot settle is the *amount*, which is why a
+    line answering true here is flagged rather than waved through.
+
+    A fabricated citation fails all three: a till cannot mint a rule, put itself
+    on one, or make one cover a brand it never named.
+
+    Note `no_discount=False`. The question being asked is whether the *rule* was
+    about this piece, and the AMM/NOD flag is a fact about the piece today, not
+    part of any rule. It is a live master-data column with no history, so a piece
+    flagged after a bill printed would otherwise turn that bill into a refusal -
+    the same retrospective trap, arriving through a different column.
+    """
+    if not offer_id:
+        return False
+    offer = _running_on(store_code, day).filter(pk=offer_id).first()
+    if offer is None:
+        return False
+    return covers(offer.as_rule(), replace(_cart_line(line), no_discount=False), day)

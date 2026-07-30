@@ -75,6 +75,10 @@ REWARD_GIFT = "gift"
 #: all, rather than making a wrong one.
 ADD_ON_REWARDS = frozenset({REWARD_PCT_OFF, REWARD_AMT_OFF})
 
+#: What a gift may fall back to when the counter has none left (D5 Q11). Never
+#: another gift: a fallback that could itself be out of stock is a loop.
+FALLBACK_REWARDS = frozenset({REWARD_PCT_OFF, REWARD_AMT_OFF, REWARD_FIXED_PRICE})
+
 
 # --- the inputs ------------------------------------------------------------
 
@@ -92,6 +96,8 @@ class CartLine:
     brand: str = ""
     item: str = ""
     design: str = ""
+    size: str = ""
+    color: str = ""
     barcode: str = ""
     season: str = ""
     qty: int = 1
@@ -257,7 +263,10 @@ def _within_dates(rule: Rule, day: date) -> bool:
     return rule.ends_on is None or day <= rule.ends_on
 
 
-_SCOPE_KEYS = ("brands", "categories", "styles", "barcodes", "seasons")
+#: Every axis a rule may aim at, from a whole brand down to one size in one
+#: colour (D5 Q2: "any level ... brand -> category -> chosen styles -> specific
+#: size/colour", plus season).
+SCOPE_KEYS = ("brands", "categories", "styles", "sizes", "colors", "barcodes", "seasons")
 
 
 def _facets(line: CartLine) -> tuple[tuple[str, str], ...]:
@@ -265,6 +274,8 @@ def _facets(line: CartLine) -> tuple[tuple[str, str], ...]:
         ("brands", line.brand),
         ("categories", line.item),
         ("styles", line.design),
+        ("sizes", line.size),
+        ("colors", line.color),
         ("barcodes", line.barcode),
         ("seasons", line.season),
     )
@@ -344,6 +355,15 @@ def _slab(rule: Rule, spend_paise: int, units: int) -> Mapping[str, Any] | None:
         key=lambda slab: int(slab.get(key, 0)),
     )
     return qualifying[-1] if qualifying else None
+
+
+def _slab_for(rule: Rule, covered: Sequence[CartLine]) -> Mapping[str, Any] | None:
+    """The step this set of lines reaches. Always measured on printed MRP (D5 Q13)."""
+    return _slab(
+        rule,
+        sum(line.gross_paise for line in covered),
+        sum(line.qty for line in covered),
+    )
 
 
 def _reward_params(rule: Rule, slab: Mapping[str, Any]) -> dict[str, Any]:
@@ -456,11 +476,7 @@ def _propose(
     covered = [line for line in lines if covers(rule, line, day) and base.get(line.line_no, 0) > 0]
     if not covered:
         return None
-    slab = _slab(
-        rule,
-        sum(line.gross_paise for line in covered),
-        sum(line.qty for line in covered),
-    )
+    slab = _slab_for(rule, covered)
     if slab is None:  # the ladder's bottom step was never reached
         return None
 
@@ -494,11 +510,7 @@ def _split_gifts(rules: Sequence[Rule], cart: Cart) -> tuple[list[Rule], list[En
         covered = [line for line in cart.lines if covers(rule, line, cart.day)]
         if not covered:
             continue
-        slab = _slab(
-            rule,
-            sum(line.gross_paise for line in covered),
-            sum(line.qty for line in covered),
-        )
+        slab = _slab_for(rule, covered)
         if slab is None:  # the spend threshold was not reached
             continue
         params = _reward_params(rule, slab)
@@ -514,7 +526,7 @@ def _split_gifts(rules: Sequence[Rule], cart: Cart) -> tuple[list[Rule], list[En
             continue
         fallback = params.get("fallback") or {}
         reward_type = str(fallback.get("reward_type") or "")
-        if reward_type not in (REWARD_PCT_OFF, REWARD_AMT_OFF, REWARD_FIXED_PRICE):
+        if reward_type not in FALLBACK_REWARDS:
             # No fallback configured: the customer gets nothing, and that is a
             # gap in the rulebook for a human to close, not a crash here.
             continue

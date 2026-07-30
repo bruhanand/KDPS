@@ -54,7 +54,7 @@ const BUILT: Screen[] = [
   { id: "approvals", path: "/approvals", element: <ApprovalsPage /> },
   // Home's Alerts surface — in-transit aging + return-window 30/15/7 (#77)
   { id: "alerts", path: "/alerts", element: <AlertsPage /> },
-  // Offers & Price — the store's read-only view of the rulebook (#183). The
+  // Offers & Price - the store's read-only view of the rulebook (#183). The
   // three authoring screens beside it in the nav are still planned.
   { id: "offers", path: "/offers", element: <OffersPage /> },
   // Booking

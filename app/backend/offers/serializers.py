@@ -24,11 +24,13 @@ from offers.models import Offer
 from offers.resolution import (
     ADD_ON_LAYERS,
     ADD_ON_REWARDS,
+    FALLBACK_REWARDS,
     REWARD_AMT_OFF,
     REWARD_FIXED_PRICE,
     REWARD_GIFT,
     REWARD_ITEM_FREE,
     REWARD_PCT_OFF,
+    SCOPE_KEYS,
     TRIGGER_GROUP,
     TRIGGER_QTY,
     TRIGGER_SPEND,
@@ -38,7 +40,7 @@ from offers.resolution import (
 #: Everything `covers()` knows how to read. A key outside this set is a typo that
 #: would narrow nothing and discount everything, so it is a refusal rather than
 #: an ignored extra.
-EXCLUDE_KEYS = frozenset({"brands", "categories", "styles", "barcodes", "seasons"})
+EXCLUDE_KEYS = frozenset(SCOPE_KEYS)
 ITEM_SCOPE_KEYS = EXCLUDE_KEYS | {"mrp_min_paise", "mrp_max_paise", "exclude"}
 
 #: draft is where a rule starts; live is where it stops changing.
@@ -322,33 +324,45 @@ def _check_percent(params: dict[str, Any]) -> None:
         _refuse("'percent' must be above nought and at most 100.")
 
 
+#: ₹10 crore, in paise. Nothing a garment retailer discounts comes near it, and
+#: above it the two engines stop agreeing: the largest-remainder split multiplies
+#: the amount by a line's value, and JavaScript's integers run out of exactness at
+#: 2^53 where Python's do not. A ceiling nobody will meet beats a divergence
+#: nobody would see.
+MAX_MONEY_DIAL_PAISE = 100_000_000_000
+
+
+def _check_money(params: dict[str, Any], key: str, *, above_nought: bool) -> None:
+    value = params.get(key)
+    if not _is_int(value) or value < (1 if above_nought else 0):
+        _refuse(f"'{key}' must be whole paise{' above nought' if above_nought else ''}.")
+    elif value > MAX_MONEY_DIAL_PAISE:
+        _refuse(f"'{key}' is larger than any offer this business runs.")
+
+
 def _check_amount(params: dict[str, Any]) -> None:
-    if not _is_int(params.get("amount_paise")) or int(params["amount_paise"]) <= 0:
-        _refuse("'amount_paise' must be whole paise above nought.")
+    _check_money(params, "amount_paise", above_nought=True)
 
 
 def _check_price(params: dict[str, Any]) -> None:
-    if not _is_int(params.get("price_paise")) or int(params["price_paise"]) < 0:
-        _refuse("'price_paise' must be whole paise.")
+    _check_money(params, "price_paise", above_nought=False)
 
 
 def _check_gift(params: dict[str, Any]) -> None:
     if not str(params.get("gift_barcode") or "").strip():
         _refuse("A gift needs the barcode of the piece being given.")
-    if not _is_int(params.get("token_price_paise", 0)):
-        _refuse("'token_price_paise' must be whole paise.")
+    params = {**params, "token_price_paise": params.get("token_price_paise", 0)}
+    _check_money(params, "token_price_paise", above_nought=False)
     fallback = params.get("fallback")
     if fallback is None:
         return
-    if not isinstance(fallback, dict) or fallback.get("reward_type") not in _FALLBACK_REWARDS:
+    if not isinstance(fallback, dict) or fallback.get("reward_type") not in FALLBACK_REWARDS:
         _refuse(
             "The out-of-stock fallback is a percentage, an amount or a fixed price - "
             "never another gift."
         )
     _check_reward(str(fallback["reward_type"]), {}, dict(fallback.get("reward_config") or {}))
 
-
-_FALLBACK_REWARDS = (REWARD_PCT_OFF, REWARD_AMT_OFF, REWARD_FIXED_PRICE)
 
 #: One checker per reward. A reward with no entry here needs no dials.
 _REWARD_CHECKS = {

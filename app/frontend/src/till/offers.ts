@@ -45,6 +45,8 @@ export interface OfferCartLine {
   brand: string;
   item: string;
   design: string;
+  size: string;
+  color: string;
   barcode: string;
   season: string;
   qty: number;
@@ -95,7 +97,7 @@ export function hundredths(value: unknown): number {
   const text = String(value ?? "").trim();
   if (!text) return 0;
   const sign = text.startsWith("-") ? -1 : 1;
-  const [whole = "", frac = ""] = text.replace(/^[+-]/, "").split(".");
+  const [whole = "", frac = ""] = text.replace(/^[+-]+/, "").split(".");
   const w = whole || "0";
   const f = (frac + "00").slice(0, 2);
   if (!/^\d+$/.test(w) || !/^\d+$/.test(f)) throw new Error(`'${text}' is not a percentage`);
@@ -129,6 +131,8 @@ function facets(line: OfferCartLine): [string, string][] {
     ["brands", line.brand],
     ["categories", line.item],
     ["styles", line.design],
+    ["sizes", line.size],
+    ["colors", line.color],
     ["barcodes", line.barcode],
     ["seasons", line.season],
   ];
@@ -189,6 +193,15 @@ function reachedSlab(rule: TillOffer, spendPaise: number, units: number): Dials 
     .filter((slab) => reached >= Number(slab[key] ?? 0))
     .sort((a, b) => Number(a[key] ?? 0) - Number(b[key] ?? 0));
   return qualifying.length ? qualifying[qualifying.length - 1] : null;
+}
+
+/** The step this set of lines reaches. Always measured on printed MRP (D5 Q13). */
+function slabFor(rule: TillOffer, covered: OfferCartLine[]): Dials | null {
+  return reachedSlab(
+    rule,
+    covered.reduce((n, l) => n + l.mrp_paise * l.qty, 0),
+    covered.reduce((n, l) => n + l.qty, 0),
+  );
 }
 
 /** The reward's dials, with the reached step's own values on top. */
@@ -303,11 +316,7 @@ function propose(
 ): Proposal | null {
   const covered = lines.filter((line) => covers(rule, line, day) && (base.get(line.line_no) ?? 0) > 0);
   if (!covered.length) return null;
-  const slab = reachedSlab(
-    rule,
-    covered.reduce((n, l) => n + l.mrp_paise * l.qty, 0),
-    covered.reduce((n, l) => n + l.qty, 0),
-  );
+  const slab = slabFor(rule, covered);
   if (slab === null) return null;
 
   const raw = sharesFor(rule.reward_type, rule, covered, base, rewardParams(rule, slab));
@@ -336,11 +345,7 @@ function splitGifts(
     }
     const covered = cart.lines.filter((line) => covers(rule, line, cart.day));
     if (!covered.length) continue;
-    const slab = reachedSlab(
-      rule,
-      covered.reduce((n, l) => n + l.mrp_paise * l.qty, 0),
-      covered.reduce((n, l) => n + l.qty, 0),
-    );
+    const slab = slabFor(rule, covered);
     if (slab === null) continue;
     const params = rewardParams(rule, slab);
     if (!declined.has(rule.id)) {
