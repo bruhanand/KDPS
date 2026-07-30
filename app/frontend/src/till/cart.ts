@@ -16,15 +16,33 @@
 //   line     : mrp × qty − disc == net, and GST == net − base(net, rate)
 //   tenders  : Σ amounts == net
 //
-// Two things this file deliberately does not do. It applies no offer - the
-// rulebook is #183, and a discount here is a *manual* one the cashier keyed in,
-// which is why it is the thing the cap measures. And it never invents a price:
-// a piece the books have no MRP for arrives as `null` (contract, step 3) and
-// stops the bill until a human types the price off the tag, because a nought
-// would post no revenue and no tax against a garment that left the shop.
+// The offer engine (#183) sits inside `priceCart`, and its output is kept in a
+// field of its own rather than folded into `disc_paise`. That separation is the
+// whole point: `disc_paise` is what a *cashier* keyed in, and it is the thing
+// the cap measures. Adding a rulebook discount into it would trip
+// `OVERRIDE_REQUIRED` on every offer in the shop; keeping the rulebook's saving
+// out of it would understate the bill. So the line carries both, adds them for
+// the customer, and sends the sum as the line's discount with the evidence to
+// say where it came from.
+//
+// One thing this file still deliberately does not do: invent a price. A piece
+// the books have no MRP for arrives as `null` (contract, step 3) and stops the
+// bill until a human types the price off the tag, because a nought would post no
+// revenue and no tax against a garment that left the shop.
 
+import { resolveOffers } from "./offers";
+import type { Entitlement, OfferCart } from "./offers";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
-import type { BillDraft, BillLine, TillGstSlab, TillItem, TillSeason } from "./types";
+import type {
+  BillDraft,
+  BillLine,
+  NoOffer,
+  OfferEvidence,
+  TillGstSlab,
+  TillItem,
+  TillOffer,
+  TillSeason,
+} from "./types";
 
 /** One row of the line grid, as the cashier has it so far. */
 export interface CartLine {
@@ -69,6 +87,14 @@ export interface Cart {
 export interface PricedLine extends CartLine {
   line_no: number;
   gross_paise: number;
+  /** What the rulebook took off this line, kept apart from `disc_paise` so the
+   *  cap measures the cashier and only the cashier. */
+  offer_paise: number;
+  /** The brand-layer rule that won, for the chip and for the sale line's FK. */
+  offer_id: number | null;
+  /** What the chip says: the winning rule's name, or "" when none applied. */
+  offer_label: string;
+  offer_evidence: OfferEvidence | NoOffer;
   net_paise: number;
   gst_rate: string;
   gst_paise: number;
@@ -82,6 +108,9 @@ export interface PricedBill {
   pieces: number;
   gross_paise: number;
   discount_paise: number;
+  /** Gifts this bill has earned - a trolley at a token price, and the like. The
+   *  counter scans them as ordinary lines; this is the prompt to do so. */
+  entitlements: Entitlement[];
   /** What the lines come to before the bill is rounded. */
   subtotal_paise: number;
   round_paise: number;
@@ -96,6 +125,7 @@ export interface PricedBill {
 export interface PricingWorld {
   seasons: TillSeason[];
   slabs: TillGstSlab[];
+  offers: TillOffer[];
 }
 
 export interface PricingOptions {
@@ -166,7 +196,15 @@ export function capFor(mrpPaise: number, qty: number, capPercent: string): numbe
   return Math.floor((mrpPaise * qty * rateHundredths(capPercent)) / 10_000);
 }
 
-/** Price the whole cart: every line, then the bill, then the change. */
+/**
+ * Price the whole cart: the rulebook, then every line, then the bill.
+ *
+ * The rulebook runs over the **whole cart at once** and cannot be folded into
+ * `priceLine`. A "spend ₹11,000 and take ₹1,000 off" measures across a brand's
+ * lines and shares its reward back over them, and a "buy 2 get 1" gives away the
+ * cheapest of three pieces that may be on three different rows - neither
+ * question can be answered one line at a time.
+ */
 export function priceCart(
   cart: Cart,
   world: PricingWorld,
@@ -174,10 +212,14 @@ export function priceCart(
   options: PricingOptions = {},
 ): PricedBill {
   const capPercent = options.capPercent ?? "0.00";
-  const lines = cart.lines.map((line, index) => priceLine(line, index + 1, world, day, capPercent));
+  const rulebook = resolveOffers(offerCart(cart, day), world.offers ?? []);
+  const byLine = new Map(rulebook.lines.map((outcome) => [outcome.line_no, outcome]));
+  const lines = cart.lines.map((line, index) =>
+    priceLine(line, index + 1, world, day, capPercent, byLine.get(index + 1)),
+  );
 
   const gross = lines.reduce((n, l) => n + l.gross_paise, 0);
-  const discount = lines.reduce((n, l) => n + l.disc_paise, 0);
+  const discount = lines.reduce((n, l) => n + l.disc_paise + l.offer_paise, 0);
   const subtotal = lines.reduce((n, l) => n + l.net_paise, 0);
   const round = roundingOf(subtotal);
   const net = subtotal + round;
@@ -187,15 +229,37 @@ export function priceCart(
     pieces: lines.reduce((n, l) => n + l.qty, 0),
     gross_paise: gross,
     discount_paise: discount,
+    entitlements: rulebook.entitlements,
     subtotal_paise: subtotal,
     round_paise: round,
     net_paise: net,
     // Rounding is not a discount and moves no tax: the GST total is the lines'
     // and nothing else, which is what the accept pipeline re-derives.
     gst_paise: lines.reduce((n, l) => n + l.gst_paise, 0),
+    // What staff quote across the counter is everything off the ticket price -
+    // the rulebook's part and the cashier's - because that is the number the
+    // customer is comparing with the tags in their hand.
     saved_paise: discount,
     tenderedPaise: cart.tenderedPaise,
     changePaise: changeFor(cart.tenderedPaise, net),
+  };
+}
+
+/** The cart in the rulebook's own terms; line numbers are positions, as ever. */
+function offerCart(cart: Cart, day: string): OfferCart {
+  return {
+    day,
+    lines: cart.lines.map((line, index) => ({
+      line_no: index + 1,
+      brand: line.brand,
+      item: line.item,
+      design: line.design,
+      barcode: line.barcode,
+      season: line.season,
+      qty: line.qty,
+      mrp_paise: line.mrp_paise,
+      no_discount: line.no_discount,
+    })),
   };
 }
 
@@ -205,9 +269,11 @@ function priceLine(
   world: PricingWorld,
   day: string,
   capPercent: string,
+  offer: { discount_paise: number; offer_id: number | null; evidence: PricedLine["offer_evidence"] } | undefined,
 ): PricedLine {
   const gross = line.mrp_paise * line.qty;
-  const net = gross - line.disc_paise;
+  const offerPaise = offer?.discount_paise ?? 0;
+  const net = gross - offerPaise - line.disc_paise;
   // A line that cannot be priced still has to render: the screen shows why and
   // refuses to close, rather than throwing on the way to telling anybody.
   const split =
@@ -215,14 +281,21 @@ function priceLine(
       ? splitLine(net, line.qty, slabFor(world.slabs, line.hsn, day))
       : { rate: "0.00", base_paise: 0, gst_paise: 0 };
   const cap = capFor(line.mrp_paise, line.qty, capPercent);
+  const evidence = offer?.evidence ?? {};
   return {
     ...line,
     line_no,
     gross_paise: gross,
+    offer_paise: offerPaise,
+    offer_id: offer?.offer_id ?? null,
+    offer_label: "offer_name" in evidence ? evidence.offer_name : "",
+    offer_evidence: evidence,
     net_paise: net,
     gst_rate: split.rate,
     gst_paise: split.gst_paise,
     cap_paise: cap,
+    // The cap measures the cashier, so it measures `disc_paise` alone. An offer
+    // is head office's decision and was never the counter's to authorise.
     over_cap: line.disc_paise > cap,
   };
 }
@@ -303,15 +376,18 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     season: line.season,
     qty: line.qty,
     mrp_paise: line.mrp_paise,
-    disc_paise: line.disc_paise,
+    // The wire carries one discount per line, because that is what the bill
+    // says and what the customer paid. Which part of it the rulebook is
+    // answerable for is a separate question, and the server answers it by
+    // re-resolving the cart itself - the evidence below is what the daily check
+    // audits, never what the cap believes.
+    disc_paise: line.offer_paise + line.disc_paise,
     net_paise: line.net_paise,
     gst_rate: line.gst_rate,
     gst_paise: line.gst_paise,
     salesman: line.salesman,
-    // No offer claimed, deliberately: the rulebook is #183, and a discount on
-    // this bill is one a person keyed in. Evidence the till cannot stand behind
-    // would be evidence the cap has to ignore anyway (`_rulebook_saving`).
-    offer_evidence: {},
+    offer_id: line.offer_id,
+    offer_evidence: line.offer_evidence,
   }));
   return {
     billed_at: identity.billedAt,

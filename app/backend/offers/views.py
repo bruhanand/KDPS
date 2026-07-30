@@ -116,21 +116,24 @@ class OfferDetailView(APIView):
         if offer is None:
             return Response(refusal_body("NOT_FOUND", f"No offer {pk}."), status=404)
 
-        was_live = offer.status == Offer.Status.LIVE
-        wanted = str(request.data.get("status") or "")
-        stopping = was_live and wanted == Offer.Status.ENDED
-
-        serializer = OfferWriteSerializer(offer, data=request.data, partial=not was_live)
-        if was_live and not stopping:
-            # A live rule's content is frozen; the edit becomes a new rule.
-            serializer = OfferWriteSerializer(data=request.data)
+        # A live rule's content is frozen, so an edit to one is authored as a new
+        # rule from a whole body; everything else patches the row in front of us.
+        replacing = (
+            offer.status == Offer.Status.LIVE
+            and str(request.data.get("status") or "") != Offer.Status.ENDED
+        )
+        serializer = (
+            OfferWriteSerializer(data=request.data)
+            if replacing
+            else OfferWriteSerializer(offer, data=request.data, partial=True)
+        )
         if not serializer.is_valid():
             return _bad_request(serializer.errors)
 
-        if not was_live or stopping:
-            saved = serializer.save(**_approval_stamp(offer, serializer.validated_data, request))
-            return Response(OfferReadSerializer(saved).data)
-        return self._end_and_replace(offer, serializer, request)
+        if replacing:
+            return self._end_and_replace(offer, serializer, request)
+        saved = serializer.save(**_approval_stamp(offer, serializer.validated_data, request))
+        return Response(OfferReadSerializer(saved).data)
 
     def _end_and_replace(
         self, offer: Offer, serializer: OfferWriteSerializer, request: Request

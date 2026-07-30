@@ -418,12 +418,22 @@ class SaleLine(TimeStampedModel):
     salesman = models.ForeignKey(
         Salesman, null=True, blank=True, on_delete=models.PROTECT, related_name="lines"
     )
+    offer = models.ForeignKey(
+        "offers.Offer",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sale_lines",
+        help_text="The brand-layer rule that won this line. An add-on that stacked "
+        "on top is in the evidence, not here: this is 'which offer was this sold "
+        "under', which has exactly one answer.",
+    )
     offer_evidence = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Which rule won, what it beat, and by how much (B3). The FK onto "
-        "offers.Offer arrives with the offer engine; until then the winner's id "
-        "rides inside this evidence.",
+        help_text="Which rule won, what it beat, and by how much (B3). Kept beside "
+        "the FK rather than replaced by it: the rule can be ended and replaced, and "
+        "what this bill was priced under has to stay readable afterwards (Rule 3).",
     )
     manual_desc = models.CharField(
         max_length=200, blank=True, default="", help_text="A line the scan could not resolve."

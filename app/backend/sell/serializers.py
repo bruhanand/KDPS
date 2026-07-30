@@ -44,6 +44,7 @@ class _LineWriteSerializer(serializers.Serializer):
     )
     gst_paise = serializers.IntegerField(min_value=0, required=False, default=0)
     salesman = serializers.IntegerField(required=False, allow_null=True, default=None)
+    offer_id = serializers.IntegerField(required=False, allow_null=True, default=None)
     offer_evidence = serializers.JSONField(required=False, default=dict)
     manual_desc = serializers.CharField(
         max_length=200, allow_blank=True, required=False, default=""

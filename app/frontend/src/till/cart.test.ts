@@ -11,7 +11,7 @@ import {
 } from "./cart";
 import type { Cart } from "./cart";
 import { item, season } from "./testSupport";
-import type { TillGstSlab } from "./types";
+import type { TillGstSlab, TillOffer } from "./types";
 
 const SLAB: TillGstSlab = {
   hsn_prefix: "",
@@ -21,7 +21,7 @@ const SLAB: TillGstSlab = {
   effective_from: "2020-01-01",
 };
 
-const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB] };
+const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [] };
 
 function cartOf(...lines: Cart["lines"]): Cart {
   return { lines, tenderedPaise: 0 };
@@ -215,9 +215,106 @@ describe("the bill handed to the till", () => {
     expect(drafted.customer).toEqual({ name: "Mrs Sharma", mobile: "9876543210", gstin: "" });
   });
 
-  it("claims no offer, because there is no rulebook yet (#183)", () => {
-    expect(drafted.lines.every((l) => l.offer_evidence && !("saved_paise" in l.offer_evidence)));
+  it("claims no offer when no rule reached the line", () => {
+    expect(drafted.lines[0].offer_evidence).toEqual({});
     expect(drafted.lines[0].offer_id ?? null).toBeNull();
+  });
+});
+
+// --- what the rulebook does to the money on the screen (#183) --------------
+
+const MUFTI_HALF: TillOffer = {
+  id: 7,
+  name: "Mufti flat 50",
+  layer: "brand",
+  brand: "MUFTI",
+  trigger_type: "none",
+  trigger_config: {},
+  reward_type: "pct_off",
+  reward_config: { percent: "50.00" },
+  item_scope: {},
+  starts_on: "2026-07-01",
+  ends_on: null,
+  combinable: false,
+  priority: 100,
+};
+
+const RULEBOOK = { ...WORLD, offers: [MUFTI_HALF] };
+
+describe("the rulebook, on the line and on the bill", () => {
+  it("takes the offer off the line and says which rule did it", () => {
+    const bill = priceCart(cartOf(scanned(149900)), RULEBOOK, "2026-07-30");
+
+    expect(bill.lines[0].offer_paise).toBe(74950);
+    expect(bill.lines[0].offer_id).toBe(7);
+    expect(bill.lines[0].offer_label).toBe("Mufti flat 50");
+    expect(bill.lines[0].net_paise).toBe(74950);
+  });
+
+  it("quotes the whole saving to the customer, rulebook and cashier together", () => {
+    const bill = priceCart(cartOf(scanned(149900, { disc_paise: 5000 })), RULEBOOK, "2026-07-30");
+
+    expect(bill.saved_paise).toBe(79950);
+    expect(bill.discount_paise).toBe(79950);
+    expect(bill.subtotal_paise).toBe(69950);
+    expect(bill.net_paise).toBe(70000); // the bill's own rounding, as ever
+  });
+
+  it("does not let an offer count against the cashier's own cap", () => {
+    // ₹749.50 is far past any cashier's cap, and it is head office's decision.
+    // If the offer counted, every discounted line in the shop would demand a
+    // manager and the counter would stop.
+    const cart = { ...cartOf(scanned(149900)), tenderedPaise: 100000 };
+
+    const bill = priceCart(cart, RULEBOOK, "2026-07-30", { capPercent: "7.50" });
+
+    expect(bill.lines[0].over_cap).toBe(false);
+    expect(whyItCannotClose(bill)).toBe("");
+  });
+
+  it("still caps what the cashier keyed in on top of an offer", () => {
+    const bill = priceCart(cartOf(scanned(149900, { disc_paise: 20000 })), RULEBOOK, "2026-07-30", {
+      capPercent: "7.50",
+    });
+
+    expect(bill.lines[0].over_cap).toBe(true);
+    expect(whyItCannotClose(bill)).toContain("more than a cashier may");
+  });
+
+  it("stops a rule the day it stops, on the counter's own clock", () => {
+    const ended = { ...WORLD, offers: [{ ...MUFTI_HALF, ends_on: "2026-07-29" }] };
+
+    expect(priceCart(cartOf(scanned(149900)), ended, "2026-07-30").lines[0].offer_paise).toBe(0);
+  });
+
+  it("sends the whole discount up the wire, with the evidence behind it", () => {
+    const bill = priceCart(cartOf(scanned(149900, { disc_paise: 5000 })), RULEBOOK, "2026-07-30");
+    const draft = toDraft(bill, { billedAt: "2026-07-30T12:31:00.000Z" });
+
+    // One number on the bill, because that is what the customer paid; which part
+    // of it the rulebook owns is the server's own question to re-answer.
+    expect(draft.lines[0].disc_paise).toBe(79950);
+    expect(draft.lines[0].net_paise).toBe(69950);
+    expect(draft.lines[0].offer_id).toBe(7);
+    expect(draft.lines[0].offer_evidence).toMatchObject({
+      offer_id: 7,
+      layer: "brand",
+      saved_paise: 74950,
+    });
+  });
+
+  it("leaves a no-discount piece alone (D5 Q3)", () => {
+    const protectedPiece = {
+      ...addPiece({ ...item("8902", "FW25", 149900), no_discount: true }, {
+        stock: 1,
+        alternatives: [],
+      }),
+    };
+
+    const bill = priceCart(cartOf(protectedPiece), RULEBOOK, "2026-07-30");
+
+    expect(bill.lines[0].offer_paise).toBe(0);
+    expect(bill.lines[0].net_paise).toBe(149900);
   });
 });
 

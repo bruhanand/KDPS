@@ -42,6 +42,9 @@ export interface TillGstSlab {
 
 export interface TillOffer {
   id: number;
+  /** What the counter calls it - the chip on the line and the "you saved" line
+   *  read this, so it is the one field here a customer ever hears out loud. */
+  name: string;
   layer: string;
   brand?: string;
   trigger_type: string;
@@ -54,6 +57,37 @@ export interface TillOffer {
   combinable: boolean;
   priority: number;
 }
+
+/** One rule this line's discount was chosen over, and by how much. */
+export interface OfferCredit {
+  offer_id: number;
+  offer_name: string;
+  saved_paise: number;
+}
+
+export interface StackedCredit extends OfferCredit {
+  layer: string;
+}
+
+/**
+ * Why a line cost what it cost - what rides to `SaleLine.offer_evidence` (B3).
+ *
+ * A wire shape rather than an engine one, which is why it lives here: it is
+ * written at the counter, sent up with the bill, stored on the line, and read
+ * months later by the daily applied-versus-rulebook check when the rule itself
+ * may have been ended and replaced twice over.
+ */
+export interface OfferEvidence {
+  offer_id: number | null;
+  offer_name: string;
+  layer: string;
+  saved_paise: number;
+  beat: OfferCredit[];
+  stack: StackedCredit[];
+}
+
+/** Nothing applied. Written as `{}`, exactly as the server writes it. */
+export type NoOffer = Record<string, never>;
 
 export interface TillCreditNote {
   number: string;
@@ -142,7 +176,7 @@ export interface BillLine {
   gst_paise: number;
   salesman?: number | null;
   offer_id?: number | null;
-  offer_evidence?: Record<string, unknown>;
+  offer_evidence?: OfferEvidence | NoOffer;
   manual_desc?: string;
   override_by?: number | null;
 }

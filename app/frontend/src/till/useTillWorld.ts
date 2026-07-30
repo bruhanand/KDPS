@@ -22,6 +22,7 @@ import { DEFAULT_POLICY } from "./sync";
 import type {
   TillGstSlab,
   TillItem,
+  TillOffer,
   TillPolicy,
   TillSalesman,
   TillSeason,
@@ -32,6 +33,10 @@ import type {
 export interface TillWorld {
   items: TillItem[];
   stock: TillStock[];
+  /** The rulebook as it stood at the last sync. Read here rather than queried
+   *  per line: pricing runs on every keystroke in the discount box, and an
+   *  await between a scan and the offer chip is an await the counter feels. */
+  offers: TillOffer[];
   seasons: TillSeason[];
   slabs: TillGstSlab[];
   salesmen: TillSalesman[];
@@ -46,6 +51,7 @@ export interface TillWorld {
 const EMPTY: TillWorld = {
   items: [],
   stock: [],
+  offers: [],
   seasons: [],
   slabs: [],
   salesmen: [],
@@ -67,9 +73,10 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
 
   const load = useCallback(async (): Promise<TillWorld> => {
     if (!db) return EMPTY;
-    const [items, stock, seasons, slabs, salesmen] = await Promise.all([
+    const [items, stock, offers, seasons, slabs, salesmen] = await Promise.all([
       db.items.toArray(),
       db.stock.toArray(),
+      db.offers.toArray(),
       db.seasons.toArray(),
       db.gstSlabs.toArray(),
       db.salesmen.toArray(),
@@ -77,6 +84,7 @@ export function useTillWorld(db: TillDb | null, version: string): TillWorld {
     return {
       items,
       stock,
+      offers,
       seasons,
       slabs,
       salesmen: salesmen.filter((s) => s.is_active),

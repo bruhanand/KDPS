@@ -9,6 +9,7 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import { addPiece, priceCart, qtyFrom, toDraft, whyItCannotClose } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
+import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
@@ -82,7 +83,7 @@ function Counter({ storeName }: { storeName?: string }) {
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => tillToday(), []);
   const bill = useMemo(
     () =>
       priceCart(cart, world, today, {
@@ -639,7 +640,15 @@ function RateCell({ line, locked, onEdit }: CellProps) {
   );
 }
 
-/** A manual discount, and the cap it lives under (B2). */
+/**
+ * A manual discount, the cap it lives under (B2), and what the rulebook gave.
+ *
+ * The two discounts share a cell because they share a column in the customer's
+ * head - "what came off this shirt" - but they never share a number. The box is
+ * the cashier's and the cap measures it; the chip below is head office's and is
+ * not editable here at all, because the way to change an offer is to change the
+ * offer.
+ */
 function DiscountCell({ line, locked, onEdit }: CellProps) {
   return (
     <>
@@ -651,18 +660,27 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
         placeholder="0"
         onChange={(paise) => onEdit(line.key, { disc_paise: paise })}
       />
+      {line.offer_paise > 0 && (
+        <span
+          className="bill-offer"
+          data-testid={`bill-offer-${line.line_no}`}
+          title={line.offer_label}
+        >
+          {line.offer_label || "Offer"} · <Money paise={line.offer_paise} />
+        </span>
+      )}
       {line.over_cap && (
         <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
           over the cap
         </span>
       )}
-      {/* Information, not a gate - and deliberately so. The corpus ties
-          `no_discount` to the *offer* rulebook only ("no_discount excluded",
-          api-contract step 6), which is #183; nothing in it says a cashier's
-          keyed-in discount is barred on such a style. Enforcing one here would
-          be inventing brand policy, so the cap governs this line like any other
-          and the cashier is told what they are discounting. Whether the flag
-          should also bind a manual discount is Anand's to rule on. */}
+      {/* Information, not a gate - and deliberately so. The rulebook (#183) does
+          obey this flag: no offer, of any layer, reaches a no-discount piece.
+          But nothing in the corpus says a *cashier's* keyed-in discount is
+          barred on such a style, and enforcing one here would be inventing brand
+          policy - so the cap governs this line like any other and the cashier is
+          told what they are discounting. Whether the flag should also bind a
+          manual discount is Anand's to rule on. */}
       {line.no_discount && <span className="muted-cell">no-discount style</span>}
     </>
   );

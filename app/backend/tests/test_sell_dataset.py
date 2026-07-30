@@ -288,9 +288,11 @@ def test_gst_slabs_carry_their_own_effective_date(till):
     assert future["threshold_paise"] == 250000
 
 
-def test_offers_is_present_and_empty_until_the_rulebook_lands(till):
+def test_offers_is_present_and_empty_when_nothing_is_running(till):
     """Empty, not absent: "no offers running" is something a till must be able to
-    read. The rulebook is #183; when it lands each row carries its own dates."""
+    read, and it must read the same way on the day the rulebook is empty as on
+    the day it is full. What a populated section looks like is #183's own suite
+    (`tests/test_offers_api.py`), which owns the rulebook end to end."""
     assert till["client"].get(URL).json()["offers"] == []
 
 
