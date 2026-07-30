@@ -108,8 +108,12 @@ CROSS_STORE_AVAILABILITY = declare_scope_exception(
         "30 July, and the whole point of the screen. It is safe to widen only "
         "because of what it withholds: quantities, sizes and store codes, never "
         "cost, landed value, MRP or margin. Another store's money stays another "
-        "store's business, and this read cannot become a way to see it. It is "
-        "read-only and places no hold on the piece; asking for it is a stock "
-        "request that walks its own approval route."
+        "store's business, and this read cannot become a way to see it. Only the "
+        "*store* axis is suspended - a brand-scoped caller is still narrowed to "
+        "the brands they are entitled to, because the customer-at-the-counter "
+        "argument is a store's and says nothing about letting one brand's "
+        "representative read another brand's network position. It is read-only "
+        "and places no hold on the piece; asking for it is a stock request that "
+        "walks its own approval route."
     ),
 )

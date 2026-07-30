@@ -23,7 +23,7 @@ from _rbac import make_role
 from rest_framework.test import APIClient
 
 from accounts.models import ScopeType, User
-from masters.models import Gstin, LegalEntity, Sku, Store
+from masters.models import Brand, Gstin, LegalEntity, Sku, Store
 from masters.scope_exceptions import (
     CROSS_STORE_AVAILABILITY,
     REGISTERED_SCOPE_EXCEPTIONS,
@@ -129,8 +129,8 @@ def _get(user, **params):
     return _client(user).get(URL, params)
 
 
-def _stores_for(payload, design="CH8801", size="L"):
-    entry = next(r for r in payload["results"] if r["design"] == design)
+def _stores_for(payload, design="CH8801", size="L", brand="AvBrand"):
+    entry = next(r for r in payload["results"] if r["design"] == design and r["brand"] == brand)
     sizes = next(s for s in entry["sizes"] if s["size"] == size)
     return {s["store"]: s["qty"] for s in sizes["stores"]}
 
@@ -229,6 +229,92 @@ def test_two_colours_of_one_size_stay_two_askable_rows(rig):
     size_l = next(s for s in resp.data["results"][0]["sizes"] if s["size"] == "L")
     at_warehouse = [s for s in size_l["stores"] if s["store"] == "AV-WH"]
     assert {(s["color"], s["qty"]) for s in at_warehouse} == {("Blue", 7), ("Red", 2)}
+
+
+@pytest.mark.django_db
+def test_a_brand_manager_is_still_bounded_by_their_brands(rig):
+    """Only the *store* axis is suspended, and this is the line that says so.
+
+    A brand manager is scoped by brand, not by store, so the ordinary stock gates
+    narrow them that way. If this endpoint dropped both axes it would hand one
+    brand's representative another brand's network position, store by store —
+    which no reading of the counter argument supports.
+    """
+    Brand.objects.create(code="av-br", name="AvBrand")
+    Brand.objects.create(code="other-br", name="OtherBrand")
+    rep = User.objects.create_user(
+        username="av_brand_rep",
+        password=TEST_PASSWORD,
+        role=make_role("brand_manager"),
+        scope_type=ScopeType.BRAND,
+    )
+    rep.brands.add(Brand.objects.get(name="AvBrand"))
+
+    theirs = _get(rep, q="Chinos")
+    assert theirs.status_code == 200, theirs.data
+    assert {r["brand"] for r in theirs.data["results"]} == {"AvBrand"}
+
+    not_theirs = _get(rep, q="Shirt")
+    assert not_theirs.status_code == 200, not_theirs.data
+    assert not_theirs.data["results"] == []
+
+
+@pytest.mark.django_db
+def test_a_brand_manager_with_no_brands_sees_nothing(rig):
+    """Fail-closed, the same answer every other gate gives them."""
+    rep = User.objects.create_user(
+        username="av_brand_none",
+        password=TEST_PASSWORD,
+        role=make_role("brand_manager"),
+        scope_type=ScopeType.BRAND,
+    )
+
+    resp = _get(rep, q="CH8801")
+
+    assert resp.status_code == 200, resp.data
+    assert resp.data["results"] == []
+
+
+@pytest.mark.django_db
+def test_two_brands_using_the_same_design_number_stay_two_styles(rig):
+    """A design number is a brand's own numbering, not the network's.
+
+    Grouped on the bare style code, PeerBrand's pieces would land inside
+    AvBrand's card and its total — one card headed with the wrong brand, and a
+    "pcs in the network" figure nobody could reconcile.
+    """
+    Sku.objects.create(
+        barcode="PEER-CH-M",
+        design="CH8801",
+        color="Green",
+        size="M",
+        brand="PeerBrand",
+        item="Chinos",
+        hsn="6203",
+        mrp_paise=199900,
+    )
+    StockOnHand.objects.create(
+        store=rig["store_b"],
+        sku_code="PEER-CH-M",
+        design="CH8801",
+        color="Green",
+        size="M",
+        brand="PeerBrand",
+        season="SS26",
+        item="Chinos",
+        hsn="6203",
+        net_qty=9,
+        net_value_paise=900000,
+    )
+
+    resp = _get(rig["asker"], q="CH8801")
+
+    by_brand = {r["brand"]: r for r in resp.data["results"]}
+    assert set(by_brand) == {"AvBrand", "PeerBrand"}
+    assert [s["size"] for s in by_brand["PeerBrand"]["sizes"]] == ["M"]
+    assert by_brand["PeerBrand"]["sizes"][0]["stores"][0]["qty"] == 9
+    # AvBrand's own card is untouched by the neighbour sharing its style code.
+    assert _stores_for(resp.data) == {"AV-B": 3, "AV-WH": 7}
 
 
 @pytest.mark.django_db

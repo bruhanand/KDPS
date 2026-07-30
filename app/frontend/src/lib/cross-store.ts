@@ -81,11 +81,17 @@ export function storeIdByCode(locations: LocationT[], code: string): number | nu
   return locations.find((l) => l.code === code)?.id ?? null;
 }
 
-export interface RequestDraftT {
-  requestingStoreId: number;
-  fulfillingStoreId: number;
+/** A row the counter has pointed at, with the design it sits under — the two
+ *  always travel together, because a row alone names a size and a place but not
+ *  the style they belong to. */
+export interface PickedRowT {
   design: AvailabilityDesignT;
   row: AvailabilityRowT;
+}
+
+export interface RequestDraftT extends PickedRowT {
+  requestingStoreId: number;
+  fulfillingStoreId: number;
   qty: number;
   /** Raw `datetime-local` value; converted here, so callers never post one. */
   expectedArrivalLocal: string;

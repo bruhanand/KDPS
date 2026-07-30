@@ -17,6 +17,7 @@ import {
   type AvailabilityDesignT,
   type AvailabilityResponseT,
   type AvailabilityRowT,
+  type PickedRowT,
 } from "../lib/cross-store";
 import { SearchBox } from "../components/SearchBox";
 import { PageHeader } from "../components/PageHeader";
@@ -49,9 +50,7 @@ export default function CrossStoreSearch() {
   const [data, setData] = useState<AvailabilityResponseT | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [picked, setPicked] = useState<{ design: AvailabilityDesignT; row: AvailabilityRowT } | null>(
-    null,
-  );
+  const [picked, setPicked] = useState<PickedRowT | null>(null);
 
   const term = q.trim();
   const searchable = term.length >= MIN_TERM;
@@ -131,7 +130,7 @@ export default function CrossStoreSearch() {
           ) : (
             data.results.map((design) => (
               <DesignCard
-                key={design.design}
+                key={`${design.brand}/${design.design}`}
                 design={design}
                 picked={picked}
                 onPick={pick}
@@ -154,13 +153,15 @@ function DesignCard({
   onDone,
 }: {
   design: AvailabilityDesignT;
-  picked: { design: AvailabilityDesignT; row: AvailabilityRowT } | null;
+  picked: PickedRowT | null;
   onPick: (design: AvailabilityDesignT, row: AvailabilityRowT) => void;
   canRequest: boolean;
   onDone: () => void;
 }) {
   const rows = rowsFor(design);
-  const testId = `availability-design-${design.design}`;
+  // Two brands may both number a style "1001", so the key carries both — the
+  // server groups on the pair and this list has to agree with it.
+  const testId = `availability-design-${design.brand}-${design.design}`;
 
   return (
     <div className="card section-card" data-testid={testId}>
@@ -209,7 +210,7 @@ function DesignCard({
                       type="button"
                       className="btn"
                       onClick={() => onPick(design, row)}
-                      data-testid={`availability-request-${design.design}-${i}`}
+                      data-testid={`${testId}-request-${i}`}
                     >
                       <PackageSearch size={14} /> {isPicked ? "Cancel" : "Request this"}
                     </button>

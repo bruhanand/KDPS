@@ -18,7 +18,7 @@ from core.money import paise_to_rupees_str
 from core.refusals import refusal_body
 from core.textsearch import search_term, text_filter
 from masters.models import Sku
-from masters.scoping import scope_by_store_and_brand
+from masters.scoping import scope_by_entitled_brands, scope_by_store_and_brand
 from stockledger.models import (
     InTransitStock,
     QuarantineStock,
@@ -336,6 +336,13 @@ class StockAvailabilityView(APIView):
     forgot the gate. The exception's ``withholds`` list is asserted against the
     live payload by this endpoint's test.
 
+    **One axis, not two.** Stock is normally read through
+    ``scope_by_store_and_brand``, and only the *store* half is suspended here.
+    A brand-scoped caller (a brand manager) is still narrowed to the brands they
+    are entitled to: the customer-at-the-counter argument is a store's argument,
+    and it says nothing at all about letting one brand's representative read
+    another brand's network position.
+
     It is read-only and it places no hold on anything: the customer is quoted a
     time, never promised a piece. Asking for the stock is a separate act — a
     stock request, which walks its own approval route.
@@ -367,6 +374,10 @@ class StockAvailabilityView(APIView):
             )
 
         qs = StockOnHand.objects.filter(net_qty__gt=0, store__is_active=True)
+        # The half of the boundary this exception does *not* suspend. No-op for
+        # everybody else — `visible_brand_names` answers None unless the caller
+        # is brand-scoped.
+        qs = scope_by_entitled_brands(qs, request.user)
         qs = qs.filter(sku_code__in=self._matching_barcodes(term))
         if brand := (request.query_params.get("brand") or "").strip():
             qs = qs.filter(brand__iexact=brand)
@@ -376,14 +387,26 @@ class StockAvailabilityView(APIView):
         # One past the cap, never the whole match: "is there more?" is answerable
         # with one extra row, and a three-letter term over a 20,000-SKU catalogue
         # must not pull every style name it hit into memory to find that out.
-        designs = list(
-            qs.order_by("design")
-            .values_list("design", flat=True)
+        #
+        # Keyed on brand *and* design, because a design number is a brand's own
+        # numbering and two brands may both call something "1001". Capping or
+        # grouping on the bare style code would fold their stock into one card
+        # headed with whichever brand's row arrived first.
+        styles = list(
+            qs.order_by("brand", "design")
+            .values_list("brand", "design")
             .distinct()[: self.MAX_DESIGNS + 1]
         )
-        truncated = len(designs) > self.MAX_DESIGNS
+        truncated = len(styles) > self.MAX_DESIGNS
+        shown = styles[: self.MAX_DESIGNS]
+        if not shown:
+            return Response({"results": [], "truncated": False})
+
+        match = Q()
+        for brand_name, design in shown:
+            match |= Q(brand=brand_name, design=design)
         rows = (
-            qs.filter(design__in=designs[: self.MAX_DESIGNS])
+            qs.filter(match)
             .values(
                 "design",
                 "brand",
@@ -398,7 +421,7 @@ class StockAvailabilityView(APIView):
             )
             .annotate(qty=Sum("net_qty"))
             .filter(qty__gt=0)
-            .order_by("design", "size", "store__code", "color")
+            .order_by("brand", "design", "size", "store__code", "color")
         )
         return Response({"results": self._nest(rows), "truncated": truncated})
 
@@ -417,8 +440,9 @@ class StockAvailabilityView(APIView):
         # Not narrowed to active SKUs: stock that exists can be asked for, and a
         # style retired in the master with pieces still on a shelf is exactly the
         # one a store is hunting for.
-        if Sku.objects.filter(barcode__iexact=term).exists():
-            return Sku.objects.filter(barcode__iexact=term).values("barcode")
+        scanned = Sku.objects.filter(barcode__iexact=term)
+        if scanned.exists():
+            return scanned.values("barcode")
         return Sku.objects.filter(Q(design__istartswith=term) | Q(item__icontains=term)).values(
             "barcode"
         )
@@ -427,30 +451,37 @@ class StockAvailabilityView(APIView):
     def _nest(rows: Any) -> list[dict[str, Any]]:
         """Flat SKU × store rows folded into the shape the screen reads.
 
-        The rows arrive ordered by design, size, store then colour, so one pass
+        Grouped on brand *and* design: a design number is a brand's own
+        numbering, so two brands may both call something "1001" and folding them
+        together would head one card with the wrong brand and total another
+        brand's pieces into it. It also keeps every design-less row from
+        collapsing into a single nameless group.
+
+        The rows arrive ordered brand, design, size, store, colour, so one pass
         builds the nesting and the output keeps that order — the answer reads the
         way a person scans it and does not reshuffle between two searches for the
         same thing. Looked up rather than trusted to be contiguous: the ordering
         is a property of the queryset above, and a nesting that silently split a
-        design in two if it ever changed is not worth the line it saves.
+        style in two if it ever changed is not worth the line it saves.
         """
         results: list[dict[str, Any]] = []
-        by_design: dict[str, dict[str, Any]] = {}
-        by_size: dict[tuple[str, str], dict[str, Any]] = {}
+        by_style: dict[tuple[str, str], dict[str, Any]] = {}
+        by_size: dict[tuple[str, str, str], dict[str, Any]] = {}
         for row in rows:
-            design, size = row["design"], row["size"]
-            entry = by_design.get(design)
+            style = (row["brand"], row["design"])
+            size = row["size"]
+            entry = by_style.get(style)
             if entry is None:
-                entry = by_design[design] = {
-                    "design": design,
+                entry = by_style[style] = {
+                    "design": row["design"],
                     "brand": row["brand"],
                     "item": row["item"],
                     "sizes": [],
                 }
                 results.append(entry)
-            group = by_size.get((design, size))
+            group = by_size.get((*style, size))
             if group is None:
-                group = by_size[(design, size)] = {"size": size, "stores": []}
+                group = by_size[(*style, size)] = {"size": size, "stores": []}
                 entry["sizes"].append(group)
             group["stores"].append(
                 {
