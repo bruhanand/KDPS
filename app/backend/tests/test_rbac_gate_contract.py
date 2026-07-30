@@ -35,11 +35,20 @@ from rest_framework.test import APIClient
 from accounts.models import Role, User
 from accounts.rbac_matrix import KNOWN_ROLE_CODES, roles_with_capability, section_access_for
 from accounts.role_lists import REGISTERED_ROLE_LISTS
-from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE, CAP_VIEW, meets
+from accounts.sections import (
+    CAP_APPROVE,
+    CAP_MANAGE,
+    CAP_OPERATE,
+    CAP_VIEW,
+    SECTION_CODES,
+    meets,
+)
 from approvals.models import Approval, ApprovalPolicy, ApprovalStatus
+from core.gl import GLEntry
 from masters.models import Gstin, LegalEntity, Store
 from outbound.maker_checker import KINDS
 from outbound.models import StockAdjustment, WriteOff
+from vendors.models import Vendor
 
 BACKEND = Path(__file__).resolve().parent.parent
 
@@ -183,22 +192,117 @@ def _call(client: APIClient, method: str, path: str):
 
 
 # --- 1. The gates ----------------------------------------------------------
+def _stored_capability(role: Role, section: str) -> str:
+    """What the *database* says this role holds - the only authority there is.
+
+    #173 made the matrix an admin-editable screen, so ``rbac_matrix`` is now
+    starting content and nothing more. Reading the expectation from the code
+    table would make this test agree with a seed the business may have retuned
+    months ago, and pass while every live gate answered something else.
+    """
+    role.refresh_from_db(fields=["section_access"])
+    entry = (role.section_access or {}).get(section) or {}
+    return str(entry.get("capability", "none"))
+
+
 @pytest.mark.parametrize("role_code", KNOWN_ROLE_CODES)
 def test_every_gate_answers_what_the_matrix_says(db, role_code):
-    """The contract itself: expectation computed from the sheet, never restated.
+    """The contract itself: expectation read from the stored row, never restated.
 
     Store scope is a separate gate, so these users are network-scoped — this
     measures the rung and nothing else.
     """
-    client = _client(_user(f"g_{role_code}", _role(role_code)))
+    role = _role(role_code)
+    client = _client(_user(f"g_{role_code}", role))
     for label, section, minimum, method, path in GATED_ENDPOINTS:
-        allowed = meets(section_access_for(role_code)[section]["capability"], minimum)
+        allowed = meets(_stored_capability(role, section), minimum)
         resp = _call(client, method, path)
         denied = resp.status_code == 403
         assert denied is not allowed, (
             f"{role_code} on {label} ({section}:{minimum}): "
-            f"matrix says {'allow' if allowed else 'deny'}, API said {resp.status_code}"
+            f"stored matrix says {'allow' if allowed else 'deny'}, API said {resp.status_code}"
         )
+
+
+@pytest.mark.parametrize(
+    ("label", "section", "minimum", "method", "path"),
+    [row for row in GATED_ENDPOINTS if row[2] in (CAP_OPERATE, CAP_APPROVE)],
+    ids=[row[0] for row in GATED_ENDPOINTS if row[2] in (CAP_OPERATE, CAP_APPROVE)],
+)
+def test_a_retuned_cell_moves_its_gate_with_it(db, label, section, minimum, method, path):
+    """ "Whatever it says" - the half the old assertion could not see (#173).
+
+    Comparing the API against the seed table proves the two agree on the seed.
+    It cannot prove the gate is *reading* the stored row rather than the code
+    one, which is the whole promise of an editable matrix. So: take a role the
+    seed denies, grant it the rung on the Role row - no release, no restart -
+    and the same call must stop answering 403.
+
+    This is about *where the gate reads from*, not about when a change should
+    land on someone mid-shift - that question is open and is #173's, not this
+    test's (see the PR).
+    """
+    denied_by_the_seed = next(
+        (
+            code
+            for code in KNOWN_ROLE_CODES
+            if not meets(section_access_for(code)[section]["capability"], minimum)
+        ),
+        "",
+    )
+    if not denied_by_the_seed:
+        pytest.skip(f"every seeded role already reaches {section}:{minimum} - nothing to retune")
+    role = _role(denied_by_the_seed)
+    client = _client(_user(f"retune_{denied_by_the_seed}_{section}_{minimum}", role))
+    assert _call(client, method, path).status_code == 403, label
+
+    role.section_access[section] = {"capability": minimum, "label": "Retuned in Setup"}
+    role.save(update_fields=["section_access"])
+
+    assert _call(client, method, path).status_code != 403, label
+
+
+def test_the_floors_hold_whatever_the_stored_matrix_says(db):
+    """Floors are asserted unconditionally - they are not cells (#173, PRD #104).
+
+    A retuned matrix moves gates; it must never move a floor. This writes the
+    most generous row the ladder can express straight onto the database, past
+    the editor that would have refused it, and then asks the two floors that
+    have somewhere to fail: a store seat still cannot post value to the books,
+    and Setup rung or no Setup rung, a role outside Owner/IT Admin still cannot
+    touch users and roles.
+    """
+    everything = {
+        section: {"capability": CAP_MANAGE, "label": "Everything"} for section in SECTION_CODES
+    }
+    cashier = _role("store_staff")
+    cashier.section_access = dict(everything)
+    cashier.save(update_fields=["section_access"])
+    warehouse = _role("warehouse")
+    warehouse.section_access = dict(everything)
+    warehouse.save(update_fields=["section_access"])
+
+    store_user = _user("floor_cashier", cashier)
+    store_user.scope_type = "store"
+    store_user.save(update_fields=["scope_type"])
+    vendor = Vendor.objects.create(code="floor-gate-vendor", name="Floor Gate Vendor")
+
+    # Rule 2 - the books refuse the store, even holding `money: manage`.
+    posted = _client(store_user).post(
+        "/api/finledger/vendor/bill",
+        {"vendor_id": vendor.pk, "amount": "1250.00", "description": "must not post"},
+        format="json",
+    )
+    assert posted.status_code == 403
+    assert not GLEntry.objects.exists()
+
+    # Rule 4 - `setup: manage` is not the power to change users and roles.
+    assert (
+        _client(_user("floor_warehouse", warehouse))
+        .patch(f"/api/auth/admin/roles/{cashier.pk}", {"name": "Bypassed"}, format="json")
+        .status_code
+        == 403
+    )
 
 
 def test_accounts_cannot_write_anything_it_may_only_view(db):
@@ -504,6 +608,13 @@ def test_the_migration_leaves_a_small_pending_adjustment_with_the_in_charge(db):
 EXPECTED_EXCEPTIONS = {
     "accounts.access_administrators_floor",
     "accounts.head_office_value_actors_floor",
+    # #173, the third and the decision this list exists to force. The access
+    # matrix became editable, so rule 2 ("a store never posts value to the
+    # books") needed a *cell* floor as well as the engine one - and the matrix
+    # is keyed by role while store-ness is a property of scope, so the two store
+    # seats have to be named. The other two floors reuse the lists already here
+    # rather than retyping them, which is why only one name is new.
+    "accounts.store_seats_floor",
 }
 
 

@@ -270,6 +270,34 @@ def test_seeding_stores_exactly_the_table(db):
         assert role.section_access == section_access_for(role.code), role.code
 
 
+# --- The payload is the stored row, whatever it says (#173) ----------------
+def test_the_payload_follows_a_retuned_row_not_the_seed_table(db):
+    """The matrix became an admin-editable screen, so the seed is only a start.
+
+    Every other assertion in this file builds a role *from* ``rbac_matrix`` and
+    then checks the payload against ``rbac_matrix``, which agrees with itself
+    whether or not `/me` ever reads the database. This one retunes the stored
+    row away from the table in both directions - a section opened, a section
+    closed - and requires the payload to follow the row.
+    """
+    role = _make_role("store_staff")
+    user = _make_user("retuned_cashier", role)
+    seeded = _client(user).get("/api/auth/me").json()["capabilities"]
+    assert seeded["booking"] == "view"  # what the table says
+    assert "setup" not in seeded
+
+    role.section_access["booking"] = {"capability": CAP_NONE, "label": "Closed in Setup"}
+    role.section_access["setup"] = {"capability": "operate", "label": "Products only"}
+    role.save(update_fields=["section_access"])
+
+    retuned = _client(user).get("/api/auth/me").json()
+    assert "booking" not in retuned["capabilities"]
+    assert retuned["capabilities"]["setup"] == "operate"
+    assert [s["code"] for s in retuned["sections"] if s["code"] == "setup"] == ["setup"]
+    # And the table is untouched - the row moved, not the seed.
+    assert section_access_for("store_staff")["booking"]["capability"] == "view"
+
+
 # --- Access is data, not code (Rule 12) -----------------------------------
 def test_setup_manage_cannot_configure_away_the_access_admin_floor(db):
     role = _make_role("accounts")

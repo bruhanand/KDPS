@@ -11,6 +11,7 @@ import { PlannedPage } from "./pages/PlannedPage";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
+import { AccessMatrixPage } from "./pages/AccessMatrix";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -99,6 +100,7 @@ const BUILT: Screen[] = [
   { id: "setup-seasons", path: "/setup/seasons", element: <SeasonsPage /> },
   { id: "setup-gstins", path: "/setup/gstins", element: <GstinsPage /> },
   { id: "setup-users", path: "/setup/users", element: <UsersRolesPage /> },
+  { id: "setup-access", path: "/setup/access", element: <AccessMatrixPage /> },
 ];
 
 // Sections whose subsections aren't built yet still appear in the sidebar — so

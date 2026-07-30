@@ -8,6 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from accounts.actor_policies import actions_for
+from accounts.floors import describe_floors, floor_violations
 from accounts.models import NAV_GROUPS, ActorPolicy, Role, User
 from accounts.permissions import visible_sections
 from accounts.role_lists import HEAD_OFFICE_VALUE_ACTORS
@@ -78,6 +79,29 @@ class AdminRoleSerializer(serializers.ModelSerializer):
         if self.instance and self.instance.is_system and value != self.instance.code:
             raise serializers.ValidationError("System role codes cannot be changed.")
         return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """The money floor, on the older whole-role door too (#173).
+
+        The access-matrix editor is the screen people will use, but this
+        endpoint edits the same ``section_access`` column and would otherwise be
+        the way around it. A floor with one gate is not a floor.
+
+        The **code** is checked as carefully as the access, because the floor
+        keys on it: renaming a role that holds full Money to a code the floor
+        binds would leave a row nobody could have written directly. So a rename
+        re-tests whatever access that role will hold afterwards, sent or stored.
+        """
+        code = attrs.get("code") or getattr(self.instance, "code", "")
+        access = attrs.get("section_access")
+        if access is None:
+            if "code" not in attrs or self.instance is None:
+                return attrs
+            access = self.instance.section_access or {}
+        crossed = floor_violations(str(code), access)
+        if crossed:
+            raise serializers.ValidationError({"section_access": describe_floors(crossed)})
+        return attrs
 
 
 class ActorPolicySerializer(serializers.ModelSerializer):

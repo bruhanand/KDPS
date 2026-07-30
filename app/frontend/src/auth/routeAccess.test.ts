@@ -199,6 +199,18 @@ describe("canAccess", () => {
     expect(canAccess("/setup/users", owner)).toBe(true);
   });
 
+  it("the Access grid sits on the same Setup rung as Users & Roles (#173)", () => {
+    // Reading who may do what is the top Setup rung, and the four floor rules
+    // mean only Owner and IT Admin can ever hold it. The screen is not the
+    // boundary - the server refuses the edit too - but a person who cannot
+    // administer access has no business browsing the grid either.
+    expect(canAccess("/setup/access", owner)).toBe(true);
+    expect(canAccess("/setup/access", admin)).toBe(true);
+    expect(canAccess("/setup/access", warehouse)).toBe(false);
+    expect(canAccess("/setup/access", storeManager)).toBe(false);
+    expect(canAccess("/setup/access", accounts)).toBe(false);
+  });
+
   it("V-flip rides on Stock, at the rung the server gates it on", () => {
     expect(canAccess("/stock", storePerson)).toBe(true);
     // Converting ownership is `stock: manage` server-side (#94). The store

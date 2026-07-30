@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/api/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description Open alerts, scoped exactly like the approvals inbox (ADR-0003): a
+         *     store-scoped user sees their own store's, a brand-scoped user sees their
+         *     own brands', HO sees the network. Gated on the Home section (#77) — the
+         *     same section Approvals lives in.
+         */
+        get: operations["alerts_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/approvals": {
         parameters: {
             query?: never;
@@ -53,6 +75,31 @@ export interface paths {
          *     a self-approval can't succeed, so it is never offered.
          */
         get: operations["approvals_inbox_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin/access-matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description The roles x sections grid an administrator edits (#173).
+         *
+         *     The answer is the **stored** matrix - ``Role.section_access`` as it is
+         *     today, not the seed table it started from - plus the cells the money floor
+         *     has locked and the sentence to show over each. The grid is data all the way
+         *     down: sections, rungs, roles and locks all arrive from here, so adding a
+         *     section or ratifying a floor needs no front-end release (Rule 12).
+         */
+        get: operations["auth_admin_access_matrix_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -161,6 +208,38 @@ export interface paths {
         put?: never;
         /** @description Every Setup write becomes a proposal a second administrator applies. */
         post: operations["auth_admin_roles_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/admin/roles/{code}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * @description Replace one role's row of the matrix - as a proposal, never as a save.
+         *
+         *     Two things stand between an administrator and the stored row, and both are
+         *     floor rules rather than policy:
+         *
+         *     · the **money floor** (``accounts.floors``) refuses a cell that would put a
+         *       store seat on the books or hand full Money or full Setup to a role the
+         *       ruling does not trust - cell by cell, naming each one;
+         *     · **"never by one person alone"** (rule 4) makes the write a proposal a
+         *       second Owner or IT Admin applies through the existing approvals
+         *       machinery. The api-contract sketched an immediate 200 here; a direct write
+         *       would have been the one door in the system where one person could change
+         *       a role, which is exactly what the rule this ticket is enforcing forbids.
+         *       So the endpoint answers 202 with the approval to clear.
+         */
+        put: operations["auth_admin_roles_access_update"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -822,6 +901,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/masters/store-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET | PUT /api/masters/store-targets` - the store x month target grid.
+         *
+         *     A master, so a PUT *is* the whole write: `(store, month)` is unique and
+         *     setting a target again corrects it. There is no delete, because a store's
+         *     month always has a number even when that number is nought.
+         *
+         *     Both verbs gate on **entitlement**, not on the top-bar switcher, and that is
+         *     the one thing about this view worth reading twice.
+         *
+         *     The grid's rows come from the store master (`scoped_stores`, which says in its
+         *     own docstring that it is "deliberately *not* narrowed by the active unit").
+         *     Its cells come from here. Gate the two differently and they disagree: an
+         *     Operations Head with Deoghar picked in the top bar would get all fifty store
+         *     rows with only Deoghar's numbers in them, every other cell reading as "no
+         *     target set" for a target that exists, and the year's total quietly collapsing
+         *     to one store. A screen that hides committed money behind a header nobody
+         *     thought they were filtering with is worse than one that refuses.
+         *
+         *     So this endpoint follows the master it is keyed on rather than the reading
+         *     convention for documents: one financial year of targets is a single HO
+         *     decision, and you do not look at one store's column of it at a time. Scope is
+         *     still the boundary - a store-scoped caller sees their own store and no other,
+         *     which is the acceptance criterion - the switcher simply gets no vote. Callers
+         *     who want one store ask for it by name with `?store=`.
+         */
+        get: operations["masters_store_targets_retrieve"];
+        /**
+         * @description `GET | PUT /api/masters/store-targets` - the store x month target grid.
+         *
+         *     A master, so a PUT *is* the whole write: `(store, month)` is unique and
+         *     setting a target again corrects it. There is no delete, because a store's
+         *     month always has a number even when that number is nought.
+         *
+         *     Both verbs gate on **entitlement**, not on the top-bar switcher, and that is
+         *     the one thing about this view worth reading twice.
+         *
+         *     The grid's rows come from the store master (`scoped_stores`, which says in its
+         *     own docstring that it is "deliberately *not* narrowed by the active unit").
+         *     Its cells come from here. Gate the two differently and they disagree: an
+         *     Operations Head with Deoghar picked in the top bar would get all fifty store
+         *     rows with only Deoghar's numbers in them, every other cell reading as "no
+         *     target set" for a target that exists, and the year's total quietly collapsing
+         *     to one store. A screen that hides committed money behind a header nobody
+         *     thought they were filtering with is worse than one that refuses.
+         *
+         *     So this endpoint follows the master it is keyed on rather than the reading
+         *     convention for documents: one financial year of targets is a single HO
+         *     decision, and you do not look at one store's column of it at a time. Scope is
+         *     still the boundary - a store-scoped caller sees their own store and no other,
+         *     which is the acceptance criterion - the switcher simply gets no vote. Callers
+         *     who want one store ask for it by name with `?store=`.
+         */
+        put: operations["masters_store_targets_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/masters/stores": {
         parameters: {
             query?: never;
@@ -914,9 +1061,10 @@ export interface paths {
         /**
          * @description POST: send a rejected draft back for approval.
          *
-         *     One view for all three wired families — the only thing that differs is
-         *     which model to load and who may ask, both supplied by the URL conf. The
-         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
          *     ``maker_checker.ask_again``, not here.
          */
         post: operations["outbound_adjustments_request_approval_create"];
@@ -1041,9 +1189,10 @@ export interface paths {
         /**
          * @description POST: send a rejected draft back for approval.
          *
-         *     One view for all three wired families — the only thing that differs is
-         *     which model to load and who may ask, both supplied by the URL conf. The
-         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
          *     ``maker_checker.ask_again``, not here.
          */
         post: operations["outbound_gap_closures_request_approval_create"];
@@ -1123,6 +1272,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/outbound/returnable-pool": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET: what this brand will take back, and how much allowance is left (#75).
+         *
+         *     The one place the screen learns which pieces may be scanned onto a return —
+         *     and the same call the create endpoint validates against, so the beep on the
+         *     scanner and the refusal from the server can never disagree.
+         */
+        get: operations["outbound_returnable_pool_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/outbound/rtvs": {
         parameters: {
             query?: never;
@@ -1130,8 +1302,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description The returns list, and the scan-built create behind it (#75). */
         get: operations["outbound_rtvs_list"];
         put?: never;
+        /** @description The returns list, and the scan-built create behind it (#75). */
         post: operations["outbound_rtvs_create"];
         delete?: never;
         options?: never;
@@ -1155,6 +1329,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/outbound/rtvs/{id}/credit-note": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: record the brand's credit note against a posted return (#75).
+         *
+         *     Status, not money: the payable already moved when the return posted, and
+         *     this is the acknowledgement arriving days or weeks later. It writes the
+         *     companion record, never the document — a posted document is immutable at the
+         *     kernel, which is exactly why the credit note is not a column on it.
+         *
+         *     Re-postable, so a mistyped number or the wrong date can be corrected: the
+         *     document underneath stays frozen either way.
+         */
+        post: operations["outbound_rtvs_credit_note_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/rtvs/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_rtvs_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/outbound/rtvs/{id}/submit": {
         parameters: {
             query?: never;
@@ -1164,7 +1390,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description POST: Submit (post) a draft RTV — stock exits, GL posts. */
+        /** @description POST: Submit (post) an approved RTV — stock exits its bucket, GL posts. */
         post: operations["outbound_rtvs_submit_create"];
         delete?: never;
         options?: never;
@@ -1187,6 +1413,133 @@ export interface paths {
          *     stock (the wrong-piece beep).
          */
         get: operations["outbound_scan_lookup_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_stock_requests_list"];
+        put?: never;
+        post: operations["outbound_stock_requests_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["outbound_stock_requests_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-requests/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: the fulfilling store says no more is coming — the request settles
+         *     as partly fulfilled rather than sitting "being fulfilled" forever.
+         */
+        post: operations["outbound_stock_requests_close_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-requests/{id}/fulfil": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: build the draft transfer a request pre-fills.
+         *
+         *     Only the fulfilling store may act — the location whose stock this commits.
+         *     The transfer itself is a fresh draft; it still needs the Operations Head
+         *     before dispatch (#137), unchanged.
+         */
+        post: operations["outbound_stock_requests_fulfil_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-requests/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_stock_requests_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stock-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description GET ?q=&store= — stock across *every* location, for a store building a
+         *     pull request (#74).
+         *
+         *     The one place in outbound a person sees stock that is not theirs: identity
+         *     and quantity are shown for every active store and warehouse — Anand's
+         *     ruling of 26 July says the search is the whole point — but cost, landed
+         *     value and margin show only for the caller's own location(s). Deliberately
+         *     not ``scope_by_entitlement``/``scope_by_store``, which would hide other
+         *     locations' rows entirely; only the money fields are gated here, per-row.
+         */
+        get: operations["outbound_stock_search_retrieve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1241,10 +1594,36 @@ export interface paths {
         /**
          * @description POST: apply the variance as one stock adjustment.
          *
-         *     409 when stock moved between the count and now, naming the lines: the person
-         *     deciding confirms those barcodes and posts again. Never a blind overwrite.
+         *     Two 409s, both meaning "not refused forever, refused until a named person
+         *     does a named thing": stock moved between the count and now (confirm those
+         *     barcodes and post again), or a difference is too big for one person's count
+         *     (a second person recounts it). Never a blind overwrite, and never a big
+         *     variance on one pair of eyes.
          */
         post: operations["outbound_stocktakes_apply_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/outbound/stocktakes/{id}/recount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: a second person's count of one piece, and why it is out (#78).
+         *
+         *     403 rather than 400 when the caller counted the piece themselves: the request
+         *     is well formed and this person may never make it, whatever the tolerance and
+         *     the bands are retuned to.
+         */
+        post: operations["outbound_stocktakes_recount_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1449,6 +1828,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/outbound/transfers/{id}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * @description POST: send a rejected draft back for approval.
+         *
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
+         *     ``maker_checker.ask_again``, not here.
+         */
+        post: operations["outbound_transfers_request_approval_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/outbound/transfers/gaps": {
         parameters: {
             query?: never;
@@ -1516,9 +1920,10 @@ export interface paths {
         /**
          * @description POST: send a rejected draft back for approval.
          *
-         *     One view for all three wired families — the only thing that differs is
-         *     which model to load and who may ask, both supplied by the URL conf. The
-         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
          *     ``maker_checker.ask_again``, not here.
          */
         post: operations["outbound_vflips_request_approval_create"];
@@ -1589,9 +1994,10 @@ export interface paths {
         /**
          * @description POST: send a rejected draft back for approval.
          *
-         *     One view for all three wired families — the only thing that differs is
-         *     which model to load and who may ask, both supplied by the URL conf. The
-         *     rules (draft only, rejected only, and who stays the maker) live in
+         *     One view for every wired family — the only things that differ are which
+         *     model to load, who may ask, and which of the document's own columns names
+         *     the location it answers to, all supplied by the URL conf. The rules (draft
+         *     only, rejected only, and who stays the maker) live in
          *     ``maker_checker.ask_again``, not here.
          */
         post: operations["outbound_writeoffs_request_approval_create"];
@@ -2215,6 +2621,50 @@ export interface components {
             readonly date_joined: string;
             password?: string;
         };
+        AlertRead: {
+            readonly id: number;
+            readonly kind: components["schemas"]["AlertReadKindEnum"];
+            readonly kind_label: string;
+            /** @description Snapshot one-liner the inbox shows — store, brand, days. */
+            readonly title: string;
+            /** @description The document this alert is about, if it is about one — a transfer id for in-transit aging. The client maps kind → route, the same way it does for approvals; a return-window alert has none, because it names a holding rather than a document. */
+            readonly object_id: number | null;
+            /** @description Scopes the inbox for store-scoped users — the same rule as approvals (ADR-0003). */
+            readonly store: number | null;
+            /** @default  */
+            readonly store_code: string;
+            /** @default  */
+            readonly store_name: string;
+            /** @description Scopes the inbox for a brand-scoped user. Blank means this alert is not about one brand. */
+            readonly brand: string;
+            /**
+             * Format: date
+             * @description The deadline this alert is counting down to.
+             */
+            readonly due_date: string | null;
+            /**
+             * @description Days to the deadline, from today — negative once it's blown past.
+             *     ``None`` for an alert with no deadline of its own to count down to.
+             */
+            readonly days_left: number | null;
+            /** @description Which configured threshold this crossing fired at. */
+            readonly threshold_days: number | null;
+            readonly status: components["schemas"]["AlertReadStatusEnum"];
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        /**
+         * @description * `in_transit_aging` - Transfer stuck in transit
+         *     * `return_window` - Return window closing
+         * @enum {string}
+         */
+        AlertReadKindEnum: "in_transit_aging" | "return_window";
+        /**
+         * @description * `open` - Open
+         *     * `resolved` - Resolved
+         * @enum {string}
+         */
+        AlertReadStatusEnum: "open" | "resolved";
         ApprovalPolicyAdmin: {
             readonly id: number;
             /** @description Document family this governs, e.g. 'adjustment'. */
@@ -2250,6 +2700,8 @@ export interface components {
             readonly store_code: string;
             /** @default  */
             readonly store_name: string;
+            /** @description Scopes the inbox for brand-scoped users — a brand manager, whose boundary is brands and not stores (ADR-0003). Snapshotted as the brand *name*, like every other brand on a ledger row, so this table still imports no business model. Blank means the decision is not about one brand, and a brand-scoped user never sees it (#75). */
+            readonly brand: string;
             /** @description Value at stake, snapshotted — the input to value-banded approval. */
             readonly value_paise: number;
             readonly status: components["schemas"]["ApprovalReadStatusEnum"];
@@ -2341,6 +2793,15 @@ export interface components {
             ownership?: components["schemas"]["OwnershipEnum"];
             return_terms?: components["schemas"]["ReturnTermsEnum"];
             readonly commercial_label: string;
+            /** @description How long after a piece arrives the brand will still take it back (60–120 days, negotiated per brand). 0 means nobody has agreed one yet — the return screen says so rather than guessing a deadline. */
+            return_window_days?: number;
+            /**
+             * Format: decimal
+             * @description The Correction goods-return allowance, as a percentage of the brand's delivered value (the 10 of 25-18-10, stretchable to 12/15). Read only for Correction brands — the other three models have no cap.
+             */
+            return_cap_percent?: string;
+            readonly takes_returns: boolean;
+            readonly cap_applies: boolean;
             is_active?: boolean;
         };
         BrandMini: {
@@ -2383,6 +2844,21 @@ export interface components {
          * @enum {integer}
          */
         DocstatusEnum: 0 | 1 | 2;
+        /**
+         * @description What a request's page shows about each transfer answering it — enough to
+         *     link through, not the whole transfer.
+         */
+        FulfillingTransferSummary: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            readonly source_store_code: string;
+            readonly destination_store_code: string;
+            /** Format: date-time */
+            dispatch_date?: string | null;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         GapClosureLine: {
             readonly id: number;
             readonly sku_code: string;
@@ -2536,11 +3012,12 @@ export interface components {
             readonly state_name: string;
         };
         /**
-         * @description * `store_pickup` - Brand collects from store (Madura)
+         * @description * `store_pickup` - Brand collects from store
+         *     * `store_dispatch` - Store sends to brand
          *     * `warehouse` - Consolidated at warehouse
          * @enum {string}
          */
-        LogisticsRouteEnum: "store_pickup" | "warehouse";
+        LogisticsRouteEnum: "store_pickup" | "store_dispatch" | "warehouse";
         LookupProposal: {
             readonly id: number;
             dimension: string;
@@ -2770,6 +3247,15 @@ export interface components {
             ownership?: components["schemas"]["OwnershipEnum"];
             return_terms?: components["schemas"]["ReturnTermsEnum"];
             readonly commercial_label?: string;
+            /** @description How long after a piece arrives the brand will still take it back (60–120 days, negotiated per brand). 0 means nobody has agreed one yet — the return screen says so rather than guessing a deadline. */
+            return_window_days?: number;
+            /**
+             * Format: decimal
+             * @description The Correction goods-return allowance, as a percentage of the brand's delivered value (the 10 of 25-18-10, stretchable to 12/15). Read only for Correction brands — the other three models have no cap.
+             */
+            return_cap_percent?: string;
+            readonly takes_returns?: boolean;
+            readonly cap_applies?: boolean;
             is_active?: boolean;
         };
         /**
@@ -2855,7 +3341,7 @@ export interface components {
         PtFileDetail: {
             readonly id: number;
             original_filename: string;
-            source?: components["schemas"]["SourceEnum"];
+            source?: components["schemas"]["SourceB43Enum"];
             brand_guess?: string;
             profile_code?: string;
             profile_name?: string;
@@ -2893,7 +3379,7 @@ export interface components {
         PtFileList: {
             readonly id: number;
             original_filename: string;
-            source?: components["schemas"]["SourceEnum"];
+            source?: components["schemas"]["SourceB43Enum"];
             brand_guess?: string;
             profile_code?: string;
             profile_name?: string;
@@ -2999,22 +3485,60 @@ export interface components {
          */
         ReturnTermsEnum: "none" | "capped" | "uncapped" | "rolling";
         /**
-         * @description ``unit_cost_paise`` is read-only: a money posting reads its cost from the
-         *     books, never from the payload (#103) — same rule as a transfer line.
+         * @description The scan payload behind a new return (#75).
+         *
+         *     Barcodes and quantities, and nothing else that decides money. Which bucket
+         *     each piece comes out of, what it is worth and whether the brand will take it
+         *     at all are all the server's answers, read off the returnable pool.
+         */
+        ReturnToBrandCreate: {
+            store: number;
+            vendor: number;
+            brand: number;
+            return_type: components["schemas"]["ReturnTypeEnum"];
+            logistics_route: components["schemas"]["LogisticsRouteEnum"];
+            via_transfer?: number | null;
+            scans: components["schemas"]["ScanLine"][];
+            /** @default  */
+            notes: string;
+        };
+        /**
+         * @description Read-only, whole. A return line is built by the server from the scanned
+         *     barcode and the pool row it matched (#75): the source bucket decides which
+         *     ledger the posting drains, and the unit cost comes from the books, never from
+         *     the payload (#103) — so neither is a client's to send.
          */
         ReturnToVendorLine: {
             readonly id: number;
-            sku_code: string;
-            design?: string;
-            color?: string;
-            size?: string;
-            brand?: string;
-            season?: string;
-            item?: string;
-            hsn?: string;
-            qty: number;
+            readonly source: components["schemas"]["ReturnToVendorLineSourceEnum"];
+            readonly sku_code: string;
+            readonly design: string;
+            readonly color: string;
+            readonly size: string;
+            readonly brand: string;
+            readonly season: string;
+            readonly item: string;
+            readonly hsn: string;
+            readonly qty: number;
             readonly unit_cost_paise: number;
         };
+        /**
+         * @description * `quarantine` - Confirmed damaged (quarantine)
+         *     * `season_end` - Season-end unsold stock
+         * @enum {string}
+         */
+        ReturnToVendorLineSourceEnum: "quarantine" | "season_end";
+        /**
+         * @description Base read shape for a document that needs a second person.
+         *
+         *     Every such document answers the same three questions on its own page, for
+         *     good: **made by** whom, **approved by** whom, and **when** — plus the live
+         *     approval record (pending / approved / rejected, with the reject reason).
+         *
+         *     The approver is read from the approval, not from the document's own column:
+         *     the column is a denormalised copy stamped at post time (for Tally), so on a
+         *     still-unposted draft only the approval knows the answer.
+         */
         ReturnToVendorRead: {
             readonly id: number;
             doc_number?: string | null;
@@ -3024,39 +3548,77 @@ export interface components {
             readonly store_name: string;
             vendor: number;
             brand?: number | null;
+            /** @default  */
+            readonly brand_name: string;
+            /** @default  */
+            readonly commercial_label: string;
             return_type: components["schemas"]["ReturnTypeEnum"];
             logistics_route?: components["schemas"]["LogisticsRouteEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            readonly logistics_route_label: string;
+            /** @description The store→warehouse transfer that brought these pieces here, for the consolidated route. Required for it: 'via warehouse' is a claim that a movement already happened, and a claim with nothing behind it is how stock goes missing between two documents (#75). */
+            via_transfer?: number | null;
+            /** @default  */
+            readonly via_transfer_number: string;
             season?: string;
             /**
              * Format: date
-             * @description Deadline for seasonal return (alerts at 30/15/7 days).
+             * @description The earliest deadline on this return's lines, snapshotted at draft time. The screen counts down to it and turns amber inside the last fortnight.
              */
             return_window_date?: string | null;
-            credit_note_received?: boolean;
-            /** Format: date */
-            credit_note_date?: string | null;
+            /**
+             * @description The countdown, as of now. None when no deadline applies — a defect
+             *     claim has none, and neither does a brand with no negotiated window.
+             */
+            readonly days_to_window: number | null;
+            /**
+             * @description What this return is worth at the cost frozen on its lines — the number
+             *     the allowance was measured against, so it is derived from the same place
+             *     rather than recomputed from today's books.
+             */
+            readonly value_paise: number;
+            /**
+             * Format: decimal
+             * @description The brand's negotiated allowance percentage on the day. 0 for the three models that have no cap.
+             */
+            cap_percent?: string;
+            /** Format: int64 */
+            cap_allowance_paise?: number;
+            /** Format: int64 */
+            cap_used_before_paise?: number;
+            /**
+             * Format: int64
+             * @description How far past the allowance this return goes. Flagged, never blocked (Rule 5) — the pieces are already defective or already unsold, and refusing the document would only mean nobody records where they went.
+             */
+            cap_exceeded_by_paise?: number;
+            /**
+             * @description The brand's acknowledgement, if it has arrived. None until it does —
+             *     an absent credit note is a fact the returns list is chased on.
+             */
+            readonly credit_note: {
+                [key: string]: unknown;
+            } | null;
             notes?: string;
             created_by?: number | null;
+            readonly created_by_name: string;
+            /** @description Stamped by the approvals inbox on approve — never typed (#75). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
             readonly updated_at: string;
             readonly lines: components["schemas"]["ReturnToVendorLine"][];
-        };
-        ReturnToVendorWrite: {
-            store: number;
-            vendor: number;
-            brand?: number | null;
-            return_type: components["schemas"]["ReturnTypeEnum"];
-            logistics_route?: components["schemas"]["LogisticsRouteEnum"] | components["schemas"]["BlankEnum"];
-            season?: string;
-            /**
-             * Format: date
-             * @description Deadline for seasonal return (alerts at 30/15/7 days).
-             */
-            return_window_date?: string | null;
-            notes?: string;
-            lines: components["schemas"]["ReturnToVendorLine"][];
         };
         /**
          * @description * `defective` - Defective / GR return
@@ -3127,7 +3689,7 @@ export interface components {
          *     * `invoice` - Authored from GRN / invoice
          * @enum {string}
          */
-        SourceEnum: "brand_file" | "invoice";
+        SourceB43Enum: "brand_file" | "invoice";
         /**
          * @description * `needs_review` - Needs review
          *     * `ready` - Ready
@@ -3143,6 +3705,10 @@ export interface components {
          *     against what was counted, and only the count comes from outside: a client
          *     that could send the book number, or the subtraction, could post a correction
          *     the books never agreed to. Send ``counted_qty``; the server does the rest.
+         *
+         *     ``reason`` is read-only for the same family of reasons (#78): where a line
+         *     carries one, it came from a recount by a second person, and a typed
+         *     adjustment says why on the document rather than piece by piece.
          */
         StockAdjustmentLine: {
             readonly id: number;
@@ -3159,6 +3725,16 @@ export interface components {
             /** @description counted − book; + surplus, − shrinkage */
             readonly adj_qty: number;
             readonly unit_cost_paise: number;
+            /**
+             * @description Why *this* piece is off, where a recount said so (#78). The document's own reason is the whole correction's; one count can find a theft on one rail and a miscount on the next, and a single column would have to lose one of them.
+             *
+             *     * `shrinkage` - Shrinkage
+             *     * `miscount` - Miscount
+             *     * `damage` - Damage
+             *     * `surplus_found` - Surplus found
+             *     * `other` - Other
+             */
+            readonly reason: components["schemas"]["Reason4c0Enum"];
         };
         /**
          * @description Base read shape for a document that needs a second person.
@@ -3259,6 +3835,100 @@ export interface components {
          * @enum {string}
          */
         StockLedgerEntryKindEnum: "pt_inward" | "pt_reversal" | "transfer_out" | "transfer_in" | "transit_in" | "transit_out" | "damage_out" | "quarantine_in" | "quarantine_out" | "rtv_out" | "seasonal_ret" | "adjustment" | "write_off" | "vflip_out" | "vflip_in";
+        StockRequestLineRead: {
+            readonly id: number;
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            /** @description Pieces asked for. */
+            qty: number;
+            readonly qty_fulfilled: number;
+            readonly qty_committed: number;
+        };
+        /**
+         * @description Dims come straight off the cross-location search that built this line —
+         *     there is no local stock to re-derive them from, unlike a transfer's plan:
+         *     the whole point of a request is asking for stock the requesting store does
+         *     not hold (#74).
+         */
+        StockRequestLineWrite: {
+            sku_code: string;
+            design?: string;
+            color?: string;
+            size?: string;
+            brand?: string;
+            season?: string;
+            item?: string;
+            hsn?: string;
+            qty: number;
+        };
+        /**
+         * @description Base read shape for a document that needs a second person.
+         *
+         *     Every such document answers the same three questions on its own page, for
+         *     good: **made by** whom, **approved by** whom, and **when** — plus the live
+         *     approval record (pending / approved / rejected, with the reject reason).
+         *
+         *     The approver is read from the approval, not from the document's own column:
+         *     the column is a denormalised copy stamped at post time (for Tally), so on a
+         *     still-unposted draft only the approval knows the answer.
+         */
+        StockRequestRead: {
+            readonly id: number;
+            doc_number?: string | null;
+            docstatus?: components["schemas"]["DocstatusEnum"];
+            requesting_store: number;
+            readonly requesting_store_code: string;
+            readonly requesting_store_name: string;
+            fulfilling_store: number;
+            readonly fulfilling_store_code: string;
+            readonly fulfilling_store_name: string;
+            notes?: string;
+            readonly status: string;
+            readonly status_display: string;
+            /**
+             * @description Why the fulfilling store said no — the same reason the approvals
+             *     inbox required on reject, read back onto the request (#74).
+             */
+            readonly decline_reason: string;
+            /** @description Stamped from the approvals inbox once fulfilment starts — never typed (#74). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
+            created_by?: number | null;
+            readonly created_by_name: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+            readonly lines: components["schemas"]["StockRequestLineRead"][];
+            readonly fulfilling_transfers: components["schemas"]["FulfillingTransferSummary"][];
+        };
+        /**
+         * @description Raises the ask and puts it straight in the fulfilling store's inbox —
+         *     born waiting, same as a transfer (#137) and every other maker-checker
+         *     family: a maker cannot forget to ask.
+         */
+        StockRequestWrite: {
+            requesting_store: number;
+            fulfilling_store: number;
+            notes?: string;
+            lines: components["schemas"]["StockRequestLineWrite"][];
+        };
         Store: {
             readonly id: number;
             code: string;
@@ -3313,6 +3983,17 @@ export interface components {
             sku_code: string;
             qty_planned: number;
         };
+        /**
+         * @description Base read shape for a document that needs a second person.
+         *
+         *     Every such document answers the same three questions on its own page, for
+         *     good: **made by** whom, **approved by** whom, and **when** — plus the live
+         *     approval record (pending / approved / rejected, with the reject reason).
+         *
+         *     The approver is read from the approval, not from the document's own column:
+         *     the column is a denormalised copy stamped at post time (for Tally), so on a
+         *     still-unposted draft only the approval knows the answer.
+         */
         StoreTransferRead: {
             readonly id: number;
             doc_number?: string | null;
@@ -3337,7 +4018,27 @@ export interface components {
             /** Format: date-time */
             dispatch_date?: string | null;
             dispatched_by?: number | null;
+            /**
+             * @description Who actually sent the pieces. Distinct from ``dispatcher_name``,
+             *     which is the free-text person carrying the carton — the trail wants the
+             *     user who pressed the button (#137).
+             */
+            readonly dispatched_by_name: string;
             created_by?: number | null;
+            readonly created_by_name: string;
+            /** @description Stamped from the approvals inbox at dispatch — never typed (#137). */
+            approved_by?: number | null;
+            readonly approved_by_name: string;
+            readonly approval: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * @description Everything asked before the live one — the rejections a maker has
+             *     already worked through. Empty for the common case.
+             */
+            readonly approval_history: {
+                [key: string]: unknown;
+            }[];
             /** Format: date-time */
             readonly created_at: string;
             /** Format: date-time */
@@ -3593,6 +4294,25 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    alerts_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertRead"][];
+                };
+            };
+        };
+    };
     approvals_list: {
         parameters: {
             query?: never;
@@ -3648,6 +4368,24 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApprovalRead"][];
                 };
+            };
+        };
+    };
+    auth_admin_access_matrix_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3923,6 +4661,26 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminRole"];
                 };
+            };
+        };
+    };
+    auth_admin_roles_access_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5068,6 +5826,42 @@ export interface operations {
             };
         };
     };
+    masters_store_targets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    masters_store_targets_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     masters_stores_list: {
         parameters: {
             query?: never;
@@ -5500,6 +6294,24 @@ export interface operations {
             };
         };
     };
+    outbound_returnable_pool_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     outbound_rtvs_list: {
         parameters: {
             query?: never;
@@ -5528,9 +6340,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReturnToVendorWrite"];
-                "application/x-www-form-urlencoded": components["schemas"]["ReturnToVendorWrite"];
-                "multipart/form-data": components["schemas"]["ReturnToVendorWrite"];
+                "application/json": components["schemas"]["ReturnToBrandCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["ReturnToBrandCreate"];
+                "multipart/form-data": components["schemas"]["ReturnToBrandCreate"];
             };
         };
         responses: {
@@ -5539,7 +6351,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReturnToVendorWrite"];
+                    "application/json": components["schemas"]["ReturnToBrandCreate"];
                 };
             };
         };
@@ -5565,6 +6377,46 @@ export interface operations {
             };
         };
     };
+    outbound_rtvs_credit_note_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_rtvs_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     outbound_rtvs_submit_create: {
         parameters: {
             query?: never;
@@ -5586,6 +6438,149 @@ export interface operations {
         };
     };
     outbound_scan_lookup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stock_requests_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockRequestRead"][];
+                };
+            };
+        };
+    };
+    outbound_stock_requests_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockRequestWrite"];
+                "application/x-www-form-urlencoded": components["schemas"]["StockRequestWrite"];
+                "multipart/form-data": components["schemas"]["StockRequestWrite"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockRequestWrite"];
+                };
+            };
+        };
+    };
+    outbound_stock_requests_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockRequestRead"];
+                };
+            };
+        };
+    };
+    outbound_stock_requests_close_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stock_requests_fulfil_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stock_requests_request_approval_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stock_search_retrieve: {
         parameters: {
             query?: never;
             header?: never;
@@ -5660,6 +6655,26 @@ export interface operations {
         };
     };
     outbound_stocktakes_apply_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_stocktakes_recount_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -5885,6 +6900,26 @@ export interface operations {
         };
     };
     outbound_transfers_receive_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    outbound_transfers_request_approval_create: {
         parameters: {
             query?: never;
             header?: never;
