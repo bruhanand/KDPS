@@ -681,15 +681,21 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
         placeholder="0"
         onChange={(paise) => onEdit(line.key, { disc_paise: paise })}
       />
-      {line.offer_paise > 0 && (
+      {/* One chip per rule, each with the part *it* took off. A brand offer and
+          a storewide add-on on the same line are two decisions by two people,
+          and rolling them into one chip quoted the brand's offer as half again
+          as generous as it is - which is what the counter then tells the
+          customer. */}
+      {line.offer_credits.map((credit) => (
         <span
           className="bill-offer"
-          data-testid={`bill-offer-${line.line_no}`}
-          title={line.offer_label}
+          data-testid={`bill-offer-${line.line_no}-${credit.offer_id}`}
+          key={credit.offer_id}
+          title={credit.offer_name}
         >
-          {line.offer_label || "Offer"} · <Money paise={line.offer_paise} />
+          {credit.offer_name || "Offer"} · <Money paise={credit.saved_paise} />
         </span>
-      )}
+      ))}
       {line.over_cap && (
         <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
           over the cap

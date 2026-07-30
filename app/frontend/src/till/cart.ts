@@ -38,6 +38,7 @@ import type {
   BillLine,
   NoOffer,
   OfferEvidence,
+  StackedCredit,
   TillGstSlab,
   TillItem,
   TillOffer,
@@ -90,10 +91,11 @@ export interface PricedLine extends CartLine {
   /** What the rulebook took off this line, kept apart from `disc_paise` so the
    *  cap measures the cashier and only the cashier. */
   offer_paise: number;
-  /** The brand-layer rule that won, for the chip and for the sale line's FK. */
+  /** The brand-layer rule that won - the sale line's FK. */
   offer_id: number | null;
-  /** What the chip says: the winning rule's name, or "" when none applied. */
-  offer_label: string;
+  /** One entry per rule that reduced this line, each with its own share: what
+   *  the chips on the screen say, and the only honest way to say it. */
+  offer_credits: StackedCredit[];
   offer_evidence: OfferEvidence | NoOffer;
   net_paise: number;
   gst_rate: string;
@@ -265,6 +267,37 @@ function offerCart(cart: Cart, day: string): OfferCart {
   };
 }
 
+/**
+ * Every rule that reduced this line, each with the part *it* took off.
+ *
+ * The evidence records the winning brand rule by name and the total saving in
+ * one field, with the add-ons that stacked on top listed separately. That is the
+ * right shape to store - it is what the daily applied-versus-rulebook check
+ * reads - and the wrong shape to show a cashier: browser QA found one chip
+ * reading "Louis Philippe flat 30% · ₹1,172.17" where ₹1,172.17 was the 30%
+ * *and* a storewide 5%, so the counter would have quoted the brand's offer as
+ * half again as generous as it is.
+ *
+ * So the brand rule's own share is what is left after the add-ons, which is
+ * arithmetic that cannot be ambiguous: the parts are recorded, and the whole is
+ * recorded, so the remainder is the first part.
+ */
+export function creditsOn(evidence: OfferEvidence | NoOffer): StackedCredit[] {
+  if (!("saved_paise" in evidence)) return [];
+  const stacked = evidence.stack ?? [];
+  const brandShare = evidence.saved_paise - stacked.reduce((n, s) => n + s.saved_paise, 0);
+  const credits: StackedCredit[] = [];
+  if (evidence.offer_id !== null && brandShare > 0) {
+    credits.push({
+      offer_id: evidence.offer_id,
+      offer_name: evidence.offer_name,
+      layer: evidence.layer,
+      saved_paise: brandShare,
+    });
+  }
+  return [...credits, ...stacked];
+}
+
 function priceLine(
   line: CartLine,
   line_no: number,
@@ -290,7 +323,7 @@ function priceLine(
     gross_paise: gross,
     offer_paise: offerPaise,
     offer_id: offer?.offer_id ?? null,
-    offer_label: "offer_name" in evidence ? evidence.offer_name : "",
+    offer_credits: creditsOn(evidence),
     offer_evidence: evidence,
     net_paise: net,
     gst_rate: split.rate,

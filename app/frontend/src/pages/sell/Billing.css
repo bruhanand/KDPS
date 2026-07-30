@@ -61,12 +61,22 @@ select.bill-season { min-width: 0; }
   display: block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--red);
 }
 /* The offer chip. Tokens only - no literal colours - so dark mode inherits it
-   with no second rule, per the theme's one standing constraint. It wraps rather
-   than truncating: the rule's name is what a cashier reads out to a customer who
-   asks why the shirt is cheaper, and half a name answers nothing. */
+   with no second rule, per the theme's one standing constraint.
+
+   `white-space: normal` is load-bearing, not tidying. This chip lives in a
+   `td.num`, and that cell says `white-space: nowrap` so that "₹3,4 / 99" can
+   never break across two lines. A rule's *name* is not a figure and is far
+   longer than the column: left nowrap it does not wrap, it overflows, and
+   browser QA found it printed straight across the GST and salesman columns on
+   every discounted line. `block` + `fit-content` + `max-width` is then the pair
+   that keeps it a pill that hugs its text and can never exceed its cell -
+   `.bill-overcap` beside it is `block` for the same reason and never showed the
+   fault only because "over the cap" is three short words. */
 .bill-offer {
-  display: inline-block; margin-top: 4px; padding: 1px 6px; border-radius: 10px;
-  font-size: 11px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere;
+  display: block; width: fit-content; max-width: 100%; box-sizing: border-box;
+  margin-top: 4px; padding: 1px 6px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; line-height: 1.5;
+  white-space: normal; overflow-wrap: anywhere; text-align: left;
   color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
 }
 

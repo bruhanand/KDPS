@@ -247,7 +247,9 @@ describe("the rulebook, on the line and on the bill", () => {
 
     expect(bill.lines[0].offer_paise).toBe(74950);
     expect(bill.lines[0].offer_id).toBe(7);
-    expect(bill.lines[0].offer_label).toBe("Mufti flat 50");
+    expect(bill.lines[0].offer_credits).toEqual([
+      { offer_id: 7, offer_name: "Mufti flat 50", layer: "brand", saved_paise: 74950 },
+    ]);
     expect(bill.lines[0].net_paise).toBe(74950);
   });
 
@@ -368,5 +370,53 @@ describe("a piece the books never priced", () => {
   it("refuses to close until a human types the price off the tag", () => {
     const bill = priceCart(cartOf(scanned(null)), WORLD, "2026-07-30");
     expect(whyItCannotClose(bill)).toContain("no price");
+  });
+});
+
+describe("what the chips on a line say", () => {
+  const STOREWIDE: TillOffer = {
+    ...MUFTI_HALF,
+    id: 9,
+    name: "Monsoon extra 10",
+    layer: "storewide",
+    brand: undefined,
+    reward_config: { percent: "10.00" },
+    combinable: true,
+  };
+
+  it("gives each rule its own chip and its own share", () => {
+    // The defect browser QA found: one chip reading "Mufti flat 50 · ₹824.45",
+    // where ₹824.45 was the 50% *and* a storewide 10% - so the counter would
+    // have quoted the brand's offer as a sixth more generous than it is.
+    const bill = priceCart(
+      cartOf(scanned(149900)),
+      { ...WORLD, offers: [MUFTI_HALF, STOREWIDE] },
+      "2026-07-30",
+    );
+
+    expect(bill.lines[0].offer_credits).toEqual([
+      { offer_id: 7, offer_name: "Mufti flat 50", layer: "brand", saved_paise: 74950 },
+      { offer_id: 9, offer_name: "Monsoon extra 10", layer: "storewide", saved_paise: 7495 },
+    ]);
+    // And the parts still come to the whole, which is what the customer paid.
+    expect(bill.lines[0].offer_paise).toBe(74950 + 7495);
+  });
+
+  it("says nothing at all when no rule reached the line", () => {
+    expect(priceCart(cartOf(scanned(149900)), WORLD, "2026-07-30").lines[0].offer_credits).toEqual(
+      [],
+    );
+  });
+
+  it("names only the add-on when there was no brand offer to sit on", () => {
+    const bill = priceCart(
+      cartOf(scanned(149900)),
+      { ...WORLD, offers: [STOREWIDE] },
+      "2026-07-30",
+    );
+
+    expect(bill.lines[0].offer_credits).toEqual([
+      { offer_id: 9, offer_name: "Monsoon extra 10", layer: "storewide", saved_paise: 14990 },
+    ]);
   });
 });
