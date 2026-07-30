@@ -11,7 +11,7 @@ import {
   type DashboardPayload,
 } from "./storeDashboardModel";
 
-/** The six keys `storefront/dashboard.py` sends today, in its order. Kept as a
+/** The seven keys `storefront/dashboard.py` sends today, in its order. Kept as a
  *  literal on purpose: if the server adds a key this side has never heard of,
  *  the row silently disappears, and this is the test that says so. */
 const SERVER_KEYS = [
@@ -21,6 +21,7 @@ const SERVER_KEYS = [
   "quarantine_to_confirm",
   "rtb_windows_closing",
   "open_count_session",
+  "held_bills",
 ];
 
 function payload(over: Partial<DashboardPayload> = {}): DashboardPayload {
@@ -51,11 +52,20 @@ describe("the action queue", () => {
   });
 
   it("draws no key it has no screen for", () => {
-    // The three `sell` keys land with #177-#186; until then a row would be a
-    // number nobody could click through and clear.
-    expect(KNOWN_QUEUE_KEYS).not.toContain("held_bills");
-    const rows = queueRows(payload({ action_queue: [{ key: "held_bills", count: 4 }] }));
+    // The last two `sell` keys land with #186 and #188; until then a row would be
+    // a number nobody could click through and clear. `held_bills` is on the list
+    // now because #185 built the screen that clears it.
+    expect(KNOWN_QUEUE_KEYS).not.toContain("uncosted_sale_lines");
+    const rows = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }));
     expect(rows).toEqual([]);
+  });
+
+  it("sends bills on hold to the counter that can pick them up", () => {
+    // Not a list screen of its own: resuming a parked bill *is* billing, so the
+    // row opens the counter with the hold list already showing (#185).
+    const [row] = queueRows(payload({ action_queue: [{ key: "held_bills", count: 2 }] }));
+    expect(row.to).toBe("/sell?holds=1");
+    expect(row.count).toBe(2);
   });
 
   it("keeps the server's order", () => {

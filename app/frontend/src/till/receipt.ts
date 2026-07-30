@@ -14,6 +14,7 @@
 // have this bill yet.
 
 import { changeFor } from "./cart";
+import { describePiece } from "./lookup";
 import type { BillLine, QueuedBill, TillStoreIdentity } from "./types";
 
 export interface ReceiptOptions {
@@ -166,4 +167,109 @@ export function receiptHtml(
     Exchange within the store's policy, with this bill.<br>Thank you.
   </footer>
 </body></html>`;
+}
+
+/** A bill as the *server* has it - `GET /api/sell/sales/{doc_number}`. */
+export interface PostedBill {
+  doc_number: string;
+  billed_at: string;
+  origin: string;
+  store_code: string;
+  store_name: string;
+  store_gstin: string;
+  customer_name: string;
+  customer_mobile: string;
+  lines: {
+    line_no: number;
+    direction: string;
+    barcode: string;
+    season: string;
+    brand: string;
+    item: string;
+    design: string;
+    size: string;
+    color: string;
+    manual_desc: string;
+    qty: number;
+    mrp_paise: number;
+    net_paise: number;
+  }[];
+  tenders: { mode: string; amount_paise: number }[];
+  gross_paise: number;
+  discount_paise: number;
+  net_paise: number;
+  gst_paise: number;
+  round_paise: number;
+}
+
+/**
+ * A bill found by customer search, as paper (#185, E2).
+ *
+ * The same template as the till's own reprint, deliberately: a customer holding
+ * two copies of one bill should not be able to tell which screen printed them.
+ * What differs is where the facts come from - the counter that billed it may be
+ * another machine, or last month's - so this reads the posted document and
+ * nothing else.
+ *
+ * It re-renders rather than replaying a stored string, which is the one place the
+ * note above ("a reprint keeps the finished string") has to bend: there is no
+ * stored string for a bill this device never billed. It is safe for the reason
+ * the note exists - the source is the posted document itself, so the paper says
+ * what the books say, and A7 is untouched because nothing here can write.
+ */
+export function postedReceiptHtml(bill: PostedBill): string {
+  const cash = bill.tenders.find((tender) => tender.mode === "cash");
+  return receiptHtml(
+    {
+      idempotency_uuid: "",
+      store: bill.store_code,
+      fy: "",
+      till_seq: 0,
+      attempts: 0,
+      doc_number: bill.doc_number,
+      billed_at: bill.billed_at,
+      // Anything but "offline" simply drops the offline footnote; a reprint of a
+      // bill written offline still says so, because that is a fact about the bill.
+      origin: bill.origin === "offline" ? "offline" : "online",
+      customer: { name: bill.customer_name, mobile: bill.customer_mobile },
+      lines: bill.lines.map((line) => ({
+        line_no: line.line_no,
+        direction: line.direction === "return" ? "return" : "sale",
+        barcode: line.barcode,
+        season: line.season,
+        qty: line.qty,
+        mrp_paise: line.mrp_paise,
+        // The paper shows the ticket price and what was actually paid, which is
+        // the pair a customer checks. The discount is the difference between the
+        // two columns and the bill's own "You saved" line, so a per-line copy of
+        // it here would be a third place for one figure to be wrong.
+        disc_paise: 0,
+        net_paise: line.net_paise,
+        gst_rate: "",
+        gst_paise: 0,
+        manual_desc: line.manual_desc,
+      })),
+      tenders: bill.tenders,
+      totals: {
+        gross_paise: bill.gross_paise,
+        discount_paise: bill.discount_paise,
+        net_paise: bill.net_paise,
+        gst_paise: bill.gst_paise,
+        round_paise: bill.round_paise,
+      },
+    },
+    { code: bill.store_code, gstin: bill.store_gstin, state_code: "" },
+    {
+      storeName: bill.store_name,
+      tenderedPaise: cash?.amount_paise ?? 0,
+      // The server writes the brand, item and size onto every line at billing
+      // (Rule 3), so unlike the till's own receipt this one is not lent a
+      // description - it has the snapshot the bill was printed from.
+      describe: (line) => {
+        const posted = bill.lines.find((row) => row.line_no === line.line_no);
+        if (!posted) return line.barcode;
+        return posted.manual_desc || describePiece(posted) || posted.barcode;
+      },
+    },
+  );
 }

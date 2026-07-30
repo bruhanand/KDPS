@@ -170,6 +170,8 @@ export interface FakeServer extends TillTransport {
   registers: RegisterPayload[];
   /** Cursors the till asked from, in order. */
   asked: string[];
+  /** Every held-bill push, in order - each one the whole list as it stood. */
+  heldPushes: Record<string, unknown>[][];
 }
 
 /** A server that takes every bill, unless a test says otherwise. */
@@ -180,6 +182,7 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
     datasets: [],
     registers: [],
     asked: [],
+    heldPushes: [],
     answer: (bill) => ({ doc_number: bill.doc_number, id: bill.till_seq, flags: [] }),
     async dataset(since: string) {
       server.asked.push(since);
@@ -196,6 +199,10 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
       const accepted = server.answer(bill);
       landed.push(bill.till_seq);
       return accepted;
+    },
+    async putHeld(held: Record<string, unknown>[]) {
+      server.heldPushes.push(held);
+      return { count: held.length };
     },
     ...over,
   };

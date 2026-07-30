@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { receiptHtml } from "./receipt";
+import { postedReceiptHtml, receiptHtml } from "./receipt";
 import { draft } from "./testSupport";
 import type { QueuedBill } from "./types";
 
@@ -125,5 +125,70 @@ describe("the customer's copy", () => {
 
     expect(html.startsWith("<!doctype html>")).toBe(true);
     expect(html).toContain("</html>");
+  });
+});
+
+describe("reprinting a bill found by search (#185)", () => {
+  const posted = {
+    doc_number: "26-27/DEO/SAL/74",
+    billed_at: "2026-07-30T12:31:00.000Z",
+    origin: "offline",
+    store_code: "DEO",
+    store_name: "Deoghar",
+    store_gstin: "10AAAAA0000A1Z5",
+    customer_name: "Mrs Sharma",
+    customer_mobile: "9876543210",
+    lines: [
+      {
+        line_no: 1,
+        direction: "sale",
+        barcode: "8901000000011",
+        season: "FW25",
+        brand: "MUFTI",
+        item: "Shirt",
+        design: "SHIRT-01",
+        size: "M",
+        color: "NAVY",
+        manual_desc: "",
+        qty: 1,
+        mrp_paise: 149900,
+        net_paise: 139900,
+      },
+    ],
+    tenders: [{ mode: "cash", amount_paise: 139900 }],
+    gross_paise: 149900,
+    discount_paise: 10000,
+    net_paise: 139900,
+    gst_paise: 6662,
+    round_paise: 0,
+  };
+
+  it("prints the posted bill on the same paper as the till's own", () => {
+    const html = postedReceiptHtml(posted);
+
+    expect(html).toContain("26-27/DEO/SAL/74");
+    expect(html).toContain("Deoghar");
+    // The registration comes off the document's store, because the screen that
+    // reprints has no counter behind it to borrow one from.
+    expect(html).toContain("10AAAAA0000A1Z5");
+    expect(html).toContain("₹1,399.00");
+  });
+
+  it("describes the line from the snapshot the bill was billed with", () => {
+    // Rule 3: the brand, item and size were written onto the line at billing, so
+    // a reprint a year later reads the garment as it was sold, not as the item
+    // master describes it today.
+    expect(postedReceiptHtml(posted)).toContain("MUFTI · Shirt · SHIRT-01 · M · NAVY");
+  });
+
+  it("still says a bill was written offline", () => {
+    expect(postedReceiptHtml(posted)).toContain("Billed offline");
+    expect(postedReceiptHtml({ ...posted, origin: "online" })).not.toContain("Billed offline");
+  });
+
+  it("shows no change on a bill paid to the paise", () => {
+    // The cash the customer held out is not on the document - only what the bill
+    // took - so a reprint may not invent a change figure.
+    expect(postedReceiptHtml(posted)).not.toContain("Change");
   });
 });

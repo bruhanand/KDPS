@@ -20,6 +20,7 @@ The five acceptance criteria on the ticket, in order:
 from __future__ import annotations
 
 from datetime import date, timedelta
+from uuid import uuid4
 
 import pytest
 from _creds import TEST_PASSWORD
@@ -34,13 +35,14 @@ from core.documents import VoucherSeries
 from core.fiscal import financial_year
 from masters.models import Gstin, LegalEntity, Store, StoreTarget
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer, StoreTransferLine
+from sell.models import HeldBill
 
 URL = "/api/store/dashboard"
 
-#: The six keys this build can honestly count. The other three in the contract
-#: (`held_bills`, `uncosted_sale_lines`, `continuity_flags`) read `sell` tables
-#: that #177-#186 create; see `storefront/dashboard.py` for why they are absent
-#: rather than nought.
+#: The seven keys this build can honestly count. The other two in the contract
+#: (`uncosted_sale_lines`, `continuity_flags`) read `sell` tables that #186 and
+#: #188 create; see `storefront/dashboard.py` for why they are absent rather than
+#: nought. `held_bills` joined the list when the hold itself did (#185).
 QUEUE_KEYS = [
     "approvals_pending",
     "transfers_to_receive",
@@ -48,6 +50,7 @@ QUEUE_KEYS = [
     "quarantine_to_confirm",
     "rtb_windows_closing",
     "open_count_session",
+    "held_bills",
 ]
 
 
@@ -295,6 +298,22 @@ def test_the_queue_counts_this_stores_work_and_not_the_next_stores(cashier, mana
     assert counts["quarantine_to_confirm"] == 2
     assert counts["open_count_session"] == 1
     assert counts["rtb_windows_closing"] == 1
+
+
+def test_bills_on_hold_are_counted_for_the_store_that_parked_them(cashier, network):
+    """The Dashboard's count and the counter's list are the same list (#185).
+
+    A hold is not a document and has no store of its own to be inferred from, so
+    the mirror's `store` column is the whole of the scoping - and a store reading
+    "2 bills on hold" that included the next town's would send somebody looking
+    for a cart that is not there.
+    """
+    for store, label in [(network["deo"], "Mrs Sharma"), (network["deo"], "Blue shirt")]:
+        HeldBill.objects.create(store=store, held_uuid=uuid4(), label=label, held_at=timezone.now())
+    HeldBill.objects.create(store=network["ran"], held_uuid=uuid4(), held_at=timezone.now())
+
+    counts = {row["key"]: row["count"] for row in cashier.get(URL).json()["action_queue"]}
+    assert counts["held_bills"] == 2
 
 
 def test_a_confirmed_damage_report_leaves_the_queue(cashier, network):

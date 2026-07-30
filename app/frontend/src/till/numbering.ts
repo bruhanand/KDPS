@@ -26,6 +26,7 @@ import { META, readMeta } from "./db";
 import type { TillDb } from "./db";
 import { notesSpentBy } from "./tender";
 import type { BillDraft, QueuedBill } from "./types";
+import { newUuid } from "./uuid";
 
 /** The document type the till numbers. The kernel accepts external numbers on
  *  this series and no other (`core.documents.EXTERNAL_NUMBER_DOC_TYPES`). */
@@ -224,17 +225,4 @@ export async function drawDownNotes(db: TillDb, spent: Map<string, number>): Pro
       remaining_paise: Math.max(0, note.remaining_paise - amount),
     });
   }
-}
-
-/** A v4 UUID, from the platform where there is one. */
-function newUuid(): string {
-  const cryptoApi = globalThis.crypto;
-  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID();
-  // Chrome is the standardised till (grill Q5) and has had `randomUUID` on
-  // secure origins for years, so this is for a plain-http dev box, not for a
-  // counter. It is still a v4 shape, so nothing downstream can tell.
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => {
-    const n = Number(c);
-    return (n ^ (Math.floor(Math.random() * 256) & (15 >> (n / 4)))).toString(16);
-  });
 }

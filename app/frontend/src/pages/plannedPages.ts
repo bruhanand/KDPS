@@ -81,19 +81,9 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     notes: ["A return needs the original bill, so this comes with billing."],
     module: POS,
   },
-  "/sell/customers": {
-    summary: "Find an old bill and print it again.",
-    contains: [
-      "Search by name, phone number or bill number",
-      "The bill opens with its details",
-      "Re-print only — a past bill is never edited",
-    ],
-    notes: [
-      "There are no bills to find until billing is live.",
-      "“Re-print only, no editing” is the stores' own wording from their 25 July note, and it is already the rule the whole system runs on: a document is corrected by another document, never overwritten.",
-    ],
-    module: POS,
-  },
+  // Customers is built too (#185) - search, the bill read-only, and Print again.
+  // The stores' own wording from the 25 July note, "re-print only, no editing",
+  // is what shipped: there is no writer behind that screen to edit with.
 
   // ---- Receive Goods ------------------------------------------------------
   "/receive/upload-bill": {

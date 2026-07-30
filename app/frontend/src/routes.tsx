@@ -35,6 +35,7 @@ import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
 import BillingPage from "./pages/sell/Billing";
+import CustomerSearchPage from "./pages/sell/CustomerSearch";
 import TillPage from "./pages/sell/Till";
 import { TillProvider } from "./till/TillProvider";
 
@@ -113,6 +114,13 @@ const BUILT: Screen[] = [
   // and outlives the navigation either way.
   { id: "sell-billing", path: "/sell", element: withTill(<BillingPage />) },
   { id: "sell-till", path: "/sell/till", element: withTill(<TillPage />) },
+  // Find a bill and print it again (#185). No `withTill`, and that is the whole
+  // shape of the screen: it reads the *server's* bills, because the counter's
+  // local copy holds only what it has not yet synced - last month's bill, or one
+  // from the machine that was replaced, is only ever at head office. It also
+  // means somebody who may read bills but not bill (an owner, an accountant) can
+  // open it without a counter's price list being opened on their laptop.
+  { id: "sell-customers", path: "/sell/customers", element: <CustomerSearchPage /> },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
   { id: "stock-search", path: "/stock/search", element: <CrossStoreSearch /> },

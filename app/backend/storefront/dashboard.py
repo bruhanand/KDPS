@@ -7,11 +7,12 @@ just to draw a card (ADR-0002) - the same shape `search` already has.
 
 **Every count here is a count of something that exists today.** The nine
 `action_queue` keys in `api-contract.md` include three that read `sell_heldbill`,
-`sell_deferredcosting` and `sell_continuityflag`, and the `sell` app is not built
-until #177-#186. Those three keys are *absent* rather than reported as nought:
-a row saying "0 bills on hold" would be a sentence about a store's morning, and
-what is actually true is that nothing can be put on hold yet. The ticket's own
-words are "counting what already exists". They arrive with the tables they read.
+`sell_deferredcosting` and `sell_continuityflag`, and those tables arrive one
+ticket at a time. A key is *absent* rather than reported as nought until its table
+is there: a row saying "0 bills on hold" would be a sentence about a store's
+morning, and what would actually be true is that nothing can be put on hold yet.
+`held_bills` joined the queue with the hold list itself (#185); the other two wait
+for `sell_deferredcosting` (#186) and the daily check (#188).
 
 The same honesty runs through the money tiles, which the contract does fix at
 zero: `sales_live` says whether a Sale can exist at all, so the screen can label
@@ -41,6 +42,7 @@ from offers.models import Offer
 from offers.serializers import one_liner
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
 from ptmapper.models import PtFile
+from sell.models import HeldBill
 
 #: How many in-transit cartons the "live in store" card names before it stops
 #: listing and the action-queue row carries the rest. Four fits the card; the
@@ -223,14 +225,27 @@ def _open_count_session(store: Store) -> int:
     return int(Stocktake.objects.filter(store_id=store.id, status=CountStatus.OPEN).count())
 
 
+def _held_bills(store: Store) -> int:
+    """Carts the counter has parked (#185, grill Q13).
+
+    The till's own mirror, not a document: a hold holds no stock and no money, so
+    this is the one row on the queue that is a count of *unfinished conversations*
+    rather than of work the books are waiting on. It is on the queue because the
+    store chooses at day close whether each one is kept or let go, and a manager
+    should not have to walk to the counter to find out how many there are.
+    """
+    return int(HeldBill.objects.filter(store_id=store.id).count())
+
+
 def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[str, Any]]:
     """The needs-your-action rows, in the contract's order.
 
-    Every row ships with its count even when that count is nought: unlike the
-    three `sell` keys, these all read a table that exists, so nought is a fact
-    about the store and not about the build. The screen greys a nought row rather
-    than hiding it - a queue that changes length as work is cleared is one you
-    stop trusting to be the whole list.
+    Every row ships with its count even when that count is nought: these all read
+    a table that exists, so nought is a fact about the store and not about the
+    build. The screen greys a nought row rather than hiding it - a queue that
+    changes length as work is cleared is one you stop trusting to be the whole
+    list. The two keys still missing are the ones whose tables are (see the module
+    docstring).
     """
     return [
         {"key": "approvals_pending", "count": _approvals_pending(user, store)},
@@ -239,6 +254,7 @@ def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[st
         {"key": "quarantine_to_confirm", "count": _quarantine_to_confirm(store)},
         {"key": "rtb_windows_closing", "count": _rtb_windows_closing(store)},
         {"key": "open_count_session", "count": _open_count_session(store)},
+        {"key": "held_bills", "count": _held_bills(store)},
     ]
 
 

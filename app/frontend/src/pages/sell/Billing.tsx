@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { AlertTriangle, Gift, KeyRound, Plus, Printer, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Gift, KeyRound, PauseCircle, Plus, Printer, Search, X } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
@@ -16,6 +17,8 @@ import {
   whyItCannotClose,
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
+import type { HeldBill } from "../../till/db";
+import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
 import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import { whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
@@ -30,6 +33,8 @@ import { useTillWorld } from "../../till/useTillWorld";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
 // screen with a dialog on it borrows from the same place.
 import "../Booking.css";
+import { newUuid } from "../../till/uuid";
+import { HeldBills } from "./HeldBills";
 import "./Billing.css";
 
 // ---------------------------------------------------------------------------
@@ -73,9 +78,14 @@ import "./Billing.css";
 // the bill records it - and an authorisation only covers what the manager was
 // shown, so an exception keyed in after they walked away asks again.
 //
-// What this slice does not do yet, by ticket: offers are #183, Hold Bill and
-// customer search are #185, the sold-before-inward manual line is #186. Each is
-// absent rather than faked.
+// **A hold is not a bill** (#185, grill Q13). Parking a cart writes one row in
+// one local table: no number is taken, no piece leaves the shelf, nothing is
+// queued. Picking one up prices it again from today's world, because a bill kept
+// overnight is sold at tomorrow's prices and offers, not at the ones it happened
+// to be parked under.
+//
+// What this slice does not do yet, by ticket: the sold-before-inward manual line
+// is #186. Absent rather than faked.
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -124,6 +134,11 @@ function Counter({ storeName }: { storeName?: string }) {
    * having to stand at the counter visibly doing nothing.
    */
   const [wrongPins, setWrongPins] = useState(0);
+  // The hold list opens on demand, and opens itself when the Dashboard's "bills
+  // on hold" row sent somebody here to clear them (`/sell?holds=1`).
+  const [showHolds, setShowHolds] = useState(() =>
+    new URLSearchParams(window.location.search).has("holds"),
+  );
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
@@ -237,6 +252,67 @@ function Counter({ storeName }: { storeName?: string }) {
     scan.focus();
   }
 
+  // --- bills on hold (#185, grill Q13) --------------------------------------
+
+  const holds = till?.held ?? [];
+  // Recomputed against the list rather than stored: "before today" is a fact
+  // about the clock, and a flag written at park time would be wrong by morning.
+  const toReview = useMemo(() => holdsToReview(holds), [holds]);
+  // A hold replaces the cart, so an open bill has to be dealt with first. Saying
+  // so is the whole guard - the alternative is a Resume button that throws away
+  // pieces somebody has already scanned.
+  const holdsBlocked = cart.lines.length
+    ? "Save, hold or clear the bill on screen before picking up another."
+    : "";
+
+  /**
+   * Park the bill and clear the counter for the next customer.
+   *
+   * One tap, and the customer's name is the label when the strip has one -
+   * "label optional" (grill Q13) with nothing extra for a cashier to fill in. A
+   * hold with no name identifies itself by what is in it.
+   */
+  async function holdBill() {
+    if (!engine || !cart.lines.length || saving) return;
+    try {
+      await engine.hold({
+        held_uuid: newUuid(),
+        label: customer.name.trim(),
+        payload: heldPayload(cart, customer, {
+          net_paise: bill.net_paise,
+          pieces: bill.pieces,
+        }),
+      });
+      setCart({ lines: [], tenderedPaise: 0 });
+      setCustomer({ name: "", mobile: "" });
+      setTyped("");
+      setNote("Bill held. Scan the next customer's first piece.");
+      setShowHolds(false);
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : String(error));
+    }
+    scan.focus();
+  }
+
+  /** Pick a parked bill back up, at today's prices. */
+  async function resumeHold(hold: HeldBill) {
+    if (!engine || holdsBlocked) return;
+    const restored = restoreHold(hold, world);
+    setCart(restored.cart);
+    setCustomer(restored.customer);
+    setShowHolds(false);
+    setNote(
+      restored.stale
+        ? "Bill picked up. Priced at today's rates - check the lines the counter no longer stocks."
+        : "Bill picked up, priced at today's rates.",
+    );
+    // The hold goes only after the cart is on screen: if this throws, the cart is
+    // in front of the cashier and the hold is still in the list, which is a
+    // duplicate somebody can see rather than a bill nobody has.
+    await engine.releaseHold(hold.held_uuid);
+    scan.focus();
+  }
+
   async function print(receipt: string): Promise<void> {
     const outcome = await browserPrintAdapter.print(receipt);
     setPrintProblem(
@@ -339,6 +415,33 @@ function Counter({ storeName }: { storeName?: string }) {
         </p>
       ))}
 
+      {/* Day close, until store open/close (I3) defines one properly: a bill
+          parked before today is put to the store, and stays parked until
+          somebody answers. Nothing expires on a timer (grill Q13). */}
+      {toReview.length > 0 && (
+        <p className="bill-alert" data-testid="bill-holds-due">
+          <AlertTriangle size={15} />
+          {toReview.length === 1
+            ? "1 bill has been on hold since before today."
+            : `${toReview.length} bills have been on hold since before today.`}{" "}
+          Keep each one for tomorrow or let it go.
+          <button type="button" className="btn" onClick={() => setShowHolds(true)}>
+            Review them
+          </button>
+        </p>
+      )}
+
+      {showHolds && (
+        <HeldBills
+          holds={holds}
+          toReview={toReview}
+          blocked={holdsBlocked}
+          onResume={(hold) => void resumeHold(hold)}
+          onKeep={(hold) => void engine?.keepHold(hold.held_uuid)}
+          onLetGo={(hold) => void engine?.releaseHold(hold.held_uuid)}
+        />
+      )}
+
       {suggestions.length > 0 && (
         <Suggestions
           pieces={suggestions}
@@ -426,6 +529,32 @@ function Counter({ storeName }: { storeName?: string }) {
             <Printer size={15} />
             {lastBill ? `Reprint ${lastBill.bill.doc_number}` : "Reprint"}
           </button>
+          <button
+            type="button"
+            className="btn"
+            data-testid="bill-hold"
+            disabled={!cart.lines.length || saving}
+            onClick={() => void holdBill()}
+          >
+            <PauseCircle size={15} />
+            Hold bill
+          </button>
+          <button
+            type="button"
+            className="btn"
+            data-testid="bill-holds-open"
+            aria-expanded={showHolds}
+            onClick={() => setShowHolds((open) => !open)}
+          >
+            {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
+          </button>
+          {/* The one navigation on this page. Finding an old bill is a different
+              job with a different screen (#185, E1/E2), and it is read-only:
+              nothing over there can change what was billed. */}
+          <Link className="btn" data-testid="bill-find" to="/sell/customers">
+            <Search size={15} />
+            Find a bill
+          </Link>
           <button
             type="button"
             className="btn"

@@ -696,6 +696,51 @@ class DeferredCosting(TimeStampedModel):
         return f"{self.barcode} × {self.qty} ({self.status} · {self.reason})"
 
 
+class HeldBill(TimeStampedModel):
+    """A cart the counter put down to serve the next customer (grill Q13).
+
+    The one row in this app that is **not** a fact about money. A hold moves no
+    stock, takes no bill number and posts nothing: it is a cart, and a cart is
+    just what somebody is thinking about buying.
+
+    It is also the one row the till owns rather than the server. The counter's
+    IndexedDB is authoritative - a hold has to survive a dead line, and the
+    person who parked it is standing in front of it - and this table exists so
+    the Dashboard can say "2 bills on hold" without a manager walking to the
+    counter to look. That is why the push replaces the store's whole list rather
+    than adding to it: a hold resumed at the counter has to *disappear* here, and
+    the till has no per-hold delete to send.
+
+    `payload` is the cart as the till holds it, opaque to the server on purpose.
+    Repricing a kept bill happens at the counter on retrieval, against that day's
+    rules, so the server has no reason to understand what is inside - and reading
+    it as if it meant something would make a mirror into a second opinion.
+    """
+
+    class ExpiresPolicy(models.TextChoices):
+        TODAY = "today", "Expires at day close unless the store keeps it"
+        KEPT = "kept", "The store chose to carry it forward"
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="held_bills")
+    held_uuid = models.UUIDField(unique=True)
+    label = models.CharField(max_length=120, blank=True, default="")
+    payload = models.JSONField(default=dict, blank=True)
+    held_at = models.DateTimeField()
+    expires_policy = models.CharField(
+        max_length=8, choices=ExpiresPolicy.choices, default=ExpiresPolicy.TODAY
+    )
+
+    class Meta:
+        db_table = "sell_held_bill"
+        ordering = ["held_at", "id"]
+        indexes = [
+            models.Index(fields=["store", "held_at"], name="heldbill_store_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.label or 'Held bill'} · {self.store_id}"
+
+
 class IrnQueueItem(TimeStampedModel):
     """A B2B bill waiting for head office to raise its IRN (grill Q8).
 

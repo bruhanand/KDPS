@@ -32,11 +32,13 @@
 //     with the rest of the PWA hardening in #189.
 
 import { META, readMeta, tillDb, writeMeta } from "./db";
-import type { TillDb } from "./db";
+import type { HeldBill, TillDb } from "./db";
+import { dropHold, keepHold, listHolds, parkHold } from "./held";
+import type { HeldPayload } from "./held";
 import { commitBill, previewNextNumber } from "./numbering";
 import { deriveStatus } from "./status";
 import type { SyncStatus } from "./status";
-import { clearHalt, drainQueue, forceBootstrap, reconcileRegister, syncDown } from "./sync";
+import { clearHalt, drainQueue, forceBootstrap, pushHeld, reconcileRegister, syncDown } from "./sync";
 import { httpTransport } from "./transport";
 import type { TillTransport } from "./transport";
 import type { BillDraft, QueueHalt, QueuedBill, RegisterPayload } from "./types";
@@ -71,6 +73,11 @@ export interface TillSnapshot {
   halt: QueueHalt | null;
   register: RegisterPayload | null;
   counts: TillCounts;
+  /** The carts this counter has parked (#185). In the snapshot rather than read
+   *  per screen because two screens want them - the Billing hold list and the
+   *  day-close prompt - and both have to see the same list at the same moment as
+   *  the count on the sync panel. There are a handful of these at most. */
+  held: HeldBill[];
   /** What the next bill will be numbered, for a screen to show. Advisory. */
   nextNumber: string;
   /** A sync or a drain is in flight. */
@@ -106,6 +113,7 @@ function initialSnapshot(storeCode: string): TillSnapshot {
     halt: null,
     register: null,
     counts: EMPTY_COUNTS,
+    held: [],
     nextNumber: "",
     busy: false,
     lastFlags: [],
@@ -247,6 +255,10 @@ export class TillEngine {
       await this.attempt(() => reconcileRegister(this.db, this.transport)),
       await this.pullDataset(),
       await this.push(),
+      // Last, and its own attempt: a mirror of what is parked is the least
+      // important thing on this list, and it must never be the reason a bill or
+      // a price list did not move.
+      await this.attempt(() => pushHeld(this.db, this.transport)),
       await this.attempt(() => this.refresh()),
     ].filter(Boolean);
     this.publish({ busy: false, lastError: failures[0] ?? "" });
@@ -273,6 +285,44 @@ export class TillEngine {
     await this.refresh();
     void this.pushAndRefresh();
     return bill;
+  }
+
+  // -- holds (#185, grill Q13) -----------------------------------------------
+  //
+  // Four one-line methods over `held.ts`, and they all end the same way: write,
+  // re-read the snapshot, and *offer* the new list to the server without waiting
+  // for it. Parking a bill is a thing a cashier does with a customer waiting, so
+  // it may not depend on a network - and a hold is not money, so nothing is lost
+  // if the mirror is a minute stale.
+
+  /** Park the cart. Returns the row so the screen can name what it just put down. */
+  async hold(hold: { held_uuid: string; label: string; payload: HeldPayload }): Promise<HeldBill> {
+    const row = await parkHold(this.db, hold);
+    await this.refresh();
+    this.mirrorHeld();
+    return row;
+  }
+
+  /** Take a hold off the list - resumed into a bill, or let go at day close.
+   *
+   *  One method for both because they are one act at this layer: the difference
+   *  is entirely what the *screen* does with the cart, and a second method that
+   *  did the same delete would be two names for one row disappearing. */
+  async releaseHold(heldUuid: string): Promise<void> {
+    await dropHold(this.db, heldUuid);
+    await this.refresh();
+    this.mirrorHeld();
+  }
+
+  /** The store's day-close answer: this cart carries to tomorrow. */
+  async keepHold(heldUuid: string): Promise<void> {
+    await keepHold(this.db, heldUuid);
+    await this.refresh();
+    this.mirrorHeld();
+  }
+
+  private mirrorHeld(): void {
+    void this.attempt(() => pushHeld(this.db, this.transport));
   }
 
   /** Remember who sold the last piece, so the next line defaults to them.
@@ -355,7 +405,7 @@ export class TillEngine {
    *  are counts and one small table - and it is the only writer of the snapshot's
    *  facts, so nothing on screen can drift from what is on disk. */
   async refresh(): Promise<void> {
-    const [items, stock, offers, creditNotes, salesmen, managers, gstSlabs, held] =
+    const [items, stock, offers, creditNotes, salesmen, managers, gstSlabs, heldBills] =
       await Promise.all([
         this.db.items.count(),
         this.db.stock.count(),
@@ -364,8 +414,9 @@ export class TillEngine {
         this.db.salesmen.count(),
         this.db.managers.count(),
         this.db.gstSlabs.count(),
-        this.db.held.count(),
+        listHolds(this.db),
       ]);
+    const held = heldBills.length;
     const queue = await this.db.queue.orderBy("id").toArray();
     const halt = await readMeta<QueueHalt | null>(this.db, META.halt, null);
     const register = await readMeta<RegisterPayload | null>(this.db, META.register, null);
@@ -377,6 +428,7 @@ export class TillEngine {
     this.publish({
       ready: true,
       counts: { items, stock, offers, creditNotes, salesmen, managers, gstSlabs, held },
+      held: heldBills,
       queue,
       pending: queue.length,
       halt,

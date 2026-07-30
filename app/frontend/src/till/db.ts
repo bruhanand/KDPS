@@ -40,8 +40,20 @@ export interface HeldBill {
   held_uuid: string;
   label: string;
   held_at: string;
+  /** `today` until the store says otherwise at day close; `kept` once it has. */
   expires_policy: string;
   payload: Record<string, unknown>;
+  /** The local day the store last answered "keep this" - and the one field here
+   *  that is **not** mirrored up.
+   *
+   *  A hold parked before today is put to the store at day close, and keeping it
+   *  has to be an answer about *that* close rather than for ever: a hold kept on
+   *  Monday and still parked on Thursday is a cart nobody has thought about in
+   *  three days, and a policy of `kept` alone would hide it for good. The server
+   *  has no use for the answer - the mirror is a count on a Dashboard - and the
+   *  contract's five columns are what `PUT /api/sell/held-bills` takes, so this
+   *  stays where the decision was made. */
+  reviewed_on?: string;
 }
 
 /** One row of `meta` - the till's small pile of state, keyed by name so a new
