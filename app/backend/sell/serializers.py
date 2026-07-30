@@ -123,6 +123,10 @@ class _TotalsWriteSerializer(serializers.Serializer):
 #: uses when they were asked both at once. A closed set, because the daily check
 #: groups bills by this value: a spelling nothing recognises is an exception
 #: nobody counts. The till builds the pair in this order (`till/cart.ts`).
+#:
+#: What is *stored* is derived from what the pipeline itself found
+#: (`accept._authorised_kind`), never from what arrives here - this validation
+#: only keeps the wire honest about what the till believes it is asking for.
 OVERRIDE_KINDS = (
     "over_cap_discount",
     "credit_note",

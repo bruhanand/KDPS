@@ -18,7 +18,7 @@ import {
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
-import { isShared, whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
+import { whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
 import type { Ask, Authorisation, AuthorisationKind } from "../../till/pin";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
@@ -113,9 +113,27 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Open when a manager is being asked for their PIN, carrying exactly what
    *  they are being shown - which is also what their approval will cover. */
   const [asking, setAsking] = useState<Ask[] | null>(null);
+  /**
+   * Wrong PINs at this counter, and when the pause they earned runs out.
+   *
+   * Held here rather than inside the modal, which is the whole point: a count
+   * that lived in the modal would be cleared by closing it, and closing it is
+   * one click - so three tries per half minute would become three tries per
+   * click, which is no limit at all. It is still only a speed bump; the hash is
+   * on this device by design (grill Q1), so what it buys is somebody guessing
+   * having to stand at the counter visibly doing nothing.
+   */
+  const [wrongPins, setWrongPins] = useState(0);
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
+
+  // The pause runs down on its own, whether or not the modal is open.
+  useEffect(() => {
+    if (wrongPins < WRONG_PINS_BEFORE_A_PAUSE) return;
+    const timer = setTimeout(() => setWrongPins(0), PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [wrongPins]);
 
   const today = useMemo(() => tillToday(), []);
   const bill = useMemo(
@@ -365,12 +383,15 @@ function Counter({ storeName }: { storeName?: string }) {
         <ManagerPin
           managers={world.managers}
           asks={asking}
+          wrong={wrongPins}
+          onWrong={() => setWrongPins((n) => n + 1)}
           onClose={() => {
             setAsking(null);
             scan.focus();
           }}
           onAuthorised={(authorisation) => {
             setCart((current) => ({ ...current, authorisation }));
+            setWrongPins(0);
             setAsking(null);
             setNote(`${authorisation.name} approved what this bill needed approving.`);
             scan.focus();
@@ -1176,18 +1197,24 @@ const KIND_WORDS: Record<AuthorisationKind, string> = {
 function ManagerPin({
   managers,
   asks,
+  wrong,
+  onWrong,
   onClose,
   onAuthorised,
 }: {
   managers: TillManager[];
   asks: Ask[];
+  /** Wrong PINs so far at this counter - held by the screen, not by this modal,
+   *  because a modal's own count is cleared by closing it, and closing it is one
+   *  click. See `Counter`. */
+  wrong: number;
+  onWrong: () => void;
   onClose: () => void;
   onAuthorised: (authorisation: Authorisation) => void;
 }) {
   const [pin, setPin] = useState("");
   const [checking, setChecking] = useState(false);
   const [refused, setRefused] = useState("");
-  const [wrong, setWrong] = useState(0);
   const box = useRef<HTMLInputElement>(null);
   const waiting = wrong >= WRONG_PINS_BEFORE_A_PAUSE;
 
@@ -1195,39 +1222,28 @@ function ManagerPin({
     box.current?.focus();
   }, []);
 
-  // The pause after a run of wrong PINs. Four digits is a small space, and this
-  // modal is on a machine anybody in the shop can reach while the cashier is
-  // looking at a customer. It is a speed bump rather than a lock: the hash is on
-  // this device by design (grill Q1), so what this buys is the person guessing
-  // having to stand there visibly doing nothing.
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = setTimeout(() => setWrong(0), PAUSE_MS);
-    return () => clearTimeout(timer);
-  }, [waiting]);
-
   async function check() {
     if (checking || waiting || !pin) return;
     setChecking(true);
     setRefused("");
     try {
-      const authorisation = await whoAuthorised(managers, pin, asks);
-      if (!authorisation) {
+      const attempt = await whoAuthorised(managers, pin, asks);
+      if (!attempt.authorisation) {
         // A wrong PIN and a PIN belonging to a manager of another store are the
         // same answer here, and telling them apart would be telling whoever is
         // standing there which. A *shared* PIN is not - it is a thing an
         // administrator has to fix, and no amount of retrying will help.
         setRefused(
-          (await isShared(managers, pin))
+          attempt.matched > 1
             ? "More than one manager here uses that PIN, so the bill could not say which of them approved it. One of them has to change theirs."
             : "That is not a manager's PIN for this store.",
         );
-        setWrong((n) => n + 1);
+        onWrong();
         setPin("");
         box.current?.focus();
         return;
       }
-      onAuthorised(authorisation);
+      onAuthorised(attempt.authorisation);
     } finally {
       setChecking(false);
     }

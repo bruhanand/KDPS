@@ -14,7 +14,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   covers,
-  isShared,
   kindsOf,
   verifyPin,
   whoAuthorised,
@@ -93,9 +92,9 @@ describe("who authorised it", () => {
   it("names the manager whose PIN it is, and exactly what they were shown", async () => {
     const at = new Date("2026-07-31T09:15:00Z");
 
-    const authorisation = await whoAuthorised(managers, "190277", [discount("l1", 20000)], at);
+    const attempt = await whoAuthorised(managers, "190277", [discount("l1", 20000)], at);
 
-    expect(authorisation).toEqual({
+    expect(attempt.authorisation).toEqual({
       user_id: 9,
       name: "P. Sinha",
       asks: [discount("l1", 20000)],
@@ -108,31 +107,36 @@ describe("who authorised it", () => {
     // holding a reference into it would quietly agree to whatever it became.
     const asks = [discount("l1", 20000)];
 
-    const authorisation = await whoAuthorised(managers, "4813", asks);
+    const attempt = await whoAuthorised(managers, "4813", asks);
     asks[0].paise = 2000000;
 
-    expect(authorisation?.asks[0].paise).toBe(20000);
+    expect(attempt.authorisation?.asks[0].paise).toBe(20000);
   });
 
   it("answers nothing for a PIN belonging to nobody on this counter", async () => {
-    expect(await whoAuthorised(managers, "0000", [note("CRN/9", 50000)])).toBeNull();
+    const attempt = await whoAuthorised(managers, "0000", [note("CRN/9", 50000)]);
+
+    expect(attempt).toEqual({ authorisation: null, matched: 0 });
   });
 
   it("answers nothing when the counter knows no managers at all", async () => {
     // The seeded state today: no store role reaches the rung, so the list is
     // empty until an administrator grants it. An empty list authorises nothing.
-    expect(await whoAuthorised([], "4813", [note("CRN/9", 50000)])).toBeNull();
+    const attempt = await whoAuthorised([], "4813", [note("CRN/9", 50000)]);
+
+    expect(attempt).toEqual({ authorisation: null, matched: 0 });
   });
 
-  it("authorises nobody when two managers share a PIN", async () => {
+  it("authorises nobody when two managers share a PIN, and says how many", async () => {
     // Four digits is a small space. "The first one that matches" would put one
     // manager's name on a bill the other one approved, with nothing afterwards
     // able to tell - so an ambiguous PIN is refused and said out loud.
     const twin = { ...SINHA, user_id: 11, name: "S. Das", till_pin_hash: KUMAR.till_pin_hash };
 
-    expect(await whoAuthorised([KUMAR, twin], "4813", [discount("l1", 100)])).toBeNull();
-    expect(await isShared([KUMAR, twin], "4813")).toBe(true);
-    expect(await isShared([KUMAR, twin], "190277")).toBe(false);
+    const attempt = await whoAuthorised([KUMAR, twin], "4813", [discount("l1", 100)]);
+
+    expect(attempt).toEqual({ authorisation: null, matched: 2 });
+    expect((await whoAuthorised([KUMAR, twin], "190277", [])).matched).toBe(0);
   });
 });
 

@@ -137,38 +137,38 @@ export async function verifyPin(manager: TillManager, pin: string): Promise<bool
  * counter is told to have one of them changed. Every manager is checked either
  * way; there is no early exit to time, either.
  */
+export interface PinAttempt {
+  /** Null unless exactly one manager owns this PIN. */
+  authorisation: Authorisation | null;
+  /** How many of this counter's managers own it. Two is a thing to say out loud
+   *  - "wrong PIN" would send a manager away to keep trying something that can
+   *  never work - and it is carried out of here rather than asked for again,
+   *  because asking again means deriving every hash a second time. */
+  matched: number;
+}
+
 export async function whoAuthorised(
   managers: TillManager[],
   pin: string,
   asks: Ask[],
   now: Date = new Date(),
-): Promise<Authorisation | null> {
+): Promise<PinAttempt> {
   const matched: TillManager[] = [];
   for (const manager of managers) {
     if (await verifyPin(manager, pin)) matched.push(manager);
   }
-  if (matched.length !== 1) return null;
+  if (matched.length !== 1) return { authorisation: null, matched: matched.length };
   return {
-    user_id: matched[0].user_id,
-    name: matched[0].name,
-    // Copied, not referenced: what was on the screen at this moment is the whole
-    // of what this authorisation means, and the cart goes on changing.
-    asks: asks.map((ask) => ({ ...ask })),
-    at: now.toISOString(),
+    authorisation: {
+      user_id: matched[0].user_id,
+      name: matched[0].name,
+      // Copied, not referenced: what was on the screen at this moment is the
+      // whole of what this authorisation means, and the cart goes on changing.
+      asks: asks.map((ask) => ({ ...ask })),
+      at: now.toISOString(),
+    },
+    matched: 1,
   };
-}
-
-/** Do two or more of this counter's managers share this PIN?
- *
- *  Asked only after `whoAuthorised` has answered nothing, so the modal can say
- *  which of the two things went wrong. Telling them apart is worth it: "wrong
- *  PIN" sends a manager away to try again at something that will never work. */
-export async function isShared(managers: TillManager[], pin: string): Promise<boolean> {
-  let matches = 0;
-  for (const manager of managers) {
-    if (await verifyPin(manager, pin)) matches += 1;
-  }
-  return matches > 1;
 }
 
 interface ParsedHash {

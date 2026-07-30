@@ -536,6 +536,20 @@ def test_a_kind_nothing_recognises_is_refused(counter):
     assert not Sale.objects.exists()
 
 
+def test_what_was_authorised_is_what_the_server_found_not_what_the_till_said(counter):
+    """The daily check groups on this field, and the till is the party the
+    override constrains - so a bill cannot file an over-cap discount under
+    "credit_note" and have neither counted honestly."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "credit_note"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount"
+
+
 def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
     _shelf(counter["store"], 3)
 
