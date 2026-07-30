@@ -181,6 +181,57 @@ def test_no_cost_or_value_field_reaches_the_wire(rig):
 
 
 @pytest.mark.django_db
+def test_a_result_names_the_piece_well_enough_to_ask_for_it(rig):
+    """ "Request this" has to build a stock-request line, and a line needs a
+    barcode. So the innermost entry is one SKU at one store — its colour and its
+    tag included — rather than a size's colours summed into a number nobody can
+    act on."""
+    resp = _get(rig["asker"], q="CH8801")
+
+    size_l = next(s for s in resp.data["results"][0]["sizes"] if s["size"] == "L")
+    at_warehouse = next(s for s in size_l["stores"] if s["store"] == "AV-WH")
+    assert at_warehouse["sku_code"] == "AV-CH-L-WH"
+    assert at_warehouse["color"] == "Blue"
+    assert at_warehouse["store_name"] == "Availability Warehouse"
+    assert at_warehouse["qty"] == 7
+
+
+@pytest.mark.django_db
+def test_two_colours_of_one_size_stay_two_askable_rows(rig):
+    """A customer wants the navy one. Folding the colours of a size together
+    would read tidier and leave the counter unable to say which piece."""
+    StockOnHand.objects.create(
+        store=rig["warehouse"],
+        sku_code="AV-CH-L-WH-RED",
+        design="CH8801",
+        color="Red",
+        size="L",
+        brand="AvBrand",
+        season="SS26",
+        item="Chinos",
+        hsn="6203",
+        net_qty=2,
+        net_value_paise=240000,
+    )
+    Sku.objects.create(
+        barcode="AV-CH-L-WH-RED",
+        design="CH8801",
+        color="Red",
+        size="L",
+        brand="AvBrand",
+        item="Chinos",
+        hsn="6203",
+        mrp_paise=249900,
+    )
+
+    resp = _get(rig["asker"], q="CH8801")
+
+    size_l = next(s for s in resp.data["results"][0]["sizes"] if s["size"] == "L")
+    at_warehouse = [s for s in size_l["stores"] if s["store"] == "AV-WH"]
+    assert {(s["color"], s["qty"]) for s in at_warehouse} == {("Blue", 7), ("Red", 2)}
+
+
+@pytest.mark.django_db
 def test_the_switcher_cannot_narrow_the_answer_away(rig):
     """A unit picked in the top bar filters what you are looking at; it must not
     filter this. An HO person standing in AV-A still needs the network's answer,

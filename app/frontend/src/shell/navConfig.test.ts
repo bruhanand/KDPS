@@ -274,6 +274,10 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     expect(fold?.kind === "fold" && fold.fold.to).toBe("/inventory");
     expect(fold?.kind === "fold" && fold.tabs.map((t) => t.label)).toEqual([
       "Stock on Hand",
+      // Cross-store availability (#175) is Stock's tab, and the fold is a store
+      // person's whole Stock section - leaving it off would put the screen out
+      // of reach of the very people it was built for.
+      "Search Across Stores",
       "Damage & Quarantine",
       "Count & Adjust",
       "Return to Brand",
@@ -285,11 +289,16 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     // codes, so revoking one takes its tab and nothing else.
     const { stock_count: _noCount, ...withoutCount } = STORE_CAPS;
     expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutCount)))
-      .map((t) => t.label)).toEqual(["Stock on Hand", "Damage & Quarantine", "Return to Brand"]);
+      .map((t) => t.label)).toEqual([
+        "Stock on Hand",
+        "Search Across Stores",
+        "Damage & Quarantine",
+        "Return to Brand",
+      ]);
 
     const { return_to_brand: _noRtv, ...withoutRtv } = STORE_CAPS;
     expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutRtv)))
-      .map((t) => t.label)).toEqual(["Stock on Hand", "Count & Adjust"]);
+      .map((t) => t.label)).toEqual(["Stock on Hand", "Search Across Stores", "Count & Adjust"]);
 
     // Damage & Quarantine is Return to Brand's line onto Stock's screen, so it
     // needs both - the same pair clicking the line and landing on the URL needs.

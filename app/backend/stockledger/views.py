@@ -340,8 +340,11 @@ class StockAvailabilityView(APIView):
     time, never promised a piece. Asking for the stock is a separate act — a
     stock request, which walks its own approval route.
 
-    Grouped design × size × store rather than row per SKU, because that is the
-    question being asked out loud: "who has this shirt in L?"
+    Nested design → size → the places holding it, because that is the question
+    being asked out loud: "who has this shirt in L?" The innermost entry is one
+    SKU at one store, so it names its colour and its barcode. Folding the colours
+    of a size together would read tidier and be useless: the customer wants the
+    navy one, and "Request this" has to be able to say which piece it means.
     """
 
     permission_classes = [require_section("stock", CAP_VIEW)]
@@ -381,10 +384,21 @@ class StockAvailabilityView(APIView):
         truncated = len(designs) > self.MAX_DESIGNS
         rows = (
             qs.filter(design__in=designs[: self.MAX_DESIGNS])
-            .values("design", "brand", "item", "size", "store__code", "store__name")
+            .values(
+                "design",
+                "brand",
+                "item",
+                "size",
+                "color",
+                "sku_code",
+                "hsn",
+                "season",
+                "store__code",
+                "store__name",
+            )
             .annotate(qty=Sum("net_qty"))
             .filter(qty__gt=0)
-            .order_by("design", "size", "store__code")
+            .order_by("design", "size", "store__code", "color")
         )
         return Response({"results": self._nest(rows), "truncated": truncated})
 
@@ -411,34 +425,41 @@ class StockAvailabilityView(APIView):
 
     @staticmethod
     def _nest(rows: Any) -> list[dict[str, Any]]:
-        """Flat design × size × store rows folded into the shape the screen reads.
+        """Flat SKU × store rows folded into the shape the screen reads.
 
-        The rows arrive ordered by design, size then store code, so one pass
-        builds the nesting and the output keeps that order — the answer reads
-        the way a person scans it, smallest size first, and does not reshuffle
-        between two searches for the same thing.
+        The rows arrive ordered by design, size, store then colour, so one pass
+        builds the nesting and the output keeps that order — the answer reads the
+        way a person scans it and does not reshuffle between two searches for the
+        same thing. Looked up rather than trusted to be contiguous: the ordering
+        is a property of the queryset above, and a nesting that silently split a
+        design in two if it ever changed is not worth the line it saves.
         """
         results: list[dict[str, Any]] = []
         by_design: dict[str, dict[str, Any]] = {}
+        by_size: dict[tuple[str, str], dict[str, Any]] = {}
         for row in rows:
-            design = row["design"]
+            design, size = row["design"], row["size"]
             entry = by_design.get(design)
             if entry is None:
-                entry = {
+                entry = by_design[design] = {
                     "design": design,
                     "brand": row["brand"],
                     "item": row["item"],
                     "sizes": [],
                 }
-                by_design[design] = entry
                 results.append(entry)
-            sizes = entry["sizes"]
-            if not sizes or sizes[-1]["size"] != row["size"]:
-                sizes.append({"size": row["size"], "stores": []})
-            sizes[-1]["stores"].append(
+            group = by_size.get((design, size))
+            if group is None:
+                group = by_size[(design, size)] = {"size": size, "stores": []}
+                entry["sizes"].append(group)
+            group["stores"].append(
                 {
                     "store": row["store__code"],
                     "store_name": row["store__name"],
+                    "color": row["color"],
+                    "sku_code": row["sku_code"],
+                    "hsn": row["hsn"],
+                    "season": row["season"],
                     "qty": row["qty"],
                 }
             )

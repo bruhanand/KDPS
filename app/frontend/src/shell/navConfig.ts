@@ -221,6 +221,11 @@ export const SECTIONS: NavSectionDef[] = [
     layer: "ledgers",
     items: [
       { label: "Stock on Hand", to: "/stock" },
+      // The counter's question, not the back office's: "who has this in L?"
+      // (#175). It reads every store deliberately — a registered scoping
+      // exception — and carries quantities only, so it sits at the same `view`
+      // rung a store person already holds on this section.
+      { label: "Search Across Stores", to: "/stock/search" },
       { label: "Movement History", to: "/stock/history" },
       // Not a menu item — an ownership action reached from Stock on Hand.
       // Relabelling who owns stock is `stock: manage` on the server (#94).
@@ -536,6 +541,10 @@ export const INVENTORY_FOLD: NavFoldDef = {
   sections: ["stock", "stock_count", "return_to_brand"],
   tabs: [
     { slug: "stock", label: "Stock on Hand", entry: "/stock" },
+    // The store persona's only way to this screen until the Dashboard's
+    // quick-actions row lands (#174): the fold *is* their Stock section, so a
+    // tab left off it is unreachable for exactly the people it was built for.
+    { slug: "search", label: "Search Across Stores", entry: "/stock/search" },
     { slug: "damage", label: "Damage & Quarantine", entry: "/stock?view=quarantine" },
     { slug: "count", label: "Count & Adjust", entry: "/stock-count" },
     { slug: "returns", label: "Return to Brand", entry: "/return-to-brand" },

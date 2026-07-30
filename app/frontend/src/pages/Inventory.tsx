@@ -4,7 +4,7 @@
  * Stock, Stock Count and Return to Brand used to be three headings in the
  * sidebar. D10 folded them: "no subsections in the sidebar, ever - anything
  * that needs dividing divides inside the page, as tabs." So this is one URL
- * with four tabs, and each tab is an *existing* screen rendered unchanged.
+ * with five tabs, and each tab is an *existing* screen rendered unchanged.
  *
  * It is presentation and nothing else. No section code moved, no permission key
  * changed, and each tab is gated by the very menu entry it draws - the manifest
@@ -24,6 +24,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { HostedPageContext } from "../components/PageHeader";
 import { INVENTORY_FOLD, foldTabsFor, resolveFoldTab } from "../shell/navConfig";
+import CrossStoreSearch from "./CrossStoreSearch";
 import { RTVListPage } from "./OutboundRTV";
 import { StockCountListPage } from "./StockCount";
 import StockOnHand from "./StockOnHand";
@@ -34,6 +35,7 @@ import "./Inventory.css";
  *  offers and this map has no answer for is a white screen. */
 export const PANELS: Record<string, () => ReactElement> = {
   stock: () => <StockOnHand view="stock" />,
+  search: () => <CrossStoreSearch />,
   damage: () => <StockOnHand view="quarantine" />,
   count: () => <StockCountListPage />,
   returns: () => <RTVListPage />,
