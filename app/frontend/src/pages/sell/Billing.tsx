@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { AlertTriangle, Gift, Printer, X } from "lucide-react";
 
@@ -517,7 +517,8 @@ function Lines({
         </thead>
         <tbody>
           {lines.map((line) => (
-            <tr key={line.key} data-testid={`bill-line-${line.line_no}`}>
+            <Fragment key={line.key}>
+            <tr data-testid={`bill-line-${line.line_no}`}>
               <td>
                 {line.item}
                 <br />
@@ -586,6 +587,29 @@ function Lines({
                 </button>
               </td>
             </tr>
+            {/* The offers on their own row, spanning the grid.
+                They sat in the Disc column at first, which is sixty pixels
+                wide - it holds "₹1,049.70" and nothing longer, so a rule's
+                *name* broke to one syllable a line and stood up as a tall thin
+                column. A rule is the one thing on this row a cashier has to
+                read aloud to a customer who asks why the shirt is cheaper, so
+                it gets the width to be read in. */}
+            {line.offer_credits.length > 0 && (
+              <tr className="bill-offer-row" data-testid={`bill-offers-${line.line_no}`}>
+                <td colSpan={COLUMN_WIDTHS.length}>
+                  {line.offer_credits.map((credit) => (
+                    <span
+                      className="bill-offer"
+                      data-testid={`bill-offer-${line.line_no}-${credit.offer_id}`}
+                      key={credit.offer_id}
+                    >
+                      {credit.offer_name || "Offer"} · <Money paise={credit.saved_paise} />
+                    </span>
+                  ))}
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -681,21 +705,6 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
         placeholder="0"
         onChange={(paise) => onEdit(line.key, { disc_paise: paise })}
       />
-      {/* One chip per rule, each with the part *it* took off. A brand offer and
-          a storewide add-on on the same line are two decisions by two people,
-          and rolling them into one chip quoted the brand's offer as half again
-          as generous as it is - which is what the counter then tells the
-          customer. */}
-      {line.offer_credits.map((credit) => (
-        <span
-          className="bill-offer"
-          data-testid={`bill-offer-${line.line_no}-${credit.offer_id}`}
-          key={credit.offer_id}
-          title={credit.offer_name}
-        >
-          {credit.offer_name || "Offer"} · <Money paise={credit.saved_paise} />
-        </span>
-      ))}
       {line.over_cap && (
         <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
           over the cap
