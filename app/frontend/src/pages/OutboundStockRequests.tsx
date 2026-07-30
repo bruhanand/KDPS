@@ -13,7 +13,7 @@ import {
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
-import { Money } from "../lib/format";
+import { Money, formatDateTime } from "../lib/format";
 import { canWriteTransfer } from "../lib/outbound-rbac";
 import { destinationOptions, type LocationT } from "../lib/transfer-locations";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
@@ -81,6 +81,8 @@ interface StockRequestT {
   fulfilling_store_code: string;
   fulfilling_store_name: string;
   notes: string;
+  source: string;
+  expected_arrival_at: string | null;
   status: string;
   status_display: string;
   decline_reason: string;
@@ -166,6 +168,7 @@ export function StockRequestListPage() {
                 <th className="num">Lines</th>
                 <th className="num">Total qty</th>
                 <th>Status</th>
+                <th>Expected</th>
                 <th>Date</th>
               </tr>
             </thead>
@@ -184,6 +187,9 @@ export function StockRequestListPage() {
                     <td className="num">{r.lines.length}</td>
                     <td className="num">{totalQty}</td>
                     <td><StatusPill status={r.status} label={r.status_display} /></td>
+                    <td data-testid={`sr-expected-${r.id}`}>
+                      {r.expected_arrival_at ? formatDateTime(r.expected_arrival_at) : "—"}
+                    </td>
                     <td>{fmtDate(r.created_at)}</td>
                   </tr>
                 );
@@ -606,6 +612,11 @@ export function StockRequestDetailPage() {
           <p className="lead">{r.requesting_store_name} → {r.fulfilling_store_name}{r.notes ? ` · ${r.notes}` : ""}</p>
         </div>
         <div className="spacer" />
+        {r.source === "cross_store_search" && (
+          <span className="chip chip-blue" data-testid="sr-source">
+            From store search
+          </span>
+        )}
         <StatusPill status={r.status} label={r.status_display} />
       </div>
 
@@ -632,6 +643,15 @@ export function StockRequestDetailPage() {
           <p className="eyebrow">Date</p>
           <h3 className="h3">{fmtDate(r.created_at)}</h3>
         </div>
+        {r.expected_arrival_at && (
+          // The counter quoted this to a person who is coming back to ask about
+          // it. A time nobody can read back is a time that was never carried.
+          <div className="card section-card" data-testid="sr-expected-arrival">
+            <p className="eyebrow">Customer told</p>
+            <h3 className="h3">{formatDateTime(r.expected_arrival_at)}</h3>
+            <p className="lead">No hold was placed on the piece.</p>
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 18 }}>

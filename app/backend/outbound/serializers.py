@@ -1347,6 +1347,8 @@ class StockRequestReadSerializer(ApprovedDocumentSerializer):
             "fulfilling_store_code",
             "fulfilling_store_name",
             "notes",
+            "source",
+            "expected_arrival_at",
             "status",
             "status_display",
             "decline_reason",
@@ -1364,15 +1366,30 @@ class StockRequestReadSerializer(ApprovedDocumentSerializer):
 
 
 class StockRequestWriteSerializer(serializers.ModelSerializer):
-    """Raises the ask and puts it straight in the fulfilling store's inbox —
-    born waiting, same as a transfer (#137) and every other maker-checker
-    family: a maker cannot forget to ask."""
+    """Raises the ask and puts it straight in the asking store's inbox — born
+    waiting, same as a transfer (#137) and every other maker-checker family: a
+    maker cannot forget to ask.
+
+    What it deliberately does **not** validate is whether the fulfilling store
+    can actually supply this (#175, D10 §3 locked): the named store is a
+    suggestion the humans made, and a system that refused the ask because the
+    projection says nought would be refusing on a number the shop floor is
+    routinely ahead of. Possibility is the approvers' call — they have the phone
+    call and the shelf; the route in front of this document is where it is made.
+    """
 
     lines = StockRequestLineWriteSerializer(many=True)
 
     class Meta:
         model = StockRequest
-        fields = ["requesting_store", "fulfilling_store", "notes", "lines"]
+        fields = [
+            "requesting_store",
+            "fulfilling_store",
+            "notes",
+            "source",
+            "expected_arrival_at",
+            "lines",
+        ]
 
     def validate(self, data):
         if not data.get("lines"):

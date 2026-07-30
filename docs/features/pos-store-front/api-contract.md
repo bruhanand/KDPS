@@ -98,22 +98,30 @@ Business logic (PUT):
 
 Auth: `require_section("stock", CAP_VIEW)`.
 **Registered scoping exception:** this endpoint deliberately reads stock across ALL stores (read-only, quantities and sizes only, no cost, no value) - the cross-store search ruling. The exception is registered with that reason beside the scope helper, same pattern as registered role lists.
+Only the **store** axis is suspended. A brand-scoped caller (a brand manager) stays narrowed to the brands they are entitled to: the customer-at-the-counter argument is a store's, and it says nothing about letting one brand's representative read another brand's network position.
 
 Query: `q` (barcode, design no., or name; required, min 3 chars), `brand`, `size` (optional).
-Response 200: `{"results": [{"design": "X123", "brand": "MUFTI", "item": "Shirt", "sizes": [{"size": "M", "stores": [{"store": "RAN", "qty": 2}]}]}], "truncated": false}` (cap 200 designs, `truncated` flag - same convention as StockOnHandView).
+Response 200: `{"results": [{"design": "X123", "brand": "MUFTI", "item": "Shirt", "sizes": [{"size": "M", "stores": [{"store": "RAN", "store_name": "Ranchi Warehouse", "color": "Navy", "sku_code": "8901234567890", "hsn": "6205", "season": "SS26", "qty": 2}]}]}], "truncated": false}` (cap 200 styles, `truncated` flag - same convention as StockOnHandView).
+
+**As built (30 Jul 2026), two refinements to the shape above.** Both were forced by the screen and are recorded here rather than left to diverge:
+
+- **The innermost entry is one SKU at one store, not a size's total** - it names its `color` and its `sku_code`. "Request this" builds a `StockRequestLine`, and a line needs a barcode; a size whose colours were summed together reads tidier and leaves the counter unable to say which piece the customer wants. Two colours of one size at one store are therefore two entries with the same `store`.
+- **Styles are keyed on brand + design, not design alone.** A design number is a brand's own numbering, so two brands may both call something "1001"; grouping on the bare style code would head one card with the wrong brand and total another brand's pieces into it. The 200 cap counts brand+design pairs.
 
 Business logic:
 
 1. Gate stock>=view.
 2. Resolve `q` against Sku (barcode exact, design prefix, name icontains).
    -> under 3 chars -> `VALIDATION` (400)
-3. Aggregate `StockOnHand(net_qty > 0)` across all stores, grouped design x size x store.
+3. Aggregate `StockOnHand(net_qty > 0)` across all stores (active stores only), grouped brand x design x size x store x SKU.
 4. Return with truncation flag; log nothing sensitive (no cost fields exist in the response by construction).
 
 | code | HTTP | trigger |
 |---|---|---|
 | VALIDATION | 400 | q missing/too short |
 | SCOPE_DENIED | 403 | caller lacks stock view |
+
+*As built:* the `SCOPE_DENIED` **code** is not emitted - the capability gate is `require_section`, which answers with DRF's `{"detail": ...}` at 403, exactly as the sibling `/api/masters/store-targets` gate does. The `{"error", "code"}` shape is carried where the contract's code table earns its keep (the till branching a queued write on it); unifying the two capability gates is one change across both endpoints, not this slice's.
 
 ### POST `/api/outbound/stock-requests` (CHANGED, updated in place)
 

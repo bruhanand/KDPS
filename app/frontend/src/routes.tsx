@@ -29,6 +29,7 @@ import { AlertsPage } from "./pages/Alerts";
 import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
+import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
 
@@ -85,6 +86,7 @@ const BUILT: Screen[] = [
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
+  { id: "stock-search", path: "/stock/search", element: <CrossStoreSearch /> },
   { id: "stock-history", path: "/stock/history", element: <StockLedger /> },
   { id: "vflip-list", path: "/stock/vflips", element: <VFlipListPage /> },
   { id: "vflip-new", path: "/stock/vflips/new", element: <VFlipNewPage /> },

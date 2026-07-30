@@ -258,13 +258,28 @@ def scope_by_store_or_brand(
     header too.
     """
     if is_brand_scoped(user):
-        return _by_entitled_brands(qs, user, brand_field)
+        return scope_by_entitled_brands(qs, user, brand_field)
     return scope_by_store(qs, user, store_field)
 
 
-def _by_entitled_brands(qs: Any, user: Any, brand_field: str) -> Any:
-    """Rows whose brand is one this person is entitled to, switcher ignored."""
+def scope_by_entitled_brands(qs: Any, user: Any, brand_field: str = "brand") -> Any:
+    """Rows whose brand is one this person is entitled to, switcher ignored.
+
+    Public because the cross-store availability search (#175) needs this axis on
+    its own: it suspends the *store* boundary by registered exception and must
+    keep the brand one, and a brand manager entitled to two brands is answering
+    a question about those brands wherever the pieces happen to sit.
+
+    Three answers, and the middle one is why the None branch is spelled out:
+    a caller who is not brand-scoped has no brand boundary and keeps every row,
+    a brand-scoped one with no brands assigned gets none, and everyone else gets
+    theirs. The two gates above only ever reach here down their brand-scoped
+    branch, so they cannot tell "no boundary" from "an empty one" — a general
+    helper must.
+    """
     names = visible_brand_names(user)
+    if names is None:
+        return qs
     if not names:
         return qs.none()
     match = Q()
@@ -283,7 +298,7 @@ def scope_by_entitlement_or_brand(
     entitled to two brands may decide either one's return whichever is on screen.
     """
     if is_brand_scoped(user):
-        return _by_entitled_brands(qs, user, brand_field)
+        return scope_by_entitled_brands(qs, user, brand_field)
     return scope_by_entitlement(qs, user, store_field)
 
 
