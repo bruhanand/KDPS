@@ -41,8 +41,20 @@ def seed_route(apps, schema_editor):
 
 
 def unseed_route(apps, schema_editor):
+    """Take the route away again — but only while no request has walked it.
+
+    ``Approval.route`` is PROTECT, deliberately: a route a request has walked is
+    part of that request's audit trail. So once anybody has approved anything
+    through this chain the row stays, and the rollback is a no-op rather than
+    either an exception (which would strand the whole migration) or a cascade
+    that quietly rewrites who approved what. The forward migration is
+    ``get_or_create``, so a re-apply finds it exactly where it left it.
+    """
     ApprovalRoute = apps.get_model("approvals", "ApprovalRoute")
-    ApprovalRoute.objects.filter(kind="stock_request", steps=STEPS).delete()
+    Approval = apps.get_model("approvals", "Approval")
+    for route in ApprovalRoute.objects.filter(kind="stock_request", steps=STEPS):
+        if not Approval.objects.filter(route=route).exists():
+            route.delete()
 
 
 class Migration(migrations.Migration):
