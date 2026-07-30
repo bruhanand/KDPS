@@ -5,6 +5,11 @@
    the colour is a solid behind something, since `--navy` inverts to a light
    *text* colour in dark. */
 
+/* One vertical rhythm for the blocks that stack down the page. 18px is what
+   the quick-action row and the two-column layout below already use; the Today
+   card carried nothing, so it butted onto whatever followed it. */
+.dash-block { margin-bottom: 18px; }
+
 /* Today: four tiles, not the three-wide network grid. */
 .today-grid { grid-template-columns: repeat(4, 1fr); }
 .collect-row {
@@ -72,7 +77,6 @@
 .spark-tick { font-size: 10.5px; color: var(--caption); white-space: nowrap; padding-bottom: 8px; }
 
 /* The manager row. */
-.manager-row { margin-bottom: 18px; }
 .mtd-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .mtd-figure { font-size: 27px; font-weight: 700; color: var(--navy); letter-spacing: -0.3px; }
 .mtd-of { font-size: 13.5px; color: var(--muted); }
