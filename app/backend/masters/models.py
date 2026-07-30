@@ -226,6 +226,11 @@ class GstSlab(TimeStampedModel):
 
     class Meta:
         ordering = ["-effective_from"]
+        # No `updated_at` index here, unlike `Sku` and `Cohort`, and `db-design.md`
+        # asked for one: the till's dataset sends every slab whole on every response
+        # rather than deltaing a table with a handful of rows in it, so nothing
+        # filters this column. An index nobody queries is a false statement about how
+        # a table is read.
 
     def __str__(self) -> str:
         return f"{self.name} (from {self.effective_from})"
@@ -265,6 +270,11 @@ class Sku(TimeStampedModel):
     item = models.CharField(max_length=120, blank=True, default="")
     hsn = models.CharField(max_length=24, blank=True, default="")
     mrp_paise = MoneyField(null=True, blank=True)
+    no_discount = models.BooleanField(
+        default=False,
+        help_text="The AMM/NOD flag: this piece is never discounted, by any offer "
+        "or by any cashier. Rides down to the till in its dataset (B4, D5 Q3).",
+    )
     first_doc_number = models.CharField(max_length=128, blank=True, default="")
     is_active = models.BooleanField(default=True)
 
@@ -273,6 +283,14 @@ class Sku(TimeStampedModel):
         indexes = [
             models.Index(fields=["brand"], name="masters_sku_brand_idx"),
             models.Index(fields=["design"], name="masters_sku_design_idx"),
+            # The till's dataset asks each synced master "what changed since this
+            # timestamp" (#179), and `updated_at` is already the honest answer -
+            # `TimeStampedModel` has been stamping it since these tables existed.
+            # So the watermark the db-design calls a new column is a new *index*
+            # on an old one, and there is deliberately no backfill: the values in
+            # there are real edit times, and setting them all to migration time
+            # would throw away the only history a delta can read.
+            models.Index(fields=["updated_at"], name="masters_sku_synced_idx"),
         ]
 
     def __str__(self) -> str:
@@ -302,7 +320,11 @@ class Cohort(TimeStampedModel):
                 name="ck_cohort_unit_cost_le_mrp",
             ),
         ]
-        indexes = [models.Index(fields=["season"], name="masters_cohort_season_idx")]
+        indexes = [
+            models.Index(fields=["season"], name="masters_cohort_season_idx"),
+            # The till's dataset watermark (#179) - see `Sku.Meta`.
+            models.Index(fields=["updated_at"], name="masters_cohort_synced_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.barcode}@{self.season}"

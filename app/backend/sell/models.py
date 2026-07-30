@@ -22,7 +22,10 @@ Two shapes here are worth reading before the rest:
 
 from __future__ import annotations
 
+from datetime import date
+
 from django.db import models
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from core.base import TimeStampedModel
@@ -196,13 +199,49 @@ class CreditNote(Document):
     def remaining_paise(self) -> int:
         return int(self.value_paise or 0) - self.spent_paise
 
+    #: What `with_balance` annotates the balance as. Not `remaining_paise`, because
+    #: Django refuses to annotate over a property (there is no setter), and not a
+    #: name each caller invents, because then the balance would be spelled twice.
+    BALANCE = "remaining"
+
+    @classmethod
+    def with_balance(cls, rows: models.QuerySet[CreditNote]) -> models.QuerySet[CreditNote]:
+        """`rows` with each note's balance worked out in SQL rather than per note.
+
+        The same subtraction `remaining_paise` does, and the only other place it is
+        spelled: a *list* of notes (the till's dataset asks for every one this store
+        issued) must not pay a query per row for its balance, and the fix for that
+        must not be a second copy of the arithmetic somewhere else.
+
+        Read it off `note.remaining` (`CreditNote.BALANCE`) and hand it to
+        `status_at`, rather than reading `note.status`, which would go back to the
+        database for the balance the row already carries.
+        """
+        return rows.annotate(
+            **{
+                cls.BALANCE: models.F("value_paise")
+                - Coalesce(models.Sum("redemptions__amount_paise"), models.Value(0))
+            }
+        )
+
     @property
     def status(self) -> str:
+        return self.status_at(self.remaining_paise, timezone.localdate())
+
+    def status_at(self, remaining_paise: int, today: date) -> str:
+        """`status`, told its two inputs instead of fetching them.
+
+        The rule lives here and only here, but a *list* of notes must not pay a
+        query per note for its balance (the till's dataset asks for every open one
+        this store issued). So the caller that already has the balance in hand -
+        annotated by `with_balance` - and the day it is asking about hands both in,
+        and gets the same answer the property gives.
+        """
         if self.docstatus == DocStatus.CANCELLED:
             return self.Status.CANCELLED
-        if self.remaining_paise <= 0:
+        if remaining_paise <= 0:
             return self.Status.SPENT
-        if self.expires_on < timezone.localdate():
+        if self.expires_on < today:
             return self.Status.EXPIRED
         return self.Status.OPEN
 

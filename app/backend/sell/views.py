@@ -24,9 +24,10 @@ from rest_framework.views import APIView
 from core.refusals import first_message, refusal_body
 from masters.scoping import scope_by_store
 from sell.models import Sale, SaleLine
-from sell.permissions import CanReadOrBill, CanReadSales
+from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
 from sell.serializers import SaleReadSerializer, SaleRowSerializer, SaleWriteSerializer
 from sell.services.accept import AcceptError, accept_sale
+from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -105,6 +106,35 @@ class SaleListCreateView(APIView):
                 match |= Q(till_seq=int(doc))
             rows = rows.filter(match)
         return Response(SaleRowSerializer(rows[:SEARCH_LIMIT], many=True).data)
+
+
+class DatasetView(APIView):
+    """`GET /api/sell/dataset` - everything the counter has to know offline.
+
+    Gated at `sell: operate`, not `view`: this is not a report about selling, it is
+    the working copy a till bills from, and it carries the store's manager
+    override PIN hashes. Somebody who may read yesterday's bills has no use for it.
+
+    See `sell.services.dataset` for what is in it and why the cursor laps
+    backwards.
+
+    `TILL_SCOPE` is the one refusal that carries a code, and the till needs it to:
+    it means "this login will never be a till, a human must fix the account", which
+    is not something to retry. The capability refusal above it answers with DRF's
+    own `{"detail": ...}` at 403 - the same as every sibling `require_section` gate,
+    and the same as `/api/stock/availability` recorded when it shipped. Unifying the
+    two body shapes is one change across every gate in the project, not this
+    endpoint's to make alone.
+    """
+
+    permission_classes = [IsAuthenticated, CanRunTill]
+
+    def get(self, request: Request) -> Response:
+        try:
+            store = resolve_till_store(request.user)
+        except TillScopeError as exc:
+            return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
+        return Response(build_dataset(store, request.query_params.get("since") or ""))
 
 
 class SaleDetailView(APIView):
