@@ -1,0 +1,98 @@
+{
+  "name": "no-discount-piece-is-untouchable",
+  "note": "A no-discount piece takes neither the brand offer nor the storewide one; the piece beside it takes both.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 50,
+      "name": "Mufti flat 50",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "50.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 60,
+      "name": "Storewide extra 10",
+      "layer": "storewide",
+      "brand": "",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "10.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": true,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 199900,
+      "no_discount": true
+    },
+    {
+      "line_no": 2,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M2",
+      "barcode": "8922",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 99900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 0,
+        "offer_id": null,
+        "evidence": {}
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 54945,
+        "offer_id": 50,
+        "evidence": {
+          "offer_id": 50,
+          "offer_name": "Mufti flat 50",
+          "layer": "brand",
+          "saved_paise": 54945,
+          "beat": [],
+          "stack": [
+            {
+              "offer_id": 60,
+              "offer_name": "Storewide extra 10",
+              "layer": "storewide",
+              "saved_paise": 4995
+            }
+          ]
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 54945
+  }
+}

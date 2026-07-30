@@ -1,0 +1,119 @@
+{
+  "name": "qty-slabs-tie-on-priority",
+  "note": "Both rules give 1,799.40. The lower priority number wins; the loser is recorded as beaten on both lines.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 10,
+      "name": "Spykar buy-more ladder",
+      "layer": "brand",
+      "brand": "SPYKAR",
+      "trigger_type": "qty",
+      "trigger_config": {
+        "slabs": [
+          {
+            "min_qty": 1,
+            "percent": "20.00"
+          },
+          {
+            "min_qty": 2,
+            "percent": "30.00"
+          }
+        ]
+      },
+      "reward_type": "pct_off",
+      "reward_config": {},
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 20,
+      "name": "Spykar flat 30",
+      "layer": "brand",
+      "brand": "SPYKAR",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "30.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 50
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "SPYKAR",
+      "item": "Jeans",
+      "design": "SP1",
+      "barcode": "8911",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 299900,
+      "no_discount": false
+    },
+    {
+      "line_no": 2,
+      "brand": "SPYKAR",
+      "item": "Jeans",
+      "design": "SP2",
+      "barcode": "8912",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 299900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 89970,
+        "offer_id": 20,
+        "evidence": {
+          "offer_id": 20,
+          "offer_name": "Spykar flat 30",
+          "layer": "brand",
+          "saved_paise": 89970,
+          "beat": [
+            {
+              "offer_id": 10,
+              "offer_name": "Spykar buy-more ladder",
+              "saved_paise": 89970
+            }
+          ],
+          "stack": []
+        }
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 89970,
+        "offer_id": 20,
+        "evidence": {
+          "offer_id": 20,
+          "offer_name": "Spykar flat 30",
+          "layer": "brand",
+          "saved_paise": 89970,
+          "beat": [
+            {
+              "offer_id": 10,
+              "offer_name": "Spykar buy-more ladder",
+              "saved_paise": 89970
+            }
+          ],
+          "stack": []
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 179940
+  }
+}
