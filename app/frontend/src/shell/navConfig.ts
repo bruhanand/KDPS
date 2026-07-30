@@ -141,7 +141,10 @@ export const SECTIONS: NavSectionDef[] = [
     icon: ShoppingCart,
     layer: "store",
     items: [
-      { label: "Billing", to: "/sell", planned: true },
+      // The counter itself (#181). `operate` for the same reason Till & Sync
+      // carries it: this screen bills, and every endpoint behind it is gated at
+      // `sell: operate`.
+      { label: "Billing", to: "/sell", minCapability: "operate" },
       { label: "Return & Exchange", to: "/sell/returns", planned: true },
       { label: "Customers", to: "/sell/customers", planned: true },
       // The counter's own state: what it holds offline, and what it still owes

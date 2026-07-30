@@ -275,6 +275,16 @@ export class TillEngine {
     return bill;
   }
 
+  /** Remember who sold the last piece, so the next line defaults to them.
+   *
+   *  In the database rather than in a component's state because the default has
+   *  to survive a reload and a walk to another screen: the point of it is that a
+   *  busy counter accepts the salesman with no keystrokes at all (D10 §4), and a
+   *  default that resets whenever React remounts is a popup again. */
+  async rememberSalesman(salesmanId: number): Promise<void> {
+    await writeMeta(this.db, META.lastSalesman, salesmanId);
+  }
+
   private async bootstrapIfNewDay(): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     if ((await readMeta(this.db, META.bootstrapDay, "")) === today) return;

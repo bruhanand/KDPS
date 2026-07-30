@@ -89,9 +89,16 @@ export function dataset(over: Partial<DatasetPayload> = {}): DatasetPayload {
     credit_notes: [],
     salesmen: [],
     managers: [],
+    seasons: [],
+    policy: { manual_discount_cap_percent: "0.00" },
     deleted: { items: [], offers: [], credit_notes: [] },
     ...over,
   };
+}
+
+/** A season, with the master's own ordering. Lower `sort_order` is older. */
+export function season(code: string, sort_order: number, status = "open") {
+  return { code, name: `Season ${code}`, status, sort_order };
 }
 
 export function item(barcode: string, season = "FW25", mrp: number | null = 149900) {

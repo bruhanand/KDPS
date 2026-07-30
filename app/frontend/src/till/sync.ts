@@ -24,7 +24,12 @@ import type { TillDb } from "./db";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
 import { fastForwardTo } from "./numbering";
-import type { DatasetPayload, QueueHalt, RegisterPayload } from "./types";
+import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
+
+/** What the counter assumes before a server has told it otherwise: no keyed-in
+ *  discount at all without a manager. The strict end of the dial, because a
+ *  default that guessed generously would be a cap this file invented. */
+export const DEFAULT_POLICY: TillPolicy = { manual_discount_cap_percent: "0.00" };
 
 /** Slowest a failing queue will retry, and the plain interval it drains on
  *  anyway. A minute is the contract's number: fast enough that a shop with a
@@ -70,6 +75,7 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       db.salesmen,
       db.managers,
       db.gstSlabs,
+      db.seasons,
       db.meta,
       db.queue,
     ],
@@ -95,6 +101,17 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.managers.bulkPut(payload.managers);
       await db.gstSlabs.clear();
       await db.gstSlabs.bulkPut(payload.gst_slabs);
+      // Seasons and the policy arrived after the till spine did (#181), so a
+      // server that predates them - a rolling deploy is exactly that, for a few
+      // minutes - answers without the key. Absent means "this server has nothing
+      // to say", not "the master is empty": wiping it would drop scan resolution
+      // back to sorting names, where "FW25 before SS26" is true only by the
+      // accident of the alphabet, and the till would write a season onto the
+      // line that the server would never have chosen.
+      if (payload.seasons) {
+        await db.seasons.clear();
+        await db.seasons.bulkPut(payload.seasons);
+      }
 
       // A withdrawal names a barcode and takes every season of that piece with
       // it: a cohort is a record of a purchase and is never unmade, so the only
@@ -111,6 +128,7 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
         { key: META.store, value: payload.store },
+        { key: META.policy, value: payload.policy ?? DEFAULT_POLICY },
         { key: META.syncedAt, value: new Date().toISOString() },
       ]);
     },

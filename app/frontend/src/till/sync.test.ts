@@ -22,7 +22,7 @@ import {
   reconcileRegister,
   syncDown,
 } from "./sync";
-import { dataset, draft, fakeServer, freshTill, item, refuse, register } from "./testSupport";
+import { dataset, draft, fakeServer, freshTill, item, refuse, register, season } from "./testSupport";
 import type { QueueHalt } from "./types";
 
 let close = () => undefined as void;
@@ -57,6 +57,37 @@ describe("the dataset landing", () => {
     expect(await db.managers.count()).toBe(1);
     expect(await db.creditNotes.count()).toBe(1);
     expect(await readMeta(db, META.cursor, "")).toBe("2026-07-30T10:00:00.000Z");
+  });
+
+  it("lands the season master so the till can rank seasons the server's way", async () => {
+    const { db } = till();
+
+    await applyDataset(
+      db,
+      dataset({ seasons: [season("SS24", 1, "closed"), season("FW25", 2), season("SS26", 3)] }),
+    );
+
+    // The master's own ordering has to survive the trip, because that ordering
+    // is the whole reason the section is sent: `olderSeasonFirst` reads it.
+    expect(await db.seasons.count()).toBe(3);
+    expect(await db.seasons.get("SS24")).toMatchObject({ sort_order: 1, status: "closed" });
+    expect(await db.seasons.get("SS26")).toMatchObject({ sort_order: 3, status: "open" });
+  });
+
+  it("keeps the season master when a server too old to send one answers", async () => {
+    // A rolling deploy is exactly this for a few minutes: the new till talks to
+    // an instance that predates `seasons`. Absent means "nothing to say", not
+    // "the master is empty" - wiping it would drop scan resolution back to
+    // sorting names, where "FW25 before SS26" is true only by the alphabet, and
+    // the till would write a season the server would never have chosen.
+    const { db } = till();
+    await applyDataset(db, dataset({ seasons: [season("FW25", 2), season("SS26", 3)] }));
+
+    const old = dataset({});
+    delete (old as { seasons?: unknown }).seasons;
+    await applyDataset(db, old);
+
+    expect(await db.seasons.count()).toBe(2);
   });
 
   it("keeps the same piece in two seasons apart", async () => {

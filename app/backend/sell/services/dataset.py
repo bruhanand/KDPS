@@ -20,10 +20,11 @@ cost-shaped key or number, and that test is the belt to this braces.
 
 **Big sections are deltaed; small ones are sent whole.** Items and stock are
 20,000 rows and get a watermark. The store's own registration, its tax slabs, its
-salesmen and its manager PINs are a handful of rows each: a delta over five rows
-saves nothing and would need a deletion channel the contract does not give it, so
-they are replaced wholesale on every response. `deleted` therefore names exactly
-the three sections that can lose a row invisibly - items, offers, credit notes.
+salesmen, its manager PINs, the season master's ordering and the shop floor's
+money dials are a handful of rows each: a delta over five rows saves nothing and
+would need a deletion channel the contract does not give it, so they are replaced
+wholesale on every response. `deleted` therefore names exactly the three sections
+that can lose a row invisibly - items, offers, credit notes.
 
 **The cursor deliberately laps backwards, and even so it is not the whole
 guarantee.** `updated_at` is stamped when a row is written, not when its
@@ -55,9 +56,9 @@ from accounts.models import ScopeType, User
 from accounts.permissions import user_can
 from accounts.sections import CAP_APPROVE
 from core.documents import DocStatus
-from masters.models import Cohort, GstSlab, Sku, Store
+from masters.models import Cohort, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
-from sell.models import CreditNote, CreditNoteRedemption, Salesman
+from sell.models import CreditNote, CreditNoteRedemption, Salesman, SellPolicy
 from stockledger.models import StockOnHand
 
 #: How far behind the clock the returned cursor sits. See the module docstring for
@@ -185,6 +186,8 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "credit_notes": notes_open,
         "salesmen": _salesmen(sync),
         "managers": _managers(store),
+        "seasons": _seasons(),
+        "policy": _policy(),
         "deleted": {
             "items": _withdrawn_items(sync),
             "offers": [],
@@ -378,6 +381,52 @@ def _rate(rate: Decimal) -> str:
     counter and the server a paise apart on every line.
     """
     return f"{Decimal(rate):.2f}"
+
+
+def _seasons() -> list[dict[str, Any]]:
+    """The season master's own ordering, so the counter can pick the oldest.
+
+    A barcode is a scan-alias, not an identity (A2): the same tag under two buying
+    cohorts is two lots at two ticket prices, and a scan that does not name a
+    season resolves to the **oldest live** one with stock here. `resolve_piece`
+    makes that choice server-side by ranking `(is_closed, sort_order)` from this
+    master - and the till has to make the identical choice offline, because the
+    season it picks is the season it writes on the line and the accept pipeline
+    honours an exact `(barcode, season)` outright. Without the ordering on the
+    device the till would fall back to sorting names, and "FW25 before SS26" is
+    true only by the accident of the alphabet.
+
+    Whole on every response, like the slabs and the manager list: it is a handful
+    of rows, a season closing is a fact the counter must not miss, and `deleted`
+    has no channel for it.
+    """
+    fields = ("code", "name", "status", "sort_order")
+    return [
+        {"code": code, "name": name, "status": status, "sort_order": sort_order}
+        for code, name, status, sort_order in Season.objects.order_by(
+            "sort_order", "code"
+        ).values_list(*fields)
+    ]
+
+
+def _policy() -> dict[str, str]:
+    """The dials the counter has to hold offline - today, just the discount cap.
+
+    The cap is B2: below it a manual discount is the cashier's to give, above it
+    the bill will not close without a manager. Both ends of that rule have to
+    agree, and only one of them is online. A till that did not know the number
+    would let a cashier key in a discount the accept pipeline refuses with
+    `OVERRIDE_REQUIRED` - days later, when the bill is printed, paid for and in a
+    customer's hand, and the only remaining move is a human unpicking it.
+
+    So it rides down whole on every response, and as a two-decimal **string** for
+    the reason the tax rates are: the till multiplies by it, and a rate that
+    arrived as 7.499999 would put the counter and the server on opposite sides of
+    a cap.
+    """
+    return {
+        "manual_discount_cap_percent": f"{SellPolicy.current().manual_discount_cap_percent:.2f}"
+    }
 
 
 def _credit_notes(sync: Sync) -> tuple[list[dict[str, Any]], list[str]]:
