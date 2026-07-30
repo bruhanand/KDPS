@@ -514,17 +514,7 @@ function Lines({
               <td>{line.design}</td>
               <td>{line.size}</td>
               <td className="num">
-                <input
-                  className="input bill-cell"
-                  type="number"
-                  min={1}
-                  step={1}
-                  disabled={locked}
-                  data-testid={`bill-qty-${line.line_no}`}
-                  aria-label={`Quantity, line ${line.line_no}`}
-                  value={line.qty}
-                  onChange={(e) => onEdit(line.key, { qty: qtyFrom(e.target.value) })}
-                />
+                <QtyCell line={line} locked={locked} onEdit={onEdit} />
               </td>
               <td className="num">
                 <RateCell line={line} locked={locked} onEdit={onEdit} />
@@ -675,6 +665,49 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
           should also bind a manual discount is Anand's to rule on. */}
       {line.no_discount && <span className="muted-cell">no-discount style</span>}
     </>
+  );
+}
+
+/**
+ * How many pieces of this line, as whole pieces.
+ *
+ * A plain controlled `type="number"` is wrong here, and the way it is wrong is
+ * expensive. Typing "1.5" into one goes: "1" is 1; "." makes the value
+ * momentarily invalid, so the browser reports it as empty and the controlled
+ * value snaps back to "1", eating the dot; then "5" lands beside the 1 and the
+ * cashier has silently billed **fifteen** pieces. So the text is held here, the
+ * way `RupeeInput` holds a half-written amount, and only `qtyFrom` decides what
+ * the cart gets - which truncates, so "1.5" is one piece and never 15 and never
+ * a fraction on the write path.
+ */
+function QtyCell({ line, locked, onEdit }: CellProps) {
+  const [text, setText] = useState(String(line.qty));
+  const shown = useRef(line.qty);
+
+  useEffect(() => {
+    if (line.qty === shown.current) return;
+    shown.current = line.qty;
+    setText(String(line.qty));
+  }, [line.qty]);
+
+  return (
+    <input
+      className="input bill-cell"
+      inputMode="numeric"
+      disabled={locked}
+      data-testid={`bill-qty-${line.line_no}`}
+      aria-label={`Quantity, line ${line.line_no}`}
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const qty = qtyFrom(e.target.value);
+        shown.current = qty;
+        onEdit(line.key, { qty });
+      }}
+      // Whatever half-written thing is in the box, the count it actually billed
+      // is what the cashier should be looking at once they leave it.
+      onBlur={() => setText(String(line.qty))}
+    />
   );
 }
 
