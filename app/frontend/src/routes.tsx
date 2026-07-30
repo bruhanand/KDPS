@@ -10,7 +10,7 @@ import type { RouteObject } from "react-router-dom";
 import { PlannedPage } from "./pages/PlannedPage";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
-import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
+import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
 import { PtFileDetailPage, PtMapperPage, ReviewQueuePage } from "./pages/PtMapper";
@@ -89,6 +89,7 @@ const BUILT: Screen[] = [
   { id: "vflip-new", path: "/stock/vflips/new", element: <VFlipNewPage /> },
   { id: "vflip-detail", path: "/stock/vflips/:id", element: <VFlipDetailPage /> },
   // Money
+  { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
   // Setup

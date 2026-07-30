@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from datetime import date
+
 from rest_framework import serializers
 
-from masters.models import Brand, Gstin, LegalEntity, Season, Store
+from masters.models import Brand, Gstin, LegalEntity, Season, Store, StoreTarget
 
 
 class LegalEntitySerializer(serializers.ModelSerializer):
@@ -68,6 +70,49 @@ class LocationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Store
         fields = ["id", "code", "name", "store_type", "gstin", "state_code", "state_name"]
+
+
+class StoreTargetSerializer(serializers.ModelSerializer):
+    """One cell of the target grid: which store, which month, how many paise.
+
+    `store` is the store *code* both ways round — the code is what HO says out
+    loud ("Deoghar's August") and what the Dashboard already holds, so making the
+    screen carry a row id it would only ever translate back adds a lookup and a
+    way to be wrong.
+    """
+
+    store = serializers.SlugRelatedField(slug_field="code", read_only=True)
+
+    class Meta:
+        model = StoreTarget
+        fields = ["store", "month", "target_paise"]
+
+
+class StoreTargetWriteSerializer(serializers.Serializer):
+    """What a PUT is allowed to say. Deliberately not a `ModelSerializer`:
+
+    * `store` is validated as a *name* here and resolved against the caller's
+      scope in the view, because "no such store" (404) and "not your store" (403)
+      are different answers and a `SlugRelatedField` gives one for both;
+    * `month` is a month, so a mid-month date is refused rather than truncated —
+      the same rule the table's CHECK holds, stated here so the caller gets a
+      sentence instead of a database error;
+    * `target_paise` is integer paise (ADR-0004). A rupee decimal reaching this
+      field means the conversion was skipped upstream, and rounding it here would
+      hide that.
+    """
+
+    store = serializers.CharField(max_length=16)
+    month = serializers.DateField()
+    target_paise = serializers.IntegerField(min_value=0)
+
+    def validate_month(self, value: date) -> date:
+        if value.day != 1:
+            raise serializers.ValidationError(
+                "A target belongs to a month, so give the month's first day "
+                f"({value:%Y-%m}-01), not {value.isoformat()}."
+            )
+        return value
 
 
 class SeasonSerializer(serializers.ModelSerializer):

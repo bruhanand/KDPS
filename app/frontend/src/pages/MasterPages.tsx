@@ -5,9 +5,12 @@ import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-reac
 import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
-import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
+import { CommercialBadge, StatusChip, formatINR, rupeesToPaise } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import { SearchBox } from "../components/SearchBox";
+import { financialYear, financialYearChoices, financialYearMonths } from "../lib/fiscal";
+import type { FiscalMonth } from "../lib/fiscal";
+import { userCan } from "../shell/navConfig";
 import { withQuery, type QueryParams } from "../lib/query";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
@@ -159,6 +162,233 @@ export function StoresPage() {
         </table>
       </div>
     </Screen>
+  );
+}
+
+// -------------------------------------------------------- Store targets
+
+interface StoreTarget {
+  store: string;
+  month: string;
+  target_paise: number;
+}
+
+interface TargetEdit {
+  store: string;
+  month: string;
+  label: string;
+  rupees: string;
+}
+
+/** `GET | PUT /masters/store-targets` — the monthly rupee number each store is
+ *  asked to sell, which the store Dashboard shows month-to-date against (#171).
+ *
+ *  Gated on `money: manage`, the same rung the server's PUT requires, not on the
+ *  master-data steward rule the rest of this file uses: setting what a store must
+ *  sell is a Money act, and the D10 grill made *which* role holds that cell
+ *  admin-editable data rather than code. Reading stays at whatever holds the Money
+ *  section at all — a store may see the number it is judged against.
+ *
+ *  Twelve columns are drawn from the financial year, not from the rows that came
+ *  back: a month nobody has set yet is a blank cell to fill, and dropping it would
+ *  hide exactly the work this screen exists for. */
+export function StoreTargetsPage() {
+  const { user } = useAuth();
+  const canEdit = userCan(user, "money", "manage");
+  const [fy, setFy] = useState(() => financialYear());
+  const { data: stores, loading: storesLoading } = useList<Store>("/masters/stores");
+  const { data, loading, reload } = useList<StoreTarget>("/masters/store-targets", { fy });
+  const [edit, setEdit] = useState<TargetEdit | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  const months = useMemo(() => financialYearMonths(fy), [fy]);
+  // `store|month` → paise. One pass, because a 50-store year is 600 cells and
+  // scanning the list per cell would be 600 scans of it.
+  const byCell = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of data) map.set(`${row.store}|${row.month}`, row.target_paise);
+    return map;
+  }, [data]);
+  const fyTotal = useMemo(() => data.reduce((sum, row) => sum + row.target_paise, 0), [data]);
+
+  async function save() {
+    if (!edit) return;
+    const paise = rupeesToPaise(edit.rupees);
+    if (paise === null) {
+      setError("Enter the target in rupees — digits, and at most two decimal places.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await api.put("/masters/store-targets", {
+        store: edit.store,
+        month: edit.month,
+        target_paise: paise,
+      });
+      setOk(`${edit.store} · ${edit.label} target set to ${formatINR(paise)}.`);
+      setEdit(null);
+      reload();
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function open(store: string, month: FiscalMonth) {
+    const current = byCell.get(`${store}|${month.iso}`);
+    setError("");
+    setOk("");
+    setEdit({
+      store,
+      month: month.iso,
+      label: month.label,
+      // Pre-filled with what is already there so a correction is an edit, not a
+      // retype — and blank when there is nothing, so nought stays a deliberate
+      // answer rather than the default one.
+      rupees: current === undefined ? "" : String(current / 100),
+    });
+  }
+
+  // Not the shared `Screen` wrapper: its lead counts records, and "600 records"
+  // says nothing true about a grid. What a reader wants off the top of this one is
+  // the year's committed total.
+  return (
+    <div className="page-pad">
+      <PageHeader
+        lead={
+          <span data-testid="target-fy-total">
+            {canEdit
+              ? "Pick a cell to set that store's month for the year. "
+              : "Set at head office; shown here for reference. "}
+            FY {fy} committed across every store: <b>{formatINR(fyTotal)}</b>.
+          </span>
+        }
+        actions={
+          <select
+            className="select"
+            value={fy}
+            onChange={(e) => {
+              setFy(e.target.value);
+              setEdit(null);
+            }}
+            aria-label="Financial year"
+            data-testid="target-fy-select"
+          >
+            {financialYearChoices().map((choice) => (
+              <option key={choice} value={choice}>
+                FY {choice}
+              </option>
+            ))}
+          </select>
+        }
+      />
+      <Feedback error={error} ok={ok} />
+      {canEdit && edit && (
+        <div className="card section-card" data-testid="target-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">
+              {edit.store} · {edit.label}
+            </h3>
+            <div className="spacer" />
+            <button
+              className="btn btn-sm"
+              onClick={() => setEdit(null)}
+              data-testid="target-editor-close"
+            >
+              <X size={14} /> Close
+            </button>
+          </div>
+          <div className="form-grid wide-form">
+            <input
+              className="input"
+              inputMode="decimal"
+              placeholder="Target for the month (₹)"
+              value={edit.rupees}
+              onChange={(e) => setEdit({ ...edit, rupees: e.target.value })}
+              aria-label={`Target for ${edit.store}, ${edit.label}, in rupees`}
+              data-testid="target-amount-input"
+            />
+            <button
+              className="btn btn-cta"
+              onClick={save}
+              disabled={busy || !edit.rupees.trim()}
+              data-testid="target-save-button"
+            >
+              <Save size={15} /> {busy ? "Saving…" : "Save target"}
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="table-wrap">
+        <table className="data" data-testid="store-targets-table">
+          <thead>
+            <tr>
+              <th>Store</th>
+              {months.map((month) => (
+                <th key={month.iso} className="tabular">
+                  {month.label}
+                </th>
+              ))}
+              <th className="tabular">FY total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {storesLoading || loading ? (
+              <tr>
+                <td colSpan={months.length + 2}>Loading…</td>
+              </tr>
+            ) : stores.length === 0 ? (
+              <tr data-testid="store-targets-empty">
+                <td colSpan={months.length + 2}>
+                  No stores yet — add one in Setup before setting targets.
+                </td>
+              </tr>
+            ) : (
+              stores.map((store) => {
+                const cells = months.map((month) => byCell.get(`${store.code}|${month.iso}`));
+                const total = cells.reduce<number>((sum, paise) => sum + (paise ?? 0), 0);
+                return (
+                  <tr key={store.code} data-testid={`target-row-${store.code}`}>
+                    <td>
+                      <b className="mono">{store.code}</b> {store.name}
+                    </td>
+                    {months.map((month, index) => {
+                      const paise = cells[index];
+                      const shown = paise === undefined ? "—" : formatINR(paise, { short: true });
+                      const testId = `target-cell-${store.code}-${month.iso}`;
+                      return (
+                        <td key={month.iso} className="tabular">
+                          {canEdit ? (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => open(store.code, month)}
+                              aria-label={`Set ${store.name} target for ${month.label}`}
+                              data-testid={testId}
+                            >
+                              {shown}
+                            </button>
+                          ) : (
+                            <span data-testid={testId}>{shown}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="tabular">
+                      <b>{total ? formatINR(total, { short: true }) : "—"}</b>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

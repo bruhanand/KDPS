@@ -38,6 +38,23 @@ export function formatRupeeAmount(amount: string): string {
   return `${sign}${formatINR(paise)}`;
 }
 
+/** A rupee amount as typed, in exact integer paise — or `null` when what was
+ *  typed is not an amount.
+ *
+ *  Digit arithmetic on purpose: `25.51 * 100` is `2551.0000000000005` in binary
+ *  floating point, and the server's money column refuses a non-integer rather
+ *  than rounding it (ADR-0004), so the rounding must not happen here either. The
+ *  mirror of `core.money.rupees_to_paise`, held to the same rule — only what a
+ *  person would write as money, never a guess at what they meant. */
+export function rupeesToPaise(text: string): number | null {
+  // Commas are how an amount is *read back* (₹25,00,000), so someone editing one
+  // is allowed to type them straight back in; spaces likewise.
+  const typed = text.replace(/[,\s]/g, "");
+  if (!/^\d+(\.\d{1,2})?$/.test(typed)) return null;
+  const [whole, fraction = ""] = typed.split(".");
+  return Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+}
+
 /** The single SKU-grain primitive: Brand · Style · Colour · Size — never style-only. */
 export function SkuLine({
   brand,
