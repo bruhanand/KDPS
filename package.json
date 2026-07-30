@@ -10,6 +10,7 @@
     "dev:setup": "./scripts/dev.sh --setup-only",
     "dev:reset": "./scripts/dev.sh --reset --setup-only",
     "dev:down": "./scripts/dev.sh --down",
+    "dev:stop": "./scripts/stop-stack.sh",
     "dev:where": "./scripts/dev.sh --where",
     "setup": "cd app/backend && uv sync && cd ../.. && npm --prefix app/frontend install",
     "ci": "npm run ci:backend && npm run ci:frontend",

@@ -26,6 +26,18 @@ installs dependencies, migrates, seeds demo data, and runs both servers.
 Idempotent — re-run it any time. It prints the URLs it chose; open the PWA one and
 sign in with a login from `memory/test_credentials.md` (e.g. `owner` / `Owner@123`).
 
+**Building the environment and starting the app are two different jobs.**
+`npm run dev:setup` is the slow one and runs once — in Conductor it is the setup
+hook, fired when the workspace is created: Postgres container, dependencies,
+schema, seed data.
+`npm run dev` is the fast one and runs constantly — it checks the database is up
+and the schema current (a rebase adds migrations, a reboot stops the container),
+then starts the two servers.
+The two are safe to overlap: both take a per-workspace provisioning lock, so
+pressing Run while setup is still going makes Run *wait* rather than collide with
+it. It used to collide, and Docker's answer to two `compose up` calls on one
+project is `Conflict. The container name ... is already in use`.
+
 **The ports are per workspace.** Every Conductor workspace gets its own database
 and its own three ports, so `:3000` / `:8001` are only the fallback outside
 Conductor — see "One database per workspace" below, and run `npm run dev:where` to
@@ -36,8 +48,19 @@ npm run dev:where   # this workspace's compose project, ports and database URL
 npm run dev:setup   # provision DB + deps + seed, start no servers
 npm run dev:reset   # destroy this workspace's database and rebuild it (~11s), then exit
 npm run dev:down    # stop this workspace's Postgres (its data is kept)
+npm run dev:stop    # stop this workspace's servers (Postgres stays up)
 ./scripts/dev.sh --api    # API only          --web   PWA only
 ./scripts/dev.sh --reset  # rebuild the database AND run the stack
+./scripts/dev.sh --seed   # re-seed demo data on the way up
+```
+
+**Leftovers from deleted workspaces.** Archiving a workspace now stops its
+servers before deleting its database. If you have older ones still running — a
+Django API on a recycled port, talking to a database that no longer exists, which
+is enough to stop a *new* workspace from starting — clear them all at once:
+
+```bash
+./scripts/stop-stack.sh --stale   # stop every stack whose workspace directory is gone
 ```
 
 **No secrets needed.** `scripts/dev.sh` generates `app/backend/.env` on first run.
