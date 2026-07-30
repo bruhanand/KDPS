@@ -408,6 +408,23 @@ function Suggestions({
 
 // --- the line grid ---------------------------------------------------------
 
+/** Item · Brand · Barcode · Design · Size · Qty · Rate · Disc ₹ · GST ·
+ *  Salesman · Net · remove. */
+const COLUMN_WIDTHS = [
+  "11%",
+  "8%",
+  "12%",
+  "8%",
+  "5%",
+  "7%",
+  "8%",
+  "8%",
+  "8%",
+  "12%",
+  "9%",
+  "4%",
+] as const;
+
 /** The columns staff read today (D10 §4), in the order they read them. */
 function Lines({
   lines,
@@ -432,6 +449,14 @@ function Lines({
   return (
     <div className="table-wrap">
       <table className="data bill-grid" data-testid="bill-lines">
+        {/* Fixed widths, not content widths. All twelve columns D10 names have
+            to be on the counter's screen at once - a Net column that scrolled
+            off the right would be the one number the cashier reads aloud. */}
+        <colgroup>
+          {COLUMN_WIDTHS.map((width, i) => (
+            <col key={i} style={{ width }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             <th>Item</th>
@@ -457,7 +482,15 @@ function Lines({
                 <SeasonCell line={line} locked={locked} onEdit={onEdit} />
               </td>
               <td>{line.brand}</td>
-              <td className="mono">{line.barcode}</td>
+              <td>
+                <span className="mono bill-barcode">{line.barcode}</span>
+                <br />
+                {/* The "Total Stock" readout staff use today (A3), against the
+                    barcode it is a count of rather than against the price. */}
+                <span className="muted-cell" data-testid={`bill-stock-${line.line_no}`}>
+                  {line.stock} in stock
+                </span>
+              </td>
               <td>{line.design}</td>
               <td>{line.size}</td>
               <td className="num">
@@ -580,17 +613,7 @@ function RateCell({
   locked: boolean;
   onEdit: (key: string, patch: Partial<CartLine>) => void;
 }) {
-  if (line.mrp_paise > 0) {
-    return (
-      <>
-        <Money paise={line.mrp_paise} />
-        <br />
-        <span className="muted-cell" data-testid={`bill-stock-${line.line_no}`}>
-          {line.stock} in stock
-        </span>
-      </>
-    );
-  }
+  if (line.mrp_paise > 0) return <Money paise={line.mrp_paise} />;
   return (
     <RupeeInput
       testId={`bill-rate-${line.line_no}`}

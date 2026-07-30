@@ -7,6 +7,24 @@ This catches exactly that.
 Use whichever browser tooling the session has (see "Browser use" in `CLAUDE.md`), loading the tools you need in one ToolSearch call.
 It drives the user's own Chrome: always a new tab, never a tab from another session; and never trigger an alert or confirm dialog - it blocks everything until dismissed by hand.
 
+**`window.print()` is one of those dialogs.** Chrome's print preview is browser UI, so no click or key you send reaches it, and the session is stuck until Anand dismisses it by hand.
+The Billing screen prints through a hidden `<iframe title="Receipt">`, so intercept that frame's window before pressing Save & Print - product code untouched, and `window.__printed` becomes the evidence that the receipt was built and what it said:
+
+```js
+const orig = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "contentWindow").get;
+window.__printed = [];
+Object.defineProperty(HTMLIFrameElement.prototype, "contentWindow", {
+  configurable: true,
+  get() {
+    const real = orig.call(this);
+    if (this.title !== "Receipt") return real;
+    return { focus() {}, print() { window.__printed.push(real.document.documentElement.innerText); } };
+  },
+});
+```
+
+Make `print()` throw instead, and you have the printer-is-off path: the bill must still save, with a banner and a working Reprint.
+
 ## Preconditions: is the thing under test the thing you built?
 
 Skip this and you will debug a ghost - a stale container has served months-old code against a migrated schema before.
