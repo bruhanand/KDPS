@@ -125,10 +125,14 @@ These await a chartered-accountant (or Anand/client) ruling. Build the *mechanis
 - **Tally** — the statutory book of record; KDPS feeds it one-way via a deterministic voucher number.
 
 **POS & edges**
-- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson per bill, distinct from the till login (#107).
+- **Sale** — the **source-agnostic** sale document (`source ∈ {KDPS POS, manual}`); posting logic lives on the Sale, not on any adapter. Every Sale records **who sold it** — a salesperson per line (defaulting to the last picked; D10, 30 Jul 2026), distinct from the till login (#107).
 - **KDPS POS** — our own counter, and the only writer of a Sale. Offline-first, idempotent. **Decided 26 Jul 2026: KDPS builds its own POS; the third-party-POS route is dropped**, so there is no external sales feed to ingest or reconcile against. The source-agnostic Sale shape is kept anyway — it costs nothing and keeps a future importer (or a migration load) from touching posting logic.
-- **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till.
+- **Offer** — brand-specific slab/condition discount (value slabs, B2G1 lowest-item-free, gifts, per-store, dates); applied on-invoice at the till. Tie-break (locked 30 Jul 2026, closes D5's O3): three layers - one brand offer per item by best-deal-wins (B2G1 groups dearest-first, cheapest free), then storewide, then bank/tender offers, each stacking only when explicitly flagged; new offers default non-combining; same cart always prices the same.
 - **Idempotency key** — client-UUID per sale; retries return the same Sale-ID.
+- **Hold Bill** - a till-local parked cart (30 Jul 2026): holds no stock or money, shows on the store Dashboard, flagged at day close for the store to keep or expire; a multi-day set-aside is a Booking, not a hold.
+- **Register handover** - the deliberate recovery action when a till device dies or is replaced: the new till resumes from the last server-synced bill number; unsynced bills are re-entered from their printed copies under their original numbers (the paper-bill F3 muscle). The till owns its store's gap-free counter; the server verifies continuity at sync.
+- **Sold-before-inward** - a billed line the books cannot yet price: the sale proceeds (manual line, MRP from the tag), the stock/money postings wait in the exception queue until GRN/PT prices the piece. No zero-cost posting ever; the GST-recognition side stays CA-gated (sold-before-PT).
+- **Credit note (counter)** - issued by Exchange/plain Return for what the customer actually paid; redeems only at the issuing store (v1), cached at the till for offline redemption; plain returns are credit-note-only, never cash from the drawer.
 
 ---
 

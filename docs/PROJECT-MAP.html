@@ -89,6 +89,7 @@
   <div class="status"><span class="pill done">Designed</span><b>D8 · Master-data &amp; users consolidation</b><span>Every registry in one owned place: edit-rights grid, season calendar, GST slab, configurable roles. Locked 21 Jun 2026.</span></div>
   <div class="status"><span class="pill done">Done 25 Jun</span><b>Review · 16 decisions · reconciliation</b><span>Full design review + India retail-ERP research → 16 locked decisions → canonical doc set in order (build artifacts + ratified ADR chain). Stack ratified (ADR-0001).</span></div>
   <div class="status"><span class="pill paused">Deferred</span><b>D9 · Migration &amp; rollout</b><span>Masters import, opening stock, store-by-store go-live, parallel Tally run. Designed later, before go-live (decided 23 Jun).</span></div>
+  <div class="status"><span class="pill ongoing">Requirements out</span><b>D10 · POS (own-build)</b><span>Store-login POS requirements captured 29 Jul (keep the current screen's shape; scan-first; offline-first; 7 pre-design decisions open). Screen design next.</span></div>
   <div class="status"><span class="pill done">Built · alpha</span><b>Foundation + money layer</b><span>10 Django apps (kernel + masters/inbound/ptmapper/stock+vendor+cash ledgers) + React PWA, merged to <code>main</code>, deployed on a Render alpha. Money path remediated (Phases A–F). Next: selling/POS → offers → payments.</span></div>
   <div class="status"><span class="pill done">Built</span><b>PT-mapper (in-app)</b><span>app/backend/ptmapper — 9 brand profiles + review queue, fed &amp; hardened, seeded on Render. (Standalone code/pdf-to-pt is regenerated weekly.)</span></div>
   <div class="status"><span class="pill ongoing">Every month</span><b>Store dashboards</b><span>Per-store 16-measure business dashboard via the <code>store-dashboard</code> skill (first run: JSL, 2 Jul). See data-from-kdps/store-analysis/.</span></div>
@@ -115,6 +116,7 @@
     <li class="star"><b>adr/0001–0007</b> — <span>the ratified decision records: stack, repo layout, data scoping, DB conventions, CI gate, posting engine, entity/GSTIN scoping.</span></li>
     <li><b>build-process-and-roadmap.html · erpnext-engineering-study.html · audit-and-build-readiness.html · build-playbook.html</b> — <span>the build companion: foundation + slice roadmap, ERPNext patterns to borrow, readiness checklist.</span></li>
     <li><b>09-migration/</b> — <span>not created yet — the last design discussion (D9) lands here, before go-live.</span></li>
+    <li class="star"><b>10-pos/pos-store-requirements.html</b> — <span>D10: the KDPS-built POS, store-login requirements (29 Jul) — keep-the-shape rule, current-screen anatomy (screenshots in current-pos/), A–I requirements, 7 decisions to close before screen design.</span></li>
   </ul>
   <div class="rule"><b>New design discussion?</b> Make its own numbered folder here (e.g. <code>06-tally-sync/</code>) and end the doc with a locked-decisions table + open-items list.</div>
 </div>
@@ -153,6 +155,14 @@
   <ul class="files">
     <li><b>Vendor-Management-Module-Client</b> · <b>Goods-Inward-Module-Client</b> · <b>Outbound-Module-Client</b> · <b>Payments-Module-Client</b> · <b>Offers-Module-Client</b> — <span>the client-facing version of each designed module (.html + .pdf).</span></li>
     <li><b>POS-Ingestion-Requirements</b> · <b>POS-Integration-Requirements</b> — <span>what the POS must push/pull — written for an outside vendor, now the spec for our own counter.</span></li>
+  </ul>
+</div>
+
+<h2><span class="num">dev</span>features — dev-process artifacts, one folder per feature</h2>
+<div class="folder">
+  <div class="folder-head"><code>features/</code><span class="purpose">Where the phased dev process (<code>docs/agents/dev-process.md</code>) writes its per-feature artifacts: feature analysis, grill decisions, contracts, designs, tickets.</span></div>
+  <ul class="files">
+    <li class="star"><b>pos-store-front/</b> — <span>the D10 store-front feature (sidebar, Dashboard, cross-store request, offline-first Sell/POS): Phase-0 <b>feature-analysis.md</b> + Phase-1 <b>grill-decisions.md</b> (14 locked decisions, 30 Jul 2026).</span></li>
   </ul>
 </div>
 
@@ -231,7 +241,7 @@
 <div class="rule"><b>New client deliverable?</b> <code>04-client-docs/</code>. When superseded, move the old one to <code>__archive/</code>.</div>
 <div class="rule"><b>Something stale?</b> Never delete — move it into <code>__archive/</code> so the active folders stay clean.</div>
 
-<footer>KDPS project · updated 2 July 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
+<footer>KDPS project · updated 30 July 2026 · update this map when folders or status change (CLAUDE.md tells Claude to keep it current).</footer>
 </div>
 </body>
 </html>
