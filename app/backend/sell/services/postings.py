@@ -42,6 +42,7 @@ do with its tax is the CA's ruling and is not encoded here.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -51,26 +52,36 @@ from finledger.posting import post_sale_collection, post_sale_sor_liability
 from masters.ownership import brand_is_owned
 from sell.models import DeferredCosting, Sale, SaleLine, SaleTender
 from stockledger.models import StockLedgerEntry
+from vendors.models import Vendor
 
-#: Which value account each tender lands in. Card and UPI are *clearing*
-#: accounts, not CASH: the customer has paid but the money has not reached the
-#: bank, and only keeping them apart lets a store's drawer be counted against
-#: CASH alone. A credit-note tender is not a receipt at all - it extinguishes a
-#: liability we raised when the note was issued.
-TENDER_ACCOUNTS: dict[str, str] = {
-    SaleTender.Mode.CASH: GLAccount.CASH,
-    SaleTender.Mode.CARD: GLAccount.CARD_CLEARING,
-    SaleTender.Mode.UPI: GLAccount.UPI_CLEARING,
-    SaleTender.Mode.CREDIT_NOTE: GLAccount.CREDIT_NOTE_LIABILITY,
-}
+#: `core.posting.dr` or `core.posting.cr` - which side of a pair a leg goes on.
+LegWriter = Callable[..., Leg]
 
-#: Which cash-ledger account a tender is a receipt into, for the store's cash
-#: summary. A credit note is deliberately absent: no money moved, so there is no
-#: cash row to write - the summary reads that column off the tenders themselves.
-COLLECTION_ACCOUNTS: dict[str, str] = {
-    SaleTender.Mode.CASH: "CASH",
-    SaleTender.Mode.CARD: "CARD",
-    SaleTender.Mode.UPI: "UPI",
+
+@dataclass(frozen=True)
+class TenderPosting:
+    """Where one way of paying goes, in both books.
+
+    One table rather than two maps, so the credit note's carve-out is stated once:
+    it has a value account (the liability it extinguishes) and deliberately no cash
+    account, because no money moved. Two maps would leave a mode that had drifted
+    out of one of them silently untendered or silently uncollected.
+    """
+
+    #: The value account. Card and UPI are *clearing* accounts, not CASH: the
+    #: customer has paid but the money has not reached the bank, and only keeping
+    #: them apart lets a store's drawer be counted against CASH alone.
+    value_account: str
+    #: The cash-ledger account the collection is a receipt into, for the store's
+    #: cash summary - or empty where nothing was collected.
+    cash_account: str = ""
+
+
+TENDERS: dict[str, TenderPosting] = {
+    SaleTender.Mode.CASH: TenderPosting(GLAccount.CASH, "CASH"),
+    SaleTender.Mode.CARD: TenderPosting(GLAccount.CARD_CLEARING, "CARD"),
+    SaleTender.Mode.UPI: TenderPosting(GLAccount.UPI_CLEARING, "UPI"),
+    SaleTender.Mode.CREDIT_NOTE: TenderPosting(GLAccount.CREDIT_NOTE_LIABILITY),
 }
 
 
@@ -78,19 +89,30 @@ COLLECTION_ACCOUNTS: dict[str, str] = {
 class CostPlan:
     """How one bill line's cost posts - or why it cannot yet.
 
-    `deferral` empty means postable. When it is set it carries the
-    `DeferredCosting.Reason` naming what the books are waiting for, which is what
-    lets the sweep (#186) tell a piece waiting for its *price* from one waiting for
-    its *brand* - the first has not moved stock yet, the second has.
+    Exactly one of the two is ever set, which is why `book` is the field and
+    `postable` reads off it rather than off a separate flag: a plan that claimed
+    both to be brand-owned and to be waiting would be a state nothing could act
+    on. `book` is also what gets written to the line, so an exchange reading it
+    back later sees exactly what this bill posted.
+
+    `deferral` carries the `DeferredCosting.Reason` naming what the books are
+    waiting for, which is what lets the sweep (#186) tell a piece waiting for its
+    *price* from one waiting for its *brand* - the first has not moved stock yet,
+    the second has.
     """
 
-    owned: bool = False
-    vendor: Any = None
+    #: A `SaleLine.CostBook` value, or empty when nothing can post.
+    book: str = ""
+    vendor: Vendor | None = None
     deferral: str = ""
 
     @property
     def postable(self) -> bool:
-        return not self.deferral
+        return bool(self.book)
+
+    @property
+    def owned(self) -> bool:
+        return self.book == SaleLine.CostBook.OWN
 
 
 @dataclass(frozen=True)
@@ -102,18 +124,49 @@ class CostedLine:
 
     @property
     def is_return(self) -> bool:
-        return self.row.direction == SaleLine.Direction.RETURN
+        return self.row.is_return
 
     @property
     def cost_paise(self) -> int:
-        return int(self.row.unit_cost_paise or 0) * int(self.row.qty)
+        return self.row.cost_paise
 
 
 # --- which book the piece came out of --------------------------------------
 
 
+def plan_from_original(original: SaleLine) -> CostPlan:
+    """The plan the *original* sale posted under, read back off its line.
+
+    An exchange unwinds a posting that already happened, so it has to unwind the
+    one that actually happened - not one re-derived from today's masters. A brand
+    flipped from SOR to Outright between the sale and the exchange would otherwise
+    reverse a brand-owned piece into our own inventory and leave the brand still
+    owed for it; a brand that has since gained a second supplier would credit the
+    wrong one. In both cases the trial balance stays at zero and the subledger tie
+    still passes, so nothing downstream would ever notice - which is why the model
+    and the vendor are columns on the line (Rule 3) and this reads them.
+
+    A line the books never placed has no cost event to reverse, and says which of
+    the two silences it was so the return waits for the same thing the sale does.
+    """
+    if int(original.unit_cost_paise or 0) <= 0:
+        return CostPlan(deferral=DeferredCosting.Reason.UNPRICED)
+    if not original.cost_book:
+        return CostPlan(deferral=DeferredCosting.Reason.MODEL_UNKNOWN)
+    if original.cost_book == SaleLine.CostBook.OWN:
+        return CostPlan(book=SaleLine.CostBook.OWN)
+    if original.cost_vendor is None:
+        return CostPlan(deferral=DeferredCosting.Reason.VENDOR_UNKNOWN)
+    return CostPlan(book=SaleLine.CostBook.BRAND, vendor=original.cost_vendor)
+
+
 def resolve_cost_plan(*, brand: str, barcode: str, season: str, unit_cost_paise: int) -> CostPlan:
     """Where this piece's cost posts from, or what is missing.
+
+    Asked of a piece being *sold*. A piece coming back reads the plan off the line
+    it gives back instead (`plan_from_original`); the only returns that reach here
+    are paper-era ones whose original bill we do not hold, where a re-derivation is
+    all there is.
 
     Three things must be known before a cost event can be written, and each of
     them refuses rather than guesses:
@@ -136,14 +189,14 @@ def resolve_cost_plan(*, brand: str, barcode: str, season: str, unit_cost_paise:
     if owned is None:
         return CostPlan(deferral=DeferredCosting.Reason.MODEL_UNKNOWN)
     if owned:
-        return CostPlan(owned=True)
+        return CostPlan(book=SaleLine.CostBook.OWN)
     vendor = supplier_of(barcode=barcode, season=season, brand=brand)
     if vendor is None:
         return CostPlan(deferral=DeferredCosting.Reason.VENDOR_UNKNOWN)
-    return CostPlan(owned=False, vendor=vendor)
+    return CostPlan(book=SaleLine.CostBook.BRAND, vendor=vendor)
 
 
-def supplier_of(*, barcode: str, season: str, brand: str) -> Any:
+def supplier_of(*, barcode: str, season: str, brand: str) -> Vendor | None:
     """The vendor a brand-owned piece is owed to, or `None` if nobody can say.
 
     Asked of the piece before the brand, because the piece knows better: the
@@ -162,8 +215,6 @@ def supplier_of(*, barcode: str, season: str, brand: str) -> Any:
     can choose between them, and `None` sends the line to the deferred queue for a
     human rather than picking one.
     """
-    from vendors.models import Vendor
-
     inward = (
         StockLedgerEntry.objects.filter(
             sku_code=barcode,
@@ -214,7 +265,7 @@ def _post_money_event(
     """
     legs = [
         dr(
-            TENDER_ACCOUNTS[tender.mode],
+            TENDERS[tender.mode].value_account,
             int(tender.amount_paise or 0),
             memo=f"{tender.get_mode_display()} · {sale.doc_number}",
         )
@@ -241,19 +292,30 @@ def _post_money_event(
         post_entries(sale, legs, posted_by=actor)
 
 
-def _revenue_legs(side: Any, row: SaleLine, base_paise: int) -> list[Leg]:
-    """The revenue and tax legs for one line, each carrying its own dimensions.
+def _dims(row: SaleLine) -> dict[str, str]:
+    """What every leg about this line is filed under (Rule 3, snapshotted).
 
-    Per line rather than one summed pair, because the brand and the season are
-    what every margin question is asked by, and a leg that summed two brands
-    together could not answer any of them.
+    Brand and season, because they are what every margin question is asked by -
+    which is also why the revenue, tax and cost legs are written per line rather
+    than as one summed pair: a leg that added two brands together could not answer
+    any of them.
     """
-    dims = {"brand": row.brand, "season": row.season}
+    return {"brand": row.brand, "season": row.season}
+
+
+def _sides(line: CostedLine) -> tuple[LegWriter, LegWriter]:
+    """Which way round a pair goes: `out` is the piece leaving, `back` its counter
+    entry. An exchange leg is the same pair the other way about."""
+    return (cr, dr) if line.is_return else (dr, cr)
+
+
+def _revenue_legs(side: LegWriter, row: SaleLine, base_paise: int) -> list[Leg]:
+    """The revenue and tax legs for one line."""
     legs = []
     if base_paise:
-        legs.append(side(GLAccount.SALES_REVENUE, base_paise, **dims))
+        legs.append(side(GLAccount.SALES_REVENUE, base_paise, **_dims(row)))
     if row.gst_paise:
-        legs.append(side(GLAccount.OUTPUT_GST, int(row.gst_paise or 0), **dims))
+        legs.append(side(GLAccount.OUTPUT_GST, int(row.gst_paise or 0), **_dims(row)))
     return legs
 
 
@@ -281,9 +343,9 @@ def _post_cost_event(sale: Sale, costed: list[CostedLine], actor: Any) -> None:
     record for the piece and never the discounted price the customer paid.
 
     An exchange leg reverses whichever of those the *original* piece was, at the
-    original's own frozen cost. Its model is read from the original line's brand
-    snapshot for the same reason: the piece is that piece, whatever the brand's
-    terms have become since.
+    original's own frozen cost, reading both off the original line's own columns
+    (`plan_from_original`): the piece is that piece, whatever the brand's terms
+    have become since.
     """
     postable = [line for line in costed if line.plan.postable and line.cost_paise]
     if not postable:
@@ -297,8 +359,8 @@ def _post_cost_event(sale: Sale, costed: list[CostedLine], actor: Any) -> None:
 
 def _own_cost_legs(line: CostedLine) -> list[Leg]:
     """KDPS-owned: the value leaves our own inventory and becomes cost of sale."""
-    dims = {"brand": line.row.brand, "season": line.row.season}
-    out, back = (cr, dr) if line.is_return else (dr, cr)
+    dims = _dims(line.row)
+    out, back = _sides(line)
     return [
         out(GLAccount.COGS, line.cost_paise, **dims),
         back(GLAccount.INVENTORY, line.cost_paise, **dims),
@@ -313,8 +375,11 @@ def _sor_cost_legs(line: CostedLine) -> list[Leg]:
     inward raised so brand-owned pieces could be counted without being valued on
     our balance sheet; the piece has gone, so the memo goes with it.
     """
-    dims = {"brand": line.row.brand, "season": line.row.season}
-    out, back = (cr, dr) if line.is_return else (dr, cr)
+    dims = _dims(line.row)
+    out, back = _sides(line)
+    # A postable brand-owned plan names its vendor by construction; the posting
+    # floor refuses the leg without one anyway (`core.floors`).
+    assert line.plan.vendor is not None
     return [
         out(GLAccount.COGS, line.cost_paise, **dims),
         back(
@@ -338,9 +403,9 @@ def _accrue_sor_liability(sale: Sale, postable: list[CostedLine], actor: Any) ->
     and takes another back owes the difference, and two rows that cancel each other
     would be noise on the vendor's account rather than detail.
     """
-    per_vendor: dict[Any, int] = defaultdict(int)
+    per_vendor: dict[Vendor, int] = defaultdict(int)
     for line in postable:
-        if not line.plan.owned:
+        if line.plan.vendor is not None:
             per_vendor[line.plan.vendor] += -line.cost_paise if line.is_return else line.cost_paise
     for vendor, amount in per_vendor.items():
         post_sale_sor_liability(
@@ -355,8 +420,8 @@ def _accrue_sor_liability(sale: Sale, postable: list[CostedLine], actor: Any) ->
 def _write_collections(sale: Sale, tenders: list[SaleTender], actor: Any) -> None:
     """The cash-ledger receipt rows behind the bill's tenders."""
     for tender in tenders:
-        account = COLLECTION_ACCOUNTS.get(tender.mode)
-        if account is None:  # a credit note is not money moving
+        account = TENDERS[tender.mode].cash_account
+        if not account:  # a credit note is not money moving
             continue
         post_sale_collection(
             account=account,

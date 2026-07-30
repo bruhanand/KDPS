@@ -357,7 +357,10 @@ def test_a_credit_note_tender_extinguishes_the_liability_it_raised(counter):
     issued = counter["client"].post(SALES_URL, payload, format="json")
     assert issued.status_code == 201, issued.json()
     note = Sale.objects.get(pk=issued.json()["id"]).credit_notes_issued.get()
+    _assert_golden(Sale.objects.get(pk=issued.json()["id"]), "credit-note-issued")
     owed_to_customer = -account_balance(GLAccount.CREDIT_NOTE_LIABILITY)
+    # The leg is the note, to the paisa: the bill's own liability and the document
+    # it minted cannot say different numbers.
     assert owed_to_customer == note.value_paise
 
     third = bill_payload(
@@ -546,6 +549,95 @@ def test_brand_owned_stock_with_no_supplier_of_record_waits(counter):
     assert account_balance(GLAccount.VENDOR_PAYABLE) == 0
     assert DeferredCosting.objects.get().reason == DeferredCosting.Reason.VENDOR_UNKNOWN
     assert trial_balance() == 0
+
+
+def test_an_exchange_unwinds_the_model_the_sale_posted_not_todays(counter):
+    """The defect this snapshot exists to stop.
+
+    A brand-owned piece is sold; the brand is then re-negotiated to Outright, which
+    is an ordinary edit an Operations Head makes in Master Data. The exchange must
+    still put the payable back - the money is owed to the brand for the piece that
+    actually sold - and must not credit an inventory account KDPS never debited.
+    Re-deriving from the live Brand row would do exactly that, and the trial balance
+    would stay at zero throughout, so nothing downstream would ever report it.
+    """
+    build_supplier(build_brand("SOR"))
+    stock_in(counter["store"], 4, model="SOR")
+    first = counter["client"].post(
+        SALES_URL, bill_payload(counter["store"], counter["salesman"], till_seq=1), format="json"
+    )
+    assert first.status_code == 201, first.json()
+    assert account_balance(GLAccount.VENDOR_PAYABLE) == -COST_PAISE
+
+    build_brand("Outright")  # the terms change after the sale
+
+    dearer = 199900
+    refund = MRP_PAISE
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=2, mrp_paise=dearer)
+    payload["exchange"] = {
+        "original": {"store": counter["store"].code, "fy": payload["fy"], "till_seq": 1},
+        "lines": [
+            {
+                "line_no": 2,
+                "direction": "return",
+                "barcode": "8901000000011",
+                "season": "FW25",
+                "original_line": 1,
+                "qty": 1,
+                "refund_paise": refund,
+                "gst_rate": "5",
+                "gst_paise": gst_on(refund),
+                "condition": "good",
+                "reason": "size",
+            }
+        ],
+    }
+    payload["totals"] |= {
+        "net_paise": dearer - refund,
+        "gst_paise": gst_on(dearer) - gst_on(refund),
+    }
+    payload["tenders"] = [{"mode": "cash", "amount_paise": dearer - refund}]
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    returned = SaleLine.objects.get(line_no=2)
+    assert returned.cost_book == SaleLine.CostBook.BRAND
+    # The accrual is back off: the brand-owned piece came back, whatever the brand's
+    # terms say today.
+    assert account_balance(GLAccount.VENDOR_PAYABLE) == 0
+    assert account_balance(GLAccount.SOR_STOCK) == 0
+    # And the new piece, sold under the new terms, is ours.
+    assert account_balance(GLAccount.INVENTORY) == -COST_PAISE
+    assert trial_balance() == 0
+
+
+def test_a_sold_line_records_which_book_priced_it(counter):
+    """The snapshot is on the line, not looked up - Rule 3."""
+    _sell(counter, model="SOR")
+    line = SaleLine.objects.get()
+
+    assert line.cost_book == SaleLine.CostBook.BRAND
+    assert line.cost_vendor is not None and line.cost_vendor.code == "ARVIND"
+
+
+def test_a_line_the_books_could_not_place_records_no_book(counter):
+    """Blank is what an exchange later reads as "there was nothing to reverse"."""
+    stock_in(counter["store"], 3)
+    Brand.objects.all().delete()
+    assert (
+        counter["client"]
+        .post(
+            SALES_URL,
+            bill_payload(counter["store"], counter["salesman"], till_seq=1),
+            format="json",
+        )
+        .status_code
+        == 201
+    )
+
+    line = SaleLine.objects.get()
+    assert line.cost_book == ""
+    assert line.cost_vendor is None
 
 
 def test_two_suppliers_for_one_brand_cannot_be_chosen_between(counter):

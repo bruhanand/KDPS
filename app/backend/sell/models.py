@@ -28,6 +28,7 @@ from django.utils import timezone
 from core.base import TimeStampedModel
 from core.documents import DocStatus, Document, MintedNumber, VoucherSeries
 from core.money import MoneyField
+from masters.models import Gstin
 
 #: Doc types this app mints. `SAL` is till-assigned (see the kernel's
 #: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` is an ordinary server-allocated counter.
@@ -281,7 +282,7 @@ class Sale(Document):
         return SALE_DOC_TYPE
 
     @property
-    def gstin(self):  # type: ignore[no-untyped-def]
+    def gstin(self) -> Gstin:
         """The registration the bill was raised under (the store's).
 
         A property rather than a column: a store belongs to exactly one GSTIN and
@@ -331,6 +332,25 @@ class SaleLine(TimeStampedModel):
         POSTED = "posted", "Costed"
         DEFERRED = "deferred", "Waiting on the paperwork"
 
+    class CostBook(models.TextChoices):
+        """Which book this piece's cost came out of, snapshotted at billing.
+
+        Not derived on demand, and that is the point. An exchange unwinds a
+        posting that already happened, so it has to unwind the one that actually
+        happened - and a brand's commercial model is editable master data. A brand
+        flipped from SOR to Outright between the sale and the exchange would
+        otherwise reverse a brand-owned piece into our own inventory and strand
+        what the brand is still owed. The trial balance would stay at zero and the
+        subledger tie would still pass, which is exactly why this is a column and
+        not a lookup (Rule 3).
+
+        Blank means the books could not place the piece at all: nothing posted, and
+        the line waits in `DeferredCosting`.
+        """
+
+        OWN = "own", "KDPS-owned - out of our own inventory"
+        BRAND = "brand", "Brand-owned - against what we owe the brand"
+
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="lines")
     line_no = models.IntegerField()
     direction = models.CharField(max_length=8, choices=Direction.choices, default=Direction.SALE)
@@ -373,6 +393,16 @@ class SaleLine(TimeStampedModel):
     costing_status = models.CharField(
         max_length=8, choices=CostingStatus.choices, default=CostingStatus.POSTED
     )
+    cost_book = models.CharField(max_length=8, choices=CostBook.choices, blank=True, default="")
+    cost_vendor = models.ForeignKey(
+        "vendors.Vendor",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="sale_lines_accrued",
+        help_text="Who the brand-owned piece is settled with, frozen at billing. "
+        "PROTECT because a return reverses the accrual against this row.",
+    )
     return_reason = models.CharField(max_length=40, blank=True, default="")
     condition = models.CharField(max_length=8, choices=Condition.choices, blank=True, default="")
     original_line = models.ForeignKey(
@@ -408,6 +438,15 @@ class SaleLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sale_id}/{self.line_no} · {self.barcode} × {self.qty}"
+
+    @property
+    def is_return(self) -> bool:
+        return self.direction == self.Direction.RETURN
+
+    @property
+    def cost_paise(self) -> int:
+        """What this line's pieces cost the books, at the rate frozen on it."""
+        return int(self.unit_cost_paise or 0) * int(self.qty)
 
 
 class SaleTender(TimeStampedModel):
@@ -544,6 +583,15 @@ class DeferredCosting(TimeStampedModel):
         *are* on the shelf and *did* leave it: their stock is already posted and
         only the value is missing, so re-posting the movement would take the piece
         out twice.
+
+        They also drain differently, and only the first one drains today. An
+        `unpriced` row is released by the PT that prices its cohort, which is the
+        hook #186 builds. The other two are waiting on **master data**, not on an
+        inward - somebody adding the brand, or naming its supplier - so no PT will
+        ever release them and #186 needs a masters-side trigger as well. Until it
+        has one they sit in the queue: visible, aged by the daily check, and
+        deliberately not posted, because a guess about whose stock it was is the
+        one outcome worse than a wait.
         """
 
         UNPRICED = "unpriced", "No cost of record - sold before inward"

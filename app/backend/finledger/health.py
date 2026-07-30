@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 from core.gl import GLAccount, GLEntry, account_balance, trial_balance
 from core.money import paise_to_rupees_str
 from finledger.models import CashLedgerEntry, VendorLedgerEntry
+from finledger.posting import CASH_CONTROL_ACCOUNTS, gl_control_for
 from finledger.views import IsBooksKeeper
 from stockledger.models import StockOnHand
 
@@ -58,6 +59,10 @@ ACCOUNTS = [
     (GLAccount.COGS, "Cost of goods sold", "expense"),
     (GLAccount.ROUND_OFF, "Rounding", "expense"),
 ]
+
+
+#: Display label per account code, off the one chart above.
+ACCOUNT_LABELS = {code: label for code, label, _ in ACCOUNTS}
 
 
 class BooksHealthView(APIView):
@@ -97,27 +102,22 @@ def _reconciliation(balances: dict[str, int]) -> dict[str, Any]:
     positive "we owe" subledger, so it ties when Σ(vendor rows) == −GL payable.
     Cash is an asset (debit +), the same sign as its subledger.
 
-    "Cash" here is the whole collection family, not the CASH account alone. A
-    counter sale writes one cash-ledger receipt row per tender — cash into CASH,
-    card into CARD, UPI into UPI — while the value GL sends the same three to CASH,
+    Cash is now more than one control account, and it is checked **per account**.
+    A counter sale writes one cash-ledger receipt row per tender - cash into CASH,
+    card into CARD, UPI into UPI - and the value GL sends the same three to CASH,
     CARD_CLEARING and UPI_CLEARING, because a card sale is money the customer has
-    paid and the bank has not yet settled. Tying only CASH would report the books
-    broken after every card swipe. The family is the smallest honest unit until the
-    finledger's own cash path stops collapsing BANK and UPI into GL CASH; a
-    per-account tie is that change, not this one.
+    paid and the bank has not yet settled. `gl_control_for` is the one mapping both
+    sides use. Comparing only the family total would tie perfectly while a card
+    receipt sat in CASH, which is a settlement reconciliation quietly reading the
+    wrong number; the totals are still reported for the screen, but `reconciled`
+    is every account agreeing.
     """
     vendor_sub = VendorLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
-    cash_sub = CashLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
     gl_payable = balances[GLAccount.VENDOR_PAYABLE]
-    gl_cash = (
-        balances[GLAccount.CASH]
-        + balances[GLAccount.CARD_CLEARING]
-        + balances[GLAccount.UPI_CLEARING]
-    )
     vendor_reconciled = vendor_sub == -gl_payable
-    cash_reconciled = cash_sub == gl_cash
+    cash = _cash_reconciliation(balances)
     return {
-        "reconciled": vendor_reconciled and cash_reconciled,
+        "reconciled": vendor_reconciled and cash["reconciled"],
         "vendor": {
             "reconciled": vendor_reconciled,
             "subledger_paise": vendor_sub,
@@ -126,14 +126,39 @@ def _reconciliation(balances: dict[str, int]) -> dict[str, Any]:
             "gl_control_rupees": paise_to_rupees_str(-gl_payable),
             "drift_paise": vendor_sub + gl_payable,
         },
-        "cash": {
-            "reconciled": cash_reconciled,
-            "subledger_paise": cash_sub,
-            "subledger_rupees": paise_to_rupees_str(cash_sub),
-            "gl_control_paise": gl_cash,
-            "gl_control_rupees": paise_to_rupees_str(gl_cash),
-            "drift_paise": cash_sub - gl_cash,
-        },
+        "cash": cash,
+    }
+
+
+def _cash_reconciliation(balances: dict[str, int]) -> dict[str, Any]:
+    """The cash subledger against each of its value control accounts."""
+    subledger: dict[str, int] = dict.fromkeys(CASH_CONTROL_ACCOUNTS.values(), 0)
+    for row in CashLedgerEntry.objects.values("account").annotate(total=Sum("amount")):
+        subledger[gl_control_for(row["account"])] += row["total"] or 0
+    pairs = sorted(subledger.items())
+    by_account = [
+        {
+            "code": control,
+            "label": ACCOUNT_LABELS.get(control, control),
+            "subledger_paise": total,
+            "subledger_rupees": paise_to_rupees_str(total),
+            "gl_control_paise": balances[control],
+            "gl_control_rupees": paise_to_rupees_str(balances[control]),
+            "drift_paise": total - balances[control],
+            "reconciled": total == balances[control],
+        }
+        for control, total in pairs
+    ]
+    total_sub = sum(total for _, total in pairs)
+    total_gl = sum(balances[control] for control, _ in pairs)
+    return {
+        "reconciled": all(total == balances[control] for control, total in pairs),
+        "subledger_paise": total_sub,
+        "subledger_rupees": paise_to_rupees_str(total_sub),
+        "gl_control_paise": total_gl,
+        "gl_control_rupees": paise_to_rupees_str(total_gl),
+        "drift_paise": total_sub - total_gl,
+        "by_account": by_account,
     }
 
 

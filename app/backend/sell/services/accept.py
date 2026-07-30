@@ -51,7 +51,13 @@ from sell.models import (
     SellPolicy,
 )
 from sell.pricing import base_from_inclusive, split_line
-from sell.services.postings import CostedLine, CostPlan, post_sale_value, resolve_cost_plan
+from sell.services.postings import (
+    CostedLine,
+    CostPlan,
+    plan_from_original,
+    post_sale_value,
+    resolve_cost_plan,
+)
 from sell.services.resolve import (
     ResolvedPiece,
     line_dims,
@@ -297,11 +303,19 @@ def _prepare_lines(
         else:
             line = _prepare_sale_line(payload, store, salesmen)
         line.dims, line.season = _line_description(line)
-        line.cost = resolve_cost_plan(
-            brand=line.dims.get("brand", ""),
-            barcode=payload["barcode"].strip(),
-            season=line.season,
-            unit_cost_paise=line.unit_cost_paise,
+        # A piece coming back unwinds the posting its own sale made, so its plan is
+        # read off that line rather than derived again from masters that may have
+        # moved since (Rule 3). Only a paper-era return, whose original bill we do
+        # not hold, has nothing to read and falls back to a fresh resolution.
+        line.cost = (
+            plan_from_original(line.original)
+            if line.original is not None
+            else resolve_cost_plan(
+                brand=line.dims.get("brand", ""),
+                barcode=payload["barcode"].strip(),
+                season=line.season,
+                unit_cost_paise=line.unit_cost_paise,
+            )
         )
         prepared.append(line)
     _check_return_quantities(prepared)
@@ -703,6 +717,11 @@ def _write_line(sale: Sale, line: _PreparedLine, override: Any) -> SaleLine:
         costing_status=(
             SaleLine.CostingStatus.POSTED if line.cost.postable else SaleLine.CostingStatus.DEFERRED
         ),
+        # Frozen here and read back by any exchange against this line: which book
+        # the cost came out of, and who a brand-owned piece is settled with. The
+        # brand's terms are editable master data; what this bill posted is not.
+        cost_book=line.cost.book,
+        cost_vendor=line.cost.vendor,
         return_reason=payload["reason"].strip() if line.is_return else "",
         condition=(payload["condition"] or SaleLine.Condition.GOOD) if line.is_return else "",
         original_line=line.original,
