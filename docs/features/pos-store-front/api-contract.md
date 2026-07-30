@@ -17,7 +17,12 @@ Endpoints are grouped by build-order step.
 
 ### GET `/api/store/dashboard`
 
-Auth: `require_section("home", CAP_VIEW)`; `?store=` must be in the caller's scope (defaults to the single scoped store).
+**Amended 30 Jul 2026, after building it (#174).** Six things below were written as if `sell` and `offers` already existed; what shipped is marked inline, and the till (#181) should be built against this amended text, not the original sketch.
+
+Auth: `require_section("home", CAP_VIEW)`.
+Store resolution, **as built**: scope narrowed by the top-bar switcher (`active_store_ids`) picks the store, and `?store=` narrows *within* that rather than reaching past it.
+The original line ("must be in the caller's scope") left the switcher unsaid, which would have put two scope models on one screen: the `approvals_pending` row counts through `inbox_for`, which obeys the switcher, so a store named past the switcher would have read nought on that row alone while the other five counted correctly - the #171 defect class, on a card nobody would have checked.
+A caller who can see many stores and has picked none gets `SCOPE_DENIED`, not an arbitrary first store.
 
 Response 200 (cards keyed; every count links to a section/tab):
 
@@ -46,15 +51,23 @@ Response 200 (cards keyed; every count links to a section/tab):
 
 Business logic:
 
-1. Resolve store from scope; reject a store outside scope.
-   -> store not in caller scope -> `SCOPE_DENIED` (403)
+1. Resolve store from scope narrowed by the switcher (above); reject anything else.
+   -> no single store, or a store outside it -> `SCOPE_DENIED` (403)
 2. Aggregate today/last7 tiles from `sell_sale` + `sell_saletender` for the store (billed_at in store-local day).
+   **As built:** noughts, and a new top-level `"sales_live": false` beside them. `sell` does not exist until #177, and four zeros with nothing to read them against say "this store sold nothing today" when the truth is "this store cannot bill yet". The flag flips to `true` with the Sale document; nothing else about the block changes.
 3. Build action_queue counts from: approvals (pending, store-scoped), in-transit transfers inbound, GRN/PT drafts, QuarantineStock, RTV windows, open count sessions, `sell_heldbill`, `sell_deferredcosting(waiting)`, `sell_continuityflag(open)`.
+   **As built:** the first six keys only. The last three read `sell` tables that #177-#186 create, and they are *absent* rather than reported as nought - the ticket's own words are "counting what already exists", and a row reading "0 bills on hold" is a sentence about a store's morning. `approvals_pending` is the caller's own inbox (`inbox_for`), not every pending approval at the store: a count that opens onto an empty screen is worse than no count. `quarantine_to_confirm` counts draft `MarkDamaged` (the flag awaiting confirmation, #138), and `rtb_windows_closing` counts open `alerts_alert(return_window)` rather than re-deriving the pool, so the card and the Alerts screen cannot drift.
 4. `live.offers` = offers where store in scope and today within dates and status live.
+   **As built:** always `[]` - the rulebook is #183. Empty rather than absent: "no offers running" is a card a store reads every morning.
 5. `manager` block included only when the caller holds `sell >= CAP_APPROVE` at this store; otherwise the key is absent (matrix-driven, cashiers see the money tiles but not this row - grill settled).
+   **As built: `sell >= approve` AND `money >= view`.** What the block carries is `StoreTarget`, which `/api/masters/store-targets` serves behind `money: view` - gating on Sell alone opened a second door onto data whose first door is locked, and handed the target to a seat holding `sell: manage` with a ratified `money: none` cell (IT Admin).
+   Note also: no *seeded* role reaches `sell: approve` today. The ratified sheet gives both store roles `sell: operate`, and an override may only vary sections the sheet left blank, so putting a store manager on the manager rung is an access change two administrators make in the editor (#173) - live on the next request - not a code edit. **Anand's ruling is outstanding on whether the sheet should move instead.**
 6. `today.collections` and tiles come from synced bills only; the card is labelled with the last sync time of the till (from register state).
+   **Deferred to #182**, which builds register state. Nothing is labelled today because the till has no clock to read.
+7. `live.in_transit[]` is **as built** `{id, doc_number, pieces, expected}`. `expected` is the transfer's `expected_arrival_note` (free text: "Bus, Friday evening"), not the date this sketch showed - no expected-arrival date column exists on a transfer, and deriving one from the note would be inventing it; if a real date is wanted, it is a column on `StoreTransfer` first. `id` is there because the card links each carton to its own document, which is where the store scans it in: browser QA found that `transfers_to_receive` alone sent the *receiving* store to `/transfer/in-transit`, a screen scoped to the **source** store, so a store reading "1 carton to receive" clicked through to "nothing on the road". The row now opens the Transfers list and the card opens the carton.
+8. `manager.day_close.state` is **as built** `"not_built"` until store open/close (I3) lands. The key keeps its shape from the first day rather than appearing later.
 
-Errors: `SCOPE_DENIED`/403 only (a fresh store returns zeros, never 404).
+Errors: `SCOPE_DENIED`/403 only (a fresh store returns zeros, never 404). All three causes - no store picked, a store you cannot open, a bad `X-KDPS-Unit` - wear that one code and are told apart by the sentence, never by the code.
 
 ### GET | PUT `/api/masters/store-targets`
 

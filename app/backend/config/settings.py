@@ -65,8 +65,9 @@ INSTALLED_APPS = [
     "approvals.apps.ApprovalsConfig",
     "outbound.apps.OutboundConfig",
     "alerts.apps.AlertsConfig",
-    # Composition root: reads across the domain apps, imported by none of them.
+    # Composition roots: read across the domain apps, imported by none of them.
     "search.apps.SearchConfig",
+    "storefront.apps.StorefrontConfig",
 ]
 
 MIDDLEWARE = [

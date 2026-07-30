@@ -11,7 +11,6 @@ import {
   Inbox,
   PackageCheck,
   Settings2,
-  ShoppingCart,
   Sparkles,
   TrendingUp,
   X,
@@ -21,6 +20,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { Money } from "../lib/format";
 import { userCan } from "../shell/navConfig";
+import { StoreDashboard } from "./StoreDashboard";
 import "./Home.css";
 
 interface Summary {
@@ -558,21 +558,11 @@ export function Home() {
       </header>
 
       {variant === "store" ? (
-        <>
-          <QuickActions
-            items={[
-              { label: "Sell", to: "/sell", icon: <ShoppingCart size={20} />, cta: true },
-              { label: "Receive", to: "/receive", icon: <PackageCheck size={20} /> },
-              { label: "Count", to: "/stock-count", icon: <ClipboardList size={20} /> },
-              { label: "Transfer", to: "/transfer", icon: <ArrowLeftRight size={20} /> },
-            ]}
-          />
-          {renderDashboardCards()}
-          <div className="home-cols">
-            <NetworkPanel s={summary} />
-            <MorningBrief />
-          </div>
-        </>
+        // The store's Home is the D10 Dashboard (#174) - one payload, one store,
+        // its own shape. The configurable-tile grid below belongs to the network
+        // and warehouse views and is deliberately not drawn here: a store's
+        // screen is a fixed morning routine, not a board somebody rearranges.
+        <StoreDashboard />
       ) : variant === "warehouse" ? (
         <>
           <QuickActions

@@ -174,7 +174,16 @@ export function apiErrorMessage(e: unknown): string {
   // message is just as deliberate, and falling through to "something went
   // wrong" would tell the user nothing about a rule they just hit.
   const detail = (data as { detail?: unknown })?.detail;
+  // The D10 endpoints answer `{"error": "<sentence>", "code": "<CODE>"}` instead
+  // (`core/refusals.py`), so `error` is read by name too. The fallback below
+  // would find it by walking the object — but only while `error` is declared
+  // before `code`, and a body whose message depends on its key order is one
+  // reorder away from showing a store person "SCOPE_DENIED".
+  const error = (data as { error?: unknown })?.error;
   return (
-    firstSentence(detail) || firstSentence(data) || "Something went wrong. Please try again."
+    firstSentence(detail) ||
+    firstSentence(error) ||
+    firstSentence(data) ||
+    "Something went wrong. Please try again."
   );
 }
