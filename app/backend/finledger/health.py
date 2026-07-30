@@ -96,11 +96,24 @@ def _reconciliation(balances: dict[str, int]) -> dict[str, Any]:
     the subledger running sums. Vendor payable is credit-side (−paise) against a
     positive "we owe" subledger, so it ties when Σ(vendor rows) == −GL payable.
     Cash is an asset (debit +), the same sign as its subledger.
+
+    "Cash" here is the whole collection family, not the CASH account alone. A
+    counter sale writes one cash-ledger receipt row per tender — cash into CASH,
+    card into CARD, UPI into UPI — while the value GL sends the same three to CASH,
+    CARD_CLEARING and UPI_CLEARING, because a card sale is money the customer has
+    paid and the bank has not yet settled. Tying only CASH would report the books
+    broken after every card swipe. The family is the smallest honest unit until the
+    finledger's own cash path stops collapsing BANK and UPI into GL CASH; a
+    per-account tie is that change, not this one.
     """
     vendor_sub = VendorLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
     cash_sub = CashLedgerEntry.objects.aggregate(b=Sum("amount"))["b"] or 0
     gl_payable = balances[GLAccount.VENDOR_PAYABLE]
-    gl_cash = balances[GLAccount.CASH]
+    gl_cash = (
+        balances[GLAccount.CASH]
+        + balances[GLAccount.CARD_CLEARING]
+        + balances[GLAccount.UPI_CLEARING]
+    )
     vendor_reconciled = vendor_sub == -gl_payable
     cash_reconciled = cash_sub == gl_cash
     return {

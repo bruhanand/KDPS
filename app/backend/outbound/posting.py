@@ -18,6 +18,7 @@ from django.utils import timezone
 from approvals.models import CLEARED_STATUSES
 from core.gl import GLAccount
 from core.posting import PostingRef, assert_pt_or_vflip_actor, cr, dr, post_entries
+from masters.ownership import brand_is_owned
 from outbound.costing import OutboundPostingError, book_unit_cost
 from outbound.maker_checker import request_document_approval, require_approved
 from stockledger.models import (
@@ -283,30 +284,6 @@ def resolve_line_cost(store_id: int, sku_code: str, season: str = "") -> int:
     if cost <= 0:
         raise OutboundPostingError(_cannot_price(store_id, sku_code, season))
     return cost
-
-
-def brand_is_owned(brand_name: str) -> bool | None:
-    """Whose stock is this — KDPS's, or the brand's held on SOR/consignment?
-
-    The answer decides which accounts a value posting may touch: owned stock is
-    an on-book asset, brand-owned stock lives behind the SOR memo pair and never
-    inside INVENTORY. Getting it wrong is the "model-blind liability" defect the
-    30 June review found, so it is asked once, here.
-
-    ``None`` means the masters cannot say, which is not the same as "ours".
-    Every caller must treat it as a reason to refuse rather than to assume.
-    """
-    from masters.models import Brand
-
-    if not brand_name:
-        return None
-    # A V-flipped piece is displayed as "V <brand>" and is KDPS-owned by
-    # definition — the flip is the ownership change (see ``post_vflip``), so the
-    # original brand's row must not be consulted for it.
-    if brand_name.startswith("V "):
-        return True
-    brand = Brand.objects.filter(name=brand_name).first()
-    return None if brand is None else bool(brand.ownership == Brand.Ownership.OWNED)
 
 
 @dataclass

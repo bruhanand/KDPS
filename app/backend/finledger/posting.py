@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import Any
 
 from django.db import transaction
 
@@ -59,7 +60,7 @@ def _allocate(doc_type: str) -> str:
     return number
 
 
-def _user(user):
+def _user(user: Any) -> Any:
     return user if getattr(user, "is_authenticated", False) else None
 
 
@@ -277,6 +278,69 @@ def post_pt_vendor_bill(pt, booking, total_value_paise: int, user) -> VendorLedg
         booking=booking,
         reference=booking.number,
         gl=False,
+    )
+
+
+def post_sale_sor_liability(
+    vendor: Any, amount_paise: int, description: str, user: Any, *, reference: str = ""
+) -> VendorLedgerEntry | None:
+    """The SOR/consignment liability a *bill* raises, as vendor-subledger detail.
+
+    Brand-owned stock raises nothing at the PT (`post_pt_vendor_bill` refuses it):
+    the goods were never ours, so what we owe the brand is not known until a piece
+    sells. It accrues here, at the settlement rate frozen on the piece — never at
+    the price the customer happened to pay for it.
+
+    Detail only, deliberately: the Sale's own cost event books the payable in the
+    value GL (Dr COGS / Cr VENDOR_PAYABLE), so this row must not book it a second
+    time. What it buys is that the vendor's account shows the accrual, and the
+    subledger sum still equals the GL payable control account (F1).
+
+    A negative amount is an exchange handing a brand-owned piece back inside the
+    bill: what we owe falls, so the row is a reversal of accrual, not a bill.
+    """
+    if vendor is None or not amount_paise:
+        return None
+    return VendorLedgerEntry.objects.create(
+        vendor=vendor,
+        amount=amount_paise,
+        kind=(VendorLedgerEntry.Kind.BILL if amount_paise > 0 else VendorLedgerEntry.Kind.REVERSAL),
+        doc_number=_allocate(VENDOR_DOC),
+        description=description,
+        reference=reference,
+        posted_by=_user(user),
+    )
+
+
+def post_sale_collection(
+    *,
+    account: str,
+    amount_paise: int,
+    doc_number: str,
+    description: str,
+    mode: str,
+    user: Any,
+) -> CashLedgerEntry:
+    """One tender on a bill, as a cash-ledger receipt row.
+
+    Projection only, and that is the whole point of it not going through
+    `post_cash_movement`: the Sale's money event has already booked this tender in
+    the value GL (Dr CASH / CARD_CLEARING / UPI_CLEARING), and that helper would
+    book its own balanced voucher against SUSPENSE — the same rupees twice.
+
+    The row carries the *bill's* number rather than a CASH-series one, because it
+    is not an event of its own: it is what the bill collected, and the store's cash
+    summary and the D4 three-way audit both want to get from a collection back to
+    the bill that made it.
+    """
+    return CashLedgerEntry.objects.create(
+        account=account,
+        amount=abs(amount_paise),
+        kind=CashLedgerEntry.Kind.RECEIPT,
+        doc_number=doc_number,
+        description=description,
+        mode=mode,
+        posted_by=_user(user),
     )
 
 
