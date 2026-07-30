@@ -1,0 +1,168 @@
+// The commit point (#180).
+//
+// Every test here is about one sentence from the ticket: "number + enqueue are
+// one atomic local transaction; no path splits them". A bill number is the Tally
+// join key, the till is its only writer, and a counter that got out of step with
+// the queue would put two customers' purchases under one key or send a store
+// looking for a bill nobody wrote.
+
+import "fake-indexeddb/auto";
+
+import { afterEach, describe, expect, it } from "vitest";
+
+import { META, readMeta } from "./db";
+import { commitBill, previewNextNumber, renderBillNumber } from "./numbering";
+import { draft, freshTill, item } from "./testSupport";
+
+let close = () => undefined as void;
+afterEach(() => close());
+
+function till() {
+  const made = freshTill();
+  close = made.close;
+  return made;
+}
+
+describe("numbering a bill", () => {
+  it("counts from one and does not skip", async () => {
+    const { db, storeCode } = till();
+
+    const first = await commitBill(db, storeCode, draft());
+    const second = await commitBill(db, storeCode, draft());
+
+    expect(first.till_seq).toBe(1);
+    expect(second.till_seq).toBe(2);
+    expect(first.doc_number).toBe(renderBillNumber(first.fy, storeCode, 1));
+  });
+
+  it("queues exactly what it numbered, and nothing else", async () => {
+    const { db, storeCode } = till();
+
+    const bill = await commitBill(db, storeCode, draft());
+
+    const queued = await db.queue.toArray();
+    expect(queued).toHaveLength(1);
+    expect(queued[0].till_seq).toBe(bill.till_seq);
+    expect(queued[0].idempotency_uuid).toBe(bill.idempotency_uuid);
+    expect(queued[0].attempts).toBe(0);
+  });
+
+  it("gives every bill its own idempotency key", async () => {
+    // The server dedupes on this. Two bills sharing one would make the second a
+    // replay of the first: the customer's money in the drawer and nothing on the
+    // books to match it.
+    const { db, storeCode } = till();
+
+    const keys = new Set<string>();
+    for (let i = 0; i < 5; i += 1) {
+      keys.add((await commitBill(db, storeCode, draft())).idempotency_uuid);
+    }
+
+    expect(keys.size).toBe(5);
+  });
+
+  it("rolls the counter back when the queue write fails", async () => {
+    // The failure this exists to prevent: the number is spent, the bill is not
+    // written, and the server later reports a hole for a bill that never was.
+    const { db, storeCode } = till();
+    await commitBill(db, storeCode, draft());
+
+    db.queue.hook("creating", () => {
+      throw new Error("disk full");
+    });
+    await expect(commitBill(db, storeCode, draft())).rejects.toThrow();
+
+    expect(await readMeta(db, META.nextSeq, 0)).toBe(2);
+    expect(await db.queue.count()).toBe(1);
+  });
+
+  it("survives a reload - the counter and the queue are on disk", async () => {
+    // The acceptance criterion in the ticket's own words. A queue held in memory
+    // would lose a paid-for bill to a flat battery.
+    const { db, storeCode, reopen } = till();
+    await commitBill(db, storeCode, draft());
+    await commitBill(db, storeCode, draft());
+
+    const after = reopen();
+    const third = await commitBill(after, storeCode, draft());
+
+    expect(third.till_seq).toBe(3);
+    expect((await after.queue.orderBy("id").toArray()).map((b) => b.till_seq)).toEqual([1, 2, 3]);
+  });
+
+  it("restarts at one in a new financial year", async () => {
+    // The till rolls its own year on its own clock at midnight on 1 April; the
+    // server seeds next year's series row in advance precisely so it can.
+    const { db, storeCode } = till();
+    const march = new Date("2027-03-31T18:00:00Z");
+    const april = new Date("2027-04-01T04:00:00Z");
+
+    const last = await commitBill(db, storeCode, draft(), march);
+    const secondLast = await commitBill(db, storeCode, draft(), march);
+    const first = await commitBill(db, storeCode, draft(), april);
+
+    expect([last.fy, secondLast.fy]).toEqual(["26-27", "26-27"]);
+    expect(secondLast.till_seq).toBe(2);
+    expect(first.fy).toBe("27-28");
+    expect(first.till_seq).toBe(1);
+  });
+});
+
+describe("the local shelf", () => {
+  it("comes down by what was sold, in the same transaction", async () => {
+    const { db, storeCode } = till();
+    await db.items.put(item("8901000000011"));
+    await db.stock.put({ barcode: "8901000000011", qty: 3 });
+
+    await commitBill(db, storeCode, draft());
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
+  });
+
+  it("goes negative rather than refusing a sale", async () => {
+    // Grill Q6: the piece was on the shelf, so the count was wrong. A count that
+    // cannot go negative is a count that stops a real sale.
+    const { db, storeCode } = till();
+    await db.items.put(item("8901000000011"));
+    await db.stock.put({ barcode: "8901000000011", qty: 0 });
+
+    await commitBill(db, storeCode, draft());
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(-1);
+  });
+
+  it("invents no stock row for a piece the till has never heard of", async () => {
+    // A sold-before-inward line. Writing a row here would put a piece the books
+    // do not know about into the counter's own stock figures.
+    const { db, storeCode } = till();
+
+    await commitBill(db, storeCode, draft());
+
+    expect(await db.stock.count()).toBe(0);
+  });
+
+  it("puts an exchanged piece back", async () => {
+    const { db, storeCode } = till();
+    await db.items.put(item("8901000000011"));
+    await db.stock.put({ barcode: "8901000000011", qty: 1 });
+    const exchange = draft();
+    exchange.lines.push({ ...exchange.lines[0], line_no: 2, direction: "return", qty: 1 });
+
+    await commitBill(db, storeCode, exchange);
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(1);
+  });
+});
+
+describe("the next number, for a screen to show", () => {
+  it("is what the next bill will actually take", async () => {
+    const { db, storeCode } = till();
+    expect(await previewNextNumber(db, storeCode)).toBe(
+      renderBillNumber((await commitBill(db, storeCode, draft())).fy, storeCode, 1),
+    );
+
+    const next = await previewNextNumber(db, storeCode);
+
+    expect(next).toContain("/SAL/2");
+  });
+});

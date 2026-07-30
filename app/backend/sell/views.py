@@ -22,12 +22,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.refusals import first_message, refusal_body
+from masters.models import Store
 from masters.scoping import scope_by_store
 from sell.models import Sale, SaleLine
 from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
 from sell.serializers import SaleReadSerializer, SaleRowSerializer, SaleWriteSerializer
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
+from sell.services.register import register_state
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -50,6 +52,23 @@ def _sales(user: Any) -> QuerySet[Sale]:
         user,
         "store_id",
     )
+
+
+def till_store(request: Request) -> tuple[Store | None, Response]:
+    """The one store this caller is a counter for, or the refusal to send back.
+
+    Shared by the two till endpoints because it is one rule with one sentence -
+    "a till is a store login by construction" - and a second copy of it is a
+    second place for the wording, or the status, to drift.
+
+    `TILL_SCOPE` is the one refusal here that carries a code, and the till needs
+    it to: it means "this login will never be a till, a human must fix the
+    account", which is not something to retry.
+    """
+    try:
+        return resolve_till_store(request.user), Response(status=200)
+    except TillScopeError as exc:
+        return None, Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
 
 
 class SaleListCreateView(APIView):
@@ -130,11 +149,32 @@ class DatasetView(APIView):
     permission_classes = [IsAuthenticated, CanRunTill]
 
     def get(self, request: Request) -> Response:
-        try:
-            store = resolve_till_store(request.user)
-        except TillScopeError as exc:
-            return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
+        store, refusal = till_store(request)
+        if store is None:
+            return refusal
         return Response(build_dataset(store, request.query_params.get("since") or ""))
+
+
+class RegisterView(APIView):
+    """`GET /api/sell/register` - the till's boot and recovery state (#180).
+
+    The one call a counter makes before it trusts its own bill counter. Gated the
+    same as the dataset, and for the same reason: it describes one counter's
+    numbering, which is only ever of use to that counter.
+
+    Read-only. The deliberate handover that moves a series onto a new machine is
+    the sibling POST, and it belongs to a manager rather than to a till (#189).
+
+    See `sell.services.register` for what each field answers.
+    """
+
+    permission_classes = [IsAuthenticated, CanRunTill]
+
+    def get(self, request: Request) -> Response:
+        store, refusal = till_store(request)
+        if store is None:
+            return refusal
+        return Response(register_state(store).as_payload())
 
 
 class SaleDetailView(APIView):
