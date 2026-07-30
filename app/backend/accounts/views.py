@@ -24,6 +24,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from accounts.access_changes import is_access_administrator, propose_access_change
+from accounts.floors import RULES, cell_limits, describe_floors, floor_violations
 from accounts.models import (
     NAV_GROUPS,
     AccessChange,
@@ -34,7 +35,16 @@ from accounts.models import (
     User,
 )
 from accounts.permissions import require_section
-from accounts.sections import CAP_MANAGE, CAPABILITY_ORDER, SECTIONS
+from accounts.sections import (
+    CAP_MANAGE,
+    CAP_NONE,
+    CAPABILITY_ORDER,
+    CAPABILITY_WORDS,
+    SECTION_CODES,
+    SECTIONS,
+    is_valid_capability,
+    is_valid_section,
+)
 from accounts.serializers import (
     ActorPolicySerializer,
     AdminRoleSerializer,
@@ -267,6 +277,206 @@ class PendingAccessChangeMixin:
             target=self.get_object(),
             partial=bool(kwargs.get("partial", False)),
         )
+
+
+class AccessMatrixView(APIView):
+    """The roles x sections grid an administrator edits (#173).
+
+    The answer is the **stored** matrix — ``Role.section_access`` as it is
+    today, not the seed table it started from — plus the cells the money floor
+    has locked and the sentence to show over each. The grid is data all the way
+    down: sections, rungs, roles and locks all arrive from here, so adding a
+    section or ratifying a floor needs no front-end release (Rule 12).
+    """
+
+    permission_classes = [IsAuthenticated, IsRbacAdmin]
+
+    def get(self, request: Request) -> Response:
+        return Response(
+            {
+                "sections": [{"code": code, "label": label} for code, label in SECTIONS],
+                "capabilities": list(CAPABILITY_ORDER),
+                # All four ratified rules, including the two no cell can express,
+                # so the screen states the whole floor rather than the part it
+                # happens to grey out.
+                "rules": [{"rule": number, "text": text} for number, text in sorted(RULES.items())],
+                "roles": [
+                    {
+                        "code": role.code,
+                        "name": role.name,
+                        "is_system": role.is_system,
+                        "is_active": role.is_active,
+                        "user_count": role.users.count(),
+                        "section_access": normalised_access(role),
+                        "locked": cell_limits(role.code),
+                    }
+                    for role in Role.objects.prefetch_related("users").order_by("name")
+                ],
+            }
+        )
+
+
+class RoleAccessView(APIView):
+    """Replace one role's row of the matrix — as a proposal, never as a save.
+
+    Two things stand between an administrator and the stored row, and both are
+    floor rules rather than policy:
+
+    · the **money floor** (``accounts.floors``) refuses a cell that would put a
+      store seat on the books or hand full Money or full Setup to a role the
+      ruling does not trust — cell by cell, naming each one;
+    · **"never by one person alone"** (rule 4) makes the write a proposal a
+      second Owner or IT Admin applies through the existing approvals
+      machinery. The api-contract sketched an immediate 200 here; a direct write
+      would have been the one door in the system where one person could change
+      a role, which is exactly what the rule this ticket is enforcing forbids.
+      So the endpoint answers 202 with the approval to clear.
+    """
+
+    permission_classes = [IsAuthenticated, IsRbacAdmin, IsAccessAdministrator]
+
+    def put(self, request: Request, code: str) -> Response:
+        try:
+            role = Role.objects.get(code=code)
+        except Role.DoesNotExist:
+            return Response(
+                {"error": f"No role with code {code!r}.", "code": "NOT_FOUND"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        unknown = sorted(set(request.data) - {"section_access"})
+        if unknown:
+            return Response(
+                {
+                    "error": (
+                        "This endpoint sets section access and nothing else, and the "
+                        "four floor rules cannot be configured away by adding a "
+                        f"setting: {', '.join(unknown)}."
+                    ),
+                    "code": "VALIDATION",
+                    "fields": unknown,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        requested = request.data.get("section_access")
+        if not isinstance(requested, dict):
+            return Response(
+                {"error": "section_access must be an object.", "code": "VALIDATION"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        invalid = _invalid_cells(requested)
+        if invalid:
+            return Response(
+                {"error": "; ".join(invalid), "code": "VALIDATION"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        crossed = floor_violations(role.code, requested)
+        if crossed:
+            return Response(
+                {
+                    "error": " ".join(describe_floors(crossed)),
+                    "code": "FLOOR_LOCKED",
+                    "cells": crossed,
+                },
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+
+        # A full replacement: a section the body left out is *removed*, not kept,
+        # so the row on screen is the row that gets stored. Fail-closed — an
+        # omission narrows access, it never widens it.
+        before = normalised_access(role)
+        after = _replacement(requested)
+        cells = [
+            {
+                "section": section,
+                "from": before[section]["capability"],
+                "to": after[section]["capability"],
+            }
+            for section in SECTION_CODES
+            if before[section]["capability"] != after[section]["capability"]
+        ]
+        if not cells:
+            return Response(
+                {
+                    "status": "unchanged",
+                    "detail": "Nothing changed, so nobody was asked to approve anything.",
+                    "code": role.code,
+                    "section_access": before,
+                }
+            )
+
+        change, approval = propose_access_change(
+            resource=AccessChange.Resource.ROLE,
+            actor=request.user,
+            data={"section_access": after},
+            target=role,
+            partial=True,
+            annotations={"cells": cells},
+            summary=(
+                f"Access change: {role.name} — "
+                + ", ".join(f"{c['section']} {c['from']}→{c['to']}" for c in cells)
+            ),
+        )
+        response = _pending_response(change, approval)
+        response.data["cells"] = cells
+        return response
+
+
+def _invalid_cells(requested: dict[str, Any]) -> list[str]:
+    """Every unknown section code or off-ladder rung in one answer, not the first."""
+    problems = []
+    for section, entry in requested.items():
+        if not is_valid_section(section):
+            problems.append(f"Unknown section {section!r}")
+            continue
+        capability = entry.get("capability") if isinstance(entry, dict) else None
+        if not is_valid_capability(capability or ""):
+            problems.append(f"{section}: capability must be one of {', '.join(CAPABILITY_ORDER)}")
+    return problems
+
+
+def normalised_access(role: Role) -> dict[str, dict[str, str]]:
+    """A role's stored row, stated for all thirteen sections.
+
+    A stored row can be short (a hand-made role, an older seed); the grid needs
+    every cell, and an absent one is ``none`` — the same fail-closed answer
+    ``require_section`` gives it.
+    """
+    stored = role.section_access if isinstance(role.section_access, dict) else {}
+    out: dict[str, dict[str, str]] = {}
+    for section in SECTION_CODES:
+        entry = stored.get(section)
+        entry = entry if isinstance(entry, dict) else {}
+        capability = entry.get("capability", CAP_NONE)
+        out[section] = {
+            "capability": capability if is_valid_capability(str(capability)) else CAP_NONE,
+            "label": str(entry.get("label", "")),
+        }
+    return out
+
+
+def _replacement(requested: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """The row to store, from the row the screen sent.
+
+    A cell that arrives without a label gets the ladder's own word for its rung.
+    The ratified sheet wording ("Expenses only (create)") is preserved only on
+    cells nobody has retuned — once a human moves a rung, the old sentence
+    describes access the role no longer has, and a stale label on a live gate is
+    worse than a plain one.
+    """
+    out: dict[str, dict[str, str]] = {}
+    for section in SECTION_CODES:
+        entry = requested.get(section)
+        entry = entry if isinstance(entry, dict) else {}
+        capability = str(entry.get("capability", CAP_NONE))
+        label = str(entry.get("label") or "").strip()
+        out[section] = {
+            "capability": capability,
+            "label": label or CAPABILITY_WORDS[capability],
+        }
+    return out
 
 
 #: Users & Roles (#106) — name / code, same as every other master list.

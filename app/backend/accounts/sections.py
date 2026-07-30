@@ -40,6 +40,18 @@ CAP_MANAGE = "manage"  # full control / configure the section
 CAPABILITY_ORDER = [CAP_NONE, CAP_VIEW, CAP_OPERATE, CAP_APPROVE, CAP_MANAGE]
 CAPABILITY_RANK = {cap: rank for rank, cap in enumerate(CAPABILITY_ORDER)}
 
+# The ladder in words. A seeded cell carries the sheet's own sentence as its
+# label; a cell a human retunes in the access-matrix editor (#173) has no sheet
+# sentence to carry, so it gets the rung's plain word instead of keeping a
+# description of access it no longer has.
+CAPABILITY_WORDS = {
+    CAP_NONE: "No access",
+    CAP_VIEW: "View only",
+    CAP_OPERATE: "Do the work",
+    CAP_APPROVE: "Approve others' work",
+    CAP_MANAGE: "Full control",
+}
+
 
 def is_valid_capability(cap: str) -> bool:
     return cap in CAPABILITY_RANK

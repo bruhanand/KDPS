@@ -36,6 +36,13 @@ SERIALIZERS = {
     AccessChange.Resource.APPROVAL_POLICY: ApprovalPolicyAdminSerializer,
 }
 
+#: Payload keys that are evidence rather than columns. The appliers below write
+#: every key of a payload onto the row, so an annotation has to be visibly not a
+#: field: the leading underscore says "kept for the audit trail, never applied".
+#: `_cells` is the access matrix's per-cell diff (#173) — the old and new rung of
+#: each section an edit moved, which the flat `section_access` blob cannot show.
+ANNOTATION_PREFIX = "_"
+
 
 def is_access_administrator(user: Any) -> bool:
     if not (user and getattr(user, "is_authenticated", False)):
@@ -69,25 +76,36 @@ def propose_access_change(
     data: dict[str, Any],
     target: Any = None,
     partial: bool = False,
+    annotations: dict[str, Any] | None = None,
+    summary: str | None = None,
 ) -> tuple[AccessChange, Any]:
-    """Validate and freeze a Setup mutation, then ask a second admin to apply it."""
+    """Validate and freeze a Setup mutation, then ask a second admin to apply it.
+
+    ``annotations`` are evidence carried alongside the columns and never written
+    to the row (see ``ANNOTATION_PREFIX``); ``summary`` overrides the generic
+    "Update role: X" line when the caller can say something more useful.
+    """
     serializer_class = SERIALIZERS[resource]
     serializer = serializer_class(instance=target, data=data, partial=partial)
     serializer.is_valid(raise_exception=True)
     payload = _json_payload(resource, serializer.validated_data)
+    for key, value in (annotations or {}).items():
+        payload[f"{ANNOTATION_PREFIX}{key}"] = value
     operation = (
         AccessChange.Operation.UPDATE if target is not None else AccessChange.Operation.CREATE
     )
     target_name = (
         str(target) if target is not None else str(payload.get("name") or payload.get("code"))
     )
-    summary = f"{operation.title()} {resource.replace('_', ' ')}: {target_name or 'new row'}"
+    line = (
+        summary or f"{operation.title()} {resource.replace('_', ' ')}: {target_name or 'new row'}"
+    )
     change = AccessChange.objects.create(
         resource=resource,
         operation=operation,
         target_id=getattr(target, "pk", None),
         payload=payload,
-        summary=summary[:240],
+        summary=line[:240],
         created_by=actor,
     )
     approval = request_approval(
@@ -111,11 +129,18 @@ def _target(model: type, change: AccessChange) -> Any:
         raise AccessChangeError("The row this access change targeted no longer exists.") from exc
 
 
+def _columns(change: AccessChange) -> dict[str, Any]:
+    """The payload minus its audit annotations — what actually lands on the row."""
+    return {
+        key: value for key, value in change.payload.items() if not key.startswith(ANNOTATION_PREFIX)
+    }
+
+
 def _apply_user(change: AccessChange) -> None:
     """The one resource whose payload is not just columns: two m2m sets and a
     password that was hashed at proposal time, never carried in the clear."""
     user = _target(User, change)
-    payload = dict(change.payload)
+    payload = _columns(change)
     store_ids = payload.pop("store_ids", None)
     brand_ids = payload.pop("brand_ids", None)
     password_hash = payload.pop("password_hash", "")
@@ -135,7 +160,7 @@ def _apply_columns(model: type) -> Callable[[AccessChange], None]:
 
     def apply(change: AccessChange) -> None:
         row = _target(model, change)
-        for key, value in change.payload.items():
+        for key, value in _columns(change).items():
             setattr(row, key, value)
         row.save()
 
