@@ -30,6 +30,7 @@ describe("the route table", () => {
       ["/money/vendor", "vendor-ledger"],
       ["/money/cash", "cash-ledger"],
       ["/setup/users", "setup-users"],
+      ["/setup/access", "setup-access"],
     ];
     for (const [url, id] of cases) expect(screenAt(url), url).toBe(id);
   });
