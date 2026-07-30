@@ -66,7 +66,13 @@ def _visible(user: Any, *, include_ended: bool = False) -> OfferQuerySet:
     store_ids = active_store_ids(user)
     if store_ids is None:  # head office: the network's rulebook
         return rows
-    codes = list(Store.objects.filter(id__in=store_ids).values_list("code", flat=True))
+    # Upper-cased, because `store_scope.stores` is normalised on the way in and
+    # `Store.code` is a slug with no normalisation of its own. Without it a store
+    # whose code is not already upper case would 404 on its own rule.
+    codes = [
+        code.upper()
+        for code in Store.objects.filter(id__in=store_ids).values_list("code", flat=True)
+    ]
     if not codes:
         return rows.none()
     reach = Q()
@@ -183,16 +189,27 @@ class OfferDetailView(APIView):
         return self._end_and_replace(offer, serializer, request)
 
     def _stop(self, offer: Offer) -> Response:
-        """Stop a running rule, at the end of today rather than retrospectively.
+        """Stop a running rule at the end of today, and never any other day.
 
-        `ends_on` moves to today, never to yesterday. Fifty tills are holding this
-        rule offline and will keep applying it until their own clocks pass its end
-        date; back-dating would not stop one of them, it would only make every
-        bill they printed today disagree with the server and raise an
-        `offer_mismatch` on each. The placard is still in the window, too.
+        Two boundaries, and both matter for the same reason - the accept pipeline
+        prices a bill against the rules that were running on the day it printed.
+
+        It does not move **backwards**. Fifty tills are holding this rule offline
+        and will keep applying it until their own clocks pass its end date;
+        back-dating would not stop one of them, it would only make every bill they
+        printed today disagree with the server. The placard is still in the
+        window, too.
+
+        And it does not move **forwards**. A rule whose end date has already gone
+        by is stopped where it stopped: pushing `ends_on` out to today would widen
+        the window a bill can be re-priced in, and every un-synced bill from the
+        days in between would suddenly be explained by a rule that was not
+        running when it was rung up.
         """
+        today = timezone.localdate()
+        stops_at = today if offer.ends_on is None else min(offer.ends_on, today)
         offer.status = Offer.Status.ENDED
-        offer.ends_on = max(timezone.localdate(), offer.starts_on)
+        offer.ends_on = max(stops_at, offer.starts_on)
         offer.save(update_fields=["status", "ends_on", "updated_at"])
         return Response(OfferReadSerializer(offer).data)
 

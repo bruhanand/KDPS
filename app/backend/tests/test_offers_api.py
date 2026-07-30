@@ -619,3 +619,63 @@ def test_a_money_dial_no_business_would_ever_run_is_refused(counter):
 
     assert response.status_code == 400
     assert "larger than any offer" in response.json()["error"]
+
+
+def test_a_till_cannot_zero_a_bill_by_naming_a_real_offer(counter):
+    """The hole the second review round found, closed.
+
+    Naming a real rule buys the *amount that rule works out*, never a permission.
+    A ₹1,499 shirt under a 30% rule is worth ₹449.70 off; asking for the whole
+    ₹1,499 and calling it the same offer leaves ₹1,049.30 nobody authorised, and
+    that is a manager's to approve.
+    """
+    offer = _live_rule(counter["store"].code)
+    _shelf(counter["store"])
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=MRP_PAISE)
+    payload["lines"][0]["offer_id"] = offer.id
+    payload["lines"][0]["offer_evidence"] = {"offer_id": offer.id, "saved_paise": 0}
+    payload["tenders"] = [{"mode": "cash", "amount_paise": 0}]
+    payload["totals"] |= {"discount_paise": MRP_PAISE, "net_paise": 0, "gst_paise": 0}
+    payload["lines"][0] |= {"net_paise": 0, "gst_paise": 0}
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+
+
+def test_a_line_credited_to_its_cited_rule_is_always_put_in_front_of_a_human(counter):
+    """The other half of the same hole: a drifted line may not land quietly.
+
+    The evidence the till sends is what step 12 measures against, so a till that
+    understated its own saving could make the mismatch cancel itself out. The
+    door exists so a queue is not stopped, not so a discount passes unseen - so
+    every line credited to its citation is flagged, whatever the figures say.
+    """
+    offer = _live_rule(counter["store"].code)
+    _shelf(counter["store"])
+    Sku.objects.filter(barcode="8901000000011").update(no_discount=True)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=44970)
+    payload["lines"][0]["offer_id"] = offer.id
+    payload["lines"][0]["offer_evidence"] = {"offer_id": offer.id, "saved_paise": 0}
+
+    response = counter["client"].post(SALES_URL, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    assert "offer_mismatch" in response.json()["flags"]
+
+
+def test_stopping_a_rule_never_widens_the_days_it_covers(counter):
+    """A rule that stopped on the 20th stopped on the 20th.
+
+    Pushing `ends_on` out to today would let the accept pipeline explain every
+    un-synced bill from the days in between with a rule that was not running when
+    those bills were rung up.
+    """
+    offer = _live_rule(counter["store"].code, ends_on=date(2026, 7, 20))
+
+    response = _ho().put(f"{OFFERS_URL}{offer.id}", {"status": "ended"}, format="json")
+
+    assert response.status_code == 200, response.json()
+    offer.refresh_from_db()
+    assert offer.ends_on == date(2026, 7, 20)

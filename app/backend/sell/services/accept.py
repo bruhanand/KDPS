@@ -63,8 +63,8 @@ from sell.services.postings import (
 from sell.services.recompute import (
     OFFER_TOLERANCE_PAISE,
     BillLine,
+    credit_from_cited_rule,
     resolve_bill,
-    rule_was_running,
 )
 from sell.services.resolve import (
     ResolvedPiece,
@@ -554,7 +554,7 @@ def _check_totals(data: dict[str, Any], lines: list[_PreparedLine]) -> None:
         )
 
 
-@dataclass(frozen=True)
+@dataclass
 class _Rulebook:
     """What the rulebook says this bill should have cost - the server's own answer.
 
@@ -572,14 +572,34 @@ class _Rulebook:
     day: date
     resolution: Resolution
     lines: dict[int, BillLine]
+    #: Lines whose discount was credited to the rule they cite rather than to
+    #: today's rulebook. Every one is flagged at step 12, whatever the figures
+    #: come to - see `_check_discount_policy`.
+    drift: set[int] = field(default_factory=set)
 
     def saving_for(self, line_no: int) -> int:
         outcome = self.resolution.by_line().get(line_no)
         return outcome.discount_paise if outcome else 0
 
-    def was_running(self, offer_id: Any, line_no: int) -> bool:
-        line = self.lines.get(line_no)
-        return line is not None and rule_was_running(offer_id, self.store.code, self.day, line)
+    def credit_for(self, line: _PreparedLine) -> tuple[int, bool]:
+        """What this line's discount may be credited to the rulebook, and whether
+        that credit came from the rule the line *cites* rather than from today's
+        reading of the book.
+
+        The second half is the important one: a credit the current rulebook does
+        not produce is a disagreement, and a disagreement is always put in front
+        of a human, whatever the amounts happen to be.
+        """
+        line_no = line.payload["line_no"]
+        today = self.saving_for(line_no)
+        cited = credit_from_cited_rule(
+            line.payload.get("offer_id"),
+            self.store.code,
+            self.day,
+            list(self.lines.values()),
+            line_no,
+        )
+        return max(today, cited), cited > today
 
 
 def _server_resolution(data: dict[str, Any], store: Store, lines: list[_PreparedLine]) -> _Rulebook:
@@ -621,22 +641,6 @@ def _billed_on(data: dict[str, Any]) -> date:
     return timezone.localdate(data["billed_at"])
 
 
-def _rulebook_saving(line: _PreparedLine, rulebook: _Rulebook) -> int:
-    """How much of this line's discount the rulebook is answerable for.
-
-    The server's own resolution, never the till's `offer_evidence.saved_paise`.
-    That number arrives from the till, and the till is the party the cap exists to
-    constrain: a cap the capped party can lift by describing its own discount as
-    an offer is not a cap. The evidence is still stored on the line, because the
-    daily applied-vs-rulebook check audits it - it simply does not get a vote
-    here.
-
-    Capped at what was actually given, so a rulebook that was *more* generous than
-    the counter was cannot manufacture headroom for a manual discount on top.
-    """
-    return min(rulebook.saving_for(line.payload["line_no"]), int(line.payload["disc_paise"]))
-
-
 def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, override: Any) -> None:
     """Step 6 - a discount the rulebook did not produce needs a manager past the cap.
 
@@ -645,24 +649,35 @@ def _check_discount_policy(lines: list[_PreparedLine], rulebook: _Rulebook, over
     above it the bill does not close without a manager's OK recorded on it, which
     is the whole of H3.
 
-    With one door left open, and only one: a line over the cap that names a rule
-    the server can still verify was running over that piece that day is a
-    *disagreement about an amount*, not an unauthorised discount. It lands, and
-    step 12 puts it on the store's morning queue instead of stopping the store
-    (`recompute.rule_was_running` says why at length).
+    The rulebook's share is the server's own resolution, never the till's
+    `offer_evidence.saved_paise`: that number arrives from the till, and the till
+    is the party the cap exists to constrain. A cap the capped party can lift by
+    describing its own discount as an offer is not a cap.
+
+    With one door open, and only one. A line may also be credited with what the
+    rule it *cites* works out - re-run server-side, so it is an amount rather
+    than a claim (`recompute.credit_from_cited_rule` says why at length). Any
+    line credited that way is recorded on `rulebook_drift`, and every one of them
+    is flagged at step 12 whatever the figures come to: the door exists so a
+    store's queue is not stopped by head office editing master data, not so a
+    discount can pass unseen.
     """
     cap_percent = SellPolicy.current().manual_discount_cap_percent
     over: list[_PreparedLine] = []
     for line in lines:
         if line.is_return:
             continue
-        manual = line.payload["disc_paise"] - _rulebook_saving(line, rulebook)
+        credit, drifted = rulebook.credit_for(line)
+        given = int(line.payload["disc_paise"])
+        # Never more than was actually given, so a rulebook more generous than the
+        # counter cannot manufacture headroom for a manual discount on top.
+        manual = given - min(credit, given)
         allowance = int(Decimal(line.payload["mrp_paise"] * line.qty) * cap_percent / 100)
+        if drifted and manual <= allowance:
+            rulebook.drift.add(line.payload["line_no"])
         if manual <= allowance:
             continue
         line.override_needed = True
-        if rulebook.was_running(line.payload.get("offer_id"), line.payload["line_no"]):
-            continue
         over.append(line)
     if over and override is None:
         first = over[0].payload["line_no"]
@@ -1161,7 +1176,7 @@ def _advisory_offer_check(
         given = int(row.disc_paise or 0)
         keyed_in = max(given - max(claimed, expected), 0)
         charged = given - keyed_in
-        if abs(charged - expected) > OFFER_TOLERANCE_PAISE:
+        if abs(charged - expected) > OFFER_TOLERANCE_PAISE or row.line_no in rulebook.drift:
             offenders.append(
                 {
                     "line_no": row.line_no,

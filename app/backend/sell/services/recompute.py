@@ -35,7 +35,7 @@ from typing import Any
 from django.db.models import Q
 
 from offers.models import Offer
-from offers.resolution import Cart, CartLine, Resolution, Rule, covers, resolve
+from offers.resolution import Cart, CartLine, Resolution, Rule, resolve
 
 #: A rupee a line, matching the GST half of the same advisory step (B3). Below
 #: this the two engines are agreeing and the difference is a rounding artefact
@@ -103,37 +103,47 @@ def resolve_bill(store_code: str, day: date, lines: Sequence[BillLine]) -> Resol
     return resolve(cart, rulebook_for(store_code, day))
 
 
-def rule_was_running(offer_id: Any, store_code: str, day: date, line: BillLine) -> bool:
-    """Was the rule the counter cited genuinely running over this piece that day?
+def credit_from_cited_rule(
+    offer_id: Any, store_code: str, day: date, lines: Sequence[BillLine], line_no: int
+) -> int:
+    """What the rule this line *names* gives it - the second opinion the cap takes.
 
     The narrow question that keeps the discount cap from stopping a store's whole
-    queue.
+    queue, without opening it to a till that simply says "an offer did this".
 
     The server reads its rulebook live; the till read its copy whenever it last
-    synced. Between the two, head office can end a rule, take this store off one,
-    or flip a piece's no-discount flag - and a bill priced honestly under the
+    synced. Between the two, head office can flip a piece's no-discount flag or
+    edit the master data a rule aims by - and a bill priced honestly under the
     till's copy then looks, to the server, like a discount nobody authorised.
     Refusing it would be `OVERRIDE_REQUIRED` on a receipt already in a customer's
     hand, with every bill behind it stuck in the queue: exactly the "block what
     the business has already absorbed" this pipeline exists not to do.
 
-    So the citation is checked for the three things the server *can* still settle
-    - the rule exists, it belonged to this store, and it covered this piece on the
-    day the bill printed. What it cannot settle is the *amount*, which is why a
-    line answering true here is flagged rather than waved through.
+    So the cited rule is fetched and **re-run on its own**, and what it works out
+    is the credit. That is an *amount*, not a permission: a till naming a real
+    rule cannot thereby claim any discount it likes, only the one that rule
+    actually produces. A rule's dials cannot have moved underneath it either -
+    a live rule is frozen, and changing one authors a successor (`offers.views`).
 
-    A fabricated citation fails all three: a till cannot mint a rule, put itself
-    on one, or make one cover a brand it never named.
+    A fabricated citation earns nothing: a till cannot mint a rule, put its own
+    store on one, or make one cover a brand it never named.
 
-    Note `no_discount=False`. The question being asked is whether the *rule* was
-    about this piece, and the AMM/NOD flag is a fact about the piece today, not
-    part of any rule. It is a live master-data column with no history, so a piece
-    flagged after a bill printed would otherwise turn that bill into a refusal -
-    the same retrospective trap, arriving through a different column.
+    Two deliberate narrowings. `no_discount` is forced off, because the question
+    is whether the *rule* was about this piece and the AMM/NOD flag is a fact
+    about the piece today, with no history - a piece flagged after a bill printed
+    would otherwise turn that bill into a refusal, the same retrospective trap
+    through a different column. And `offer_id` is the brand-layer winner by
+    construction, so a saving that came only from a storewide or bank add-on
+    earns no credit here; those are small percentages on top of a brand offer,
+    and one large enough to blow a cap on its own is a bill for a manager.
     """
     if not offer_id:
-        return False
+        return 0
     offer = _running_on(store_code, day).filter(pk=offer_id).first()
     if offer is None:
-        return False
-    return covers(offer.as_rule(), replace(_cart_line(line), no_discount=False), day)
+        return 0
+    cart = Cart(
+        lines=tuple(replace(_cart_line(line), no_discount=False) for line in lines), day=day
+    )
+    outcome = resolve(cart, [offer.as_rule()]).by_line().get(line_no)
+    return outcome.discount_paise if outcome else 0
