@@ -12,7 +12,16 @@
 
 import { describe, expect, it } from "vitest";
 
-import { covers, verifyPin, whoAuthorised } from "./pin";
+import {
+  covers,
+  isShared,
+  kindsOf,
+  verifyPin,
+  whoAuthorised,
+  OVER_CAP_DISCOUNT,
+  UNVERIFIED_NOTE,
+} from "./pin";
+import type { Ask } from "./pin";
 import type { TillManager } from "./types";
 
 /** `4813`, hashed by Django. */
@@ -68,30 +77,62 @@ describe("a hash the counter cannot read", () => {
   });
 });
 
+/** A discount of `paise` on one cart line. */
+function discount(ref: string, paise: number): Ask {
+  return { kind: OVER_CAP_DISCOUNT, ref, paise, label: `Line ${ref}` };
+}
+
+/** A credit note this counter cannot check. */
+function note(ref: string, paise: number): Ask {
+  return { kind: UNVERIFIED_NOTE, ref, paise, label: ref };
+}
+
 describe("who authorised it", () => {
   const managers = [KUMAR, SINHA];
 
-  it("names the manager whose PIN it is, and what they authorised", async () => {
+  it("names the manager whose PIN it is, and exactly what they were shown", async () => {
     const at = new Date("2026-07-31T09:15:00Z");
 
-    const authorisation = await whoAuthorised(managers, "190277", ["over_cap_discount"], at);
+    const authorisation = await whoAuthorised(managers, "190277", [discount("l1", 20000)], at);
 
     expect(authorisation).toEqual({
       user_id: 9,
       name: "P. Sinha",
-      kinds: ["over_cap_discount"],
+      asks: [discount("l1", 20000)],
       at: "2026-07-31T09:15:00.000Z",
     });
   });
 
+  it("keeps its own copy of what was on the screen", async () => {
+    // The cart goes on changing after the manager walks away. An authorisation
+    // holding a reference into it would quietly agree to whatever it became.
+    const asks = [discount("l1", 20000)];
+
+    const authorisation = await whoAuthorised(managers, "4813", asks);
+    asks[0].paise = 2000000;
+
+    expect(authorisation?.asks[0].paise).toBe(20000);
+  });
+
   it("answers nothing for a PIN belonging to nobody on this counter", async () => {
-    expect(await whoAuthorised(managers, "0000", ["credit_note"])).toBeNull();
+    expect(await whoAuthorised(managers, "0000", [note("CRN/9", 50000)])).toBeNull();
   });
 
   it("answers nothing when the counter knows no managers at all", async () => {
     // The seeded state today: no store role reaches the rung, so the list is
     // empty until an administrator grants it. An empty list authorises nothing.
-    expect(await whoAuthorised([], "4813", ["credit_note"])).toBeNull();
+    expect(await whoAuthorised([], "4813", [note("CRN/9", 50000)])).toBeNull();
+  });
+
+  it("authorises nobody when two managers share a PIN", async () => {
+    // Four digits is a small space. "The first one that matches" would put one
+    // manager's name on a bill the other one approved, with nothing afterwards
+    // able to tell - so an ambiguous PIN is refused and said out loud.
+    const twin = { ...SINHA, user_id: 11, name: "S. Das", till_pin_hash: KUMAR.till_pin_hash };
+
+    expect(await whoAuthorised([KUMAR, twin], "4813", [discount("l1", 100)])).toBeNull();
+    expect(await isShared([KUMAR, twin], "4813")).toBe(true);
+    expect(await isShared([KUMAR, twin], "190277")).toBe(false);
   });
 });
 
@@ -99,23 +140,52 @@ describe("what an authorisation covers", () => {
   const authorisation = {
     user_id: 7,
     name: "R. Kumar",
-    kinds: ["credit_note"],
+    asks: [discount("l1", 20000), note("26-27/XXX/CRN/9", 50000)],
     at: "2026-07-31T09:15:00.000Z",
   };
 
-  it("covers what the manager was shown", () => {
-    expect(covers(authorisation, ["credit_note"])).toBe(true);
+  it("covers exactly what the manager was shown", () => {
+    expect(covers(authorisation, [discount("l1", 20000)])).toBe(true);
+    expect(covers(authorisation, authorisation.asks)).toBe(true);
   });
 
-  it("does not stretch to an exception keyed in after they walked away", () => {
-    expect(covers(authorisation, ["credit_note", "over_cap_discount"])).toBe(false);
+  it("covers less than they agreed to", () => {
+    // The cashier took ₹100 back off the discount. Nobody has to look again at
+    // something that got smaller.
+    expect(covers(authorisation, [discount("l1", 10000)])).toBe(true);
   });
 
-  it("is not needed by a bill that needs nothing", () => {
+  it("does not stretch to a bigger discount on the same line", () => {
+    // The hole this closes: a manager nods at ₹200 off, the cashier makes it
+    // ₹20,000, and the bill closes in the manager's name.
+    expect(covers(authorisation, [discount("l1", 20001)])).toBe(false);
+  });
+
+  it("does not stretch to the same discount on another line", () => {
+    expect(covers(authorisation, [discount("l2", 20000)])).toBe(false);
+  });
+
+  it("does not stretch to a second unknown note", () => {
+    expect(covers(authorisation, [note("26-27/XXX/CRN/10", 100)])).toBe(false);
+  });
+
+  it("is not needed by a bill that asks for nothing", () => {
     expect(covers(null, [])).toBe(true);
   });
 
-  it("is needed by a bill that needs something", () => {
-    expect(covers(null, ["over_cap_discount"])).toBe(false);
+  it("is needed by a bill that asks for something", () => {
+    expect(covers(null, [discount("l1", 1)])).toBe(false);
+  });
+});
+
+describe("the kinds among a set of asks", () => {
+  it("is always written in one order, whatever order they arrived in", () => {
+    const asks = [note("CRN/9", 1), discount("l1", 1), note("CRN/10", 1)];
+
+    expect(kindsOf(asks)).toEqual(["over_cap_discount", "credit_note"]);
+  });
+
+  it("is empty for an ordinary bill", () => {
+    expect(kindsOf([])).toEqual([]);
   });
 });

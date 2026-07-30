@@ -771,6 +771,9 @@ def _write_sale(
     customer = data.get("customer") or {}
     totals = data["totals"]
     buyer_gstin = (customer.get("gstin") or "").strip().upper()
+    # What the till said about the manager's tap, read once. Empty unless the
+    # pipeline recognised the person it named - see `override_by` below.
+    authorisation = (data.get("override") or {}) if override else {}
     sale = Sale.objects.create(
         idempotency_uuid=data["idempotency_uuid"],
         store=store,
@@ -798,8 +801,8 @@ def _write_sale(
         # been discarded by `manager_for_override`, and recording the id anyway
         # would put a name on a bill that person never authorised.
         override_by=override,
-        override_kind=(data.get("override") or {}).get("kind", "") if override else "",
-        override_at=(data.get("override") or {}).get("at") if override else None,
+        override_kind=authorisation.get("kind", ""),
+        override_at=authorisation.get("at"),
         created_by=actor,
     )
     for line in lines:

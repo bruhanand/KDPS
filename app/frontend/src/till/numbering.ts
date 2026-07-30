@@ -199,13 +199,30 @@ async function moveStock(db: TillDb, bill: QueuedBill): Promise<void> {
  * different remedy. The sync's `deleted.credit_notes` is what removes it.
  */
 async function moveNotes(db: TillDb, bill: QueuedBill): Promise<void> {
-  for (const [number, spent] of notesSpentBy(bill.tenders)) {
+  await drawDownNotes(db, notesSpentBy(bill.tenders));
+}
+
+/**
+ * Take `spent` off the counter's copy of each named note.
+ *
+ * Exported because the sync does the same write for a different reason: it has
+ * to subtract the queue's spending from a balance the server has just re-stated
+ * (`sync.replayQueuedNotes`). Two copies of "what a spent note now says" is two
+ * chances to write one of them differently.
+ *
+ * A note the counter does not hold is skipped: it is an unverified one taken on
+ * a manager's OK, there is no local balance to move, and inventing one would be
+ * inventing money. A note that reaches nought stays in the cache at nought, so
+ * the next attempt reads "nothing left on it" rather than "never heard of it".
+ */
+export async function drawDownNotes(db: TillDb, spent: Map<string, number>): Promise<void> {
+  for (const [number, amount] of spent) {
     const note = await db.creditNotes.get(number);
-    // No row means the counter never had this note: an unverified one, taken on
-    // a manager's OK. There is no local balance to move, and inventing one would
-    // be inventing money.
     if (!note) continue;
-    await db.creditNotes.put({ ...note, remaining_paise: Math.max(0, note.remaining_paise - spent) });
+    await db.creditNotes.put({
+      ...note,
+      remaining_paise: Math.max(0, note.remaining_paise - amount),
+    });
   }
 }
 

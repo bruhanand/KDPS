@@ -18,8 +18,8 @@ import {
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
-import { whoAuthorised } from "../../till/pin";
-import type { Authorisation } from "../../till/pin";
+import { isShared, whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
+import type { Ask, Authorisation, AuthorisationKind } from "../../till/pin";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
 import { newNote } from "../../till/tender";
@@ -110,8 +110,9 @@ function Counter({ storeName }: { storeName?: string }) {
   // just moved - and, since #182, the credit notes it just spent. The sync time
   // covers the other direction.
   const [commits, setCommits] = useState(0);
-  /** Open when a manager is being asked for their PIN, carrying what for. */
-  const [asking, setAsking] = useState<string[] | null>(null);
+  /** Open when a manager is being asked for their PIN, carrying exactly what
+   *  they are being shown - which is also what their approval will cover. */
+  const [asking, setAsking] = useState<Ask[] | null>(null);
 
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
@@ -350,7 +351,11 @@ function Counter({ storeName }: { storeName?: string }) {
             payment={cart.payment}
             locked={locked}
             onChange={editPayment}
-            onAsk={() => setAsking(bill.needsAuthorising)}
+            // Everything the bill asks for, not only the part still unapproved:
+            // a manager looking at a second exception should see the first one
+            // they agreed to as well, and the fresh authorisation replaces the
+            // old one whole.
+            onAsk={() => setAsking(bill.asks)}
           />
           <CustomerStrip value={customer} locked={locked} onChange={setCustomer} />
         </aside>
@@ -359,7 +364,7 @@ function Counter({ storeName }: { storeName?: string }) {
       {asking && (
         <ManagerPin
           managers={world.managers}
-          kinds={asking}
+          asks={asking}
           onClose={() => {
             setAsking(null);
             scan.focus();
@@ -367,7 +372,7 @@ function Counter({ storeName }: { storeName?: string }) {
           onAuthorised={(authorisation) => {
             setCart((current) => ({ ...current, authorisation }));
             setAsking(null);
-            setNote(`${authorisation.name} approved this bill.`);
+            setNote(`${authorisation.name} approved what this bill needed approving.`);
             scan.focus();
           }}
         />
@@ -1115,11 +1120,8 @@ function Authorised({
   locked: boolean;
   onAsk: () => void;
 }) {
-  const needed = bill.needsAuthorising;
-  const authorisation = bill.authorisation;
-  const covered =
-    authorisation !== null && needed.every((kind) => authorisation.kinds.includes(kind));
-  if (!needed.length && !authorisation) return null;
+  const { asks, needsAuthorising, authorisation } = bill;
+  if (!asks.length && !authorisation) return null;
   return (
     <div className="bill-authorised" data-testid="bill-authorised">
       {authorisation && (
@@ -1127,7 +1129,7 @@ function Authorised({
           Approved by {authorisation.name} at {formatClock(authorisation.at)}
         </span>
       )}
-      {needed.length > 0 && !covered && (
+      {needsAuthorising.length > 0 && (
         <button
           type="button"
           className="btn"
@@ -1150,10 +1152,15 @@ function formatClock(iso: string): string {
     : at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** How many wrong PINs the modal takes before it makes somebody wait, and how
+ *  long it makes them wait. */
+const WRONG_PINS_BEFORE_A_PAUSE = 3;
+const PAUSE_MS = 30_000;
+
 /** What each authorisation kind is called on the shop floor. */
-const KIND_WORDS: Record<string, string> = {
-  over_cap_discount: "a discount past the cashier's limit",
-  credit_note: "a credit note this counter cannot check",
+const KIND_WORDS: Record<AuthorisationKind, string> = {
+  [OVER_CAP_DISCOUNT]: "a discount past the cashier's limit",
+  [UNVERIFIED_NOTE]: "a credit note this counter cannot check",
 };
 
 /**
@@ -1168,35 +1175,54 @@ const KIND_WORDS: Record<string, string> = {
  */
 function ManagerPin({
   managers,
-  kinds,
+  asks,
   onClose,
   onAuthorised,
 }: {
   managers: TillManager[];
-  kinds: string[];
+  asks: Ask[];
   onClose: () => void;
   onAuthorised: (authorisation: Authorisation) => void;
 }) {
   const [pin, setPin] = useState("");
   const [checking, setChecking] = useState(false);
   const [refused, setRefused] = useState("");
+  const [wrong, setWrong] = useState(0);
   const box = useRef<HTMLInputElement>(null);
+  const waiting = wrong >= WRONG_PINS_BEFORE_A_PAUSE;
 
   useEffect(() => {
     box.current?.focus();
   }, []);
 
+  // The pause after a run of wrong PINs. Four digits is a small space, and this
+  // modal is on a machine anybody in the shop can reach while the cashier is
+  // looking at a customer. It is a speed bump rather than a lock: the hash is on
+  // this device by design (grill Q1), so what this buys is the person guessing
+  // having to stand there visibly doing nothing.
+  useEffect(() => {
+    if (!waiting) return;
+    const timer = setTimeout(() => setWrong(0), PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [waiting]);
+
   async function check() {
-    if (checking || !pin) return;
+    if (checking || waiting || !pin) return;
     setChecking(true);
     setRefused("");
     try {
-      const authorisation = await whoAuthorised(managers, pin, kinds);
+      const authorisation = await whoAuthorised(managers, pin, asks);
       if (!authorisation) {
-        // One sentence for every failure - a wrong PIN and a PIN belonging to a
-        // manager of another store are the same answer at this counter, and
-        // telling them apart would be telling whoever is standing there which.
-        setRefused("That is not a manager's PIN for this store.");
+        // A wrong PIN and a PIN belonging to a manager of another store are the
+        // same answer here, and telling them apart would be telling whoever is
+        // standing there which. A *shared* PIN is not - it is a thing an
+        // administrator has to fix, and no amount of retrying will help.
+        setRefused(
+          (await isShared(managers, pin))
+            ? "More than one manager here uses that PIN, so the bill could not say which of them approved it. One of them has to change theirs."
+            : "That is not a manager's PIN for this store.",
+        );
+        setWrong((n) => n + 1);
         setPin("");
         box.current?.focus();
         return;
@@ -1228,7 +1254,14 @@ function ManagerPin({
           </button>
         </div>
 
-        <p className="lead">This bill has {kinds.map((k) => KIND_WORDS[k] ?? k).join(" and ")}.</p>
+        <p className="lead">This bill needs approving:</p>
+        <ul className="bill-asks" data-testid="bill-pin-asks">
+          {asks.map((ask) => (
+            <li key={`${ask.kind}/${ask.ref}`}>
+              {ask.label} · {KIND_WORDS[ask.kind]} · <Money paise={ask.paise} />
+            </li>
+          ))}
+        </ul>
 
         {managers.length === 0 ? (
           <p className="warn-note" data-testid="bill-pin-nobody">
@@ -1247,7 +1280,7 @@ function ManagerPin({
                 type="password"
                 inputMode="numeric"
                 autoComplete="off"
-                disabled={checking}
+                disabled={checking || waiting}
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 onKeyDown={(e) => {
@@ -1263,14 +1296,20 @@ function ManagerPin({
                 {refused}
               </p>
             )}
+            {waiting && (
+              <p className="warn-note" data-testid="bill-pin-waiting">
+                Too many wrong PINs. This waits half a minute before it will take another.
+              </p>
+            )}
             <p className="muted-cell">
-              The manager types it themselves. Their name and the time go on the bill.
+              The manager types it themselves. Their name, the time, and what they approved go
+              on the bill.
             </p>
             <button
               type="button"
               className="btn btn-cta"
               data-testid="bill-pin-approve"
-              disabled={checking || !pin}
+              disabled={checking || waiting || !pin}
               onClick={() => void check()}
             >
               {checking ? "Checking…" : "Approve"}

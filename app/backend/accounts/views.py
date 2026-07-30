@@ -38,6 +38,7 @@ from accounts.models import (
 )
 from accounts.permissions import require_section
 from accounts.sections import (
+    CAP_APPROVE,
     CAP_MANAGE,
     CAPABILITY_ORDER,
     CAPABILITY_WORDS,
@@ -135,9 +136,15 @@ class TillPinView(APIView):
     two-administrator access-change path (`PendingAccessChangeMixin`), and a
     person changing their own credential is not an access change waiting on
     somebody else's approval - it is the same shape as changing a password.
+
+    Gated on the rung the PIN actually authorises - `sell: approve`, the second
+    eye on selling - so the access table decides who may hold one (#94's one
+    write gate). `may_hold_till_pin` then asks the half a section gate cannot:
+    whether this person's boundary is stores at all. A network administrator
+    whose matrix cell happens to reach the rung is not one of a counter's people.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, require_section("sell", CAP_APPROVE)]
 
     def put(self, request: Request) -> Response:
         user = request.user

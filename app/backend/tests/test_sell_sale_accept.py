@@ -506,6 +506,36 @@ def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter)
     assert sale.override_at.isoformat() == "2026-07-30T12:29:00+00:00"
 
 
+def test_a_bill_that_needed_two_things_approving_says_so_in_one_word(counter):
+    """The daily check groups on this value, so the pair has one spelling."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": "26-27/XXX/CRN/9"},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 20000 - 50000},
+    ]
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "over_cap_discount+credit_note",
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount+credit_note"
+
+
+def test_a_kind_nothing_recognises_is_refused(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "because I said so"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert not Sale.objects.exists()
+
+
 def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
     _shelf(counter["store"], 3)
 

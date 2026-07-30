@@ -23,7 +23,7 @@ import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
-import { fastForwardTo } from "./numbering";
+import { drawDownNotes, fastForwardTo } from "./numbering";
 import { notesSpentBy } from "./tender";
 import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
 
@@ -200,15 +200,7 @@ async function replayQueuedNotes(db: TillDb, payload: DatasetPayload): Promise<v
       spent.set(number, (spent.get(number) ?? 0) + amount);
     }
   }
-  for (const [number, amount] of spent) {
-    const note = await db.creditNotes.get(number);
-    if (note) {
-      await db.creditNotes.put({
-        ...note,
-        remaining_paise: Math.max(0, note.remaining_paise - amount),
-      });
-    }
-  }
+  await drawDownNotes(db, spent);
 }
 
 /** Pull whatever has changed since the last cursor (everything, the first time). */

@@ -11,7 +11,7 @@ import {
   whyItCannotClose,
 } from "./cart";
 import type { Cart } from "./cart";
-import type { Authorisation } from "./pin";
+import type { Ask, Authorisation } from "./pin";
 import { newNote } from "./tender";
 import type { Payment } from "./tender";
 import { item, season } from "./testSupport";
@@ -34,9 +34,15 @@ const NOTE: TillCreditNote = {
 
 const WORLD = { seasons: [season("FW25", 2)], slabs: [SLAB], offers: [], creditNotes: [NOTE] };
 
-/** A manager who has already put their PIN in for `kinds`. */
-function approved(...kinds: string[]): Authorisation {
-  return { user_id: 7, name: "R. Kumar", kinds, at: "2026-07-30T12:29:00.000Z" };
+/** A manager who has already put their PIN in for exactly these asks. */
+function approved(...asks: Ask[]): Authorisation {
+  return { user_id: 7, name: "R. Kumar", asks, at: "2026-07-30T12:29:00.000Z" };
+}
+
+/** What the bill is about to ask a manager for, from the bill itself - so a test
+ *  approves what the screen would actually have shown. */
+function asksOf(cart: Cart, options: Parameters<typeof priceCart>[3] = {}): Ask[] {
+  return priceCart(cart, WORLD, "2026-07-30", options).asks;
 }
 
 function cartOf(...lines: Cart["lines"]): Cart {
@@ -148,7 +154,9 @@ describe("the cashier's discount cap", () => {
 
     expect(bill.lines[0].cap_paise).toBe(15000);
     expect(bill.lines[0].over_cap).toBe(true);
-    expect(bill.needsAuthorising).toEqual(["over_cap_discount"]);
+    expect(bill.needsAuthorising).toEqual([
+      { kind: "over_cap_discount", ref: bill.lines[0].key, paise: 20000, label: "Line 1" },
+    ]);
     expect(whyItCannotClose(bill)).toMatch(/manager/i);
   });
 
@@ -163,28 +171,73 @@ describe("the cashier's discount cap", () => {
   });
 
   it("closes once a manager has approved the over-cap line", () => {
-    const cart = {
-      ...cartOf(scanned(200000, { disc_paise: 20000 })),
-      authorisation: approved("over_cap_discount"),
-    };
+    const cap = { capPercent: "7.50" };
+    const discounted = cartOf(scanned(200000, { disc_paise: 20000 }));
+    const cart = { ...discounted, authorisation: approved(...asksOf(discounted, cap)) };
 
-    const bill = priceCart(cart, WORLD, "2026-07-30", { capPercent: "7.50" });
+    const bill = priceCart(cart, WORLD, "2026-07-30", cap);
 
+    expect(bill.needsAuthorising).toEqual([]);
     expect(whyItCannotClose(bill)).toBe("");
   });
 
-  it("asks again for an exception the manager never saw", () => {
+  it("asks again when the cashier raises the discount the manager agreed to", () => {
+    // The hole this closes: a manager nods at ₹200 off, the cashier makes it
+    // ₹500, and the bill closes with the manager's name on it.
+    const cap = { capPercent: "7.50" };
+    const agreed = cartOf(scanned(200000, { disc_paise: 20000 }));
+    const raised = {
+      ...cartOf({ ...agreed.lines[0], disc_paise: 50000 }),
+      authorisation: approved(...asksOf(agreed, cap)),
+    };
+
+    const bill = priceCart(raised, WORLD, "2026-07-30", cap);
+
+    expect(bill.needsAuthorising).toHaveLength(1);
+    expect(whyItCannotClose(bill)).toMatch(/manager/i);
+  });
+
+  it("stands when the cashier takes some of that discount back off", () => {
+    const cap = { capPercent: "7.50" };
+    const agreed = cartOf(scanned(200000, { disc_paise: 50000 }));
+    const trimmed = {
+      ...cartOf({ ...agreed.lines[0], disc_paise: 20000 }),
+      authorisation: approved(...asksOf(agreed, cap)),
+    };
+
+    expect(whyItCannotClose(priceCart(trimmed, WORLD, "2026-07-30", cap))).toBe("");
+  });
+
+  it("asks again for a second over-cap line the manager never saw", () => {
+    const cap = { capPercent: "7.50" };
+    const first = cartOf(scanned(200000, { disc_paise: 20000 }));
+    const both = {
+      ...cartOf(first.lines[0], scanned(200000, { disc_paise: 20000 })),
+      authorisation: approved(...asksOf(first, cap)),
+    };
+
+    const bill = priceCart(both, WORLD, "2026-07-30", cap);
+
+    expect(bill.asks).toHaveLength(2);
+    expect(bill.needsAuthorising).toHaveLength(1);
+    expect(whyItCannotClose(bill)).toMatch(/Line 2/);
+  });
+
+  it("asks again for an exception of another kind entirely", () => {
     // They approved the credit note and walked away; the cashier then keyed in a
-    // discount past the cap. An authorisation that stretched to cover it would
-    // be that manager's name on something they never looked at.
-    const cart = paying(
-      { ...cartOf(scanned(200000, { disc_paise: 20000 })), authorisation: approved("credit_note") },
-      { notes: [{ ...newNote(), number: NOTE.number, amount_paise: 20000 }] },
-    );
+    // discount past the cap.
+    const cap = { capPercent: "7.50" };
+    const noted = paying(cartOf(scanned(200000)), {
+      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 20000 }],
+    });
+    const andDiscounted = {
+      ...paying(cartOf(scanned(200000, { disc_paise: 20000 })), noted.payment),
+      authorisation: approved(...asksOf(noted, cap)),
+    };
 
-    const bill = priceCart(cart, WORLD, "2026-07-30", { capPercent: "7.50" });
+    const bill = priceCart(andDiscounted, WORLD, "2026-07-30", cap);
 
-    expect(bill.needsAuthorising).toEqual(["over_cap_discount"]);
+    expect(bill.needsAuthorising.map((ask) => ask.kind)).toEqual(["over_cap_discount"]);
     expect(whyItCannotClose(bill)).toMatch(/manager/i);
   });
 });
@@ -219,11 +272,22 @@ describe("what stops a bill closing", () => {
 
     const bill = priceCart(cart, WORLD, "2026-07-30");
 
-    expect(bill.needsAuthorising).toEqual(["credit_note"]);
+    expect(bill.needsAuthorising).toEqual([
+      {
+        kind: "credit_note",
+        ref: "26-27/XXX/CRN/9",
+        paise: 50000,
+        label: "26-27/XXX/CRN/9",
+      },
+    ]);
     expect(whyItCannotClose(bill)).toMatch(/has to approve/i);
     expect(
       whyItCannotClose(
-        priceCart({ ...cart, authorisation: approved("credit_note") }, WORLD, "2026-07-30"),
+        priceCart(
+          { ...cart, authorisation: approved(...asksOf(cart)) },
+          WORLD,
+          "2026-07-30",
+        ),
       ),
     ).toBe("");
   });
@@ -311,12 +375,15 @@ describe("the bill's split, as the till hands it over", () => {
   });
 
   it("names the manager, what they saw and when they typed the PIN", () => {
-    const unknown = paying(
-      { ...cartOf(scanned(149900, { salesman: 3 })), authorisation: approved("credit_note") },
-      { notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }] },
-    );
+    const paidWithUnknownNote = paying(cartOf(scanned(149900, { salesman: 3 })), {
+      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 50000 }],
+    });
+    const authorised = {
+      ...paidWithUnknownNote,
+      authorisation: approved(...asksOf(paidWithUnknownNote)),
+    };
 
-    const drafted = toDraft(priceCart(unknown, WORLD, "2026-07-30"), {
+    const drafted = toDraft(priceCart(authorised, WORLD, "2026-07-30"), {
       billedAt: "2026-07-30T12:31:00.000Z",
     });
 
@@ -327,15 +394,31 @@ describe("the bill's split, as the till hands it over", () => {
     });
   });
 
-  it("leaves an authorisation off a bill that ended up needing none", () => {
+  it("says both, in one order, when a bill needed two things approving", () => {
+    const cap = { capPercent: "7.50" };
+    const messy = paying(cartOf(scanned(200000, { salesman: 3, disc_paise: 20000 })), {
+      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 20000 }],
+    });
+    const authorised = { ...messy, authorisation: approved(...asksOf(messy, cap)) };
+
+    const drafted = toDraft(priceCart(authorised, WORLD, "2026-07-30", cap), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+    });
+
+    expect(drafted.override?.kind).toBe("over_cap_discount+credit_note");
+  });
+
+  it("leaves an authorisation off a bill that ended up asking for nothing", () => {
     // The cashier took the discount back off after the manager approved it.
     // Sending the override anyway would put a manager's name on an ordinary bill.
+    const cap = { capPercent: "7.50" };
+    const agreed = cartOf(scanned(200000, { salesman: 3, disc_paise: 20000 }));
     const undone = {
-      ...cartOf(scanned(149900, { salesman: 3 })),
-      authorisation: approved("over_cap_discount"),
+      ...cartOf({ ...agreed.lines[0], disc_paise: 0 }),
+      authorisation: approved(...asksOf(agreed, cap)),
     };
 
-    const drafted = toDraft(priceCart(undone, WORLD, "2026-07-30"), {
+    const drafted = toDraft(priceCart(undone, WORLD, "2026-07-30", cap), {
       billedAt: "2026-07-30T12:31:00.000Z",
     });
 

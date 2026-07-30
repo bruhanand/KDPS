@@ -119,9 +119,22 @@ class _TotalsWriteSerializer(serializers.Serializer):
     round_paise = serializers.IntegerField(required=False, default=0, min_value=-50, max_value=50)
 
 
+#: What a manager can be asked to authorise at a till, and the one word a bill
+#: uses when they were asked both at once. A closed set, because the daily check
+#: groups bills by this value: a spelling nothing recognises is an exception
+#: nobody counts. The till builds the pair in this order (`till/cart.ts`).
+OVERRIDE_KINDS = (
+    "over_cap_discount",
+    "credit_note",
+    "over_cap_discount+credit_note",
+)
+
+
 class _OverrideWriteSerializer(serializers.Serializer):
     user_id = serializers.IntegerField()
-    kind = serializers.CharField(max_length=40, allow_blank=True, required=False, default="")
+    kind = serializers.ChoiceField(
+        choices=OVERRIDE_KINDS, allow_blank=True, required=False, default=""
+    )
     #: When the manager's PIN was accepted at the counter. A separate moment from
     #: `billed_at` - a manager authorises a discount and the cashier goes on
     #: scanning - and the whole point of the evidence is the gap between the two.

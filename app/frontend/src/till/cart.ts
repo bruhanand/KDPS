@@ -32,8 +32,8 @@
 
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
-import { covers } from "./pin";
-import type { Authorisation } from "./pin";
+import { covers, kindsOf, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
+import type { Ask, Authorisation } from "./pin";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
 import { emptyPayment, splitOf, toTenders, whyPaymentCannotClose } from "./tender";
 import type { Payment, TenderSplit } from "./tender";
@@ -49,11 +49,6 @@ import type {
   TillOffer,
   TillSeason,
 } from "./types";
-
-/** What a manager may be asked to authorise on a bill (#182). Two today; a
- *  return outside its window is the third, and belongs with #184. */
-export const OVER_CAP_DISCOUNT = "over_cap_discount";
-export const UNVERIFIED_NOTE = "credit_note";
 
 /** One row of the line grid, as the cashier has it so far. */
 export interface CartLine {
@@ -141,8 +136,11 @@ export interface PricedBill {
   split: TenderSplit;
   /** Who authorised the exceptions on this bill, if anybody has. */
   authorisation: Authorisation | null;
-  /** What still needs a manager, as kinds - empty on an ordinary bill. */
-  needsAuthorising: string[];
+  /** Everything on this bill a manager has to agree to - empty on an ordinary
+   *  bill, and still listed here when a manager has already agreed to it. */
+  asks: Ask[];
+  /** The asks nobody has agreed to yet. Empty means the bill can close. */
+  needsAuthorising: Ask[];
 }
 
 export interface PricingWorld {
@@ -250,6 +248,7 @@ export function priceCart(
   const round = roundingOf(subtotal);
   const net = subtotal + round;
   const split = splitOf(cart.payment, net, world.creditNotes, day);
+  const asks = asksOn(lines, split);
 
   return {
     lines,
@@ -269,7 +268,8 @@ export function priceCart(
     saved_paise: discount,
     split,
     authorisation: cart.authorisation,
-    needsAuthorising: authorisationsNeeded(lines, split),
+    asks,
+    needsAuthorising: asks.filter((ask) => !covers(cart.authorisation, [ask])),
   };
 }
 
@@ -324,16 +324,37 @@ export function creditsOn(evidence: OfferEvidence | NoOffer): StackedCredit[] {
   return [...credits, ...stacked];
 }
 
-/** What a manager would have to agree to before this bill can close.
+/**
+ * Everything on this bill a manager has to agree to, one entry per thing.
  *
- *  Named as kinds rather than counted, because an authorisation only covers what
- *  the manager was actually shown: a discount keyed in after they walked away is
- *  a fresh exception and asks again (`pin.covers`). */
-function authorisationsNeeded(lines: PricedLine[], split: TenderSplit): string[] {
-  const kinds: string[] = [];
-  if (lines.some((line) => line.over_cap)) kinds.push(OVER_CAP_DISCOUNT);
-  if (split.unverified.length) kinds.push(UNVERIFIED_NOTE);
-  return kinds;
+ * Per line and per note rather than per kind, because that is the granularity a
+ * manager actually agrees at: they look at a discount on line 3, or at a note
+ * the counter cannot check, and say yes to that. `pin.covers` then holds the
+ * cashier to it - a bigger discount on the same line, or a discount on another
+ * line, is a thing nobody has looked at and asks again.
+ */
+function asksOn(lines: PricedLine[], split: TenderSplit): Ask[] {
+  const asks: Ask[] = lines
+    .filter((line) => line.over_cap)
+    .map((line) => ({
+      kind: OVER_CAP_DISCOUNT,
+      // The line's own key, not its number: a line removed from the middle of a
+      // bill renumbers every line under it, and an authorisation that followed
+      // the *number* would slide onto a piece nobody approved.
+      ref: line.key,
+      paise: line.disc_paise,
+      label: `Line ${line.line_no}`,
+    }));
+  for (const standing of split.notes) {
+    if (!standing.doubt) continue;
+    asks.push({
+      kind: UNVERIFIED_NOTE,
+      ref: standing.note.number,
+      paise: standing.note.amount_paise,
+      label: standing.note.number,
+    });
+  }
+  return asks;
 }
 
 function priceLine(
@@ -415,18 +436,15 @@ export function whyItCannotClose(bill: PricedBill): string {
   if (negative) {
     return `Line ${negative.line_no} is discounted by more than it costs.`;
   }
-  const overCap = bill.lines.find((line) => line.over_cap);
-  if (overCap && !covers(bill.authorisation, [OVER_CAP_DISCOUNT])) {
+  const discount = bill.needsAuthorising.find((ask) => ask.kind === OVER_CAP_DISCOUNT);
+  if (discount) {
     return (
-      `Line ${overCap.line_no} discounts more than a cashier may on their own. ` +
+      `${discount.label} discounts more than a cashier may on their own. ` +
       "A manager of this store has to approve it."
     );
   }
-  return whyPaymentCannotClose(
-    bill.split,
-    covers(bill.authorisation, [UNVERIFIED_NOTE]),
-    bill.net_paise,
-  );
+  const notesCovered = !bill.needsAuthorising.some((ask) => ask.kind === UNVERIFIED_NOTE);
+  return whyPaymentCannotClose(bill.split, notesCovered, bill.net_paise);
 }
 
 export interface BillIdentity {
@@ -485,11 +503,17 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       gst_paise: bill.gst_paise,
       round_paise: bill.round_paise,
     },
-    ...(bill.authorisation && bill.needsAuthorising.length
+    ...(bill.authorisation && bill.asks.length
       ? {
           override: {
             user_id: bill.authorisation.user_id,
-            kind: bill.needsAuthorising.join("+"),
+            // A bill can need two things authorised at once, and the contract
+            // has one `kind` for them. They are joined with `+` in one fixed
+            // order - "over_cap_discount+credit_note" - so what is stored is
+            // always the same word for the same pair, and a check grouping on it
+            // never sees two spellings. The server takes those four values and
+            // no others.
+            kind: kindsOf(bill.asks).join("+"),
             at: bill.authorisation.at,
           },
         }

@@ -32,27 +32,80 @@ import type { TillManager } from "./types";
 /** The one hash format the counter can read - Django's `PBKDF2PasswordHasher`. */
 const ALGORITHM = "pbkdf2_sha256";
 
-/** Who authorised something, as the bill will carry it. */
+/**
+ * What a manager may be asked to authorise on a bill.
+ *
+ * A closed vocabulary, and closed for the same reason `BillTender.mode` is: the
+ * value travels to the server as the contract's `override.kind` and is what the
+ * daily check groups by, so a fifth string would be an exception nobody counts.
+ * A return outside its window is the third and belongs with #184.
+ */
+/** A discount past what a cashier may give on their own (B2). */
+export const OVER_CAP_DISCOUNT = "over_cap_discount" as const;
+/** A credit note this counter cannot check - unknown, spent, or out of date.
+ *  The wire word is the contract's, and it is the plain noun. */
+export const UNVERIFIED_NOTE = "credit_note" as const;
+
+export type AuthorisationKind = typeof OVER_CAP_DISCOUNT | typeof UNVERIFIED_NOTE;
+
+/**
+ * One thing on a bill that a manager has to agree to.
+ *
+ * It names *which* thing and *how much*, and both halves are load-bearing. A
+ * manager who nods at ₹200 off line 1 has agreed to ₹200 off line 1 - not to
+ * whatever that line says by the time the bill closes, and not to the five other
+ * lines the cashier discounted afterwards. Everything about `covers` follows
+ * from that.
+ */
+export interface Ask {
+  kind: AuthorisationKind;
+  /** Which line or note this is about - a cart line's key, or a note number.
+   *  Stable across re-prices, which the line number is not. */
+  ref: string;
+  /** How exceptional it is, in paise: the discount asked for, or what is being
+   *  taken off a note nobody here can check. */
+  paise: number;
+  /** How it reads to the manager - "Line 3", or the note's own number. No money
+   *  in it: the screen formats that, in Indian format, where it is rendered. */
+  label: string;
+}
+
+/** Who authorised what, as the bill will carry it. */
 export interface Authorisation {
   user_id: number;
   name: string;
-  /** What they were shown and agreed to - `over_cap_discount`, `credit_note`.
-   *
-   *  A set rather than a word, because a manager authorises *what is on the bill
-   *  when they type the PIN*. A cashier who then keys in an over-cap discount has
-   *  produced a second exception nobody has seen, and an authorisation that
-   *  covered it retrospectively would be the manager's name on something they
-   *  never looked at. `covers` is where that is enforced. */
-  kinds: string[];
+  /** Exactly what was on the screen when they typed the PIN. */
+  asks: Ask[];
   /** The moment the PIN was accepted, which is not Save & Print. */
   at: string;
 }
 
-/** Does this authorisation actually cover everything the bill now needs? */
-export function covers(authorisation: Authorisation | null, needed: string[]): boolean {
-  if (!needed.length) return true;
+/**
+ * Does this authorisation cover everything the bill now asks for?
+ *
+ * Matched ask by ask, and never by kind alone. Approving "a discount past the
+ * cap" and letting that stand for the rest of the bill is the whole hole this
+ * closes: one tap would otherwise lift the cap on every later line, and on any
+ * amount, in a manager's name. So a bigger discount on the same line asks again,
+ * a discount on a different line asks again, and a second unknown note asks
+ * again. Less than was approved stands - a cashier taking money *off* an
+ * exception has not created a new one.
+ */
+export function covers(authorisation: Authorisation | null, asks: Ask[]): boolean {
+  if (!asks.length) return true;
   if (!authorisation) return false;
-  return needed.every((kind) => authorisation.kinds.includes(kind));
+  return asks.every((ask) =>
+    authorisation.asks.some(
+      (seen) => seen.kind === ask.kind && seen.ref === ask.ref && ask.paise <= seen.paise,
+    ),
+  );
+}
+
+/** The kinds among a set of asks, in the fixed order they are always written. */
+export function kindsOf(asks: Ask[]): AuthorisationKind[] {
+  return [OVER_CAP_DISCOUNT, UNVERIFIED_NOTE].filter((kind) =>
+    asks.some((ask) => ask.kind === kind),
+  );
 }
 
 /**
@@ -69,29 +122,53 @@ export async function verifyPin(manager: TillManager, pin: string): Promise<bool
   return derived !== null && sameSecret(derived, parsed.digest);
 }
 
-/** The first manager on the cached list whose PIN this is, or null.
+/**
+ * The manager on the cached list whose PIN this is, or null.
  *
- *  The counter types a PIN and not a name: at a busy till the manager reaches
- *  over the cashier's shoulder, and asking them to find themselves in a dropdown
- *  first is a step for the sake of the database. Which of them it was is then a
- *  fact the PIN establishes, and the bill records it. */
+ * The counter types a PIN and not a name: at a busy till the manager reaches
+ * over the cashier's shoulder, and asking them to find themselves in a dropdown
+ * first is a step for the sake of the database. Which of them it was is then a
+ * fact the PIN establishes, and the bill records it.
+ *
+ * **Exactly one, never the first of several.** Four digits is a small space, and
+ * two managers of one store can pick the same four - at which point "the first
+ * that matches" puts one of their names on a bill the other one approved, and
+ * nothing afterwards can tell. So an ambiguous PIN authorises nobody, and the
+ * counter is told to have one of them changed. Every manager is checked either
+ * way; there is no early exit to time, either.
+ */
 export async function whoAuthorised(
   managers: TillManager[],
   pin: string,
-  kinds: string[],
+  asks: Ask[],
   now: Date = new Date(),
 ): Promise<Authorisation | null> {
+  const matched: TillManager[] = [];
   for (const manager of managers) {
-    if (await verifyPin(manager, pin)) {
-      return {
-        user_id: manager.user_id,
-        name: manager.name,
-        kinds: [...kinds],
-        at: now.toISOString(),
-      };
-    }
+    if (await verifyPin(manager, pin)) matched.push(manager);
   }
-  return null;
+  if (matched.length !== 1) return null;
+  return {
+    user_id: matched[0].user_id,
+    name: matched[0].name,
+    // Copied, not referenced: what was on the screen at this moment is the whole
+    // of what this authorisation means, and the cart goes on changing.
+    asks: asks.map((ask) => ({ ...ask })),
+    at: now.toISOString(),
+  };
+}
+
+/** Do two or more of this counter's managers share this PIN?
+ *
+ *  Asked only after `whoAuthorised` has answered nothing, so the modal can say
+ *  which of the two things went wrong. Telling them apart is worth it: "wrong
+ *  PIN" sends a manager away to try again at something that will never work. */
+export async function isShared(managers: TillManager[], pin: string): Promise<boolean> {
+  let matches = 0;
+  for (const manager of managers) {
+    if (await verifyPin(manager, pin)) matches += 1;
+  }
+  return matches > 1;
 }
 
 interface ParsedHash {
@@ -100,12 +177,19 @@ interface ParsedHash {
   digest: Uint8Array;
 }
 
+/** As many rounds as this will ever run. Django's own count is in the hundreds
+ *  of thousands and rises every release, so the ceiling is generous - what it is
+ *  for is a corrupt row asking for a billion, which would hang the counter's tab
+ *  rather than answer anybody. */
+const MAX_ITERATIONS = 50_000_000;
+
 function parseHash(encoded: string): ParsedHash | null {
   const parts = (encoded || "").split("$");
   if (parts.length !== 4) return null;
   const [algorithm, iterations, salt, digest] = parts;
   const rounds = Number(iterations);
-  if (algorithm !== ALGORITHM || !salt || !Number.isInteger(rounds) || rounds < 1) return null;
+  if (algorithm !== ALGORITHM || !salt) return null;
+  if (!Number.isInteger(rounds) || rounds < 1 || rounds > MAX_ITERATIONS) return null;
   const bytes = fromBase64(digest);
   return bytes && bytes.length ? { iterations: rounds, salt, digest: bytes } : null;
 }
@@ -117,15 +201,25 @@ async function derive(pin: string, salt: string, iterations: number): Promise<Ui
   // on a stray origin rather than a counter - and the honest answer to "I cannot
   // check this" is still no.
   if (!subtle) return null;
-  const encoder = new TextEncoder();
-  const key = await subtle.importKey("raw", encoder.encode(pin), "PBKDF2", false, ["deriveBits"]);
-  const bits = await subtle.deriveBits(
-    { name: "PBKDF2", salt: encoder.encode(salt), iterations, hash: "SHA-256" },
-    key,
-    // Django's PBKDF2 hasher derives one SHA-256 digest: 32 bytes, 256 bits.
-    256,
-  );
-  return new Uint8Array(bits);
+  try {
+    const encoder = new TextEncoder();
+    const key = await subtle.importKey("raw", encoder.encode(pin), "PBKDF2", false, [
+      "deriveBits",
+    ]);
+    const bits = await subtle.deriveBits(
+      { name: "PBKDF2", salt: encoder.encode(salt), iterations, hash: "SHA-256" },
+      key,
+      // Django's PBKDF2 hasher derives one SHA-256 digest: 32 bytes, 256 bits.
+      256,
+    );
+    return new Uint8Array(bits);
+  } catch {
+    // A rejection here - an algorithm the browser withdrew, a key it refused -
+    // is the same answer as a wrong PIN and must not escape as an exception: a
+    // modal that threw would sit there doing nothing while a queue of customers
+    // waited, which reads as "the button is broken" rather than "no".
+    return null;
+  }
 }
 
 /** Compare in constant time. The timing of a PIN check at a counter is not a

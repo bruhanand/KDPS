@@ -23,7 +23,7 @@ from _creds import TEST_PASSWORD
 from _sell import build_cashier, build_manager, build_store
 from rest_framework.test import APIClient
 
-from accounts.models import User
+from accounts.models import ScopeType, User
 from accounts.till_pin import may_hold_till_pin
 
 URL = "/api/auth/me/till-pin"
@@ -101,15 +101,37 @@ def test_the_wrong_password_sets_nothing(store):
 
 
 def test_a_cashier_cannot_hold_a_counter_pin(store):
-    """`sell: operate` is doing the work; the PIN is the second eye on it."""
+    """`sell: operate` is doing the work; the PIN is the second eye on it.
+
+    Refused by the section gate itself, in DRF's own words - the same shape every
+    other capability refusal in this project wears.
+    """
     cashier = build_cashier(store)
 
     response = _put(cashier, current_password=TEST_PASSWORD, pin="4813")
 
     assert response.status_code == 403
-    assert response.json()["code"] == "NOT_A_TILL_MANAGER"
     cashier.refresh_from_db()
     assert cashier.till_pin_hash == ""
+
+
+def test_somebody_who_is_not_at_a_store_cannot_hold_one(store):
+    """The half a section gate cannot ask.
+
+    A network-wide administrator may hold `sell: approve` on the stored matrix
+    and still not be one of any counter's people - and this hash goes down to
+    fifty shop-floor devices in the dataset, or to none.
+    """
+    everywhere = build_manager(store, username="sell_manager_network")
+    everywhere.scope_type = ScopeType.ALL
+    everywhere.save(update_fields=["scope_type"])
+
+    response = _put(everywhere, current_password=TEST_PASSWORD, pin="4813")
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "NOT_A_TILL_MANAGER"
+    everywhere.refresh_from_db()
+    assert everywhere.till_pin_hash == ""
 
 
 @pytest.mark.parametrize(

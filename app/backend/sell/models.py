@@ -310,7 +310,9 @@ class Sale(Document):
         max_length=40,
         blank=True,
         default="",
-        help_text="What was authorised - over_cap_discount, credit_note.",
+        help_text="What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: "
+        "over_cap_discount, credit_note, or over_cap_discount+credit_note when a "
+        "manager was asked both at once.",
     )
     override_at = models.DateTimeField(
         null=True,

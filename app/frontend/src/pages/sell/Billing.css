@@ -125,6 +125,11 @@ select.bill-season { min-width: 0; }
 .bill-authorised .btn { display: inline-flex; align-items: center; gap: 7px; }
 .bill-authorised .muted-cell { margin-top: 0; }
 .bill-pin { max-width: 460px; }
+/* What the manager is agreeing to, itemised. They are approving these lines and
+   these amounts and nothing else, so the modal shows all of them rather than a
+   count. */
+.bill-asks { margin: 4px 0 16px; padding-left: 18px; font-size: 13.5px; color: var(--ink); }
+.bill-asks li { margin-top: 4px; }
 
 .bill-foot {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;

@@ -316,6 +316,50 @@ Business logic:
 
 (Every flag named above has a `sell_continuityflag` kind; flags are returned in the 201 body.)
 
+**Amended 31 Jul 2026, after building the split tender and the manager's PIN (#182).**
+Four things about the `override` block, and one new endpoint that had to exist for any of it to work.
+
+- **`override` carries `at` as well as `user_id` and `kind`.**
+  The manager types their PIN and the cashier goes on scanning; Save & Print is a different moment, sometimes minutes later, and the gap between the two is the evidence.
+  Optional, because a till that predates the field is still a till.
+- **The bill records the override, not only the line.**
+  `db-design.md` puts `override_by` on `sell_saleline`, which is right for a discount and has nowhere to hang the other case: an unrecognised credit note is a *tender*, and the lines it helped pay for are ordinary lines.
+  So `sell_sale` gains `override_by` / `override_kind` / `override_at` (migration `sell.0005`), and a daily check reading "somebody took an unknown note here" finds a name against it.
+  The line-level field is unchanged.
+- **`kind` is a closed vocabulary**: `over_cap_discount`, `credit_note`, or `over_cap_discount+credit_note` when a manager was asked both at once (`sell.serializers.OVERRIDE_KINDS`, a `ChoiceField`).
+  One bill can need two things approving and the contract has one field for them; joining them in a fixed order means the value a check groups on has one spelling.
+- **What one tap authorises is bounded at the till, and only at the till.**
+  A manager approves *this discount on this line*, and the till refuses to close if the discount grows, moves to another line, or is joined by a second unknown note (`till/pin.ts` `covers`).
+  The server still asks only "is `override.user_id` a manager of this store" - and cannot honestly ask more, because the till composes the payload and the PIN is verified on the device by design (grill Q1).
+  The server-side floor is therefore *a named manager*, and the per-exception binding is a property of the screen; the daily check is what audits the pair.
+
+### PUT `/api/auth/me/till-pin` (NEW, #182)
+
+The counter PIN had no way to be set: `db-design.md` §9 adds the column and the dataset ships the hash, and nothing anywhere wrote one - so the manager list was empty by construction and no override could ever be verified.
+
+Auth: `require_section("sell", CAP_APPROVE)` **and** `accounts.till_pin.may_hold_till_pin` - store-bound scope, active, not the break-glass superuser. That is the same sentence the dataset's `managers` section is built from, written once so the two cannot drift.
+Body: `{"pin": "4813", "current_password": "…"}`. Response 200 `{"status": "set"}`.
+
+Self-service, and only ever the caller's own row: an override's whole value is that it names who stood at the counter, so an administrator who could set a manager's PIN could authorise a discount in that manager's name.
+The password is asked for because a counter is a shared machine and a screen left signed in would otherwise be a way to give yourself somebody else's override.
+
+Hashed with **PBKDF2-SHA256** explicitly, not the project's default bcrypt: the till verifies it offline in a browser, and the Web Crypto API has PBKDF2 and no bcrypt. A hash nothing can verify is not a credential.
+PIN rules (invented here, nothing in the design speaks to them): 4 to 6 digits, digits only, not one digit repeated.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | not 4-6 digits, not digits, one digit repeated |
+| NOT_A_TILL_MANAGER | 403 | holds the rung but is not somebody at a store |
+| PASSWORD_WRONG | 403 | the caller's own password does not match |
+
+(A caller who does not hold `sell: approve` is refused by the section gate itself, in DRF's `{"detail": …}` at 403 - the same shape every other capability refusal wears.)
+
+`GET /api/auth/me` gains `has_till_pin` and `may_hold_till_pin` (booleans, never the hash), which `design.md`'s "`/me` untouched" did not anticipate: the card that offers to set a PIN has to know whether you have one and whether you are somebody who may.
+
+**Still deferred, and no longer to #182:** step 1's point 6 - labelling the Dashboard's collections card with the till's last sync time.
+The till's clock is in the browser's own database and `TillProvider` is mounted per Sell route on purpose, so a head-office or warehouse login never opens a store's local copy.
+Reading it on the Dashboard means moving where the till layer mounts, which is a PWA-shaped decision and belongs with #189.
+
 ### GET `/api/sell/register` · POST `/api/sell/register/handover`
 
 GET - the till's boot/recovery state. Auth: sell>=operate, single-store scope.
