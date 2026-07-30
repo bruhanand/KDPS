@@ -10,11 +10,25 @@
 // its section's items, so what the sidebar hides, the URL bar hides too, and
 // the two can't drift. Whether the user holds a section is the server's answer
 // (`capabilities`, the SIDEBAR RBAC contract #85), never inferred here.
-import { itemOwning, itemPath, itemVisible, normalizePath } from "../shell/navConfig";
+import {
+  foldOwning,
+  foldTabs,
+  itemOwning,
+  itemPath,
+  itemVisible,
+  normalizePath,
+  visibleSections,
+} from "../shell/navConfig";
 import type { User } from "./AuthContext";
 
 export function canAccess(pathname: string, user: User): boolean {
   if (user.is_superuser) return true;
+  // A folded page (#170) owns its URL outright — no menu entry points at it, so
+  // `itemOwning` finds nothing and the default-allow branch would let anyone in.
+  // It opens for whoever can see at least one of its tabs, and every tab carries
+  // the gate of the screen it draws: a page with nothing on it is not a page.
+  const fold = foldOwning(pathname);
+  if (fold) return foldTabs(fold, visibleSections(user)).length > 0;
   // The screen this URL belongs to, longest match first — so /money/vendor's
   // finance-only gate beats plain /money, and a mixed-case or trailing-slash
   // URL can't slip past into the default-allow branch.

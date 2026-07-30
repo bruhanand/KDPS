@@ -7,8 +7,8 @@ import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { headingOwning, isActiveItem, sidebarRows, testId } from "./navConfig";
-import type { NavItem, VisibleSection } from "./navConfig";
+import { headingOwning, isActiveFold, isActiveItem, sidebarRows, testId } from "./navConfig";
+import type { NavFoldDef, NavItem, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
@@ -361,6 +361,33 @@ function Sidebar({
     );
   }
 
+  /** A fold: one link to one page whose tabs are the screens it folds. It draws
+   *  exactly like a one-item section, because that is what it is to the reader
+   *  - the dividing happens inside the page, never here (D10 §1). */
+  function renderFold(fold: NavFoldDef) {
+    const Icon = fold.icon;
+    const active = isActiveFold(fold, pathname);
+    const slug = fold.heading.toLowerCase();
+    return (
+      <div className="nav-group" key={fold.to}>
+        <div className="nav-group-head">
+          <span className="nav-ic" style={{ color: `var(--layer-${fold.layer})` }}>
+            <Icon size={16} />
+          </span>
+          <Link
+            to={fold.to}
+            onClick={onNavigate}
+            aria-current={active ? "page" : undefined}
+            className={`nav-grouplink ${active ? "active" : ""}`}
+            data-testid={`nav-fold-${slug}`}
+          >
+            {fold.heading}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
@@ -371,27 +398,9 @@ function Sidebar({
         </span>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
-        {rows.map((row) => {
-          if (row.kind === "section") return renderSection(row.section);
-          // A grouping heading: a label and an order, nothing else. It owns no
-          // route and no capability, so it is not a link and does not collapse -
-          // the sections beneath it keep their own heads and their own gates.
-          const GroupIcon = row.group.icon;
-          const slug = row.group.heading.toLowerCase();
-          return (
-            <div className="nav-group nav-supergroup" key={row.key}>
-              <div className="nav-group-head">
-                <span className="nav-ic" style={{ color: `var(--layer-${row.group.layer})` }}>
-                  <GroupIcon size={16} />
-                </span>
-                <span className="nav-group-label" data-testid={`nav-heading-${slug}`}>
-                  {row.group.heading}
-                </span>
-              </div>
-              <div className="nav-subsections">{row.sections.map(renderSection)}</div>
-            </div>
-          );
-        })}
+        {rows.map((row) =>
+          row.kind === "section" ? renderSection(row.section) : renderFold(row.fold),
+        )}
       </nav>
       <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
     </aside>

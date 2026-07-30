@@ -2,7 +2,7 @@ import { matchRoutes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { PROTECTED_ROUTES } from "./routes";
-import { NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
+import { INVENTORY_FOLD, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
 
 /** Which screen does this URL actually open? */
 function screenAt(url: string): string | null {
@@ -24,6 +24,8 @@ describe("the route table", () => {
       ["/stock-count/adjustments", "adjustment-list"],
       ["/stock-count/writeoffs", "writeoff-list"],
       ["/return-to-brand", "rtv-list"],
+      // The folded page (#170): its own URL, no menu entry pointing at it.
+      ["/inventory", "inventory"],
       ["/stock", "stock-on-hand"],
       ["/stock/history", "stock-history"],
       ["/stock/vflips", "vflip-list"],
@@ -72,6 +74,17 @@ describe("the route table", () => {
   it("gives every sidebar item somewhere to land", () => {
     for (const item of NAV_ITEMS) {
       expect(screenAt(itemPath(item)), item.to).not.toBeNull();
+    }
+  });
+
+  it("gives every folded page somewhere to land, and leaves its tabs' own URLs alone", () => {
+    // A fold is a second address for screens that keep their first one: the
+    // sidebar sends a store person to /inventory, and /stock still opens Stock
+    // on Hand for everybody the fold is not drawn to.
+    expect(screenAt(INVENTORY_FOLD.to), INVENTORY_FOLD.to).not.toBeNull();
+    for (const tab of INVENTORY_FOLD.tabs) {
+      const path = tab.entry.split("?")[0];
+      expect(screenAt(path), tab.entry).not.toBeNull();
     }
   });
 

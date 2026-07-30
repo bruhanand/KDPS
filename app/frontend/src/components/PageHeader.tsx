@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -20,6 +21,24 @@ export function pageContext(pathname: string) {
   return { item, section };
 }
 
+/** What a folded page (#170) tells the header, so a page hosting four screens
+ *  as tabs still shows exactly one header.
+ *
+ *  The panels are the existing screens, unchanged; they render their own
+ *  `PageHeader` and would otherwise caption themselves off a URL — `/inventory`
+ *  — that no menu entry owns, leaving them titleless. Passed through context
+ *  rather than as props, so folding a screen never means editing it. */
+export interface HostedPage {
+  /** The eyebrow: the folded page's own name. */
+  crumb: string;
+  /** The showing tab's name, which is this screen's title. */
+  title: string;
+  /** The tab strip, drawn under the title row. */
+  tabs: ReactNode;
+}
+
+export const HostedPageContext = createContext<HostedPage | null>(null);
+
 export function PageHeader({
   title,
   lead,
@@ -35,33 +54,39 @@ export function PageHeader({
 }) {
   const { pathname } = useLocation();
   const { item, section } = pageContext(pathname);
-  const heading = title ?? item?.label ?? "";
+  const hosted = useContext(HostedPageContext);
+  const heading = title ?? hosted?.title ?? item?.label ?? "";
   // The screen's own line is worth showing only when the title is something
   // else — a document number, or a page whose name differs from its menu entry.
   // On the list screen itself "Booking · Bookings" would just say it twice.
-  const showScreen = !!item && item.label !== heading && itemPath(item) !== normalizePath(pathname);
+  // A hosted screen never shows it: the tab strip already says which one it is.
+  const showScreen =
+    !hosted && !!item && item.label !== heading && itemPath(item) !== normalizePath(pathname);
 
   return (
-    <div className="toolbar">
-      <div>
-        <p className="eyebrow" data-testid="page-crumb">
-          {section?.label}
-          {showScreen && (
-            <>
-              {" · "}
-              <Link className="crumb-link" to={item.to} data-testid="page-crumb-screen">
-                {item.label}
-              </Link>
-            </>
-          )}
-        </p>
-        <h1 className="h1 h2-rust" data-testid={titleTestId ?? "page-title"}>
-          {heading}
-        </h1>
-        {lead && <p className="lead">{lead}</p>}
+    <>
+      <div className="toolbar">
+        <div>
+          <p className="eyebrow" data-testid="page-crumb">
+            {hosted?.crumb ?? section?.label}
+            {showScreen && (
+              <>
+                {" · "}
+                <Link className="crumb-link" to={item.to} data-testid="page-crumb-screen">
+                  {item.label}
+                </Link>
+              </>
+            )}
+          </p>
+          <h1 className="h1 h2-rust" data-testid={titleTestId ?? "page-title"}>
+            {heading}
+          </h1>
+          {lead && <p className="lead">{lead}</p>}
+        </div>
+        <div className="spacer" />
+        {actions}
       </div>
-      <div className="spacer" />
-      {actions}
-    </div>
+      {hosted?.tabs}
+    </>
   );
 }

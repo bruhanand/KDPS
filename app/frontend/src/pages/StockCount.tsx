@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ClipboardCheck, Play, Plus, ScanLine, Send } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, Play, Plus, ScanLine, Send, Trash2, Wrench } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
@@ -193,7 +193,25 @@ export function StockCountListPage() {
 
   return (
     <div className="page-pad">
-      <PageHeader lead="Counters scan blind; the book appears when the count is submitted." />
+      <PageHeader
+        lead="Counters scan blind; the book appears when the count is submitted."
+        actions={
+          // Corrections live where they are caused, and on the Inventory page
+          // (#170) this screen *is* "Count & Adjust" — there is no sidebar line
+          // to reach them by any more, so they are buttons here. Same gate the
+          // menu lines carried: `stock_count: operate`.
+          writable && (
+            <>
+              <Link className="btn" to="/stock-count/adjustments" data-testid="adjustments-link">
+                <Wrench size={16} /> Adjustments
+              </Link>
+              <Link className="btn" to="/stock-count/writeoffs" data-testid="writeoffs-link">
+                <Trash2 size={16} /> Write-offs
+              </Link>
+            </>
+          )
+        }
+      />
 
       {writable && (
         <div className="card section-card" data-testid="open-count-card">
