@@ -38,10 +38,11 @@ const QUICK_ACTIONS = [
   { label: "New Bill", to: "/sell", icon: <ShoppingCart size={20} />, cta: true },
   { label: "Receive", to: "/receive", icon: <PackageCheck size={20} /> },
   { label: "Transfer", to: "/transfer", icon: <ArrowLeftRight size={20} /> },
-  // D10 calls this "search across stores". That screen is #175; until it lands
-  // the button opens the stock the person can already see, which is what it
-  // would have done for their own store anyway.
-  { label: "Find stock", to: "/stock", icon: <Search size={20} /> },
+  // D10's fourth quick action is "search across stores", and it now exists
+  // (#175) - so this opens it rather than the stock the person can already see.
+  // The two answer different questions, and the one a customer is standing at
+  // the counter asking is this one.
+  { label: "Find stock", to: "/stock/search", icon: <Search size={20} /> },
 ];
 
 function QuickActions() {
