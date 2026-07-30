@@ -465,10 +465,11 @@ class StockRequest(Document):
     document posts no ledger of its own; it is a coordination record the
     fulfilling store answers, not a movement.
 
-    The inbox hangs off the *fulfilling* store, not the store asking: that
-    location's stock is what is being committed, so its own person is the one
-    who says yes or no (mirroring ``StoreTransfer``, which hangs off its
-    *source* for the same reason — see ``outbound.maker_checker``).
+    The inbox hangs off the *requesting* store: D10 routes the ask through that
+    store's own manager and then the Operations Head (#172), and the holding
+    store's manager answers in a conversation rather than on a gate. What the
+    ask is worth is still read from the fulfilling store's books, which are the
+    only ones holding the pieces — see ``outbound.maker_checker``.
     """
 
     requesting_store = models.ForeignKey(
@@ -501,11 +502,11 @@ class StockRequest(Document):
 
     @property
     def approval_subject(self) -> str:
-        """What the approvals inbox leads the row with — the fulfilling store is
-        being asked to send stock *to* somewhere, so that somewhere is the fact
-        that cannot wait for the line below it (mirrors ``StoreTransfer``'s own
+        """What the approvals inbox leads the row with. The row already carries
+        the asking store (it hangs off it), so the fact that cannot wait is
+        which location is being asked (mirrors ``StoreTransfer``'s own
         "To <destination>", read from the other end of the same move)."""
-        return f"For {self.requesting_store.code}"
+        return f"From {self.fulfilling_store.code}"
 
     def series_lookup(self) -> tuple[str, str, str]:
         dt = self.created_at or timezone.now()

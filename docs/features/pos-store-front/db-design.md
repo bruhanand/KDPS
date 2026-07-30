@@ -163,9 +163,15 @@ Index: (layer, starts_on, ends_on), brand.
 
 ## 7. `approvals` (CHANGED) - routes as data
 
-- `approvals_approvalroute` (NEW): kind CharField unique · steps JSONField - ordered `[{order, roles: [...], label, later_step_may_short_circuit: bool}]`.
-- `Approval` (CHANGED): + `route` FK ApprovalRoute SET_NULL null, + `current_step` IntegerField default 0. Null route = today's single-step behaviour, untouched.
+- `approvals_approvalroute` (NEW): kind CharField unique · steps JSONField - ordered `[{order, roles: [...] | roles_from_policy: true, label, later_step_may_short_circuit: bool}]`.
+  A step sets **either** its own `roles` **or** `roles_from_policy`, which reads the family's live `ApprovalPolicy` (including its value band) instead - so a route never freezes a second copy of an approver list that Setup can still edit (Rule 12).
+- `Approval` (CHANGED): + `route` FK ApprovalRoute **PROTECT** null, + `current_step` IntegerField default 0. Null route = today's single-step behaviour, untouched.
+  PROTECT rather than SET_NULL (as built, 30 Jul): nulling a route under a live request would silently turn a two-step approval into a one-step one, and a route a request has walked is part of that request's audit trail.
+- `approvals_step_decision` (NEW): approval FK CASCADE · step_order Integer · step_label Char snapshot · decided_by FK User PROTECT · decided_at · short_circuited bool · note. Unique on (approval, step_order).
+  Needed because `Approval` carries one `decided_by`, and the kernel's `approval_decision_is_complete` constraint keeps it empty while the request is pending - so the steps cleared along the way have nowhere else to live, and "the Approvals screen shows the step trail" has nothing to read.
 - Seed one route for `kind="stock_request"`: step 1 requesting store's manager, step 2 Operations Head (short-circuit allowed = the direct-approve ruling); the conversation with the holding store's manager is step 2's human work, not a system step.
+- Consequence in `outbound` (as built): a stock request's approval row moves from the fulfilling store to the **requesting** store, since step 1 is that store's manager and the inbox is store-scoped (ADR-0003).
+  What the ask is *worth* is still priced from the fulfilling store's books - `ApprovalKind` gains `pricing_store_field` to keep the two apart.
 
 ## 8. `outbound` (CHANGED)
 
@@ -185,6 +191,7 @@ Index: (layer, starts_on, ends_on), brand.
 4. StockLedgerEntry Kind + CashLedgerEntry account choices (migration).
 5. `updated_at` columns + backfill on Sku/Cohort/GstSlab.
 6. `Sku.no_discount` default false (backfill from AMM/NOD import comes with the offers slice).
-7. ApprovalRoute table + stock_request route seed; Approval route/current_step columns (null-safe, no backfill needed).
+7. ApprovalRoute + ApprovalStepDecision tables + stock_request route seed; Approval route/current_step columns (null-safe).
+   One backfill after all: pending stock-request approvals are moved onto the requesting store and attached to the route, so in-flight asks do not run under the old single-step rules in the old store's inbox (same treatment as the transfer and return gates got).
 8. `sell` KINDS entry + ApprovalPolicy rows (plain return kind) for maker-checker.
 9. No destructive change anywhere; nothing existing is renamed.

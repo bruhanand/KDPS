@@ -139,7 +139,9 @@ urlpatterns = [
             read_serializer=StockRequestReadSerializer,
             permission_classes=[CanWriteTransfer],
             related=("requesting_store", "fulfilling_store", "created_by"),
-            scope_field="fulfilling_store_id",
+            # Asking again is the *requesting* store's move, and its approval
+            # now hangs off that store too (#172).
+            scope_field="requesting_store_id",
         ),
         name="stock-request-request-approval",
     ),

@@ -65,6 +65,13 @@ class ApprovalKind:
     #: ends and hangs off the *source*, because the sender is answerable for the
     #: pieces until the receiver scans them in (#137).
     store_field: str = "store"
+    #: Which location's books price the document, where that is *not* the
+    #: location its inbox row hangs off. Only a stock request needs the two to
+    #: differ: the ask belongs to the store that raised it — that is whose
+    #: manager clears step 1 of the route (#172) — while the only books that can
+    #: say what the pieces are worth are the ones holding them. Blank means the
+    #: two are the same location, which is every other family.
+    pricing_store_field: str = ""
     #: Which brand the decision is about, where it is about one. Only the return
     #: families set it, and only they need to: the approver a return's policy
     #: names is the brand manager, whose scope is brands rather than stores, so
@@ -97,14 +104,23 @@ KINDS: dict[type[models.Model], ApprovalKind] = {
     # what value stay retunable in Setup (Rule 12) — this table only says the
     # family exists and which end of the move answers for it.
     StoreTransfer: ApprovalKind("transfer", "Transfer", "approved_by", store_field="source_store"),
-    # The ask, not the move: a stock request hangs off the *fulfilling* store,
-    # because that location's stock is what a second person is committing —
-    # the transfer it later pre-fills answers to the Operations Head
-    # separately, on its own gate (#137). Zero tolerance for the same reason
-    # as a transfer: whatever it is worth, another store's stock does not
-    # leave on the asker's say-so alone (#74).
+    # The ask, not the move. The row hangs off the *requesting* store, because
+    # D10 routes it through that store's own manager first and then the
+    # Operations Head (#172) — the ask came off their counter and it is theirs
+    # to stand behind. The holding store's manager is not a system step: the
+    # design makes that conversation the Operations Head's human work.
+    # It is still priced from the *fulfilling* store's books, since a request
+    # line carries no cost of its own and only the location holding the pieces
+    # can say what they are worth. The transfer this later pre-fills answers to
+    # the Operations Head separately, on its own gate (#137). Zero tolerance:
+    # whatever it is worth, another store's stock does not leave on the asker's
+    # say-so alone (#74).
     StockRequest: ApprovalKind(
-        "stock_request", "Stock request", "approved_by", store_field="fulfilling_store"
+        "stock_request",
+        "Stock request",
+        "approved_by",
+        store_field="requesting_store",
+        pricing_store_field="fulfilling_store",
     ),
     # No tolerance: a flag is a report about a piece, and how much that piece is
     # worth has nothing to do with whether the store may take it off the shelf
@@ -226,7 +242,8 @@ def request_document_approval(doc: Any, *, requested_by: Any) -> Approval | None
         return None
 
     store = getattr(doc, kind.store_field)
-    line_count, pieces, value = _line_totals(doc, store.id)
+    pricing_store = getattr(doc, kind.pricing_store_field) if kind.pricing_store_field else store
+    line_count, pieces, value = _line_totals(doc, pricing_store.id)
     title = f"{store.code} · {line_count} line{'' if line_count == 1 else 's'} · {pieces} pcs"
     # A document may add what the store code alone cannot say — a gap closure is
     # meaningless in the inbox without naming the transfer it closes. Optional,
