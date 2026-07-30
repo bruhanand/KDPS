@@ -148,6 +148,8 @@ function ActionQueue({ d }: { d: DashboardPayload }) {
 }
 
 function LiveInStore({ d }: { d: DashboardPayload }) {
+  // Each carton opens its own transfer, which is where the Receive button is.
+  const navigate = useNavigate();
   return (
     <div className="card panel" data-testid="live-card">
       <div className="panel-head">
@@ -184,9 +186,15 @@ function LiveInStore({ d }: { d: DashboardPayload }) {
           {d.live.in_transit.map((t, i) => (
             // Keyed by position as well as number: a transfer posted without one
             // would otherwise collide with the next on the empty string.
-            <li key={`${t.doc_number}-${i}`} data-testid={`live-transit-${t.doc_number}`}>
-              <b className="mono">{t.doc_number}</b> · {t.pieces} pc
-              {t.expected && <span className="live-when"> · {t.expected}</span>}
+            <li key={`${t.doc_number}-${i}`}>
+              <button
+                className="live-link"
+                data-testid={`live-transit-${t.doc_number}`}
+                onClick={() => navigate(`/transfer/${t.id}`)}
+              >
+                <b className="mono">{t.doc_number}</b> · {t.pieces} pc
+                {t.expected && <span className="live-when"> · {t.expected}</span>}
+              </button>
             </li>
           ))}
         </ul>

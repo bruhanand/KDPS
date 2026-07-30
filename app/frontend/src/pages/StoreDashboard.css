@@ -49,6 +49,11 @@
   background: var(--inner); border: 1px solid var(--hairline);
   border-radius: var(--radius-inner); padding: 9px 12px;
 }
+.live-link {
+  display: block; width: 100%; text-align: left; background: none;
+  border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer;
+}
+.live-list li:hover { border-color: var(--navy); }
 .live-when { color: var(--muted); }
 .live-empty { margin: 0; font-size: 13px; }
 

@@ -53,6 +53,12 @@ SPARKLINE_DAYS = 7
 class InTransitTransfer:
     """One carton on the road to this store, and how many pieces are on it."""
 
+    #: The transfer's own id, so the card can open the document where the store
+    #: actually scans it in. Beyond the contract's sketch, and the reason is a
+    #: QA failure: the queue row alone landed the receiving store on the
+    #: in-transit screen, which is scoped to the *sending* store, so a store
+    #: reading "1 carton to receive" clicked through to "nothing on the road".
+    id: int
     doc_number: str
     pieces: int
     expected: str
@@ -160,6 +166,7 @@ def inbound_in_transit(store: Store) -> list[InTransitTransfer]:
     )
     return [
         InTransitTransfer(
+            id=transfer.id,
             doc_number=transfer.doc_number or "",
             pieces=int(transfer.pieces or 0),
             # There is no expected-arrival *date* on a transfer, only the
@@ -316,7 +323,12 @@ def build(user: Any, store: Store) -> dict[str, Any]:
             # day the table does.
             "offers": [],
             "in_transit": [
-                {"doc_number": row.doc_number, "pieces": row.pieces, "expected": row.expected}
+                {
+                    "id": row.id,
+                    "doc_number": row.doc_number,
+                    "pieces": row.pieces,
+                    "expected": row.expected,
+                }
                 for row in in_transit[:IN_TRANSIT_SHOWN]
             ],
         },

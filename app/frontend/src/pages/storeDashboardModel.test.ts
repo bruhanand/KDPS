@@ -80,6 +80,16 @@ describe("the action queue", () => {
   });
 });
 
+describe("where a queue row goes", () => {
+  it("sends the receiving store to Transfers, not to the sender's in-transit screen", () => {
+    // Found in browser QA: `/transfer/in-transit` is scoped to the *source*
+    // store, so a store reading "1 carton to receive" clicked through and was
+    // told nothing was on the road.
+    const row = queueRows(payload()).find((r) => r.key === "transfers_to_receive");
+    expect(row?.to).toBe("/transfer");
+  });
+});
+
 describe("the sparkline", () => {
   it("scales a week of nothing to nothing, not to a flat full row", () => {
     expect(sparkBars(payload().last7).map((b) => b.heightPct)).toEqual([0, 0, 0]);

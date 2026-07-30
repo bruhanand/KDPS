@@ -386,9 +386,15 @@ def test_a_carton_on_the_road_is_both_a_queue_row_and_a_live_card(cashier, netwo
     body = cashier.get(URL).json()
     counts = {row["key"]: row["count"] for row in body["action_queue"]}
     assert counts["transfers_to_receive"] == 1
-    assert body["live"]["in_transit"] == [
-        {"doc_number": number, "pieces": 40, "expected": "Bus, Friday evening"}
+    card = body["live"]["in_transit"]
+    assert [(row["doc_number"], row["pieces"], row["expected"]) for row in card] == [
+        (number, 40, "Bus, Friday evening")
     ]
+    # The card carries the transfer's own id so a store can open the document
+    # the Receive button lives on. Browser QA found the queue row alone landed
+    # the receiving store on the sender's in-transit screen, which showed
+    # nothing: the count said one carton, the screen said none.
+    assert StoreTransfer.objects.get(pk=card[0]["id"]).destination_store == network["deo"]
 
 
 def test_a_fully_scanned_in_carton_is_off_the_road(cashier, network):

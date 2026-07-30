@@ -23,7 +23,7 @@ export interface DashboardPayload {
   action_queue: { key: string; count: number }[];
   live: {
     offers: { id: number; brand: string; one_liner: string }[];
-    in_transit: { doc_number: string; pieces: number; expected: string }[];
+    in_transit: { id: number; doc_number: string; pieces: number; expected: string }[];
   };
   last7: { date: string; net_sales_paise: number }[];
   manager?: {
@@ -50,7 +50,12 @@ export interface QueueRow {
  *  here either - they arrive with the screens that clear them. */
 const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   approvals_pending: { label: "Waiting for your approval", to: "/approvals" },
-  transfers_to_receive: { label: "Cartons to receive", to: "/transfer/in-transit" },
+  // Not `/transfer/in-transit`: that screen is the *sender's*, scoped to the
+  // source store, so a receiving store clicked through from "1 carton to
+  // receive" and was told nothing was on the road (found in browser QA). The
+  // Transfers list carries both directions, and the Receive button lives on the
+  // transfer itself - which the live-in-store card links to piece by piece.
+  transfers_to_receive: { label: "Cartons to receive", to: "/transfer" },
   grn_pt_pending: { label: "Arrivals awaiting their PT", to: "/receive" },
   // The store's three folded sections are addressed through the Inventory fold
   // (#170), which is the arrangement a store person actually has.
