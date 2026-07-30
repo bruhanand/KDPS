@@ -10,7 +10,7 @@ import type { RouteObject } from "react-router-dom";
 import { PlannedPage } from "./pages/PlannedPage";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
-import { BrandsPage, GstinsPage, SeasonsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
+import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { AccessMatrixPage } from "./pages/AccessMatrix";
 import { BookingDetailPage, BookingNewPage, BookingsPage } from "./pages/Bookings";
 import { GrnDetailPage, InboundNewPage, InboundPage } from "./pages/Inbound";
@@ -26,6 +26,7 @@ import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/O
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
 import { AlertsPage } from "./pages/Alerts";
+import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
 import VendorLedger from "./pages/VendorLedger";
@@ -78,6 +79,10 @@ const BUILT: Screen[] = [
   { id: "rtv-list", path: "/return-to-brand", element: <RTVListPage /> },
   { id: "rtv-new", path: "/return-to-brand/new", element: <RTVNewPage /> },
   { id: "rtv-detail", path: "/return-to-brand/:id", element: <RTVDetailPage /> },
+  // Inventory - Stock, Stock Count and Return to Brand folded onto one page
+  // (#170). It belongs to no section: it is the store persona's arrangement of
+  // three of them, and its tabs carry those sections' own gates.
+  { id: "inventory", path: "/inventory", element: <InventoryPage /> },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
   { id: "stock-history", path: "/stock/history", element: <StockLedger /> },
@@ -85,6 +90,7 @@ const BUILT: Screen[] = [
   { id: "vflip-new", path: "/stock/vflips/new", element: <VFlipNewPage /> },
   { id: "vflip-detail", path: "/stock/vflips/:id", element: <VFlipDetailPage /> },
   // Money
+  { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
   // Setup

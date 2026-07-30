@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { headingOwning, isActiveItem, sidebarRows, testId } from "./navConfig";
-import type { NavItem, VisibleSection } from "./navConfig";
+import { headingOwning, isActiveFold, isActiveItem, sidebarRows, testId } from "./navConfig";
+import type { NavFoldDef, NavItem, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
@@ -285,6 +286,38 @@ function Sidebar({
     localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
   }
 
+  /** A row that is simply a link: a section with one visible item, or a fold,
+   *  whose whole point is to be one line. */
+  function oneLineRow(row: {
+    key: string;
+    icon: LucideIcon;
+    layer: string;
+    to: string;
+    label: string;
+    active: boolean;
+    testId: string;
+  }) {
+    const Icon = row.icon;
+    return (
+      <div className="nav-group" key={row.key}>
+        <div className="nav-group-head">
+          <span className="nav-ic" style={{ color: `var(--layer-${row.layer})` }}>
+            <Icon size={16} />
+          </span>
+          <Link
+            to={row.to}
+            onClick={onNavigate}
+            aria-current={row.active ? "page" : undefined}
+            className={`nav-grouplink ${row.active ? "active" : ""}`}
+            data-testid={row.testId}
+          >
+            {row.label}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   /** One section: its head, plus its items when it has more than one. */
   function renderSection(s: VisibleSection) {
     const Icon = s.def.icon;
@@ -293,27 +326,22 @@ function Sidebar({
     // open to reach a single line is a click that buys nothing. It is a tidying,
     // not a shaping: what a persona's sidebar *contains* is the layout's job
     // (`applyLayout` in the manifest), never this.
-    const single = items.length === 1;
     const open = !collapsed[s.def.code];
     const holdsActive = items.some((i) => isActiveItem(i, pathname));
+    if (items.length === 1) {
+      return oneLineRow({
+        key: s.def.code,
+        icon: Icon,
+        layer: s.def.layer,
+        to: items[0].to,
+        label: s.label,
+        active: isActiveItem(items[0], pathname),
+        testId: `nav-${s.def.code}`,
+      });
+    }
     return (
       <div className="nav-group" key={s.def.code}>
-        {single ? (
-          <div className="nav-group-head">
-            <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-              <Icon size={16} />
-            </span>
-            <Link
-              to={items[0].to}
-              onClick={onNavigate}
-              aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
-              className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
-              data-testid={`nav-${s.def.code}`}
-            >
-              {s.label}
-            </Link>
-          </div>
-        ) : (
+        {(
           <button
             type="button"
             className="nav-group-head nav-group-toggle"
@@ -330,7 +358,7 @@ function Sidebar({
             <ChevronDown size={14} className={`nav-chev ${open ? "open" : ""}`} />
           </button>
         )}
-        {!single && open && (
+        {open && (
           <div className="nav-items">
             {items.map((it) => {
               const active = isActiveItem(it, pathname);
@@ -361,6 +389,21 @@ function Sidebar({
     );
   }
 
+  /** A fold: one link to one page whose tabs are the screens it folds. It draws
+   *  exactly like a one-item section, because that is what it is to the reader
+   *  - the dividing happens inside the page, never here (D10 §1). */
+  function renderFold(fold: NavFoldDef) {
+    return oneLineRow({
+      key: fold.to,
+      icon: fold.icon,
+      layer: fold.layer,
+      to: fold.to,
+      label: fold.heading,
+      active: isActiveFold(fold, pathname),
+      testId: `nav-fold-${fold.heading.toLowerCase()}`,
+    });
+  }
+
   return (
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
@@ -371,27 +414,9 @@ function Sidebar({
         </span>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
-        {rows.map((row) => {
-          if (row.kind === "section") return renderSection(row.section);
-          // A grouping heading: a label and an order, nothing else. It owns no
-          // route and no capability, so it is not a link and does not collapse -
-          // the sections beneath it keep their own heads and their own gates.
-          const GroupIcon = row.group.icon;
-          const slug = row.group.heading.toLowerCase();
-          return (
-            <div className="nav-group nav-supergroup" key={row.key}>
-              <div className="nav-group-head">
-                <span className="nav-ic" style={{ color: `var(--layer-${row.group.layer})` }}>
-                  <GroupIcon size={16} />
-                </span>
-                <span className="nav-group-label" data-testid={`nav-heading-${slug}`}>
-                  {row.group.heading}
-                </span>
-              </div>
-              <div className="nav-subsections">{row.sections.map(renderSection)}</div>
-            </div>
-          );
-        })}
+        {rows.map((row) =>
+          row.kind === "section" ? renderSection(row.section) : renderFold(row.fold),
+        )}
       </nav>
       <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
     </aside>

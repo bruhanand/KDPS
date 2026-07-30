@@ -5,9 +5,12 @@ import { Pencil, Plus, Save, ShieldCheck, UserPlus, Users, X } from "lucide-reac
 import { api, apiErrorMessage, typedApi } from "../lib/api";
 import type { ApiSchemas } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
-import { CommercialBadge, StatusChip, formatINR } from "../lib/format";
+import { CommercialBadge, StatusChip, formatINR, paiseToRupees, rupeesToPaise } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import { SearchBox } from "../components/SearchBox";
+import { financialYear, financialYearChoices, financialYearMonths } from "../lib/fiscal";
+import type { FiscalMonth } from "../lib/fiscal";
+import { userCan } from "../shell/navConfig";
 import { withQuery, type QueryParams } from "../lib/query";
 
 const STEWARD_ROLES = ["owner", "it_admin", "data_steward"];
@@ -17,9 +20,15 @@ function useSteward(): boolean {
   return Boolean(user?.is_superuser || STEWARD_ROLES.includes(user?.role?.code ?? ""));
 }
 
+// `failure` is not decoration. Without it a refused or broken fetch left `data`
+// at `[]` and said nothing at all, so "the server would not tell me" rendered
+// exactly like "there is nothing here" - survivable on a list of seasons, not on
+// a grid of editable money cells, where a blank cell reads as "no target set" and
+// the next save would overwrite a number that was there all along.
 function useList<T>(url: string, params?: QueryParams) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failure, setFailure] = useState("");
   const [tick, setTick] = useState(0);
   const full = withQuery(url, params);
   useEffect(() => {
@@ -27,13 +36,22 @@ function useList<T>(url: string, params?: QueryParams) {
     setLoading(true);
     api
       .get(full)
-      .then((r) => live && setData(r.data))
+      .then((r) => {
+        if (!live) return;
+        setData(r.data);
+        setFailure("");
+      })
+      .catch((e) => {
+        if (!live) return;
+        setData([]);
+        setFailure(apiErrorMessage(e));
+      })
       .finally(() => live && setLoading(false));
     return () => {
       live = false;
     };
   }, [full, tick]);
-  return { data, loading, reload: () => setTick((t) => t + 1) };
+  return { data, loading, failure, reload: () => setTick((t) => t + 1) };
 }
 
 function Screen({
@@ -159,6 +177,273 @@ export function StoresPage() {
         </table>
       </div>
     </Screen>
+  );
+}
+
+// -------------------------------------------------------- Store targets
+
+interface StoreTarget {
+  store: string;
+  month: string;
+  target_paise: number;
+}
+
+interface TargetEdit {
+  store: string;
+  month: string;
+  label: string;
+  rupees: string;
+}
+
+/** How a cell is addressed, in the one place that spells it. Three call sites
+ *  build this key, and three hand-written template strings are three chances for
+ *  the lookup to stop matching the fill. */
+const cellKey = (store: string, monthIso: string) => `${store}|${monthIso}`;
+
+/** `GET | PUT /masters/store-targets` - the monthly rupee number each store is
+ *  asked to sell, which the store Dashboard shows month-to-date against (#171).
+ *
+ *  Gated on `money: manage`, the same rung the server's PUT requires, not on the
+ *  master-data steward rule the rest of this file uses: setting what a store must
+ *  sell is a Money act, and the D10 grill made *which* role holds that cell
+ *  admin-editable data rather than code. Reading stays at whatever holds the Money
+ *  section at all - a store may see the number it is judged against.
+ *
+ *  Twelve columns are drawn from the financial year, not from the rows that came
+ *  back: a month nobody has set yet is a blank cell to fill, and dropping it would
+ *  hide exactly the work this screen exists for. */
+export function StoreTargetsPage() {
+  const { user } = useAuth();
+  const canEdit = userCan(user, "money", "manage");
+  const [fy, setFy] = useState(() => financialYear());
+  const storeList = useList<Store>("/masters/stores");
+  const { data: stores, loading: storesLoading, failure: storesFailure } = storeList;
+  const { data, loading, failure, reload } = useList<StoreTarget>("/masters/store-targets", { fy });
+  const [edit, setEdit] = useState<TargetEdit | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [ok, setOk] = useState("");
+
+  // A fetch that failed must not leave editable cells behind: a blank cell would
+  // read as "no target set", and saving over it would overwrite a number the
+  // screen never managed to load.
+  const stale = Boolean(failure || storesFailure);
+  const editable = canEdit && !stale;
+
+  const months = useMemo(() => financialYearMonths(fy), [fy]);
+  // cellKey -> paise. One pass, because a 50-store year is 600 cells and scanning
+  // the list per cell would be 600 scans of it.
+  const byCell = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of data) map.set(cellKey(row.store, row.month), row.target_paise);
+    return map;
+  }, [data]);
+  const fyTotal = useMemo(() => data.reduce((sum, row) => sum + row.target_paise, 0), [data]);
+
+  // What the total is a total *of*, in the words that are true for this reader.
+  // A store manager sees one store, so "across every store" would be a claim
+  // about the network from a page showing one row of it.
+  const totalOf =
+    stores.length === 1 ? `at ${stores[0].code}` : `across ${stores.length} stores`;
+
+  /** Dismiss whatever the last save said. A banner that outlives the editor it
+   *  belonged to gets read against the next cell, or against the next year. */
+  function clearFeedback() {
+    setError("");
+    setOk("");
+  }
+
+  function closeEditor() {
+    setEdit(null);
+    clearFeedback();
+  }
+
+  async function save() {
+    if (!edit) return;
+    const paise = rupeesToPaise(edit.rupees);
+    if (paise === null) {
+      setError("Enter the target in rupees - digits, and at most two decimal places.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    setOk("");
+    try {
+      await api.put("/masters/store-targets", {
+        store: edit.store,
+        month: edit.month,
+        target_paise: paise,
+      });
+      setOk(`${edit.store} · ${edit.label} target set to ${formatINR(paise)}.`);
+      setEdit(null);
+      reload();
+    } catch (e) {
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function open(store: string, month: FiscalMonth) {
+    const current = byCell.get(cellKey(store, month.iso));
+    clearFeedback();
+    setEdit({
+      store,
+      month: month.iso,
+      label: month.label,
+      // Pre-filled with what is already there so a correction is an edit, not a
+      // retype - and blank when there is nothing, so nought stays a deliberate
+      // answer rather than the default one.
+      rupees: current === undefined ? "" : paiseToRupees(current),
+    });
+  }
+
+  // Not the shared `Screen` wrapper: its lead counts records, and "600 records"
+  // says nothing true about a grid. What a reader wants off the top of this one is
+  // the year's committed total.
+  return (
+    <div className="page-pad">
+      <PageHeader
+        lead={
+          <span data-testid="target-fy-total">
+            {canEdit
+              ? "Pick a cell to set that store's month for the year. "
+              : "Set at head office; shown here for reference. "}
+            {/* No total until there is something to total. "committed across 0
+                stores" while the grid loads is a number nobody asked for. */}
+            {stores.length > 0 && !loading && (
+              <>
+                FY {fy} committed {totalOf}: <b>{formatINR(fyTotal)}</b>.
+              </>
+            )}
+          </span>
+        }
+        actions={
+          <select
+            className="select"
+            value={fy}
+            onChange={(e) => {
+              setFy(e.target.value);
+              closeEditor();
+            }}
+            aria-label="Financial year"
+            data-testid="target-fy-select"
+          >
+            {financialYearChoices().map((choice) => (
+              <option key={choice} value={choice}>
+                FY {choice}
+              </option>
+            ))}
+          </select>
+        }
+      />
+      <Feedback error={error || failure || storesFailure} ok={ok} />
+      {stale && (
+        <div className="warn-note" data-testid="target-stale-note">
+          The grid could not be loaded, so nothing here can be edited - what you
+          would see as an empty cell might be a target that is already set.
+          Refresh, or check you still have access to this section.
+        </div>
+      )}
+      {editable && edit && (
+        <div className="card section-card" data-testid="target-editor">
+          <div className="toolbar" style={{ marginBottom: 12 }}>
+            <h3 className="h3">
+              {edit.store} · {edit.label}
+            </h3>
+            <div className="spacer" />
+            <button className="btn btn-sm" onClick={closeEditor} data-testid="target-editor-close">
+              <X size={14} /> Close
+            </button>
+          </div>
+          <div className="form-grid wide-form">
+            <input
+              className="input"
+              inputMode="decimal"
+              placeholder="Target for the month (₹)"
+              value={edit.rupees}
+              onChange={(e) => setEdit({ ...edit, rupees: e.target.value })}
+              aria-label={`Target for ${edit.store}, ${edit.label}, in rupees`}
+              data-testid="target-amount-input"
+            />
+            <button
+              className="btn btn-cta"
+              onClick={save}
+              disabled={busy || !edit.rupees.trim()}
+              data-testid="target-save-button"
+            >
+              <Save size={15} /> {busy ? "Saving…" : "Save target"}
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="table-wrap">
+        <table className="data" data-testid="store-targets-table">
+          <thead>
+            <tr>
+              <th>Store</th>
+              {months.map((month) => (
+                <th key={month.iso} className="tabular">
+                  {month.label}
+                </th>
+              ))}
+              <th className="tabular">FY total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {storesLoading || loading ? (
+              <tr>
+                <td colSpan={months.length + 2}>Loading…</td>
+              </tr>
+            ) : stores.length === 0 ? (
+              <tr data-testid="store-targets-empty">
+                <td colSpan={months.length + 2}>
+                  No stores yet - add one in Setup before setting targets.
+                </td>
+              </tr>
+            ) : (
+              stores.map((store) => {
+                const cells = months.map((month) => byCell.get(cellKey(store.code, month.iso)));
+                const total = cells.reduce<number>((sum, paise) => sum + (paise ?? 0), 0);
+                return (
+                  <tr key={store.code} data-testid={`target-row-${store.code}`}>
+                    <td>
+                      <b className="mono">{store.code}</b> {store.name}
+                    </td>
+                    {months.map((month, index) => {
+                      const paise = cells[index];
+                      // The em dash is this table's "nothing here" glyph, the same
+                      // one the store and vendor lists use for a blank column.
+                      const shown = paise === undefined ? "—" : formatINR(paise, { short: true });
+                      const testId = `target-cell-${store.code}-${month.iso}`;
+                      return (
+                        <td key={month.iso} className="tabular">
+                          {editable ? (
+                            <button
+                              className="btn btn-sm"
+                              onClick={() => open(store.code, month)}
+                              aria-label={`Set ${store.name} target for ${month.label}`}
+                              data-testid={testId}
+                            >
+                              {shown}
+                            </button>
+                          ) : (
+                            <span data-testid={testId}>{shown}</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                    <td className="tabular">
+                      <b>{total ? formatINR(total, { short: true }) : "—"}</b>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

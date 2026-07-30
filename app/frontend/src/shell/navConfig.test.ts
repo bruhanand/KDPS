@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  INVENTORY_FOLD,
   NAV_ITEMS,
   PERSONA_LAYOUTS,
   SECTIONS,
   applyLayout,
+  foldTabs,
   headingOwning,
+  isActiveFold,
   isActiveItem,
   itemOwning,
   itemPath,
+  resolveFoldTab,
   resolveLegacyPath,
   sectionsIn,
   sidebarRows,
@@ -36,24 +40,15 @@ function user(roleCode: string, caps: Record<string, string>) {
   };
 }
 
-/** Each row named as the person reads it: a section by its label, a grouping
- *  heading as "Heading > section, section". */
+/** Each row named as the person reads it: a section by its label, a fold by its
+ *  heading. Both draw as one row - a fold's tabs are inside its page. */
 function headings(rows: NavRow[]): string[] {
-  return rows.map((r) =>
-    r.kind === "section"
-      ? r.section.label
-      : `${r.group.heading} > ${r.sections.map((s) => s.label).join(", ")}`,
-  );
+  return rows.map((r) => (r.kind === "section" ? r.section.label : r.fold.heading));
 }
 
-/** The item labels drawn under one section, wherever that section is drawn. */
+/** The item labels drawn under one section. */
 function itemsUnder(rows: NavRow[], sectionCode: string): string[] {
   return sectionsIn(rows).find((s) => s.def.code === sectionCode)?.items.map((i) => i.label) ?? [];
-}
-
-/** Every item label on the sidebar, whatever heading it ended up under. */
-function allLabels(rows: NavRow[]): string[] {
-  return sectionsIn(rows).flatMap((s) => s.items.map((i) => i.label));
 }
 
 describe("the thirteen sections", () => {
@@ -194,7 +189,7 @@ describe("the highlighted menu line", () => {
   });
 });
 
-describe("a persona's sidebar shape (#96)", () => {
+describe("a persona's sidebar shape (#96, folded by #170)", () => {
   // What the server sends today, from `accounts/rbac_matrix.py`: the sheet's
   // "Store Person" row, plus #97's `hrms: manage` for a manager. Written out
   // here rather than imported because the point of these tests is that the
@@ -233,101 +228,148 @@ describe("a persona's sidebar shape (#96)", () => {
   const rowsFor = (roleCode: string, caps: Record<string, string>) =>
     sidebarRows(user(roleCode, caps));
 
-  it("gives a store cashier the screen the store asked for, twice", () => {
-    // Booking is last because the layout does not name it: they were granted
-    // `booking: view` on 26 July (#130) and it joins Inventory only when #101
-    // scopes it. Held and unnamed ⇒ appended, never dropped.
-    expect(headings(rowsFor("store_staff", STORE_CAPS))).toEqual([
-      "Home",
-      "Sell",
-      "Inventory > Receive Goods, Transfer, Stock",
-      "Reports",
-      "Stock Count",
-      "Money",
-      "Offers & Price",
-      "Booking",
-    ]);
+  // D10's ten, in D10's order.
+  const TEN = [
+    "Home",
+    "Sell",
+    "Inventory",
+    "Receive Goods",
+    "Transfer",
+    "Booking",
+    "Money",
+    "Offers & Price",
+    "Reports",
+    "HRMS",
+  ];
+
+  it("gives a store cashier the ten flat sections D10 decided", () => {
+    expect(headings(rowsFor("store_staff", STORE_CAPS))).toEqual(TEN);
   });
 
-  it("gives a store manager the same, plus the one HRMS row", () => {
+  it("gives a store manager the same ten", () => {
+    // The manager differs from the cashier in one cell (`hrms: manage`), which
+    // adds a line inside HRMS and no row to the sidebar.
     const rows = rowsFor("store_manager", MANAGER_CAPS);
-    expect(headings(rows)).toEqual([
-      "Home",
-      "Sell",
-      "Inventory > Receive Goods, Transfer, Stock",
-      "Reports",
-      "HRMS",
-      "Stock Count",
-      "Money",
-      "Offers & Price",
-      "Booking",
-    ]);
-    // Attendance has moved to Home, so HRMS is Member Details alone and draws
-    // as one line. A cashier has no Member Details and so no HRMS row at all.
-    expect(itemsUnder(rows, "hrms")).toEqual(["Member Details"]);
-    expect(headings(rowsFor("store_staff", STORE_CAPS))).not.toContain("HRMS");
+    expect(headings(rows)).toEqual(TEN);
+    expect(itemsUnder(rows, "hrms")).toEqual(["Attendance", "Member Details"]);
+    expect(itemsUnder(rowsFor("store_staff", STORE_CAPS), "hrms")).toEqual(["Attendance"]);
   });
 
-  it("draws Attendance under Home for a store person and under HRMS for everyone else", () => {
-    const store = rowsFor("store_staff", STORE_CAPS);
-    expect(itemsUnder(store, "home")).toEqual(["Dashboard", "Attendance", "Approvals", "Alerts"]);
-    expect(itemsUnder(store, "hrms")).toEqual([]);
-
-    const warehouse = rowsFor("warehouse", WAREHOUSE_CAPS);
-    expect(itemsUnder(warehouse, "home")).toEqual(["Dashboard", "Approvals", "Alerts"]);
-    expect(itemsUnder(warehouse, "hrms")).toEqual(["Attendance"]);
+  it("nests no section under another - no subsections in the sidebar, ever", () => {
+    // D10 §1's standing rule: anything that needs dividing divides inside the
+    // page, as tabs. A row is a section or a fold; a fold draws one link.
+    for (const rows of [rowsFor("store_staff", STORE_CAPS), rowsFor("warehouse", WAREHOUSE_CAPS)]) {
+      for (const row of rows) expect(["section", "fold"]).toContain(row.kind);
+    }
   });
 
-  it("leaves Return to Brand off the store's sidebar, with damage still one click away", () => {
+  it("folds Stock, Stock Count and Return to Brand into Inventory's four tabs", () => {
     const rows = rowsFor("store_staff", STORE_CAPS);
-    expect(headings(rows)).not.toContain("Return to Brand");
-    // The store keeps "mark damage only" - the entry is drawn under Stock, the
-    // section that owns the screen, so nothing became unreachable.
-    expect(itemsUnder(rows, "stock")).toContain("Damage / Quarantine");
-    expect(itemsUnder(rowsFor("warehouse", WAREHOUSE_CAPS), "stock")).not.toContain(
-      "Damage / Quarantine",
-    );
-  });
-
-  it("groups without renaming: a store person still reads Transfer", () => {
-    const rows = rowsFor("store_staff", STORE_CAPS);
-    const grouped = rows.find((r) => r.kind === "group");
-    expect(grouped?.kind === "group" && grouped.sections.map((s) => s.label)).toEqual([
-      "Receive Goods",
-      "Transfer",
-      "Stock",
+    // The three heads are gone from the sidebar...
+    for (const gone of ["Stock", "Stock Count", "Return to Brand"]) {
+      expect(headings(rows)).not.toContain(gone);
+    }
+    // ...and their screens are the tabs of one page instead.
+    const fold = rows.find((r) => r.kind === "fold");
+    expect(fold?.kind === "fold" && fold.fold.to).toBe("/inventory");
+    expect(fold?.kind === "fold" && fold.tabs.map((t) => t.label)).toEqual([
+      "Stock on Hand",
+      "Damage & Quarantine",
+      "Count & Adjust",
+      "Return to Brand",
     ]);
   });
 
-  it("keeps the grouping heading out of the section catalog", () => {
-    // It owns no route, no section code and no server counterpart.
+  it("shows a store no tab it does not hold the section for", () => {
+    // The acceptance criterion of #170: tabs stay gated by their original
+    // codes, so revoking one takes its tab and nothing else.
+    const { stock_count: _noCount, ...withoutCount } = STORE_CAPS;
+    expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutCount)))
+      .map((t) => t.label)).toEqual(["Stock on Hand", "Damage & Quarantine", "Return to Brand"]);
+
+    const { return_to_brand: _noRtv, ...withoutRtv } = STORE_CAPS;
+    expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutRtv)))
+      .map((t) => t.label)).toEqual(["Stock on Hand", "Count & Adjust"]);
+
+    // Damage & Quarantine is Return to Brand's line onto Stock's screen, so it
+    // needs both - the same pair clicking the line and landing on the URL needs.
+    // Holding one half must not open by a tab what the URL bar refuses.
+    const { stock: _noStock, ...withoutStock } = STORE_CAPS;
+    expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutStock)))
+      .map((t) => t.label)).toEqual(["Count & Adjust", "Return to Brand"]);
+
+    // No folded section at all ⇒ no Inventory row: an empty page is not a page.
+    const rows = sidebarRows(user("store_staff", { home: "view", sell: "operate" }));
+    expect(headings(rows)).toEqual(["Home", "Sell"]);
+  });
+
+  it("falls back to the first tab this person can see", () => {
+    // A slug that is unknown, or one whose tab they are not shown, must not
+    // leave them on a page with nothing on it.
+    const tabs = foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", STORE_CAPS)));
+    expect(resolveFoldTab(tabs, "count")?.slug).toBe("count");
+    expect(resolveFoldTab(tabs, "nonsense")?.slug).toBe("stock");
+    expect(resolveFoldTab(tabs, null)?.slug).toBe("stock");
+    expect(resolveFoldTab([], "stock")).toBeNull();
+  });
+
+  it("folds without renaming: a store person still reads Transfer", () => {
+    // Folding may move a section onto a page; it may not give this persona a
+    // private word for one. Every section still standing keeps the name the
+    // warehouse and HO use for it.
+    const rows = rowsFor("store_staff", STORE_CAPS);
+    const byCode = new Map(SECTIONS.map((s) => [s.code, s.label]));
+    for (const row of rows) {
+      if (row.kind !== "section") continue;
+      expect(row.section.label, row.key).toBe(byCode.get(row.key));
+    }
+    expect(headings(rows)).toContain("Transfer");
+  });
+
+  it("keeps the fold out of the section catalog, and its tabs inside it", () => {
+    // A fold owns a URL but no section code and no server counterpart; every
+    // section it stands for, and every entry it draws, is a real one.
     const codes = new Set(SECTIONS.map((s) => s.code));
+    const entries = new Set(NAV_ITEMS.map((i) => i.to));
     for (const layout of Object.values(PERSONA_LAYOUTS)) {
-      for (const row of layout.rows) {
+      for (const row of layout) {
         if (typeof row === "string") continue;
         expect(codes.has(row.heading.toLowerCase())).toBe(false);
-        for (const code of row.sections) expect(codes.has(code)).toBe(true);
+        expect(claimed(row.to), row.to).toBe(false);
+        for (const code of row.sections) expect(codes.has(code), code).toBe(true);
+        for (const tab of row.tabs) expect(entries.has(tab.entry), tab.entry).toBe(true);
       }
     }
   });
 
-  it("unfolds the heading a screen is actually drawn under", () => {
-    // The sidebar must be able to show where you are. For a store person on
-    // Attendance that heading is Home, not the HRMS section that owns it.
-    expect(headingOwning("/staff/attendance", "store_staff")).toBe("home");
-    expect(headingOwning("/staff/attendance", "warehouse")).toBe("hrms");
+  it("says which row a screen is drawn under, folded or not", () => {
+    // The sidebar must be able to show where you are - including when the
+    // screen has been folded onto a page under a different name.
+    expect(headingOwning("/inventory", "store_staff")).toBe("fold:/inventory");
+    expect(headingOwning("/stock", "store_staff")).toBe("fold:/inventory");
+    expect(headingOwning("/stock-count/adjustments", "store_staff")).toBe("fold:/inventory");
+    expect(headingOwning("/stock", "warehouse")).toBe("stock");
     expect(headingOwning("/receive/pt", "store_staff")).toBe("receive_goods");
+    expect(headingOwning("/staff/attendance", "store_staff")).toBe("hrms");
     expect(headingOwning("/nobody-built-this", "store_staff")).toBeNull();
   });
 
+  it("lights the Inventory row on the screens it folded", () => {
+    // A store person who lands on /stock from the global search still sees
+    // which row they are on, even though no line points there any more.
+    for (const url of ["/inventory", "/stock", "/stock/history", "/return-to-brand/3"]) {
+      expect(isActiveFold(INVENTORY_FOLD, url), url).toBe(true);
+    }
+    for (const url of ["/receive", "/transfer", "/"]) {
+      expect(isActiveFold(INVENTORY_FOLD, url), url).toBe(false);
+    }
+  });
+
   it("gives every line on a store person's sidebar its own test handle", () => {
-    // Damage / Quarantine drawn under Stock *is* /stock once its `?view=` is
-    // dropped, so a handle built from the path alone collided with Stock on Hand.
     const handles = sectionsIn(rowsFor("store_manager", MANAGER_CAPS)).flatMap((s) =>
       s.items.map((i) => testId(s.def.code, i)),
     );
     expect(new Set(handles).size).toBe(handles.length);
-    expect(handles).toContain("nav-stock-stock-quarantine");
   });
 
   it("leaves every other persona's sidebar flat and untouched", () => {
@@ -341,8 +383,9 @@ describe("a persona's sidebar shape (#96)", () => {
 });
 
 describe("arranging a sidebar can never widen it", () => {
-  // The invariant the whole of #96 rests on: grouping consumes the output of
-  // the access filter, so it can reorder, nest or drop - never add.
+  // The invariant the whole of #96 rests on, and #170 inherits: arranging
+  // consumes the output of the access filter, so it can reorder, fold or drop -
+  // never add.
   const ROLES = ["store_staff", "store_manager", "warehouse", "owner"];
 
   function shuffleCaps(seed: number): Record<string, string> {
@@ -360,40 +403,32 @@ describe("arranging a sidebar can never widen it", () => {
         const caps = shuffleCaps(seed);
         const granted = visibleSections(user(role, caps));
         const allowed = new Map(granted.map((s) => [s.def.code, new Set(s.items.map((i) => i.to))]));
-        const drawn = sectionsIn(applyLayout(granted, role));
+        const rows = applyLayout(granted, role);
+        const drawn = sectionsIn(rows);
 
         expect(new Set(drawn.map((s) => s.def.code)).size, `${role}/${seed}`).toBe(drawn.length);
         for (const s of drawn) {
           expect(allowed.has(s.def.code), `${role}/${seed}: ${s.def.code}`).toBe(true);
           for (const item of s.items) {
-            // The item may be drawn under another heading, but it must be one
-            // the access filter passed *somewhere*: its gate travelled with it.
-            const passed = [...allowed.values()].some((set) => set.has(item.to));
-            expect(passed, `${role}/${seed}: ${item.to}`).toBe(true);
+            expect(allowed.get(s.def.code)!.has(item.to), `${role}/${seed}: ${item.to}`).toBe(true);
+          }
+        }
+        // A tab is a menu entry drawn somewhere else, so it answers to the same
+        // filter: no tab may show a screen the sidebar would have hidden.
+        for (const row of rows) {
+          if (row.kind !== "fold") continue;
+          for (const tab of row.tabs) {
+            const passed = [...allowed.values()].some((set) => set.has(tab.entry));
+            expect(passed, `${role}/${seed}: ${tab.entry}`).toBe(true);
           }
         }
       }
     }
   });
 
-  it("never draws a relocated entry for somebody who does not hold its section", () => {
-    // Attendance belongs to HRMS and keeps HRMS's gate wherever it is drawn.
-    const labels = allLabels(
-      sidebarRows(user("store_staff", { home: "view", stock: "view", sell: "operate" })),
-    );
-    expect(labels).not.toContain("Attendance");
-    // Same for the other move: no Return to Brand grant, no damage entry.
-    expect(labels).not.toContain("Damage / Quarantine");
-  });
-
-  it("gives a hidden section its heading back rather than stranding an entry", () => {
-    // Return to Brand leaves the store's sidebar *because* Damage / Quarantine
-    // is drawn under Stock. Hold Return to Brand without Stock - an admin can
-    // retune to that - and hiding it would take the one entry they can use with
-    // it, so the heading comes back instead.
-    const rows = sidebarRows(user("store_staff", { home: "view", return_to_brand: "operate" }));
-    expect(headings(rows)).toContain("Return to Brand");
-    expect(allLabels(rows)).toContain("Damage / Quarantine");
+  it("draws no Inventory row for somebody holding none of its sections", () => {
+    const rows = sidebarRows(user("store_staff", { home: "view", sell: "operate" }));
+    expect(rows.some((r) => r.kind === "fold")).toBe(false);
   });
 
   it("survives a retune in either direction", () => {
@@ -405,21 +440,21 @@ describe("arranging a sidebar can never widen it", () => {
       stock: "view",
       reports: "view",
     };
-    function shape(caps: Record<string, string>) {
-      return sidebarRows(user("store_staff", caps)).map((r) =>
-        r.kind === "section" ? r.section.label : r.group.heading,
-      );
-    }
-    // Revoked: Transfer goes, Inventory stays and keeps the other two.
+    const shape = (caps: Record<string, string>) => headings(sidebarRows(user("store_staff", caps)));
+    expect(shape(base)).toEqual(["Home", "Sell", "Inventory", "Receive Goods", "Transfer", "Reports"]);
+    // Revoked: Transfer goes, Inventory stays on the one section it still holds.
     const { transfer: _dropped, ...withoutTransfer } = base;
-    expect(shape(withoutTransfer)).toEqual(["Home", "Sell", "Inventory", "Reports"]);
-    // Revoked to nothing under a heading: the heading goes with them.
-    expect(shape({ home: "view", sell: "operate" })).toEqual(["Home", "Sell"]);
+    expect(shape(withoutTransfer)).toEqual(["Home", "Sell", "Inventory", "Receive Goods", "Reports"]);
+    // Revoked to nothing behind the fold: the fold goes with them.
+    const { stock: _noStock, ...withoutStock } = base;
+    expect(shape(withoutStock)).toEqual(["Home", "Sell", "Receive Goods", "Transfer", "Reports"]);
     // Newly granted and named nowhere in the layout: appended, not dropped.
     expect(shape({ ...base, setup: "operate" })).toEqual([
       "Home",
       "Sell",
       "Inventory",
+      "Receive Goods",
+      "Transfer",
       "Reports",
       "Setup",
     ]);

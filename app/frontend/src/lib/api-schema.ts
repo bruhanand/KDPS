@@ -901,6 +901,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/masters/store-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * @description `GET | PUT /api/masters/store-targets` - the store x month target grid.
+         *
+         *     A master, so a PUT *is* the whole write: `(store, month)` is unique and
+         *     setting a target again corrects it. There is no delete, because a store's
+         *     month always has a number even when that number is nought.
+         *
+         *     Both verbs gate on **entitlement**, not on the top-bar switcher, and that is
+         *     the one thing about this view worth reading twice.
+         *
+         *     The grid's rows come from the store master (`scoped_stores`, which says in its
+         *     own docstring that it is "deliberately *not* narrowed by the active unit").
+         *     Its cells come from here. Gate the two differently and they disagree: an
+         *     Operations Head with Deoghar picked in the top bar would get all fifty store
+         *     rows with only Deoghar's numbers in them, every other cell reading as "no
+         *     target set" for a target that exists, and the year's total quietly collapsing
+         *     to one store. A screen that hides committed money behind a header nobody
+         *     thought they were filtering with is worse than one that refuses.
+         *
+         *     So this endpoint follows the master it is keyed on rather than the reading
+         *     convention for documents: one financial year of targets is a single HO
+         *     decision, and you do not look at one store's column of it at a time. Scope is
+         *     still the boundary - a store-scoped caller sees their own store and no other,
+         *     which is the acceptance criterion - the switcher simply gets no vote. Callers
+         *     who want one store ask for it by name with `?store=`.
+         */
+        get: operations["masters_store_targets_retrieve"];
+        /**
+         * @description `GET | PUT /api/masters/store-targets` - the store x month target grid.
+         *
+         *     A master, so a PUT *is* the whole write: `(store, month)` is unique and
+         *     setting a target again corrects it. There is no delete, because a store's
+         *     month always has a number even when that number is nought.
+         *
+         *     Both verbs gate on **entitlement**, not on the top-bar switcher, and that is
+         *     the one thing about this view worth reading twice.
+         *
+         *     The grid's rows come from the store master (`scoped_stores`, which says in its
+         *     own docstring that it is "deliberately *not* narrowed by the active unit").
+         *     Its cells come from here. Gate the two differently and they disagree: an
+         *     Operations Head with Deoghar picked in the top bar would get all fifty store
+         *     rows with only Deoghar's numbers in them, every other cell reading as "no
+         *     target set" for a target that exists, and the year's total quietly collapsing
+         *     to one store. A screen that hides committed money behind a header nobody
+         *     thought they were filtering with is worse than one that refuses.
+         *
+         *     So this endpoint follows the master it is keyed on rather than the reading
+         *     convention for documents: one financial year of targets is a single HO
+         *     decision, and you do not look at one store's column of it at a time. Scope is
+         *     still the boundary - a store-scoped caller sees their own store and no other,
+         *     which is the acceptance criterion - the switcher simply gets no vote. Callers
+         *     who want one store ask for it by name with `?store=`.
+         */
+        put: operations["masters_store_targets_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/masters/stores": {
         parameters: {
             query?: never;
@@ -5741,6 +5809,42 @@ export interface operations {
         };
     };
     masters_skus_lookup_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    masters_store_targets_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    masters_store_targets_update: {
         parameters: {
             query?: never;
             header?: never;
