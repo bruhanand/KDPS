@@ -19,16 +19,14 @@ That single fact decides the shape of everything below:
   to somebody else, a discount nobody authorised. The till halts its queue and
   shows an exception card; it never silently drops a bill.
 
-**Scope note (#177).** This slice writes the *documents and the stock ledger*.
-The two balanced value-GL events - the money side and the cost side - are #178
-and deliberately absent here; nothing in this module calls `post_entries`, and a
-line the books cannot price waits in `DeferredCosting` rather than posting at zero
-(Rule 5).
+The value side of a bill - the two balanced GL events, the vendor accrual and the
+cash-ledger collections - lives in `sell.services.postings` (#178). This module
+decides *what happened*; that one decides what it is worth and where it posts.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -53,6 +51,13 @@ from sell.models import (
     SellPolicy,
 )
 from sell.pricing import base_from_inclusive, split_line
+from sell.services.postings import (
+    CostedLine,
+    CostPlan,
+    plan_from_original,
+    post_sale_value,
+    resolve_cost_plan,
+)
 from sell.services.resolve import (
     ResolvedPiece,
     line_dims,
@@ -104,6 +109,12 @@ class _PreparedLine:
     salesman: Salesman | None = None
     override_needed: bool = False
     row: SaleLine | None = None
+    #: How the piece describes itself on the bill (Rule 3), and the season it was
+    #: placed in. Settled before the row is written, because the cost plan is
+    #: decided from the brand snapshot and the row's `costing_status` from that.
+    dims: dict[str, str] = field(default_factory=dict)
+    season: str = ""
+    cost: CostPlan = field(default_factory=CostPlan)
 
     @property
     def is_return(self) -> bool:
@@ -225,10 +236,11 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     flags: list[str] = []
     flags += _flag_number_hole(sale, store, minted)  # step 4
     flags += _flag_missing_originals(sale, store, lines)  # step 8
-    _write_stock_legs(sale, store, lines, actor)  # step 10 (value GL is #178)
-    _record_deferred(sale, store, lines)  # step 5
+    _write_stock_legs(sale, store, lines, actor)  # step 10, the stock half
+    _record_deferred(store, lines)  # step 5
     flags += _apply_tenders(sale, store, tender_plan)  # step 7
     _issue_change_note(sale, store, actor)  # step 8
+    _post_value(sale, lines, actor)  # step 10, the two value events
     flags += _apply_b2b(sale, store, data)  # step 11
     flags += _advisory_gst_check(sale, store, lines)  # step 12
     return AcceptResult(sale=sale, created=True, flags=sorted(set(flags)))
@@ -287,9 +299,25 @@ def _prepare_lines(
     prepared: list[_PreparedLine] = []
     for payload in data["all_lines"]:
         if payload["direction"] == SaleLine.Direction.RETURN:
-            prepared.append(_prepare_return_line(payload, store, original_bill))
+            line = _prepare_return_line(payload, store, original_bill)
         else:
-            prepared.append(_prepare_sale_line(payload, store, salesmen))
+            line = _prepare_sale_line(payload, store, salesmen)
+        line.dims, line.season = _line_description(line)
+        # A piece coming back unwinds the posting its own sale made, so its plan is
+        # read off that line rather than derived again from masters that may have
+        # moved since (Rule 3). Only a paper-era return, whose original bill we do
+        # not hold, has nothing to read and falls back to a fresh resolution.
+        line.cost = (
+            plan_from_original(line.original)
+            if line.original is not None
+            else resolve_cost_plan(
+                brand=line.dims.get("brand", ""),
+                barcode=payload["barcode"].strip(),
+                season=line.season,
+                unit_cost_paise=line.unit_cost_paise,
+            )
+        )
+        prepared.append(line)
     _check_return_quantities(prepared)
     return prepared
 
@@ -668,15 +696,13 @@ def _write_sale(
 
 def _write_line(sale: Sale, line: _PreparedLine, override: Any) -> SaleLine:
     payload = line.payload
-    dims, season = _line_description(line)
-    deferred = not line.is_priced
     return SaleLine.objects.create(
         sale=sale,
         line_no=payload["line_no"],
         direction=payload["direction"],
         barcode=payload["barcode"].strip(),
-        season=season,
-        **dims,
+        season=line.season,
+        **line.dims,
         qty=line.qty,
         mrp_paise=payload["mrp_paise"],
         disc_paise=payload["disc_paise"],
@@ -689,8 +715,13 @@ def _write_line(sale: Sale, line: _PreparedLine, override: Any) -> SaleLine:
         manual_desc=payload["manual_desc"].strip(),
         sold_before_inward=not line.is_return and not line.piece.is_known,
         costing_status=(
-            SaleLine.CostingStatus.DEFERRED if deferred else SaleLine.CostingStatus.POSTED
+            SaleLine.CostingStatus.POSTED if line.cost.postable else SaleLine.CostingStatus.DEFERRED
         ),
+        # Frozen here and read back by any exchange against this line: which book
+        # the cost came out of, and who a brand-owned piece is settled with. The
+        # brand's terms are editable master data; what this bill posted is not.
+        cost_book=line.cost.book,
+        cost_vendor=line.cost.vendor,
         return_reason=payload["reason"].strip() if line.is_return else "",
         condition=(payload["condition"] or SaleLine.Condition.GOOD) if line.is_return else "",
         original_line=line.original,
@@ -780,7 +811,7 @@ def _write_stock_legs(sale: Sale, store: Store, lines: list[_PreparedLine], acto
     never inwarded, so there is no stock to take off a shelf it was never on, and
     the movement posts with the cost event when the paperwork lands (#186).
     """
-    for row in _written_rows(lines, priced_only=True):
+    for row in _priced_rows(lines):
         mover, kind, sign = _MOVEMENTS[_movement_of(row)]
         mover(
             store=store,
@@ -814,35 +845,54 @@ _MOVEMENTS = {
 }
 
 
-def _written_rows(lines: list[_PreparedLine], *, priced_only: bool) -> list[SaleLine]:
-    """The `SaleLine` rows behind the prepared lines, in payload order."""
-    return [
-        line.row
-        for line in lines
-        if line.row is not None and (line.is_priced if priced_only else not line.is_priced)
-    ]
+def _priced_rows(lines: list[_PreparedLine]) -> list[SaleLine]:
+    """The `SaleLine` rows the books can price, in payload order.
 
-
-def _record_deferred(sale: Sale, store: Store, lines: list[_PreparedLine]) -> None:
-    """Step 5 - park every line the books cannot price yet.
-
-    Usually that is a sold-before-inward piece, but an exchange leg can land here
-    too: a piece bought in the paper era, whose original bill we do not hold and
-    whose barcode has no cohort, has no cost of record either. Both wait for the
-    same thing and are swept the same way, so they wait in the same place.
-
-    This is the row the Dashboard counts and the daily check ages; the cost event
-    and the stock movement both fire from it when the GRN/PT prices the cohort
-    (#186). Nothing posts at zero in the meantime (Rule 5).
+    The stock half of a bill turns on *pricing* alone, not on the fuller question
+    the cost event asks: a piece whose brand the masters cannot place is still a
+    piece that left a shelf, and its movement posts now even though its value has
+    to wait.
     """
-    for row in _written_rows(lines, priced_only=False):
+    return [line.row for line in lines if line.row is not None and line.is_priced]
+
+
+def _record_deferred(store: Store, lines: list[_PreparedLine]) -> None:
+    """Step 5 - park every line whose cost the books cannot post yet.
+
+    Three ways a line lands here, and the row says which (`DeferredCosting.Reason`).
+    The commonest is a piece sold before its paperwork arrived, so nothing prices
+    it; an exchange leg from the paper era, whose original bill we do not hold and
+    whose barcode has no cohort, has no cost of record either. The other two are
+    priced but unplaceable: the masters have never heard of the brand on the bill,
+    or the brand is one whose stock is not ours and nobody can say which supplier
+    is owed for it. Booking either of those into INVENTORY on the assumption that
+    it is ours is exactly the defect this queue exists to avoid.
+
+    This is the row the Dashboard counts and the daily check ages; the sweep posts
+    the cost event when what is missing arrives (#186). Nothing posts at zero in
+    the meantime (Rule 5).
+    """
+    for line in lines:
+        if line.row is None or line.cost.postable:
+            continue
         DeferredCosting.objects.create(
-            sale_line=row,
+            sale_line=line.row,
             store=store,
-            barcode=row.barcode,
-            season=row.season,
-            qty=row.qty,
+            barcode=line.row.barcode,
+            season=line.row.season,
+            qty=line.row.qty,
+            reason=line.cost.deferral,
         )
+
+
+def _post_value(sale: Sale, lines: list[_PreparedLine], actor: Any) -> None:
+    """Step 10 - the money event and the cost event (see `sell.services.postings`)."""
+    post_sale_value(
+        sale,
+        [CostedLine(row=line.row, plan=line.cost) for line in lines if line.row is not None],
+        list(sale.tenders.all()),
+        actor,
+    )
 
 
 def _apply_tenders(sale: Sale, store: Store, plans: list[_TenderPlan]) -> list[str]:

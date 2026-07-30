@@ -28,6 +28,7 @@ from django.utils import timezone
 from core.base import TimeStampedModel
 from core.documents import DocStatus, Document, MintedNumber, VoucherSeries
 from core.money import MoneyField
+from masters.models import Gstin
 
 #: Doc types this app mints. `SAL` is till-assigned (see the kernel's
 #: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` is an ordinary server-allocated counter.
@@ -280,6 +281,19 @@ class Sale(Document):
     def doc_type(self) -> str:
         return SALE_DOC_TYPE
 
+    @property
+    def gstin(self) -> Gstin:
+        """The registration the bill was raised under (the store's).
+
+        A property rather than a column: a store belongs to exactly one GSTIN and
+        the store is already on the bill, so storing it again would be a second
+        copy of one fact. It exists because `post_entries` snapshots
+        `doc.store`/`doc.gstin` onto every leg, and Bihar and Jharkhand are
+        separate registered persons - a value leg that could not say which one it
+        belonged to would be no use to either return.
+        """
+        return self.store.gstin
+
     def series_lookup(self) -> tuple[str, str, str]:
         return self.fy, self.store.code, SALE_DOC_TYPE
 
@@ -317,6 +331,25 @@ class SaleLine(TimeStampedModel):
     class CostingStatus(models.TextChoices):
         POSTED = "posted", "Costed"
         DEFERRED = "deferred", "Waiting on the paperwork"
+
+    class CostBook(models.TextChoices):
+        """Which book this piece's cost came out of, snapshotted at billing.
+
+        Not derived on demand, and that is the point. An exchange unwinds a
+        posting that already happened, so it has to unwind the one that actually
+        happened - and a brand's commercial model is editable master data. A brand
+        flipped from SOR to Outright between the sale and the exchange would
+        otherwise reverse a brand-owned piece into our own inventory and strand
+        what the brand is still owed. The trial balance would stay at zero and the
+        subledger tie would still pass, which is exactly why this is a column and
+        not a lookup (Rule 3).
+
+        Blank means the books could not place the piece at all: nothing posted, and
+        the line waits in `DeferredCosting`.
+        """
+
+        OWN = "own", "KDPS-owned - out of our own inventory"
+        BRAND = "brand", "Brand-owned - against what we owe the brand"
 
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="lines")
     line_no = models.IntegerField()
@@ -360,6 +393,16 @@ class SaleLine(TimeStampedModel):
     costing_status = models.CharField(
         max_length=8, choices=CostingStatus.choices, default=CostingStatus.POSTED
     )
+    cost_book = models.CharField(max_length=8, choices=CostBook.choices, blank=True, default="")
+    cost_vendor = models.ForeignKey(
+        "vendors.Vendor",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="sale_lines_accrued",
+        help_text="Who the brand-owned piece is settled with, frozen at billing. "
+        "PROTECT because a return reverses the accrual against this row.",
+    )
     return_reason = models.CharField(max_length=40, blank=True, default="")
     condition = models.CharField(max_length=8, choices=Condition.choices, blank=True, default="")
     original_line = models.ForeignKey(
@@ -395,6 +438,15 @@ class SaleLine(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.sale_id}/{self.line_no} · {self.barcode} × {self.qty}"
+
+    @property
+    def is_return(self) -> bool:
+        return self.direction == self.Direction.RETURN
+
+    @property
+    def cost_paise(self) -> int:
+        """What this line's pieces cost the books, at the rate frozen on it."""
+        return int(self.unit_cost_paise or 0) * int(self.qty)
 
 
 class SaleTender(TimeStampedModel):
@@ -521,6 +573,31 @@ class DeferredCosting(TimeStampedModel):
         WAITING = "waiting", "Waiting on inward"
         POSTED = "posted", "Posted"
 
+    class Reason(models.TextChoices):
+        """What the books are actually waiting for.
+
+        Three different waits, and the sweep has to tell them apart. An
+        `unpriced` piece has no cost of record, so nothing has moved for it yet -
+        not the cost event and not the stock leg either, since a piece that was
+        never inwarded cannot come off a shelf it was never on. The other two
+        *are* on the shelf and *did* leave it: their stock is already posted and
+        only the value is missing, so re-posting the movement would take the piece
+        out twice.
+
+        They also drain differently, and only the first one drains today. An
+        `unpriced` row is released by the PT that prices its cohort, which is the
+        hook #186 builds. The other two are waiting on **master data**, not on an
+        inward - somebody adding the brand, or naming its supplier - so no PT will
+        ever release them and #186 needs a masters-side trigger as well. Until it
+        has one they sit in the queue: visible, aged by the daily check, and
+        deliberately not posted, because a guess about whose stock it was is the
+        one outcome worse than a wait.
+        """
+
+        UNPRICED = "unpriced", "No cost of record - sold before inward"
+        MODEL_UNKNOWN = "model_unknown", "The masters do not know this brand"
+        VENDOR_UNKNOWN = "vendor_unknown", "Brand-owned, but no supplier of record"
+
     sale_line = models.OneToOneField(
         SaleLine, on_delete=models.CASCADE, related_name="deferred_costing"
     )
@@ -531,6 +608,7 @@ class DeferredCosting(TimeStampedModel):
     season = models.CharField(max_length=120, blank=True, default="")
     qty = models.IntegerField()
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.WAITING)
+    reason = models.CharField(max_length=16, choices=Reason.choices, default=Reason.UNPRICED)
     posted_doc_number = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
@@ -538,7 +616,7 @@ class DeferredCosting(TimeStampedModel):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"{self.barcode} × {self.qty} ({self.status})"
+        return f"{self.barcode} × {self.qty} ({self.status} · {self.reason})"
 
 
 class IrnQueueItem(TimeStampedModel):

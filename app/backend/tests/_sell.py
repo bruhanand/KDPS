@@ -27,10 +27,11 @@ from rest_framework.test import APIClient
 from accounts.models import ScopeType, User
 from accounts.sections import CAP_APPROVE
 from core.documents import VoucherSeries
-from masters.models import Cohort, Gstin, GstSlab, LegalEntity, Season, Sku, Store
+from masters.models import Brand, Cohort, Gstin, GstSlab, LegalEntity, Season, Sku, Store
 from sell.models import Salesman
 from stockledger.models import StockLedgerEntry
 from stockledger.projections import post_on_hand_movement
+from vendors.models import Vendor
 
 SALES_URL = "/api/sell/sales"
 FY = "26-27"
@@ -90,12 +91,56 @@ def build_store(code: str = "SEL-DEO", state: str = "10") -> Store:
     return store
 
 
+#: The four commercial models, as the two axes that derive them (`Brand`).
+COMMERCIAL_MODELS = {
+    "Outright": (Brand.Ownership.OWNED, Brand.ReturnTerms.NONE),
+    "Correction": (Brand.Ownership.OWNED, Brand.ReturnTerms.CAPPED),
+    "SOR": (Brand.Ownership.BRAND_OWNED, Brand.ReturnTerms.UNCAPPED),
+    "Consignment": (Brand.Ownership.BRAND_OWNED, Brand.ReturnTerms.ROLLING),
+}
+
+
+def build_brand(model: str = "Outright") -> Brand:
+    """The fixture piece's brand master, on one of the four commercial models.
+
+    The bill's cost event branches on this and on nothing else, so a test that
+    wants a brand-owned bill says so here rather than by arranging a booking.
+    """
+    ownership, return_terms = COMMERCIAL_MODELS[model]
+    brand, _ = Brand.objects.update_or_create(
+        code="mufti",
+        defaults={
+            "name": _SKU_DIMS["brand"],
+            "ownership": ownership,
+            "return_terms": return_terms,
+        },
+    )
+    return brand
+
+
+def build_supplier(brand: Brand, code: str = "ARVIND") -> Vendor:
+    """The vendor a brand-owned piece is settled with.
+
+    One supplier for the brand, which is the fallback `supplier_of` uses when a
+    piece has no inward booking of its own to read - the paper-era case.
+    """
+    vendor, _ = Vendor.objects.get_or_create(code=code, defaults={"name": "Arvind Fashions"})
+    vendor.brands.add(brand)
+    return vendor
+
+
 def build_piece(
     barcode: str = "8901000000011",
     season: str = "FW25",
     cost_paise: int = COST_PAISE,
     mrp_paise: int = MRP_PAISE,
+    model: str = "Outright",
 ) -> Cohort:
+    # The brand master comes with the piece: a barcode the books can price but
+    # whose brand they have never heard of is a real state, and it is the *unusual*
+    # one - a fixture that reached it by default would make every sale test a test
+    # about missing masters.
+    build_brand(model)
     sku, _ = Sku.objects.update_or_create(
         barcode=barcode, defaults={**_SKU_DIMS, "mrp_paise": mrp_paise}
     )
@@ -114,6 +159,7 @@ def stock_in(
     barcode: str = "8901000000011",
     cost_paise: int = COST_PAISE,
     doc_number: str = "26-27/SEL-DEO/PT/1",
+    model: str = "Outright",
 ) -> None:
     """Put `qty` on the shelf the way an inward puts it there - through the ledger.
 
@@ -121,8 +167,13 @@ def stock_in(
     projection is a cache of the ledger, so a fixture that seeds one without the
     other cannot be checked against a rebuild, and any test that tried would be
     measuring the fixture.
+
+    `model` rides through to the piece because the brand master and the shelf are
+    set up together: shelving a piece with the default would quietly reset the
+    commercial model a test had just chosen, and the bill would post the wrong
+    cost event for a reason nothing in the test named.
     """
-    cohort = build_piece(barcode=barcode, cost_paise=cost_paise)
+    cohort = build_piece(barcode=barcode, cost_paise=cost_paise, model=model)
     # A movement locks the projection row it is about to change, so it needs a
     # transaction of its own here: the suites that drive real threads run outside
     # one, and in the ordinary suites this nests harmlessly.
