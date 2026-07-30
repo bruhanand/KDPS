@@ -1,9 +1,9 @@
-"""The stock ledger — the first concrete business ledger over `core.LedgerEntry`.
+"""The stock ledger - the first concrete business ledger over `core.LedgerEntry`.
 
 Append-only (ADR-0004): a posting is only ever INSERTed; a correction is a *new*
 today-dated reversing row, never an edit or delete (enforced by the ORM base, the
 `BEFORE UPDATE OR DELETE` DB trigger, and a `REVOKE`). Each row is *self-describing*
-— it carries its own SKU (barcode) + merchandising dimensions — so the ledger needs
+- it carries its own SKU (barcode) + merchandising dimensions - so the ledger needs
 no item master to be auditable. Inward qty is positive; a reversal is negative.
 """
 
@@ -15,7 +15,7 @@ from core.ledger import LedgerEntry
 from core.money import MoneyField
 
 # The 7 merchandising dimensions every stock row carries (Rule 9: every line
-# says exactly what item it is). One bundle — copy it with `merch_dims`, never
+# says exactly what item it is). One bundle - copy it with `merch_dims`, never
 # by hand-listing the fields.
 MERCH_DIM_FIELDS = ("design", "color", "size", "brand", "season", "item", "hsn")
 
@@ -45,6 +45,14 @@ class StockLedgerEntry(LedgerEntry):
         DAMAGE_OUT = "damage_out", "Damaged out of sellable"
         QUARANTINE_IN = "quarantine_in", "Quarantine in"
         QUARANTINE_OUT = "quarantine_out", "Quarantine out"
+        # Selling kinds (D10, #177). `sale_out` is the piece leaving the shelf at
+        # the counter; `sale_return_in` is a customer's good piece coming back on
+        # to it inside an exchange. A piece that comes back *damaged* is not a
+        # `sale_return_in` - it never reaches the shelf - and posts the existing
+        # `quarantine_in` instead, so one kind still means one bucket and the
+        # rebuild command needs no knowledge of the sale to place a row.
+        SALE_OUT = "sale_out", "Sale out"
+        SALE_RETURN_IN = "sale_return_in", "Sale return in"
         RTV_OUT = "rtv_out", "RTV out"
         SEASONAL_RET = "seasonal_ret", "Seasonal return"
         ADJUSTMENT = "adjustment", "Adjustment"
@@ -95,7 +103,7 @@ class StockLedgerEntry(LedgerEntry):
 
 
 class StockOnHand(models.Model):
-    """Materialised net stock position per (store × barcode) — a fast, indexed
+    """Materialised net stock position per (store × barcode) - a fast, indexed
     projection of the append-only ledger, maintained INSIDE each post/reverse
     transaction and fully rebuildable (`manage.py rebuild_stock_on_hand`). It is a
     cache, never the source of truth: the ledger is. Mutable (no append-only
@@ -138,7 +146,7 @@ class StockOnHand(models.Model):
 
 
 class InTransitStock(models.Model):
-    """Materialised in-transit position per (transfer × barcode) — the third
+    """Materialised in-transit position per (transfer × barcode) - the third
     honest stock number (at-warehouse / in-transit / at-store). Like
     ``StockOnHand`` it is a fast projection of the append-only ledger
     (``transit_in``/``transit_out`` legs, keyed by the transfer's doc number),
@@ -190,18 +198,18 @@ class InTransitStock(models.Model):
 
 
 class QuarantineStock(models.Model):
-    """Materialised quarantine position per (store × barcode) — damaged / held
+    """Materialised quarantine position per (store × barcode) - damaged / held
     stock that is NOT free-to-sell (issue #69). Like ``StockOnHand`` and
     ``InTransitStock`` it is a fast projection of the append-only ledger
     (``quarantine_in``/``quarantine_out`` legs), maintained inside each posting
     transaction and fully rebuildable (`manage.py rebuild_stock_on_hand`). A
     cache, never the source of truth: the ledger is.
 
-    Quarantine is a *stock state in the ledger*, not a boolean on a stock row —
+    Quarantine is a *stock state in the ledger*, not a boolean on a stock row -
     entered from anywhere via the global mark-damaged action, and (a later slice)
     the source of the returnable pool. ``marked_by`` / ``marked_at`` carry the
     most-recent mark-damaged actor + time for the inventory quarantine filter
-    (Rule 10 — every action has an actor); the full per-event history lives in
+    (Rule 10 - every action has an actor); the full per-event history lives in
     the ledger and each MarkDamaged document.
     """
 

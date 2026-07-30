@@ -156,6 +156,7 @@ class Command(BaseCommand):
         entity, gstins = self._seed_entity_gstins()
         stores = self._seed_stores(gstins)
         self._seed_sell_series(stores)
+        self._seed_salesmen(stores)
         self._seed_seasons()
         self._seed_brands()
         self._seed_gst_slab()
@@ -225,6 +226,25 @@ class Command(BaseCommand):
             )
             out[code] = store
         return out
+
+    def _seed_salesmen(self, stores: dict[str, Store]) -> None:
+        """Two named sellers per selling store.
+
+        Every sold line carries the name of who sold it (Rule 10, and D10 puts the
+        picker on the line), so the counter refuses a bill that names nobody. A
+        store seeded without a single salesman therefore cannot sell at all - the
+        first bill of a fresh install would be refused for a reason that reads
+        like a defect and is a missing row. Warehouses get none: they do not sell.
+        """
+        from sell.models import Salesman
+
+        for store in stores.values():
+            if store.store_type != Store.StoreType.STORE:
+                continue
+            for code, name in (("S1", "Counter One"), ("S2", "Counter Two")):
+                Salesman.objects.get_or_create(
+                    store=store, code=code, defaults={"name": f"{name} ({store.code})"}
+                )
 
     def _seed_sell_series(self, stores: dict[str, Store]) -> None:
         """The selling counters: a sale, credit-note and return series per store.

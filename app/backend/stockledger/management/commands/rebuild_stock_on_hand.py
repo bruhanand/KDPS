@@ -2,16 +2,22 @@
 
 `StockOnHand` (at-location) and `InTransitStock` (the in-transit bucket per
 transfer) are caches maintained inside each posting transaction; this command
-recomputes both from scratch (the ledger is the source of truth) — useful after
+recomputes both from scratch (the ledger is the source of truth) - useful after
 a backfill, a bulk import, or any doubt about drift. Idempotent.
 
 Transit legs (``transit_in``/``transit_out``) ride on the *source* store but
-are NOT at-location stock — they aggregate into `InTransitStock` keyed by the
+are NOT at-location stock - they aggregate into `InTransitStock` keyed by the
 transfer's doc number, never into `StockOnHand`. Quarantine legs
 (``quarantine_in``/``quarantine_out``) ride on their store but likewise are NOT
-free-to-sell — they aggregate into `QuarantineStock` keyed by (store × barcode).
+free-to-sell - they aggregate into `QuarantineStock` keyed by (store × barcode).
 The matching ``damage_out`` leg IS an at-location leg and reduces `StockOnHand`
 normally.
+
+The selling kinds need no rule of their own, which is the point of naming them
+the way they are named: ``sale_out`` and ``sale_return_in`` are ordinary
+at-location legs and fall through to `StockOnHand` here. A customer's *damaged*
+return posts ``quarantine_in`` rather than ``sale_return_in``, so it is placed by
+the quarantine rule above and this command never has to know what a sale is.
 """
 
 from __future__ import annotations
@@ -120,7 +126,7 @@ class Command(BaseCommand):
         StockOnHand.objects.bulk_create(rows)
 
         # In-transit bucket: destination comes from the transfer document
-        # (lazy lookup — the generic ledger app holds no FK to outbound).
+        # (lazy lookup - the generic ledger app holds no FK to outbound).
         StoreTransfer = apps.get_model("outbound", "StoreTransfer")
         destinations = dict(
             StoreTransfer.objects.filter(
