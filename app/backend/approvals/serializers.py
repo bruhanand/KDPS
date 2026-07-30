@@ -25,6 +25,7 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
     decided_by_name = serializers.SerializerMethodField()
     # `created_at` *is* the moment the maker asked; name it honestly for clients.
     requested_at = serializers.DateTimeField(source="created_at", read_only=True)
+    steps = serializers.SerializerMethodField()
 
     def get_made_by_name(self, obj: Approval) -> str:
         return display_name(obj.made_by)
@@ -34,6 +35,11 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
 
     def get_decided_by_name(self, obj: Approval) -> str:
         return display_name(obj.decided_by)
+
+    def get_steps(self, obj: Approval) -> list[dict[str, Any]]:
+        """The chain, one entry per step — empty where the family has none, so
+        the screen renders nothing extra for the single-step families (#172)."""
+        return obj.step_trail()
 
     class Meta:
         model = Approval
@@ -58,6 +64,8 @@ class ApprovalReadSerializer(serializers.ModelSerializer[Approval]):
             "decided_by_name",
             "decided_at",
             "reason",
+            "current_step",
+            "steps",
         ]
         read_only_fields = fields
 

@@ -2,11 +2,25 @@
 // needs a second person (#70). The shape mirrors ApprovalReadSerializer.
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { RotateCcw } from "lucide-react";
+import { Check, ChevronRight, RotateCcw } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 
 export type ApprovalStatusT = "pending" | "approved" | "rejected" | "not_required";
+
+/** One rung of a multi-step approval route (#172). Families with no route send
+ *  an empty `steps` array, so nothing below renders for them. */
+export interface ApprovalStepT {
+  order: number;
+  label: string;
+  roles: string[];
+  state: "done" | "current" | "waiting" | "rejected";
+  decided_by_name: string;
+  decided_at: string | null;
+  /** Closed from a later step (the Operations Head approving directly) rather
+   *  than cleared by its own approver — said plainly, never glossed over. */
+  short_circuited: boolean;
+}
 
 export interface ApprovalT {
   id: number;
@@ -28,6 +42,9 @@ export interface ApprovalT {
   decided_by_name: string;
   decided_at: string | null;
   reason: string;
+  /** Zero-based position in the route; 0 and meaningless where there is none. */
+  current_step?: number;
+  steps?: ApprovalStepT[];
 }
 
 // kind → the document's own page. The server never knows about client routes.
@@ -93,6 +110,75 @@ const STATUS_LABEL: Record<string, string> = {
  *  the policy never asked anyone (the count-variance tolerance). */
 export function isCleared(approval: ApprovalT | null | undefined): boolean {
   return approval?.status === "approved" || approval?.status === "not_required";
+}
+
+const STEP_TONE: Record<ApprovalStepT["state"], string> = {
+  done: "green",
+  current: "amber",
+  rejected: "red",
+  waiting: "grey",
+};
+
+/** The route a request is walking, one chip per step (#172).
+ *
+ *  Renders nothing for the families that have no route, which is most of them —
+ *  a single-step approval says everything it has to say in the maker/checker
+ *  block above, and a one-chip "chain" would be noise.
+ *
+ *  A step closed from above says so ("closed by the Operations Head"): the
+ *  manager who never saw it must never appear to have approved it. */
+export function ApprovalSteps({
+  steps,
+  compact = false,
+}: {
+  steps: ApprovalStepT[] | undefined;
+  /** Inbox rows sit in a table cell — names drop, only the rungs show. */
+  compact?: boolean;
+}) {
+  if (!steps || steps.length < 2) return null;
+  return (
+    <div
+      className="approval-steps"
+      data-testid="approval-steps"
+      style={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 6,
+        marginTop: compact ? 4 : 8,
+      }}
+    >
+      {steps.map((step, i) => (
+        <span key={step.order} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          {i > 0 && (
+            <ChevronRight size={12} style={{ color: "var(--muted)" }} aria-hidden />
+          )}
+          <span
+            className={`chip chip-${STEP_TONE[step.state]}`}
+            style={{ fontSize: 11.5 }}
+            data-testid={`approval-step-${step.order}`}
+            title={
+              step.state === "done"
+                ? `${step.short_circuited ? "Closed" : "Cleared"} by ${step.decided_by_name}${
+                    step.decided_at ? ` on ${fmtApprovalWhen(step.decided_at)}` : ""
+                  }`
+                : step.label
+            }
+          >
+            {step.state === "done" && <Check size={11} aria-hidden />}
+            {step.label}
+            {!compact && step.state === "done" && step.decided_by_name && (
+              <span style={{ opacity: 0.8 }}>
+                {" · "}
+                {step.short_circuited ? "closed by " : ""}
+                {step.decided_by_name}
+              </span>
+            )}
+          </span>
+        </span>
+      ))}
+    </div>
+  );
 }
 
 export function ApprovalPill({ status }: { status: string }) {
@@ -178,6 +264,7 @@ export function ApprovalTrail({
         <p className="lead">No approval on record.</p>
       )}
       <ApprovalPill status={approval?.status ?? "pending"} />
+      <ApprovalSteps steps={approval?.steps} />
 
       {approval?.status === "rejected" && askAgainPath && (
         <p className="lead" style={{ marginTop: 12 }}>

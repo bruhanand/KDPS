@@ -17,6 +17,7 @@ import { ListSearchBar } from "../components/SearchBox";
 import { useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import {
+  ApprovalSteps,
   approvalDocPath,
   fmtApprovalWhenShort,
   type ApprovalT,
@@ -126,6 +127,11 @@ export function ApprovalsPage() {
                       ) : (
                         <span className="mono">{a.title}</span>
                       )}
+                      {/* Where the family has a chain, the row says which rung
+                          it is on — an approver clearing a stock request needs
+                          to know whether they are the first pair of eyes or the
+                          last. Nothing renders for the single-step families. */}
+                      <ApprovalSteps steps={a.steps} compact />
                     </td>
                     <td className="num">{a.value_paise ? <Money paise={a.value_paise} /> : "—"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>

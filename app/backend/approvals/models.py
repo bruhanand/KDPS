@@ -24,7 +24,7 @@ Design notes
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -47,6 +47,104 @@ class ApprovalStatus(models.TextChoices):
 
 #: The two statuses that let a document post.
 CLEARED_STATUSES = (ApprovalStatus.APPROVED, ApprovalStatus.NOT_REQUIRED)
+
+
+class ApprovalRoute(TimeStampedModel):
+    """The ordered chain a document family walks before it is approved (#172).
+
+    One row per family, and the chain itself is **data** — a list of steps, each
+    naming the roles that may clear it (Rule 12: who approves is data, not a
+    branch in code). A family with no row keeps the single-step behaviour every
+    other approval in the system already has; nothing is retrofitted onto it.
+
+    Why a chain at all: a store's ask for another location's stock is sanity
+    checked by its own manager before it reaches HO, and the Operations Head who
+    would otherwise wait for that first tap can simply approve it — that is the
+    ``later_step_may_short_circuit`` flag, and it is set on the *later* step,
+    which is the one reaching back.
+    """
+
+    #: One step, as stored in ``steps``:
+    #:
+    #: ``order``                        1-based, for humans; position decides.
+    #: ``roles``                        role codes that may clear this step.
+    #: ``label``                        what the screen calls it.
+    #: ``later_step_may_short_circuit`` this step's approvers may also close
+    #:                                  every step still waiting below them.
+    kind = models.CharField(
+        max_length=32,
+        unique=True,
+        help_text="Document family this routes, e.g. 'stock_request'. Matches Approval.kind.",
+    )
+    steps = models.JSONField(
+        default=list,
+        help_text="Ordered steps: [{order, roles, label, later_step_may_short_circuit}].",
+    )
+
+    class Meta:
+        db_table = "approvals_approvalroute"
+        ordering = ["kind"]
+
+    def __str__(self) -> str:
+        return f"{self.kind} route ({len(self.ordered_steps())} steps)"
+
+    # -- reading the chain ---------------------------------------------------
+
+    def ordered_steps(self) -> list[dict[str, Any]]:
+        """The steps in the order they are walked.
+
+        Sorted by ``order`` rather than trusted as stored: the list is editable
+        data, and a chain read out of sequence would hand step 2's approver
+        step 1's authority.
+        """
+        steps = self.steps or []
+        return sorted(steps, key=lambda step: step.get("order", 0))
+
+    def step_count(self) -> int:
+        return len(self.ordered_steps())
+
+    def label_at(self, index: int) -> str:
+        steps = self.ordered_steps()
+        if 0 <= index < len(steps):
+            return str(steps[index].get("label") or f"Step {index + 1}")
+        return ""
+
+    def active_roles(self, from_index: int) -> list[str]:
+        """Every role that may act *right now*, with the request at ``from_index``.
+
+        The step's own roles, plus the roles of any later step allowed to reach
+        back. This is what gets snapshotted onto ``Approval.approver_roles``, so
+        the inbox query and the decide gate keep reading one list and never learn
+        that routes exist.
+        """
+        roles: list[str] = []
+        for index, step in enumerate(self.ordered_steps()):
+            if index < from_index:
+                continue
+            if index > from_index and not step.get("later_step_may_short_circuit"):
+                continue
+            for role in step.get("roles") or []:
+                if role not in roles:
+                    roles.append(role)
+        return roles
+
+    def step_for_role(self, role_code: str, from_index: int) -> int | None:
+        """Which step ``role_code`` is deciding, with the request at ``from_index``.
+
+        The current step if they are on it; otherwise the *earliest* later step
+        that both lists them and is allowed to close the ones below. None means
+        they are on no remaining step — a 403, not a silent no-op.
+        """
+        if not role_code:
+            return None
+        for index, step in enumerate(self.ordered_steps()):
+            if index < from_index:
+                continue
+            if index > from_index and not step.get("later_step_may_short_circuit"):
+                continue
+            if role_code in (step.get("roles") or []):
+                return index
+        return None
 
 
 class Approval(TimeStampedModel):
@@ -93,7 +191,27 @@ class Approval(TimeStampedModel):
     approver_roles = ArrayField(
         models.CharField(max_length=32),
         default=list,
-        help_text="Role codes that may decide this one. Data, not code (Rule 12).",
+        help_text="Role codes that may decide this one *right now*. Data, not "
+        "code (Rule 12). On a routed approval this is the current step's roles "
+        "plus any later step allowed to close it, rewritten as the chain "
+        "advances — so the inbox query never has to know routes exist.",
+    )
+
+    # --- the chain, where the family has one (#172) -------------------------
+    route = models.ForeignKey(
+        ApprovalRoute,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="approvals",
+        help_text="The chain snapshotted at request time. Null is the ordinary "
+        "single-step approval every other family uses.",
+    )
+    current_step = models.IntegerField(
+        default=0,
+        help_text="Zero-based position in the route. 0 on an unrouted approval, "
+        "where it means nothing; on a routed one it is the step now waiting, and "
+        "once approved it sits past the last step.",
     )
 
     # --- maker -------------------------------------------------------------
@@ -188,6 +306,110 @@ class Approval(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.kind_label} #{self.object_id} — {self.status}"
+
+    def step_trail(self) -> list[dict[str, Any]]:
+        """The chain as the Approvals screen shows it — one entry per step.
+
+        Empty on an unrouted approval, which is the whole of "single-step
+        behaviour untouched": a screen that renders nothing for an empty trail
+        needs no branch for the families that have no chain.
+
+        ``state`` is one of ``done`` (someone cleared it), ``rejected`` (the
+        request died here), ``current`` (waiting on it now) and ``waiting``.
+        """
+        route = self.route
+        if route is None:
+            return []
+        decisions = {d.step_order: d for d in self.step_decisions.all()}
+        trail: list[dict[str, Any]] = []
+        for index, step in enumerate(route.ordered_steps()):
+            decision = decisions.get(index)
+            if decision is not None:
+                state = "done"
+            elif self.status == ApprovalStatus.REJECTED and index == self.current_step:
+                state = "rejected"
+            elif self.status == ApprovalStatus.PENDING and index == self.current_step:
+                state = "current"
+            else:
+                state = "waiting"
+            trail.append(
+                {
+                    "order": index + 1,
+                    "label": route.label_at(index),
+                    "roles": list(step.get("roles") or []),
+                    "state": state,
+                    "decided_by_name": decision.decided_by_name if decision else "",
+                    "decided_at": decision.decided_at if decision else None,
+                    "short_circuited": bool(decision.short_circuited) if decision else False,
+                }
+            )
+        if self.status == ApprovalStatus.REJECTED and not any(
+            step["state"] == "rejected" for step in trail
+        ):
+            # A route edited after the request was raised can leave the step it
+            # died on out of range; say so rather than showing a chain that
+            # reads as though nothing ever refused it.
+            for step in trail:
+                if step["state"] == "waiting":
+                    step["state"] = "rejected"
+                    break
+        return trail
+
+
+class ApprovalStepDecision(TimeStampedModel):
+    """Who cleared one step of a routed approval, and when (#172).
+
+    A single ``Approval`` row can only carry one decider, and the kernel's
+    ``approval_decision_is_complete`` constraint keeps that column empty while
+    the request is still pending — correctly, since a chain that is half walked
+    has not been decided by anybody. So the steps cleared along the way are kept
+    here, one row each, and the inbox's step trail is read straight off them.
+
+    ``short_circuited`` is the honest part: when the Operations Head approves
+    directly, the store manager's step closes with *the Operations Head* named
+    on it and a flag saying it was closed from above. Nobody is ever recorded as
+    having approved something they did not touch.
+    """
+
+    approval = models.ForeignKey(Approval, on_delete=models.CASCADE, related_name="step_decisions")
+    step_order = models.IntegerField(help_text="Zero-based position in the route at the time.")
+    step_label = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="The step's name, snapshotted — the route is editable data (Rule 6).",
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.PROTECT,
+        related_name="approval_steps_decided",
+    )
+    decided_at = models.DateTimeField()
+    short_circuited = models.BooleanField(
+        default=False,
+        help_text="Closed from a later step rather than cleared by its own approver.",
+    )
+    note = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "approvals_step_decision"
+        ordering = ["approval_id", "step_order"]
+        constraints = [
+            # A step is cleared once. Without this, a retry that half-failed
+            # could write a second row and the trail would show two approvers
+            # for one step.
+            models.UniqueConstraint(
+                fields=["approval", "step_order"], name="uq_approval_step_once"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.approval_id} step {self.step_order} — {self.decided_by_id}"
+
+    @property
+    def decided_by_name(self) -> str:
+        user = self.decided_by
+        return getattr(user, "full_name", "") or getattr(user, "username", "") or ""
 
 
 class ApprovalPolicy(TimeStampedModel):

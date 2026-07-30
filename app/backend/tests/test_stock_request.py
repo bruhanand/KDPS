@@ -6,7 +6,9 @@ approves the *ask* — the Operations Head still gates the transfer it pre-fills
 before anything dispatches (#137, already covered by
 ``test_transfer_approval_gate.py``). This suite covers the request's own life:
 
-- **API seam (primary)**: raise → lands in the fulfilling store's inbox →
+- **API seam (primary)**: raise → lands in the asking store's inbox (the route
+  added by #172 starts with that store's own manager; the chain itself is
+  covered by ``test_approval_routes.py``) →
   unapproved requests refuse to fulfil → approved ones pre-fill a draft
   transfer that still needs its own gate → partial fulfilment and an explicit
   close read back as "partly fulfilled" → full receipt closes automatically →
@@ -192,17 +194,29 @@ def _line_id(request_data, sku="SR001"):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_a_request_is_born_waiting_in_the_fulfilling_stores_inbox(rig):
+def test_a_request_is_born_waiting_in_the_asking_stores_inbox(rig):
+    """The ask hangs off the store that raised it, not the one holding the stock.
+
+    It hung off the *fulfilling* store until D10 (#172) put a route in front of
+    it: step 1 is the asking store's own manager, step 2 the Operations Head,
+    and the holding store's manager is a phone call rather than a gate. So the
+    row has to be visible where step 1's approver actually is. Nothing is taken
+    from the holding store — no store role was ever on this family's approver
+    list — and what the ask is *worth* is still priced from their books, which
+    are the only ones holding the pieces.
+    """
     g = rig
     data = _raise(g)
 
     assert data["status"] == "pending_approval"
     assert data["approval"]["status"] == ApprovalStatus.PENDING
     assert data["approval"]["kind"] == "stock_request"
-    assert data["approval"]["title"].startswith("For SR-A")
+    assert data["approval"]["title"].startswith("From SR-WH")
 
     approval = Approval.objects.get(kind="stock_request", object_id=data["id"])
-    assert approval.store_id == g["warehouse"].id
+    assert approval.store_id == g["store_a"].id
+    # Priced from the warehouse's books: 10 pieces at ₹450 each.
+    assert approval.value_paise == 10 * 45000
 
 
 @pytest.mark.django_db(transaction=True)

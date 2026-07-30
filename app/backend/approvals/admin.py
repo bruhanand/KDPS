@@ -15,7 +15,48 @@ from typing import Any
 
 from django.contrib import admin
 
-from approvals.models import Approval, ApprovalPolicy
+from approvals.models import Approval, ApprovalPolicy, ApprovalRoute, ApprovalStepDecision
+
+
+@admin.register(ApprovalRoute)
+class ApprovalRouteAdmin(admin.ModelAdmin):
+    """Read-only here, deliberately.
+
+    The chain is data (Rule 12) and is meant to be retuned — but the steps of a
+    live route decide who may approve what, so retuning them belongs behind the
+    same audited access-change path the approval *policies* already use, not in
+    a raw JSON textarea. Until that screen exists a migration is the honest way
+    to change one; this page is for reading what is configured.
+    """
+
+    list_display = ("kind", "step_count")
+    readonly_fields = ("created_at", "updated_at")
+
+    def has_add_permission(self, request: Any) -> bool:
+        return False
+
+    def has_change_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+
+@admin.register(ApprovalStepDecision)
+class ApprovalStepDecisionAdmin(admin.ModelAdmin):
+    """Read-only for the same reason ``Approval`` is: it is the audit trail."""
+
+    list_display = ("approval", "step_order", "step_label", "decided_by", "short_circuited")
+    list_filter = ("short_circuited",)
+
+    def has_add_permission(self, request: Any) -> bool:
+        return False
+
+    def has_change_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
+
+    def has_delete_permission(self, request: Any, obj: Any = None) -> bool:
+        return False
 
 
 @admin.register(ApprovalPolicy)
