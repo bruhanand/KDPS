@@ -13,7 +13,7 @@ import {
 import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useDoc, useList } from "../lib/hooks";
-import { Money } from "../lib/format";
+import { Money, formatDateTime } from "../lib/format";
 import { canWriteTransfer } from "../lib/outbound-rbac";
 import { destinationOptions, type LocationT } from "../lib/transfer-locations";
 import { ApprovalTrail, type ApprovalT } from "../components/approval";
@@ -27,17 +27,6 @@ import "./Booking.css";
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-}
-
-/** A quoted arrival, to the minute. The customer was told a *time*, not a day,
- *  so the day alone would not answer the question they ring back to ask (#175). */
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }
 
 // The six honest statuses a store sees on its ask (#74) — derived server-side,
@@ -199,7 +188,7 @@ export function StockRequestListPage() {
                     <td className="num">{totalQty}</td>
                     <td><StatusPill status={r.status} label={r.status_display} /></td>
                     <td data-testid={`sr-expected-${r.id}`}>
-                      {r.expected_arrival_at ? fmtDateTime(r.expected_arrival_at) : "—"}
+                      {r.expected_arrival_at ? formatDateTime(r.expected_arrival_at) : "—"}
                     </td>
                     <td>{fmtDate(r.created_at)}</td>
                   </tr>
@@ -659,7 +648,7 @@ export function StockRequestDetailPage() {
           // it. A time nobody can read back is a time that was never carried.
           <div className="card section-card" data-testid="sr-expected-arrival">
             <p className="eyebrow">Customer told</p>
-            <h3 className="h3">{fmtDateTime(r.expected_arrival_at)}</h3>
+            <h3 className="h3">{formatDateTime(r.expected_arrival_at)}</h3>
             <p className="lead">No hold was placed on the piece.</p>
           </div>
         )}

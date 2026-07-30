@@ -74,6 +74,27 @@ export function paiseToRupees(paise: number): string {
   return sub === 0 ? `${sign}${rupees}` : `${sign}${rupees}.${String(sub).padStart(2, "0")}`;
 }
 
+/** A moment, written the way an Indian store reads one: `1 Aug, 5:30 pm`.
+ *
+ *  To the minute, deliberately. Every use of this so far is a time somebody was
+ *  *told* — an expected arrival quoted to a waiting customer (#175) — and the
+ *  day alone does not answer the question they ring back to ask.
+ *
+ *  It also does a second job wherever a `datetime-local` input feeds it: that
+ *  control renders in the *browser's* locale, so a person typing `08/02` meaning
+ *  the eighth of February hands a US-formatted picker the second of August and
+ *  gets no hint of it. Echoing the chosen instant back in this format turns a
+ *  silent wrong date into a visible one, before it is committed to anything. */
+export function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 /** The single SKU-grain primitive: Brand · Style · Colour · Size — never style-only. */
 export function SkuLine({
   brand,

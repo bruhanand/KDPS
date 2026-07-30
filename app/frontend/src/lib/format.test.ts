@@ -8,7 +8,7 @@
 // rather than rounding it (ADR-0004).
 import { describe, expect, it } from "vitest";
 
-import { formatINR, formatRupeeAmount, paiseToRupees, rupeesToPaise } from "./format";
+import { formatDateTime, formatINR, formatRupeeAmount, paiseToRupees, rupeesToPaise } from "./format";
 
 describe("formatINR", () => {
   it("groups in lakhs and crores, and drops empty paise", () => {
@@ -108,5 +108,29 @@ describe("paiseToRupees", () => {
     for (let paise = 0; paise < 2000; paise += 7) {
       expect(paiseToRupees(paise)).toMatch(/^\d+(\.\d{2})?$/);
     }
+  });
+});
+
+describe("formatDateTime", () => {
+  it("writes a moment the way an Indian store reads one, to the minute", () => {
+    // Rendered in the runner's zone, so the assertion is built the same way
+    // rather than hard-coding an offset the CI box may not share.
+    const when = new Date("2026-08-01T12:00:00Z");
+    const shown = formatDateTime("2026-08-01T12:00:00Z");
+    expect(shown).toContain(String(when.getFullYear()));
+    expect(shown).toMatch(/\d{1,2}:\d{2}/);
+    // Month as a word, never a bare number: "1/8" and "8/1" are the same six
+    // characters and different days, which is the confusion this format exists
+    // to remove.
+    expect(shown).toMatch(/[A-Za-z]{3}/);
+  });
+
+  it("distinguishes the two readings of an ambiguous date", () => {
+    // The whole point on the request screens: 08/02 typed into a picker
+    // rendering in another locale is a different day, and this is what makes
+    // that visible before anybody commits to it.
+    expect(formatDateTime("2026-02-08T10:00:00Z")).not.toBe(
+      formatDateTime("2026-08-02T10:00:00Z"),
+    );
   });
 });

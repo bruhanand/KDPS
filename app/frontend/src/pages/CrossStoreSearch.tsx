@@ -6,10 +6,12 @@ import { api, apiErrorMessage } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { useList } from "../lib/hooks";
 import { withQuery } from "../lib/query";
+import { formatDateTime } from "../lib/format";
 import { canWriteTransfer } from "../lib/outbound-rbac";
 import { type LocationT } from "../lib/transfer-locations";
 import {
   MIN_TERM,
+  quotedArrivalIso,
   requestBody,
   rowsFor,
   storeIdByCode,
@@ -261,6 +263,7 @@ function RequestPanel({
   const [saving, setSaving] = useState(false);
 
   const fulfillingId = storeIdByCode(locations, row.store);
+  const quoted = quotedArrivalIso(arrival);
 
   async function raise() {
     setError("");
@@ -350,6 +353,15 @@ function RequestPanel({
             onChange={(e) => setArrival(e.target.value)}
             data-testid="availability-arrival"
           />
+          {/* The picker renders in the browser's locale, so a person typing
+              08/02 for the eighth of February can hand a US-formatted control
+              the second of August and never know. Reading the instant back the
+              way India writes it is the only warning they get. */}
+          {quoted && (
+            <p className="lead" data-testid="availability-arrival-echo">
+              {formatDateTime(quoted)}
+            </p>
+          )}
         </div>
         <div className="field" style={{ flex: 1 }}>
           <label>Notes</label>
