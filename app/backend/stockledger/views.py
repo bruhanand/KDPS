@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -12,7 +12,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.permissions import require_section
+from accounts.sections import CAP_VIEW
 from core.money import paise_to_rupees_str
+from core.refusals import refusal_body
 from core.textsearch import search_term, text_filter
 from masters.models import Sku
 from masters.scoping import scope_by_store_and_brand
@@ -314,3 +317,129 @@ class StockOnHandView(APIView):
             for g in grouped[: self.MAX_LINES]
         ]
         return rows, lines
+
+
+class StockAvailabilityView(APIView):
+    """`GET /api/stock/availability?q=&brand=&size=` — where a piece is, in every
+    store, size by size (#175, D10 §3).
+
+    The one read in the system that deliberately steps outside `masters.scoping`.
+    A customer is standing at the counter asking for a shirt in L that this store
+    does not have; answering "we don't stock it" while a sister store has three
+    is the loss the system exists to stop. So the boundary is suspended here on
+    purpose, registered as ``masters.scope_exceptions.CROSS_STORE_AVAILABILITY``
+    with the written reason, and kept narrow by what the answer carries:
+    quantities, sizes and store codes. **No cost, value, MRP or margin field is
+    built here at all** — not gated per row as
+    ``outbound.CrossLocationStockSearchView`` does, but absent by construction, so
+    another store's money cannot leak out of this endpoint by a later edit that
+    forgot the gate. The exception's ``withholds`` list is asserted against the
+    live payload by this endpoint's test.
+
+    It is read-only and it places no hold on anything: the customer is quoted a
+    time, never promised a piece. Asking for the stock is a separate act — a
+    stock request, which walks its own approval route.
+
+    Grouped design × size × store rather than row per SKU, because that is the
+    question being asked out loud: "who has this shirt in L?"
+    """
+
+    permission_classes = [require_section("stock", CAP_VIEW)]
+
+    #: Designs, not rows — the cap has to fall where the person's eye does, and a
+    #: design with twelve sizes across six stores is still one answer to them.
+    MAX_DESIGNS = 200
+    #: Two characters match most of the catalogue; a search that returns
+    #: everything is the same as no search, only slower.
+    MIN_TERM = 3
+
+    def get(self, request: Request) -> Response:
+        term = search_term(request)
+        if len(term) < self.MIN_TERM:
+            return Response(
+                refusal_body(
+                    "VALIDATION", f"Type at least {self.MIN_TERM} characters, or scan the tag."
+                ),
+                status=400,
+            )
+
+        qs = StockOnHand.objects.filter(net_qty__gt=0, store__is_active=True)
+        qs = qs.filter(sku_code__in=self._matching_barcodes(term))
+        if brand := (request.query_params.get("brand") or "").strip():
+            qs = qs.filter(brand__iexact=brand)
+        if size := (request.query_params.get("size") or "").strip():
+            qs = qs.filter(size__iexact=size)
+
+        # One past the cap, never the whole match: "is there more?" is answerable
+        # with one extra row, and a three-letter term over a 20,000-SKU catalogue
+        # must not pull every style name it hit into memory to find that out.
+        designs = list(
+            qs.order_by("design")
+            .values_list("design", flat=True)
+            .distinct()[: self.MAX_DESIGNS + 1]
+        )
+        truncated = len(designs) > self.MAX_DESIGNS
+        rows = (
+            qs.filter(design__in=designs[: self.MAX_DESIGNS])
+            .values("design", "brand", "item", "size", "store__code", "store__name")
+            .annotate(qty=Sum("net_qty"))
+            .filter(qty__gt=0)
+            .order_by("design", "size", "store__code")
+        )
+        return Response({"results": self._nest(rows), "truncated": truncated})
+
+    def _matching_barcodes(self, term: str) -> Any:
+        """The SKUs a typed term or a scanned tag means, as a subquery.
+
+        Three habits, in the order they are meant: a whole barcode is a scan and
+        means that tag alone; otherwise the term is the *start* of a style code
+        (people read design numbers left to right off the tag), or anywhere
+        inside the item name for someone who only knows it as "chinos".
+
+        A queryset rather than a list on purpose — the match runs as one SQL
+        subquery, so a three-letter term that hits ten thousand styles never
+        travels through Python on its way back into the filter.
+        """
+        # Not narrowed to active SKUs: stock that exists can be asked for, and a
+        # style retired in the master with pieces still on a shelf is exactly the
+        # one a store is hunting for.
+        if Sku.objects.filter(barcode__iexact=term).exists():
+            return Sku.objects.filter(barcode__iexact=term).values("barcode")
+        return Sku.objects.filter(Q(design__istartswith=term) | Q(item__icontains=term)).values(
+            "barcode"
+        )
+
+    @staticmethod
+    def _nest(rows: Any) -> list[dict[str, Any]]:
+        """Flat design × size × store rows folded into the shape the screen reads.
+
+        The rows arrive ordered by design, size then store code, so one pass
+        builds the nesting and the output keeps that order — the answer reads
+        the way a person scans it, smallest size first, and does not reshuffle
+        between two searches for the same thing.
+        """
+        results: list[dict[str, Any]] = []
+        by_design: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            design = row["design"]
+            entry = by_design.get(design)
+            if entry is None:
+                entry = {
+                    "design": design,
+                    "brand": row["brand"],
+                    "item": row["item"],
+                    "sizes": [],
+                }
+                by_design[design] = entry
+                results.append(entry)
+            sizes = entry["sizes"]
+            if not sizes or sizes[-1]["size"] != row["size"]:
+                sizes.append({"size": row["size"], "stores": []})
+            sizes[-1]["stores"].append(
+                {
+                    "store": row["store__code"],
+                    "store_name": row["store__name"],
+                    "qty": row["qty"],
+                }
+            )
+        return results

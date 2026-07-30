@@ -109,6 +109,21 @@ class StockRequestStatus(models.TextChoices):
     CLOSED = "closed", "Closed"
 
 
+class StockRequestSource(models.TextChoices):
+    """Where the ask came from (#175, D10 §3) — stored, unlike the status.
+
+    Not decoration: the two are raised by different people for different
+    reasons. A manual request is a store planning its shelf; a cross-store-search
+    request is a customer standing at a counter that has not got their size. How
+    often the second happens, and for which styles, is the signal that says where
+    the network's stock is wrong — and it is unrecoverable after the fact if the
+    ask does not carry it.
+    """
+
+    MANUAL = "manual", "Raised by hand"
+    CROSS_STORE_SEARCH = "cross_store_search", "From cross-store search"
+
+
 class ReturnType(models.TextChoices):
     DEFECTIVE = "defective", "Defective / GR return"
     SEASONAL = "seasonal", "Season-end return"
@@ -479,6 +494,20 @@ class StockRequest(Document):
         "masters.Store", on_delete=models.PROTECT, related_name="stock_requests_in"
     )
     notes = models.CharField(max_length=240, blank=True, default="")
+    source = models.CharField(
+        max_length=24,
+        choices=StockRequestSource.choices,
+        default=StockRequestSource.MANUAL,
+        help_text="How the ask was raised — by hand, or from the cross-store search (#175).",
+    )
+    expected_arrival_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "The time the counter quoted the waiting customer. A quote, never a "
+            "promise: no hold is placed on the piece (#175)."
+        ),
+    )
     approved_by = models.ForeignKey(
         "accounts.User",
         null=True,

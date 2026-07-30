@@ -55,6 +55,9 @@ urlpatterns = [
     path("api/inbound/", include("inbound.urls")),
     path("api/ptmapper/", include("ptmapper.urls")),
     path("api/stockledger/", include("stockledger.urls")),
+    # The counter's stock question, not the back office's ledger read — see
+    # `stockledger/urls_stock.py` for why the two are mounted apart (#175).
+    path("api/stock/", include("stockledger.urls_stock")),
     path("api/finledger/", include("finledger.urls")),
     path("api/outbound/", include("outbound.urls")),
     path("api/", include("approvals.urls")),
