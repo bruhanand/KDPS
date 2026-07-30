@@ -147,7 +147,13 @@ export const SECTIONS: NavSectionDef[] = [
       // The counter's own state: what it holds offline, and what it still owes
       // head office (#180). Listed after the screens a cashier uses all day,
       // because it is the page somebody opens when something looks wrong.
-      { label: "Till & Sync", to: "/sell/till" },
+      //
+      // `operate`, not the section's own rung: both endpoints behind this page
+      // are gated at `sell: operate` (`sell/permissions.py`), because the
+      // dataset is the working copy a counter bills from rather than a report
+      // about selling. Offering the entry at `view` would walk an owner or an
+      // accountant into a 403.
+      { label: "Till & Sync", to: "/sell/till", minCapability: "operate" },
     ],
   },
   {

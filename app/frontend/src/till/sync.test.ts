@@ -182,6 +182,59 @@ describe("the dataset landing", () => {
     expect(await db.salesmen.count()).toBe(0);
   });
 
+  it("does not put an unsynced sale back on the shelf", async () => {
+    // The store-open bootstrap replaces the whole stock table with the server's
+    // counts, and the server has not heard about last night's queued bills. Left
+    // alone, the daily routine would undo the decrement Save & Print made and the
+    // counter would sell the same last piece again.
+    const { db, storeCode } = till();
+    await applyDataset(
+      db,
+      dataset({ items: [item("8901000000011")], stock: [{ barcode: "8901000000011", qty: 3 }] }),
+    );
+    await commitBill(db, storeCode, draft());
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
+
+    await applyDataset(
+      db,
+      dataset({ items: [item("8901000000011")], stock: [{ barcode: "8901000000011", qty: 3 }] }),
+    );
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
+  });
+
+  it("does not take a queued sale off twice on a delta", async () => {
+    // A delta that says nothing about a barcode left its local row alone, and
+    // that row already carries the decrement.
+    const { db, storeCode } = till();
+    await applyDataset(
+      db,
+      dataset({ items: [item("8901000000011")], stock: [{ barcode: "8901000000011", qty: 3 }] }),
+    );
+    await commitBill(db, storeCode, draft());
+
+    await applyDataset(db, dataset({ full: false, cursor: "later" }));
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
+  });
+
+  it("puts the shelf back where the server says once the bill has gone up", async () => {
+    const { db, storeCode } = till();
+    await applyDataset(
+      db,
+      dataset({ items: [item("8901000000011")], stock: [{ barcode: "8901000000011", qty: 3 }] }),
+    );
+    await commitBill(db, storeCode, draft());
+    await drainQueue(db, fakeServer());
+
+    await applyDataset(
+      db,
+      dataset({ items: [item("8901000000011")], stock: [{ barcode: "8901000000011", qty: 2 }] }),
+    );
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
+  });
+
   it("asks from the cursor it was given, and takes a bootstrap when told to", async () => {
     const { db } = till();
     const server = fakeServer();

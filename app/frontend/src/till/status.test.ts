@@ -28,14 +28,34 @@ const HALT = {
 
 describe("the sync light", () => {
   it("is green when the server has everything", () => {
-    expect(deriveStatus(HEALTHY).colour).toBe("green");
+    expect(deriveStatus(HEALTHY)).toMatchObject({ colour: "green", label: "Synced" });
   });
 
   it("is amber with a count while bills are waiting", () => {
     const status = deriveStatus({ ...HEALTHY, pending: 3 });
 
     expect(status.colour).toBe("amber");
+    expect(status.label).toBe("3 waiting");
     expect(status.reason).toContain("3 bills");
+  });
+
+  it("gives the chip a word for every state it can be in", () => {
+    // The chip has room for two words and the sentence goes in the tooltip, so a
+    // state that produced an empty chip would be a light with no light in it.
+    const states: StatusInput[] = [
+      HEALTHY,
+      { ...HEALTHY, pending: 2 },
+      { ...HEALTHY, online: false },
+      { ...HEALTHY, halt: HALT },
+      { ...HEALTHY, datasetReady: false },
+      { ...HEALTHY, storageLost: true },
+      { ...HEALTHY, register: { ...HEALTHY.register!, series_open: false } },
+    ];
+    for (const state of states) {
+      const { label, reason } = deriveStatus(state);
+      expect(label.trim().length, reason).toBeGreaterThan(0);
+      expect(label.split(" ").length, label).toBeLessThanOrEqual(3);
+    }
   });
 
   it("counts one bill in the singular", () => {

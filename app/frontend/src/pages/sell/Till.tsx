@@ -10,14 +10,14 @@ import type { BillDraft } from "../../till/types";
 import "./Till.css";
 
 // ---------------------------------------------------------------------------
-// Till & Sync — what the counter holds, and what it still owes head office (#180)
+// Till & Sync - what the counter holds, and what it still owes head office (#180)
 // ---------------------------------------------------------------------------
 //
 // The till spine's own surface. The billing screen (#181) sits on top of this
 // layer and shows the same sync light in its header; this page is where a store
 // person, or whoever they ring, can see the whole of it: what came down, what is
-// waiting to go up, which bill number we are on, and — the one thing that ever
-// needs a human — a bill the server would not take.
+// waiting to go up, which bill number we are on, and - the one thing that ever
+// needs a human - a bill the server would not take.
 //
 // Nothing here is money the person can change. There is no edit affordance on a
 // queued bill by construction: it is printed, it is paid for, and the only two
@@ -64,7 +64,7 @@ export default function TillPage() {
           <h2 className="h3">Bill {till.halt.doc_number} was not accepted</h2>
           <p className="till-halt-why">{till.halt.message}</p>
           <p className="muted-cell">
-            Nothing has been lost — the bill is still here, and every bill behind it is
+            Nothing has been lost - the bill is still here, and every bill behind it is
             waiting on this one. Selling continues on the next number. Refused at{" "}
             {formatDateTime(till.halt.at)} · {till.halt.code}
           </p>
@@ -103,7 +103,7 @@ export default function TillPage() {
               />
               <Row
                 label="Bill series open"
-                value={till.register.series_open ? "Yes" : "No — bills will not sync"}
+                value={till.register.series_open ? "Yes" : "No - bills will not sync"}
               />
               <Row
                 label="Numbers never received"
@@ -117,7 +117,7 @@ export default function TillPage() {
               />
             </>
           ) : (
-            <p className="muted-cell">Not asked yet — sync to find out.</p>
+            <p className="muted-cell">Not asked yet - sync to find out.</p>
           )}
         </section>
 
@@ -163,7 +163,7 @@ export default function TillPage() {
                     <Money paise={bill.totals.net_paise} />
                   </td>
                   <td className="num">{bill.attempts}</td>
-                  <td className="muted-cell">{bill.last_error || "—"}</td>
+                  <td className="muted-cell">{bill.last_error || "not tried yet"}</td>
                 </tr>
               ))}
             </tbody>
@@ -205,7 +205,7 @@ function NoCounter() {
  *
  * The whole of #180 is demonstrable in one click: number a bill locally, watch it
  * queue, watch it drain into a real Sale on the server. It is a development
- * affordance and it is fenced as one — a button that writes a bill nobody sold
+ * affordance and it is fenced as one - a button that writes a bill nobody sold
  * has no business on a shop floor, so it is compiled out of a production build
  * rather than merely hidden.
  */
@@ -234,7 +234,7 @@ function TestBill() {
       <h2 className="h3">Development only</h2>
       <p className="muted-cell">
         Numbers one piece from the local price list at its ticket price, queues it, and lets
-        the sync engine take it to the server — the whole spine, without the billing screen.
+        the sync engine take it to the server - the whole spine, without the billing screen.
       </p>
       <button
         type="button"
@@ -254,7 +254,7 @@ function TestBill() {
  *  prices: ticket price inclusive, tax taken out of it, tender equal to the net. */
 async function fixtureBill(engine: NonNullable<ReturnType<typeof useTill>["engine"]>) {
   const item = await engine.db.items.filter((row) => (row.mrp_paise ?? 0) > 0).first();
-  if (!item) throw new Error("No priced piece in the local copy yet — sync first.");
+  if (!item) throw new Error("No priced piece in the local copy yet - sync first.");
   const slabs = await engine.db.gstSlabs.toArray();
   const salesman = await engine.db.salesmen.orderBy("id").first();
   const net = item.mrp_paise as number;

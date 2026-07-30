@@ -323,6 +323,18 @@ Body: `{"reason": "till machine replaced"}`.
 | SCOPE_DENIED | 403 | not a manager at this store |
 | VALIDATION | 400 | missing reason |
 
+**Amended 30 Jul 2026, after building the GET (#180).**
+The POST handover is unbuilt and belongs to #189; three things about the GET are not as sketched above.
+
+- **The response carries `hole_count` as well as `holes`.**
+  A till that died on bill 5,000 leaves five thousand holes, and this is on the boot path of every counter every morning.
+  `holes` names the first 200 in ascending order, which is as many as a person can act on from printed copies; `hole_count` is the true total, and a screen that shows "249 (1, 2, 3 …)" is telling the truth about both.
+- **`last_accepted_seq` counts only bills the kernel actually numbered**, not every `sell_sale` row: `doc_number` is the fact of acceptance, and a draft that never got one is a bill the server has not taken.
+  It is `0`, never `1`, for a store that has never billed - the frontier and the next number are two different questions, and answering them with one field would leave one of the two readers wrong.
+- **`fy` is the *server's* financial year**, and the till compares it with its own before believing anything else in the body.
+  The two clocks straddle 1 April for a few minutes each year, and a till that reconciled a brand-new counter against last year's frontier would jump to bill 5,001 and stay there.
+  The `TILL_SCOPE` refusal is the dataset endpoint's, unchanged, for the same reason: one counter's numbering is only ever of use to that counter.
+
 ### PUT `/api/sell/held-bills`
 
 Best-effort mirror so the Dashboard sees holds (grill Q13); the till is authoritative.

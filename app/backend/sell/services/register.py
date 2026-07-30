@@ -29,7 +29,8 @@ year's numbers would jump to five thousand and never come back.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any
 
 from django.db import connection
 from django.db.models import Count, Max
@@ -54,14 +55,11 @@ class RegisterState:
     hole_count: int
     series_open: bool
 
-    def as_payload(self) -> dict[str, object]:
-        return {
-            "fy": self.fy,
-            "last_accepted_seq": self.last_accepted_seq,
-            "holes": self.holes,
-            "hole_count": self.hole_count,
-            "series_open": self.series_open,
-        }
+    def as_payload(self) -> dict[str, Any]:
+        """The wire shape, which is the fields as they stand. Spelling them out
+        again here would be a second copy of the contract, one rename apart from
+        answering a till a field it does not have."""
+        return asdict(self)
 
 
 def register_state(store: Store) -> RegisterState:
@@ -100,10 +98,11 @@ def _holes(store: Store, fy: str, last: int) -> list[int]:
     and this is on the boot path of every till every morning.
     """
     with connection.cursor() as cur:
+        sales = connection.ops.quote_name(Sale._meta.db_table)
         cur.execute(
             "SELECT s.seq FROM generate_series(1, %s) AS s(seq) "
             "WHERE NOT EXISTS ("
-            f"  SELECT 1 FROM {Sale._meta.db_table} x "  # noqa: S608 - db_table is a trusted identifier
+            f"  SELECT 1 FROM {sales} x "  # noqa: S608 - a quoted table name, not input
             "  WHERE x.store_id = %s AND x.fy = %s AND x.till_seq = s.seq "
             "    AND x.doc_number IS NOT NULL) "
             "ORDER BY s.seq LIMIT %s",

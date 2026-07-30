@@ -45,8 +45,40 @@ export async function previewNextNumber(
   now: Date = new Date(),
 ): Promise<string> {
   const fy = financialYear(now);
-  const seq = (await readMeta(db, META.fy, "")) === fy ? await readMeta(db, META.nextSeq, 1) : 1;
-  return renderBillNumber(fy, storeCode, seq);
+  return renderBillNumber(fy, storeCode, await counterFor(db, fy));
+}
+
+/**
+ * Move the counter up to `seq`, and never down.
+ *
+ * The one legitimate reason to write the counter from outside a commit: the
+ * server has told us it already holds a bill at a number this till would hand
+ * out again (see `sync.reconcileRegister`). It lives here, with the counter's
+ * other two readers, so the rule about what "where are we up to" means is
+ * written in one file rather than re-derived at each site.
+ *
+ * Forward only, and by a floor rather than an assignment: the ordinary state of
+ * a busy counter is to be ahead of the server by whatever is still queued, and a
+ * plain write would re-issue every one of those numbers.
+ */
+export async function fastForwardTo(db: TillDb, fy: string, seq: number): Promise<number> {
+  return db.transaction("rw", db.meta, async () => {
+    const local = await counterFor(db, fy);
+    const next = Math.max(local, seq);
+    await db.meta.bulkPut([
+      { key: META.fy, value: fy },
+      { key: META.nextSeq, value: next },
+    ]);
+    return next;
+  });
+}
+
+/** Where this till's counter stands for `fy` - 1 for a year it has not counted
+ *  in yet, which is what makes a financial-year rollover a read rather than a
+ *  scheduled job. */
+async function counterFor(db: TillDb, fy: string): Promise<number> {
+  const countingFor = await readMeta(db, META.fy, "");
+  return countingFor === fy ? await readMeta(db, META.nextSeq, 1) : 1;
 }
 
 /**
@@ -104,11 +136,10 @@ export async function commitBill(
  * its own it is a way to spend a number on nothing.
  */
 async function nextBillNumber(db: TillDb, fy: string): Promise<number> {
-  const countingFor = await readMeta(db, META.fy, "");
   // A new financial year is a new series, starting at 1. Reading the stored year
   // rather than comparing dates means a till that was switched off across 1 April
   // rolls over when it is switched on, not when somebody remembers.
-  const seq = countingFor === fy ? await readMeta(db, META.nextSeq, 1) : 1;
+  const seq = await counterFor(db, fy);
   await db.meta.bulkPut([
     { key: META.fy, value: fy },
     { key: META.nextSeq, value: seq + 1 },

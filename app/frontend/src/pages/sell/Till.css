@@ -1,4 +1,4 @@
-/* Till & Sync (#180). House tokens only — no colour is spelled out here, so the
+/* Till & Sync (#180). House tokens only - no colour is spelled out here, so the
    dark theme's one override block keeps working without touching this file. */
 
 .till-actions { display: flex; align-items: center; gap: 12px; }

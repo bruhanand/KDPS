@@ -19,6 +19,39 @@ import type {
 
 let counter = 0;
 
+/** The three browser globals the engine reads, for a test running in node.
+ *
+ *  Deliberately the smallest possible: `window` for the online/offline events,
+ *  `navigator` for `onLine` and the persistent-storage request, `localStorage`
+ *  for the storage-loss marker. Anything the engine starts reading beyond these
+ *  should fail loudly here rather than only in a browser. */
+export function installBrowserGlobals(): void {
+  const listeners = new Map<string, Set<() => void>>();
+  define("window", {
+    addEventListener: (name: string, fn: () => void) => {
+      if (!listeners.has(name)) listeners.set(name, new Set());
+      listeners.get(name)!.add(fn);
+    },
+    removeEventListener: (name: string, fn: () => void) => listeners.get(name)?.delete(fn),
+    dispatchEvent: (event: { type: string }) => {
+      for (const fn of listeners.get(event.type) ?? []) fn();
+      return true;
+    },
+  });
+  define("navigator", { onLine: true, storage: { persist: async () => true } });
+  const held = new Map<string, string>();
+  define("localStorage", {
+    getItem: (key: string) => held.get(key) ?? null,
+    setItem: (key: string, value: string) => held.set(key, value),
+    removeItem: (key: string) => held.delete(key),
+    clear: () => held.clear(),
+  });
+}
+
+function define(name: string, value: unknown): void {
+  Object.defineProperty(globalThis, name, { value, configurable: true, writable: true });
+}
+
 /** A fresh, empty till, on a database name no other test is using.
  *
  *  `reopen` is what a reload looks like from here: the connection is dropped and

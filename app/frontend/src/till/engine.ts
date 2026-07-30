@@ -14,8 +14,24 @@
 // idempotent by key, and the server's idempotency makes a re-offered bill a
 // no-op. That matters because the triggers overlap by design: a till that comes
 // back online during its own retry backoff should sync at once, not wait.
+//
+// Two departures from `design.md`'s sketch of a separate `guard.ts`, both
+// deliberate and both recorded here rather than in a file that does not exist:
+//
+//   · **The storage sentinel is in `localStorage`, not in `meta`.** design.md
+//     lists `storageSentinel` as a `meta` row, and a sentinel that lives inside
+//     the database cannot survive the database being thrown away - which is the
+//     one event it exists to detect. It has to sit outside, and `localStorage` is
+//     the only other durable place a browser offers.
+//   · **There is no `navigator.locks` single-till lock.** It was there to stop a
+//     second tab double-writing the counter, and IndexedDB already does: two
+//     read-write transactions whose scopes overlap are serialised across every
+//     connection to the database, tabs included, so `commitBill`'s transaction is
+//     the lock. What the lock would still add is telling a person they have two
+//     tills open, which is a warning rather than an invariant, and it belongs
+//     with the rest of the PWA hardening in #189.
 
-import { closeTillDb, META, readMeta, tillDb, writeMeta } from "./db";
+import { META, readMeta, tillDb, writeMeta } from "./db";
 import type { TillDb } from "./db";
 import { commitBill, previewNextNumber } from "./numbering";
 import { deriveStatus } from "./status";
@@ -81,7 +97,7 @@ function initialSnapshot(storeCode: string): TillSnapshot {
   return {
     storeCode,
     ready: false,
-    status: { colour: "amber", reason: "Starting the till…" },
+    status: { colour: "amber", label: "Starting", reason: "Opening the counter…" },
     pending: 0,
     queue: [],
     datasetReady: false,
@@ -105,6 +121,9 @@ export class TillEngine {
   private retry: ReturnType<typeof setTimeout> | null = null;
   private started = false;
   private storageLost = false;
+  /** Bumped by every start and every stop, so a boot sequence that was
+   *  interrupted half way through stops touching the engine it no longer owns. */
+  private generation = 0;
 
   constructor(
     readonly storeCode: string,
@@ -146,33 +165,55 @@ export class TillEngine {
    *   · **The register is read.** The server says how far it has got, and a till
    *     that lost its local state moves its counter forward rather than re-issuing
    *     a number that is already on a posted bill.
+   *
+   * Start and stop are a matched pair that can run any number of times on one
+   * engine, because React runs them that way: StrictMode mounts, unmounts and
+   * remounts every effect in development, and a person walking off the Sell page
+   * and back does the same in production. The timers are armed before the first
+   * `await` for that reason - a `stop()` landing mid-start would otherwise clear
+   * an empty list and leave two intervals firing at nobody.
    */
   async start(): Promise<void> {
     if (this.started) return;
     this.started = true;
+    const generation = (this.generation += 1);
     window.addEventListener("online", this.onOnline);
     window.addEventListener("offline", this.onOffline);
-    await navigator.storage?.persist?.().catch(() => false);
-
-    this.storageLost = await detectStorageLoss(this.db, this.storeCode);
-    await this.refresh();
     this.timers = [
       setInterval(() => void this.pullDatasetAndRefresh(), DATASET_INTERVAL_MS),
       setInterval(() => void this.pushAndRefresh(), QUEUE_INTERVAL_MS),
     ];
+
+    await navigator.storage?.persist?.().catch(() => false);
+    if (generation !== this.generation) return;
+    this.storageLost = await detectStorageLoss(this.db, this.storeCode);
+    if (generation !== this.generation) return;
+    await this.refresh();
+    if (generation !== this.generation) return;
     await this.syncNow({ bootstrapIfNewDay: true });
   }
 
+  /** Put the engine down without putting the *database* down.
+   *
+   *  The Dexie connection is a per-store singleton shared by whatever else the
+   *  tab opens, and closing it here would leave a memoised engine holding a dead
+   *  handle - which is exactly what a StrictMode remount does, and what a person
+   *  walking off the Sell page and back does in production. It stays open for the
+   *  life of the tab; `closeTillDb` exists for tests and for a sign-out that
+   *  really is finished with this store.
+   *
+   *  Subscribers are left alone too: `useSyncExternalStore` unsubscribes itself,
+   *  and dropping its listener here would freeze the screen on the last snapshot
+   *  it happened to see. */
   stop(): void {
     this.started = false;
+    this.generation += 1;
     window.removeEventListener("online", this.onOnline);
     window.removeEventListener("offline", this.onOffline);
     for (const timer of this.timers) clearInterval(timer);
     this.timers = [];
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
-    this.listeners.clear();
-    closeTillDb(this.storeCode);
   }
 
   private onOnline = (): void => {
@@ -182,7 +223,7 @@ export class TillEngine {
   };
 
   private onOffline = (): void => {
-    void this.refresh();
+    void this.attempt(() => this.refresh());
   };
 
   // -- the work --------------------------------------------------------------
@@ -197,19 +238,24 @@ export class TillEngine {
    */
   async syncNow(options: { bootstrapIfNewDay?: boolean } = {}): Promise<void> {
     this.publish({ busy: true, lastError: "" });
-    if (options.bootstrapIfNewDay) await this.bootstrapIfNewDay();
     const failures = [
+      options.bootstrapIfNewDay ? await this.attempt(() => this.bootstrapIfNewDay()) : "",
       await this.attempt(() => reconcileRegister(this.db, this.transport)),
       await this.pullDataset(),
       await this.push(),
+      await this.attempt(() => this.refresh()),
     ].filter(Boolean);
     this.publish({ busy: false, lastError: failures[0] ?? "" });
-    await this.refresh();
   }
 
-  /** Clear the halt and offer the refused bill again. */
+  /** Clear the halt and offer the refused bill again. Called from a button with
+   *  no `await` behind it, so it reports rather than throws. */
   async retryHalted(): Promise<void> {
-    await clearHalt(this.db);
+    const failed = await this.attempt(() => clearHalt(this.db));
+    if (failed) {
+      this.publish({ lastError: failed });
+      return;
+    }
     await this.pushAndRefresh();
   }
 
@@ -255,16 +301,22 @@ export class TillEngine {
     });
   }
 
+  // Both of these are fired from a timer with `void`, so nothing is waiting to
+  // catch them: an unhandled rejection here is a store's browser logging an
+  // error nobody reads and a light that stops moving. Every step, the refresh
+  // included, goes through `attempt`.
   private async pushAndRefresh(): Promise<void> {
     const failed = await this.push();
-    this.publish({ lastError: failed });
-    await this.refresh();
+    // The refresh runs whether or not the push worked - a failed attempt has an
+    // attempt count and a reason on it, and those are what the screen is for.
+    const stale = await this.attempt(() => this.refresh());
+    this.publish({ lastError: failed || stale });
   }
 
   private async pullDatasetAndRefresh(): Promise<void> {
     const failed = await this.pullDataset();
-    this.publish({ lastError: failed });
-    await this.refresh();
+    const stale = await this.attempt(() => this.refresh());
+    this.publish({ lastError: failed || stale });
   }
 
   private async attempt(work: () => Promise<unknown>): Promise<string> {

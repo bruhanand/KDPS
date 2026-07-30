@@ -20,6 +20,8 @@ export type SyncColour = "green" | "amber" | "red";
 
 export interface SyncStatus {
   colour: SyncColour;
+  /** Two or three words, for the chip itself. */
+  label: string;
   /** What the light means, in a sentence a store person can act on. */
   reason: string;
 }
@@ -40,35 +42,51 @@ export interface StatusInput {
 
 export function deriveStatus(input: StatusInput): SyncStatus {
   // Ordered by what a person should do about it, worst first: a halted queue
-  // matters more than a stale dataset, and both matter more than a count.
+  // matters more than a stale dataset, and both matter more than a count. The
+  // chip's word and the sentence behind it are decided together, here and
+  // nowhere else - two places deciding what the light says is two lights.
   if (input.storageLost) {
     return red(
+      "Local data lost",
       "This device cleared the counter's local data. Sync before billing so the till knows which bill number it is on.",
     );
   }
   if (input.halt) {
-    return red(`Bill ${input.halt.doc_number} was not accepted: ${input.halt.message}`);
+    return red(
+      "Bill refused",
+      `Bill ${input.halt.doc_number} was not accepted: ${input.halt.message}`,
+    );
   }
   if (!input.datasetReady) {
-    return red("No local copy of the price list yet. Connect and sync before billing.");
+    return red(
+      "No price list",
+      "No local copy of the price list yet. Connect and sync before billing.",
+    );
   }
   if (input.register && !input.register.series_open) {
     return red(
+      "No bill series",
       `Head office has not opened a bill series for ${input.register.fy}. Bills printed today will not sync.`,
     );
   }
   if (input.pending > 0) {
+    const bills = input.pending === 1 ? "bill" : "bills";
     return {
       colour: "amber",
-      reason: `${input.pending} ${input.pending === 1 ? "bill" : "bills"} waiting to sync.`,
+      label: `${input.pending} waiting`,
+      reason: `${input.pending} ${bills} waiting to sync.`,
     };
   }
   if (!input.online) {
-    return { colour: "amber", reason: "Working offline. Bills will sync when the line is back." };
+    return {
+      colour: "amber",
+      label: "Offline",
+      reason: "Working offline. Bills will sync when the line is back.",
+    };
   }
-  return { colour: "green", reason: "Everything is synced." };
+  return { colour: "green", label: "Synced", reason: "Everything is synced." };
 }
 
-function red(reason: string): SyncStatus {
-  return { colour: "red", reason };
+function red(label: string, reason: string): SyncStatus {
+  return { colour: "red", label, reason };
 }

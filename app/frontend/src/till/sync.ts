@@ -23,6 +23,7 @@ import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
+import { fastForwardTo } from "./numbering";
 import type { DatasetPayload, QueueHalt, RegisterPayload } from "./types";
 
 /** Slowest a failing queue will retry, and the plain interval it drains on
@@ -61,7 +62,17 @@ export function backoffMs(attempts: number): number {
 export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise<void> {
   await db.transaction(
     "rw",
-    [db.items, db.stock, db.offers, db.creditNotes, db.salesmen, db.managers, db.gstSlabs, db.meta],
+    [
+      db.items,
+      db.stock,
+      db.offers,
+      db.creditNotes,
+      db.salesmen,
+      db.managers,
+      db.gstSlabs,
+      db.meta,
+      db.queue,
+    ],
     async () => {
       if (payload.full) {
         await Promise.all([
@@ -95,6 +106,8 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.offers.bulkDelete(payload.deleted.offers);
       await db.creditNotes.bulkDelete(payload.deleted.credit_notes);
 
+      await replayQueuedStock(db, payload);
+
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
         { key: META.store, value: payload.store },
@@ -102,6 +115,42 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       ]);
     },
   );
+}
+
+/**
+ * Take the queue's sales back off the shelf the dataset just re-stated.
+ *
+ * The server's `stock` counts only the bills it has *received*, so every row it
+ * sends is short by whatever this till has sold and not yet synced. Writing it
+ * straight over the local count puts yesterday's unsynced sales back on the
+ * shelf - and the store-open bootstrap replaces the whole table, so the daily
+ * routine would undo the very decrement `commitBill` made at Save & Print.
+ *
+ * Only rows this payload actually wrote are adjusted. A delta that did not
+ * mention a barcode left its local row alone, and that row already carries the
+ * decrement; adjusting it again would take the piece off twice.
+ */
+async function replayQueuedStock(db: TillDb, payload: DatasetPayload): Promise<void> {
+  const pending = await db.queue.toArray();
+  if (!pending.length) return;
+  const restated = payload.full ? null : new Set(payload.stock.map((row) => row.barcode));
+
+  const net = new Map<string, number>();
+  for (const bill of pending) {
+    for (const line of bill.lines) {
+      if (restated && !restated.has(line.barcode)) continue;
+      const delta = line.direction === "return" ? line.qty : -line.qty;
+      net.set(line.barcode, (net.get(line.barcode) ?? 0) + delta);
+    }
+  }
+  for (const [barcode, delta] of net) {
+    if (!delta) continue;
+    const row = await db.stock.get(barcode);
+    // No row means the server does not stock this piece here - a sold-before-
+    // inward line. `commitBill` declined to invent a count for it, and so does
+    // this.
+    if (row) await db.stock.put({ barcode, qty: row.qty + delta });
+  }
 }
 
 /** Pull whatever has changed since the last cursor (everything, the first time). */
@@ -150,19 +199,9 @@ export async function reconcileRegister(
   await writeMeta(db, META.register, register);
   if (register.fy !== financialYear(now)) return register;
 
-  await db.transaction("rw", db.meta, async () => {
-    const countingFor = await readMeta(db, META.fy, "");
-    const local = countingFor === register.fy ? await readMeta(db, META.nextSeq, 1) : 1;
-    const resume = register.last_accepted_seq + 1;
-    if (resume > local) {
-      await db.meta.bulkPut([
-        { key: META.fy, value: register.fy },
-        { key: META.nextSeq, value: resume },
-      ]);
-    } else if (countingFor !== register.fy) {
-      await writeMeta(db, META.fy, register.fy);
-    }
-  });
+  // `fastForwardTo` owns the "never backwards" half, in the same file as the two
+  // other readers of the counter.
+  await fastForwardTo(db, register.fy, register.last_accepted_seq + 1);
   return register;
 }
 
@@ -223,15 +262,15 @@ async function drainOnce(db: TillDb, transport: TillTransport): Promise<DrainRes
   for (;;) {
     const bill = await db.queue.orderBy("id").first();
     if (!bill) break;
+    let accepted;
     try {
-      const accepted = await transport.postSale(bill);
-      // Delete by primary key rather than by object: the row may have been
-      // rewritten with a new attempt count between the read and here.
-      await db.queue.delete(bill.id as number);
-      result.accepted += 1;
-      result.flags.push(...accepted.flags);
+      accepted = await transport.postSale(bill);
     } catch (error) {
-      const refusal = error instanceof TillHttpError ? error : new TillHttpError(0, "NETWORK", "");
+      // Only the *network* call is guarded here. A local failure - a full disk,
+      // a closed database - is not a refusal of the bill and must not be dressed
+      // up as one: it would read as "no connection" for ever while the real
+      // reason went unsaid. It escapes to the engine, which records it.
+      const refusal = asRefusal(error);
       const attempts = bill.attempts + 1;
       await db.queue.update(bill.id as number, {
         attempts,
@@ -251,9 +290,31 @@ async function drainOnce(db: TillDb, transport: TillTransport): Promise<DrainRes
       }
       break;
     }
+    // Outside the guard on purpose. The server has taken the bill; if the local
+    // delete now fails, the loop must not treat that as the *server* refusing
+    // one - the bill would sit in the queue being re-offered every minute with
+    // "no connection" written beside it, which is a lie about a bill that is on
+    // the books. Delete by primary key rather than by object: the row may have
+    // been rewritten with a new attempt count since it was read.
+    await db.queue.delete(bill.id as number);
+    result.accepted += 1;
+    result.flags.push(...accepted.flags);
   }
   result.pending = await db.queue.count();
   return result;
+}
+
+/** What the server said, or - for anything the transport did not shape - the
+ *  fact that we never heard back. A transport is free to throw a plain `Error`
+ *  (a fake in a test, an interceptor that rejected before the request went out),
+ *  and "we do not know what happened to this bill" is always retry, never halt. */
+function asRefusal(error: unknown): TillHttpError {
+  if (error instanceof TillHttpError) return error;
+  return new TillHttpError(0, "NETWORK", messageOf(error) || "No connection to head office.");
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : "";
 }
 
 /**
