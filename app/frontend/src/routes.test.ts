@@ -26,6 +26,8 @@ describe("the route table", () => {
       ["/return-to-brand", "rtv-list"],
       // The folded page (#170): its own URL, no menu entry pointing at it.
       ["/inventory", "inventory"],
+      ["/sell", "sell-billing"],
+      ["/sell/till", "sell-till"],
       ["/stock", "stock-on-hand"],
       ["/stock/history", "stock-history"],
       ["/stock/vflips", "vflip-list"],

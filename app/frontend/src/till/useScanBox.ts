@@ -24,6 +24,7 @@
 //     the poll does it, so no button has to remember to.
 
 import { useCallback, useEffect, useRef } from "react";
+import type { RefObject } from "react";
 
 /** How often to check where the cursor is. Fast enough that a stray click costs
  *  no scan, slow enough to be invisible; ScanScreen's number, and it has held. */
@@ -31,7 +32,7 @@ const PATROL_MS = 400;
 
 export interface ScanBox {
   /** Put this on the visible scan input. */
-  ref: React.RefObject<HTMLInputElement | null>;
+  ref: RefObject<HTMLInputElement>;
   /** Send the cursor back now, rather than waiting for the next patrol. */
   focus: () => void;
 }
@@ -47,7 +48,7 @@ export interface ScanBox {
  * dialogue that owns the keyboard while it is open.
  */
 export function useScanBox(enabled = true): ScanBox {
-  const ref = useRef<HTMLInputElement | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
 
   const focus = useCallback(() => ref.current?.focus(), []);
 

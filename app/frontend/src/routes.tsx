@@ -5,6 +5,7 @@
 // opens — `/receive/new` is the new-GRN form, `/receive/12` is GRN 12 — is
 // something a test can assert rather than something we hope React Router got
 // right. `id` is that assertion's handle; it never reaches the user.
+import type { ReactNode } from "react";
 import type { RouteObject } from "react-router-dom";
 
 import { PlannedPage } from "./pages/PlannedPage";
@@ -32,10 +33,16 @@ import StockOnHand from "./pages/StockOnHand";
 import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
+import BillingPage from "./pages/sell/Billing";
 import TillPage from "./pages/sell/Till";
 import { TillProvider } from "./till/TillProvider";
 
 type Screen = RouteObject & { id: string; path: string };
+
+/** A Sell screen, with the counter behind it. */
+function withTill(screen: ReactNode) {
+  return <TillProvider>{screen}</TillProvider>;
+}
 
 /** Screens that are built. Behaviour is unchanged from before the re-housing —
  *  only the address moved. */
@@ -86,20 +93,22 @@ const BUILT: Screen[] = [
   // (#170). It belongs to no section: it is the store persona's arrangement of
   // three of them, and its tabs carry those sections' own gates.
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },
-  // Sell — the till layer's own surface (#180). `TillProvider` wraps the screen
-  // rather than the app: opening a counter's local database means holding one
-  // store's price list, credit notes and manager PIN hashes, which a warehouse or
-  // head-office login has no business carrying. When the billing screens land
-  // (#181) the three of them share one provider through a layout route.
-  {
-    id: "sell-till",
-    path: "/sell/till",
-    element: (
-      <TillProvider>
-        <TillPage />
-      </TillProvider>
-    ),
-  },
+  // Sell — the counter (#181) and the till layer's own surface (#180).
+  //
+  // `TillProvider` wraps each screen rather than the app: opening a counter's
+  // local database means holding one store's price list, credit notes and
+  // manager PIN hashes, which a warehouse or head-office login has no business
+  // carrying.
+  //
+  // A provider each rather than the layout route this comment used to promise.
+  // The route table is flat by design - `App.tsx` maps it, and `routes.test.ts`
+  // asserts one route per URL over that flat list - and nesting it to save a
+  // remount would change both to buy nothing: only one of these renders at a
+  // time, and `TillEngine.start`/`stop` are a matched pair built to run any
+  // number of times on one tab. The Dexie connection is a per-store singleton
+  // and outlives the navigation either way.
+  { id: "sell-billing", path: "/sell", element: withTill(<BillingPage />) },
+  { id: "sell-till", path: "/sell/till", element: withTill(<TillPage />) },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
   { id: "stock-search", path: "/stock/search", element: <CrossStoreSearch /> },

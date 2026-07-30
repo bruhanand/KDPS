@@ -69,20 +69,8 @@ export interface PlannedScreen {
 
 export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // ---- Sell ---------------------------------------------------------------
-  "/sell": {
-    summary: "The counter screen — scan, bill, take the money.",
-    contains: [
-      "Barcode billing and GST invoice",
-      "Discounts at the counter, inside the limit the role allows",
-      "Real-time stock deduction",
-      "EOSS bulk billing — stock billed and kept in the store, set up in Offers & Price",
-    ],
-    notes: [
-      "Selling runs on the existing store billing software today. Our own counter is proven at one store, one counter, before any store is switched over.",
-      "The stores put Sell first on their own list of daily screens, twice — 30 June and 25 July.",
-    ],
-    module: POS,
-  },
+  // Billing is built (#181) - a screen with a promise on this list would be a
+  // promise nobody can reach, and `plannedPages.test.ts` says so.
   "/sell/returns": {
     summary: "A customer brings something back, or swaps it for another size.",
     contains: [
