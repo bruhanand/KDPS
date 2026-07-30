@@ -98,8 +98,11 @@ The same trick covers Sell's three tabs and Transfer's four.
 
 A Setup - Access screen (it_admin/superadmin only) edits any role's capability per section at runtime (Rule 12: roles are data an admin maintains without a release).
 The four money floor rules from the actor-model decision stay hard-coded invariants the editor cannot cross; the screen greys those cells and says why.
-Every change is audit-logged (who, when, role, section, old to new) and takes effect on next login/token refresh.
+Every change is audit-logged (who, when, role, section, old to new).
 The contract tests evolve from "gates match the seed" to "gates match the stored matrix"; the seed becomes starting content only.
+
+**Amended 30 Jul 2026 (Anand's ruling, while building #173).** This decision originally said a change "takes effect on next login/token refresh" so nobody's rights moved mid-shift. That is reversed: **an approved change is live immediately, everywhere.** The mid-shift surprise it was guarding against is rare and needed two people to agree to it; a right that cannot be withdrawn until the person next logs out stays open for a whole shift, and a store till may not log out for days. Anand: "everything should be live and get updated instantly."
+Two further corrections from the build: the edit is a **proposal a second Owner or IT Admin approves**, not a save, because floor rule 4 ("never by one person alone") governs `section_access` exactly as it governs any other part of a role; and only three of the four floor rules are cells the grid can grey out - rule 1 (nobody approves their own document) and rule 4's second half live in the approvals engine, and the screen states all four so the missing two do not read as forgotten.
 
 ### 12. Store targets
 

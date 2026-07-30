@@ -340,30 +340,36 @@ The store's day-close confirmation (I3, store open/close) is deliberately NOT in
 
 ## Access matrix editor (rider from grill Q8)
 
-### GET `/api/accounts/access-matrix`
+Amended 30 Jul 2026, after building it (#173). Three things in this section were wrong and are corrected below: the paths, the response to a PUT, and when a change takes effect.
+The endpoints live under `/api/auth/admin/`, where the whole accounts admin surface already sits; `/api/accounts/` is a prefix this project does not mount.
 
-Auth: `require_section("setup", CAP_MANAGE)`.
-Response: roles x sections grid from stored `Role.section_access`, plus `floors`: the hard-coded floor cells with their reasons (rendered greyed-out).
+### GET `/api/auth/admin/access-matrix`
 
-### PUT `/api/accounts/roles/{code}/access`
+Auth: `require_section("setup", CAP_MANAGE)` **and** the access-administrator floor (Owner or IT Admin), the same pair every sibling admin endpoint carries. Floor rule 4 caps `setup: manage` at those two roles anyway, so the pair is belt and braces against a legacy row.
+Response: roles x sections grid from stored `Role.section_access`, the capability ladder with its wording, all four ratified rules, and per role a `locked` map of the floor cells with the ceiling and the reason (rendered greyed-out).
 
-Auth: `require_section("setup", CAP_MANAGE)`.
-Body: `{"section_access": {"sell": {"capability": "operate"}, ...}}` - full replacement for one role.
+### PUT `/api/auth/admin/roles/{code}/access`
 
-1. Gate setup>=manage.
+Auth: as above.
+Body: `{"section_access": {"sell": {"capability": "operate"}, ...}}` - full replacement for one role. A section left out is removed, never kept.
+
+1. Gate setup>=manage, and the access-administrator floor.
 2. Validate every section code and capability value.
    -> unknown code/capability -> `VALIDATION` (400)
 3. Check the four floor rules (code constant): a change that crosses a floor is refused cell-by-cell.
    -> floor crossed -> `FLOOR_LOCKED` (422), body names the cell and the reason
-4. Write `Role.section_access`; log an `AccessChange` row per changed cell (who, when, role, section, old -> new).
-5. Return 200 with the stored row. Takes effect on next login/token refresh (no live mid-shift shifts).
+4. **Propose, do not write.** Floor rule 4 says users and roles change "never by one person alone", and `section_access` is the role. The edit becomes an `AccessChange` carrying the per-cell diff (who, when, role, section, old -> new) plus the row it was written against, and a second Owner or IT Admin applies it through the existing approvals machinery.
+   -> nothing actually moved -> 200 `{"status": "unchanged"}`, and nobody is asked to approve nothing
+5. Return **202** with the approval to clear and the cell diff. The floor is checked again at apply time, and the change is refused if that role moved since the proposal was written.
 
 | code | HTTP | trigger |
 |---|---|---|
-| VALIDATION | 400 | unknown section/capability |
-| SCOPE_DENIED | 403 | lacks setup manage |
+| VALIDATION | 400 | unknown section/capability, or a setting this endpoint does not have |
+| SCOPE_DENIED | 403 | lacks setup manage, or is not Owner / IT Admin |
 | NOT_FOUND | 404 | unknown role code |
 | FLOOR_LOCKED | 422 | edit crosses a hard-coded money floor |
+
+**Timing: an approved change is live immediately (Anand's ruling, 30 Jul 2026).** This section previously said a change waited for the affected person's next login. It does not, and must not: the gate resolves every request against the stored row. Anand's reasoning - the mid-shift surprise is rare and two people had to agree to it, whereas a right you cannot withdraw until someone next logs out stays open for a whole shift, and a till may not log out for days. **Everything live, updated instantly.**
 
 The contract tests move with this: gates are asserted against the STORED matrix (whatever it says), floors asserted unconditionally.
 
