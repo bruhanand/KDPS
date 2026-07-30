@@ -28,6 +28,7 @@ from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
 from sell.serializers import SaleReadSerializer, SaleRowSerializer, SaleWriteSerializer
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
+from sell.services.register import register_state
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -135,6 +136,29 @@ class DatasetView(APIView):
         except TillScopeError as exc:
             return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
         return Response(build_dataset(store, request.query_params.get("since") or ""))
+
+
+class RegisterView(APIView):
+    """`GET /api/sell/register` - the till's boot and recovery state (#180).
+
+    The one call a counter makes before it trusts its own bill counter. Gated the
+    same as the dataset, and for the same reason: it describes one counter's
+    numbering, which is only ever of use to that counter.
+
+    Read-only. The deliberate handover that moves a series onto a new machine is
+    the sibling POST, and it belongs to a manager rather than to a till (#189).
+
+    See `sell.services.register` for what each field answers.
+    """
+
+    permission_classes = [IsAuthenticated, CanRunTill]
+
+    def get(self, request: Request) -> Response:
+        try:
+            store = resolve_till_store(request.user)
+        except TillScopeError as exc:
+            return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
+        return Response(register_state(store).as_payload())
 
 
 class SaleDetailView(APIView):

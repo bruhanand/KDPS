@@ -1,0 +1,74 @@
+// What colour the sync light is, and why (#180, D10 grill Q1).
+//
+// One function, pure, because the light is the only thing a busy counter person
+// looks at and "amber" has to mean the same thing at every till on every day.
+// The three colours are not severity - they are three different sentences:
+//
+//   · **green** - the server has everything this counter has done.
+//   · **amber** - work is outstanding and the till is handling it. Nobody needs
+//     to do anything; the count says how far behind we are.
+//   · **red** - the till cannot be trusted to bill, or a bill needs a human. This
+//     is the only colour that asks for an action, which is why nothing routine is
+//     ever allowed to reach it.
+//
+// Note what is deliberately *not* red: being offline. The till is offline-first
+// and selling with no network is the designed state, not a fault (grill Q5).
+
+import type { QueueHalt, RegisterPayload } from "./types";
+
+export type SyncColour = "green" | "amber" | "red";
+
+export interface SyncStatus {
+  colour: SyncColour;
+  /** What the light means, in a sentence a store person can act on. */
+  reason: string;
+}
+
+export interface StatusInput {
+  /** Has a dataset ever landed? A till with no local copy cannot price a scan. */
+  datasetReady: boolean;
+  /** Bills waiting to go up. */
+  pending: number;
+  /** Set when the server refused a bill and the queue stopped. */
+  halt: QueueHalt | null;
+  /** What the server last told us about this counter, if we have asked. */
+  register: RegisterPayload | null;
+  /** Did the browser throw the local database away between sessions? */
+  storageLost: boolean;
+  online: boolean;
+}
+
+export function deriveStatus(input: StatusInput): SyncStatus {
+  // Ordered by what a person should do about it, worst first: a halted queue
+  // matters more than a stale dataset, and both matter more than a count.
+  if (input.storageLost) {
+    return red(
+      "This device cleared the counter's local data. Sync before billing so the till knows which bill number it is on.",
+    );
+  }
+  if (input.halt) {
+    return red(`Bill ${input.halt.doc_number} was not accepted: ${input.halt.message}`);
+  }
+  if (!input.datasetReady) {
+    return red("No local copy of the price list yet. Connect and sync before billing.");
+  }
+  if (input.register && !input.register.series_open) {
+    return red(
+      `Head office has not opened a bill series for ${input.register.fy}. Bills printed today will not sync.`,
+    );
+  }
+  if (input.pending > 0) {
+    return {
+      colour: "amber",
+      reason: `${input.pending} ${input.pending === 1 ? "bill" : "bills"} waiting to sync.`,
+    };
+  }
+  if (!input.online) {
+    return { colour: "amber", reason: "Working offline. Bills will sync when the line is back." };
+  }
+  return { colour: "green", reason: "Everything is synced." };
+}
+
+function red(reason: string): SyncStatus {
+  return { colour: "red", reason };
+}

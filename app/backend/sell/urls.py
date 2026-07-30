@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from django.urls import path
 
-from sell.views import DatasetView, SaleDetailView, SaleListCreateView
+from sell.views import DatasetView, RegisterView, SaleDetailView, SaleListCreateView
 
 urlpatterns = [
     path("dataset", DatasetView.as_view(), name="sell-dataset"),
+    path("register", RegisterView.as_view(), name="sell-register"),
     path("sales", SaleListCreateView.as_view(), name="sale-list"),
     path("sales/<path:doc_number>", SaleDetailView.as_view(), name="sale-detail"),
 ]

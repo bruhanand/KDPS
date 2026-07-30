@@ -144,6 +144,10 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Billing", to: "/sell", planned: true },
       { label: "Return & Exchange", to: "/sell/returns", planned: true },
       { label: "Customers", to: "/sell/customers", planned: true },
+      // The counter's own state: what it holds offline, and what it still owes
+      // head office (#180). Listed after the screens a cashier uses all day,
+      // because it is the page somebody opens when something looks wrong.
+      { label: "Till & Sync", to: "/sell/till" },
     ],
   },
   {

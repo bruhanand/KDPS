@@ -32,6 +32,8 @@ import StockOnHand from "./pages/StockOnHand";
 import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
+import TillPage from "./pages/sell/Till";
+import { TillProvider } from "./till/TillProvider";
 
 type Screen = RouteObject & { id: string; path: string };
 
@@ -84,6 +86,20 @@ const BUILT: Screen[] = [
   // (#170). It belongs to no section: it is the store persona's arrangement of
   // three of them, and its tabs carry those sections' own gates.
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },
+  // Sell — the till layer's own surface (#180). `TillProvider` wraps the screen
+  // rather than the app: opening a counter's local database means holding one
+  // store's price list, credit notes and manager PIN hashes, which a warehouse or
+  // head-office login has no business carrying. When the billing screens land
+  // (#181) the three of them share one provider through a layout route.
+  {
+    id: "sell-till",
+    path: "/sell/till",
+    element: (
+      <TillProvider>
+        <TillPage />
+      </TillProvider>
+    ),
+  },
   // Stock — V-flip is an action inside this section, not a menu item
   { id: "stock-on-hand", path: "/stock", element: <StockOnHand /> },
   { id: "stock-search", path: "/stock/search", element: <CrossStoreSearch /> },
