@@ -76,9 +76,17 @@ const TABS: { key: Group; label: string }[] = [
 ];
 
 /** Which half of this screen to draw when it is hosted on the Inventory page
- *  (#170), where Stock on Hand and Damage & Quarantine are two separate tabs —
+ *  (#170), where Stock on Hand and Damage & Quarantine are two separate tabs -
  *  so the panel must not also offer the other one as a fourth grouping. */
 export type StockView = "stock" | "quarantine";
+
+/** The groupings that belong to one half. Standing alone at /stock all four are
+ *  one strip and Quarantine is the fourth; hosted, the host has already split
+ *  them across two tabs. */
+function groupingsFor(view: StockView | undefined): typeof TABS {
+  if (!view) return TABS;
+  return TABS.filter((t) => (t.key === "quarantine") === (view === "quarantine"));
+}
 
 export default function StockOnHand({ view }: { view?: StockView } = {}) {
   // Where a global-search result lands (#86): one barcode, or one brand, with
@@ -231,11 +239,11 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
   }
 
   const isQuar = group === "quarantine";
-  // Standing alone the strip offers all four; hosted, the host has split the two
-  // halves across two tabs, so it offers only the groupings of the half showing.
-  const groupings = view
-    ? TABS.filter((t) => (t.key === "quarantine") === (view === "quarantine"))
-    : TABS;
+  const groupings = groupingsFor(view);
+  // Hosted, this panel is only ever one half, so its header can speak for that
+  // half. Standing alone it is one screen with a strip you switch on, and the
+  // header must stay the screen's - unchanged from before the fold.
+  const hostedQuar = view === "quarantine";
   const cards = isQuar
     ? [
         { icon: ShieldAlert, label: "Units quarantined", value: quar?.summary.units_quarantined ?? 0 },
@@ -259,14 +267,14 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
     <div className="page-pad">
       <PageHeader
         lead={
-          isQuar
+          hostedQuar
             ? "Pieces held back from sale, and the damage reports still waiting on somebody."
             : "The live net position, from the stock ledger."
         }
         actions={
-          !isQuar && (
+          !hostedQuar && (
             <>
-              {/* V-flip is an ownership correction, not a daily job — so it is an
+              {/* V-flip is an ownership correction, not a daily job - so it is an
                   action here inside Stock rather than a line in the sidebar (#87). */}
               <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
               <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
@@ -276,7 +284,7 @@ export default function StockOnHand({ view }: { view?: StockView } = {}) {
       />
 
       {/* Hosted on Inventory, Quarantine is a tab of its own and the strip is
-          only the three groupings — or nothing at all, on the damage tab. */}
+          only the three groupings - or nothing at all, on the damage tab. */}
       {groupings.length > 1 && (
         <div className="seg" data-testid="onhand-tabs">
           {groupings.map((t) => (

@@ -570,12 +570,16 @@ export function foldKey(fold: NavFoldDef): string {
   return `fold:${fold.to}`;
 }
 
-/** The folded page a URL belongs to, or null. A fold owns its URL outright: no
- *  menu entry points at `/inventory`, so `itemOwning` cannot answer for it and
- *  the route guard would default-allow it. */
+/** The folded page a URL *is*, or null. A fold owns its URL outright: no menu
+ *  entry points at `/inventory`, so `itemOwning` cannot answer for it and the
+ *  route guard would default-allow it.
+ *
+ *  Exact, not by prefix: a fold's gate is "any one of my tabs", which is the
+ *  loosest gate in the manifest. A screen routed under `/inventory/...` later
+ *  must carry its own, not inherit this one by sitting beneath it. */
 export function foldOwning(pathname: string): NavFoldDef | null {
   const normalized = normalizePath(pathname);
-  return FOLDS.find((f) => underPrefix(normalized, f.to)) ?? null;
+  return FOLDS.find((f) => normalized === f.to) ?? null;
 }
 
 /** A section the signed-in user actually gets, with its visible items. The
@@ -628,10 +632,28 @@ export type NavRow =
  *
  *  Reads the *output* of the access filter, so a tab exists only where the menu
  *  entry behind it survived that filter: folding four screens onto one page can
- *  never show one of them to somebody the sidebar would have refused it to. */
+ *  never show one of them to somebody the sidebar would have refused it to.
+ *
+ *  A deep-link entry needs both halves. "Damage / Quarantine" is Return to
+ *  Brand's line onto Stock's screen, and the two carry different gates - the
+ *  line answers to Return to Brand, the URL to Stock - so a tab drawing it must
+ *  clear the pair, exactly as clicking the line and landing on the screen does. */
 export function foldTabs(fold: NavFoldDef, sections: VisibleSection[]): FoldTab[] {
   const passed = new Set(sections.flatMap((s) => s.items.map((i) => i.to)));
-  return fold.tabs.filter((t) => passed.has(t.entry));
+  return fold.tabs.filter((t) => {
+    if (!passed.has(t.entry)) return false;
+    const host = itemOwning(t.entry.split("?")[0]);
+    return !host || passed.has(host.to);
+  });
+}
+
+/** The tabs of `fold` one signed-in person may see. The guard and the page both
+ *  ask this, so what the URL opens and what the page draws cannot disagree. */
+export function foldTabsFor(
+  fold: NavFoldDef,
+  user: Parameters<typeof visibleSections>[0] | null | undefined,
+): FoldTab[] {
+  return user ? foldTabs(fold, visibleSections(user)) : [];
 }
 
 /** The tab `slug` names, or the first one this person can see. An unknown slug,

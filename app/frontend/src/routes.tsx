@@ -78,7 +78,7 @@ const BUILT: Screen[] = [
   { id: "rtv-list", path: "/return-to-brand", element: <RTVListPage /> },
   { id: "rtv-new", path: "/return-to-brand/new", element: <RTVNewPage /> },
   { id: "rtv-detail", path: "/return-to-brand/:id", element: <RTVDetailPage /> },
-  // Inventory — Stock, Stock Count and Return to Brand folded onto one page
+  // Inventory - Stock, Stock Count and Return to Brand folded onto one page
   // (#170). It belongs to no section: it is the store persona's arrangement of
   // three of them, and its tabs carry those sections' own gates.
   { id: "inventory", path: "/inventory", element: <InventoryPage /> },

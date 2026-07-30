@@ -291,6 +291,13 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutRtv)))
       .map((t) => t.label)).toEqual(["Stock on Hand", "Count & Adjust"]);
 
+    // Damage & Quarantine is Return to Brand's line onto Stock's screen, so it
+    // needs both - the same pair clicking the line and landing on the URL needs.
+    // Holding one half must not open by a tab what the URL bar refuses.
+    const { stock: _noStock, ...withoutStock } = STORE_CAPS;
+    expect(foldTabs(INVENTORY_FOLD, visibleSections(user("store_staff", withoutStock)))
+      .map((t) => t.label)).toEqual(["Count & Adjust", "Return to Brand"]);
+
     // No folded section at all ⇒ no Inventory row: an empty page is not a page.
     const rows = sidebarRows(user("store_staff", { home: "view", sell: "operate" }));
     expect(headings(rows)).toEqual(["Home", "Sell"]);

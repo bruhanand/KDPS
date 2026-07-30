@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { api } from "../lib/api";
@@ -285,6 +286,38 @@ function Sidebar({
     localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(updated));
   }
 
+  /** A row that is simply a link: a section with one visible item, or a fold,
+   *  whose whole point is to be one line. */
+  function oneLineRow(row: {
+    key: string;
+    icon: LucideIcon;
+    layer: string;
+    to: string;
+    label: string;
+    active: boolean;
+    testId: string;
+  }) {
+    const Icon = row.icon;
+    return (
+      <div className="nav-group" key={row.key}>
+        <div className="nav-group-head">
+          <span className="nav-ic" style={{ color: `var(--layer-${row.layer})` }}>
+            <Icon size={16} />
+          </span>
+          <Link
+            to={row.to}
+            onClick={onNavigate}
+            aria-current={row.active ? "page" : undefined}
+            className={`nav-grouplink ${row.active ? "active" : ""}`}
+            data-testid={row.testId}
+          >
+            {row.label}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   /** One section: its head, plus its items when it has more than one. */
   function renderSection(s: VisibleSection) {
     const Icon = s.def.icon;
@@ -293,27 +326,22 @@ function Sidebar({
     // open to reach a single line is a click that buys nothing. It is a tidying,
     // not a shaping: what a persona's sidebar *contains* is the layout's job
     // (`applyLayout` in the manifest), never this.
-    const single = items.length === 1;
     const open = !collapsed[s.def.code];
     const holdsActive = items.some((i) => isActiveItem(i, pathname));
+    if (items.length === 1) {
+      return oneLineRow({
+        key: s.def.code,
+        icon: Icon,
+        layer: s.def.layer,
+        to: items[0].to,
+        label: s.label,
+        active: isActiveItem(items[0], pathname),
+        testId: `nav-${s.def.code}`,
+      });
+    }
     return (
       <div className="nav-group" key={s.def.code}>
-        {single ? (
-          <div className="nav-group-head">
-            <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
-              <Icon size={16} />
-            </span>
-            <Link
-              to={items[0].to}
-              onClick={onNavigate}
-              aria-current={isActiveItem(items[0], pathname) ? "page" : undefined}
-              className={`nav-grouplink ${isActiveItem(items[0], pathname) ? "active" : ""}`}
-              data-testid={`nav-${s.def.code}`}
-            >
-              {s.label}
-            </Link>
-          </div>
-        ) : (
+        {(
           <button
             type="button"
             className="nav-group-head nav-group-toggle"
@@ -330,7 +358,7 @@ function Sidebar({
             <ChevronDown size={14} className={`nav-chev ${open ? "open" : ""}`} />
           </button>
         )}
-        {!single && open && (
+        {open && (
           <div className="nav-items">
             {items.map((it) => {
               const active = isActiveItem(it, pathname);
@@ -365,27 +393,15 @@ function Sidebar({
    *  exactly like a one-item section, because that is what it is to the reader
    *  - the dividing happens inside the page, never here (D10 §1). */
   function renderFold(fold: NavFoldDef) {
-    const Icon = fold.icon;
-    const active = isActiveFold(fold, pathname);
-    const slug = fold.heading.toLowerCase();
-    return (
-      <div className="nav-group" key={fold.to}>
-        <div className="nav-group-head">
-          <span className="nav-ic" style={{ color: `var(--layer-${fold.layer})` }}>
-            <Icon size={16} />
-          </span>
-          <Link
-            to={fold.to}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={`nav-grouplink ${active ? "active" : ""}`}
-            data-testid={`nav-fold-${slug}`}
-          >
-            {fold.heading}
-          </Link>
-        </div>
-      </div>
-    );
+    return oneLineRow({
+      key: fold.to,
+      icon: fold.icon,
+      layer: fold.layer,
+      to: fold.to,
+      label: fold.heading,
+      active: isActiveFold(fold, pathname),
+      testId: `nav-fold-${fold.heading.toLowerCase()}`,
+    });
   }
 
   return (

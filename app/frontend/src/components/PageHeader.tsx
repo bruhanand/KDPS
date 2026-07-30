@@ -25,8 +25,8 @@ export function pageContext(pathname: string) {
  *  as tabs still shows exactly one header.
  *
  *  The panels are the existing screens, unchanged; they render their own
- *  `PageHeader` and would otherwise caption themselves off a URL — `/inventory`
- *  — that no menu entry owns, leaving them titleless. Passed through context
+ *  `PageHeader` and would otherwise caption themselves off a URL - `/inventory`
+ *  - that no menu entry owns, leaving them titleless. Passed through context
  *  rather than as props, so folding a screen never means editing it. */
 export interface HostedPage {
   /** The eyebrow: the folded page's own name. */

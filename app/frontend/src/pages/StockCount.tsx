@@ -197,7 +197,7 @@ export function StockCountListPage() {
         lead="Counters scan blind; the book appears when the count is submitted."
         actions={
           // Corrections live where they are caused, and on the Inventory page
-          // (#170) this screen *is* "Count & Adjust" — there is no sidebar line
+          // (#170) this screen *is* "Count & Adjust" - there is no sidebar line
           // to reach them by any more, so they are buttons here. Same gate the
           // menu lines carried: `stock_count: operate`.
           writable && (
