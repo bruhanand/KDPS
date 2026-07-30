@@ -73,7 +73,7 @@ function TodayRow({ d }: { d: DashboardPayload }) {
     { id: "pieces", label: "Pieces sold", value: t.pieces },
   ];
   return (
-    <div className="card panel" data-testid="today-card">
+    <div className="card panel dash-block" data-testid="today-card">
       <div className="panel-head">
         <p className="eyebrow">Today</p>
         <h3 className="h3">The day so far</h3>
@@ -234,7 +234,7 @@ function Sparkline({ d }: { d: DashboardPayload }) {
 function ManagerRow({ m }: { m: NonNullable<DashboardPayload["manager"]> }) {
   const pct = targetProgressPct(m.mtd_net_paise, m.target_paise);
   return (
-    <div className="card panel manager-row" data-testid="manager-row">
+    <div className="card panel dash-block" data-testid="manager-row">
       <div className="panel-head">
         <p className="eyebrow">Manager</p>
         <h3 className="h3">This month</h3>
