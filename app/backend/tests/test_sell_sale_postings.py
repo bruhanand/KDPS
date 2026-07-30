@@ -653,6 +653,142 @@ def test_two_suppliers_for_one_brand_cannot_be_chosen_between(counter):
     assert plan.deferral == DeferredCosting.Reason.VENDOR_UNKNOWN
 
 
+def _inward_under(store, vendor, *, number: str, barcode="8901000000011", season="FW25"):
+    """One PT inward of the fixture cohort, booked against `vendor`.
+
+    Written straight to the ledger rather than through a helper because what the
+    test needs is exactly what `supplier_of` reads: a `PT_INWARD` leg carrying a
+    booking. The projection is beside the point here.
+    """
+    from masters.models import Season
+    from stockledger.models import StockLedgerEntry
+    from vendors.models import Booking
+
+    booking = Booking.objects.create(
+        number=number,
+        vendor=vendor,
+        brand=Brand.objects.get(code="mufti"),
+        season=Season.objects.get(code="FW25"),
+    )
+    return StockLedgerEntry.objects.create(
+        store=store,
+        gstin=store.gstin,
+        qty=1,
+        amount=COST_PAISE,
+        sku_code=barcode,
+        season=season,
+        brand="MUFTI",
+        kind=StockLedgerEntry.Kind.PT_INWARD,
+        doc_number=f"26-27/SEL-DEO/PT/{number}",
+        line_no=1,
+        booking=booking,
+    )
+
+
+def test_the_inward_names_the_supplier_even_when_the_brand_has_two(counter):
+    """The piece knows better than the brand: one booked inward decides."""
+    brand = build_brand("SOR")
+    arvind = build_supplier(brand, code="ARVIND")
+    build_supplier(brand, code="MADURA")
+    build_piece(model="SOR")
+    _inward_under(counter["store"], arvind, number="BK-1")
+
+    plan = resolve_cost_plan(
+        brand=brand.name, barcode="8901000000011", season="FW25", unit_cost_paise=COST_PAISE
+    )
+    assert plan.vendor == arvind
+
+
+def test_a_cohort_inwarded_under_two_vendors_defers_rather_than_guessing(counter):
+    """Two vendors' inwards on one cohort: nobody can say whose piece just sold.
+
+    The pieces are indistinguishable once they share a (barcode, season), so the
+    latest booking is not an answer - it is a guess with a counterparty on it,
+    and a payable to the wrong vendor is invisible to the trial balance and the
+    subledger tie alike. The line waits for a human instead.
+    """
+    brand = build_brand("SOR")
+    arvind = build_supplier(brand, code="ARVIND")
+    madura = build_supplier(brand, code="MADURA")
+    build_piece(model="SOR")
+    _inward_under(counter["store"], arvind, number="BK-1")
+    _inward_under(counter["store"], madura, number="BK-2")
+
+    plan = resolve_cost_plan(
+        brand=brand.name, barcode="8901000000011", season="FW25", unit_cost_paise=COST_PAISE
+    )
+    assert plan.vendor is None
+    assert plan.deferral == DeferredCosting.Reason.VENDOR_UNKNOWN
+
+
+def test_restocking_from_the_same_vendor_still_posts_to_that_vendor(counter):
+    """Two inwards, one vendor: no ambiguity, no deferral."""
+    brand = build_brand("SOR")
+    arvind = build_supplier(brand, code="ARVIND")
+    build_piece(model="SOR")
+    _inward_under(counter["store"], arvind, number="BK-1")
+    _inward_under(counter["store"], arvind, number="BK-2")
+
+    plan = resolve_cost_plan(
+        brand=brand.name, barcode="8901000000011", season="FW25", unit_cost_paise=COST_PAISE
+    )
+    assert plan.vendor == arvind
+
+
+def test_a_cancelled_exchange_gives_the_returnable_quantity_back(counter):
+    """A cancelled bill's returns never happened, so they cannot spend the quota.
+
+    The counter takes an exchange, realises the bill was wrong, and cancels it by
+    the kernel's own transition. The customer still holds the piece and the
+    receipt; the next attempt at the same return must be accepted. Counting the
+    cancelled bill's return line against the original would refuse it with
+    ALREADY_RETURNED - a refund path the books closed over a bill they themselves
+    say never happened.
+    """
+    stock_in(counter["store"], 6)
+    first = counter["client"].post(
+        SALES_URL, bill_payload(counter["store"], counter["salesman"], till_seq=1), format="json"
+    )
+    assert first.status_code == 201, first.json()
+
+    def exchange_payload(till_seq: int):
+        dearer = 199900
+        payload = bill_payload(
+            counter["store"], counter["salesman"], till_seq=till_seq, mrp_paise=dearer
+        )
+        payload["exchange"] = {
+            "original": {"store": counter["store"].code, "fy": payload["fy"], "till_seq": 1},
+            "lines": [
+                {
+                    "line_no": 2,
+                    "direction": "return",
+                    "barcode": "8901000000011",
+                    "season": "FW25",
+                    "original_line": 1,
+                    "qty": 1,
+                    "refund_paise": MRP_PAISE,
+                    "gst_rate": "5",
+                    "gst_paise": gst_on(MRP_PAISE),
+                    "condition": "good",
+                    "reason": "size",
+                }
+            ],
+        }
+        payload["totals"] |= {
+            "net_paise": dearer - MRP_PAISE,
+            "gst_paise": gst_on(dearer) - gst_on(MRP_PAISE),
+        }
+        payload["tenders"] = [{"mode": "cash", "amount_paise": dearer - MRP_PAISE}]
+        return payload
+
+    exchanged = counter["client"].post(SALES_URL, exchange_payload(2), format="json")
+    assert exchanged.status_code == 201, exchanged.json()
+    Sale.objects.get(pk=exchanged.json()["id"]).cancel()
+
+    again = counter["client"].post(SALES_URL, exchange_payload(3), format="json")
+    assert again.status_code == 201, again.json()
+
+
 # --- the invariants no golden file can state -------------------------------
 
 
