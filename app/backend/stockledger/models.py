@@ -139,6 +139,11 @@ class StockOnHand(models.Model):
             models.Index(fields=["brand"], name="onhand_brand_idx"),
             models.Index(fields=["season"], name="onhand_season_idx"),
             models.Index(fields=["net_qty"], name="onhand_net_qty_idx"),
+            # The till's dataset delta (#179) filters this column twice on every
+            # sync - once for the quantities that moved and once to catch a piece
+            # arriving at a store for the first time - and this is the biggest
+            # table in the system (a row per store per barcode).
+            models.Index(fields=["store", "updated_at"], name="onhand_synced_idx"),
         ]
 
     def __str__(self) -> str:

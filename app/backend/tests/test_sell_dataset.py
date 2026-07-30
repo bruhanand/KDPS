@@ -475,17 +475,59 @@ def test_a_draft_note_is_not_money_yet_and_stays_home(till):
     assert till["client"].get(URL).json()["credit_notes"] == []
 
 
-def test_a_corrupt_cursor_self_heals_into_a_bootstrap(till):
+@pytest.mark.parametrize(
+    "damaged",
+    [
+        "yesterday-ish",  # not a timestamp at all
+        "2026-02-30T00:00:00Z",  # correctly shaped, and no such day
+        "2026-13-01T00:00:00Z",  # correctly shaped, and no such month
+        "2026-07-30T25:00:00Z",  # correctly shaped, and no such hour
+        "0",
+    ],
+)
+def test_a_damaged_cursor_self_heals_into_a_bootstrap(till, damaged):
     """A GET the till cannot escape from is worse than a re-send.
 
     The cursor is opaque and ours; a till holding a damaged one has no way to
     repair it, so an unreadable `since` is answered with the full snapshot rather
-    than a 400 the queue would retry forever.
+    than a 400 the queue would retry for ever - or a 500, which is what the three
+    correctly-shaped-and-impossible cases here used to give: Django's
+    `parse_datetime` answers `None` for the first and *raises* for those.
     """
-    body = till["client"].get(URL, {"since": "yesterday-ish"}).json()
+    response = till["client"].get(URL, {"since": damaged})
 
+    assert response.status_code == 200
+    body = response.json()
     assert body["full"] is True
     assert [row["barcode"] for row in body["items"]] == ["8901000000011"]
+
+
+def test_a_piece_nobody_has_priced_reaches_the_till_as_no_price(till):
+    """`null`, never nought - a zero here is a garment billed at ₹0.
+
+    A PT that quotes no MRP registers the SKU with none, deliberately, so an
+    unpriced piece really does reach a shelf. The till prices the scan from this
+    field and the accept pipeline writes what the till sends straight onto the
+    bill, so a nought would post no revenue and no tax against a shirt that walked
+    out of the shop.
+
+    The second piece is the fallback: a lot that never carried its own MRP takes the
+    SKU's. (A *nought* on the cohort is not asserted because the database will not
+    hold one - `ck_cohort_unit_cost_le_mrp` would have to be satisfied by a nought
+    cost, and Rule 5 forbids a posting at nought value. `_ticket_price` treats it as
+    "no price" anyway, so a future writer cannot make a stored nought shadow a good
+    price on the SKU.)
+    """
+    stock_in(till["store"], 1, barcode="8901000000033")
+    Sku.objects.filter(barcode="8901000000033").update(mrp_paise=None)
+    Cohort.objects.filter(barcode="8901000000033").update(mrp_paise=None)
+    stock_in(till["store"], 1, barcode="8901000000044")
+    Cohort.objects.filter(barcode="8901000000044").update(mrp_paise=None)
+
+    items = {row["barcode"]: row["mrp_paise"] for row in till["client"].get(URL).json()["items"]}
+
+    assert items["8901000000033"] is None
+    assert items["8901000000044"] == MRP_PAISE
 
 
 def test_the_cursor_laps_backwards_so_a_late_commit_cannot_be_missed(till):

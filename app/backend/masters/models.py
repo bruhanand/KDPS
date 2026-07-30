@@ -226,11 +226,11 @@ class GstSlab(TimeStampedModel):
 
     class Meta:
         ordering = ["-effective_from"]
-        indexes = [
-            # The till's dataset watermark (#179). See `Sku.Meta` for why the
-            # index is the whole change here.
-            models.Index(fields=["updated_at"], name="masters_gstslab_synced_idx"),
-        ]
+        # No `updated_at` index here, unlike `Sku` and `Cohort`, and `db-design.md`
+        # asked for one: the till's dataset sends every slab whole on every response
+        # rather than deltaing a table with a handful of rows in it, so nothing
+        # filters this column. An index nobody queries is a false statement about how
+        # a table is read.
 
     def __str__(self) -> str:
         return f"{self.name} (from {self.effective_from})"

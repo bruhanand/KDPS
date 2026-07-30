@@ -186,17 +186,55 @@ Business logic:
 | TILL_SCOPE | 403 | caller not scoped to exactly one store |
 | SCOPE_DENIED | 403 | caller lacks sell operate |
 
-**Amended 30 Jul 2026, after building it (#179).** Six things above were written before the delta had been thought through end to end; what shipped is below, and #181 should be built against this text.
+**Amended 30 Jul 2026, after building it (#179).**
+Ten things above were written before the delta had been thought through end to end.
+What shipped is below, and #181 should be built against this text.
 
-- **Which sections are deltaed.** Step 2's "per section" is now explicit: **items and stock** carry a watermark; **store, gst_slabs, salesmen, managers** are sent whole on every response. A delta over five rows saves nothing and would need a deletion channel `deleted` does not give it - and `deleted` names exactly the three sections that can lose a row invisibly (items, offers, credit notes). `managers` in particular must never be stale: a rung withdrawn at head office is withdrawn on the next request, so the counter's copy is replaced, never patched.
-- **The cursor sits one minute behind the clock**, and step 7's "max watermark seen" is not what shipped. `updated_at` is stamped when a transaction starts writing, not when it commits, so a cursor set to the request's own instant can step over a row that was already stamped and had not landed yet. The till upserts every section by key, so the overlap re-sends a few rows and the alternative loses one for ever.
-- **An unreadable `since` self-heals into a full bootstrap** rather than answering `VALIDATION`. The cursor is opaque and ours; a till holding a damaged one cannot repair it, and a GET it can never escape is worse than a re-send. No new error code.
-- **`deleted.items` carries barcodes**, and the only withdrawal that exists is deactivating the SKU. A cohort is a record of a purchase and is never unmade; a stock row falls to nought rather than vanishing. So a removal takes every season of that piece with it, and a *bootstrap* reports none - there is nothing cached to remove, and an inactive piece is simply absent from `items`.
-- **`deleted.credit_notes` has a third trigger the watermark cannot see.** A note dies because a date passed (Rule 11) with nothing written, so the delta also asks which notes crossed their own `expires_on` between the cursor and today. The other two are the note itself changing (cancellation) and a redemption row appearing - the balance is not a column on the note, because a submitted document may not be UPDATEd.
-- **`salesmen` rows carry `is_active`** (additive to the sketch). `deleted` has no salesmen key, so a seller who has left says so on their own row and the till drops them from the per-line popup. A bootstrap sends only the working list.
-- **`managers` is narrower than "users holding `sell >= approve`".** It is people **explicitly assigned to this store** whose scope is stores at all, who are not the break-glass superuser, and who have actually set a PIN - a blank hash is not a credential. A network- or entity-wide administrator whose matrix cell happens to say `sell: manage` is not one of this counter's people, and this list is a credential set that leaves the building on a shop-floor device.
-  Note also, exactly as the Dashboard's manager row noted: **no seeded role reaches `sell: approve`**, so out of the box this list is empty until an administrator grants the rung in the editor (#173). **Anand's ruling is outstanding on whether the ratified sheet should move instead.**
-- **`gst_slabs` includes slabs whose date has not arrived.** A rate change announced today and effective in October has to be on the device before the counter reaches October offline; the rates are two-decimal **strings**, so the till's back-calculation out of an MRP-inclusive price cannot drift a paise from the server's.
+- **Which sections are deltaed.**
+  Step 2's "per section" is now explicit: **items and stock** carry a watermark; **store, gst_slabs, salesmen, managers** are sent whole on every response.
+  A delta over five rows saves nothing and would need a deletion channel `deleted` does not give it - and `deleted` names exactly the three sections that can lose a row invisibly (items, offers, credit notes).
+  `managers` in particular must never be stale: a rung withdrawn at head office is withdrawn on the next request, so the counter's copy is replaced, never patched.
+  Consequence for db-design: the `updated_at` index it asks for on `GstSlab` is **not** built, because nothing filters that column; the indexes that are built are on `Sku`, `Cohort` and (new, not in db-design) `StockOnHand(store, updated_at)`, which every delta scans twice on the biggest table in the system.
+- **The cursor sits a quarter of an hour behind the clock**, and step 7's "max watermark seen" is not what shipped.
+  `updated_at` is stamped when a row is written, not when its transaction commits, so a cursor set to the request's own instant can step over a row that was stamped before the request and landed after it - and that row is then missed for ever.
+  The lap has to outlast the longest write transaction in the system, which is a PT inward: one `atomic` block upserting `Sku` and `Cohort` row by row, minutes rather than seconds on a 20,000-line PT.
+  The till upserts every section by key, so the overlap re-sends a handful of rows and the alternative loses one permanently.
+- **The lap is not what the correctness rests on.**
+  A **bootstrap cannot miss anything by construction**, so #181 must take one at store open each day rather than deltaing for ever off its first sync.
+  That bounds any residual watermark hole to a day, without anybody having to notice one.
+- **A damaged `since` self-heals into a full bootstrap** rather than answering `VALIDATION`.
+  The cursor is opaque and ours; a till holding a damaged one cannot repair it, and a GET it can never escape is worse than re-sending 20,000 rows once.
+  Both failure shapes are caught: Django's `parse_datetime` answers nothing for text that is not a timestamp ("yesterday-ish") but *raises* for text correctly shaped and impossible ("2026-02-30T00:00:00Z").
+  No new error code.
+- **`items[].mrp_paise` can be `null`, and is never nought.**
+  A PT that quotes no MRP registers the SKU with none, deliberately, so an unpriced piece really does reach a shelf.
+  The till prices the scan from this field and the accept pipeline writes what the till sends straight onto the bill, so a nought would post no revenue and no tax against a garment that walked out of the shop.
+  `null` says "this needs a price from a human"; #181 must not treat it as free.
+- **`deleted.items` carries barcodes**, and the only withdrawal that exists is deactivating the SKU.
+  A cohort is a record of a purchase and is never unmade; a stock row falls to nought rather than vanishing.
+  So a removal takes every season of that piece with it, and a *bootstrap* reports none - there is nothing cached to remove, and an inactive piece is simply absent from `items`.
+- **`deleted.credit_notes` has a third trigger the watermark cannot see.**
+  A note dies because a date passed (Rule 11) with nothing written, so the delta also asks which notes crossed their own `expires_on` between the cursor and today.
+  The other two are the note itself changing (cancellation) and a redemption row appearing - the balance is not a column on the note, because a submitted document may not be UPDATEd.
+  A bootstrap sends only notes that have not passed their date, since it reports nothing as closed anyway.
+- **`salesmen` rows carry `is_active`** (additive to the sketch).
+  `deleted` has no salesmen key, so a seller who has left says so on their own row and the till drops them from the per-line popup.
+  A bootstrap sends only the working list.
+- **`managers` is narrower than "users holding `sell >= approve`".**
+  It is people **explicitly assigned to this store** whose scope is stores at all, who are not the break-glass superuser, and who have actually set a PIN - a blank hash is not a credential.
+  A network- or entity-wide administrator whose matrix cell happens to say `sell: manage` is not one of this counter's people, and this list is a credential set that leaves the building on a shop-floor device.
+  Note also, exactly as the Dashboard's manager row noted: **no seeded role reaches `sell: approve`**, so out of the box this list is empty until an administrator grants the rung in the editor (#173).
+  **Anand's ruling is outstanding on whether the ratified sheet should move instead.**
+- **`gst_slabs` includes slabs whose date has not arrived.**
+  A rate change announced today and effective in October has to be on the device before the counter reaches October offline.
+  The rates are two-decimal **strings**, so the till's back-calculation out of an MRP-inclusive price cannot drift a paise from the server's.
+- **`SCOPE_DENIED` is not emitted as a code.**
+  The capability refusal is `require_section`, which answers with DRF's `{"error": ...}`-less `{"detail": ...}` at 403, exactly as `/api/stock/availability` recorded when it shipped.
+  `TILL_SCOPE` does carry its code, because the till branches on it: it means "this login will never be a till", which is not something to retry.
+  Unifying the two body shapes is one change across every gate in the project, not this endpoint's to make alone.
+- **`updated_at` was not a new column and is not backfilled.**
+  db-design lists "`updated_at` (NEW column, auto_now + index) ... Backfill: set to migration time" for `Sku`/`Cohort`/`GstSlab`.
+  The column already exists on all three through `TimeStampedModel` and has been stamping real edit times since those tables did, so only the index is new - and a backfill would throw away the only history a delta can read.
 
 ### POST `/api/sell/sales`
 

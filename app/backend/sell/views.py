@@ -16,7 +16,6 @@ from typing import Any
 
 from django.db.models import Prefetch, Q, QuerySet
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -117,9 +116,15 @@ class DatasetView(APIView):
     override PIN hashes. Somebody who may read yesterday's bills has no use for it.
 
     See `sell.services.dataset` for what is in it and why the cursor laps
-    backwards. The two refusals here are told apart by their codes because the
-    till branches on them: `TILL_SCOPE` means "this login will never be a till, a
-    human must fix the account", which is not something to retry.
+    backwards.
+
+    `TILL_SCOPE` is the one refusal that carries a code, and the till needs it to:
+    it means "this login will never be a till, a human must fix the account", which
+    is not something to retry. The capability refusal above it answers with DRF's
+    own `{"detail": ...}` at 403 - the same as every sibling `require_section` gate,
+    and the same as `/api/stock/availability` recorded when it shipped. Unifying the
+    two body shapes is one change across every gate in the project, not this
+    endpoint's to make alone.
     """
 
     permission_classes = [IsAuthenticated, CanRunTill]
@@ -129,11 +134,6 @@ class DatasetView(APIView):
             store = resolve_till_store(request.user)
         except TillScopeError as exc:
             return Response(refusal_body("TILL_SCOPE", str(exc)), status=403)
-        except PermissionDenied as exc:
-            # An unknown or out-of-scope `X-KDPS-Unit` on the way in. Caught so the
-            # till gets this endpoint's own body shape rather than the scoping
-            # layer's DRF `{"detail": ...}` leaking past it.
-            return Response(refusal_body("SCOPE_DENIED", str(exc.detail)), status=403)
         return Response(build_dataset(store, request.query_params.get("since") or ""))
 
 
