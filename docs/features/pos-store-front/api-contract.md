@@ -232,6 +232,14 @@ What shipped is below, and #181 should be built against this text.
   The capability refusal is `require_section`, which answers with DRF's `{"error": ...}`-less `{"detail": ...}` at 403, exactly as `/api/stock/availability` recorded when it shipped.
   `TILL_SCOPE` does carry its code, because the till branches on it: it means "this login will never be a till", which is not something to retry.
   Unifying the two body shapes is one change across every gate in the project, not this endpoint's to make alone.
+- **Two sections were added while building the Billing screen (#181): `seasons` and `policy`.**
+  Both are sent whole on every response, for the same reason `gst_slabs` and `managers` are.
+  `seasons` is `[{code, name, status, sort_order}]`, the season master's own ordering.
+  A2 says a scan that does not name a season resolves to the *oldest live* one with stock, and `sell.services.resolve` makes that choice by ranking `(is_closed, sort_order)` from that master - so a till without it would fall back to sorting names, and "FW25 before SS26" is true only by the accident of the alphabet.
+  The season the till picks is the season it writes on the line, and the accept pipeline honours an exact `(barcode, season)` outright, so the till's choice is the one that reaches the books.
+  `policy` is `{"manual_discount_cap_percent": "7.50"}` from `SellPolicy`, a two-decimal string for the reason the tax rates are.
+  Without it the counter cannot hold the cap it is meant to hold, and a cashier's over-cap discount would be discovered by an `OVERRIDE_REQUIRED` days later, on a bill already printed, paid for and in a customer's hand.
+
 - **`updated_at` was not a new column and is not backfilled.**
   db-design lists "`updated_at` (NEW column, auto_now + index) ... Backfill: set to migration time" for `Sku`/`Cohort`/`GstSlab`.
   The column already exists on all three through `TimeStampedModel` and has been stamping real edit times since those tables did, so only the index is new - and a backfill would throw away the only history a delta can read.
