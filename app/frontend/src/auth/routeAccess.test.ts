@@ -218,6 +218,25 @@ describe("canAccess", () => {
     expect(canAccess("/stock", withSections({ home: "view" }))).toBe(false);
   });
 
+  it("the folded Inventory page opens for anyone with a tab on it, and nobody else", () => {
+    // #170: /inventory belongs to no section, so the old "no screen claims this
+    // path" branch would have default-allowed it to everyone. It answers to the
+    // gates of the screens it draws instead.
+    expect(canAccess("/inventory", storePerson)).toBe(true);
+    expect(canAccess("/inventory", warehouse)).toBe(true);
+    // One folded section is enough - they get that one tab.
+    expect(canAccess("/inventory", withSections({ stock: "view" }))).toBe(true);
+    expect(canAccess("/inventory", withSections({ stock_count: "operate" }))).toBe(true);
+    // None of the three ⇒ an empty page, which is not a page they may open.
+    expect(canAccess("/inventory", withSections({ home: "view", sell: "operate" }))).toBe(false);
+    expect(canAccess("/inventory", makeUser({}))).toBe(false);
+    expect(canAccess("/Inventory", withSections({ home: "view" }))).toBe(false);
+    // Folding changed no gate: the tabs' own URLs answer exactly as before.
+    expect(canAccess("/stock", storePerson)).toBe(true);
+    expect(canAccess("/stock-count", storePerson)).toBe(true);
+    expect(canAccess("/return-to-brand", storePerson)).toBe(true);
+  });
+
   it("mixed-case URLs are guarded too (React Router matches case-insensitively)", () => {
     expect(canAccess("/MONEY/VENDOR", storePerson)).toBe(false);
     expect(canAccess("/Setup/Users", storePerson)).toBe(false);

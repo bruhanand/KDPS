@@ -6,6 +6,7 @@ import { fmtApprovalWhen } from "../components/approval";
 import type { ApprovalT } from "../components/approval";
 import { SearchBox } from "../components/SearchBox";
 import { api, apiErrorMessage } from "../lib/api";
+import { formatRupeeAmount } from "../lib/format";
 import { withQuery } from "../lib/query";
 import "./Booking.css";
 import "./PtMapper.css";
@@ -75,7 +76,20 @@ const TABS: { key: Group; label: string }[] = [
   { key: "quarantine", label: "Quarantine" },
 ];
 
-export default function StockOnHand() {
+/** Which half of this screen to draw when it is hosted on the Inventory page
+ *  (#170), where Stock on Hand and Damage & Quarantine are two separate tabs -
+ *  so the panel must not also offer the other one as a fourth grouping. */
+export type StockView = "stock" | "quarantine";
+
+/** The groupings that belong to one half. Standing alone at /stock all four are
+ *  one strip and Quarantine is the fourth; hosted, the host has already split
+ *  them across two tabs. */
+function groupingsFor(view: StockView | undefined): typeof TABS {
+  if (!view) return TABS;
+  return TABS.filter((t) => (t.key === "quarantine") === (view === "quarantine"));
+}
+
+export default function StockOnHand({ view }: { view?: StockView } = {}) {
   // Where a global-search result lands (#86): one barcode, or one brand, with
   // its stock wherever the caller may see it. Both filters are the server's, so
   // the answer survives the on-hand line cap.
@@ -83,10 +97,12 @@ export default function StockOnHand() {
   const skuFilter = params.get("sku") ?? "";
   const brandFilter = params.get("brand") ?? "";
   const deepFilter = skuFilter || brandFilter;
+  // Standing alone at /stock the four groupings are one strip, and
   // `?view=quarantine` is the deep link the Return to Brand section uses for
   // Damage / Quarantine — the screen lives here, the menu entry lives there.
+  // Hosted, the host has already chosen which half this is.
   const [group, setGroup] = useState<Group>(
-    params.get("view") === "quarantine" ? "quarantine" : "sku",
+    view === "quarantine" || (!view && params.get("view") === "quarantine") ? "quarantine" : "sku",
   );
   const [data, setData] = useState<OnHandT | null>(null);
   const [quar, setQuar] = useState<QuarT | null>(null);
@@ -224,15 +240,20 @@ export default function StockOnHand() {
   }
 
   const isQuar = group === "quarantine";
+  const groupings = groupingsFor(view);
+  // Hosted, this panel is only ever one half, so its header can speak for that
+  // half. Standing alone it is one screen with a strip you switch on, and the
+  // header must stay the screen's - unchanged from before the fold.
+  const hostedQuar = view === "quarantine";
   const cards = isQuar
     ? [
         { icon: ShieldAlert, label: "Units quarantined", value: quar?.summary.units_quarantined ?? 0 },
-        { icon: IndianRupee, label: "Quarantine value (₹)", value: quar?.summary.value_rupees ?? "0.00" },
+        { icon: IndianRupee, label: "Quarantine value", value: formatRupeeAmount(quar?.summary.value_rupees ?? "0") },
         { icon: Layers, label: "Quarantine lines", value: quar?.summary.lines ?? 0 },
       ]
     : [
         { icon: Boxes, label: "Units on hand", value: data?.summary.units_on_hand ?? 0 },
-        { icon: IndianRupee, label: "Stock value (₹)", value: data?.summary.value_rupees ?? "0.00" },
+        { icon: IndianRupee, label: "Stock value", value: formatRupeeAmount(data?.summary.value_rupees ?? "0") },
         { icon: Layers, label: group === "store" ? "Stores" : group === "brand" ? "Brands" : "SKU lines", value: data?.summary.lines ?? 0 },
       ];
 
@@ -246,29 +267,39 @@ export default function StockOnHand() {
   return (
     <div className="page-pad">
       <PageHeader
-        lead="The live net position, from the stock ledger."
+        lead={
+          hostedQuar
+            ? "Pieces held back from sale, and the damage reports still waiting on somebody."
+            : "The live net position, from the stock ledger."
+        }
         actions={
-          <>
-            {/* V-flip is an ownership correction, not a daily job — so it is an
-                action here inside Stock rather than a line in the sidebar (#87). */}
-            <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
-            <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
-          </>
+          !hostedQuar && (
+            <>
+              {/* V-flip is an ownership correction, not a daily job - so it is an
+                  action here inside Stock rather than a line in the sidebar (#87). */}
+              <Link className="btn" to="/stock/vflips" data-testid="vflip-link"><Repeat size={16} /> V-Flip</Link>
+              <Link className="btn" to="/stock/history" data-testid="stock-ledger-link"><ScrollText size={16} /> Movement History</Link>
+            </>
+          )
         }
       />
 
-      <div className="seg" data-testid="onhand-tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={`seg-btn ${group === t.key ? "active" : ""}`}
-            onClick={() => setGroup(t.key)}
-            data-testid={`onhand-tab-${t.key}`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* Hosted on Inventory, Quarantine is a tab of its own and the strip is
+          only the three groupings - or nothing at all, on the damage tab. */}
+      {groupings.length > 1 && (
+        <div className="seg" data-testid="onhand-tabs">
+          {groupings.map((t) => (
+            <button
+              key={t.key}
+              className={`seg-btn ${group === t.key ? "active" : ""}`}
+              onClick={() => setGroup(t.key)}
+              data-testid={`onhand-tab-${t.key}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {flash && (
         <div className="ok-note" data-testid="onhand-flash">
@@ -420,7 +451,7 @@ export default function StockOnHand() {
                     <td className="mono">{r.sku_code}</td><td>{r.brand}</td><td>{r.design}</td>
                     <td>{r.color}</td><td>{r.size}</td><td>{r.season}</td><td>{r.store_code}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{r.qty}</td>
-                    <td className="num mono">{r.value_rupees}</td>
+                    <td className="num mono">{formatRupeeAmount(r.value_rupees)}</td>
                     <td>{r.marked_by ?? "—"}</td>
                     <td>{r.marked_at ? new Date(r.marked_at).toLocaleString("en-IN") : "—"}</td>
                   </tr>
@@ -473,7 +504,7 @@ export default function StockOnHand() {
                   {group === "brand" && (<><td><b>{r.brand}</b></td><td>{r.store_code}</td><td className="num">{r.skus}</td></>)}
                   {group === "store" && (<><td className="mono">{r.store_code}</td><td>{r.store_name}</td><td className="num">{r.skus}</td></>)}
                   <td className="num" style={{ fontWeight: 700 }}>{r.net_qty}</td>
-                  <td className="num mono">{r.net_value_rupees}</td>
+                  <td className="num mono">{formatRupeeAmount(r.net_value_rupees)}</td>
                   {group === "sku" && (
                     <td>
                       <button

@@ -452,89 +452,100 @@ export function itemVisible(
 }
 
 // ---------------------------------------------------------------------------
-// Persona layouts (#96) - how one persona's sidebar is *arranged*.
+// Persona layouts (#96, reshaped by #170) - how one persona's sidebar is
+// *arranged*.
 //
 // The sections above are shared vocabulary and the server decides which of them
 // a person gets. Neither changes here. What changes is the order they are drawn
-// in and which heading they sit under, because a store person asked - twice, a
-// month apart - for their own screen: Home, Sell, one "Inventory" heading over
-// the goods work, Reports, Staff, Stock Count, Money, Offers & Price.
+// in, and whether several of them are drawn as one *folded* page.
+//
+// D10 settled the store login's shape: ten flat sections, and no subsections in
+// the sidebar, ever - anything that needs dividing divides inside the page, as
+// tabs. So #96's grouping heading (a label with three section heads nested
+// under it) is gone, and in its place is a fold: one link, one URL, and the
+// folded sections' screens drawn on that page as tabs.
 //
 // Three rules this must not break, all of them tested below in navConfig.test:
-//   · Grouping runs *after* access, over whatever the server's section list
+//   · Arranging runs *after* access, over whatever the server's section list
 //     leaves standing. It can only ever draw less, never more.
-//   · An entry's gate travels with the entry. Attendance drawn under Home is
-//     still Staff's entry with Staff's gate; moving it changes nobody's access.
-//   · Names never change. Grouping is allowed, renaming is not (#84 as amended)
-//     - a store person and the warehouse both say "Transfer" on the phone.
+//   · A tab's gate is the gate of the menu entry it draws. Folding is
+//     presentation, so a tab can never open a screen the sidebar would have
+//     hidden - a role without count rights simply sees no Count & Adjust tab.
+//   · Names never change. Folding is allowed, renaming is not (#84 as amended)
+//     - a store person and the warehouse both say "Transfer".
 //
 // A role with no layout gets the flat list, which is what keeps every other
 // persona byte-identical to before this file grew this section.
 
-/** A heading with sections nested under it. It owns no route, no section code,
- *  no capability and no server counterpart - it is a label and an order. */
-export interface NavGroupDef {
+/** One tab of a folded page. */
+export interface FoldTab {
+  /** The `?tab=` value. Stable, because it ends up in people's URLs. */
+  slug: string;
+  label: string;
+  /** The manifest entry whose screen this tab draws, by its `to`. Naming the
+   *  entry rather than restating a section code is what keeps the tab's gate
+   *  and the screen's standalone URL in one place. */
+  entry: string;
+}
+
+/** Several sections drawn as one link, their screens recomposed as tabs on one
+ *  page. Unlike a section head it owns a URL - but it owns no section code and
+ *  no capability, because every tab keeps the gate of the entry it draws. */
+export interface NavFoldDef {
   heading: string;
   icon: LucideIcon;
   /** CSS `--layer-*` token suffix, as on a section. */
   layer: string;
-  /** Section codes drawn under this heading, in this order. */
+  /** The one URL. Its tabs are `?tab=<slug>` under it. */
+  to: string;
+  /** Section codes this fold stands in for; their heads leave the sidebar. */
   sections: string[];
+  tabs: FoldTab[];
 }
 
-/** One row of a persona's sidebar: a section code, or a grouping heading. */
-export type LayoutRow = string | NavGroupDef;
+/** One row of a persona's sidebar: a section code, or a fold. */
+export type LayoutRow = string | NavFoldDef;
 
-export interface PersonaLayout {
-  /** The rows, top to bottom. A section held but named nowhere here is still
-   *  drawn - appended after these rows - so retuning somebody's access can
-   *  never silently lose them a section. */
-  rows: LayoutRow[];
-  /** Sections this persona does not get a heading for. The capability is
-   *  untouched and the URL still opens; only the menu line goes. Use it with an
-   *  entry in `relocate` for anything that must stay one click away. */
-  hide: string[];
-  /** Entries drawn under a heading other than their own section's, keyed by the
-   *  entry's `to`. `after` places it directly below that entry in the host, else
-   *  it goes last. If the host section is not held, the entry stays where it is
-   *  - the move is presentation, so it can never be the reason something goes
-   *  missing. */
-  relocate: Record<string, { under: string; after?: string }>;
-}
+/** The rows, top to bottom. A section held but named nowhere here is still
+ *  drawn - appended after these rows - so retuning somebody's access can never
+ *  silently lose them a section. */
+export type PersonaLayout = LayoutRow[];
 
-// The store's own screen, from the 30 June and 25 July store notes.
-//
-// Two entries move, and both moves are named by Anand's ruling of 26 July:
-// Attendance is drawn under Home ("Home only"), and Damage / Quarantine is
-// drawn under Stock, which is the section that already owns that screen. That
-// second move is what lets Return to Brand leave the sidebar without anything
-// becoming unreachable - a store person keeps "mark damage only" and reaches it
-// in one click, they just no longer see a Returns heading they cannot use.
-const STORE_LAYOUT: PersonaLayout = {
-  rows: [
-    "home",
-    "sell",
-    {
-      heading: "Inventory",
-      icon: Warehouse,
-      layer: "store",
-      sections: ["receive_goods", "transfer", "stock"],
-    },
-    "reports",
-    // Reads "HRMS" (#118 renamed it from "Staff"); with Attendance moved to
-    // Home it holds one visible item (Member Details, for a manager) and so
-    // draws as one line.
-    "hrms",
-    "stock_count",
-    "money",
-    "offers_price",
+// Inventory (D10 §1): Stock, Stock Count and Return to Brand fold into one
+// page. Four tabs over three section codes - Damage & Quarantine and Return to
+// Brand are both Return to Brand's, which is where a store's "mark damage only"
+// right already lives.
+export const INVENTORY_FOLD: NavFoldDef = {
+  heading: "Inventory",
+  icon: Warehouse,
+  layer: "store",
+  to: "/inventory",
+  sections: ["stock", "stock_count", "return_to_brand"],
+  tabs: [
+    { slug: "stock", label: "Stock on Hand", entry: "/stock" },
+    { slug: "damage", label: "Damage & Quarantine", entry: "/stock?view=quarantine" },
+    { slug: "count", label: "Count & Adjust", entry: "/stock-count" },
+    { slug: "returns", label: "Return to Brand", entry: "/return-to-brand" },
   ],
-  hide: ["return_to_brand"],
-  relocate: {
-    "/staff/attendance": { under: "home", after: "/" },
-    "/stock?view=quarantine": { under: "stock" },
-  },
 };
+
+// The store's own screen, as D10 decided it on 30 July 2026: ten sections, in
+// this order, one row each. Attendance is back under HRMS - D10 §10 puts it
+// there, and Home becomes the store dashboard that carries approvals and alerts
+// as cards (#174).
+const STORE_LAYOUT: PersonaLayout = [
+  "home",
+  "sell",
+  INVENTORY_FOLD,
+  "receive_goods",
+  "transfer",
+  "booking",
+  "money",
+  "offers_price",
+  "reports",
+  // Reads "HRMS" (#118 renamed it from "Staff").
+  "hrms",
+];
 
 /** Role code → its sidebar arrangement. Absent ⇒ the flat list. Both store role
  *  codes share the store's screen: a manager and a cashier differ only in what
@@ -543,6 +554,33 @@ export const PERSONA_LAYOUTS: Record<string, PersonaLayout> = {
   store_manager: STORE_LAYOUT,
   store_staff: STORE_LAYOUT,
 };
+
+/** Every fold any persona is drawn, once. */
+const FOLDS: NavFoldDef[] = [
+  ...new Set(
+    Object.values(PERSONA_LAYOUTS)
+      .flat()
+      .filter((row): row is NavFoldDef => typeof row !== "string"),
+  ),
+];
+
+/** A fold's key, in the same namespace as a section code - which is why it is
+ *  prefixed rather than being the bare heading. */
+export function foldKey(fold: NavFoldDef): string {
+  return `fold:${fold.to}`;
+}
+
+/** The folded page a URL *is*, or null. A fold owns its URL outright: no menu
+ *  entry points at `/inventory`, so `itemOwning` cannot answer for it and the
+ *  route guard would default-allow it.
+ *
+ *  Exact, not by prefix: a fold's gate is "any one of my tabs", which is the
+ *  loosest gate in the manifest. A screen routed under `/inventory/...` later
+ *  must carry its own, not inherit this one by sitting beneath it. */
+export function foldOwning(pathname: string): NavFoldDef | null {
+  const normalized = normalizePath(pathname);
+  return FOLDS.find((f) => normalized === f.to) ?? null;
+}
 
 /** A section the signed-in user actually gets, with its visible items. The
  *  server decides *which* sections (#85); the manifest says what is in one; an
@@ -588,11 +626,46 @@ export function visibleSections(user: {
 /** A row of the rendered sidebar. */
 export type NavRow =
   | { kind: "section"; key: string; section: VisibleSection }
-  | { kind: "group"; key: string; group: NavGroupDef; sections: VisibleSection[] };
+  | { kind: "fold"; key: string; fold: NavFoldDef; tabs: FoldTab[] };
+
+/** The tabs of `fold` this person may see, in the fold's own order.
+ *
+ *  Reads the *output* of the access filter, so a tab exists only where the menu
+ *  entry behind it survived that filter: folding four screens onto one page can
+ *  never show one of them to somebody the sidebar would have refused it to.
+ *
+ *  A deep-link entry needs both halves. "Damage / Quarantine" is Return to
+ *  Brand's line onto Stock's screen, and the two carry different gates - the
+ *  line answers to Return to Brand, the URL to Stock - so a tab drawing it must
+ *  clear the pair, exactly as clicking the line and landing on the screen does. */
+export function foldTabs(fold: NavFoldDef, sections: VisibleSection[]): FoldTab[] {
+  const passed = new Set(sections.flatMap((s) => s.items.map((i) => i.to)));
+  return fold.tabs.filter((t) => {
+    if (!passed.has(t.entry)) return false;
+    const host = itemOwning(t.entry.split("?")[0]);
+    return !host || passed.has(host.to);
+  });
+}
+
+/** The tabs of `fold` one signed-in person may see. The guard and the page both
+ *  ask this, so what the URL opens and what the page draws cannot disagree. */
+export function foldTabsFor(
+  fold: NavFoldDef,
+  user: Parameters<typeof visibleSections>[0] | null | undefined,
+): FoldTab[] {
+  return user ? foldTabs(fold, visibleSections(user)) : [];
+}
+
+/** The tab `slug` names, or the first one this person can see. An unknown slug,
+ *  or one whose tab this person is not shown, falls back rather than leaving
+ *  them on a page with nothing on it. */
+export function resolveFoldTab(tabs: FoldTab[], slug: string | null): FoldTab | null {
+  return tabs.find((t) => t.slug === slug) ?? tabs[0] ?? null;
+}
 
 /** Arrange the sections this person holds into their persona's rows.
  *
- *  Takes the *output* of the access filter and only ever reorders, nests or
+ *  Takes the *output* of the access filter and only ever reorders, folds or
  *  drops what is already in it - so no arrangement can put a section in front
  *  of somebody the server did not send it to. */
 export function applyLayout(sections: VisibleSection[], roleCode: string): NavRow[] {
@@ -601,58 +674,23 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
     return sections.map((s) => ({ kind: "section", key: s.def.code, section: s }));
   }
 
-  // Copy before moving anything: the caller's list is derived from the login
-  // payload and other screens read it.
-  const byCode = new Map(sections.map((s) => [s.def.code, { ...s, items: [...s.items] }]));
-
-  for (const [to, target] of Object.entries(layout.relocate)) {
-    const host = byCode.get(target.under);
-    if (!host) continue;
-    for (const source of byCode.values()) {
-      if (source === host) continue;
-      const at = source.items.findIndex((i) => i.to === to);
-      if (at < 0) continue;
-      const [entry] = source.items.splice(at, 1);
-      const after = target.after ? host.items.findIndex((i) => i.to === target.after) : -1;
-      host.items.splice(after < 0 ? host.items.length : after + 1, 0, entry);
-    }
-  }
-
-  /** The section, if this person holds it and it still has a line to show.
-   *  Relocation can empty a section (a cashier's Staff is Attendance and
-   *  nothing else), and an empty heading is a dead end. */
-  function drawable(code: string): VisibleSection | null {
-    const s = byCode.get(code);
-    return s && s.items.length ? s : null;
-  }
-
-  // A hidden section is only safe to hide once the entries the layout moves out
-  // of it have actually landed. Return to Brand leaves the store's sidebar
-  // *because* Damage / Quarantine is drawn under Stock - so if a retune ever
-  // leaves somebody holding Return to Brand without Stock, the heading comes
-  // back rather than taking the only entry they can use down with it.
-  const stranded = (s: VisibleSection) => s.items.some((i) => i.to in layout.relocate);
-  const hidden = layout.hide.filter((code) => {
-    const s = byCode.get(code);
-    return !s || !stranded(s);
-  });
-
+  const byCode = new Map(sections.map((s) => [s.def.code, s]));
   const rows: NavRow[] = [];
-  const spokenFor = new Set<string>(hidden);
-  for (const row of layout.rows) {
+  const spokenFor = new Set<string>();
+  for (const row of layout) {
     if (typeof row === "string") {
       spokenFor.add(row);
-      const s = drawable(row);
-      if (s) rows.push({ kind: "section", key: row, section: s });
+      const s = byCode.get(row);
+      if (s?.items.length) rows.push({ kind: "section", key: row, section: s });
       continue;
     }
-    const inner: VisibleSection[] = [];
-    for (const code of row.sections) {
-      spokenFor.add(code);
-      const s = drawable(code);
-      if (s) inner.push(s);
-    }
-    if (inner.length) rows.push({ kind: "group", key: `group:${row.heading}`, group: row, sections: inner });
+    // A fold speaks for its sections whether or not it draws a tab for each of
+    // them: the heads are gone from this persona's sidebar either way, and the
+    // page is where those screens now live.
+    for (const code of row.sections) spokenFor.add(code);
+    const tabs = foldTabs(row, sections);
+    // No tab this person can see ⇒ nothing on the page; don't draw the link.
+    if (tabs.length) rows.push({ kind: "fold", key: foldKey(row), fold: row, tabs });
   }
 
   // Held, but named nowhere in the layout - an admin can retune access, so this
@@ -660,9 +698,8 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
   // dropped: a sidebar that quietly loses a section somebody was just granted is
   // worse than one whose last row is in an unexpected place.
   for (const s of sections) {
-    if (spokenFor.has(s.def.code)) continue;
-    const d = drawable(s.def.code);
-    if (d) rows.push({ kind: "section", key: s.def.code, section: d });
+    if (spokenFor.has(s.def.code) || !s.items.length) continue;
+    rows.push({ kind: "section", key: s.def.code, section: s });
   }
   return rows;
 }
@@ -688,20 +725,31 @@ export function testId(sectionCode: string, item: NavItem): string {
   return `nav-${sectionCode}-${tail}${view ? `-${view}` : ""}`;
 }
 
-/** Every section drawn in `rows`, group members included. */
+/** Every section drawn as its own head in `rows`. A fold draws no section head
+ *  - its sections are tabs on one page - so it contributes none. */
 export function sectionsIn(rows: NavRow[]): VisibleSection[] {
-  return rows.flatMap((r) => (r.kind === "section" ? [r.section] : r.sections));
+  return rows.flatMap((r) => (r.kind === "section" ? [r.section] : []));
 }
 
-/** The code of the section whose head this person's sidebar draws `pathname`
- *  under - the section that owns the screen, unless their layout relocates that
- *  entry to another heading. What the sidebar has to unfold to show where you
- *  are: a store person standing on Attendance is under Home, not under Staff. */
+/** Is the folded page where this person is standing? True on the fold's own URL
+ *  and on any standalone screen it folds - so a store person who lands on
+ *  `/stock` from the global search still sees which row they are on. */
+export function isActiveFold(fold: NavFoldDef, pathname: string): boolean {
+  if (underPrefix(normalizePath(pathname), fold.to)) return true;
+  const owner = itemOwning(pathname);
+  return !!owner && fold.sections.includes(owner.section);
+}
+
+/** The key of the sidebar row this person's screen is drawn under - a section
+ *  code, or a fold's key. What the sidebar has to unfold to show where you are;
+ *  a folded page draws as one link and so has nothing to unfold. */
 export function headingOwning(pathname: string, roleCode: string): string | null {
+  const layout = PERSONA_LAYOUTS[roleCode] ?? [];
+  const folds = layout.filter((row): row is NavFoldDef => typeof row !== "string");
+  const here = folds.find((f) => isActiveFold(f, pathname));
+  if (here) return foldKey(here);
   for (const section of SECTIONS) {
-    const entry = section.items.find((i) => isActiveItem(i, pathname));
-    if (!entry) continue;
-    return PERSONA_LAYOUTS[roleCode]?.relocate[entry.to]?.under ?? section.code;
+    if (section.items.some((i) => isActiveItem(i, pathname))) return section.code;
   }
   return null;
 }

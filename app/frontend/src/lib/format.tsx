@@ -23,6 +23,21 @@ export function Money({ paise, short }: { paise: number; short?: boolean }) {
   return <span className="tabular">{formatINR(paise, { short })}</span>;
 }
 
+/** Render a rupee decimal string the server already computed ("72450.00") as
+ *  INR. A few read endpoints project money that way rather than as paise, and
+ *  the screens reading them were printing "72450.00" at the counter.
+ *
+ *  Read as text, not arithmetic: `72450.29 * 100` is 7245028.999… in float, and
+ *  the integer-paise rule holds on the client too. Anything unparseable comes
+ *  back untouched rather than silently rendering as ₹0. */
+export function formatRupeeAmount(amount: string): string {
+  const parsed = /^\s*(-?)(\d+)(?:\.(\d*))?\s*$/.exec(amount);
+  if (!parsed) return amount;
+  const [, sign, whole, fraction = ""] = parsed;
+  const paise = Number(whole) * 100 + Number((fraction + "00").slice(0, 2));
+  return `${sign}${formatINR(paise)}`;
+}
+
 /** The single SKU-grain primitive: Brand · Style · Colour · Size — never style-only. */
 export function SkuLine({
   brand,
