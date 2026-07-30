@@ -12,6 +12,12 @@ transfer's doc number, never into `StockOnHand`. Quarantine legs
 free-to-sell — they aggregate into `QuarantineStock` keyed by (store × barcode).
 The matching ``damage_out`` leg IS an at-location leg and reduces `StockOnHand`
 normally.
+
+The selling kinds need no rule of their own, which is the point of naming them
+the way they are named: ``sale_out`` and ``sale_return_in`` are ordinary
+at-location legs and fall through to `StockOnHand` here. A customer's *damaged*
+return posts ``quarantine_in`` rather than ``sale_return_in``, so it is placed by
+the quarantine rule above and this command never has to know what a sale is.
 """
 
 from __future__ import annotations

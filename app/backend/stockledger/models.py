@@ -45,6 +45,14 @@ class StockLedgerEntry(LedgerEntry):
         DAMAGE_OUT = "damage_out", "Damaged out of sellable"
         QUARANTINE_IN = "quarantine_in", "Quarantine in"
         QUARANTINE_OUT = "quarantine_out", "Quarantine out"
+        # Selling kinds (D10, #177). `sale_out` is the piece leaving the shelf at
+        # the counter; `sale_return_in` is a customer's good piece coming back on
+        # to it inside an exchange. A piece that comes back *damaged* is not a
+        # `sale_return_in` — it never reaches the shelf — and posts the existing
+        # `quarantine_in` instead, so one kind still means one bucket and the
+        # rebuild command needs no knowledge of the sale to place a row.
+        SALE_OUT = "sale_out", "Sale out"
+        SALE_RETURN_IN = "sale_return_in", "Sale return in"
         RTV_OUT = "rtv_out", "RTV out"
         SEASONAL_RET = "seasonal_ret", "Seasonal return"
         ADJUSTMENT = "adjustment", "Adjustment"

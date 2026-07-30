@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "finledger.apps.FinledgerConfig",
     "approvals.apps.ApprovalsConfig",
     "outbound.apps.OutboundConfig",
+    "sell.apps.SellConfig",
     "alerts.apps.AlertsConfig",
     # Composition roots: read across the domain apps, imported by none of them.
     "search.apps.SearchConfig",
