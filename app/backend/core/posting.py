@@ -20,7 +20,8 @@ from typing import Any
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
-from core.floors import REGISTERED_FLOOR_EXCEPTIONS
+from core.documents import Document
+from core.floors import REGISTERED_FLOOR_EXCEPTIONS, FloorException
 from core.gl import GLAccount, GLEntry
 
 
@@ -95,7 +96,7 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     legs = list(legs)
     _refuse_unpostable(doc, legs)
     doc_type, doc_number, default_store, default_gstin, actor = _posting_context(doc, posted_by)
-    _refuse_actor_outside_floor(actor, legs, doc_type)
+    _refuse_actor_outside_floor(doc, actor, legs, doc_type)
 
     rows = [
         GLEntry(
@@ -120,7 +121,7 @@ def post_entries(doc: Any, legs: Sequence[Leg], *, posted_by: Any = None) -> lis
     return rows
 
 
-def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> None:
+def _refuse_actor_outside_floor(doc: Any, actor: Any, legs: list[Leg], doc_type: str) -> None:
     """A store may move pieces, but it never writes rupees into the books.
 
     This sits in the sole GL writer, below every API and business module, so a
@@ -132,7 +133,7 @@ def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> N
     onto the floor even on a document the exception covers.
     """
     if getattr(actor, "scope_type", "") == "store" and not _store_actor_within_exception(
-        legs, doc_type
+        doc, legs, doc_type
     ):
         raise PostingFloorError(
             "A store-scoped user cannot post value to the books; "
@@ -142,31 +143,45 @@ def _refuse_actor_outside_floor(actor: Any, legs: list[Leg], doc_type: str) -> N
     actor_name = getattr(actor, "full_name", "") or getattr(actor, "username", "") if actor else ""
     if doc_type in {"PT", "VFL"}:
         assert_pt_or_vflip_actor(actor)
+    # Reads as "head office", and for every path but one it is: a store actor has
+    # already been refused above. The exception is the sale's own SOR accrual,
+    # where the store *is* allowed to raise a payable — machine-computed from the
+    # vendor's settlement rate — and the carve-out has separately required that
+    # leg to name the vendor it is owed to. What this rule adds on top, for every
+    # actor alike, is that nobody anonymous owes a brand money.
     if raises_brand_liability and (not getattr(actor, "pk", None) or not actor_name):
         raise PostingFloorError(
             "Money owed to a brand cannot post without a named head-office person."
         )
 
 
-def _store_actor_within_exception(legs: list[Leg], doc_type: str) -> bool:
+def _store_actor_within_exception(doc: Any, legs: list[Leg], doc_type: str) -> bool:
     """Is this posting inside a declared carve-out from the store floor?
 
-    True only when some registered exception covers `doc_type` *and* every leg
-    sits inside that exception's account allow-list — one stray account and the
-    whole posting is back on the floor. Accounts the exception marks as
-    party-required must also name their counterparty.
+    Three things must all hold, and the order is the order of trust:
+
+    1. `doc` is a real `Document`. `doc_type` is a free string on a `PostingRef`,
+       so without this any caller could label a posting `"SAL"` and inherit the
+       shop floor's permission to write value.
+    2. Some registered exception covers that document type.
+    3. Every leg sits inside that exception's account allow-list — one stray
+       account and the whole posting is back on the floor — and any leg on a
+       party-required account names the vendor it is owed to.
     """
-    exception = next(
-        (e for e in REGISTERED_FLOOR_EXCEPTIONS.values() if e.covers(doc_type)),
-        None,
-    )
-    if exception is None:
+    if not isinstance(doc, Document):
         return False
-    return all(
-        leg.account in exception.accounts
-        and (leg.account not in exception.party_required_accounts or bool(leg.party_code))
-        for leg in legs
+    covering = [e for e in REGISTERED_FLOOR_EXCEPTIONS.values() if e.covers(doc_type)]
+    return bool(covering) and any(
+        all(_leg_within(leg, exception) for leg in legs) for exception in covering
     )
+
+
+def _leg_within(leg: Leg, exception: FloorException) -> bool:
+    if leg.account not in exception.accounts:
+        return False
+    if leg.account in exception.party_required_accounts:
+        return leg.party_type == "vendor" and bool(leg.party_code)
+    return True
 
 
 def assert_pt_or_vflip_actor(actor: Any) -> None:

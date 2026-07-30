@@ -144,10 +144,15 @@ def test_a_stale_config_save_cannot_rewind_the_counter() -> None:
     # [#2] An admin loads a series, then a post advances the counter. The admin's
     # later full-row save() (editing prefix) must NOT write the old next_seq back
     # — that would reuse a number and break the gap-free guarantee.
-    series = _seed_series()
+    #
+    # Shown on a GRN series: editing the affixes of a *till-numbered* series is
+    # separately refused once it starts counting (a re-presented sequence has to
+    # render the same key), so it cannot carry this property.
+    grn = "GRN"
+    series = VoucherSeries.objects.create(fy=FY, store_code=STORE, doc_type=grn)
     stale = VoucherSeries.objects.get(pk=series.pk)  # loaded when next_seq == 1
 
-    doc = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=DOC_TYPE)
+    doc = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=grn)
     with transaction.atomic():
         doc.post()
     series.refresh_from_db()
@@ -160,10 +165,10 @@ def test_a_stale_config_save_cannot_rewind_the_counter() -> None:
     assert series.next_seq == 2  # counter did NOT regress to the stale 1
     assert series.prefix == "EDIT-"  # the config edit still landed
 
-    doc2 = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=DOC_TYPE)
+    doc2 = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=grn)
     with transaction.atomic():
         doc2.post()
-    assert doc2.doc_number == "EDIT-26-27/DEO/SAL/2"  # fresh, non-colliding
+    assert doc2.doc_number == "EDIT-26-27/DEO/GRN/2"  # fresh, non-colliding
 
 
 @pytest.mark.django_db

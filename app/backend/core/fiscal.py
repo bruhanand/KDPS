@@ -20,9 +20,19 @@ FY_START_MONTH = 4
 
 def financial_year(d: date | None = None) -> str:
     """`YY-YY` for the Apr–Mar FY of `d` (today if omitted). Jun-2026 → '26-27'."""
-    d = d or date.today()
-    start = d.year if d.month >= FY_START_MONTH else d.year - 1
-    return f"{start % 100:02d}-{(start + 1) % 100:02d}"
+    return _fy_label(_fy_start_year(d or date.today()))
+
+
+def next_financial_year(d: date | None = None) -> str:
+    """The FY after `financial_year(d)`. Jun-2026 → '27-28'.
+
+    Seeds use this: a numbering series has to exist *before* the year turns, and
+    the turn happens at midnight on 1 April whether or not anyone deployed that
+    week. Date arithmetic ("a year from today") gets this wrong around the
+    boundary - from 31 March it would skip a year entirely - so the next FY is
+    derived from the FY, not from the date.
+    """
+    return _fy_label(_fy_start_year(d or date.today()) + 1)
 
 
 def financial_year_months(fy: str) -> list[date]:
@@ -49,3 +59,13 @@ def financial_year_months(fy: str) -> list[date]:
         date(start + (0 if month >= FY_START_MONTH else 1), month, 1)
         for month in [*range(FY_START_MONTH, 13), *range(1, FY_START_MONTH)]
     ]
+
+
+def _fy_start_year(d: date) -> int:
+    """The calendar year the Apr–Mar FY containing `d` began in."""
+    return d.year if d.month >= FY_START_MONTH else d.year - 1
+
+
+def _fy_label(start_year: int) -> str:
+    """`2026` → `'26-27'`. The one place the label's spelling is written."""
+    return f"{start_year % 100:02d}-{(start_year + 1) % 100:02d}"

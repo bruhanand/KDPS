@@ -26,6 +26,7 @@ from django.db import DatabaseError, IntegrityError, connection, transaction
 
 from core.documents import (
     EXTERNAL_NUMBER_DOC_TYPES,
+    MAX_COUNTER_JUMP,
     DocumentProbe,
     ExternalNumberError,
     VoucherSeries,
@@ -219,17 +220,59 @@ def test_an_in_sequence_accept_reports_no_hole() -> None:
 
 
 @pytest.mark.django_db
-def test_an_absurd_jump_is_described_by_count_not_by_a_list() -> None:
-    # A till bug naming seq 10 million must not make the kernel build a
-    # ten-million-element range to say so. It is still accepted (flag, never
-    # block) and later, lower bills still post as hole-fills.
+def test_the_hole_reaches_the_caller_through_post() -> None:
+    # The document path must not swallow what the classmethod learned — the sale
+    # slice reads the hole off post() and writes the exception row from it.
     _seed_series()
+    probe = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=SAL, external_seq=75)
+    with transaction.atomic():
+        minted = probe.post()
+    assert minted.accepted is not None
+    assert minted.accepted.hole_from == 1
+    assert minted.accepted.hole_count == 74
+
+
+@pytest.mark.django_db
+def test_a_server_allocated_post_reports_no_acceptance() -> None:
+    _seed_series("GRN")
+    probe = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type="GRN")
+    with transaction.atomic():
+        minted = probe.post()
+    assert minted.accepted is None
+    assert minted.doc_number == "26-27/DEO/GRN/1"
+
+
+@pytest.mark.django_db
+def test_an_absurd_jump_is_accepted_but_does_not_poison_the_counter() -> None:
+    # A corrupt payload naming seq 10 million. The bill is real and prints, so it
+    # is accepted (flag, never block) — but the counter may never be rewound, so
+    # moving it there would strand the store's series for the rest of the year.
+    # It stays put, and the result says so.
+    series = _seed_series()
     with transaction.atomic():
         accepted = VoucherSeries.accept_external(
             fy=FY, store_code=STORE, doc_type=SAL, seq=10_000_000
         )
+    assert accepted.doc_number == "26-27/DEO/SAL/10000000"
     assert accepted.hole_count == 9_999_999
-    assert _accept(2).doc_number == "26-27/DEO/SAL/2"
+    assert accepted.counter_advanced is False
+    series.refresh_from_db()
+    assert series.next_seq == 1
+    # …and the store keeps selling from where it was.
+    assert _accept(1).doc_number == "26-27/DEO/SAL/1"
+
+
+@pytest.mark.django_db
+def test_a_believable_hole_still_moves_the_counter() -> None:
+    # A till down for a week is thousands of bills; that is a hole, not a bug.
+    series = _seed_series()
+    with transaction.atomic():
+        accepted = VoucherSeries.accept_external(
+            fy=FY, store_code=STORE, doc_type=SAL, seq=MAX_COUNTER_JUMP
+        )
+    assert accepted.counter_advanced is True
+    series.refresh_from_db()
+    assert series.next_seq == MAX_COUNTER_JUMP + 1
 
 
 # --- who may come this way --------------------------------------------------
@@ -320,6 +363,51 @@ def test_a_sale_counter_cannot_be_jumped_by_a_bulk_update() -> None:
             VoucherSeries.objects.filter(pk=series.pk).update(next_seq=999)
     series.refresh_from_db()
     assert series.next_seq == 2
+
+
+@pytest.mark.django_db
+def test_the_rendered_key_is_frozen_once_a_till_series_starts_counting() -> None:
+    # The whole exactly-once guarantee is the unique constraint on the *rendered*
+    # doc_number. On this path a sequence can be re-presented — a straggler bill
+    # syncing days later — so if an admin could edit the prefix in between, seq 74
+    # would render as a second, different key and the bill would post twice:
+    # revenue and cost counted again. The affixes freeze instead.
+    series = _seed_series()
+    _accept(74)
+    series.refresh_from_db()
+    series.prefix = "EDIT-"
+    with pytest.raises(DatabaseError):
+        with transaction.atomic():
+            series.save()
+    series.refresh_from_db()
+    assert series.prefix == ""
+    # the straggler re-presenting 73 still renders the key it always would have
+    assert _accept(73).doc_number == "26-27/DEO/SAL/73"
+
+
+@pytest.mark.django_db
+def test_a_till_series_affix_is_editable_before_it_starts_counting() -> None:
+    # Configuration is still configuration until the first bill lands.
+    series = _seed_series()
+    series.prefix = "S-"
+    series.save()
+    assert _accept(1).doc_number == "S-26-27/DEO/SAL/1"
+
+
+@pytest.mark.django_db
+def test_a_server_allocated_series_may_still_be_re_labelled() -> None:
+    # `allocate()` never re-presents a number, so there is nothing for a rendered
+    # key to collide with; the freeze is specific to the till path and does not
+    # spread to the rest of the chart.
+    series = _seed_series("GRN")
+    grn = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type="GRN")
+    with transaction.atomic():
+        grn.post()
+    series.refresh_from_db()
+    series.prefix = "EDIT-"
+    series.save()
+    series.refresh_from_db()
+    assert series.prefix == "EDIT-"
 
 
 @pytest.mark.django_db

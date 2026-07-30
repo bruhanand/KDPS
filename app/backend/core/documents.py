@@ -47,6 +47,18 @@ EXTERNAL_NUMBER_DOC_TYPES = frozenset({"SAL"})
 #: or raw SQL rewriting the counter (which may not). See `voucher_series_guard_sql`.
 EXTERNAL_ACCEPT_SETTING = "kdps.external_seq"
 
+#: The widest hole an accept will move the counter over.
+#:
+#: A hole is real — a till dead for a week is a few thousand unsynced bills — so
+#: the bound is generous. What it guards against is a corrupt payload naming, say,
+#: sequence 2,147,483,647: the counter may never rewind (that is the one thing the
+#: DB guard refuses absolutely), so a single bad accept would otherwise strand the
+#: store's series at an unreachable number for the rest of the financial year.
+#: Beyond the bound the document is still accepted — flag, never block — but the
+#: counter stays where it was and `counter_advanced` says so, which is a condition
+#: a human resolves rather than a bill a customer loses.
+MAX_COUNTER_JUMP = 10_000
+
 
 class DocumentError(Exception):
     """Base for every document-skeleton violation."""
@@ -75,12 +87,31 @@ class ExternalAllocation:
     flag don't block). The count is returned rather than the list because a till
     bug could name an absurd `seq`, and the kernel must not build a
     million-element range to describe it.
+
+    `counter_advanced` is false when the hole was too large to believe: the
+    document is accepted all the same, but the series counter stays where it was.
+    See `MAX_COUNTER_JUMP`.
     """
 
     series: VoucherSeries
     doc_number: str
     hole_from: int | None
     hole_count: int
+    counter_advanced: bool
+
+
+@dataclass(frozen=True)
+class MintedNumber:
+    """What `post()` minted, handed back so the caller can act on it.
+
+    `accepted` is set only when the number came from a till. It is the caller's
+    single chance to see a hole: the sale slice reads it off `post()` and writes
+    the exception row the daily reconciliation picks up.
+    """
+
+    series: VoucherSeries
+    doc_number: str
+    accepted: ExternalAllocation | None = None
 
 
 class DocStatus(models.IntegerChoices):
@@ -100,9 +131,22 @@ class VoucherSeries(models.Model):
     a row, no release. `next_seq` is a plain row counter — *not* a Postgres
     SEQUENCE — because a SEQUENCE leaks gaps on rollback, and the Tally join key
     must be gap-free. Allocation increments the counter DB-side inside the posting
-    transaction, so a rolled-back post un-allocates its number; the counter is
-    owned *solely* by `allocate()` — a config `save()` can never write it (so a
-    stale in-memory instance cannot rewind it).
+    transaction, so a rolled-back post un-allocates its number; a config `save()`
+    can never write the counter (so a stale in-memory instance cannot rewind it).
+
+    Two ways in, and the difference matters:
+
+    * `allocate()` — the server hands out the next number. Gap-free by
+      construction, and the counter's sole owner for every document type but one.
+    * `accept_external()` — the till arrives holding a number. Only for
+      `EXTERNAL_NUMBER_DOC_TYPES`, and the trade is deliberate: that series is
+      *not* gap-free, because a bill still sitting on an offline till leaves a
+      hole the server can see but not fill. The hole is reported and reconciled;
+      the Tally join key stays unique, which is the property that actually has to
+      hold. Because a number can be re-presented on this path — a straggler
+      syncing days later — the rendered form of a used external series is frozen
+      (`prefix`/`suffix` cannot be edited), or the same sequence could render as
+      two different keys and become two documents.
     """
 
     fy = models.CharField(max_length=7)  # financial year, e.g. "26-27"
@@ -147,6 +191,12 @@ class VoucherSeries(models.Model):
         `doc_type` is part of the key: the counter is scoped per
         `(fy, store, doc_type)`, so dropping it would mint the same number for two
         types and corrupt the (globally unique) Tally join key.
+
+        This is also where "the same number twice" would come from on an external
+        series, which is why the affixes freeze once one starts counting: the
+        unique constraint that makes acceptance exactly-once is on the *rendered*
+        string, so a re-presented sequence must render to the byte the first
+        acceptance wrote.
         """
         return f"{self.prefix}{self.fy}/{self.store_code}/{self.doc_type}/{seq}{self.suffix}"
 
@@ -194,7 +244,9 @@ class VoucherSeries(models.Model):
         * `seq` is the number the series expected, or beyond it — accept, and
           advance `next_seq` past it. Anything skipped is a **hole**: earlier
           bills still queued on the till, or lost with a dead machine. Reported
-          on the result, never refused (Rule 8).
+          on the result, never refused (Rule 8). A hole wider than
+          `MAX_COUNTER_JUMP` is still accepted, but the counter is left alone —
+          see there for why.
         * `seq` is *behind* `next_seq` — a late arrival filling a hole. Accept;
           the counter does not move.
         * the number is already on a document — refused, but not here: the caller
@@ -237,7 +289,8 @@ class VoucherSeries(models.Model):
                 raise cls.DoesNotExist(f"no VoucherSeries for {fy}/{store_code}/{doc_type}")
             series_id, next_seq = row
             hole_count = max(0, seq - next_seq)
-            if seq >= next_seq:
+            advance = seq >= next_seq and hole_count <= MAX_COUNTER_JUMP
+            if advance:
                 # Declare the accept to the DB guard, which otherwise refuses any
                 # jump; scoped to this transaction and cleared straight after, so
                 # nothing else riding the same transaction inherits the licence.
@@ -254,6 +307,7 @@ class VoucherSeries(models.Model):
             doc_number=series.render(seq),
             hole_from=next_seq if hole_count else None,
             hole_count=hole_count,
+            counter_advanced=advance,
         )
 
 
@@ -356,7 +410,7 @@ class Document(models.Model):
             f"{type(self).__name__} must implement series_lookup() to be postable"
         )
 
-    def mint_number(self) -> tuple[VoucherSeries, str]:
+    def mint_number(self) -> MintedNumber:
         """Take this document's `doc_number` from its series.
 
         Server allocation is the default and the rule. The one document that
@@ -368,19 +422,24 @@ class Document(models.Model):
         back the same way.
 
         An override runs on the *locked re-read*, not on the instance the caller
-        holds, so anything it learns along the way — a number hole, say — belongs
-        in the database (an exception row) rather than stashed on `self`, where
-        the caller would never see it.
+        holds, which is why what it learns comes back in the return value: `post()`
+        hands the `MintedNumber` straight to the caller, and that is where the sale
+        slice reads the hole it has to flag.
         """
         fy, store_code, doc_type = self.series_lookup()
-        return VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=doc_type)
+        series, number = VoucherSeries.allocate(fy=fy, store_code=store_code, doc_type=doc_type)
+        return MintedNumber(series=series, doc_number=number)
 
     # -- the FSM ---------------------------------------------------------------
-    def post(self) -> None:
-        """`draft → submitted`: mint the gap-free number, freeze the doc.
+    def post(self) -> MintedNumber:
+        """`draft → submitted`: mint the number, freeze the doc.
 
         Run inside `transaction.atomic()` so number allocation and the status
         flip commit together (and roll back together — gap-free).
+
+        Returns what was minted. For a server-allocated document that is only the
+        number, already on `self`; for a till-numbered one it also carries whether
+        the accepted sequence left a hole behind, which the caller must record.
         """
         if self._state.adding:
             raise DocumentTransitionError("save the draft before posting it")
@@ -401,11 +460,12 @@ class Document(models.Model):
                 raise DocumentTransitionError(
                     f"only a draft can be posted; this is {locked.get_docstatus_display()}"
                 )
-            series, number = locked.mint_number()
-            self.series = series
-            self.doc_number = number
+            minted = locked.mint_number()
+            self.series = minted.series
+            self.doc_number = minted.doc_number
             self.docstatus = DocStatus.SUBMITTED
             self._save_transition(["series", "doc_number", "docstatus", "updated_at"])
+            return minted
 
     def cancel(self) -> None:
         """`submitted → cancelled`: a reversing transition, never a delete.
@@ -514,7 +574,7 @@ def voucher_series_guard_sql(table_name: str = "core_voucher_series") -> str:
 
     The gap-free counter is the slice's whole reason to exist, so its protection
     cannot live only in `Model.save()` — `QuerySet.update()`, raw SQL, and bulk
-    writes bypass the ORM. This trigger binds even the superuser:
+    writes bypass the ORM, and this trigger catches all three:
 
     * `next_seq` may never rewind. Not once, not by anybody: a rewind hands out a
       number that is already on a posted document.
@@ -530,7 +590,16 @@ def voucher_series_guard_sql(table_name: str = "core_voucher_series") -> str:
       series as much as any other.
     * a *used* series (one that has already minted a number, `next_seq > 1`) has
       frozen identity: re-pointing `fy`/`store_code`/`doc_type` would strand its
-      counter and let the old scope restart at 1, colliding with history (#E).
+      counter and let the old scope restart at 1, colliding with history (#E). On
+      an external series `prefix`/`suffix` freeze with it, because there a
+      sequence can legitimately be re-presented (a straggler bill syncing late)
+      and it must render to the same key it rendered the first time.
+
+    One honest limit on "binds even the superuser": somebody writing raw SQL can
+    also call `set_config` and mint themselves the same licence — as they could
+    simply drop the trigger. What this stops is every path that is not deliberately
+    impersonating the accept: application code, bulk updates, migrations, a hand
+    UPDATE at a psql prompt.
     """
     trigger_name = f"{table_name}_guard"
     external_types = ", ".join(f"'{t}'" for t in sorted(EXTERNAL_NUMBER_DOC_TYPES))
@@ -554,6 +623,14 @@ def voucher_series_guard_sql(table_name: str = "core_voucher_series") -> str:
                     'voucher series: next_seq may only advance by one (got % from %)',
                     NEW.next_seq, OLD.next_seq;
             END IF;
+        END IF;
+        IF OLD.next_seq > 1
+            AND OLD.doc_type IN ({external_types})
+            AND (NEW.prefix <> OLD.prefix OR NEW.suffix <> OLD.suffix)
+        THEN
+            RAISE EXCEPTION
+                'voucher series: prefix/suffix are frozen on a till-numbered series once '
+                'numbering has started; a re-presented sequence must render the same key';
         END IF;
         IF OLD.next_seq > 1 AND (
             NEW.fy <> OLD.fy
@@ -607,13 +684,13 @@ class DocumentProbe(Document):
     def series_lookup(self) -> tuple[str, str, str]:
         return self.fy, self.store_code, self.doc_type
 
-    def mint_number(self) -> tuple[VoucherSeries, str]:
+    def mint_number(self) -> MintedNumber:
         if self.external_seq is None:
             return super().mint_number()
+        fy, store_code, doc_type = self.series_lookup()
         accepted = VoucherSeries.accept_external(
-            fy=self.fy,
-            store_code=self.store_code,
-            doc_type=self.doc_type,
-            seq=self.external_seq,
+            fy=fy, store_code=store_code, doc_type=doc_type, seq=self.external_seq
         )
-        return accepted.series, accepted.doc_number
+        return MintedNumber(
+            series=accepted.series, doc_number=accepted.doc_number, accepted=accepted
+        )

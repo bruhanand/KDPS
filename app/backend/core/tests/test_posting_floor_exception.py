@@ -9,20 +9,35 @@ out to be wider than it reads.
 So these tests come at it from the outside: a store actor posting a *sale* of
 allow-listed legs succeeds, and a store actor posting anything else, or a sale
 carrying one leg that is not on the list, is refused exactly as before.
+
+The documents here are real posted `DocumentProbe` rows rather than bare
+`PostingRef`s, because that is itself part of the rule: `doc_type` on a ref is a
+free string a caller chooses, so eligibility for the carve-out requires an actual
+document that walked the FSM to get its number.
 """
 
 from __future__ import annotations
 
 import pytest
+from django.db import transaction
 
 from accounts.models import Role, User
+from core.documents import DocumentProbe, VoucherSeries
 from core.floors import REGISTERED_FLOOR_EXCEPTIONS, STORE_NATIVE_SALE
 from core.gl import GLAccount, GLEntry, trial_balance
 from core.posting import PostingFloorError, PostingRef, cr, dr, post_entries
 
-SALE = PostingRef(doc_type="SAL", doc_number="26-27/DEO/SAL/74")
-RETURN = PostingRef(doc_type="SRT", doc_number="26-27/DEO/SRT/3")
-TRANSFER = PostingRef(doc_type="STO", doc_number="26-27/DEO/STO/9")
+FY = "26-27"
+STORE = "DEO"
+
+
+def _document(doc_type: str) -> DocumentProbe:
+    """A posted document of `doc_type`, carrying a real minted number."""
+    VoucherSeries.objects.get_or_create(fy=FY, store_code=STORE, doc_type=doc_type)
+    doc = DocumentProbe.objects.create(fy=FY, store_code=STORE, doc_type=doc_type)
+    with transaction.atomic():
+        doc.post()
+    return doc
 
 
 def _till_actor() -> User:
@@ -49,15 +64,16 @@ def _sale_money_legs() -> list:
 
 @pytest.mark.django_db
 def test_a_till_can_post_the_money_side_of_its_own_bill() -> None:
-    post_entries(SALE, _sale_money_legs(), posted_by=_till_actor())
-    assert GLEntry.objects.filter(doc_number=SALE.doc_number).count() == 3
+    sale = _document("SAL")
+    post_entries(sale, _sale_money_legs(), posted_by=_till_actor())
+    assert GLEntry.objects.filter(doc_number=sale.doc_number).count() == 3
     assert trial_balance() == 0
 
 
 @pytest.mark.django_db
 def test_a_till_can_post_the_cost_side_of_its_own_bill() -> None:
     post_entries(
-        SALE,
+        _document("SAL"),
         [dr(GLAccount.COGS, 90000), cr(GLAccount.INVENTORY, 90000)],
         posted_by=_till_actor(),
     )
@@ -67,7 +83,7 @@ def test_a_till_can_post_the_cost_side_of_its_own_bill() -> None:
 @pytest.mark.django_db
 def test_a_till_can_post_a_plain_return() -> None:
     post_entries(
-        RETURN,
+        _document("SRT"),
         [
             dr(GLAccount.SALES_REVENUE, 166600),
             dr(GLAccount.OUTPUT_GST, 8330),
@@ -81,7 +97,7 @@ def test_a_till_can_post_a_plain_return() -> None:
 @pytest.mark.django_db
 def test_a_till_can_accrue_the_sor_liability_when_it_names_the_vendor() -> None:
     post_entries(
-        SALE,
+        _document("SAL"),
         [
             dr(GLAccount.COGS, 90000),
             cr(GLAccount.VENDOR_PAYABLE, 90000, party_type="vendor", party_code="V-ARROW"),
@@ -98,7 +114,7 @@ def test_a_till_can_accrue_the_sor_liability_when_it_names_the_vendor() -> None:
 def test_a_till_still_cannot_post_a_transfer() -> None:
     with pytest.raises(PostingFloorError):
         post_entries(
-            TRANSFER,
+            _document("STO"),
             [dr(GLAccount.INVENTORY, 5000), cr(GLAccount.INVENTORY, 5000)],
             posted_by=_till_actor(),
         )
@@ -122,7 +138,7 @@ def test_one_leg_outside_the_allow_list_drops_the_whole_bill_back_on_the_floor()
     # wrapper to slip an unrelated account past the floor.
     with pytest.raises(PostingFloorError):
         post_entries(
-            SALE,
+            _document("SAL"),
             [
                 dr(GLAccount.CASH, 174930),
                 cr(GLAccount.SALES_REVENUE, 166600),
@@ -139,8 +155,38 @@ def test_a_vendor_liability_with_no_named_vendor_is_refused() -> None:
     # settlement rate*. A payable with nobody on the other end is not that.
     with pytest.raises(PostingFloorError):
         post_entries(
-            SALE,
+            _document("SAL"),
             [dr(GLAccount.COGS, 90000), cr(GLAccount.VENDOR_PAYABLE, 90000)],
+            posted_by=_till_actor(),
+        )
+    assert GLEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_calling_something_a_sale_does_not_make_it_one() -> None:
+    # `doc_type` on a bare reference is a string the caller picks. If that were
+    # enough, any posting path could label itself "SAL" and inherit the shop
+    # floor's permission to write value. Eligibility needs a real document.
+    with pytest.raises(PostingFloorError):
+        post_entries(
+            PostingRef(doc_type="SAL", doc_number="26-27/DEO/SAL/74"),
+            _sale_money_legs(),
+            posted_by=_till_actor(),
+        )
+    assert GLEntry.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_a_payable_leg_that_is_not_a_vendor_accrual_is_refused() -> None:
+    # `party_code` alone is not the check — the carve-out admits the vendor
+    # settlement accrual, so the leg must say that is what it is.
+    with pytest.raises(PostingFloorError):
+        post_entries(
+            _document("SAL"),
+            [
+                dr(GLAccount.COGS, 90000),
+                cr(GLAccount.VENDOR_PAYABLE, 90000, party_type="customer", party_code="C-1"),
+            ],
             posted_by=_till_actor(),
         )
     assert GLEntry.objects.count() == 0
@@ -153,7 +199,9 @@ def test_a_head_office_actor_is_unaffected_by_any_of_this() -> None:
         username="ho-accounts", full_name="HO Accounts", scope_type="all", role=role
     )
     post_entries(
-        TRANSFER, [dr(GLAccount.INVENTORY, 5000), cr(GLAccount.SUSPENSE, 5000)], posted_by=ho
+        _document("STO"),
+        [dr(GLAccount.INVENTORY, 5000), cr(GLAccount.SUSPENSE, 5000)],
+        posted_by=ho,
     )
     assert trial_balance() == 0
 

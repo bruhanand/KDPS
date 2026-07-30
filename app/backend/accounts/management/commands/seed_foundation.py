@@ -19,7 +19,7 @@ from django.db import transaction
 from accounts.models import NAV_GROUPS, Role, User
 from accounts.rbac_matrix import section_access_for
 from core.documents import VoucherSeries
-from core.fiscal import financial_year
+from core.fiscal import financial_year, next_financial_year
 from masters.models import Brand, Gstin, LegalEntity, Season, Store
 from vendors.models import Booking, BookingLine, Vendor
 
@@ -236,13 +236,20 @@ class Command(BaseCommand):
         credit-note and return series are ordinary server-allocated counters and
         ride along so the whole selling set exists together.
 
+        Next year's rows are seeded alongside this year's, because the failure
+        this is here to prevent lands precisely at midnight on 1 April: the till
+        rolls its own financial year on its own clock and starts at bill 1, and
+        nobody is deploying at that moment to create the row it needs.
+
         Idempotent, and only ever creates: `get_or_create` never touches
         `next_seq` on a series that is already counting.
         """
-        fy = financial_year()
-        for store in stores.values():
-            for doc_type in SELL_DOC_TYPES:
-                VoucherSeries.objects.get_or_create(fy=fy, store_code=store.code, doc_type=doc_type)
+        for fy in (financial_year(), next_financial_year()):
+            for store in stores.values():
+                for doc_type in SELL_DOC_TYPES:
+                    VoucherSeries.objects.get_or_create(
+                        fy=fy, store_code=store.code, doc_type=doc_type
+                    )
 
     def _seed_seasons(self) -> None:
         for code, name, status, order in [
