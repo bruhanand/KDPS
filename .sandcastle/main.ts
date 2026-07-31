@@ -57,12 +57,20 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // "sonnet", "haiku"). QA is Sonnet by policy (/implement sends a Sonnet).
 const MODELS = {
   planner: "claude-sonnet-5", // reads issues, emits waves
-  slicer: "claude-sonnet-5", //  gates the issue + reads the corpus → slice plan
+  slicer: "claude-opus-5", //    gates the issue + reads the corpus → slice plan
   builder: "claude-sonnet-5", // writes code from the slice plan. The workhorse.
-  reviewer: "claude-sonnet-5", // one axis per run, findings file out
   fixer: "claude-sonnet-5", //   applies ESCALATION.md to the findings
   qa: "claude-sonnet-5", //      drives the browser, <300-word report
   publisher: "claude-sonnet-5", // pushes + opens PRs. Never merges.
+} as const;
+
+// One model per review axis, not one for "the reviewer". Standards and Spec are
+// checklist work against a written rule; Correctness & Money is the axis that
+// has to reason about ledgers and postings, so it gets the deeper model.
+const REVIEW_MODELS = {
+  standards: "claude-sonnet-5",
+  spec: "claude-sonnet-5",
+  correctness: "claude-opus-5",
 } as const;
 
 // --- Iteration caps ---------------------------------------------------------
@@ -276,7 +284,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
         const review = await sandbox.run({
           name: `review-${axis}-r${round}`,
           maxIterations: ITERATIONS.reviewer,
-          agent: sandcastle.claudeCode(MODELS.reviewer),
+          agent: sandcastle.claudeCode(REVIEW_MODELS[axis]),
           promptFile: `./.sandcastle/review-${axis}-prompt.md`,
           promptArgs: { ...promptArgs, ROUND: String(round) },
         });
