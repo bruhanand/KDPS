@@ -212,7 +212,6 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Transfers", to: "/transfer" },
       { label: "Send Stock", to: "/transfer/new" },
       { label: "Stock Request", to: "/transfer/requests" },
-      { label: "Distribution", to: "/transfer/distribution", planned: true },
       { label: "In-Transit", to: "/transfer/in-transit" },
     ],
   },
@@ -394,6 +393,9 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   // The Upload Bill stub, deleted in #228 - the bill goes up inside "New
   // receipt". Anyone holding the old link lands on Receive.
   ["/receive/upload-bill", "/receive"],
+  // The Distribution stub, deleted in #229 - the stub is gone for every role,
+  // and distribution returns later as a rare-case feature of a transfer.
+  ["/transfer/distribution", "/transfer"],
   ["/outbound/transfers", "/transfer"],
   ["/outbound/rtvs", "/return-to-brand"],
   ["/outbound/adjustments", "/stock-count/adjustments"],
@@ -543,8 +545,11 @@ export function itemVisible(
 //   · A tab's gate is the gate of the menu entry it draws. Folding is
 //     presentation, so a tab can never open a screen the sidebar would have
 //     hidden - a role without count rights simply sees no Count & Adjust tab.
-//   · Names never change. Folding is allowed, renaming is not (#84 as amended)
-//     - a store person and the warehouse both say "Transfer".
+//   · Names never change, with two conscious exceptions Anand made for the
+//     store persona alone (#84 as amended, #229): Home reads "Dashboard" and
+//     HRMS reads "Attendance" there. Every other section keeps the word the
+//     warehouse and HO use for it - a store person and the warehouse both
+//     say "Transfer".
 //
 // A role with no layout gets the flat list, which is what keeps every other
 // persona byte-identical to before this file grew this section.
@@ -647,21 +652,36 @@ export const SELL_STRIP: NavStripDef = {
 };
 
 // The store's own screen, as D10 decided it on 30 July 2026: ten sections, in
-// this order, one row each. Attendance is back under HRMS - D10 §10 puts it
-// there, and Home becomes the store dashboard that carries approvals and alerts
-// as cards (#174).
+// this order, one row each, and no subsections ever - anything a section needs
+// to divide does it inside the page, as tabs (#229). Sell and Inventory proved
+// the two mechanisms first (#227, #170); this slice turns the rest into strips.
+// Home becomes "Dashboard" - the store dashboard that carries approvals and
+// alerts as cards (#174) - and HRMS becomes "Attendance", both consciously
+// renamed for the store persona alone (see the amendment above). Approvals and
+// Alerts stay in the manifest as Home's own items; they are simply not one of
+// Dashboard's tabs, so they stay reachable by URL and from the bell, never from
+// this row.
 const STORE_LAYOUT: PersonaLayout = [
-  "home",
+  { section: "home", label: "Dashboard", tabs: ["/"] },
   SELL_STRIP,
   INVENTORY_FOLD,
-  "receive_goods",
-  "transfer",
-  "booking",
-  "money",
-  "offers_price",
-  "reports",
-  // Reads "HRMS" (#118 renamed it from "Staff").
-  "hrms",
+  { section: "receive_goods", tabs: ["/receive"] },
+  { section: "transfer", tabs: ["/transfer", "/transfer/requests", "/transfer/in-transit"] },
+  { section: "booking", tabs: ["/booking"] },
+  { section: "money", tabs: ["/money/day-summary", "/money/store-targets", "/money/expenses"] },
+  {
+    section: "offers_price",
+    tabs: ["/offers/price-list", "/offers", "/offers/discounts", "/offers/eoss"],
+  },
+  {
+    section: "reports",
+    tabs: ["/reports/sales", "/reports/stock", "/reports/profit", "/reports/daily", "/reports/maker"],
+  },
+  // Member Details and Payroll are not tabs here - a store manager's extra
+  // `hrms: manage` rung would otherwise add Member Details, and D10 §10 keeps
+  // this row to the one built screen (Attendance is a placeholder; the grill
+  // rules the manager loses nothing real today).
+  { section: "hrms", label: "Attendance", tabs: ["/staff/attendance"] },
 ];
 
 /** Role code → its sidebar arrangement. Absent ⇒ the flat list. Both store role
@@ -816,7 +836,11 @@ export function stripLabel(strip: NavStripDef, sections: VisibleSection[]): stri
  *
  *  Per persona, because a strip is an arrangement: an owner whose sidebar still
  *  expands Sell gets no strip and so no redundant second copy of their own menu.
- *  Deepest tab wins, so a strip is only claimed by the URL it actually draws. */
+ *  Asked of `itemOwning`'s *section*, not its tab list (#229): a screen the
+ *  strip lists no tab for - `/transfer/new`, `/receive/pt/12`, `/approvals`
+ *  under the Home strip - still belongs to a section this persona's sidebar
+ *  strips, so the row still lights. Whether a *tab row* is worth drawing there
+ *  is `sectionTabsFor`'s question, not this one. */
 export function stripOwning(pathname: string, roleCode: string): NavStripDef | null {
   // Asked of `itemOwning` rather than walked again here: which screen a URL
   // belongs to is already the manifest's one rule, and a second walk beside it
@@ -824,7 +848,7 @@ export function stripOwning(pathname: string, roleCode: string): NavStripDef | n
   const owner = itemOwning(pathname);
   if (!owner) return null;
   const strips = (PERSONA_LAYOUTS[roleCode] ?? []).filter(isStripRow);
-  return strips.find((s) => s.section === owner.section && s.tabs.includes(owner.to)) ?? null;
+  return strips.find((s) => s.section === owner.section) ?? null;
 }
 
 /** The tab lit at `pathname`: the one whose path is the deepest prefix of it, so

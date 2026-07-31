@@ -56,9 +56,9 @@ function headings(rows: NavRow[]): string[] {
   );
 }
 
-/** The item labels drawn under one section. */
-function itemsUnder(rows: NavRow[], sectionCode: string): string[] {
-  return sectionsIn(rows).find((s) => s.def.code === sectionCode)?.items.map((i) => i.label) ?? [];
+/** The strip row for `section`, if the layout drew one. */
+function stripRow(rows: NavRow[], section: string) {
+  return rows.find((r) => r.kind === "strip" && r.strip.section === section);
 }
 
 describe("the thirteen sections", () => {
@@ -249,9 +249,10 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
   const rowsFor = (roleCode: string, caps: Record<string, string>) =>
     sidebarRows(user(roleCode, caps));
 
-  // D10's ten, in D10's order.
+  // D10's ten, in D10's order (#229: every row but Sell and Inventory becomes a
+  // strip; Home and HRMS take the store persona's two renames).
   const TEN = [
-    "Home",
+    "Dashboard",
     "Sell",
     "Inventory",
     "Receive Goods",
@@ -260,7 +261,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     "Money",
     "Offers & Price",
     "Reports",
-    "HRMS",
+    "Attendance",
   ];
 
   it("gives a store cashier the ten flat sections D10 decided", () => {
@@ -268,12 +269,16 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
   });
 
   it("gives a store manager the same ten", () => {
-    // The manager differs from the cashier in one cell (`hrms: manage`), which
-    // adds a line inside HRMS and no row to the sidebar.
-    const rows = rowsFor("store_manager", MANAGER_CAPS);
-    expect(headings(rows)).toEqual(TEN);
-    expect(itemsUnder(rows, "hrms")).toEqual(["Attendance", "Member Details"]);
-    expect(itemsUnder(rowsFor("store_staff", STORE_CAPS), "hrms")).toEqual(["Attendance"]);
+    // The manager differs from the cashier in one cell (`hrms: manage`), but the
+    // hrms strip lists only the Attendance tab (#229) - Member Details, which
+    // the extra rung would otherwise add, is not one of them. Manager and
+    // cashier sidebars are therefore identical, not merely the same ten labels.
+    const managerRows = rowsFor("store_manager", MANAGER_CAPS);
+    const staffRows = rowsFor("store_staff", STORE_CAPS);
+    expect(headings(managerRows)).toEqual(TEN);
+    expect(managerRows).toEqual(staffRows);
+    const hrmsStrip = stripRow(managerRows, "hrms");
+    expect(hrmsStrip?.kind === "strip" && hrmsStrip.tabs.map((t) => t.label)).toEqual(["Attendance"]);
   });
 
   it("nests no section under another - no subsections in the sidebar, ever", () => {
@@ -283,6 +288,9 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     for (const rows of [rowsFor("store_staff", STORE_CAPS), rowsFor("warehouse", WAREHOUSE_CAPS)]) {
       for (const row of rows) expect(["section", "fold", "strip"]).toContain(row.kind);
     }
+    // Every store row is a fold or a strip since #229 - a bare section head
+    // would be exactly the subsection D10 forbids.
+    expect(rowsFor("store_staff", STORE_CAPS).some((r) => r.kind === "section")).toBe(false);
   });
 
   it("folds Stock, Stock Count and Return to Brand into Inventory's four tabs", () => {
@@ -331,7 +339,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
 
     // No folded section at all ⇒ no Inventory row: an empty page is not a page.
     const rows = sidebarRows(user("store_staff", { home: "view", sell: "operate" }));
-    expect(headings(rows)).toEqual(["Home", "Sell"]);
+    expect(headings(rows)).toEqual(["Dashboard", "Sell"]);
   });
 
   it("falls back to the first tab this person can see", () => {
@@ -344,17 +352,28 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     expect(resolveFoldTab([], "stock")).toBeNull();
   });
 
-  it("folds without renaming: a store person still reads Transfer", () => {
+  it("folds without renaming, except the two amendments Anand made", () => {
     // Folding may move a section onto a page; it may not give this persona a
-    // private word for one. Every section still standing keeps the name the
-    // warehouse and HO use for it.
+    // private word for one - except Home and HRMS, consciously renamed for the
+    // store persona alone (#229, #84 as amended). Every other section still
+    // standing keeps the word the warehouse and HO use for it.
     const rows = rowsFor("store_staff", STORE_CAPS);
     const byCode = new Map(SECTIONS.map((s) => [s.code, s.label]));
     for (const row of rows) {
-      if (row.kind !== "section") continue;
-      expect(row.section.label, row.key).toBe(byCode.get(row.key));
+      if (row.kind === "section") {
+        expect(row.section.label, row.key).toBe(byCode.get(row.key));
+      } else if (row.kind === "strip" && row.strip.section !== "home" && row.strip.section !== "hrms") {
+        expect(row.label, row.strip.section).toBe(byCode.get(row.strip.section));
+      }
     }
     expect(headings(rows)).toContain("Transfer");
+    // The mirror: a persona with no layout - the warehouse, the owner - still
+    // reads the two words the store amends.
+    for (const role of ["warehouse", "owner"]) {
+      const flatHeadings = headings(rowsFor(role, WAREHOUSE_CAPS));
+      expect(flatHeadings, role).toContain("Home");
+      expect(flatHeadings, role).toContain("HRMS");
+    }
   });
 
   it("keeps the fold out of the section catalog, and its tabs inside it", () => {
@@ -395,8 +414,11 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     expect(headingOwning("/stock", "store_staff")).toBe("fold:/inventory");
     expect(headingOwning("/stock-count/adjustments", "store_staff")).toBe("fold:/inventory");
     expect(headingOwning("/stock", "warehouse")).toBe("stock");
-    expect(headingOwning("/receive/pt", "store_staff")).toBe("receive_goods");
-    expect(headingOwning("/staff/attendance", "store_staff")).toBe("hrms");
+    // PT Files is not one of the Receive Goods strip's tabs, but its own
+    // section still lights the row (#229 dropped stripOwning's tabs.includes
+    // clause) - the strip just draws no tab row there.
+    expect(headingOwning("/receive/pt", "store_staff")).toBe("strip:receive_goods");
+    expect(headingOwning("/staff/attendance", "store_staff")).toBe("strip:hrms");
     expect(headingOwning("/nobody-built-this", "store_staff")).toBeNull();
   });
 
@@ -426,7 +448,9 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
 
     it("draws one row landing on Billing, with the four screens as its tabs", () => {
       const rows = rowsFor("store_staff", STORE_CAPS);
-      const sell = rows.find((r) => r.kind === "strip");
+      // Scoped to Sell: #229 gives the store persona nine other strips, so
+      // "the first strip row" is no longer a safe way to find this one.
+      const sell = stripRow(rows, "sell");
       expect(sell?.kind === "strip" && sell.strip.section).toBe("sell");
       expect(sell?.kind === "strip" && sell.label).toBe("Sell");
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual([
@@ -460,7 +484,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       // One tab is not a choice, so the *strip* draws no tab row (the shell
       // checks the count) - but the section is still held, so the link stays.
       const rows = rowsFor("store_staff", { ...STORE_CAPS, sell: "view" });
-      const sell = rows.find((r) => r.kind === "strip");
+      const sell = stripRow(rows, "sell");
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual(["/sell/customers"]);
       expect(headings(rows)).toContain("Sell");
     });
@@ -481,7 +505,11 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       for (const url of ["/sell", "/sell/returns", "/sell/customers", "/sell/till", "/sell/9"]) {
         expect(stripOwning(url, "store_staff"), url).toBe(SELL_STRIP);
       }
-      for (const url of ["/", "/receive", "/inventory", "/stock", "/selling-elsewhere"]) {
+      // "/" and "/receive" now belong to strips of their own (#229's Dashboard
+      // and Receive Goods rows) - Sell must not answer for them either.
+      expect(stripOwning("/", "store_staff")?.section).toBe("home");
+      expect(stripOwning("/receive", "store_staff")?.section).toBe("receive_goods");
+      for (const url of ["/inventory", "/stock", "/selling-elsewhere"]) {
         expect(stripOwning(url, "store_staff"), url).toBeNull();
       }
     });
@@ -531,8 +559,9 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
 
       // No row: a persona whose sidebar still expands Sell...
       expect(row("/sell", WAREHOUSE_CAPS, "owner")).toBeNull();
-      // ...a screen outside every strip...
+      // ...a single-tab strip, whose row lights but draws no tabs (#229)...
       expect(row("/receive", STORE_CAPS)).toBeNull();
+      // ...a screen outside every strip (a fold's own URL)...
       expect(row("/inventory", STORE_CAPS)).toBeNull();
       // ...a strip access has cut to one tab...
       expect(row("/sell/customers", { ...STORE_CAPS, sell: "view" })).toBeNull();
@@ -545,6 +574,95 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       expect(headingOwning("/sell/till", "store_staff")).toBe("strip:sell");
       // Every other persona still reads it as the plain section it always was.
       expect(headingOwning("/sell", "owner")).toBe("sell");
+    });
+  });
+
+  // #229 - the store persona's remaining eight rows become strips too, so the
+  // sidebar is exactly ten one-line links and nothing expands.
+  describe("the store's other rows, as strips", () => {
+    const rowsForStaff = (caps: Record<string, string> = STORE_CAPS) => rowsFor("store_staff", caps);
+
+    it("draws the four single-tab rows with a link and no tab row", () => {
+      // Dashboard, Receive Goods, Booking and Attendance each list exactly one
+      // tab - a strip of one is not a choice, so the row is a bare link.
+      const rows = rowsForStaff();
+      for (const [section, tab] of [
+        ["home", "/"],
+        ["receive_goods", "/receive"],
+        ["booking", "/booking"],
+        ["hrms", "/staff/attendance"],
+      ] as const) {
+        const row = stripRow(rows, section);
+        expect(row?.kind === "strip" && row.tabs.map((t) => t.to), section).toEqual([tab]);
+        expect(sectionTabsFor(tab, user("store_staff", STORE_CAPS)), tab).toBeNull();
+      }
+    });
+
+    it("links every row to its first visible tab", () => {
+      const rows = rowsForStaff();
+      const firstTab: [string, string][] = [
+        ["home", "/"],
+        ["receive_goods", "/receive"],
+        ["transfer", "/transfer"],
+        ["booking", "/booking"],
+        ["money", "/money/day-summary"],
+        ["offers_price", "/offers/price-list"],
+        ["reports", "/reports/sales"],
+        ["hrms", "/staff/attendance"],
+      ];
+      for (const [section, to] of firstTab) {
+        const row = stripRow(rows, section);
+        expect(row?.kind === "strip" && row.tabs[0].to, section).toBe(to);
+      }
+    });
+
+    it("gives Transfer, Money, Offers & Price and Reports the tab sets #229 names", () => {
+      const rows = rowsForStaff();
+      const tabLabels = (section: string) => {
+        const row = stripRow(rows, section);
+        return row?.kind === "strip" ? row.tabs.map((t) => t.label) : null;
+      };
+      expect(tabLabels("transfer")).toEqual(["Transfers", "Stock Request", "In-Transit"]);
+      expect(tabLabels("money")).toEqual(["Day Summary", "Store Targets", "Expenses"]);
+      expect(tabLabels("offers_price")).toEqual(["Price List", "Offers", "Discounts", "EOSS Planning"]);
+      expect(tabLabels("reports")).toEqual([
+        "Sales Reports",
+        "Stock Reports",
+        "Profit",
+        "Daily Summary",
+        "Report Maker",
+      ]);
+    });
+
+    it("draws no row at all where the section is not held - subtract only", () => {
+      const { transfer: _noTransfer, ...withoutTransfer } = STORE_CAPS;
+      expect(stripRow(rowsForStaff(withoutTransfer), "transfer")).toBeUndefined();
+      const { money: _noMoney, ...withoutMoney } = STORE_CAPS;
+      expect(stripRow(rowsForStaff(withoutMoney), "money")).toBeUndefined();
+    });
+
+    it("lights the Transfer row and the Transfer tab on Send Stock, a screen the strip lists no tab for", () => {
+      // /transfer/new is Send Stock, deliberately left off the strip's tabs (it
+      // stays the CTA inside the Transfers screen) - but it is still a URL of
+      // the transfer section, so the row lights and the deepest-prefix tab
+      // (Transfers) is what lights with it.
+      expect(stripOwning("/transfer/new", "store_staff")?.section).toBe("transfer");
+      const tabs = sectionTabsFor("/transfer/new", user("store_staff", STORE_CAPS));
+      expect(tabs?.active.to).toBe("/transfer");
+      expect(tabs?.title).toBe("Transfers");
+      expect(headingOwning("/transfer/new", "store_staff")).toBe("strip:transfer");
+    });
+
+    it("relabels Dashboard and Attendance for the store persona only", () => {
+      const staffHeadings = headings(rowsForStaff());
+      expect(staffHeadings).toContain("Dashboard");
+      expect(staffHeadings).toContain("Attendance");
+      expect(staffHeadings).not.toContain("Home");
+      expect(staffHeadings).not.toContain("HRMS");
+      // Approvals and Alerts are Home's items, not one of Dashboard's tabs, so
+      // they stay off this row and reachable only by URL or the bell.
+      const dashboard = stripRow(rowsForStaff(), "home");
+      expect(dashboard?.kind === "strip" && dashboard.tabs.map((t) => t.to)).toEqual(["/"]);
     });
   });
 
@@ -625,16 +743,29 @@ describe("arranging a sidebar can never widen it", () => {
       reports: "view",
     };
     const shape = (caps: Record<string, string>) => headings(sidebarRows(user("store_staff", caps)));
-    expect(shape(base)).toEqual(["Home", "Sell", "Inventory", "Receive Goods", "Transfer", "Reports"]);
+    expect(shape(base)).toEqual([
+      "Dashboard",
+      "Sell",
+      "Inventory",
+      "Receive Goods",
+      "Transfer",
+      "Reports",
+    ]);
     // Revoked: Transfer goes, Inventory stays on the one section it still holds.
     const { transfer: _dropped, ...withoutTransfer } = base;
-    expect(shape(withoutTransfer)).toEqual(["Home", "Sell", "Inventory", "Receive Goods", "Reports"]);
+    expect(shape(withoutTransfer)).toEqual([
+      "Dashboard",
+      "Sell",
+      "Inventory",
+      "Receive Goods",
+      "Reports",
+    ]);
     // Revoked to nothing behind the fold: the fold goes with them.
     const { stock: _noStock, ...withoutStock } = base;
-    expect(shape(withoutStock)).toEqual(["Home", "Sell", "Receive Goods", "Transfer", "Reports"]);
+    expect(shape(withoutStock)).toEqual(["Dashboard", "Sell", "Receive Goods", "Transfer", "Reports"]);
     // Newly granted and named nowhere in the layout: appended, not dropped.
     expect(shape({ ...base, setup: "operate" })).toEqual([
-      "Home",
+      "Dashboard",
       "Sell",
       "Inventory",
       "Receive Goods",
@@ -680,6 +811,8 @@ describe("legacy URLs", () => {
     "/outbound/vflips",
     "/outbound/vflips/new",
     "/outbound/vflips/12",
+    // Not a pre-#87 address but a deleted one: the Distribution stub (#229).
+    "/transfer/distribution",
     "/ledgers/stock",
     "/ledgers/stock-on-hand",
     "/ledgers/vendor",

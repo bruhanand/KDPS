@@ -107,19 +107,11 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // leave a menu line whose own page said "go and do it over there".
 
   // ---- Transfer -----------------------------------------------------------
-  "/transfer/distribution": {
-    summary: "The warehouse decides how newly arrived stock is split across the stores.",
-    contains: [
-      "A suggested split across stores, which you can change by hand",
-      "A buffer held back at the warehouse",
-      "Inter-store size rebalancing — moving sizes to the store that is selling them",
-      "The split becomes the transfers, so nothing is typed twice",
-    ],
-    notes: [
-      "Dispatch and receive are the transfer work in test now. This part has not been started.",
-    ],
-    module: TRANSFERS,
-  },
+  // Nothing. Distribution promised a screen to split newly arrived stock across
+  // stores; #229 deleted the stub for every role - distribution returns later
+  // as a rare-case feature of the transfer flow, not a promise sitting empty in
+  // the sidebar. Its old URL now redirects to Transfer.
+
   // ---- Money --------------------------------------------------------------
   "/money/payments": {
     summary: "Paying a brand, with the checks done before the money leaves.",
