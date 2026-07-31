@@ -30,6 +30,7 @@
 // bill until a human types the price off the tag, because a nought would post no
 // revenue and no tax against a garment that left the shop.
 
+import { normaliseGstin, taxKindFor } from "./gstin";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
 import { covers, kindsOf, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
@@ -45,6 +46,7 @@ import type {
   StackedCredit,
   TillCreditNote,
   TillGstSlab,
+  TillCustomer,
   TillItem,
   TillOffer,
   TillSeason,
@@ -524,7 +526,14 @@ export function whyItCannotClose(bill: PricedBill): string {
 
 export interface BillIdentity {
   billedAt: string;
-  customer?: { name?: string; mobile?: string; gstin?: string };
+  customer?: TillCustomer;
+  /** The shop's own state, off the dataset (`world.store.state_code`).
+   *
+   *  Only ever used against the buyer's GSTIN, so a counter that has not synced
+   *  its identity yet simply reads as a different state - which is IGST, the
+   *  answer that at least does not claim the buyer is local. The bill is flagged
+   *  server-side either way; nothing here refuses to print. */
+  storeStateCode?: string;
 }
 
 /**
@@ -566,13 +575,22 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     // only when the barcode resolves to nothing, which is exactly when it is set.
     manual_desc: line.manual_desc,
   }));
+  // Normalised here rather than at the field, so what prints on the paper, what
+  // the split was derived from, and what the server stores are one string.
+  const gstin = normaliseGstin(identity.customer?.gstin ?? "");
   return {
     billed_at: identity.billedAt,
     customer: {
       name: identity.customer?.name ?? "",
       mobile: identity.customer?.mobile ?? "",
-      gstin: identity.customer?.gstin ?? "",
+      gstin,
     },
+    // What the *customer's copy* says the tax split is. The server derives its
+    // own from the same GSTIN and flags a disagreement rather than silently
+    // preferring one (contract step 11) - which only works if the till says what
+    // it printed, so this rides on every bill including the B2C ones, where it
+    // is "none".
+    b2b_tax_kind: taxKindFor(gstin, identity.storeStateCode ?? ""),
     lines,
     tenders: toTenders(bill.split),
     totals: {

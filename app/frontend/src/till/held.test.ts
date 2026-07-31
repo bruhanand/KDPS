@@ -70,7 +70,7 @@ function cartOf(over: Partial<Cart["lines"][number]> = {}): Cart {
 }
 
 function payloadOf(cart = cartOf()): HeldPayload {
-  return heldPayload(cart, { name: "Mrs Sharma", mobile: "9876543210" }, {
+  return heldPayload(cart, { name: "Mrs Sharma", mobile: "9876543210", gstin: "" }, {
     net_paise: 149900,
     pieces: 1,
   });
@@ -244,8 +244,23 @@ describe("picking it up", () => {
 
     const restored = restoreHold(held, WORLD);
 
-    expect(restored.customer).toEqual({ name: "Mrs Sharma", mobile: "9876543210" });
+    expect(restored.customer).toEqual({ name: "Mrs Sharma", mobile: "9876543210", gstin: "" });
     expect(restored.cart.payment.cash_received_paise).toBe(200000);
+  });
+
+  it("brings a business customer's GSTIN back too (#187)", async () => {
+    // A bill parked half-billed and picked up ten minutes later is the same
+    // customer's. A hold that dropped the registration would turn their tax
+    // invoice back into a retail bill with nobody at the counter noticing.
+    const held = await park(db, {
+      payload: heldPayload(
+        cartOf(),
+        { name: "Sharma Traders", mobile: "", gstin: "10AABCU9603R1Z2" },
+        { net_paise: 149900, pieces: 1 },
+      ),
+    });
+
+    expect(restoreHold(held, WORLD).customer.gstin).toBe("10AABCU9603R1Z2");
   });
 
   it("leaves the list when it is taken, and takes nothing else with it", async () => {

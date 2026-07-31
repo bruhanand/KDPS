@@ -14,6 +14,8 @@
 // have this bill yet.
 
 import { changeFor } from "./cart";
+import { splitTax, taxKindFor } from "./gstin";
+import type { B2bTaxKind } from "./gstin";
 import { describePiece } from "./lookup";
 import type { BillLine, BillTender, QueuedBill, TillStoreIdentity } from "./types";
 
@@ -31,6 +33,14 @@ export interface ReceiptOptions {
    *  to the paper. A reprint keeps the finished string rather than re-deriving
    *  one (A7: reprint only, never re-render). */
   describe?: (line: BillLine) => string;
+  /** The e-invoice reference, once head office has raised one (#187).
+   *
+   *  Only ever present on a *reprint*, and that is not a gap: a counter's copy
+   *  is printed offline the moment the sale closes, thirty days before anybody
+   *  at head office goes near the government portal, so the original always says
+   *  "IRN to follow" and always will. A reprint pulled off the posted document
+   *  can do better, and should. */
+  irn?: string;
 }
 
 /**
@@ -101,15 +111,38 @@ export function receiptHtml(
     )
     .join("");
 
+  // What kind of bill this is (#187). Read off the bill, because that is what
+  // the counter derived at Save & Print and the customer's two copies must not
+  // disagree; derived only as a fallback, for a bill queued before the field
+  // existed. A GSTIN with no split beside it is a bill nobody can claim credit
+  // on, so this is not a field to leave blank quietly.
+  const buyerGstin = customer.gstin ?? "";
+  const taxKind: B2bTaxKind = bill.b2b_tax_kind ?? taxKindFor(buyerGstin, store.state_code);
+  const taxRows =
+    taxKind === "none"
+      ? [["Tax included", money(bill.totals.gst_paise)]]
+      : splitTax(bill.totals.gst_paise, taxKind).map(
+          (part) => [`${part.label} included`, money(part.paise)] as [string, string],
+        );
+
   const totals = [
     ["Pieces", String(pieces)],
     ["Gross", money(bill.totals.gross_paise)],
     ...(bill.totals.discount_paise ? [["You saved", money(bill.totals.discount_paise)]] : []),
     ...(bill.totals.round_paise ? [["Rounding", money(bill.totals.round_paise)]] : []),
-    ["Tax included", money(bill.totals.gst_paise)],
+    ...taxRows,
   ]
     .map(([label, value]) => `<div class="row"><span>${label}</span><span>${value}</span></div>`)
     .join("");
+
+  // The buyer's own registration, on the paper, above the lines. Without it the
+  // document is not a tax invoice and the customer cannot claim the credit the
+  // GSTIN was given for - which is the entire reason they handed it over.
+  const buyerBlock = buyerGstin
+    ? `<p class="dim buyer">Buyer${customer.name ? ` ${esc(customer.name)}` : ""}<br>
+        GSTIN ${esc(buyerGstin)}<br>
+        ${options.irn ? `IRN ${esc(options.irn)}` : "IRN to follow"}</p>`
+    : "";
 
   // How it was paid, mode by mode. A split bill's customer copy has to say which
   // card was charged what, because that is the line they will query - and a
@@ -145,6 +178,7 @@ export function receiptHtml(
   .n { text-align: right; white-space: nowrap; }
   .row { display: flex; justify-content: space-between; padding: 1px 0; }
   .due { font-weight: 700; font-size: 15px; border-top: 1px solid #000; padding-top: 4px; }
+  .buyer { border: 1px solid #999; padding: 3px 4px; }
   footer { padding-top: 6px; }
 </style></head>
 <body>
@@ -156,6 +190,7 @@ export function receiptHtml(
       ? `<br>${esc([customer.name, customer.mobile].filter(Boolean).join(" · "))}`
       : ""
   }</p>
+  ${buyerBlock}
   <table><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead>
   <tbody>${rows}</tbody></table>
   <hr>
@@ -205,6 +240,15 @@ export interface PostedBill {
   store_gstin: string;
   customer_name: string;
   customer_mobile: string;
+  /** The buyer's registration and the split the bill was raised under (#187).
+   *  Both come off the posted document rather than being re-derived: the shop's
+   *  registration can change hands and a state code cannot be looked up for a
+   *  bill from two years ago, but what this bill charged is a fact it carries. */
+  buyer_gstin: string;
+  b2b_tax_kind: B2bTaxKind;
+  /** Blank until head office has raised one - which is most of a B2B bill's
+   *  first month. Blank prints "IRN to follow", exactly as the original did. */
+  irn: string;
   lines: PostedLine[];
   tenders: BillTender[];
   gross_paise: number;
@@ -243,7 +287,12 @@ export function postedReceiptHtml(bill: PostedBill): string {
       // Anything but "offline" simply drops the offline footnote; a reprint of a
       // bill written offline still says so, because that is a fact about the bill.
       origin: bill.origin === "offline" ? "offline" : "online",
-      customer: { name: bill.customer_name, mobile: bill.customer_mobile },
+      customer: {
+        name: bill.customer_name,
+        mobile: bill.customer_mobile,
+        gstin: bill.buyer_gstin,
+      },
+      b2b_tax_kind: bill.b2b_tax_kind,
       lines: bill.lines.map((line) => ({
         line_no: line.line_no,
         direction: line.direction === "return" ? "return" : "sale",
@@ -270,6 +319,7 @@ export function postedReceiptHtml(bill: PostedBill): string {
     {
       storeName: bill.store_name,
       cashReceivedPaise: cash?.amount_paise ?? 0,
+      irn: bill.irn,
       // The server writes the brand, item and size onto every line at billing
       // (Rule 3), so unlike the till's own receipt this one is not lent a
       // description - it has the snapshot the bill was printed from.

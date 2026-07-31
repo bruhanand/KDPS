@@ -129,6 +129,72 @@ describe("the customer's copy", () => {
   });
 });
 
+describe("a B2B tax invoice (#187)", () => {
+  /** The customer handed over a card. Same state as the shop. */
+  function b2b(over: Partial<QueuedBill> = {}): QueuedBill {
+    return bill({
+      customer: { name: "Sharma Traders", mobile: "9876543210", gstin: "10AABCU9603R1Z2" },
+      b2b_tax_kind: "cgst_sgst",
+      ...over,
+    });
+  }
+
+  it("prints the buyer's registration, without which it is not a tax invoice", () => {
+    const html = receiptHtml(b2b(), STORE);
+
+    expect(html).toContain("10AABCU9603R1Z2");
+    expect(html).toContain("Sharma Traders");
+  });
+
+  it("splits the tax into CGST and SGST for a buyer in this state", () => {
+    const html = receiptHtml(b2b(), STORE);
+
+    // ₹71.38 of tax, halved without losing the odd paise.
+    expect(html).toContain("CGST included");
+    expect(html).toContain("SGST included");
+    expect(html).toContain("₹35.69");
+    expect(html).not.toContain("IGST");
+  });
+
+  it("shows one IGST line for a buyer across the state line", () => {
+    const html = receiptHtml(
+      b2b({
+        customer: { name: "Ranchi Retail", mobile: "", gstin: "20AABCU9603R1Z1" },
+        b2b_tax_kind: "igst",
+      }),
+      STORE,
+    );
+
+    expect(html).toContain("IGST included");
+    expect(html).toContain("₹71.38");
+    expect(html).not.toContain("CGST");
+  });
+
+  it("says the IRN is to follow, because at the counter it always is", () => {
+    // Head office raises it inside thirty days, on the government portal. The
+    // shop cannot, and the bill prints the moment the customer pays.
+    expect(receiptHtml(b2b(), STORE)).toContain("IRN to follow");
+  });
+
+  it("prints the split the bill was closed with, not one it re-derives", () => {
+    // The counter's copy and the books have to say one thing. If the bill says
+    // IGST, IGST is what the customer's copy says, whatever the store's state is.
+    const html = receiptHtml(b2b({ b2b_tax_kind: "igst" }), STORE);
+
+    expect(html).toContain("IGST included");
+  });
+
+  it("leaves a B2C bill completely alone", () => {
+    const html = receiptHtml(bill(), STORE);
+
+    expect(html).toContain("Tax included");
+    expect(html).not.toContain("CGST");
+    expect(html).not.toContain("IGST");
+    expect(html).not.toContain("IRN");
+    expect(html).not.toContain("Buyer");
+  });
+});
+
 describe("reprinting a bill found by search (#185)", () => {
   const posted: PostedBill = {
     doc_number: "26-27/DEO/SAL/74",
@@ -139,6 +205,9 @@ describe("reprinting a bill found by search (#185)", () => {
     store_gstin: "10AAAAA0000A1Z5",
     customer_name: "Mrs Sharma",
     customer_mobile: "9876543210",
+    buyer_gstin: "",
+    b2b_tax_kind: "none",
+    irn: "",
     lines: [
       {
         line_no: 1,
@@ -196,5 +265,25 @@ describe("reprinting a bill found by search (#185)", () => {
     // The cash the customer held out is not on the document - only what the bill
     // took - so a reprint may not invent a change figure.
     expect(postedReceiptHtml(posted)).not.toContain("Change");
+  });
+
+  it("reprints the split the bill was raised under (#187)", () => {
+    // Off the posted document, never re-derived: the shop's registration can
+    // change hands, and what this bill charged is a fact it carries.
+    const html = postedReceiptHtml({
+      ...posted,
+      buyer_gstin: "20AABCU9603R1Z1",
+      b2b_tax_kind: "igst",
+    });
+
+    expect(html).toContain("20AABCU9603R1Z1");
+    expect(html).toContain("IGST included");
+  });
+
+  it("prints the IRN once head office has raised one, and says so until then", () => {
+    const queued = { ...posted, buyer_gstin: "10AABCU9603R1Z2", b2b_tax_kind: "cgst_sgst" as const };
+
+    expect(postedReceiptHtml(queued)).toContain("IRN to follow");
+    expect(postedReceiptHtml({ ...queued, irn: "IRN-2026-0001" })).toContain("IRN IRN-2026-0001");
   });
 });

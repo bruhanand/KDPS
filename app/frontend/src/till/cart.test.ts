@@ -337,7 +337,7 @@ describe("the bill handed to the till", () => {
   const bill = priceCart(cart, WORLD, "2026-07-30");
   const drafted = toDraft(bill, {
     billedAt: "2026-07-30T12:31:00.000Z",
-    customer: { name: "Mrs Sharma", mobile: "9876543210" },
+    customer: { name: "Mrs Sharma", mobile: "9876543210", gstin: "" },
   });
 
   it("numbers its lines from one, in the order they were scanned", () => {
@@ -370,6 +370,42 @@ describe("the bill handed to the till", () => {
 
   it("names nobody when nobody had to authorise anything", () => {
     expect(drafted.override).toBeUndefined();
+  });
+
+  it("says a retail bill carries no tax split at all", () => {
+    expect(drafted.b2b_tax_kind).toBe("none");
+  });
+});
+
+describe("a GSTIN on the bill (#187)", () => {
+  const cart = paying(cartOf(scanned(149900, { salesman: 3 })), { cash_received_paise: 149900 });
+
+  function draftFor(gstin: string, storeStateCode = "10") {
+    return toDraft(priceCart(cart, WORLD, "2026-07-30"), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+      customer: { name: "Sharma Traders", mobile: "", gstin },
+      storeStateCode,
+    });
+  }
+
+  it("says what the customer's copy was printed with, so the server can check it", () => {
+    // Contract step 11: the server derives its own split and *flags* a
+    // disagreement rather than preferring either - which only works if the till
+    // says what it printed.
+    expect(draftFor("10AABCU9603R1Z2").b2b_tax_kind).toBe("cgst_sgst");
+    expect(draftFor("20AABCU9603R1Z1").b2b_tax_kind).toBe("igst");
+  });
+
+  it("tidies the registration once, so paper, split and books hold one string", () => {
+    const drafted = draftFor(" 10aabcu9603r1z2 ");
+
+    expect(drafted.customer?.gstin).toBe("10AABCU9603R1Z2");
+    expect(drafted.b2b_tax_kind).toBe("cgst_sgst");
+  });
+
+  it("still closes a bill whose GSTIN is mistyped", () => {
+    // The soft check lives on the screen; nothing in the money path refuses.
+    expect(draftFor("10AABCU9603R1ZM").b2b_tax_kind).toBe("cgst_sgst");
   });
 });
 
