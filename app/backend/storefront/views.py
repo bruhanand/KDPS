@@ -6,6 +6,8 @@ of and why three of the contract's action-queue keys are not in it yet.
 
 from __future__ import annotations
 
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -14,6 +16,7 @@ from rest_framework.views import APIView
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
 from core.refusals import refusal_body
+from storefront.cash_summary import build as build_cash_summary
 from storefront.dashboard import build, resolve_store
 
 
@@ -42,3 +45,39 @@ class DashboardView(APIView):
             # the three happened.
             return Response(refusal_body("SCOPE_DENIED", pick.refusal), status=403)
         return Response(build(request.user, pick.store))
+
+
+class CashSummaryView(APIView):
+    """`GET /api/store/cash-summary` - one store's day, by tender.
+
+    Gated on `money: view` per the contract, which is a rung the store itself
+    holds ("Expenses only (create)" is `money: operate` on the ratified sheet), so
+    a counter can read what its own day came to. Head office reads it through the
+    same door, narrowed by the top-bar switcher exactly as the Dashboard is.
+
+    Read-only, and there is deliberately no writer: agreeing a day - counting the
+    drawer, locking the date - is store open/close (I3), and a screen that let
+    somebody confirm a day before that flow exists would be a confirmation
+    nothing downstream honours.
+    """
+
+    permission_classes = [IsAuthenticated, require_section("money", CAP_VIEW)]
+
+    def get(self, request: Request) -> Response:
+        asked = (request.query_params.get("date") or "").strip()
+        # Both failure shapes, which `parse_date` answers differently: it returns
+        # nothing for text that is not a date ("yesterday") and *raises* for text
+        # correctly shaped and impossible ("2026-02-30"). The same pair the till's
+        # cursor had to catch (#179).
+        try:
+            day = parse_date(asked) if asked else timezone.localdate()
+        except ValueError:
+            day = None
+        if day is None:
+            return Response(
+                refusal_body("VALIDATION", f"'{asked}' is not a date (use 2026-07-31)."), status=400
+            )
+        pick = resolve_store(request.user, (request.query_params.get("store") or "").strip())
+        if pick.store is None:
+            return Response(refusal_body("SCOPE_DENIED", pick.refusal), status=403)
+        return Response(build_cash_summary(pick.store, day))
