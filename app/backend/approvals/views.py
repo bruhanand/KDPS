@@ -22,7 +22,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from approvals.models import Approval
+from approvals.models import Approval, ApprovalStatus
 from approvals.serializers import ApprovalDecisionSerializer, ApprovalReadSerializer
 from approvals.services import (
     ApprovalError,
@@ -30,6 +30,7 @@ from approvals.services import (
     decide,
     inbox_for,
 )
+from core.dates import parse_day, since_refusal
 from core.textsearch import search_term, text_filter
 from masters.scoping import scope_by_entitlement_or_brand, scope_by_store_or_brand
 
@@ -62,11 +63,25 @@ class ApprovalInboxView(generics.ListAPIView[Approval]):
 
 class ApprovalListView(generics.ListAPIView[Approval]):
     """History across every document type, store-scoped (ADR-0003). Includes the
-    caller's own requests — the maker must be able to watch their own decision."""
+    caller's own requests — the maker must be able to watch their own decision.
+
+    The bell's Approvals History reads this with ``?decided=1&since=`` (#226) —
+    two narrowings on the same list rather than an endpoint of its own, because
+    "decisions, lately" is a question this view was already shaped to answer.
+    """
 
     permission_classes = [IsAuthenticated]
     serializer_class = ApprovalReadSerializer
     pagination_class = None
+
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # Parsed before the queryset is built: `get_queryset` has no way to
+        # answer a refusal, and a bad date must be a sentence with a code rather
+        # than an empty list that reads like "no approvals ever".
+        asked = (request.query_params.get("since") or "").strip()
+        if asked and parse_day(asked) is None:
+            return Response(since_refusal(asked), status=status.HTTP_400_BAD_REQUEST)
+        return super().list(request, *args, **kwargs)
 
     def get_queryset(self) -> Any:
         # The route and its cleared steps come along for the ride: the serializer
@@ -82,6 +97,22 @@ class ApprovalListView(generics.ListAPIView[Approval]):
         kind = self.request.query_params.get("kind")
         if kind:
             qs = qs.filter(kind=kind)
+        # Only what a *person* decided (#226). `not_required` is a real row —
+        # "auto-adjust, logged" — but nobody decided it, so it belongs on the
+        # full screen (reachable through `status`) rather than in a history of
+        # decisions.
+        if self.request.query_params.get("decided") == "1":
+            qs = qs.filter(status__in=[ApprovalStatus.APPROVED, ApprovalStatus.REJECTED])
+        # `since` is about the decision, not the request: an undecided row has no
+        # `decided_at`, so it drops out of a dated window by construction.
+        asked = (self.request.query_params.get("since") or "").strip()
+        if asked:
+            since = parse_day(asked)
+            # `list` already refused an unreadable one; this is belt and braces
+            # so a future caller of `get_queryset` cannot widen the window to
+            # "everything" by passing nonsense.
+            if since is not None:
+                qs = qs.filter(decided_at__date__gte=since)
         # The screen's own search box (#102), applied last.
         return text_filter(qs, search_term(self.request), APPROVAL_SEARCH_FIELDS)
 

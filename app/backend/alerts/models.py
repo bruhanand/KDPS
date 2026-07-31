@@ -16,6 +16,7 @@ a condition already open, and quietly resolves what no longer applies.
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
@@ -123,3 +124,40 @@ class AlertPolicy(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.kind} policy"
+
+
+class AlertSeen(TimeStampedModel):
+    """When this person last read their alerts (#226).
+
+    The bell badges two counts side by side, and they clear in two different
+    ways: an approval clears because somebody *decided* it, which the approval
+    row already records, and an alert clears because somebody *read* it, which
+    nothing recorded until now. Hence one stamp per person.
+
+    Server-side rather than in the browser on purpose: a count kept in
+    localStorage would come back on the next device and again after every
+    logout, and "you have eleven unread" would be a different sentence on the
+    phone and on the desk.
+
+    Living in `alerts` rather than as a column on `accounts.User` is ADR-0002 —
+    the stamp is alerts semantics, and `accounts` should not grow a cursor for
+    every module that wants one. There is no backfill: an absent row means
+    "never read", which is exactly right for everyone who exists today.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="alert_seen",
+        help_text="One stamp per person; it dies with the account.",
+    )
+    seen_at = models.DateTimeField(
+        help_text="Server clock at the moment they opened the Alerts tab — a "
+        "client clock is not trusted to decide what counts as unread."
+    )
+
+    class Meta:
+        db_table = "alerts_seen"
+
+    def __str__(self) -> str:
+        return f"{self.user} read alerts at {self.seen_at:%Y-%m-%d %H:%M}"
