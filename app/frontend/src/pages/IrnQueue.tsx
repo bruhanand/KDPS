@@ -7,6 +7,7 @@ import type { B2bTaxKind } from "../till/gstin";
 import { Money } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import "./Booking.css";
+import "./IrnQueue.css";
 
 // ---------------------------------------------------------------------------
 // The IRN queue (#187, grill Q8) - head office's thirty-day clock
@@ -25,9 +26,10 @@ import "./Booking.css";
 /** One bill waiting on the portal, as `GET /api/sell/irn-queue` sends it. */
 interface IrnRowT {
   id: number;
+  /** `26-27/DEO/SAL/2` - the store is the middle of it, which is why this screen
+   *  draws no store column. The API sends `store_code`/`store_name` beside it;
+   *  they are not read here. */
   doc_number: string;
-  store_code: string;
-  store_name: string;
   billed_at: string;
   buyer_gstin: string;
   customer_name: string;
@@ -144,7 +146,7 @@ function RecordPanel({ row, onDone }: { row: IrnRowT; onDone: () => void }) {
         <Link2Off size={14} /> Portal refused
       </button>
       {error && (
-        <div className="login-error" data-testid={`irn-error-${row.id}`}>
+        <div className="login-error irn-record-error" data-testid={`irn-error-${row.id}`}>
           {error}
         </div>
       )}
@@ -222,11 +224,13 @@ export default function IrnQueue() {
         </div>
       ) : (
         <div className="table-wrap">
-          <table className="data" data-testid="irn-table">
+          <table className="data irn-table" data-testid="irn-table">
             <thead>
               <tr>
+                {/* No Store column: `26-27/DEO/SAL/2` already names it, and a
+                    column that repeats the middle of the one beside it costs a
+                    clerk the width of the button they came here to press. */}
                 <th>Bill</th>
-                <th>Store</th>
                 <th>Buyer</th>
                 <th>Split</th>
                 <th className="num">Value</th>
@@ -242,10 +246,7 @@ export default function IrnQueue() {
                   <td>
                     <b className="mono">{row.doc_number}</b>
                   </td>
-                  <td>
-                    <b className="mono">{row.store_code}</b>
-                  </td>
-                  <td>
+                  <td className="irn-buyer">
                     <span className="mono">{row.buyer_gstin}</span>
                     {row.customer_name ? <div className="muted-cell">{row.customer_name}</div> : null}
                   </td>
@@ -275,7 +276,9 @@ export default function IrnQueue() {
                         </div>
                       </>
                     ) : (
-                      <RecordPanel row={row} onDone={load} />
+                      <div className="irn-record">
+                        <RecordPanel row={row} onDone={load} />
+                      </div>
                     )}
                   </td>
                 </tr>
