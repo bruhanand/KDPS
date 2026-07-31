@@ -2,7 +2,7 @@ import { matchRoutes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { PROTECTED_ROUTES } from "./routes";
-import { INVENTORY_FOLD, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
+import { INVENTORY_FOLD, LEGACY_PATHS, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
 
 /** Which screen does this URL actually open? */
 function screenAt(url: string): string | null {
@@ -100,6 +100,27 @@ describe("the route table", () => {
     }
     for (const old of ["/inbound/12", "/ledgers/vendor", "/outbound/rtvs/3", "/masters/stores"]) {
       expect(screenAt(old), old).toBeNull();
+    }
+  });
+
+  it("redirects the deleted Upload Bill stub instead of reading it as a GRN id", () => {
+    // The one legacy path that cannot be left to the catch-all (#228): it sits
+    // exactly where `/receive/:id` looks for a document number, so without its
+    // own route the old link opens "GRN number upload-bill" - a spinner and a
+    // 404 - rather than the Receive screen.
+    expect(screenAt("/receive/upload-bill")).toBe("legacy:/receive/upload-bill");
+    expect(resolveLegacyPath("/receive/upload-bill")).toBe("/receive");
+    // And the screen it lands on is still the one that owns the address.
+    expect(screenAt("/receive")).toBe("grn-list");
+  });
+
+  it("gives a redirect route to every legacy path a screen would otherwise claim", () => {
+    // The derivation, not the one path it currently finds: a legacy address that
+    // a route claims is the case the catch-all cannot see, and it must never be
+    // left to somebody noticing.
+    for (const old of LEGACY_PATHS) {
+      const id = screenAt(old);
+      expect(id === null || id.startsWith("legacy:"), `${old} → ${id}`).toBe(true);
     }
   });
 

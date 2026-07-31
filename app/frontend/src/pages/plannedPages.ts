@@ -101,19 +101,10 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // edit with.
 
   // ---- Receive Goods ------------------------------------------------------
-  "/receive/upload-bill": {
-    summary: "Put the brand's own invoice into the system, so a PT can be made from it.",
-    contains: [
-      "Upload the brand's invoice or bill — Madura and the rest",
-      "The file stays attached to the goods receipt it belongs to",
-      "The upload feeds PT making",
-    ],
-    notes: [
-      "Reading an invoice PDF and turning it into a PT inside the app is not built. That still runs as a separate tool outside the system.",
-      "Brand PT files are a different matter — those already import with auto-mapping for nine brands, and PT making for non-brand goods is live.",
-    ],
-    module: GOODS_RECEIPT,
-  },
+  // Nothing. "Upload Bill" was a promise the built screen already keeps: the
+  // brand's invoice goes up inside "New receipt", where it is attached to the
+  // receipt and read for the line match. #228 deleted the entry rather than
+  // leave a menu line whose own page said "go and do it over there".
 
   // ---- Transfer -----------------------------------------------------------
   "/transfer/distribution": {

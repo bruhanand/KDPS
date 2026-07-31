@@ -187,8 +187,14 @@ export const SECTIONS: NavSectionDef[] = [
     icon: PackagePlus,
     layer: "store",
     items: [
-      { label: "Receive (GRN)", to: "/receive" },
-      { label: "Upload Bill", to: "/receive/upload-bill", planned: true },
+      // "Receive", not "Receive (GRN)" (#228). GRN stays in the working
+      // vocabulary where it names the document - the number, the table column -
+      // but the menu line and the page title are the plain verb.
+      //
+      // There is no "Upload Bill" line beside it: the bill upload already lives
+      // inside "New receipt", so a second entry promised a screen that would
+      // only have sent people back here.
+      { label: "Receive", to: "/receive" },
       // PT making moved to the warehouse's rung (#119): this line - the
       // Mapper-upload and from-GRN authoring workspace - needs
       // `receive_goods: approve`, so it drops off the store's sidebar on its
@@ -385,6 +391,9 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/documents/sales", "/sell"],
   ["/documents/payments", "/money/payments"],
   ["/inbound", "/receive"],
+  // The Upload Bill stub, deleted in #228 - the bill goes up inside "New
+  // receipt". Anyone holding the old link lands on Receive.
+  ["/receive/upload-bill", "/receive"],
   ["/outbound/transfers", "/transfer"],
   ["/outbound/rtvs", "/return-to-brand"],
   ["/outbound/adjustments", "/stock-count/adjustments"],
@@ -421,6 +430,11 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/edges/pos", "/setup/settings"],
   ["/edges/config", "/setup/settings"],
 ].sort((a, b) => b[0].length - a[0].length) as [string, string][];
+
+/** Every address the manifest has moved away from. The route table reads it to
+ *  spot the one that a dynamic route would otherwise claim (see routes.tsx),
+ *  so which paths are legacy is stated once, here. */
+export const LEGACY_PATHS: string[] = LEGACY_PREFIXES.map(([from]) => from);
 
 /** Does `pathname` sit at or under `prefix`? (`/stock` ≠ `/stock-count`.) */
 export function underPrefix(pathname: string, prefix: string): boolean {

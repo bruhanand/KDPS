@@ -431,7 +431,7 @@ export function Home() {
             label: "Bookings awaiting receipt",
             value: num(pendingReceipts),
             sub: "Booked or part-received, for this store",
-            purpose: "Bookings with pieces still to arrive here. Opens Receive (GRN).",
+            purpose: "Bookings with pieces still to arrive here. Opens Receive.",
             state: "live",
             to: "/receive",
           },

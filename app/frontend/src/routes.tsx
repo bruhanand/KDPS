@@ -6,10 +6,12 @@
 // something a test can assert rather than something we hope React Router got
 // right. `id` is that assertion's handle; it never reaches the user.
 import type { ReactNode } from "react";
+import { matchRoutes } from "react-router-dom";
 import type { RouteObject } from "react-router-dom";
 
 import { PlannedPage } from "./pages/PlannedPage";
-import { NAV_ITEMS, itemPath } from "./shell/navConfig";
+import { LegacyRedirect } from "./shell/LegacyRedirect";
+import { LEGACY_PATHS, NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
 import { AccessMatrixPage } from "./pages/AccessMatrix";
@@ -162,4 +164,20 @@ const PLANNED: Screen[] = NAV_ITEMS.filter((i) => i.planned && !i.deepLink).map(
   element: <PlannedPage />,
 }));
 
-export const PROTECTED_ROUTES: Screen[] = [...BUILT, ...PLANNED];
+// Old addresses are redirected by App's catch-all — every one that falls through
+// the table. `/receive/upload-bill` (the stub #228 deleted) does not fall
+// through: it sits exactly where `/receive/:id` looks for a document number, so
+// it would open "GRN number upload-bill" and the catch-all would never see it.
+//
+// So: any legacy path a built or planned route would claim gets a redirect route
+// of its own, derived rather than listed, so the next one is caught without
+// anybody remembering this file. A static segment outranks a dynamic one, so
+// these win over `/receive/:id` whatever the order here.
+const CLAIMABLE: Screen[] = [...BUILT, ...PLANNED];
+const LEGACY: Screen[] = LEGACY_PATHS.filter((path) => matchRoutes(CLAIMABLE, path)).map((path) => ({
+  id: `legacy:${path}`,
+  path,
+  element: <LegacyRedirect />,
+}));
+
+export const PROTECTED_ROUTES: Screen[] = [...CLAIMABLE, ...LEGACY];
