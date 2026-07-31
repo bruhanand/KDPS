@@ -1,0 +1,93 @@
+{
+  "name": "b2g1-cheapest-free",
+  "note": "Three pieces sorted dearest-first; the cheapest of the group goes to nought, and the other two pay full price.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 30,
+      "name": "Mufti buy 2 get 1",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "group",
+      "trigger_config": {
+        "buy": 2,
+        "get": 1,
+        "repeat": true
+      },
+      "reward_type": "item_free",
+      "reward_config": {},
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 199900,
+      "no_discount": false
+    },
+    {
+      "line_no": 2,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M2",
+      "barcode": "8922",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 149900,
+      "no_discount": false
+    },
+    {
+      "line_no": 3,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M3",
+      "barcode": "8923",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 249900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 0,
+        "offer_id": null,
+        "evidence": {}
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 149900,
+        "offer_id": 30,
+        "evidence": {
+          "offer_id": 30,
+          "offer_name": "Mufti buy 2 get 1",
+          "layer": "brand",
+          "saved_paise": 149900,
+          "beat": [],
+          "stack": []
+        }
+      },
+      {
+        "line_no": 3,
+        "discount_paise": 0,
+        "offer_id": null,
+        "evidence": {}
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 149900
+  }
+}

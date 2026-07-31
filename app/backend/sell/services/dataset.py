@@ -58,6 +58,7 @@ from accounts.sections import CAP_APPROVE
 from core.documents import DocStatus
 from masters.models import Cohort, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
+from offers.models import Offer
 from sell.models import CreditNote, CreditNoteRedemption, Salesman, SellPolicy
 from stockledger.models import StockOnHand
 
@@ -165,6 +166,7 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
     sync = Sync(store=store, since=_read_cursor(since_raw), today=timezone.localdate(started))
 
     notes_open, notes_closed = _credit_notes(sync)
+    offers_live, offers_withdrawn = _offers(sync)
     return {
         "cursor": _stamp(started - CURSOR_LAP),
         "full": sync.is_bootstrap,
@@ -176,13 +178,10 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "items": _items(sync),
         "stock": _stock(sync),
         "gst_slabs": _gst_slabs(),
-        # The rulebook is #183. Empty rather than absent, and for the same reason
-        # the Dashboard's offers card is: "nothing is running" is a fact a till
-        # has to be able to read, and a section that appears later is a section
-        # every till has to be taught about twice. Each row will carry its own
-        # `starts_on`/`ends_on` so the counter starts and stops an offer on its
-        # own clock while offline (grill Q3) - the dates ride inside the data.
-        "offers": [],
+        # Each row carries its own `starts_on`/`ends_on`, so the counter starts
+        # and stops an offer on its own clock while offline (grill Q3) - the
+        # dates ride inside the data rather than being applied by this query.
+        "offers": offers_live,
         "credit_notes": notes_open,
         "salesmen": _salesmen(sync),
         "managers": _managers(store),
@@ -190,7 +189,7 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "policy": _policy(),
         "deleted": {
             "items": _withdrawn_items(sync),
-            "offers": [],
+            "offers": offers_withdrawn,
             "credit_notes": notes_closed,
         },
     }
@@ -427,6 +426,76 @@ def _policy() -> dict[str, str]:
     return {
         "manual_discount_cap_percent": f"{SellPolicy.current().manual_discount_cap_percent:.2f}"
     }
+
+
+def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:
+    """Should this counter be holding this rule at all?
+
+    Three ways a rule stops being this till's business, and the till can only see
+    the last of them for itself: head office stopped it, head office took this
+    store off it, or its end date passed. The dates are still sent down and still
+    judged at the counter (grill Q3) - this is about what is worth sending, not
+    about who decides when an offer stops.
+    """
+    if offer.status != Offer.Status.LIVE:
+        return False
+    # Upper-cased on both sides: `validate_store_scope` normalises what it
+    # stores, `Store.code` is a slug with no normalisation of its own, and a
+    # lower-case store code would otherwise send this counter an empty rulebook
+    # while the dashboard and the server still found its offers.
+    if store_code.upper() not in ((offer.store_scope or {}).get("stores") or []):
+        return False
+    return offer.ends_on is None or offer.ends_on >= today
+
+
+def _offers(sync: Sync) -> tuple[list[dict[str, Any]], list[int]]:
+    """The rulebook this counter prices with, and the rules it must forget.
+
+    Two things make this awkward in the same way `_credit_notes` is, and for the
+    same underlying reason - a rule can stop mattering without anybody writing to
+    its row:
+
+      · **A rule dies of a date.** `ends_on` passes and nothing is stamped, so a
+        delta also asks which rules crossed their own end date between the cursor
+        and today. A till that was offline over a weekend would otherwise go on
+        discounting under a promotion that finished on the Saturday.
+      · **A rule can be taken off *this store* rather than stopped.** That edit
+        does stamp `updated_at`, but it also drops the row out of any query
+        narrowed by store - so the delta would never mention it again and the
+        till would keep it for ever. The delta therefore scans the changed rules
+        across the network and decides store membership per row, which is the
+        only ordering that can report a withdrawal at all.
+
+    A bootstrap has nothing cached, so it reports nothing withdrawn and simply
+    omits what it will not send.
+    """
+    code = sync.store.code.upper()
+    rows = Offer.objects.select_related("brand")
+    if sync.is_bootstrap:
+        live = [
+            offer
+            for offer in rows.filter(status=Offer.Status.LIVE, store_scope__stores__contains=[code])
+            .filter(Q(ends_on__isnull=True) | Q(ends_on__gte=sync.today))
+            .order_by("priority", "id")
+        ]
+        return [offer.as_rule_payload() for offer in live], []
+
+    changed = rows.filter(
+        Q(updated_at__gt=sync.from_moment)
+        | Q(ends_on__gte=timezone.localdate(sync.from_moment), ends_on__lt=sync.today)
+    ).order_by("priority", "id")
+
+    sending: list[dict[str, Any]] = []
+    withdrawn: list[int] = []
+    for offer in changed:
+        if _offer_is_for(offer, code, sync.today):
+            sending.append(offer.as_rule_payload())
+        else:
+            # Sent even for a rule this store never held: an id the till does not
+            # know is a delete that does nothing, and the alternative - guessing
+            # which store scope a rule used to have - cannot be done from here.
+            withdrawn.append(offer.id)
+    return sending, withdrawn
 
 
 def _credit_notes(sync: Sync) -> tuple[list[dict[str, Any]], list[str]]:

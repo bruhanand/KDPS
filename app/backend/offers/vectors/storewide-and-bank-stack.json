@@ -1,0 +1,104 @@
+{
+  "name": "storewide-and-bank-stack",
+  "note": "50% brand, then 10% storewide on what is left, then 5% bank on what that left - never 65% of MRP.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 50,
+      "name": "Mufti flat 50",
+      "layer": "brand",
+      "brand": "MUFTI",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "50.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    },
+    {
+      "id": 60,
+      "name": "Storewide extra 10",
+      "layer": "storewide",
+      "brand": "",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "10.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": true,
+      "priority": 100
+    },
+    {
+      "id": 70,
+      "name": "HDFC extra 5",
+      "layer": "bank",
+      "brand": "",
+      "trigger_type": "none",
+      "trigger_config": {},
+      "reward_type": "pct_off",
+      "reward_config": {
+        "percent": "5.00"
+      },
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": true,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "MUFTI",
+      "item": "Shirt",
+      "design": "M1",
+      "barcode": "8921",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 199900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 114443,
+        "offer_id": 50,
+        "evidence": {
+          "offer_id": 50,
+          "offer_name": "Mufti flat 50",
+          "layer": "brand",
+          "saved_paise": 114443,
+          "beat": [],
+          "stack": [
+            {
+              "offer_id": 60,
+              "offer_name": "Storewide extra 10",
+              "layer": "storewide",
+              "saved_paise": 9995
+            },
+            {
+              "offer_id": 70,
+              "offer_name": "HDFC extra 5",
+              "layer": "bank",
+              "saved_paise": 4498
+            }
+          ]
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 114443
+  }
+}

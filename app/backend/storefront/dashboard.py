@@ -37,6 +37,8 @@ from core.documents import DocStatus
 from inbound.models import Grn
 from masters.models import Store, StoreTarget
 from masters.scoping import active_store_ids
+from offers.models import Offer
+from offers.serializers import one_liner
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
 from ptmapper.models import PtFile
 
@@ -305,6 +307,22 @@ def manager_block(user: Any, store: Store, today: date) -> dict[str, Any] | None
     }
 
 
+def live_offers(store: Store, today: date) -> list[dict[str, Any]]:
+    """What is running at this counter this morning (contract §Step 1, item 4).
+
+    A card the store reads before opening, so it says the rule in a phrase rather
+    than in its dials - and the phrase is generated from the rule (`one_liner`)
+    rather than typed beside it, because a hand-written summary drifts away from
+    the thing it summarises and the summary is what the shop floor believes.
+    """
+    rows = (Offer.objects.live_on(today).for_store(store.code).select_related("brand")).order_by(
+        "priority", "id"
+    )
+    return [
+        {"id": offer.id, "brand": offer.brand_name, "one_liner": one_liner(offer)} for offer in rows
+    ]
+
+
 def build(user: Any, store: Store) -> dict[str, Any]:
     """One store's whole Home, in the contract's shape."""
     today = timezone.localdate()
@@ -318,10 +336,7 @@ def build(user: Any, store: Store) -> dict[str, Any]:
         "today": today_block(),
         "action_queue": action_queue(user, store, len(in_transit)),
         "live": {
-            # The rulebook is #183. Empty rather than absent: "no offers running"
-            # is a card a store reads every morning, and it should not appear the
-            # day the table does.
-            "offers": [],
+            "offers": live_offers(store, today),
             "in_transit": [
                 {
                     "id": row.id,

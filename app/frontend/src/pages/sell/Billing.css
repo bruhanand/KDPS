@@ -60,6 +60,28 @@ select.bill-season { min-width: 0; }
 .bill-overcap {
   display: block; margin-top: 4px; font-size: 11.5px; font-weight: 600; color: var(--red);
 }
+/* The offers on a strip of their own under each line, spanning the grid, with
+   no top border so it reads as part of the line above rather than as a line in
+   its own right. Tokens only - no literal colours - so the dark theme inherits
+   it with no second rule, per that theme's one standing constraint.
+
+   The strip is here because the chips were in the Disc column first, and that
+   column is sixty pixels wide. It holds "₹1,049.70" and nothing longer, and it
+   is a `td.num` - `white-space: nowrap`, so that "₹3,4 / 99" can never break
+   across two lines. A rule's *name* is not a figure: left nowrap it did not
+   wrap, it printed straight across the GST and salesman columns; wrapped, it
+   broke to one syllable a line and stood up as a tall thin column. Browser QA
+   found both. A rule is the one thing on this row a cashier reads aloud to a
+   customer asking why the shirt is cheaper, so it gets width to be read in. */
+.bill-grid tr.bill-offer-row td {
+  padding-top: 0; padding-bottom: 10px; border-top: 0; white-space: normal;
+}
+.bill-offer {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; line-height: 1.6;
+  white-space: normal; overflow-wrap: break-word;
+  color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
+}
 
 .bill-pay { display: flex; flex-direction: column; gap: 16px; }
 .bill-panel { padding: 16px 18px; }

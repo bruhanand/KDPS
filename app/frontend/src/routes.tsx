@@ -27,6 +27,7 @@ import { WriteOffListPage, WriteOffNewPage, WriteOffDetailPage } from "./pages/O
 import { VFlipListPage, VFlipNewPage, VFlipDetailPage } from "./pages/OutboundVflips";
 import { ApprovalsPage } from "./pages/Approvals";
 import { AlertsPage } from "./pages/Alerts";
+import { OffersPage } from "./pages/Offers";
 import { InventoryPage } from "./pages/Inventory";
 import StockLedger from "./pages/StockLedger";
 import StockOnHand from "./pages/StockOnHand";
@@ -53,6 +54,9 @@ const BUILT: Screen[] = [
   { id: "approvals", path: "/approvals", element: <ApprovalsPage /> },
   // Home's Alerts surface — in-transit aging + return-window 30/15/7 (#77)
   { id: "alerts", path: "/alerts", element: <AlertsPage /> },
+  // Offers & Price - the store's read-only view of the rulebook (#183). The
+  // three authoring screens beside it in the nav are still planned.
+  { id: "offers", path: "/offers", element: <OffersPage /> },
   // Booking
   { id: "booking-list", path: "/booking", element: <BookingsPage /> },
   { id: "booking-new", path: "/booking/new", element: <BookingNewPage /> },

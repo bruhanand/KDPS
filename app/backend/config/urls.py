@@ -61,6 +61,7 @@ urlpatterns = [
     path("api/finledger/", include("finledger.urls")),
     path("api/outbound/", include("outbound.urls")),
     path("api/sell/", include("sell.urls")),
+    path("api/offers/", include("offers.urls")),
     path("api/", include("approvals.urls")),
     path("api/", include("alerts.urls")),
     path("api/", include("search.urls")),

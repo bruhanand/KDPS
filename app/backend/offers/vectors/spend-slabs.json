@@ -1,0 +1,94 @@
+{
+  "name": "spend-slabs",
+  "note": "Spend 11,498 reaches the 10,999 step; 1,000 off shared by value, spare paisa to the dearer line.",
+  "day": "2026-07-31",
+  "declined_gifts": [],
+  "offers": [
+    {
+      "id": 1,
+      "name": "Blackberry ATV ladder",
+      "layer": "brand",
+      "brand": "BLACKBERRY",
+      "trigger_type": "spend",
+      "trigger_config": {
+        "slabs": [
+          {
+            "min_paise": 699900,
+            "amount_paise": 60000
+          },
+          {
+            "min_paise": 1099900,
+            "amount_paise": 100000
+          },
+          {
+            "min_paise": 1499900,
+            "amount_paise": 150000
+          }
+        ]
+      },
+      "reward_type": "amt_off",
+      "reward_config": {},
+      "item_scope": {},
+      "starts_on": "2026-07-01",
+      "ends_on": null,
+      "combinable": false,
+      "priority": 100
+    }
+  ],
+  "lines": [
+    {
+      "line_no": 1,
+      "brand": "BLACKBERRY",
+      "item": "Shirt",
+      "design": "BB1",
+      "barcode": "8901",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 349900,
+      "no_discount": false
+    },
+    {
+      "line_no": 2,
+      "brand": "BLACKBERRY",
+      "item": "Blazer",
+      "design": "BB2",
+      "barcode": "8902",
+      "season": "FW25",
+      "qty": 1,
+      "mrp_paise": 799900,
+      "no_discount": false
+    }
+  ],
+  "expect": {
+    "lines": [
+      {
+        "line_no": 1,
+        "discount_paise": 30431,
+        "offer_id": 1,
+        "evidence": {
+          "offer_id": 1,
+          "offer_name": "Blackberry ATV ladder",
+          "layer": "brand",
+          "saved_paise": 30431,
+          "beat": [],
+          "stack": []
+        }
+      },
+      {
+        "line_no": 2,
+        "discount_paise": 69569,
+        "offer_id": 1,
+        "evidence": {
+          "offer_id": 1,
+          "offer_name": "Blackberry ATV ladder",
+          "layer": "brand",
+          "saved_paise": 69569,
+          "beat": [],
+          "stack": []
+        }
+      }
+    ],
+    "entitlements": [],
+    "total_discount_paise": 100000
+  }
+}

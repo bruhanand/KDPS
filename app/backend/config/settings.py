@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "outbound.apps.OutboundConfig",
     "sell.apps.SellConfig",
     "alerts.apps.AlertsConfig",
+    "offers.apps.OffersConfig",
     # Composition roots: read across the domain apps, imported by none of them.
     "search.apps.SearchConfig",
     "storefront.apps.StorefrontConfig",

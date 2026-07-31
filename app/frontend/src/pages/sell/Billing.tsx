@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { AlertTriangle, Printer, X } from "lucide-react";
+import { AlertTriangle, Gift, Printer, X } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
@@ -9,6 +9,7 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import { addPiece, priceCart, qtyFrom, toDraft, whyItCannotClose } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
+import { tillToday } from "../../till/pricing";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
@@ -82,7 +83,7 @@ function Counter({ storeName }: { storeName?: string }) {
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const today = useMemo(() => tillToday(), []);
   const bill = useMemo(
     () =>
       priceCart(cart, world, today, {
@@ -260,6 +261,27 @@ function Counter({ storeName }: { storeName?: string }) {
           {note}
         </p>
       )}
+      {/* A gift is earned, not deducted: it takes nothing off any line, so
+          without this row the counter has no way of knowing the customer is owed
+          a trolley - and D5 Q11 is clear that it "only counts if it was actually
+          handed to the customer". Scanning it puts it on the bill at its token
+          price like any other piece. The out-of-stock fallback the engine also
+          supports has no control here yet; that needs a decline gesture and a
+          re-price, and it is its own ticket. */}
+      {bill.entitlements.map((gift) => (
+        <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
+          <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
+          {gift.token_price_paise > 0 ? (
+            <>
+              {" "}
+              at its token price of <Money paise={gift.token_price_paise} />
+            </>
+          ) : (
+            " free of charge"
+          )}
+          , and hand it over.
+        </p>
+      ))}
 
       {suggestions.length > 0 && (
         <Suggestions
@@ -495,7 +517,8 @@ function Lines({
         </thead>
         <tbody>
           {lines.map((line) => (
-            <tr key={line.key} data-testid={`bill-line-${line.line_no}`}>
+            <Fragment key={line.key}>
+            <tr data-testid={`bill-line-${line.line_no}`}>
               <td>
                 {line.item}
                 <br />
@@ -564,6 +587,29 @@ function Lines({
                 </button>
               </td>
             </tr>
+            {/* The offers on their own row, spanning the grid.
+                They sat in the Disc column at first, which is sixty pixels
+                wide - it holds "₹1,049.70" and nothing longer, so a rule's
+                *name* broke to one syllable a line and stood up as a tall thin
+                column. A rule is the one thing on this row a cashier has to
+                read aloud to a customer who asks why the shirt is cheaper, so
+                it gets the width to be read in. */}
+            {line.offer_credits.length > 0 && (
+              <tr className="bill-offer-row" data-testid={`bill-offers-${line.line_no}`}>
+                <td colSpan={COLUMN_WIDTHS.length}>
+                  {line.offer_credits.map((credit) => (
+                    <span
+                      className="bill-offer"
+                      data-testid={`bill-offer-${line.line_no}-${credit.offer_id}`}
+                      key={credit.offer_id}
+                    >
+                      {credit.offer_name || "Offer"} · <Money paise={credit.saved_paise} />
+                    </span>
+                  ))}
+                </td>
+              </tr>
+            )}
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -639,7 +685,15 @@ function RateCell({ line, locked, onEdit }: CellProps) {
   );
 }
 
-/** A manual discount, and the cap it lives under (B2). */
+/**
+ * A manual discount, the cap it lives under (B2), and what the rulebook gave.
+ *
+ * The two discounts share a cell because they share a column in the customer's
+ * head - "what came off this shirt" - but they never share a number. The box is
+ * the cashier's and the cap measures it; the chip below is head office's and is
+ * not editable here at all, because the way to change an offer is to change the
+ * offer.
+ */
 function DiscountCell({ line, locked, onEdit }: CellProps) {
   return (
     <>
@@ -656,13 +710,13 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
           over the cap
         </span>
       )}
-      {/* Information, not a gate - and deliberately so. The corpus ties
-          `no_discount` to the *offer* rulebook only ("no_discount excluded",
-          api-contract step 6), which is #183; nothing in it says a cashier's
-          keyed-in discount is barred on such a style. Enforcing one here would
-          be inventing brand policy, so the cap governs this line like any other
-          and the cashier is told what they are discounting. Whether the flag
-          should also bind a manual discount is Anand's to rule on. */}
+      {/* Information, not a gate - and deliberately so. The rulebook (#183) does
+          obey this flag: no offer, of any layer, reaches a no-discount piece.
+          But nothing in the corpus says a *cashier's* keyed-in discount is
+          barred on such a style, and enforcing one here would be inventing brand
+          policy - so the cap governs this line like any other and the cashier is
+          told what they are discounting. Whether the flag should also bind a
+          manual discount is Anand's to rule on. */}
       {line.no_discount && <span className="muted-cell">no-discount style</span>}
     </>
   );

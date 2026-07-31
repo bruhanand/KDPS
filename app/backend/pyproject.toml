@@ -110,7 +110,9 @@ markers = [
 # The kernel (`core`) must never depend on the project wiring layer (`config`).
 # This contract is the seed of "the kernel knows nothing about the modules".
 [tool.importlinter]
-root_packages = ["config", "core", "ptmapper", "approvals", "outbound", "search", "storefront"]
+root_packages = [
+    "config", "core", "ptmapper", "approvals", "outbound", "offers", "search", "storefront",
+]
 # The domain apps below aren't root packages yet, so they are "external" to the
 # graph; the approvals contract names them explicitly.
 include_external_packages = true
@@ -138,6 +140,7 @@ forbidden_modules = [
     "stockledger",
     "finledger",
     "sell",
+    "offers",
 ]
 
 [[tool.importlinter.contracts]]
@@ -176,8 +179,20 @@ source_modules = [
     "finledger",
     "alerts",
     "files",
+    "offers",
 ]
 forbidden_modules = ["search", "storefront"]
+
+[[tool.importlinter.contracts]]
+# The rulebook is a leaf below the counter, and it has to stay one: the engine
+# runs unchanged in a browser tab, so the moment `offers` reaches for a Sale it
+# stops being portable and the TypeScript port stops being a port. `sell` reads
+# `offers` (the dataset ships it, the accept pipeline re-prices with it); the
+# arrow never turns round.
+name = "the rulebook must not import the counter"
+type = "forbidden"
+source_modules = ["offers"]
+forbidden_modules = ["sell", "config", "outbound", "inbound", "vendors", "ptmapper"]
 
 [[tool.importlinter.contracts]]
 # `posting` imports `maker_checker` (every posting path asks whether a second

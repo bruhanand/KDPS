@@ -381,8 +381,9 @@ def test_a_till_cannot_lift_its_own_cap_by_calling_a_discount_an_offer(counter):
 
     `offer_evidence.saved_paise` arrives in the payload. If the cap subtracted it,
     a till - or anything posting as one - would set it to the whole discount and
-    OVERRIDE_REQUIRED could never fire again. Until the offer engine can re-resolve
-    the cart server-side (#183), nothing is evidenced and the cap covers all of it.
+    OVERRIDE_REQUIRED could never fire again. Since #183 the cap subtracts the
+    *server's* own resolution instead, and there is no rulebook here at all, so
+    the claim buys nothing and the cap covers the whole discount.
     """
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
@@ -881,12 +882,11 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """Four of the six have a producer in this slice and are asserted above. The
-    other two belong to slices that are not built yet, and are named here so the
-    gap is a recorded fact rather than something to be noticed later:
-
-      · `offer_mismatch` needs the offer engine to re-resolve against (#183);
-      · `aged_uncosted` needs the daily check that ages a deferred line (#188).
+    """Five of the six have a producer and are asserted here or in the rulebook
+    suite (`offer_mismatch`, since #183). The last belongs to a slice that is not
+    built yet, and is named here so the gap is a recorded fact rather than
+    something to be noticed later: `aged_uncosted` needs the daily check that
+    ages a deferred line (#188).
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",

@@ -184,18 +184,6 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     ],
     module: PROMOTIONS,
   },
-  "/offers": {
-    summary: "The brand schemes that a bill is allowed to apply.",
-    contains: [
-      "Scheme management — value slabs, buy-2-get-1, gifts above a threshold",
-      "Per store, with start and end dates",
-      "Brand-wise rules, kept as data, so a new scheme needs no software release",
-    ],
-    notes: [
-      "Schemes are defined here and applied at the counter, so this lands with or after billing.",
-    ],
-    module: PROMOTIONS,
-  },
   "/offers/discounts": {
     summary: "How much each role may give away, and who approves more.",
     contains: [
