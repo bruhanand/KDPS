@@ -179,6 +179,21 @@ function Counter({ storeName }: { storeName?: string }) {
     return () => clearTimeout(timer);
   }, [wrongPins]);
 
+  /**
+   * Re-entering a printed bill from the machine this counter replaced (#189).
+   *
+   * The number comes off the paper, from the list on Till & Sync, and so does the
+   * date: a bill printed last Tuesday belongs in last Tuesday's books, and
+   * stamping it with today's clock would put it in the wrong day's takings and
+   * price its tax off the wrong slab.
+   *
+   * Read once into state, exactly like the hold list is: after that the screen is
+   * the cashier's, and a value that kept re-reading the address bar would put
+   * them back into paper mode after they had left it.
+   */
+  const [paper, setPaper] = useState<number | null>(() => paperSeqFrom(params));
+  const [paperAt, setPaperAt] = useState(() => localNow());
+
   const today = useMemo(() => tillToday(), []);
   // Which state this shop is registered in - the other half of every B2B tax
   // split. Null until the counter's identity has synced, and null is *not* a
@@ -191,7 +206,11 @@ function Counter({ storeName }: { storeName?: string }) {
       }),
     [cart, world, today],
   );
-  const blocked = whyItCannotClose(bill);
+  // The counter's own refusals come first (#189): "this till does not know which
+  // number it is on" is not something a cashier can fix by editing the cart, and
+  // showing them a line-level complaint instead would send them looking at the
+  // wrong thing.
+  const blocked = till?.blocked || whyItCannotClose(bill);
 
   // Nothing may be typed into a bill while it is being committed: the cart is
   // read once inside `save`, and a line arriving after that read would be a
@@ -422,19 +441,23 @@ function Counter({ storeName }: { storeName?: string }) {
    * throws, the sale is already a numbered row in a durable queue and the
    * customer's money is accounted for; if it were the other way round a printer
    * fault would leave a printed receipt with no bill behind it.
+   *
+   * A paper re-entry takes the same path and stops before the printer (#189).
+   * The receipt for that bill is already in a customer's hand, and printing a
+   * second copy of a bill that is being keyed in from the first is how one sale
+   * ends up looking like two on a shop floor.
    */
   async function save() {
     if (!engine || blocked || saving) return;
     setSaving(true);
     setPrintProblem("");
     try {
-      const queued = await engine.commit(
-        toDraft(bill, {
-          billedAt: new Date().toISOString(),
-          customer,
-          storeStateCode: storeState,
-        }),
-      );
+      const billedAt = paper === null ? new Date().toISOString() : new Date(paperAt).toISOString();
+      const draft = toDraft(bill, { billedAt, customer, storeStateCode: storeState });
+      const queued =
+        paper === null
+          ? await engine.commit(draft)
+          : await engine.reenterFromPaper(draft, paper);
       setCommits((n) => n + 1);
       const receipt = receiptHtml(queued, world.store ?? FALLBACK_STORE, {
         storeName,
@@ -445,8 +468,16 @@ function Counter({ storeName }: { storeName?: string }) {
       setCart(emptyCart());
       setCustomer(NO_CUSTOMER);
       clearScan();
-      setNote(`Bill ${queued.doc_number} saved.`);
-      await print(receipt);
+      if (paper === null) {
+        setNote(`Bill ${queued.doc_number} saved.`);
+        await print(receipt);
+      } else {
+        setPaper(null);
+        setNote(
+          `Bill ${queued.doc_number} entered from its printed copy. ` +
+            "It is on the list to sync, and the customer keeps the receipt they have.",
+        );
+      }
     } catch (error) {
       setNote(messageOf(error));
     } finally {
@@ -472,6 +503,50 @@ function Counter({ storeName }: { storeName?: string }) {
           </div>
         }
       />
+
+      {/* The counter itself cannot bill (#189): its data was cleared, or this is
+          the second window on one till. Above everything else on the page,
+          because nothing below it can be acted on until this is dealt with. */}
+      {till?.blocked && (
+        <p className="bill-alert bill-alert-stop" data-testid="bill-counter-blocked">
+          <AlertTriangle size={15} />
+          {till.blocked}{" "}
+          <Link className="btn" to="/sell/till">
+            Open Till &amp; Sync
+          </Link>
+        </p>
+      )}
+
+      {paper !== null && (
+        <div className="bill-paper" data-testid="bill-paper">
+          <div>
+            <strong>Entering printed bill {paper}</strong> - this one was rung up on the machine
+            this counter replaced and never reached head office. Enter it exactly as the printed
+            copy reads. It keeps its own number, and nothing prints.
+          </div>
+          <div className="field">
+            <label htmlFor="bill-paper-at">Date and time on the printed copy</label>
+            <input
+              id="bill-paper-at"
+              className="input"
+              data-testid="bill-paper-at"
+              type="datetime-local"
+              disabled={locked}
+              value={paperAt}
+              onChange={(e) => setPaperAt(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="btn"
+            data-testid="bill-paper-cancel"
+            disabled={locked}
+            onClick={() => setPaper(null)}
+          >
+            <X size={15} /> Not this one
+          </button>
+        </div>
+      )}
 
       {!world.loaded && <p className="warn-note">Opening the counter…</p>}
       {world.loaded && !world.items.length && (
@@ -632,7 +707,7 @@ function Counter({ storeName }: { storeName?: string }) {
             disabled={Boolean(blocked) || saving}
             onClick={() => void save()}
           >
-            {saving ? "Saving…" : "Save & Print"}
+            {saving ? "Saving…" : paper === null ? "Save & Print" : `Save bill ${paper}`}
           </button>
           <button
             type="button"
@@ -688,6 +763,24 @@ function Counter({ storeName }: { storeName?: string }) {
 /** Whatever went wrong, as a sentence for the counter. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** The bill number this screen was sent here to re-enter from paper (#189), or
+ *  null. Anything that is not a positive whole number is nothing: the parameter
+ *  comes off an address bar, and the alternative to ignoring nonsense is a
+ *  billing screen in a mode nobody asked for. */
+function paperSeqFrom(params: URLSearchParams): number | null {
+  const asked = Number(params.get("paper"));
+  return Number.isInteger(asked) && asked > 0 ? asked : null;
+}
+
+/** Now, in the shape `<input type="datetime-local">` wants - which is local
+ *  time with no zone on it, not an ISO instant. The till's own clock, because a
+ *  bill's date is the store's day (see `tillToday`). */
+function localNow(): string {
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }
 
 /** Where the store's own registration has not landed yet. The receipt still
