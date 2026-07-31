@@ -661,3 +661,73 @@ class IrnQueueWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError("Give the IRN the portal returned.")
         attrs["irn"] = attrs["irn"].strip()
         return attrs
+
+
+class ContinuityFlagRowSerializer(serializers.ModelSerializer[ContinuityFlag]):
+    """One exception on a store's list (#188).
+
+    Wider than `FlagReadSerializer`, which rides inside a bill and can leave out
+    everything the bill already says. This one is read on its own screen, so it
+    carries the bill it is about - or says there is none, which is a fact rather
+    than a gap: a hole is a bill that never arrived, and a seller's return count
+    is a pattern across bills.
+    """
+
+    #: The kind said the way a person says it - `ContinuityFlag.Kind`'s own label,
+    #: so the wording lives once, on the model, beside the reason it exists.
+    kind_label = serializers.CharField(source="get_kind_display", read_only=True)
+    store_code = serializers.CharField(source="store.code", read_only=True)
+    #: Empty on a flag about no particular bill. The screen links on this, so a
+    #: `null` would need every caller to remember which of the two it had.
+    doc_number = serializers.SerializerMethodField()
+    billed_at = serializers.DateTimeField(source="sale.billed_at", read_only=True, default=None)
+    resolved_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ContinuityFlag
+        fields = [
+            "id",
+            "kind",
+            "kind_label",
+            "status",
+            "store_code",
+            "doc_number",
+            "billed_at",
+            "details",
+            "created_at",
+            "cleared_note",
+            "resolved_by_name",
+            "resolved_at",
+        ]
+
+    def get_doc_number(self, obj: ContinuityFlag) -> str:
+        return obj.sale.doc_number or "" if obj.sale_id else ""
+
+    def get_resolved_by_name(self, obj: ContinuityFlag) -> str:
+        return display_name(obj.resolved_by)
+
+
+class ContinuityFlagWriteSerializer(serializers.Serializer):
+    """Clearing one exception, which is a statement about a person's attention.
+
+    Two answers and no way back to `open`. **Resolved** means the thing was dealt
+    with; **ignored** means somebody looked and decided it needs nothing - which
+    is a different sentence, worth keeping apart, and the one the nightly check
+    reads to know not to raise it again.
+
+    A `note` is required on `ignored` and optional on `resolved`, and the
+    asymmetry is the point: "I dealt with it" is usually evidenced by the thing
+    itself having changed, while "this one is fine" is evidenced by nothing at
+    all unless the person says why.
+    """
+
+    status = serializers.ChoiceField(
+        choices=[ContinuityFlag.Status.RESOLVED, ContinuityFlag.Status.IGNORED]
+    )
+    note = serializers.CharField(max_length=240, allow_blank=True, required=False, default="")
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs["note"] = attrs["note"].strip()
+        if attrs["status"] == ContinuityFlag.Status.IGNORED and not attrs["note"]:
+            raise serializers.ValidationError("Say why this one needs nothing doing.")
+        return attrs

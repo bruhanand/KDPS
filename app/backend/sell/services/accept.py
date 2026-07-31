@@ -54,7 +54,7 @@ from sell.models import (
     SaleTender,
     SellPolicy,
 )
-from sell.pricing import base_from_inclusive, split_line
+from sell.pricing import base_from_inclusive
 from sell.services.movements import post_stock_move
 from sell.services.postings import (
     CostedLine,
@@ -64,9 +64,10 @@ from sell.services.postings import (
     resolve_cost_plan,
 )
 from sell.services.recompute import (
-    OFFER_TOLERANCE_PAISE,
     BillLine,
     credit_from_cited_rule,
+    gst_offenders,
+    offer_offenders,
     resolve_bill,
 )
 from sell.services.refunds import entitled_refund, returned_so_far
@@ -75,12 +76,7 @@ from sell.services.resolve import (
     line_dims,
     manager_for_override,
     resolve_piece,
-    slab_for,
 )
-
-#: How far a bill's tax may sit from the dated slab before it is worth a human's
-#: time - one rupee a line, per the daily applied-vs-rulebook check (B3, D5 Q10).
-GST_TOLERANCE_PAISE = 100
 
 #: The e-invoice clock: a B2B bill must carry an IRN within 30 days (grill Q8).
 IRN_DUE_DAYS = 30
@@ -1104,27 +1100,14 @@ def _advisory_gst_check(sale: Sale, store: Store, lines: list[_PreparedLine]) ->
     buys is the daily check knowing which bills to look at, not a refusal nobody
     could act on. A rupee a line is the threshold (B3).
 
-    Only the sold lines are checked. A return leg is priced at what the customer
-    actually paid on the original bill (D2), tax and all, so it deliberately
-    carries the *old* rate - measuring it against today's slab would raise a flag
-    on every return taken after a rate change, which is the daily check crying
-    wolf about the one thing the design asked for.
+    Only the sold lines are checked, and the arithmetic itself is
+    `sell.services.recompute` - shared with the nightly re-run (#188), so a bill
+    passed at the counter and a bill reported at midnight are answering the same
+    question rather than two questions that happen to look alike.
 
     The offer half of the same step is `_advisory_offer_check`, below.
     """
-    when = timezone.localdate(sale.billed_at)
-    offenders = []
-    for row in [line.row for line in lines if line.row is not None and not line.is_return]:
-        expected = split_line(row.net_paise, row.qty, slab_for(row.hsn, when))
-        if abs(expected.gst_paise - row.gst_paise) > GST_TOLERANCE_PAISE:
-            offenders.append(
-                {
-                    "line_no": row.line_no,
-                    "charged_paise": row.gst_paise,
-                    "slab_paise": expected.gst_paise,
-                    "slab_rate": str(expected.rate),
-                }
-            )
+    offenders = gst_offenders(_written_rows(lines), timezone.localdate(sale.billed_at))
     if not offenders:
         return []
     return [_flag(sale, store, ContinuityFlag.Kind.GST_MISMATCH, {"lines": offenders})]
@@ -1147,32 +1130,23 @@ def _advisory_offer_check(
     evidence would miss it - a till that applied no offer also writes no evidence,
     so the two would agree about nothing and report nothing.
 
-    A cashier's own discount on top is the one thing that would make this cry
-    wolf, so it is subtracted out. Note the asymmetry with step 6, which is the
-    point rather than an inconsistency: the *cap* refuses to credit the till's own
-    `saved_paise`, because a cap the capped party can lift is not a cap; this
-    check does credit it, because it is only deciding whether a human should read
-    the bill, and the till's account of itself is evidence towards that.
+    The comparison itself is `sell.services.recompute`, shared with the nightly
+    re-run for the reason its GST twin is: one question, asked twice, not two.
+    What only this side can supply is `drift` - the lines whose discount was
+    credited to the rule they *cite* rather than to today's reading of the book,
+    which is a fact about the accept decision and not about the bill.
     """
-    offenders = []
-    for line in lines:
-        row = line.row
-        if row is None or line.is_return:
-            continue
-        expected = rulebook.saving_for(row.line_no)
-        claimed = int((row.offer_evidence or {}).get("saved_paise") or 0)
-        given = int(row.disc_paise or 0)
-        keyed_in = max(given - max(claimed, expected), 0)
-        charged = given - keyed_in
-        if abs(charged - expected) > OFFER_TOLERANCE_PAISE or row.line_no in rulebook.drift:
-            offenders.append(
-                {
-                    "line_no": row.line_no,
-                    "charged_paise": charged,
-                    "rulebook_paise": expected,
-                    "offer_id": row.offer_id,
-                }
-            )
+    rows = _written_rows(lines)
+    offenders = offer_offenders(
+        rows,
+        {row.line_no: rulebook.saving_for(row.line_no) for row in rows},
+        rulebook.drift,
+    )
     if not offenders:
         return []
     return [_flag(sale, store, ContinuityFlag.Kind.OFFER_MISMATCH, {"lines": offenders})]
+
+
+def _written_rows(lines: list[_PreparedLine]) -> list[SaleLine]:
+    """The `SaleLine` rows this bill actually wrote, in payload order."""
+    return [line.row for line in lines if line.row is not None]

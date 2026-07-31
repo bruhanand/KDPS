@@ -315,7 +315,7 @@ def _close_aged_flag(sale: Any) -> None:
 # --- ageing ----------------------------------------------------------------
 
 
-def age_deferred(today: date | None = None) -> int:
+def age_deferred(today: date | None = None, store: Any = None) -> int:
     """Flag every bill whose waiting lines have waited too long. Returns how many
     bills were newly flagged.
 
@@ -337,11 +337,18 @@ def age_deferred(today: date | None = None) -> int:
     bill whose three waiting lines become one has not stopped waiting, but the two
     that posted are no longer anybody's job, and a flag still naming them sends
     somebody after work that is done.
+
+    Called by the nightly `sell_daily_check` (#188) as one of its four steps. It
+    had a schedule of its own until that existed; `today` is passed in so a run
+    about Tuesday ages Tuesday's queue rather than tonight's, and `store` so a
+    run about one shop does not report every other shop's unpriced lines.
     """
     day = today or timezone.localdate()
     cutoff = day - timedelta(days=SellPolicy.current().uncosted_aging_days)
     raised = 0
     aged = _waiting().filter(created_at__date__lte=cutoff).select_related("sale_line", "store")
+    if store is not None:
+        aged = aged.filter(store=store)
     for sale_id, rows in _by_bill(aged).items():
         flag = ContinuityFlag.objects.filter(
             sale_id=sale_id, kind=ContinuityFlag.Kind.AGED_UNCOSTED

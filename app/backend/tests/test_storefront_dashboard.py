@@ -39,11 +39,10 @@ from sell.models import HeldBill
 
 URL = "/api/store/dashboard"
 
-#: The eight keys this build can honestly count. The last one in the contract
-#: (`continuity_flags`) reads a `sell` table that #188 fills; see
-#: `storefront/dashboard.py` for why it is absent rather than nought.
-#: `held_bills` joined the list when the hold itself did (#185), and
-#: `uncosted_sale_lines` when the costing sweep did (#186).
+#: All nine of the contract's keys. They arrived one ticket at a time - a key was
+#: absent rather than nought until its table existed - and the last three closed
+#: it: `held_bills` with the hold list (#185), `uncosted_sale_lines` with the
+#: costing sweep (#186) and `continuity_flags` with the daily check (#188).
 QUEUE_KEYS = [
     "approvals_pending",
     "transfers_to_receive",
@@ -53,6 +52,7 @@ QUEUE_KEYS = [
     "open_count_session",
     "held_bills",
     "uncosted_sale_lines",
+    "continuity_flags",
 ]
 
 

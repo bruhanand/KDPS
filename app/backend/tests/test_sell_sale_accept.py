@@ -1054,15 +1054,16 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """All nine have a producer now, and each is asserted where it is raised: the
+    """All ten have a producer now, and each is asserted where it is raised: the
     four counter ones here, `offer_mismatch` in the rulebook suite (#183),
     `aged_uncosted` in the deferred-costing suite (#186) - raised by the nightly
     ageing pass on a queue that has not drained, not by a bill - `gstin_invalid`
-    here too (#187), and the two return ones in the plain-return suite (#184).
+    here too (#187), the two return ones in the plain-return suite (#184), and
+    `employee_returns` in the daily-check suite (#188).
 
-    Three of the nine are kinds db-design did not list, and each is deliberately
-    its own rather than folded into a neighbour, because head office answers each
-    with entirely different work:
+    Four of the ten are kinds db-design did not list, and each is deliberately its
+    own rather than folded into a neighbour, because head office answers each with
+    entirely different work:
 
     * `gstin_invalid` - "a character of this registration is mistyped", which is
       not "the tax on this bill is not the dated slab's".
@@ -1070,6 +1071,8 @@ def test_every_flag_kind_the_contract_names_exists(counter):
       policy at a counter they can set aside on their own say-so.
     * `return_uncosted` - a piece given back before the books could ever price it,
       so there is a cost event still parked against a sale that has been reversed.
+    * `employee_returns` - a pattern *across* bills, so there is no one bill to
+      hang it on and no one bill that answers it.
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",
@@ -1081,6 +1084,7 @@ def test_every_flag_kind_the_contract_names_exists(counter):
         "aged_uncosted",
         "return_late",
         "return_uncosted",
+        "employee_returns",
     }
 
 

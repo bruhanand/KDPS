@@ -34,6 +34,7 @@ import StockOnHand from "./pages/StockOnHand";
 import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
+import DaySummary from "./pages/DaySummary";
 import IrnQueue from "./pages/IrnQueue";
 import BillingPage from "./pages/sell/Billing";
 import CustomerSearchPage from "./pages/sell/CustomerSearch";
@@ -136,6 +137,7 @@ const BUILT: Screen[] = [
   { id: "vflip-new", path: "/stock/vflips/new", element: <VFlipNewPage /> },
   { id: "vflip-detail", path: "/stock/vflips/:id", element: <VFlipDetailPage /> },
   // Money
+  { id: "day-summary", path: "/money/day-summary", element: <DaySummary /> },
   { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },

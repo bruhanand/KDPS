@@ -132,17 +132,20 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
 
-  # --- Uncosted-sale ageing cron ------------------------------------------------
-  # Daily: any line sold before its paperwork that has sat in the costing queue
-  # past the SellPolicy dial gets its bill flagged for the store (#186). The queue
-  # drains itself when the PT lands, so anything this catches is paperwork that is
-  # not coming. Idempotent — a bill already flagged is not flagged twice, and a
-  # flag the store chose to ignore stays ignored.
-  # Folds into `sell_daily_check` when #188 builds it; a schedule of its own until
-  # then, so the flag half of the design is actually live. Same free-tier caveat
-  # as the crons above: run by hand if not on a paid Render plan (see DEPLOY.md).
+  # --- Nightly sell reconciliation ----------------------------------------------
+  # The daily check (#188), and the pilot's go/no-go gate. Four questions about a
+  # day that is over: did every bill arrive, was the customer charged what the
+  # rulebook says, is anything still unpriced (the old `sell_age_deferred`
+  # schedule, folded in as one of the four), and who took the returns. Writes
+  # exception rows only - it posts nothing and touches no document.
+  # Idempotent: a bill already flagged is not flagged twice, a flag the store
+  # chose to ignore stays ignored, and a hole that filled overnight is closed.
+  # It defaults to **yesterday**, which is what this schedule is about: 20:45 UTC
+  # is ~02:15 IST, so the day it reconciles is the one that has just ended.
+  # Same free-tier caveat as the crons above: run by hand if not on a paid Render
+  # plan (see DEPLOY.md).
   - type: cron
-    name: kdps-sell-age-deferred
+    name: kdps-sell-daily-check
     runtime: python
     branch: client-testing     # same code line as the alpha it checks
     plan: starter
@@ -150,7 +153,7 @@ services:
     region: singapore
     rootDir: app/backend
     buildCommand: pip install uv && uv sync --frozen
-    startCommand: uv run python manage.py sell_age_deferred
+    startCommand: uv run python manage.py sell_daily_check
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.6"

@@ -27,20 +27,28 @@ running when that bill was printed, and that is the only question being asked.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping, Sequence, Set
 from dataclasses import dataclass, replace
 from datetime import date
 from typing import Any
 
 from django.db.models import Q
 
+from masters.models import Sku
 from offers.models import Offer
 from offers.resolution import Cart, CartLine, Resolution, Rule, resolve
+from sell.models import SaleLine
+from sell.pricing import split_line
+from sell.services.resolve import slab_for
 
 #: A rupee a line, matching the GST half of the same advisory step (B3). Below
 #: this the two engines are agreeing and the difference is a rounding artefact
 #: nobody can act on.
 OFFER_TOLERANCE_PAISE = 100
+
+#: How far a bill's tax may sit from the dated slab before it is worth a human's
+#: time - the same rupee a line, for the same reason (B3, D5 Q10).
+GST_TOLERANCE_PAISE = 100
 
 #: Statuses a bill could have been priced under. A draft or a merely-approved
 #: rule never reached a till, so it cannot explain a discount; an ended one very
@@ -97,10 +105,17 @@ def _cart_line(line: BillLine) -> CartLine:
     )
 
 
-def resolve_bill(store_code: str, day: date, lines: Sequence[BillLine]) -> Resolution:
-    """Price these lines against the store's rulebook as it stood on `day`."""
+def resolve_bill(
+    store_code: str, day: date, lines: Sequence[BillLine], rules: Sequence[Rule] | None = None
+) -> Resolution:
+    """Price these lines against the store's rulebook as it stood on `day`.
+
+    `rules` is the same rulebook, already fetched. The nightly check walks every
+    bill a shop rang up on a day and they are all read against one book, so
+    fetching it per bill would be a thousand identical queries on a busy Saturday.
+    """
     cart = Cart(lines=tuple(_cart_line(line) for line in lines), day=day)
-    return resolve(cart, rulebook_for(store_code, day))
+    return resolve(cart, list(rules) if rules is not None else rulebook_for(store_code, day))
 
 
 def credit_from_cited_rule(
@@ -147,3 +162,122 @@ def credit_from_cited_rule(
     )
     outcome = resolve(cart, [offer.as_rule()]).by_line().get(line_no)
     return outcome.discount_paise if outcome else 0
+
+
+# --- the two advisory findings, shared by the accept and the nightly pass ----
+#
+# Both are computed off *written* `SaleLine` rows rather than off whatever the
+# caller happens to hold, which is what lets the accept pipeline and the daily
+# check (#188) ask the identical question. If they diverged, a bill would be
+# passed at the counter and reported at midnight - or reported at the counter and
+# forgotten at midnight - and neither is a check anybody would trust.
+
+
+def sold_lines(rows: Sequence[SaleLine]) -> list[SaleLine]:
+    """The lines these checks are about: pieces going out, never coming back.
+
+    A return leg is priced at what the customer actually paid on the original bill
+    (D2), tax and rule and all, so it deliberately carries the *old* answer.
+    Measuring it against today's slab or today's rulebook would raise a finding on
+    every return taken after a rate change - the daily check crying wolf about the
+    one thing the design asked it to watch.
+    """
+    return [row for row in rows if row.direction != SaleLine.Direction.RETURN]
+
+
+def gst_offenders(rows: Sequence[SaleLine], day: date) -> list[dict[str, Any]]:
+    """Lines whose tax is more than a rupee from the slab that was live on `day`."""
+    offenders = []
+    for row in sold_lines(rows):
+        expected = split_line(int(row.net_paise), int(row.qty), slab_for(row.hsn, day))
+        if abs(expected.gst_paise - int(row.gst_paise)) > GST_TOLERANCE_PAISE:
+            offenders.append(
+                {
+                    "line_no": row.line_no,
+                    "charged_paise": int(row.gst_paise),
+                    "slab_paise": expected.gst_paise,
+                    "slab_rate": str(expected.rate),
+                }
+            )
+    return offenders
+
+
+def offer_offenders(
+    rows: Sequence[SaleLine],
+    savings: Mapping[int, int],
+    drift: Set[int] = frozenset(),
+) -> list[dict[str, Any]]:
+    """Lines the counter did not charge what the rulebook says it should have.
+
+    The comparison is the *whole* discount against the rulebook's, not the till's
+    `offer_evidence` against the rulebook's, and that is deliberate. A line where
+    the counter gave nothing and the rulebook says the customer was owed ₹600 is
+    exactly the finding this exists for, and comparing evidence with evidence
+    would miss it - a till that applied no offer also writes no evidence, so the
+    two would agree about nothing and report nothing.
+
+    A cashier's own keyed-in discount on top is the one thing that would make this
+    cry wolf, so it is subtracted out. Note the asymmetry with the accept
+    pipeline's *cap*, which is the point rather than an inconsistency: the cap
+    refuses to credit the till's own `saved_paise`, because a cap the capped party
+    can lift is not a cap; this only decides whether a human should read the bill,
+    and the till's account of itself is evidence towards that.
+    """
+    offenders = []
+    for row in sold_lines(rows):
+        expected = int(savings.get(row.line_no, 0))
+        claimed = int((row.offer_evidence or {}).get("saved_paise") or 0)
+        given = int(row.disc_paise or 0)
+        keyed_in = max(given - max(claimed, expected), 0)
+        charged = given - keyed_in
+        if abs(charged - expected) > OFFER_TOLERANCE_PAISE or row.line_no in drift:
+            offenders.append(
+                {
+                    "line_no": row.line_no,
+                    "charged_paise": charged,
+                    "rulebook_paise": expected,
+                    "offer_id": row.offer_id,
+                }
+            )
+    return offenders
+
+
+def savings_for(
+    store_code: str, day: date, rows: Sequence[SaleLine], rules: Sequence[Rule] | None = None
+) -> dict[int, int]:
+    """What the rulebook says each of these written lines was owed.
+
+    The nightly counterpart of the accept pipeline's `_server_resolution`, reading
+    the bill back off its own rows instead of off a payload. `no_discount` is
+    fetched live from the SKU master for the same reason it is there: it is the
+    one input to the rulebook that does not live on the bill.
+    """
+    sold = sold_lines(rows)
+    if not sold:
+        return {}
+    barcodes = [row.barcode for row in sold]
+    never = set(
+        Sku.objects.filter(barcode__in=barcodes, no_discount=True).values_list("barcode", flat=True)
+    )
+    lines = [
+        BillLine(
+            line_no=row.line_no,
+            barcode=row.barcode,
+            season=row.season,
+            qty=int(row.qty),
+            mrp_paise=int(row.mrp_paise),
+            dims={
+                "brand": row.brand,
+                "item": row.item,
+                "design": row.design,
+                "size": row.size,
+                "color": row.color,
+            },
+            no_discount=row.barcode in never,
+        )
+        for row in sold
+    ]
+    return {
+        line_no: outcome.discount_paise
+        for line_no, outcome in resolve_bill(store_code, day, lines, rules).by_line().items()
+    }

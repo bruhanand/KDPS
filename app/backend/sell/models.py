@@ -75,6 +75,15 @@ class SellPolicy(TimeStampedModel):
     corpus fixes a customer-facing window (the 60-120 days in the domain facts are
     the *brand's* return terms, which are a different clock entirely), and head
     office moves this one without a release.
+
+    ``return_review_count`` is how many pieces one seller may take back in a day
+    before the daily check says so (#188). Returns are the best-documented theft
+    channel at any counter, which is why grill Q7 asks for them to be counted per
+    employee - but counting is not accusing, and the flag it raises is a row on a
+    list, never a refusal. Five is a starting number in exactly the sense the
+    ageing dial's three days is: nothing in the corpus fixes one, and a store with
+    a genuinely returns-heavy Saturday moves it rather than learning to ignore the
+    list.
     """
 
     SINGLETON_PK = 1
@@ -98,6 +107,11 @@ class SellPolicy(TimeStampedModel):
         default=30,
         help_text="How many days after a bill a piece comes back without a manager "
         "having to override the window.",
+    )
+    return_review_count = models.IntegerField(
+        default=5,
+        help_text="How many pieces one seller may take back in a day before the "
+        "daily check puts their name on the store's exception list.",
     )
 
     class Meta:
@@ -124,6 +138,12 @@ class SellPolicy(TimeStampedModel):
                 condition=models.Q(return_window_days__gte=0),
                 name="ck_sellpolicy_window_is_not_negative",
             ),
+            # Nought would mean "flag every seller who took anything back", which
+            # is a list nobody reads and therefore no control at all.
+            models.CheckConstraint(
+                condition=models.Q(return_review_count__gt=0),
+                name="ck_sellpolicy_return_review_is_positive",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -131,7 +151,8 @@ class SellPolicy(TimeStampedModel):
             f"cap {self.manual_discount_cap_percent}% · "
             f"credit notes valid {self.credit_note_validity_days}d · "
             f"uncosted flagged after {self.uncosted_aging_days}d · "
-            f"returns inside {self.return_window_days}d"
+            f"returns inside {self.return_window_days}d · "
+            f"returns reviewed above {self.return_review_count} a seller a day"
         )
 
     @classmethod
@@ -819,7 +840,19 @@ class ContinuityFlag(TimeStampedModel):
     `ReviewItem`). Rule 8 in one table: the counter is never the place a problem
     is argued out, so everything the business can absorb lands here and shows on
     the store's action queue instead of refusing the customer.
+
+    **Which day a flag belongs to.** Most flags are about a bill, and a bill has
+    a day - the one the counter printed it on. The nightly check (#188) raises
+    two that are about no bill at all: a hole is a bill that never arrived, and a
+    seller's return count is about a store's afternoon. Those carry `day` in
+    their details, because the check runs in the small hours of the *next*
+    morning and `created_at` would file yesterday's finding under today. See
+    `for_day`.
     """
+
+    #: The details key a bill-less flag uses to say which day it is about
+    #: (ISO). Nothing with a `sale` needs it - the bill already knows.
+    DAY_KEY = "day"
 
     class Kind(models.TextChoices):
         NUMBER_HOLE = "number_hole", "Bills missing before this one"
@@ -853,6 +886,12 @@ class ContinuityFlag(TimeStampedModel):
         # is the one outcome worse than telling somebody.
         RETURN_LATE = "return_late", "Taken back after the return window closed"
         RETURN_UNCOSTED = "return_uncosted", "Given back before the books could price it"
+        # #188. Grill Q7 asks for returns to be counted per employee in the daily
+        # check, and none of the kinds above means "one person took an unusual
+        # number of pieces back today". It is deliberately its own kind rather
+        # than a note on a bill: the finding is about a *pattern across* bills,
+        # so there is no one bill to hang it on and no one bill that answers it.
+        EMPLOYEE_RETURNS = "employee_returns", "One seller took back an unusual number"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -868,6 +907,15 @@ class ContinuityFlag(TimeStampedModel):
     )
     details = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    cleared_note = models.CharField(
+        max_length=240,
+        blank=True,
+        default="",
+        help_text="What the person who cleared this said about it. Its own column "
+        "rather than a key in `details`, because `details` is the finding - "
+        "written by a machine, rewritten on every nightly run - and a person's "
+        "sentence about it must not be something a later pass can overwrite.",
+    )
     resolved_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -882,6 +930,31 @@ class ContinuityFlag(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.kind} · {self.store_id}"
+
+    @classmethod
+    def for_day(
+        cls, rows: models.QuerySet[ContinuityFlag], day: date
+    ) -> models.QuerySet[ContinuityFlag]:
+        """`rows` narrowed to the flags that belong to `day`.
+
+        A flag about a bill belongs to the day the bill was printed. A flag about
+        no bill says which day it is about in its details (`DAY_KEY`); one that
+        somehow does not is filed by when it was raised, which is all there is to
+        go on.
+
+        The rule lives here rather than in the two screens that ask it, because
+        "which day is this exception about" has to have one answer - the Money
+        section counts them and the Dashboard's queue deliberately does not, and
+        a second copy of the rule is how those two start disagreeing.
+        """
+        return rows.filter(
+            models.Q(sale__billed_at__date=day)
+            | models.Q(sale__isnull=True, **{f"details__{cls.DAY_KEY}": day.isoformat()})
+            | (
+                models.Q(sale__isnull=True, created_at__date=day)
+                & ~models.Q(details__has_key=cls.DAY_KEY)
+            )
+        )
 
 
 class DeferredCosting(TimeStampedModel):

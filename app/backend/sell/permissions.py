@@ -56,6 +56,20 @@ CanTakeReturns = require_section("sell", CAP_OPERATE)
 #: to live in. Nothing on the ratified sheet moves to make this true.
 CanWorkIrnQueue = require_section("money", CAP_MANAGE)
 
+#: The store's exception list (#188), and the second gate here that is not `sell`.
+#:
+#: The flags are what the Money section's day summary shows underneath the day by
+#: tender - "here is what the day took, and here is what it left open" - so they
+#: answer to the same section that screen does. `money: view` reads and
+#: `money: operate` clears, which on the ratified sheet is the store itself
+#: ("Expenses only (create)" is `operate`), the warehouse, Owner and Accounts.
+#:
+#: Not `sell`, for the reason the IRN queue is not: `sell: view` is held by the
+#: brand manager, whose business a counter's exceptions are not, and no seeded
+#: role reaches `sell: approve` at all - a rung nobody holds is a list nobody
+#: could ever clear.
+CanWorkStoreFlags = require_section("money", CAP_VIEW, write_minimum=CAP_OPERATE)
+
 #: Moving a store's bill series onto a different machine (#189). `approve`, a rung
 #: above the till itself: a handover leaves holes in a numbered money series that
 #: somebody then has to fill from paper, and the cashier whose machine just died

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PROTECTED_ROUTES } from "../routes";
 import { matchRoutes } from "react-router-dom";
 import {
+  ALWAYS,
   KNOWN_QUEUE_KEYS,
   queueRows,
   shortDay,
@@ -11,9 +12,10 @@ import {
   type DashboardPayload,
 } from "./storeDashboardModel";
 
-/** The eight keys `storefront/dashboard.py` sends today, in its order. Kept as a
- *  literal on purpose: if the server adds a key this side has never heard of,
- *  the row silently disappears, and this is the test that says so. */
+/** The nine keys `storefront/dashboard.py` sends today, in its order - the
+ *  contract's full set as of #188. Kept as a literal on purpose: if the server
+ *  adds a key this side has never heard of, the row silently disappears, and
+ *  this is the test that says so. */
 const SERVER_KEYS = [
   "approvals_pending",
   "transfers_to_receive",
@@ -23,6 +25,7 @@ const SERVER_KEYS = [
   "open_count_session",
   "held_bills",
   "uncosted_sale_lines",
+  "continuity_flags",
 ];
 
 function payload(over: Partial<DashboardPayload> = {}): DashboardPayload {
@@ -53,18 +56,32 @@ describe("the action queue", () => {
   });
 
   it("draws no key it has no screen for", () => {
-    // The last `sell` key lands with #188; until then a row would be a number
-    // nobody could click through and clear. `held_bills` came off this list with
-    // #185 and `uncosted_sale_lines` with #186, each when its screen arrived.
-    expect(KNOWN_QUEUE_KEYS).not.toContain("continuity_flags");
-    const rows = queueRows(payload({ action_queue: [{ key: "continuity_flags", count: 4 }] }));
+    // A row for a key nothing can open is a number nobody could click through
+    // and clear. Every one of the server's nine has a screen now, so what this
+    // guards is the next one somebody adds server-side and forgets here.
+    const rows = queueRows(payload({ action_queue: [{ key: "some_new_thing", count: 4 }] }), ALWAYS);
     expect(rows).toEqual([]);
+  });
+
+  it("drops a row whose screen this person's sections cannot open", () => {
+    // The Dashboard is `home: view`, the rung everybody holds, but the
+    // exceptions row opens the Money section. A count that lands somebody on a
+    // refusal is worse than no count - the rule Home already holds to with the
+    // payable tile.
+    const queue = { action_queue: [{ key: "continuity_flags", count: 4 }] };
+    expect(queueRows(payload(queue), () => false)).toEqual([]);
+
+    const [row] = queueRows(payload(queue), (section, capability) =>
+      section === "money" && capability === "view",
+    );
+    expect(row.to).toBe("/money/day-summary");
+    expect(row.count).toBe(4);
   });
 
   it("sends pieces sold before their paperwork to where the paperwork lands", () => {
     // Nobody clears this queue by reading it: it clears itself when the PT that
     // prices the piece is posted, so the row goes to Goods Inward (#186).
-    const [row] = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }));
+    const [row] = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }), ALWAYS);
     expect(row.to).toBe("/receive");
     expect(row.count).toBe(4);
   });
@@ -72,17 +89,17 @@ describe("the action queue", () => {
   it("sends bills on hold to the counter that can pick them up", () => {
     // Not a list screen of its own: resuming a parked bill *is* billing, so the
     // row opens the counter with the hold list already showing (#185).
-    const [row] = queueRows(payload({ action_queue: [{ key: "held_bills", count: 2 }] }));
+    const [row] = queueRows(payload({ action_queue: [{ key: "held_bills", count: 2 }] }), ALWAYS);
     expect(row.to).toBe("/sell?holds=1");
     expect(row.count).toBe(2);
   });
 
   it("keeps the server's order", () => {
-    expect(queueRows(payload()).map((r) => r.key)).toEqual(SERVER_KEYS);
+    expect(queueRows(payload(), ALWAYS).map((r) => r.key)).toEqual(SERVER_KEYS);
   });
 
   it("gives every row a sentence and a count", () => {
-    for (const row of queueRows(payload())) {
+    for (const row of queueRows(payload(), ALWAYS)) {
       expect(row.label).not.toBe("");
       expect(typeof row.count).toBe("number");
     }
@@ -92,7 +109,7 @@ describe("the action queue", () => {
     // The acceptance criterion is "linking into the right section/tab" - a row
     // pointing at a URL with no route would be a dead end nobody notices until
     // a store person taps it.
-    for (const row of queueRows(payload())) {
+    for (const row of queueRows(payload(), ALWAYS)) {
       const [path] = row.to.split("?");
       expect(matchRoutes(PROTECTED_ROUTES, path), `${row.key} → ${row.to}`).toBeTruthy();
     }
@@ -104,7 +121,7 @@ describe("where a queue row goes", () => {
     // Found in browser QA: `/transfer/in-transit` is scoped to the *source*
     // store, so a store reading "1 carton to receive" clicked through and was
     // told nothing was on the road.
-    const row = queueRows(payload()).find((r) => r.key === "transfers_to_receive");
+    const row = queueRows(payload(), ALWAYS).find((r) => r.key === "transfers_to_receive");
     expect(row?.to).toBe("/transfer");
   });
 });

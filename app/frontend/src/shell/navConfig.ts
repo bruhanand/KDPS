@@ -265,6 +265,14 @@ export const SECTIONS: NavSectionDef[] = [
     // already have on the server, and Money collapses to one Expenses line for
     // everyone else.
     items: [
+      // What the counter took today, by tender, and what the day left open
+      // (#188). No `minCapability`, so it sits at the section's own `view` rung:
+      // the ratified sheet gives both store seats `money: operate` ("Expenses
+      // only (create)"), and a store reading its own day back is the whole point
+      // of the screen. The exceptions underneath are cleared at `operate`, which
+      // is the same seat - so nothing here shows a person a button the API
+      // refuses (#85).
+      { label: "Day Summary", to: "/money/day-summary" },
       { label: "Payments", to: "/money/payments", planned: true, minCapability: "manage" },
       // The store × month rupee target the Dashboard is measured against (#171).
       // It is a master, so Setup is where a reader might look for it - but the

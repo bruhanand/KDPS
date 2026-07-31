@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Printer, Search } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
@@ -52,34 +52,56 @@ const KEYS = [
 type SearchKey = (typeof KEYS)[number]["key"];
 
 export default function CustomerSearchPage() {
-  const [key, setKey] = useState<SearchKey>("mobile");
-  const [term, setTerm] = useState("");
+  // A bill number can arrive in the URL - the day summary links an exception
+  // straight to the bill it is about (#188), and "go and read the bill" is the
+  // first thing anybody clearing one does. Anything else and the screen opens on
+  // its own default, exactly as before.
+  const [params] = useSearchParams();
+  const linkedDoc = (params.get("doc") ?? "").trim();
+  const [key, setKey] = useState<SearchKey>(linkedDoc ? "doc" : "mobile");
+  const [term, setTerm] = useState(linkedDoc);
   const [rows, setRows] = useState<SaleRow[] | null>(null);
   const [open, setOpen] = useState<PostedBill | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [printProblem, setPrintProblem] = useState("");
 
-  async function search() {
-    const q = term.trim();
-    if (!q) {
-      setError("Type a mobile number, a name or a bill number to search for.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setPrintProblem("");
-    setOpen(null);
-    try {
-      const { data } = await api.get(withQuery("/sell/sales", { [key]: q }));
-      setRows(data as SaleRow[]);
-    } catch (e) {
-      setError(apiErrorMessage(e));
-      setRows(null);
-    } finally {
-      setLoading(false);
-    }
+  const runSearch = useCallback(
+    async (searchKey: SearchKey, q: string) => {
+      if (!q) {
+        setError("Type a mobile number, a name or a bill number to search for.");
+        return;
+      }
+      setLoading(true);
+      setError("");
+      setPrintProblem("");
+      setOpen(null);
+      try {
+        const { data } = await api.get(withQuery("/sell/sales", { [searchKey]: q }));
+        setRows(data as SaleRow[]);
+      } catch (e) {
+        setError(apiErrorMessage(e));
+        setRows(null);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  function search() {
+    void runSearch(key, term.trim());
   }
+
+  // Search once for a bill named in the URL, and never again - the box is a
+  // person's to type in after that, and a search that re-ran on every render
+  // would throw away whatever they had started.
+  const linkSearched = useRef(false);
+  useEffect(() => {
+    if (!linkedDoc || linkSearched.current) return;
+    linkSearched.current = true;
+    void runSearch("doc", linkedDoc);
+  }, [linkedDoc, runSearch]);
 
   /** Open one bill, read-only. Fetched rather than expanded from the row: the
    *  list carries a summary, and what is printed has to be the whole document. */
