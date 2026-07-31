@@ -30,12 +30,15 @@ export const MANIFEST: Partial<ManifestOptions> = {
   name: "KDPS Operating System",
   short_name: "KDPS",
   description: "The counter and back office for KDPS Lifestyle.",
-  // The counter is installed and opened at the store's own shop front; a till
-  // that started on the Dashboard would need a tap before it could sell.
-  start_url: "/sell",
+  // The app's own front door, not the counter's. A manifest is one file for the
+  // whole product - a warehouse or head-office person installs the same one -
+  // and the server already knows where each login belongs (`landing_page`).
+  // Starting everybody on a Sell route would open a screen most of them do not
+  // hold, and pinning `orientation` would lock a manager's tablet to landscape
+  // to suit a counter nobody else uses.
+  start_url: "/",
   scope: "/",
   display: "standalone",
-  orientation: "landscape",
   background_color: "#faf7f2",
   theme_color: "#faf7f2",
   lang: "en-IN",

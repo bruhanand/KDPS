@@ -39,6 +39,7 @@ import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
 import { newNote } from "../../till/tender";
 import type { NoteStanding, Payment } from "../../till/tender";
+import type { TillSnapshot } from "../../till/engine";
 import type { QueuedBill, TillCustomer, TillItem, TillManager } from "../../till/types";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
@@ -125,7 +126,7 @@ export default function BillingPage() {
 
 function Counter({ storeName }: { storeName?: string }) {
   const { engine, till } = useTill();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [cart, setCart] = useState<Cart>(emptyCart);
   const [customer, setCustomer] = useState<TillCustomer>(NO_CUSTOMER);
   const [saving, setSaving] = useState(false);
@@ -189,10 +190,26 @@ function Counter({ storeName }: { storeName?: string }) {
    *
    * Read once into state, exactly like the hold list is: after that the screen is
    * the cashier's, and a value that kept re-reading the address bar would put
-   * them back into paper mode after they had left it.
+   * them back into paper mode after they had left it - which is also why leaving
+   * paper mode strips the parameter rather than only clearing the state.
+   *
+   * Only a number the counter still regards as outstanding is honoured. The link
+   * that gets somebody here is on the handover list, so a number from anywhere
+   * else is a hand-typed address, and letting one through would offer to bill a
+   * second time under a number head office already holds - which halts the whole
+   * store's queue when it lands (`BILL_NO_TAKEN` is terminal).
    */
-  const [paper, setPaper] = useState<number | null>(() => paperSeqFrom(params));
+  const [paper, setPaper] = useState<number | null>(() => outstandingPaperSeq(params, till));
   const [paperAt, setPaperAt] = useState(() => localNow());
+
+  function leavePaperMode() {
+    setPaper(null);
+    if (params.has("paper")) {
+      const next = new URLSearchParams(params);
+      next.delete("paper");
+      setParams(next, { replace: true });
+    }
+  }
 
   const today = useMemo(() => tillToday(), []);
   // Which state this shop is registered in - the other half of every B2B tax
@@ -472,7 +489,7 @@ function Counter({ storeName }: { storeName?: string }) {
         setNote(`Bill ${queued.doc_number} saved.`);
         await print(receipt);
       } else {
-        setPaper(null);
+        leavePaperMode();
         setNote(
           `Bill ${queued.doc_number} entered from its printed copy. ` +
             "It is on the list to sync, and the customer keeps the receipt they have.",
@@ -541,7 +558,7 @@ function Counter({ storeName }: { storeName?: string }) {
             className="btn"
             data-testid="bill-paper-cancel"
             disabled={locked}
-            onClick={() => setPaper(null)}
+            onClick={leavePaperMode}
           >
             <X size={15} /> Not this one
           </button>
@@ -765,13 +782,36 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The bill number this screen was sent here to re-enter from paper (#189), or
- *  null. Anything that is not a positive whole number is nothing: the parameter
- *  comes off an address bar, and the alternative to ignoring nonsense is a
- *  billing screen in a mode nobody asked for. */
-function paperSeqFrom(params: URLSearchParams): number | null {
+/**
+ * The bill number this screen was sent here to re-enter from paper (#189), or
+ * null - which is anything the counter does not still regard as outstanding.
+ *
+ * Two questions, and the second is the one that matters. A positive whole number
+ * only means the address bar is well formed; what makes it a bill to key in is
+ * that head office is missing it and this till has not already keyed it in. Both
+ * are read from the till's own state:
+ *
+ *   · `register.holes` is the live list, so a store working through more than the
+ *     200 a response carries keeps going as earlier ones close;
+ *   · `handover.unsynced_hint` is the frozen list somebody was handed, which
+ *     still names a bill after a sync has closed it in the register's eyes but
+ *     before the drawer has been worked through;
+ *   · `paperEntered` is what this counter has actually keyed in, and it wins over
+ *     both.
+ *
+ * Anything else is somebody's hand-typed address, and honouring one would offer
+ * to bill again under a number the server already holds - which halts the whole
+ * store's queue when it lands.
+ */
+function outstandingPaperSeq(
+  params: URLSearchParams,
+  till: TillSnapshot | null,
+): number | null {
   const asked = Number(params.get("paper"));
-  return Number.isInteger(asked) && asked > 0 ? asked : null;
+  if (!Number.isInteger(asked) || asked < 1 || !till) return null;
+  if (till.paperEntered.includes(asked)) return null;
+  const missing = [...(till.register?.holes ?? []), ...(till.handover?.unsynced_hint ?? [])];
+  return missing.includes(asked) ? asked : null;
 }
 
 /** Now, in the shape `<input type="datetime-local">` wants - which is local

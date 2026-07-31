@@ -27,7 +27,7 @@ import { financialYear } from "../lib/fiscal";
 import { META, readMeta } from "./db";
 import type { TillDb } from "./db";
 import { notesSpentBy } from "./tender";
-import type { BillDraft, QueuedBill } from "./types";
+import type { BillDraft, PaperEntered, QueuedBill } from "./types";
 import { newUuid } from "./uuid";
 
 /** The document type the till numbers. The kernel accepts external numbers on
@@ -123,9 +123,14 @@ export async function commitBill(
  *   · **It must be a hole.** A sequence at or past where the till is up to is not
  *     a bill from a dead machine, it is a fresh one, and re-entering it here
  *     would spend a number twice.
- *   · **Once.** Two people working through the same drawer would otherwise queue
- *     the same receipt twice; the second one is refused here rather than left for
- *     the server to refuse with the whole queue behind it.
+ *   · **Once, and once for good.** Two people working through the same drawer -
+ *     or one person reloading a page whose address still names the bill - would
+ *     otherwise queue the same receipt twice. The record of what has been keyed
+ *     in is `META.paperEntered`, which outlives both the queue (a bill leaves it
+ *     the moment the server takes it) and the handover list (a store puts that
+ *     away when it is done). The second attempt is refused here rather than left
+ *     for the server, whose only answer is `BILL_NO_TAKEN` - terminal, which
+ *     stops the store's whole queue behind a bill nobody meant to send twice.
  *
  * The stock still moves. The pieces went out of the door on the old machine, but
  * this counter's shelf was rebuilt from the server's figures - which never heard
@@ -162,6 +167,7 @@ async function writeBill(
     [db.meta, db.queue, db.stock, db.items, db.creditNotes],
     async () => {
       const seq = atSeq === null ? await nextBillNumber(db, fy) : await claimHole(db, fy, atSeq);
+      if (atSeq !== null) await recordPaperEntry(db, fy, seq);
       const bill: QueuedBill = {
         ...draft,
         idempotency_uuid: idempotencyUuid,
@@ -182,8 +188,9 @@ async function writeBill(
 
 /** Take a number the counter has already given out, and refuse anything else.
  *
- *  Inside `writeBill`'s transaction, so the check and the insert cannot be
- *  separated by a second re-entry of the same receipt. */
+ *  Inside `writeBill`'s transaction, so the check and the write of both the bill
+ *  and the "this one is done" record cannot be separated by a second re-entry of
+ *  the same receipt. */
 async function claimHole(db: TillDb, fy: string, seq: number): Promise<number> {
   if (!Number.isInteger(seq) || seq < 1) {
     throw new Error(`${seq} is not a bill number.`);
@@ -195,11 +202,33 @@ async function claimHole(db: TillDb, fy: string, seq: number): Promise<number> {
         "Only a bill from the old machine is re-entered from paper.",
     );
   }
+  const entered = await paperEntries(db, fy);
+  if (entered.includes(seq)) {
+    throw new Error(`Bill ${seq} has already been entered from its printed copy.`);
+  }
   const queued = await db.queue.filter((bill) => bill.fy === fy && bill.till_seq === seq).count();
   if (queued) {
     throw new Error(`Bill ${seq} has already been re-entered and is waiting to sync.`);
   }
   return seq;
+}
+
+/** Which numbers this counter has keyed in from paper this year.
+ *
+ *  A year that is not the stored one reads as empty rather than being cleared:
+ *  the read happens on the commit path, and a rollover is not the moment to be
+ *  writing. `recordPaperEntry` replaces the row when it next writes. */
+export async function paperEntries(db: TillDb, fy: string): Promise<number[]> {
+  const entered = await readMeta<PaperEntered | null>(db, META.paperEntered, null);
+  return entered && entered.fy === fy ? entered.seqs : [];
+}
+
+async function recordPaperEntry(db: TillDb, fy: string, seq: number): Promise<void> {
+  const seqs = await paperEntries(db, fy);
+  await db.meta.put({
+    key: META.paperEntered,
+    value: { fy, seqs: [...seqs, seq].sort((a, b) => a - b) } satisfies PaperEntered,
+  });
 }
 
 /**

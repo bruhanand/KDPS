@@ -119,6 +119,13 @@ export interface LockManagerLike {
 export class CounterLock {
   private releaseHeld: (() => void) | null = null;
   private holding = false;
+  /** Do we still want it? Not the same question as whether we have it, and the
+   *  gap between the two is a real hazard: a grant is asynchronous, and this
+   *  engine may have been stopped while the browser was deciding. Without this,
+   *  a lock granted after `release` would be held by nobody, for ever, by a tab
+   *  that has already moved on - and every counter in that tab afterwards would
+   *  be told it was the second one. */
+  private wanted = false;
   /** The lock manager itself failed. Counted with "there is no lock manager":
    *  an API that told us nothing is not evidence of a second till. */
   private broken = false;
@@ -155,13 +162,17 @@ export class CounterLock {
   acquire(): Promise<boolean> {
     const locks = this.locks;
     if (locks === undefined || this.broken || this.holding) return Promise.resolve(true);
+    this.wanted = true;
     return new Promise<boolean>((decided) => {
       void locks
         .request(
           lockName(this.storeCode),
           { mode: "exclusive", ifAvailable: true },
           async (lock) => {
-            if (!lock) {
+            // Granted to an engine that has since been stopped. Returning here
+            // ends the callback, which is what gives the lock straight back -
+            // holding it would strand the counter behind a tab that has moved on.
+            if (!lock || !this.wanted) {
               decided(false);
               return;
             }
@@ -187,8 +198,13 @@ export class CounterLock {
     });
   }
 
-  /** Give it up - the engine stopping, or a sign-out. */
+  /** Give it up - the engine stopping, or a sign-out.
+   *
+   *  Withdrawing the *want* is the load-bearing half. A grant that has not landed
+   *  yet has no `releaseHeld` to call, and one that lands afterwards would
+   *  otherwise take a lock nobody is waiting on and never let it go. */
   release(): void {
+    this.wanted = false;
     this.releaseHeld?.();
   }
 }

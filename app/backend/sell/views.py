@@ -89,9 +89,10 @@ def _sales(user: Any) -> QuerySet[Sale]:
 def till_store(request: Request) -> tuple[Store | None, Response]:
     """The one store this caller is a counter for, or the refusal to send back.
 
-    Shared by the two till endpoints because it is one rule with one sentence -
-    "a till is a store login by construction" - and a second copy of it is a
-    second place for the wording, or the status, to drift.
+    Shared by every endpoint that speaks to or about a counter - the dataset, the
+    register, the held-bill mirror and the handover - because it is one rule with
+    one sentence, "a till is a store login by construction", and a second copy of
+    it is a second place for the wording, or the status, to drift.
 
     `TILL_SCOPE` is the one refusal here that carries a code, and the till needs
     it to: it means "this login will never be a till, a human must fix the

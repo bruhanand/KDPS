@@ -178,16 +178,28 @@ export interface HandoverPayload {
   hole_count: number;
 }
 
-/** A handover as the counter remembers it: what the server said, and which of
- *  the bills it named have since been keyed back in from paper. */
+/** A handover as the counter remembers it - the job list a store works down. */
 export interface HandoverState extends HandoverPayload {
   /** When the handover was done, ISO, by the till's own clock. */
   at: string;
-  /** Numbers from `unsynced_hint` this counter has re-entered. Kept rather than
-   *  derived from the queue: a re-entered bill leaves the queue the moment the
-   *  server takes it, and the list somebody is working through must not lose its
-   *  ticks as they sync. */
-  reentered: number[];
+}
+
+/**
+ * Numbers this counter has keyed back in from their printed copies.
+ *
+ * Kept apart from the handover, and kept for the *year* rather than for the
+ * handover, because it is what makes "exactly once" true rather than what makes
+ * a screen tick a box. Three things would each defeat a weaker home for it: a
+ * re-entered bill leaves the queue as soon as the server takes it, the handover
+ * list is something a store puts away when it is finished, and a page reload
+ * with the same address in the bar would happily do the whole thing again.
+ *
+ * `fy` scopes it because the counter restarts at 1 every April, so last year's
+ * bill 61 and this year's are two different bills.
+ */
+export interface PaperEntered {
+  fy: string;
+  seqs: number[];
 }
 
 export interface BillLine {

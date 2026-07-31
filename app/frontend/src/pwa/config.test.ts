@@ -49,12 +49,15 @@ describe("the counter's service worker", () => {
     expect(denied.some((pattern) => pattern.test("/sell/till"))).toBe(false);
   });
 
-  it("is installable, and opens on the counter", () => {
+  it("is installable, and constrains nobody it was not built for", () => {
     expect(PWA_OPTIONS.manifest).toBe(MANIFEST);
     expect(MANIFEST.name).toContain("KDPS");
     expect(MANIFEST.display).toBe("standalone");
-    // A till that opened on the Dashboard would need a tap before it could sell.
-    expect(MANIFEST.start_url).toBe("/sell");
+    // One manifest serves the whole product - a warehouse person installs the
+    // same app - so it opens the front door and lets the server's own
+    // `landing_page` decide, rather than starting everybody at a counter.
+    expect(MANIFEST.start_url).toBe("/");
+    expect(MANIFEST.orientation, "a counter's shape is not a manager's").toBeUndefined();
     // Chrome will not offer to install without a 192 and a 512.
     const sizes = (MANIFEST.icons ?? []).map((icon) => icon.sizes);
     expect(sizes).toContain("192x192");

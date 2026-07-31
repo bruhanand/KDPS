@@ -9,9 +9,9 @@ import { Money, formatDateTime } from "../../lib/format";
 import { userCan } from "../../shell/navConfig";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
-import type { TillEngine } from "../../till/engine";
+import type { TillEngine, TillSnapshot } from "../../till/engine";
 import { slabFor, splitLine } from "../../till/pricing";
-import type { BillDraft } from "../../till/types";
+import type { BillDraft, HandoverState } from "../../till/types";
 import "./Till.css";
 
 // ---------------------------------------------------------------------------
@@ -76,9 +76,12 @@ export default function TillPage() {
         </p>
       )}
 
+      {/* The page has already narrowed both to non-null, so the recovery cards
+          take them as props rather than reaching for the context again - one
+          way in, and no optional chaining over a value that cannot be null. */}
       {till.storageLost && <RecoverCounter engine={engine} busy={till.busy} />}
 
-      <Handover engine={engine} busy={till.busy} />
+      <Handover engine={engine} till={till} />
 
       {till.halt && (
         <div className="card till-halt" data-testid="till-halt">
@@ -272,15 +275,15 @@ function RecoverCounter({ engine, busy }: { engine: TillEngine; busy: boolean })
  * it at - and the list is shown to whoever is standing here, because keying a
  * receipt back in is ordinary counter work.
  */
-function Handover({ engine, busy }: { engine: TillEngine; busy: boolean }) {
+function Handover({ engine, till }: { engine: TillEngine; till: TillSnapshot }) {
   const { user } = useAuth();
-  const { till } = useTill();
   const [reason, setReason] = useState("");
   const [failed, setFailed] = useState("");
   const [said, setSaid] = useState("");
   const [asking, setAsking] = useState(false);
+  const busy = till.busy;
   const mayHandOver = userCan(user, "sell", "approve");
-  const handover = till?.handover ?? null;
+  const handover = till.handover;
 
   if (!mayHandOver && !handover) return null;
 
@@ -288,11 +291,17 @@ function Handover({ engine, busy }: { engine: TillEngine; busy: boolean }) {
     setFailed("");
     setSaid("");
     try {
-      const state = await engine.handOver(reason.trim());
+      await engine.handOver(reason.trim());
       setReason("");
       setAsking(false);
+      // The counter's own number, not the one the server suggested. They are the
+      // same in every ordinary case - and where they are not, it is because the
+      // two clocks disagree about the financial year and the till has declined
+      // to move (see `reconcileRegister`). Reporting the server's figure there
+      // would tell somebody the counter had gone somewhere it had not.
       setSaid(
-        `This machine is now the counter for this store. The next bill is number ${state.resume_from_seq}.`,
+        "This machine is now the counter for this store. The next bill is " +
+          `${engine.getSnapshot().nextNumber}.`,
       );
     } catch (error) {
       setFailed(messageOf(error));
@@ -380,7 +389,7 @@ function Handover({ engine, busy }: { engine: TillEngine; busy: boolean }) {
         </p>
       )}
 
-      {handover && <PaperReentry engine={engine} />}
+      {handover && <PaperReentry engine={engine} handover={handover} entered={till.paperEntered} />}
     </section>
   );
 }
@@ -395,13 +404,22 @@ function Handover({ engine, busy }: { engine: TillEngine; busy: boolean }) {
  * A number the response did not name is not a number nobody has to key in, so the
  * count is shown beside the list whenever the two differ (a machine dead at bill
  * 5,000 leaves more holes than a response should carry).
+ *
+ * The ticks come from what the till has actually keyed in, not from what is left
+ * in the queue: a re-entered bill leaves the queue the moment head office takes
+ * it, and a list that lost its ticks as the store worked would have somebody key
+ * the same receipt in twice.
  */
-function PaperReentry({ engine }: { engine: TillEngine }) {
-  const { till } = useTill();
-  const handover = till?.handover;
-  if (!handover) return null;
-
-  const done = new Set(handover.reentered);
+function PaperReentry({
+  engine,
+  handover,
+  entered,
+}: {
+  engine: TillEngine;
+  handover: HandoverState;
+  entered: number[];
+}) {
+  const done = new Set(entered);
   const left = handover.unsynced_hint.filter((seq) => !done.has(seq));
 
   return (

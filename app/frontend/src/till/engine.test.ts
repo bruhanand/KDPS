@@ -24,9 +24,8 @@ beforeAll(installBrowserGlobals);
 const { TillEngine } = await import("./engine");
 const { CounterLock, markTillSeen } = await import("./guard");
 const { commitBill } = await import("./numbering");
-const { dataset, fakeServer, freshTill, item, refuse } = await import("./testSupport");
+const { dataset, fakeServer, freshTill, item, refuse, register } = await import("./testSupport");
 const { emptyPayment } = await import("./tender");
-const { register } = await import("./testSupport");
 
 /** Wait for something the engine does without being awaited - Save & Print hands
  *  the bill to the queue and lets the send happen behind the cashier. */
@@ -302,10 +301,11 @@ describe("moving the counter to this machine (#189)", () => {
     expect(engine.getSnapshot().handover?.resume_from_seq).toBe(74);
   });
 
-  it("ticks a bill off the list when it is keyed back in", async () => {
+  it("ticks a bill off the list when it is keyed back in, and keeps the tick", async () => {
     // The tick has to outlive the queue: a re-entered bill leaves it the moment
     // the server takes it, and the list somebody is working down must not lose
-    // its place underneath them.
+    // its place underneath them. It also has to outlive the *list* - putting the
+    // job away is not the same as saying the receipts were never entered.
     const { engine, server } = engineOn();
     await engine.start();
     server.handover = async () => ({ resume_from_seq: 74, unsynced_hint: [61, 62], hole_count: 2 });
@@ -314,8 +314,31 @@ describe("moving the counter to this machine (#189)", () => {
 
     await engine.reenterFromPaper(emptyDraft(), 61);
     await until(() => engine.getSnapshot().pending === 0);
+    expect(engine.getSnapshot().paperEntered).toEqual([61]);
 
-    expect(engine.getSnapshot().handover?.reentered).toEqual([61]);
+    await engine.clearHandover();
+
+    expect(engine.getSnapshot().handover).toBe(null);
+    expect(engine.getSnapshot().paperEntered).toEqual([61]);
+    await expect(engine.reenterFromPaper(emptyDraft(), 61)).rejects.toThrow(/already/);
+  });
+
+  it("leaves the counter alone when the two clocks disagree about the year", async () => {
+    // 1 April, and a shop-floor clock a day out. `reconcileRegister` declines to
+    // move a counter against another year's frontier, and the handover must not
+    // step around that guard: a till standing at 25-26 bill 305 reset to bill 1
+    // would collide with every number it has already printed.
+    const { engine, server } = engineOn();
+    await engine.start();
+    await engine.commit(emptyDraft());
+    await until(() => engine.getSnapshot().pending === 0);
+    const before = engine.getSnapshot().nextNumber;
+    server.registers = [register({ fy: "99-00", last_accepted_seq: 5000 })];
+    server.handover = async () => ({ resume_from_seq: 5001, unsynced_hint: [], hole_count: 0 });
+
+    await engine.handOver("machine died");
+
+    expect(engine.getSnapshot().nextNumber).toBe(before);
   });
 
   it("tells the manager when head office refuses, rather than moving anything", async () => {

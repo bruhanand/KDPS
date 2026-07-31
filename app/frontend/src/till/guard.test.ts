@@ -124,6 +124,38 @@ describe("the single-till lock", () => {
     expect(await second.acquire()).toBe(true);
   });
 
+  it("gives back a lock granted after the tab had moved on", async () => {
+    // The hazard, and it needs a browser that takes its time to decide: `/sell`
+    // and `/sell/till` mount their own TillProvider, so walking between them
+    // builds a new engine and a new lock every time. A grant that lands after
+    // `release` has no `releaseHeld` to call, and holding it would strand the
+    // counter behind a tab that is no longer using it - every later engine in
+    // this tab told it was the second one, with no way out of it.
+    const taken = new Set<string>();
+    let grant = () => undefined as void;
+    const slow: LockManagerLike = {
+      async request(name, _options, callback) {
+        const decide = async () => {
+          if (taken.has(name)) return callback(null);
+          taken.add(name);
+          void callback({}).then(() => taken.delete(name));
+        };
+        await new Promise<void>((armed) => {
+          grant = () => void decide().then(armed);
+        });
+      },
+    };
+
+    const walkedAway = new CounterLock("DEO", slow);
+    const pending = walkedAway.acquire();
+    walkedAway.release();
+    grant();
+
+    expect(await pending).toBe(false);
+    await new Promise((settled) => setTimeout(settled, 0));
+    expect(taken.has("kdps-till-DEO"), "the abandoned lock was handed back").toBe(false);
+  });
+
   it("does not let one store's counter block another's", async () => {
     // Two shops on one machine are two counters, and neither is the other's
     // second tab.

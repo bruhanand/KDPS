@@ -22,6 +22,8 @@
 // the one event it exists to detect. It has to sit outside, and `localStorage` is
 // the only other durable place a browser offers. See `guard.ts`.
 
+import { financialYear } from "../lib/fiscal";
+
 import { META, readMeta, tillDb, writeMeta } from "./db";
 import type { HeldBill, TillDb } from "./db";
 import {
@@ -33,7 +35,7 @@ import {
 } from "./guard";
 import { dropHold, keepHold, listHolds, parkHold } from "./held";
 import type { HeldPayload } from "./held";
-import { commitBill, fastForwardTo, previewNextNumber, reenterPaperBill } from "./numbering";
+import { commitBill, paperEntries, previewNextNumber, reenterPaperBill } from "./numbering";
 import { deriveStatus } from "./status";
 import type { SyncStatus } from "./status";
 import { clearHalt, drainQueue, forceBootstrap, pushHeld, reconcileRegister, syncDown } from "./sync";
@@ -98,9 +100,14 @@ export interface TillSnapshot {
   storageLost: boolean;
   /** This tab owns the store's counter (as opposed to being the second one). */
   lockHeld: boolean;
-  /** The last register handover done on this machine, and how far through the
-   *  paper re-entry the store has got (#189). Null until one happens. */
+  /** The last register handover done on this machine (#189) - the list of bills
+   *  the old one never sent. Null until one happens, and again once the store
+   *  has put the list away. */
   handover: HandoverState | null;
+  /** Numbers this counter has keyed back in from their printed copies, this
+   *  financial year. The screen's ticks, and the reason a receipt cannot go in
+   *  twice; unlike `handover`, nothing on a screen can clear it. */
+  paperEntered: number[];
 }
 
 const EMPTY_COUNTS: TillCounts = {
@@ -136,6 +143,7 @@ function initialSnapshot(storeCode: string): TillSnapshot {
     storageLost: false,
     lockHeld: true,
     handover: null,
+    paperEntered: [],
   };
 }
 
@@ -328,14 +336,13 @@ export class TillEngine {
    * two ways `reenterPaperBill` enforces: it takes a number the counter has
    * already passed, and it takes it once.
    *
-   * The handover's tick list is updated in the same breath, so the screen
-   * somebody is working down does not lose its place when the bill syncs and
-   * leaves the queue.
+   * The record of what has been keyed in is written inside that same
+   * transaction, so a screen's tick and the guard against a second entry are one
+   * fact rather than two that can disagree.
    */
   async reenterFromPaper(draft: BillDraft, seq: number): Promise<QueuedBill> {
     this.refuseIfBlocked();
     const bill = await reenterPaperBill(this.db, this.storeCode, draft, seq);
-    await this.tickOffReentered(seq);
     await this.refresh();
     void this.pushAndRefresh();
     return bill;
@@ -390,17 +397,20 @@ export class TillEngine {
    * moved when it had not, and the next bill would take a number the old machine
    * has already printed. The refusal goes back to the caller and onto the screen.
    *
-   * What lands locally is the counter itself - fast-forwarded to the number the
-   * server says to resume from - and the list of bills the old machine never
-   * sent, which is the work the screen then walks somebody through.
+   * Moving the counter is left to `reconcileRegister`, which is the only thing in
+   * this layer that writes it from outside a commit - and which will not write it
+   * at all when the server's financial year and the till's disagree. Doing it
+   * again here from the handover's own `resume_from_seq` would step straight past
+   * that guard: a shop-floor clock a day out on 1 April would take a counter
+   * standing at 25-26 bill 305 and set it to 26-27 bill 1, and every bill after
+   * that would collide with one already posted.
    */
   async handOver(reason: string): Promise<HandoverState> {
     this.publish({ busy: true, lastError: "" });
     try {
       const answer = await this.transport.handover(reason);
-      const register = await reconcileRegister(this.db, this.transport);
-      await fastForwardTo(this.db, register.fy, answer.resume_from_seq);
-      const state: HandoverState = { ...answer, at: new Date().toISOString(), reentered: [] };
+      await reconcileRegister(this.db, this.transport);
+      const state: HandoverState = { ...answer, at: new Date().toISOString() };
       await writeMeta(this.db, META.handover, state);
       await this.refresh();
       return state;
@@ -409,19 +419,14 @@ export class TillEngine {
     }
   }
 
-  /** Put this counter's paper re-entry list away - the store is finished with it. */
+  /** Put this counter's paper re-entry list away - the store is finished with it.
+   *
+   *  Only the list. What has actually been keyed in stays where `numbering.ts`
+   *  wrote it, because that is what stops a receipt going in twice and it must
+   *  not be clearable from a screen. */
   async clearHandover(): Promise<void> {
     await writeMeta(this.db, META.handover, null);
     await this.refresh();
-  }
-
-  private async tickOffReentered(seq: number): Promise<void> {
-    const state = await readMeta<HandoverState | null>(this.db, META.handover, null);
-    if (!state || state.reentered.includes(seq)) return;
-    await writeMeta(this.db, META.handover, {
-      ...state,
-      reentered: [...state.reentered, seq].sort((a, b) => a - b),
-    });
   }
 
   // -- holds (#185, grill Q13) -----------------------------------------------
@@ -562,6 +567,7 @@ export class TillEngine {
     const register = await readMeta<RegisterPayload | null>(this.db, META.register, null);
     const syncedAt = await readMeta<string | null>(this.db, META.syncedAt, null);
     const handover = await readMeta<HandoverState | null>(this.db, META.handover, null);
+    const paperEntered = await paperEntries(this.db, financialYear());
     const nextNumber = await previewNextNumber(this.db, this.storeCode);
     const online = navigator.onLine;
     const datasetReady = Boolean(syncedAt);
@@ -578,6 +584,7 @@ export class TillEngine {
       halt,
       register,
       handover,
+      paperEntered,
       syncedAt,
       nextNumber,
       online,

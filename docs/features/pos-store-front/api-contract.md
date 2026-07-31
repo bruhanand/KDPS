@@ -425,11 +425,13 @@ Four things.
   It records the act and reads the state back; `resume_from_seq` is `last_accepted_seq + 1` handed to the new machine, not a counter the server moved.
   The till numbers bills and the server only ever accepts them, so a server that advanced its own counter would be holding an opinion about a number nobody has printed - and the next straggler from the old machine would then look like a hole that had been jumped over rather than one being filled.
 - **The audit row is its own table**, `sell_registerhandover`, rather than an `AccessChange`.
-  `AccessChange` is a maker-checker *proposal* waiting for a second administrator, and a handover is a thing that has already happened; borrowing the row would have put a handover in an approval queue nobody watches. It is `AccessChange`-shaped in the sense the contract meant - actor, reason, and the frontier at the time - and nothing reads it back into a decision. See `db-design.md` §2.
+  `AccessChange` is a maker-checker *proposal* waiting for a second administrator, and a handover is a thing that has already happened; borrowing the row would have put a handover in an approval queue nobody watches.
+  It is `AccessChange`-shaped in the sense the contract meant - actor, reason, and the frontier at the time - and nothing reads it back into a decision.
+  See `db-design.md` §2.
 
-**Still deferred, and now past #189:** labelling the Dashboard's collections card with the till's last sync time.
+**Moved out of #189 and into its own ticket, #215:** labelling the Dashboard's collections card with the till's last sync time.
 It was parked here as "PWA-shaped", and it is - but what it needs is the till layer mounted somewhere other than under the Sell routes, which would start a store's counter (and open its local database) on every screen that login opens.
-That is a change to when the till runs, not to how it is installed, and #189's four acceptance criteria do not touch it. It wants its own ticket and Anand's eye.
+That is a change to *when* the till runs rather than to how it is installed, so after two deferrals it is a decision with a ticket on it rather than a third paragraph.
 
 ### PUT `/api/sell/held-bills`
 
