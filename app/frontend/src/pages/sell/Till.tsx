@@ -389,7 +389,7 @@ function Handover({ engine, till }: { engine: TillEngine; till: TillSnapshot }) 
         </p>
       )}
 
-      {handover && <PaperReentry engine={engine} handover={handover} entered={till.paperEntered} />}
+      {handover && <PaperReentry engine={engine} till={till} handover={handover} />}
     </section>
   );
 }
@@ -412,15 +412,25 @@ function Handover({ engine, till }: { engine: TillEngine; till: TillSnapshot }) 
  */
 function PaperReentry({
   engine,
+  till,
   handover,
-  entered,
 }: {
   engine: TillEngine;
+  till: TillSnapshot;
   handover: HandoverState;
-  entered: number[];
 }) {
-  const done = new Set(entered);
-  const left = handover.unsynced_hint.filter((seq) => !done.has(seq));
+  const done = new Set(till.paperEntered);
+  // The frozen list the handover named **and** whatever head office is still
+  // missing now. Both, because neither alone is the job: the handover's list is
+  // capped at 200, so a machine that died at bill 5,000 would strand the rest
+  // out of reach - and the register's list is the live one, which drops a number
+  // the moment a re-entry syncs, taking its tick with it.
+  const outstanding = [...new Set([...handover.unsynced_hint, ...(till.register?.holes ?? [])])]
+    .sort((a, b) => a - b)
+    .filter((seq) => !done.has(seq));
+  const ticked = handover.unsynced_hint.filter((seq) => done.has(seq));
+  const listed = [...outstanding, ...ticked].sort((a, b) => a - b);
+  const stillHidden = Math.max(0, (till.register?.hole_count ?? 0) - outstanding.length);
 
   return (
     <div className="till-reentry" data-testid="till-reentry">
@@ -429,18 +439,22 @@ function PaperReentry({
         Handed over {formatDateTime(handover.at)}. These numbers were printed on the old
         machine and never reached head office. Find each printed copy and enter it again under
         the same number - the customer keeps the one they have.
-        {handover.hole_count > handover.unsynced_hint.length && (
-          <> {handover.hole_count} numbers are missing in total; the first {handover.unsynced_hint.length} are listed.</>
+        {stillHidden > 0 && (
+          <>
+            {" "}
+            {stillHidden} more are missing than can be listed at once; they appear here as these
+            are entered and sync.
+          </>
         )}
       </p>
 
-      {handover.unsynced_hint.length === 0 ? (
+      {listed.length === 0 ? (
         <p className="muted-cell" data-testid="till-reentry-none">
-          Nothing was left behind - head office had every bill the old machine printed.
+          Nothing left to enter - head office has every bill this list named.
         </p>
       ) : (
         <ul className="till-reentry-list">
-          {handover.unsynced_hint.map((seq) => (
+          {listed.map((seq) => (
             <li key={seq} className={done.has(seq) ? "till-reentry-done" : ""}>
               <span className="till-reentry-no">Bill {seq}</span>
               {done.has(seq) ? (
@@ -461,15 +475,15 @@ function PaperReentry({
         type="button"
         className="btn"
         data-testid="till-reentry-clear"
-        disabled={left.length > 0}
+        disabled={outstanding.length > 0}
         title={
-          left.length > 0
+          outstanding.length > 0
             ? "There are still bills on this list to key in."
             : "Put the list away - every bill on it has been entered."
         }
         onClick={() => void engine.clearHandover()}
       >
-        {left.length > 0 ? `${left.length} still to enter` : "Put this list away"}
+        {outstanding.length > 0 ? `${outstanding.length} still to enter` : "Put this list away"}
       </button>
     </div>
   );

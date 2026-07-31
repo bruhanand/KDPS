@@ -126,6 +126,9 @@ export class CounterLock {
    *  that has already moved on - and every counter in that tab afterwards would
    *  be told it was the second one. */
   private wanted = false;
+  /** An ask the browser has not answered yet, so a second ask joins it rather
+   *  than racing it - see `acquire`. */
+  private asking: Promise<boolean> | null = null;
   /** The lock manager itself failed. Counted with "there is no lock manager":
    *  an API that told us nothing is not evidence of a second till. */
   private broken = false;
@@ -162,8 +165,14 @@ export class CounterLock {
   acquire(): Promise<boolean> {
     const locks = this.locks;
     if (locks === undefined || this.broken || this.holding) return Promise.resolve(true);
+    // Single-flight. `refresh` asks on the commit path and on two timers, and a
+    // second `ifAvailable` request made while the first is still deciding finds
+    // the name taken *by this very tab* and answers false - which would publish
+    // "already open in another tab" over a counter that had just been granted
+    // the lock, and leave it refusing to bill until the next refresh.
+    if (this.asking) return this.asking;
     this.wanted = true;
-    return new Promise<boolean>((decided) => {
+    const asking = new Promise<boolean>((decided) => {
       void locks
         .request(
           lockName(this.storeCode),
@@ -195,6 +204,12 @@ export class CounterLock {
           this.broken = true;
           decided(true);
         });
+    });
+    this.asking = asking;
+    // Cleared once the browser has decided, not once the lock is given back: the
+    // request the callback is sitting inside outlives this promise by design.
+    return asking.finally(() => {
+      this.asking = null;
     });
   }
 

@@ -188,10 +188,15 @@ function Counter({ storeName }: { storeName?: string }) {
    * stamping it with today's clock would put it in the wrong day's takings and
    * price its tax off the wrong slab.
    *
-   * Read once into state, exactly like the hold list is: after that the screen is
-   * the cashier's, and a value that kept re-reading the address bar would put
-   * them back into paper mode after they had left it - which is also why leaving
-   * paper mode strips the parameter rather than only clearing the state.
+   * **Derived from the address and the counter's live state, never held in
+   * state.** Each Sell route mounts its own `TillProvider`, so arriving here
+   * from the handover list means a brand-new engine whose first snapshot knows
+   * nothing yet - no register, no handover, no counter. A mode resolved once at
+   * mount would therefore resolve to "not a paper bill" every single time, and
+   * the screen would quietly hand the cashier an ordinary counter: Save & Print
+   * would take a *new* number, print a second receipt, and leave the hole
+   * exactly where it was. So the address bar is the request and the snapshot is
+   * the answer, and leaving paper mode means taking the request away.
    *
    * Only a number the counter still regards as outstanding is honoured. The link
    * that gets somebody here is on the handover list, so a number from anywhere
@@ -199,17 +204,15 @@ function Counter({ storeName }: { storeName?: string }) {
    * second time under a number head office already holds - which halts the whole
    * store's queue when it lands (`BILL_NO_TAKEN` is terminal).
    */
-  const [paper, setPaper] = useState<number | null>(() => outstandingPaperSeq(params, till));
+  const paper = useMemo(() => outstandingPaperSeq(params, till), [params, till]);
   const [paperAt, setPaperAt] = useState(() => localNow());
 
-  function leavePaperMode() {
-    setPaper(null);
-    if (params.has("paper")) {
-      const next = new URLSearchParams(params);
-      next.delete("paper");
-      setParams(next, { replace: true });
-    }
-  }
+  const leavePaperMode = useCallback(() => {
+    if (!params.has("paper")) return;
+    const next = new URLSearchParams(params);
+    next.delete("paper");
+    setParams(next, { replace: true });
+  }, [params, setParams]);
 
   const today = useMemo(() => tillToday(), []);
   // Which state this shop is registered in - the other half of every B2B tax
@@ -803,7 +806,7 @@ function messageOf(error: unknown): string {
  * to bill again under a number the server already holds - which halts the whole
  * store's queue when it lands.
  */
-function outstandingPaperSeq(
+export function outstandingPaperSeq(
   params: URLSearchParams,
   till: TillSnapshot | null,
 ): number | null {
