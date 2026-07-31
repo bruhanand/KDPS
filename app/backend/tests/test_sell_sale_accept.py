@@ -898,7 +898,7 @@ def test_a_bill_that_owes_the_customer_money_issues_a_note_and_no_cash(counter):
 def test_a_gstin_on_the_bill_splits_the_tax_and_starts_the_irn_clock(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "10AABCU9603R1ZM"  # same state as the store
+    payload["customer"]["gstin"] = "10AABCU9603R1Z2"  # same state as the store
 
     response = _post(counter, payload)
 
@@ -911,7 +911,7 @@ def test_a_gstin_on_the_bill_splits_the_tax_and_starts_the_irn_clock(counter):
 def test_a_buyer_in_another_state_makes_it_igst(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "20AABCU9603R1ZM"  # Jharkhand; the store is Bihar
+    payload["customer"]["gstin"] = "20AABCU9603R1Z1"  # Jharkhand; the store is Bihar
 
     _post(counter, payload)
 
@@ -921,13 +921,84 @@ def test_a_buyer_in_another_state_makes_it_igst(counter):
 def test_a_printed_split_that_disagrees_with_the_gstin_is_flagged(counter):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
-    payload["customer"]["gstin"] = "20AABCU9603R1ZM"
+    payload["customer"]["gstin"] = "20AABCU9603R1Z1"
     payload["b2b_tax_kind"] = "cgst_sgst"
 
     response = _post(counter, payload)
 
     assert response.status_code == 201
     assert ContinuityFlag.Kind.GST_MISMATCH in response.json()["flags"]
+
+
+def test_a_well_formed_gstin_raises_nothing(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = "10AABCU9603R1Z2"
+
+    response = _post(counter, payload)
+
+    assert response.json()["flags"] == []
+
+
+def test_a_mistyped_gstin_is_flagged_and_the_bill_still_lands(counter):
+    """#187's acceptance: validated softly - flagged, never refused.
+
+    The customer is at the counter holding the garment. A cashier who fumbled one
+    character of fifteen has made a tax invoice head office must correct, not a
+    sale the shop should decline.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    # The real registration transposed - the shape survives, the check digit does
+    # not, which is the commonest way a GSTIN is mistyped and the one that costs
+    # the customer their input credit.
+    payload["customer"]["gstin"] = "10AABCU9603R1ZM"
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert ContinuityFlag.Kind.GSTIN_INVALID in response.json()["flags"]
+    flag = ContinuityFlag.objects.get(kind=ContinuityFlag.Kind.GSTIN_INVALID)
+    assert flag.details["gstin"] == "10AABCU9603R1ZM"
+    assert "check digit" in flag.details["reason"]
+
+
+def test_a_mistyped_gstin_still_prints_and_records_a_split(counter):
+    """The two characters that decide the tax are taken as typed.
+
+    The till printed the customer's copy from them minutes ago and offline; a
+    server that quietly chose otherwise would put one tax on the paper and
+    another in the books. It is flagged for a human, never re-taxed.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = "20AABCU9603R1ZM"  # Jharkhand, and mistyped
+
+    _post(counter, payload)
+
+    assert Sale.objects.get().b2b_tax_kind == Sale.B2bTaxKind.IGST
+
+
+def test_a_gstin_is_stored_upper_case_however_it_was_typed(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"]["gstin"] = " 10aabcu9603r1z2 "
+
+    response = _post(counter, payload)
+
+    assert Sale.objects.get().buyer_gstin == "10AABCU9603R1Z2"
+    assert response.json()["flags"] == []
+
+
+def test_a_bill_with_no_gstin_starts_no_clock_and_raises_nothing(counter):
+    """#187's fourth acceptance criterion: B2C bills are completely unaffected."""
+    _shelf(counter["store"], 3)
+
+    response = _post(counter, bill_payload(counter["store"], counter["salesman"], till_seq=1))
+
+    assert response.json()["flags"] == []
+    assert Sale.objects.get().b2b_tax_kind == Sale.B2bTaxKind.NONE
+    assert not IrnQueueItem.objects.exists()
 
 
 def test_tax_that_disagrees_with_the_dated_slab_is_flagged_not_refused(counter):
@@ -983,11 +1054,17 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """All six have a producer now, and each is asserted where it is raised: the
-    four counter ones here, `offer_mismatch` in the rulebook suite (#183), and
-    `aged_uncosted` in the deferred-costing suite (#186). The last is the only one
-    nothing on the accept path can raise - it is a fact about a queue that has not
-    drained, so it is raised by the nightly ageing pass and not by a bill.
+    """All seven have a producer now, and each is asserted where it is raised: the
+    four counter ones here, `offer_mismatch` in the rulebook suite (#183),
+    `aged_uncosted` in the deferred-costing suite (#186) - raised by the nightly
+    ageing pass on a queue that has not drained, not by a bill - and
+    `gstin_invalid` here too (#187).
+
+    `gstin_invalid` is the one kind db-design did not list. It is deliberately its
+    own: folding it into `gst_mismatch` would put "a character of this
+    registration is mistyped" and "the tax on this bill is not the dated slab's"
+    in one bucket, and head office answers those two with entirely different
+    work.
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",
@@ -995,6 +1072,7 @@ def test_every_flag_kind_the_contract_names_exists(counter):
         "return_orig_missing",
         "offer_mismatch",
         "gst_mismatch",
+        "gstin_invalid",
         "aged_uncosted",
     }
 

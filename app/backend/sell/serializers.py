@@ -14,7 +14,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from sell.models import ContinuityFlag, HeldBill, Sale, SaleLine, SaleTender
+from sell.models import ContinuityFlag, HeldBill, IrnQueueItem, Sale, SaleLine, SaleTender
 
 
 class _CustomerWriteSerializer(serializers.Serializer):
@@ -302,6 +302,11 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
     #: behind it to borrow the number from - the dataset is a *counter's* copy,
     #: and whoever is looking up an old bill may not be standing at one.
     store_gstin = serializers.CharField(source="store.gstin.gstin", read_only=True, default="")
+    #: The e-invoice reference, once head office has raised one (#187). Blank on
+    #: every B2C bill and on a B2B bill still in the queue - and the reprint
+    #: prints "IRN to follow" for exactly that blank, because that is what the
+    #: original said when it came off the counter's printer.
+    irn = serializers.CharField(source="irn_queue_item.irn", read_only=True, default="")
     lines = SaleLineReadSerializer(many=True, read_only=True)
     tenders = SaleTenderReadSerializer(many=True, read_only=True)
     flags = FlagReadSerializer(many=True, read_only=True)
@@ -326,6 +331,7 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
             "customer_mobile",
             "buyer_gstin",
             "b2b_tax_kind",
+            "irn",
             "gross_paise",
             "discount_paise",
             "net_paise",
@@ -376,3 +382,82 @@ class SaleRowSerializer(serializers.ModelSerializer[Sale]):
             shown = f"{shown} +{len(brands) - 2}"
         piece_word = "piece" if pieces == 1 else "pieces"
         return f"{pieces} {piece_word} · {shown}" if shown else f"{pieces} {piece_word}"
+
+
+class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):
+    """One B2B bill on head office's clock (#187, grill Q8).
+
+    Everything a clerk needs to raise the invoice on the government portal
+    without opening the bill: whose registration it is, what it was worth, which
+    split it carries, and how long is left. `days_left` is annotated by the view
+    from one `today` rather than computed per row - thirty rows must not disagree
+    about what day it is because the clock ticked over mid-response.
+    """
+
+    doc_number = serializers.CharField(source="sale.doc_number", read_only=True)
+    store_code = serializers.CharField(source="sale.store.code", read_only=True)
+    store_name = serializers.CharField(source="sale.store.name", read_only=True)
+    billed_at = serializers.DateTimeField(source="sale.billed_at", read_only=True)
+    buyer_gstin = serializers.CharField(source="sale.buyer_gstin", read_only=True)
+    customer_name = serializers.CharField(source="sale.customer_name", read_only=True)
+    b2b_tax_kind = serializers.CharField(source="sale.b2b_tax_kind", read_only=True)
+    net_paise = serializers.IntegerField(source="sale.net_paise", read_only=True)
+    gst_paise = serializers.IntegerField(source="sale.gst_paise", read_only=True)
+    handled_by_name = serializers.CharField(
+        source="handled_by.username", read_only=True, default=""
+    )
+    days_left = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IrnQueueItem
+        fields = [
+            "id",
+            "doc_number",
+            "store_code",
+            "store_name",
+            "billed_at",
+            "buyer_gstin",
+            "customer_name",
+            "b2b_tax_kind",
+            "net_paise",
+            "gst_paise",
+            "due_on",
+            "days_left",
+            "status",
+            "irn",
+            "handled_by_name",
+            "handled_at",
+        ]
+
+    def get_days_left(self, obj: IrnQueueItem) -> int:
+        """Days to the deadline; negative once it has gone by.
+
+        `today` comes in on the serializer's context because it is the view's
+        single reading of the clock (Rule 11 - the deadline is data, and so is the
+        day it is measured against).
+        """
+        return (obj.due_on - self.context["today"]).days
+
+
+class IrnQueueWriteSerializer(serializers.Serializer):
+    """What head office writes back after a run on the portal.
+
+    Only the two terminal answers: a row goes to `generated` with the reference
+    the portal gave, or to `failed` so the clerk can see what still has to be
+    chased. It never goes back to `pending` - "we tried and it did not work" is a
+    fact worth keeping, and a row that could be reset would lose it.
+    """
+
+    status = serializers.ChoiceField(
+        choices=[IrnQueueItem.Status.GENERATED, IrnQueueItem.Status.FAILED]
+    )
+    irn = serializers.CharField(max_length=64, allow_blank=True, required=False, default="")
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        # A generated row with no reference on it is the one shape that would
+        # make the queue lie: it would leave the list, and the bill would still
+        # have no IRN on it anywhere.
+        if attrs["status"] == IrnQueueItem.Status.GENERATED and not attrs["irn"].strip():
+            raise serializers.ValidationError("Give the IRN the portal returned.")
+        attrs["irn"] = attrs["irn"].strip()
+        return attrs

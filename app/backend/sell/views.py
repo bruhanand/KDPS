@@ -22,6 +22,7 @@ from typing import Any
 
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -31,10 +32,12 @@ from rest_framework.views import APIView
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_store
-from sell.models import HeldBill, Sale, SaleLine
-from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
+from sell.models import HeldBill, IrnQueueItem, Sale, SaleLine
+from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill, CanWorkIrnQueue
 from sell.serializers import (
     HeldBillsWriteSerializer,
+    IrnQueueRowSerializer,
+    IrnQueueWriteSerializer,
     SaleReadSerializer,
     SaleRowSerializer,
     SaleWriteSerializer,
@@ -45,6 +48,12 @@ from sell.services.register import register_state
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
+
+#: How many of the *settled* rows the queue sends back. The work is the pending
+#: list, which is never truncated - what is bounded is the history behind it, and
+#: a clerk looking for a bill they raised in March searches for it by number
+#: rather than scrolling. Named so the screen can say the list is cut.
+SETTLED_LIMIT = 200
 
 
 def _sales(user: Any) -> QuerySet[Sale]:
@@ -245,6 +254,106 @@ class HeldBillsView(APIView):
                     },
                 )
         return Response({"count": len(rows)})
+
+
+def _irn_rows(user: Any) -> QuerySet[IrnQueueItem]:
+    """The queue at the stores this caller may read, in deadline order.
+
+    `scope_by_store` on the bill's own store, not `scoped_stores`: the rows are
+    a store's bills, so they must obey the top-bar unit switcher exactly as every
+    other document list does. An accountant scoped to the whole network sees the
+    whole network until they pick a shop, and then they see that shop - which is
+    the same sentence the Vendor Ledger and the sales list already hold to.
+
+    Ordering is `IrnQueueItem.Meta` - due date, then id. It is the model's, not
+    this function's, because "the oldest deadline first" is what the queue *is*.
+    """
+    return scope_by_store(
+        IrnQueueItem.objects.select_related("sale", "sale__store", "handled_by"),
+        user,
+        "sale__store_id",
+    )
+
+
+class IrnQueueView(APIView):
+    """`GET /api/sell/irn-queue` - the B2B bills head office still owes an IRN.
+
+    Above the e-invoice threshold every GSTIN-bearing counter sale must carry an
+    IRN within thirty days or it is invalid and the customer loses their input
+    credit (grill Q8). The store cannot raise one and is never asked to: the
+    deadline rides as data into this list, oldest first, and the people who file
+    the returns work it.
+
+    Read-only about the *bill*. Nothing here can touch a posted sale (A7); the
+    sibling PUT writes the portal's answer onto the queue row beside it, which is
+    a fact about a filing rather than a fact about a sale.
+    """
+
+    permission_classes = [IsAuthenticated, CanWorkIrnQueue]
+
+    def get(self, request: Request) -> Response:
+        today = timezone.localdate()
+        rows = _irn_rows(request.user)
+        wanted = (request.query_params.get("status") or IrnQueueItem.Status.PENDING).strip()
+        if wanted != "all":
+            if wanted not in IrnQueueItem.Status.values:
+                return Response(
+                    refusal_body("VALIDATION", f"'{wanted}' is not a queue status."), status=400
+                )
+            rows = rows.filter(status=wanted)
+        # The pending list is the work and is never cut; the settled tail behind
+        # it is history, and history is what gets long.
+        listed = list(rows if wanted == IrnQueueItem.Status.PENDING else rows[:SETTLED_LIMIT])
+        pending = _irn_rows(request.user).filter(status=IrnQueueItem.Status.PENDING)
+        return Response(
+            {
+                "today": today,
+                "rows": IrnQueueRowSerializer(listed, many=True, context={"today": today}).data,
+                # Both counts are over the *pending* rows whatever is being
+                # listed: they are the header a clerk reads to know whether
+                # anything is on fire, and a filter is not supposed to move it.
+                "pending_count": pending.count(),
+                "overdue_count": pending.filter(due_on__lt=today).count(),
+            }
+        )
+
+
+class IrnQueueItemView(APIView):
+    """`PUT /api/sell/irn-queue/{id}` - what the portal answered.
+
+    One way only. A row goes to `generated` with its reference or to `failed`,
+    and a row already generated is refused: an IRN is the invoice's identity at
+    the GSTN, and a second one silently replacing the first would leave two
+    documents in the world claiming to be this bill.
+    """
+
+    permission_classes = [IsAuthenticated, CanWorkIrnQueue]
+
+    def put(self, request: Request, pk: int) -> Response:
+        form = IrnQueueWriteSerializer(data=request.data)
+        if not form.is_valid():
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
+        # Out of scope answers 404 rather than 403, exactly as the sale detail
+        # does: a 403 would confirm a bill this person may not see exists.
+        row = _irn_rows(request.user).filter(pk=pk).first()
+        if row is None:
+            return Response(
+                refusal_body("NOT_FOUND", f"No queued bill #{pk} at your stores."), status=404
+            )
+        if row.status == IrnQueueItem.Status.GENERATED:
+            return Response(
+                refusal_body(
+                    "IRN_ALREADY_RECORDED",
+                    f"{row.sale.doc_number} already carries IRN {row.irn}.",
+                ),
+                status=409,
+            )
+        row.status = form.validated_data["status"]
+        row.irn = form.validated_data["irn"]
+        row.handled_by = request.user
+        row.handled_at = timezone.now()
+        row.save(update_fields=["status", "irn", "handled_by", "handled_at", "updated_at"])
+        return Response(IrnQueueRowSerializer(row, context={"today": timezone.localdate()}).data)
 
 
 class SaleDetailView(APIView):

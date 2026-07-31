@@ -624,6 +624,13 @@ class ContinuityFlag(TimeStampedModel):
         OFFER_MISMATCH = "offer_mismatch", "Offer applied differs from the rulebook"
         GST_MISMATCH = "gst_mismatch", "Tax charged differs from the dated slab"
         AGED_UNCOSTED = "aged_uncosted", "Sold before inward, still unpriced"
+        # #187. Not in db-design's original six: the B2B ticket asks for the
+        # buyer's GSTIN to be "validated softly (flag, not block)", and the five
+        # existing kinds all mean something else. Folding it into GST_MISMATCH
+        # would put "a character of this registration is mistyped" and "the tax
+        # on this bill is not the dated slab's" in one bucket, and head office
+        # answers those two with entirely different work.
+        GSTIN_INVALID = "gstin_invalid", "The buyer's GSTIN is not well formed"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
