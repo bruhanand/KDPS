@@ -28,7 +28,6 @@ import CrossStoreSearch from "./CrossStoreSearch";
 import { RTVListPage } from "./OutboundRTV";
 import { StockCountListPage } from "./StockCount";
 import StockOnHand from "./StockOnHand";
-import "./Inventory.css";
 
 /** Tab slug → the screen it draws. Every slug in `INVENTORY_FOLD.tabs` needs one
  *  here; `Inventory.test` fails the build otherwise, because a tab the sidebar

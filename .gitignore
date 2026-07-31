@@ -64,3 +64,6 @@ ds-bundle/
 .design-sync/.cache/
 .design-sync/learnings/
 .design-sync/node_modules
+
+# TypeScript incremental build cache (tsc -b).
+*.tsbuildinfo

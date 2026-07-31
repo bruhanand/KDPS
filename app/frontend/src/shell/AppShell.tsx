@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { Bell, ChevronDown, LayoutDashboard, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { HostedPageContext } from "../components/PageHeader";
 import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
-import { headingOwning, isActiveFold, isActiveItem, sidebarRows, testId } from "./navConfig";
-import type { NavFoldDef, NavItem, VisibleSection } from "./navConfig";
+import {
+  headingOwning,
+  isActiveFold,
+  isActiveItem,
+  itemPath,
+  sectionDef,
+  sectionTabsFor,
+  sidebarRows,
+  testId,
+} from "./navConfig";
+import type { NavFoldDef, NavItem, NavStripDef, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
@@ -404,6 +414,23 @@ function Sidebar({
     });
   }
 
+  /** A strip: one link into the section's own first screen. Its other screens
+   *  are the tab row `SectionTabsProvider` puts on those screens - so, like a
+   *  fold, the dividing happens inside the page and never here (D10 §1). */
+  function renderStrip(row: { key: string; strip: NavStripDef; label: string; tabs: NavItem[] }) {
+    const def = sectionDef(row.strip.section);
+    return oneLineRow({
+      key: row.key,
+      icon: def?.icon ?? LayoutDashboard,
+      layer: def?.layer ?? "home",
+      // The first tab this person can see - never a screen access already hid.
+      to: row.tabs[0].to,
+      label: row.label,
+      active: row.tabs.some((i) => isActiveItem(i, pathname)),
+      testId: `nav-strip-${row.strip.section}`,
+    });
+  }
+
   return (
     <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
       <div className="brand">
@@ -415,11 +442,63 @@ function Sidebar({
       </div>
       <nav className="nav" data-testid="sidebar-nav">
         {rows.map((row) =>
-          row.kind === "section" ? renderSection(row.section) : renderFold(row.fold),
+          row.kind === "section"
+            ? renderSection(row.section)
+            : row.kind === "fold"
+              ? renderFold(row.fold)
+              : renderStrip(row),
         )}
       </nav>
       <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
     </aside>
+  );
+}
+
+/** The tab row for a stripped section, put on the section's own screens (#227).
+ *
+ *  The screens are untouched: they render their own `PageHeader`, and this
+ *  provides the `HostedPageContext` that header already knows how to draw - the
+ *  same route the Inventory fold uses. Folding a section therefore never means
+ *  editing the screens inside it.
+ *
+ *  Three rules, all of them from the grill:
+ *   · The tabs are the ones the *sidebar* would have drawn, so a strip can never
+ *     offer a screen access hid.
+ *   · One surviving tab draws no row at all - a strip of one is not a choice.
+ *   · Only a persona whose sidebar strips the section gets a row; an owner whose
+ *     sidebar still expands Sell sees no second copy of their own menu.
+ *
+ *  A page with its own hosted header (the Inventory fold) nests its provider
+ *  inside this one and wins by React context, so the fold keeps working. */
+export function SectionTabsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  const { pathname } = useLocation();
+  const strip = sectionTabsFor(pathname, user);
+  if (!strip) return <>{children}</>;
+
+  const row = (
+    <div className="page-tabs" data-testid="section-tabs">
+      {strip.tabs.map((tab) => {
+        const on = tab.to === strip.active.to;
+        return (
+          <Link
+            key={tab.to}
+            to={tab.to}
+            className={`page-tab ${on ? "active" : ""}`}
+            aria-current={on ? "page" : undefined}
+            data-testid={`section-tab-${itemPath(tab).split("/").pop() || "home"}`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+
+  return (
+    <HostedPageContext.Provider value={{ crumb: strip.crumb, title: strip.title, tabs: row }}>
+      {children}
+    </HostedPageContext.Provider>
   );
 }
 
@@ -499,7 +578,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             every screen refetches under the new unit instead of leaving the
             previous store's numbers on screen. */}
         <main className="content" key={contextKey(activeStore, activeBrand)}>
-          {children}
+          <SectionTabsProvider>{children}</SectionTabsProvider>
         </main>
       </div>
     </div>
