@@ -5,6 +5,10 @@ day before the check says so, and `employee_returns` is the row it leaves. The
 kind is its own rather than a note on a bill because the finding is a pattern
 *across* bills: there is no one bill to hang it on and no one bill that answers
 it.
+
+`ContinuityFlag.cleared_note` is what the person who cleared a flag said about
+it, in its own column rather than a key in `details`, because `details` is the
+machine's finding and is rewritten on every nightly run.
 """
 
 from django.db import migrations, models
@@ -17,6 +21,20 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AddField(
+            model_name="continuityflag",
+            name="cleared_note",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="What the person who cleared this said about it. Its own "
+                "column rather than a key in `details`, because `details` is the "
+                "finding - written by a machine, rewritten on every nightly run - "
+                "and a person's sentence about it must not be something a later "
+                "pass can overwrite.",
+                max_length=240,
+            ),
+        ),
         migrations.AddField(
             model_name="sellpolicy",
             name="return_review_count",

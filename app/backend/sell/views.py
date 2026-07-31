@@ -23,16 +23,18 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from approvals.names import display_name
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_entitlement, scope_by_store
-from sell.models import HeldBill, IrnQueueItem, Sale, SaleLine
+from sell.models import ContinuityFlag, HeldBill, IrnQueueItem, Sale, SaleLine
 from sell.permissions import (
     CanHandOverTill,
     CanReadOrBill,
@@ -40,8 +42,11 @@ from sell.permissions import (
     CanRunTill,
     CanTakeReturns,
     CanWorkIrnQueue,
+    CanWorkStoreFlags,
 )
 from sell.serializers import (
+    ContinuityFlagRowSerializer,
+    ContinuityFlagWriteSerializer,
     HeldBillsWriteSerializer,
     IrnQueueRowSerializer,
     IrnQueueWriteSerializer,
@@ -515,3 +520,142 @@ class SaleDetailView(APIView):
                 refusal_body("NOT_FOUND", f"No bill '{doc_number}' at your stores."), status=404
             )
         return Response(SaleReadSerializer(sale).data)
+
+
+def _flags(user: Any) -> QuerySet[ContinuityFlag]:
+    """This store's exception rows as the caller *reads* them.
+
+    `scope_by_store` on the flag's own store, so the top-bar unit switcher
+    narrows the list exactly as every other document list does. Head office
+    scoped to the network sees the network until it picks a shop.
+    """
+    return scope_by_store(
+        ContinuityFlag.objects.select_related("store", "sale", "resolved_by"), user, "store_id"
+    )
+
+
+def _flag_to_act_on(user: Any) -> QuerySet[ContinuityFlag]:
+    """The rows the caller may *clear* - the entitlement boundary.
+
+    Deliberately not `_flags`. ADR-0003: what you are looking at must never decide
+    what you may do, and the reading gate obeys the switcher - so a manager who
+    narrowed the list to one shop would find every other shop's row answering
+    "no such flag", which is the switcher silently stripping a right an
+    administrator granted.
+    """
+    return scope_by_entitlement(
+        ContinuityFlag.objects.select_related("store", "sale"), user, "store_id"
+    )
+
+
+class StoreFlagsView(APIView):
+    """`GET /api/sell/flags` - what the counter's day left open (#188).
+
+    The list side of the exception queue the accept pipeline and the nightly
+    check write to. It is a *list*, not a report: every row is something somebody
+    is expected to look at and then say something about, which is what the
+    sibling PUT is for.
+
+    Gated on `money`, not `sell` - see `sell.permissions.CanWorkStoreFlags`.
+    """
+
+    permission_classes = [IsAuthenticated, CanWorkStoreFlags]
+
+    def get(self, request: Request) -> Response:
+        rows = _flags(request.user)
+        wanted = (request.query_params.get("status") or ContinuityFlag.Status.OPEN).strip()
+        if wanted != "all":
+            if wanted not in ContinuityFlag.Status.values:
+                return Response(
+                    refusal_body("VALIDATION", f"'{wanted}' is not a flag status."), status=400
+                )
+            rows = rows.filter(status=wanted)
+        asked = (request.query_params.get("date") or "").strip()
+        if asked:
+            try:
+                day = parse_date(asked)
+            except ValueError:  # correctly shaped and impossible, e.g. 2026-02-30
+                day = None
+            if day is None:
+                return Response(
+                    refusal_body("VALIDATION", f"'{asked}' is not a date (use 2026-07-31)."),
+                    status=400,
+                )
+            rows = ContinuityFlag.for_day(rows, day)
+        # **Open rows are never cut, whichever filter is on** - the same rule the
+        # IRN queue holds to, for the same reason: they are the work, and a row
+        # dropped off the bottom is an exception nobody ever answers. What is
+        # bounded is the settled tail behind them, which is history.
+        settled = list(
+            rows.exclude(status=ContinuityFlag.Status.OPEN).order_by("-created_at")[
+                : SETTLED_LIMIT + 1
+            ]
+        )
+        truncated = len(settled) > SETTLED_LIMIT
+        listed = sorted(
+            list(rows.filter(status=ContinuityFlag.Status.OPEN)) + settled[:SETTLED_LIMIT],
+            key=lambda row: row.created_at,
+            reverse=True,
+        )
+        return Response(
+            {
+                "rows": ContinuityFlagRowSerializer(listed, many=True).data,
+                "truncated": truncated,
+                # Over the *open* rows whatever is being listed: it is the header
+                # somebody reads to know whether anything is waiting, and a filter
+                # is not supposed to move it.
+                "open_count": _flags(request.user)
+                .filter(status=ContinuityFlag.Status.OPEN)
+                .count(),
+            }
+        )
+
+
+class StoreFlagView(APIView):
+    """`PUT /api/sell/flags/{id}` - somebody looked at this one.
+
+    Two answers, and no way back to `open`. **Resolved** is "dealt with";
+    **ignored** is "looked at, needs nothing" - and the second takes a note,
+    because the first is usually evidenced by the thing itself having changed and
+    the second is evidenced by nothing unless a person says why.
+
+    It cannot touch the bill (A7). Clearing an exception is a statement about
+    somebody's attention, not a correction of a document - a bill that really is
+    wrong is corrected by the kernel's reversing transition and by nothing here.
+    """
+
+    permission_classes = [IsAuthenticated, CanWorkStoreFlags]
+
+    def put(self, request: Request, pk: int) -> Response:
+        form = ContinuityFlagWriteSerializer(data=request.data)
+        if not form.is_valid():
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
+        # Out of scope answers 404 rather than 403, exactly as the IRN row and the
+        # sale detail do: a 403 would confirm a bill this person may not see.
+        rows = _flag_to_act_on(request.user).filter(pk=pk)
+        if not rows.exists():
+            return Response(
+                refusal_body("NOT_FOUND", f"No exception #{pk} at your stores."), status=404
+            )
+        # The guard is the UPDATE's own WHERE clause rather than a read then a
+        # write: two people clearing one row - or one person on two tabs - would
+        # both see `open`, both pass, and the second answer would silently replace
+        # the first, taking the note and the name with it.
+        written = rows.filter(status=ContinuityFlag.Status.OPEN).update(
+            status=form.validated_data["status"],
+            cleared_note=form.validated_data["note"],
+            resolved_by=request.user,
+            resolved_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        row = _flag_to_act_on(request.user).get(pk=pk)
+        if not written:
+            return Response(
+                refusal_body(
+                    "FLAG_ALREADY_CLEARED",
+                    f"{row.get_kind_display()} was already {row.get_status_display().lower()}"
+                    f"{f' by {display_name(row.resolved_by)}' if row.resolved_by_id else ''}.",
+                ),
+                status=409,
+            )
+        return Response(ContinuityFlagRowSerializer(row).data)

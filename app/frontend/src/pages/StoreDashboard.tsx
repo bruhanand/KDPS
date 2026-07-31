@@ -21,8 +21,10 @@ import {
   Truck,
 } from "lucide-react";
 
+import { useAuth } from "../auth/AuthContext";
 import { api, apiErrorMessage } from "../lib/api";
 import { Money } from "../lib/format";
+import { userCan } from "../shell/navConfig";
 import {
   queueRows,
   shortDay,
@@ -115,7 +117,11 @@ function TodayRow({ d }: { d: DashboardPayload }) {
 
 function ActionQueue({ d }: { d: DashboardPayload }) {
   const navigate = useNavigate();
-  const rows = queueRows(d);
+  const { user } = useAuth();
+  // A row whose screen this person's sections do not reach is dropped rather
+  // than drawn as a number that opens onto a refusal - the same rule Home holds
+  // to with the payable tile.
+  const rows = queueRows(d, (section, capability) => userCan(user, section, capability));
   return (
     <div className="card panel" data-testid="action-queue">
       <div className="panel-head">

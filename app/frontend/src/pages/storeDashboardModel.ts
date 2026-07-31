@@ -1,3 +1,5 @@
+import type { Capability } from "../shell/navConfig";
+
 // The store Dashboard's payload, and the pure part of drawing it (#174, D10 §2).
 //
 // Split out of the component so it can be tested: this suite renders nothing, so
@@ -42,13 +44,22 @@ export interface QueueRow {
   to: string;
 }
 
+/** A row whose screen answers to a section this person may not hold. The
+ *  Dashboard itself is `home: view` - the rung everybody has - so most rows open
+ *  onto work their own gate has already let this person see. `continuity_flags`
+ *  is the exception: it opens the Money section, and a count that sends somebody
+ *  to a screen the API refuses is worse than no count (the `canSeeMoney` rule
+ *  Home already holds to). */
+type Needs = { section: string; capability: Capability };
+
 /** Key → the sentence and the screen. The server decides the order and which
  *  keys exist at all; this side only knows what each one means.
  *
- *  One of the contract's nine keys reads a `sell` table nothing fills yet
- *  (`continuity_flags`), so it is not here either - it arrives with the screen
- *  that clears it, exactly as `held_bills` and `uncosted_sale_lines` did. */
-const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
+ *  All nine of the contract's keys are here as of #188. They arrived one ticket
+ *  at a time and each one waited for the screen that clears it, which is the
+ *  rule this map exists to keep: a count you cannot click is a count nobody can
+ *  clear. */
+const QUEUE_MEANING: Record<string, { label: string; to: string; needs?: Needs }> = {
   approvals_pending: { label: "Waiting for your approval", to: "/approvals" },
   // Not `/transfer/in-transit`: that screen is the *sender's*, scoped to the
   // source store, so a receiving store clicked through from "1 carton to
@@ -73,15 +84,33 @@ const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   // listing the waiting lines belongs with the daily check (#188), which is what
   // a person reads when the paperwork is not coming at all.
   uncosted_sale_lines: { label: "Sold before inward", to: "/receive" },
+  // The counter's exceptions (#188) - a hole in the numbering, tax that is not
+  // the dated slab's, a seller who took back six. They live under the day they
+  // belong to, on the screen that also shows what the day took, because "the
+  // drawer is short" and "three bills never arrived" are the same conversation.
+  continuity_flags: {
+    label: "Exceptions to look at",
+    to: "/money/day-summary",
+    needs: { section: "money", capability: "view" },
+  },
 };
 
 /** The queue as rows to draw. A key this build has no screen for is dropped
  *  rather than rendered as a dead number - a count you cannot click is a count
- *  nobody can clear. */
-export function queueRows(payload: DashboardPayload): QueueRow[] {
+ *  nobody can clear - and so is one whose screen this person may not open.
+ *
+ *  `may` defaults to yes so the pure tests can ask about the mapping without
+ *  standing up a user; the screen passes `userCan`. */
+export function queueRows(
+  payload: DashboardPayload,
+  may: (section: string, capability: Capability) => boolean = () => true,
+): QueueRow[] {
   return payload.action_queue.flatMap((row) => {
     const meaning = QUEUE_MEANING[row.key];
-    return meaning ? [{ key: row.key, count: row.count, ...meaning }] : [];
+    if (!meaning) return [];
+    if (meaning.needs && !may(meaning.needs.section, meaning.needs.capability)) return [];
+    const { needs: _needs, ...rest } = meaning;
+    return [{ key: row.key, count: row.count, ...rest }];
   });
 }
 

@@ -907,6 +907,15 @@ class ContinuityFlag(TimeStampedModel):
     )
     details = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
+    cleared_note = models.CharField(
+        max_length=240,
+        blank=True,
+        default="",
+        help_text="What the person who cleared this said about it. Its own column "
+        "rather than a key in `details`, because `details` is the finding - "
+        "written by a machine, rewritten on every nightly run - and a person's "
+        "sentence about it must not be something a later pass can overwrite.",
+    )
     resolved_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
