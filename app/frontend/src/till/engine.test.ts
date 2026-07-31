@@ -24,6 +24,7 @@ beforeAll(installBrowserGlobals);
 const { TillEngine } = await import("./engine");
 const { commitBill } = await import("./numbering");
 const { dataset, fakeServer, freshTill, item, refuse } = await import("./testSupport");
+const { emptyPayment } = await import("./tender");
 
 /** Wait for something the engine does without being awaited - Save & Print hands
  *  the bill to the queue and lets the send happen behind the cashier. */
@@ -153,5 +154,57 @@ describe("what the screen is told", () => {
     expect(snapshot.lastError).toContain("No connection");
     // No price list ever landed, so the counter cannot bill: red, not amber.
     expect(snapshot.status.colour).toBe("red");
+  });
+});
+
+describe("bills on hold (#185)", () => {
+  const payload = {
+    lines: [],
+    customer: { name: "", mobile: "" },
+    payment: emptyPayment(),
+    net_paise: 0,
+    pieces: 0,
+  };
+
+  it("parks a cart without touching the counter or the queue", async () => {
+    const { engine, server } = engineOn();
+    await engine.start();
+
+    await engine.hold({ held_uuid: "h1", label: "Mrs Sharma", payload });
+
+    const snapshot = engine.getSnapshot();
+    expect(snapshot.counts.held).toBe(1);
+    expect(snapshot.held[0].label).toBe("Mrs Sharma");
+    // Nothing was sold, so nothing was numbered and nothing was queued.
+    expect(snapshot.pending).toBe(0);
+    expect(snapshot.nextNumber).toBe(engine.getSnapshot().nextNumber);
+    expect(server.offered).toHaveLength(0);
+  });
+
+  it("mirrors the whole list, so a resumed hold disappears by omission", async () => {
+    const { engine, server } = engineOn();
+    await engine.start();
+
+    await engine.hold({ held_uuid: "h1", label: "One", payload });
+    await engine.hold({ held_uuid: "h2", label: "Two", payload });
+    await until(() => server.heldPushes.length >= 2);
+    await engine.releaseHold("h1");
+    await until(() => server.heldPushes.at(-1)?.length === 1);
+
+    expect(server.heldPushes.at(-1)).toEqual([
+      expect.objectContaining({ held_uuid: "h2", label: "Two" }),
+    ]);
+  });
+
+  it("parks the cart even when head office cannot be told", async () => {
+    // A hold is not money, so the mirror failing is not a reason to refuse the
+    // cashier - and the rejection must not escape a `void`ed call either.
+    const { engine, server } = engineOn();
+    await engine.start();
+    server.putHeld = async () => refuse(0, "NETWORK", "No connection to head office.");
+
+    await expect(engine.hold({ held_uuid: "h1", label: "", payload })).resolves.toBeUndefined();
+
+    expect(engine.getSnapshot().counts.held).toBe(1);
   });
 });

@@ -53,6 +53,11 @@ export interface TillTransport {
    *  with the original bill and writes nothing; a first arrival answers 201. The
    *  queue drops the bill either way, so the two are not distinguished here. */
   postSale(bill: QueuedBill): Promise<AcceptedBill>;
+  /** `PUT /api/sell/held-bills` - the counter's parked carts, whole list, so the
+   *  Dashboard can count them (#185). Best effort by construction: a hold that
+   *  never reaches the server is still a hold, and nothing about billing waits
+   *  on this call. */
+  putHeld(held: Record<string, unknown>[]): Promise<{ count: number }>;
 }
 
 /** The real one, over `lib/api` (so it carries the session and its refresh). */
@@ -65,6 +70,9 @@ export const httpTransport: TillTransport = {
   },
   async postSale(bill: QueuedBill) {
     return unwrap(api.post("/sell/sales", billBody(bill)));
+  },
+  async putHeld(held: Record<string, unknown>[]) {
+    return unwrap(api.put("/sell/held-bills", { held }));
   },
 };
 

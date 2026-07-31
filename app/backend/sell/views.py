@@ -1,9 +1,15 @@
-"""The three sale endpoints: take a bill, find a bill, read a bill.
+"""The three sale endpoints - take a bill, find a bill, read a bill - and a mirror.
 
-There is no fourth. **No endpoint in this module can change a posted sale** (A7),
-and that is not an omission to be corrected later: a bill is a printed fact in a
-customer's hand, and the only honest correction is the kernel's reversing
-transition. A PUT here would be a way to make the paper and the books disagree.
+**No endpoint in this module can change a posted sale** (A7), and that is not an
+omission to be corrected later: a bill is a printed fact in a customer's hand, and
+the only honest correction is the kernel's reversing transition. A PUT onto a sale
+here would be a way to make the paper and the books disagree.
+
+The one PUT that does exist is not about a sale at all. A held bill is a cart the
+counter parked (#185, grill Q13) - no document, no number, no stock, no money -
+and the till pushes its whole list so the Dashboard can count them. It sits here
+because it is the same till, the same store and the same gate; what makes the
+rule above hold is that there is nothing on the other end of it to overwrite.
 
 Everything money-shaped lives in `sell.services.accept`; these views translate
 between HTTP and it, and answer refusals in the till's own vocabulary - a
@@ -14,6 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -24,9 +31,14 @@ from rest_framework.views import APIView
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_store
-from sell.models import Sale, SaleLine
+from sell.models import HeldBill, Sale, SaleLine
 from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill
-from sell.serializers import SaleReadSerializer, SaleRowSerializer, SaleWriteSerializer
+from sell.serializers import (
+    HeldBillsWriteSerializer,
+    SaleReadSerializer,
+    SaleRowSerializer,
+    SaleWriteSerializer,
+)
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
 from sell.services.register import register_state
@@ -175,6 +187,64 @@ class RegisterView(APIView):
         if store is None:
             return refusal
         return Response(register_state(store).as_payload())
+
+
+class HeldBillsView(APIView):
+    """`PUT /api/sell/held-bills` - the counter's parked carts, as a whole list.
+
+    Replace-all, and that is the design rather than an economy. The till is
+    authoritative (grill Q13): a hold lives in IndexedDB, is resumed at the
+    counter, and may be parked and picked up half a dozen times while the line to
+    head office is down. There is no per-hold delete to replay, so the honest
+    mirror is "here is everything I have now" - anything the store no longer holds
+    is gone by not being mentioned.
+
+    Gated at `sell: operate` and to one store, exactly as the dataset is: this is
+    the counter talking about its own counter. Somebody who may read yesterday's
+    bills has nothing to park.
+
+    The list is keyed by **store**, which is the same one-till-per-store invariant
+    the sale series rests on (`uq_sale_store_fy_seq`). Two counters at one shop
+    would each replace the other's mirror here; that is not a new assumption, and
+    it moves when the register handover (#189) gives a till an identity.
+    """
+
+    permission_classes = [IsAuthenticated, CanRunTill]
+
+    def put(self, request: Request) -> Response:
+        store, refusal = till_store(request)
+        if store is None:
+            return refusal
+        form = HeldBillsWriteSerializer(data=request.data)
+        if not form.is_valid():
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
+        rows: list[dict[str, Any]] = list(form.validated_data["held"])
+
+        with transaction.atomic():
+            # **The store is on both halves, and on the upsert's lookup rather
+            # than only in its defaults.** The delete reaching past this counter
+            # is the obvious hazard - one store's empty push clearing another's
+            # Dashboard row - but the upsert is the quieter one: matching a hold
+            # by its uuid alone would find another store's row and move it here,
+            # silently, taking that store's count down with it.
+            HeldBill.objects.filter(store=store).exclude(
+                held_uuid__in=[row["held_uuid"] for row in rows]
+            ).delete()
+            for row in rows:
+                # Updated rather than replaced so a hold keeps its `created_at`:
+                # "parked since 11am" is the fact the day-close prompt is about,
+                # and a row reborn on every push would always read as new.
+                HeldBill.objects.update_or_create(
+                    store=store,
+                    held_uuid=row["held_uuid"],
+                    defaults={
+                        "label": row["label"],
+                        "held_at": row["held_at"],
+                        "expires_policy": row["expires_policy"],
+                        "payload": row["payload"],
+                    },
+                )
+        return Response({"count": len(rows)})
 
 
 class SaleDetailView(APIView):

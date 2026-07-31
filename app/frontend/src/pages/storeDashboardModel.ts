@@ -45,9 +45,9 @@ export interface QueueRow {
 /** Key → the sentence and the screen. The server decides the order and which
  *  keys exist at all; this side only knows what each one means.
  *
- *  Three of the contract's nine keys read `sell` tables that do not exist yet
- *  (`held_bills`, `uncosted_sale_lines`, `continuity_flags`), so they are not
- *  here either - they arrive with the screens that clear them. */
+ *  Two of the contract's nine keys read `sell` tables that do not exist yet
+ *  (`uncosted_sale_lines`, `continuity_flags`), so they are not here either -
+ *  they arrive with the screens that clear them, exactly as `held_bills` did. */
 const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   approvals_pending: { label: "Waiting for your approval", to: "/approvals" },
   // Not `/transfer/in-transit`: that screen is the *sender's*, scoped to the
@@ -62,6 +62,10 @@ const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   quarantine_to_confirm: { label: "Damage reports to confirm", to: "/inventory?tab=damage" },
   rtb_windows_closing: { label: "Return windows closing", to: "/alerts" },
   open_count_session: { label: "Stock counts open", to: "/inventory?tab=count" },
+  // The hold list lives inside Billing rather than at an address of its own -
+  // picking a parked bill up *is* billing - so the row opens the counter with
+  // the list already showing (#185).
+  held_bills: { label: "Bills on hold", to: "/sell?holds=1" },
 };
 
 /** The queue as rows to draw. A key this build has no screen for is dropped

@@ -21,6 +21,7 @@ import { financialYear } from "../lib/fiscal";
 
 import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
+import { mirrorRow } from "./held";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
 import { drawDownNotes, fastForwardTo } from "./numbering";
@@ -365,6 +366,26 @@ function asRefusal(error: unknown): TillHttpError {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "";
+}
+
+// --------------------------------------------------------------- holds -------
+
+/**
+ * Tell head office what is parked at this counter (#185, grill Q13).
+ *
+ * The whole list every time, because the till is authoritative and there is no
+ * per-hold delete to replay: a hold resumed at the counter disappears from the
+ * store's Dashboard by not being in the next push.
+ *
+ * Deliberately **not** part of the queue. Nothing here is money - a hold moves no
+ * stock, no number and no value - so a failure has nothing to halt over and no
+ * bill to name. It is offered again on the next sync, and in the meantime the
+ * only thing that is wrong is a count on somebody else's screen.
+ */
+export async function pushHeld(db: TillDb, transport: TillTransport): Promise<number> {
+  const rows = await db.held.toArray();
+  const answer = await transport.putHeld(rows.map(mirrorRow));
+  return answer.count;
 }
 
 /**

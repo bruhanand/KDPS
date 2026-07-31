@@ -14,7 +14,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from sell.models import ContinuityFlag, Sale, SaleLine, SaleTender
+from sell.models import ContinuityFlag, HeldBill, Sale, SaleLine, SaleTender
 
 
 class _CustomerWriteSerializer(serializers.Serializer):
@@ -200,6 +200,45 @@ class SaleWriteSerializer(serializers.Serializer):
         return attrs
 
 
+class _HeldBillWriteSerializer(serializers.Serializer):
+    """One parked cart, as the till mirrors it up (contract, step 3).
+
+    `payload` is checked for being an object and for nothing else. It is the
+    counter's cart, the counter reprices it on retrieval, and a server that
+    validated its shape would be promising to understand a structure it has no
+    business reading (see `HeldBill`).
+    """
+
+    held_uuid = serializers.UUIDField()
+    label = serializers.CharField(
+        max_length=120, allow_blank=True, required=False, default="", trim_whitespace=False
+    )
+    held_at = serializers.DateTimeField()
+    expires_policy = serializers.ChoiceField(
+        choices=HeldBill.ExpiresPolicy.values,
+        required=False,
+        default=HeldBill.ExpiresPolicy.TODAY,
+    )
+    payload = serializers.DictField(required=False, default=dict)
+
+
+class HeldBillsWriteSerializer(serializers.Serializer):
+    """The counter's whole list, which is the only thing it ever sends.
+
+    `held` is required rather than defaulted to empty: "I have nothing parked" is
+    a real and destructive statement - it clears the store's Dashboard row - and a
+    body that forgot to say it should not be able to make it by accident.
+    """
+
+    held = serializers.ListField(child=_HeldBillWriteSerializer(), allow_empty=True)
+
+    def validate_held(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        keys = [row["held_uuid"] for row in rows]
+        if len(keys) != len(set(keys)):
+            raise serializers.ValidationError("The same hold appears twice in one push.")
+        return rows
+
+
 # --- read shapes -------------------------------------------------
 
 
@@ -258,6 +297,11 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
 
     store_code = serializers.CharField(source="store.code", read_only=True)
     store_name = serializers.CharField(source="store.name", read_only=True)
+    #: The registration the reprint has to carry. A tax invoice without a GSTIN on
+    #: it is not one, and a reprint reached from customer search has no till
+    #: behind it to borrow the number from - the dataset is a *counter's* copy,
+    #: and whoever is looking up an old bill may not be standing at one.
+    store_gstin = serializers.CharField(source="store.gstin.gstin", read_only=True, default="")
     lines = SaleLineReadSerializer(many=True, read_only=True)
     tenders = SaleTenderReadSerializer(many=True, read_only=True)
     flags = FlagReadSerializer(many=True, read_only=True)
@@ -273,6 +317,7 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
             "docstatus",
             "store_code",
             "store_name",
+            "store_gstin",
             "fy",
             "till_seq",
             "origin",

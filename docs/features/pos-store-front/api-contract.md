@@ -402,6 +402,18 @@ Body: `{"held": [{"held_uuid": "...", "label": "Mrs Sharma", "held_at": "...", "
 
 Errors: `VALIDATION`/400, `SCOPE_DENIED`/403.
 
+**Amended 31 Jul 2026, after building it (#185).** Four things.
+
+- **The 403 is `TILL_SCOPE`, not `SCOPE_DENIED`**, for the reason the dataset and register endpoints record: the capability refusal is `require_section`, which answers DRF's `{"detail": ...}`, and the scope refusal means "this login will never be a till", which the till must not retry.
+This endpoint shares `till_store` with them, so it shares their vocabulary; `SCOPE_DENIED` is not emitted here either.
+- **The upsert matches on `(store, held_uuid)`, and the table's unique key is that pair** rather than db-design's estate-wide `held_uuid unique`.
+A key the till mints is unique in practice, but matching a hold by it alone lets one store's push find - and silently reparent - another store's row, taking that store's Dashboard count with it.
+The scoped constraint is what makes the scoped lookup the only one the database will accept.
+- **`held` is required**, not defaulted to an empty list: "I have nothing parked" clears the store's row, and a body that omitted the key should not be able to say it by accident.
+- **The till keeps a sixth field the mirror never carries**, `reviewed_on` - the local day the store last answered "keep this" at day close.
+Without it, `expires_policy: kept` would hide a hold for ever after one answer, and grill Q13's "nothing expires silently" would become "nothing is ever asked about again".
+The server has no use for the answer, so it stays at the counter that made it.
+
 ---
 
 ## Step 4 - Offers (till-facing; HO authoring is summary-level here)
@@ -463,6 +475,10 @@ Response 200: `[{doc_number, billed_at, customer_name, net_paise, lines_summary}
 Detail: GET `/api/sell/sales/{doc_number}` -> full read-only bill for reprint. **No mutation endpoint exists on a posted Sale anywhere in this contract** (A7).
 
 Errors: `VALIDATION`/400 (no criterion), `SCOPE_DENIED`/403, `NOT_FOUND`/404 (detail only).
+
+**Amended 31 Jul 2026, after building the screen (#185).** The detail carries `store_gstin`.
+A reprint reached from customer search has no till behind it to borrow a registration from - the dataset is a *counter's* copy, and whoever is looking an old bill up may not be standing at one - and a tax invoice without a GSTIN on it is not a tax invoice.
+Nothing else about the read shape moved, and it is still read-only: there is no writer in `sell/views.py` for a screen to call.
 
 ---
 

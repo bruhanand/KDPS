@@ -22,6 +22,7 @@
 import Dexie from "dexie";
 import type { Table } from "dexie";
 
+import type { HeldPayload } from "./held";
 import type {
   QueuedBill,
   TillCreditNote,
@@ -35,13 +36,31 @@ import type {
 } from "./types";
 
 /** A bill the counter parked to serve the next customer. Mirrored to the server
- *  best-effort so the Dashboard can count them; the till stays authoritative. */
+ *  best-effort so the Dashboard can count them; the till stays authoritative.
+ *
+ *  `payload` is typed rather than left as loose JSON, even though the *server*
+ *  keeps it opaque: the till writes it and the till reads it back, so a cart is
+ *  the only thing it can hold, and calling it `Record<string, unknown>` here
+ *  would buy a cast at every one of those reads. The import is type-only, so
+ *  nothing circular survives the compiler. */
 export interface HeldBill {
   held_uuid: string;
   label: string;
   held_at: string;
-  expires_policy: string;
-  payload: Record<string, unknown>;
+  /** `today` until the store says otherwise at day close; `kept` once it has. */
+  expires_policy: "today" | "kept";
+  payload: HeldPayload;
+  /** The local day the store last answered "keep this" - and the one field here
+   *  that is **not** mirrored up.
+   *
+   *  A hold parked before today is put to the store at day close, and keeping it
+   *  has to be an answer about *that* close rather than for ever: a hold kept on
+   *  Monday and still parked on Thursday is a cart nobody has thought about in
+   *  three days, and a policy of `kept` alone would hide it for good. The server
+   *  has no use for the answer - the mirror is a count on a Dashboard - and the
+   *  contract's five columns are what `PUT /api/sell/held-bills` takes, so this
+   *  stays where the decision was made. */
+  reviewed_on?: string;
 }
 
 /** One row of `meta` - the till's small pile of state, keyed by name so a new

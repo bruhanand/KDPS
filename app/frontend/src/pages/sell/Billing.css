@@ -24,6 +24,23 @@
   width: 100%; text-align: left; font-weight: 500;
 }
 
+/* Bills on hold (#185). A panel above the grid rather than a drawer or a modal:
+   picking one up replaces what is on the counter, so the cashier should be able
+   to see both at once before choosing. */
+.bill-holds { padding: 14px 16px; margin-bottom: 16px; }
+.bill-holds-blocked { display: block; margin-top: 6px; color: var(--amber); }
+.bill-holds-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.bill-hold-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 9px 12px;
+}
+.bill-hold-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bill-hold-name { font-weight: 600; font-size: 13.5px; }
+.bill-hold-who .muted-cell { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; }
+.bill-hold-money { font-size: 15px; font-weight: 700; white-space: nowrap; }
+.bill-hold-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bill-alert .btn { margin-left: auto; }
+
 .bill-body { display: grid; grid-template-columns: minmax(0, 1fr) 264px; gap: 16px; align-items: start; }
 .bill-lines { min-width: 0; }
 .bill-empty {

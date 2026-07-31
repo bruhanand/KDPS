@@ -146,7 +146,11 @@ export const SECTIONS: NavSectionDef[] = [
       // `sell: operate`.
       { label: "Billing", to: "/sell", minCapability: "operate" },
       { label: "Return & Exchange", to: "/sell/returns", planned: true },
-      { label: "Customers", to: "/sell/customers", planned: true },
+      // Finding an old bill and printing it again (#185). `view`, not `operate`:
+      // `GET /api/sell/sales` is gated at `sell: view` and this screen cannot
+      // write, so an owner or an accountant reaching a customer's bill is the
+      // matrix working rather than a hole in it.
+      { label: "Customers", to: "/sell/customers", minCapability: "view" },
       // The counter's own state: what it holds offline, and what it still owes
       // head office (#180). Listed after the screens a cashier uses all day,
       // because it is the page somebody opens when something looks wrong.

@@ -54,8 +54,18 @@ function paying(cart: Cart, payment: Partial<Payment>): Cart {
   return { ...cart, payment: { ...cart.payment, ...payment } };
 }
 
+/** A scanned piece, credited to somebody.
+ *
+ *  The salesman is part of the default because a line without one is a line the
+ *  server refuses (`_resolve_line`), so a cart that had none would be an
+ *  unclosable cart - and every test here about *something else* would be
+ *  measuring that instead. The one test that is about it passes `salesman: null`. */
 function scanned(mrp: number | null, over: Partial<Cart["lines"][number]> = {}) {
-  return { ...addPiece(item("8901", "FW25", mrp), { stock: 3, alternatives: [] }), ...over };
+  return {
+    ...addPiece(item("8901", "FW25", mrp), { stock: 3, alternatives: [] }),
+    salesman: 1,
+    ...over,
+  };
 }
 
 describe("what a line costs", () => {
@@ -257,6 +267,16 @@ describe("what stops a bill closing", () => {
     const bill = priceCart(cartOf(scanned(100000, { disc_paise: 200000 })), WORLD, "2026-07-30");
 
     expect(whyItCannotClose(bill)).toMatch(/discount/i);
+  });
+
+  it("a piece nobody is credited with - the refusal that halted a queue", () => {
+    // Found in browser QA of #185: the counter let a bill close with no salesman
+    // on the line, printed it, took the money, and the queue then halted for ever
+    // on a `VALIDATION` from `_resolve_line` - with every later bill stuck behind
+    // it, because the queue will not reorder itself past a refused bill.
+    const bill = priceCart(cartOf(scanned(149900, { salesman: null })), WORLD, "2026-07-30");
+
+    expect(whyItCannotClose(bill)).toMatch(/salesman/i);
   });
 
   it("a split that leaves part of the bill unpaid", () => {
