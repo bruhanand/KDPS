@@ -575,8 +575,41 @@ export interface NavFoldDef {
   tabs: FoldTab[];
 }
 
-/** One row of a persona's sidebar: a section code, or a fold. */
-export type LayoutRow = string | NavFoldDef;
+/** One section drawn as a single sidebar link, its own screens recomposed as a
+ *  horizontal tab row on those screens themselves (#227).
+ *
+ *  A fold merges several sections onto one new URL it owns. A strip owns no URL
+ *  at all: its tabs are the section's existing canonical routes, and the tab row
+ *  is plain navigation between them (grill decision 1). So no screen is edited
+ *  to gain tabs, no route is added, and a bookmark keeps working - the strip is
+ *  presentation laid over URLs that already exist.
+ *
+ *  It owns no capability either: every tab is a menu entry of `section`, and
+ *  keeps that entry's gate. Folding a section can only ever subtract. */
+export interface NavStripDef {
+  /** The section code this row stands for. Its head leaves the sidebar. */
+  section: string;
+  /** This persona's name for the row. Absent ⇒ the section's own label. */
+  label?: string;
+  /** The entries drawn as tabs, by their `to`, in display order. */
+  tabs: string[];
+}
+
+/** One row of a persona's sidebar: a section code, a fold, or a strip. */
+export type LayoutRow = string | NavFoldDef | NavStripDef;
+
+/** Is this layout row a strip? A fold names several `sections`; a strip names
+ *  the one `section` it is. The two predicates are each other's complement over
+ *  the non-string rows, and every place that has to tell the shapes apart calls
+ *  one of them rather than re-writing the test. */
+export function isStripRow(row: LayoutRow): row is NavStripDef {
+  return typeof row !== "string" && "section" in row;
+}
+
+/** Is this layout row a fold? */
+export function isFoldRow(row: LayoutRow): row is NavFoldDef {
+  return typeof row !== "string" && !isStripRow(row);
+}
 
 /** The rows, top to bottom. A section held but named nowhere here is still
  *  drawn - appended after these rows - so retuning somebody's access can never
@@ -605,13 +638,21 @@ export const INVENTORY_FOLD: NavFoldDef = {
   ],
 };
 
+// Sell, as a strip (#227): one sidebar link landing on Billing, and its four
+// screens drawn as a tab row on the screens themselves. The mechanism is proven
+// here first; the rest of the store's rows follow it in #229.
+export const SELL_STRIP: NavStripDef = {
+  section: "sell",
+  tabs: ["/sell", "/sell/returns", "/sell/customers", "/sell/till"],
+};
+
 // The store's own screen, as D10 decided it on 30 July 2026: ten sections, in
 // this order, one row each. Attendance is back under HRMS - D10 §10 puts it
 // there, and Home becomes the store dashboard that carries approvals and alerts
 // as cards (#174).
 const STORE_LAYOUT: PersonaLayout = [
   "home",
-  "sell",
+  SELL_STRIP,
   INVENTORY_FOLD,
   "receive_goods",
   "transfer",
@@ -636,7 +677,7 @@ const FOLDS: NavFoldDef[] = [
   ...new Set(
     Object.values(PERSONA_LAYOUTS)
       .flat()
-      .filter((row): row is NavFoldDef => typeof row !== "string"),
+      .filter(isFoldRow),
   ),
 ];
 
@@ -702,7 +743,23 @@ export function visibleSections(user: {
 /** A row of the rendered sidebar. */
 export type NavRow =
   | { kind: "section"; key: string; section: VisibleSection }
-  | { kind: "fold"; key: string; fold: NavFoldDef; tabs: FoldTab[] };
+  | { kind: "fold"; key: string; fold: NavFoldDef; tabs: FoldTab[] }
+  | {
+      kind: "strip";
+      key: string;
+      strip: NavStripDef;
+      /** The section the strip stands for - its icon, layer and fallback label.
+       *  Resolved here because a row only exists where the section does. */
+      def: NavSectionDef;
+      label: string;
+      /** Never empty: a strip with no visible tab is not drawn at all. */
+      tabs: NavItem[];
+    };
+
+/** A strip's key, in the same namespace as a section code and a fold's key. */
+export function stripKey(strip: NavStripDef): string {
+  return `strip:${strip.section}`;
+}
 
 /** The tabs of `fold` this person may see, in the fold's own order.
  *
@@ -732,6 +789,91 @@ export function foldTabsFor(
   return user ? foldTabs(fold, visibleSections(user)) : [];
 }
 
+/** The tabs of `strip` this person may see, in the strip's own order.
+ *
+ *  Reads the *output* of the access filter, exactly as `foldTabs` does: a tab
+ *  exists only where the menu entry behind it survived that filter, so a strip
+ *  can never show a screen the sidebar would have hidden. An entry the section
+ *  no longer carries at all simply has no tab. */
+export function stripTabs(strip: NavStripDef, sections: VisibleSection[]): NavItem[] {
+  const section = sections.find((s) => s.def.code === strip.section);
+  if (!section) return [];
+  const byPath = new Map(section.items.map((i) => [i.to, i]));
+  return strip.tabs.flatMap((to) => {
+    const item = byPath.get(to);
+    return item ? [item] : [];
+  });
+}
+
+/** This persona's name for a strip row: its own override, else whatever the
+ *  server called the section, else the manifest's label. */
+export function stripLabel(strip: NavStripDef, sections: VisibleSection[]): string {
+  const section = sections.find((s) => s.def.code === strip.section);
+  return strip.label ?? section?.label ?? SECTION_DEFS.get(strip.section)?.label ?? strip.section;
+}
+
+/** The strip whose section owns this URL for this persona, or null.
+ *
+ *  Per persona, because a strip is an arrangement: an owner whose sidebar still
+ *  expands Sell gets no strip and so no redundant second copy of their own menu.
+ *  Deepest tab wins, so a strip is only claimed by the URL it actually draws. */
+export function stripOwning(pathname: string, roleCode: string): NavStripDef | null {
+  // Asked of `itemOwning` rather than walked again here: which screen a URL
+  // belongs to is already the manifest's one rule, and a second walk beside it
+  // is a second answer waiting to disagree with the route guard.
+  const owner = itemOwning(pathname);
+  if (!owner) return null;
+  const strips = (PERSONA_LAYOUTS[roleCode] ?? []).filter(isStripRow);
+  return strips.find((s) => s.section === owner.section && s.tabs.includes(owner.to)) ?? null;
+}
+
+/** The tab lit at `pathname`: the one whose path is the deepest prefix of it, so
+ *  a child URL keeps its parent tab lit (`/sell/returns/12` lights Return &
+ *  Exchange, a bill under `/sell/9` lights Billing). Null when this person holds
+ *  no tab covering where they are standing. */
+export function activeStripTab(tabs: NavItem[], pathname: string): NavItem | null {
+  const normalized = normalizePath(pathname);
+  let best: NavItem | null = null;
+  for (const tab of tabs) {
+    const path = itemPath(tab);
+    if (!underPrefix(normalized, path)) continue;
+    if (!best || path.length > itemPath(best).length) best = tab;
+  }
+  return best;
+}
+
+/** The tab row a stripped section puts on its own screens, or null for no row.
+ *
+ *  The whole decision in one place, because the shell only draws it: which strip
+ *  owns this URL for this persona, which of its tabs access left standing, which
+ *  one is lit, and what the header calls the row. Null - draw nothing - covers
+ *  the three cases the grill named: a persona whose sidebar still expands the
+ *  section, a strip access has cut to a single tab (a strip of one is not a
+ *  choice), and a URL none of the surviving tabs covers. */
+export interface SectionTabs {
+  /** The eyebrow: the strip's row name. */
+  crumb: string;
+  /** The lit tab's name, which is this screen's title. */
+  title: string;
+  tabs: NavItem[];
+  active: NavItem;
+}
+
+export function sectionTabsFor(
+  pathname: string,
+  user: Parameters<typeof visibleSections>[0] | null | undefined,
+): SectionTabs | null {
+  if (!user) return null;
+  const strip = stripOwning(pathname, user.role?.code ?? "");
+  if (!strip) return null;
+  const sections = visibleSections(user);
+  const tabs = stripTabs(strip, sections);
+  if (tabs.length < 2) return null;
+  const active = activeStripTab(tabs, pathname);
+  if (!active) return null;
+  return { crumb: stripLabel(strip, sections), title: active.label, tabs, active };
+}
+
 /** The tab `slug` names, or the first one this person can see. An unknown slug,
  *  or one whose tab this person is not shown, falls back rather than leaving
  *  them on a page with nothing on it. */
@@ -758,6 +900,25 @@ export function applyLayout(sections: VisibleSection[], roleCode: string): NavRo
       spokenFor.add(row);
       const s = byCode.get(row);
       if (s?.items.length) rows.push({ kind: "section", key: row, section: s });
+      continue;
+    }
+    if (isStripRow(row)) {
+      // A strip speaks for its section whether or not any tab survives: the
+      // head is gone from this persona's sidebar either way.
+      spokenFor.add(row.section);
+      const section = byCode.get(row.section);
+      const tabs = stripTabs(row, sections);
+      // No tab this person can see ⇒ nowhere for the row to land; don't draw it.
+      if (section && tabs.length) {
+        rows.push({
+          kind: "strip",
+          key: stripKey(row),
+          strip: row,
+          def: section.def,
+          label: stripLabel(row, sections),
+          tabs,
+        });
+      }
       continue;
     }
     // A fold speaks for its sections whether or not it draws a tab for each of
@@ -821,9 +982,11 @@ export function isActiveFold(fold: NavFoldDef, pathname: string): boolean {
  *  a folded page draws as one link and so has nothing to unfold. */
 export function headingOwning(pathname: string, roleCode: string): string | null {
   const layout = PERSONA_LAYOUTS[roleCode] ?? [];
-  const folds = layout.filter((row): row is NavFoldDef => typeof row !== "string");
+  const folds = layout.filter(isFoldRow);
   const here = folds.find((f) => isActiveFold(f, pathname));
   if (here) return foldKey(here);
+  const strip = stripOwning(pathname, roleCode);
+  if (strip) return stripKey(strip);
   for (const section of SECTIONS) {
     if (section.items.some((i) => isActiveItem(i, pathname))) return section.code;
   }

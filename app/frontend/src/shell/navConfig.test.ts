@@ -5,17 +5,24 @@ import {
   NAV_ITEMS,
   PERSONA_LAYOUTS,
   SECTIONS,
+  SELL_STRIP,
+  activeStripTab,
   applyLayout,
   foldTabs,
   headingOwning,
   isActiveFold,
   isActiveItem,
+  isStripRow,
   itemOwning,
   itemPath,
   resolveFoldTab,
   resolveLegacyPath,
+  sectionTabsFor,
   sectionsIn,
   sidebarRows,
+  stripLabel,
+  stripOwning,
+  stripTabs,
   testId,
   visibleSections,
 } from "./navConfig";
@@ -41,9 +48,12 @@ function user(roleCode: string, caps: Record<string, string>) {
 }
 
 /** Each row named as the person reads it: a section by its label, a fold by its
- *  heading. Both draw as one row - a fold's tabs are inside its page. */
+ *  heading, a strip by its row label. All three draw as one row - a fold's tabs
+ *  live inside its page, a strip's on the screens it links to. */
 function headings(rows: NavRow[]): string[] {
-  return rows.map((r) => (r.kind === "section" ? r.section.label : r.fold.heading));
+  return rows.map((r) =>
+    r.kind === "section" ? r.section.label : r.kind === "fold" ? r.fold.heading : r.label,
+  );
 }
 
 /** The item labels drawn under one section. */
@@ -268,9 +278,10 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
 
   it("nests no section under another - no subsections in the sidebar, ever", () => {
     // D10 §1's standing rule: anything that needs dividing divides inside the
-    // page, as tabs. A row is a section or a fold; a fold draws one link.
+    // page, as tabs. A row is a section, a fold or a strip; the last two draw
+    // one link each.
     for (const rows of [rowsFor("store_staff", STORE_CAPS), rowsFor("warehouse", WAREHOUSE_CAPS)]) {
-      for (const row of rows) expect(["section", "fold"]).toContain(row.kind);
+      for (const row of rows) expect(["section", "fold", "strip"]).toContain(row.kind);
     }
   });
 
@@ -354,6 +365,21 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     for (const layout of Object.values(PERSONA_LAYOUTS)) {
       for (const row of layout) {
         if (typeof row === "string") continue;
+        if (isStripRow(row)) {
+          // A strip names its own section's entries by their `to`, and the two
+          // can drift apart in silence: rename an entry and its tab quietly
+          // disappears, rename them all and the row vanishes from the sidebar
+          // with the whole suite still green. A strip may list *fewer* entries
+          // than its section holds (an action-shaped screen reached from inside
+          // another one is nobody's tab), never one that does not exist.
+          expect(codes.has(row.section), row.section).toBe(true);
+          const own = new Set(
+            NAV_ITEMS.filter((i) => i.section === row.section && !i.action).map((i) => i.to),
+          );
+          for (const to of row.tabs) expect(own.has(to), `${row.section}: ${to}`).toBe(true);
+          expect(new Set(row.tabs).size).toBe(row.tabs.length);
+          continue;
+        }
         expect(codes.has(row.heading.toLowerCase())).toBe(false);
         expect(claimed(row.to), row.to).toBe(false);
         for (const code of row.sections) expect(codes.has(code), code).toBe(true);
@@ -390,6 +416,136 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       s.items.map((i) => testId(s.def.code, i)),
     );
     expect(new Set(handles).size).toBe(handles.length);
+  });
+
+  // #227 - Sell is the first section drawn as a strip: one sidebar link, its
+  // four screens as a tab row on the screens themselves.
+  describe("Sell, as a strip", () => {
+    const sellTabs = (caps: Record<string, string>) =>
+      stripTabs(SELL_STRIP, visibleSections(user("store_staff", caps))).map((i) => i.label);
+
+    it("draws one row landing on Billing, with the four screens as its tabs", () => {
+      const rows = rowsFor("store_staff", STORE_CAPS);
+      const sell = rows.find((r) => r.kind === "strip");
+      expect(sell?.kind === "strip" && sell.strip.section).toBe("sell");
+      expect(sell?.kind === "strip" && sell.label).toBe("Sell");
+      expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual([
+        "/sell",
+        "/sell/returns",
+        "/sell/customers",
+        "/sell/till",
+      ]);
+      expect(sell?.kind === "strip" && sell.tabs.map((i) => i.label)).toEqual([
+        "Billing",
+        "Return & Exchange",
+        "Customers",
+        "Till & Sync",
+      ]);
+      // The row goes nowhere new: its link is the first tab's own canonical URL.
+      expect(sell?.kind === "strip" && sell.tabs[0].to).toBe("/sell");
+    });
+
+    it("shows no tab for a screen this person's rungs already hid", () => {
+      // Subtract-only, the same rule the fold obeys: Billing, Return & Exchange
+      // and Till & Sync all need `sell: operate`, so a `view` rung leaves the
+      // one screen the API would actually open.
+      expect(sellTabs({ ...STORE_CAPS, sell: "view" })).toEqual(["Customers"]);
+      // And with no Sell section at all there is no row to draw.
+      const { sell: _noSell, ...withoutSell } = STORE_CAPS;
+      expect(sellTabs(withoutSell)).toEqual([]);
+      expect(headings(rowsFor("store_staff", withoutSell))).not.toContain("Sell");
+    });
+
+    it("still draws the sidebar row when only one tab survives", () => {
+      // One tab is not a choice, so the *strip* draws no tab row (the shell
+      // checks the count) - but the section is still held, so the link stays.
+      const rows = rowsFor("store_staff", { ...STORE_CAPS, sell: "view" });
+      const sell = rows.find((r) => r.kind === "strip");
+      expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual(["/sell/customers"]);
+      expect(headings(rows)).toContain("Sell");
+    });
+
+    it("belongs to the store persona alone - nobody else gets a second menu", () => {
+      // An owner's sidebar still expands Sell, so a tab row there would be a
+      // redundant copy of what they are already looking at.
+      for (const role of ["owner", "warehouse", "accounts", "it_admin", ""]) {
+        expect(stripOwning("/sell", role), role).toBeNull();
+      }
+      expect(stripOwning("/sell", "store_staff")).toBe(SELL_STRIP);
+      expect(stripOwning("/sell", "store_manager")).toBe(SELL_STRIP);
+    });
+
+    it("claims the URLs its section owns, and nothing else", () => {
+      // Including a bill under Billing: the row stays lit on a document, the
+      // same way the sidebar's own highlight does.
+      for (const url of ["/sell", "/sell/returns", "/sell/customers", "/sell/till", "/sell/9"]) {
+        expect(stripOwning(url, "store_staff"), url).toBe(SELL_STRIP);
+      }
+      for (const url of ["/", "/receive", "/inventory", "/stock", "/selling-elsewhere"]) {
+        expect(stripOwning(url, "store_staff"), url).toBeNull();
+      }
+    });
+
+    it("takes this persona's name for the row when the layout gives it one", () => {
+      // #229 renames two rows for the store persona alone (Home ⇒ "Dashboard",
+      // HRMS ⇒ "Attendance"); the override lives on the layout row, never in
+      // SECTIONS, so no other persona's sidebar can change word.
+      const sections = visibleSections(user("store_staff", STORE_CAPS));
+      expect(stripLabel(SELL_STRIP, sections)).toBe("Sell");
+      expect(stripLabel({ ...SELL_STRIP, label: "Counter" }, sections)).toBe("Counter");
+      // A section the server did not send falls back to the manifest's label.
+      expect(stripLabel(SELL_STRIP, [])).toBe("Sell");
+    });
+
+    it("lights the tab the URL is under, child URLs included", () => {
+      const tabs = stripTabs(SELL_STRIP, visibleSections(user("store_staff", STORE_CAPS)));
+      const lit = (url: string) => activeStripTab(tabs, url)?.to;
+      expect(lit("/sell")).toBe("/sell");
+      expect(lit("/sell/returns")).toBe("/sell/returns");
+      // A document under a tab keeps its parent tab lit rather than falling back
+      // to Billing, whose path is a prefix of every one of these.
+      expect(lit("/sell/returns/12")).toBe("/sell/returns");
+      expect(lit("/sell/customers/4")).toBe("/sell/customers");
+      // A bill under Billing itself, and a mixed-case bookmark.
+      expect(lit("/sell/9")).toBe("/sell");
+      expect(lit("/Sell/Till/")).toBe("/sell/till");
+      expect(lit("/receive")).toBeUndefined();
+    });
+
+    it("hands the screens a row only where one is worth drawing", () => {
+      // What the shell renders, decided here so the shell only draws it.
+      const row = (url: string, caps: Record<string, string>, role = "store_staff") =>
+        sectionTabsFor(url, user(role, caps));
+
+      const billing = row("/sell", STORE_CAPS)!;
+      expect(billing.crumb).toBe("Sell");
+      expect(billing.title).toBe("Billing");
+      expect(billing.active.to).toBe("/sell");
+      expect(billing.tabs.map((t) => t.label)).toEqual([
+        "Billing",
+        "Return & Exchange",
+        "Customers",
+        "Till & Sync",
+      ]);
+      expect(row("/sell/returns/12", STORE_CAPS)!.title).toBe("Return & Exchange");
+
+      // No row: a persona whose sidebar still expands Sell...
+      expect(row("/sell", WAREHOUSE_CAPS, "owner")).toBeNull();
+      // ...a screen outside every strip...
+      expect(row("/receive", STORE_CAPS)).toBeNull();
+      expect(row("/inventory", STORE_CAPS)).toBeNull();
+      // ...a strip access has cut to one tab...
+      expect(row("/sell/customers", { ...STORE_CAPS, sell: "view" })).toBeNull();
+      // ...and nobody signed in.
+      expect(sectionTabsFor("/sell", null)).toBeNull();
+    });
+
+    it("says a store person on a Sell screen is standing under the Sell row", () => {
+      expect(headingOwning("/sell", "store_staff")).toBe("strip:sell");
+      expect(headingOwning("/sell/till", "store_staff")).toBe("strip:sell");
+      // Every other persona still reads it as the plain section it always was.
+      expect(headingOwning("/sell", "owner")).toBe("sell");
+    });
   });
 
   it("leaves every other persona's sidebar flat and untouched", () => {
@@ -436,10 +592,18 @@ describe("arranging a sidebar can never widen it", () => {
         // A tab is a menu entry drawn somewhere else, so it answers to the same
         // filter: no tab may show a screen the sidebar would have hidden.
         for (const row of rows) {
-          if (row.kind !== "fold") continue;
-          for (const tab of row.tabs) {
-            const passed = [...allowed.values()].some((set) => set.has(tab.entry));
-            expect(passed, `${role}/${seed}: ${tab.entry}`).toBe(true);
+          if (row.kind === "fold") {
+            for (const tab of row.tabs) {
+              const passed = [...allowed.values()].some((set) => set.has(tab.entry));
+              expect(passed, `${role}/${seed}: ${tab.entry}`).toBe(true);
+            }
+          }
+          if (row.kind === "strip") {
+            for (const tab of row.tabs) {
+              expect(allowed.get(row.strip.section)?.has(tab.to), `${role}/${seed}: ${tab.to}`).toBe(
+                true,
+              );
+            }
           }
         }
       }
