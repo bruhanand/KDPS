@@ -53,7 +53,7 @@ from sell.serializers import (
 )
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
-from sell.services.refunds import with_returned_qty
+from sell.services.refunds import with_returned
 from sell.services.register import record_handover, register_state
 from sell.services.returns import ReturnError, accept_return
 
@@ -86,7 +86,7 @@ def _sales(user: Any) -> QuerySet[Sale]:
             # somebody waits at the counter (#184).
             Prefetch(
                 "lines",
-                queryset=with_returned_qty(SaleLine.objects.select_related("salesman")),
+                queryset=with_returned(SaleLine.objects.select_related("salesman")),
             ),
             "tenders__credit_note",
             "flags",

@@ -55,7 +55,7 @@ describe("cash is the balance until somebody says otherwise", () => {
 
     expect(resolved.cash_paise).toBe(10000);
     expect(resolved.balance_paise).toBe(39900);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/does not cover/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/does not cover/);
   });
 
   it("never goes negative when the other modes cover the bill on their own", () => {
@@ -75,7 +75,7 @@ describe("a split across all four modes", () => {
 
   it("adds up to the bill", () => {
     expect(split(four).balance_paise).toBe(0);
-    expect(whyPaymentCannotClose(split(four), false, BILL)).toBe("");
+    expect(whyPaymentCannotClose(split(four), false)).toBe("");
   });
 
   it("becomes four tender rows", () => {
@@ -99,13 +99,13 @@ describe("a mismatch to the paisa is refused at the counter", () => {
     const resolved = split(payment({ cash_paise: BILL - 1 }));
 
     expect(resolved.balance_paise).toBe(1);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/does not cover/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/does not cover/);
   });
 
   it("refuses one paisa over, and points at the cash-received box", () => {
     const resolved = split(payment({ cash_paise: BILL + 1 }));
 
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/more than the bill/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/more than the bill/);
   });
 });
 
@@ -135,7 +135,7 @@ describe("a credit note this counter holds", () => {
 
     expect(resolved.unverified).toEqual([]);
     expect(resolved.cash_paise).toBe(BILL - 120000);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toBe("");
+    expect(whyPaymentCannotClose(resolved, false)).toBe("");
   });
 
   it("draws down by what the bill spent", () => {
@@ -148,7 +148,7 @@ describe("a credit note this counter holds", () => {
     const resolved = split(withNote(NOTE.number, 120001));
 
     expect(resolved.unverified).toEqual([NOTE.number]);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/less left on it/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/less left on it/);
   });
 
   it("is dead once its own date has passed", () => {
@@ -156,7 +156,7 @@ describe("a credit note this counter holds", () => {
     const resolved = split(withNote(NOTE.number, 50000), BILL, [expired]);
 
     expect(resolved.unverified).toEqual([NOTE.number]);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/ran out on 2026-07-30/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/ran out on 2026-07-30/);
   });
 });
 
@@ -167,11 +167,11 @@ describe("a credit note this counter has never heard of", () => {
     const resolved = split(unknown);
 
     expect(resolved.unverified).toEqual(["26-27/XXX/CRN/9"]);
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toMatch(/has to approve/);
+    expect(whyPaymentCannotClose(resolved, false)).toMatch(/has to approve/);
   });
 
   it("is taken with one", () => {
-    expect(whyPaymentCannotClose(split(unknown), true, BILL)).toBe("");
+    expect(whyPaymentCannotClose(split(unknown), true)).toBe("");
   });
 
   it("still travels on the bill so the server can flag it", () => {
@@ -185,11 +185,11 @@ describe("a credit note this counter has never heard of", () => {
 
 describe("what a note row must say before the bill closes", () => {
   it("needs a number", () => {
-    expect(whyPaymentCannotClose(split(withNote("", 50000)), true, BILL)).toMatch(/Type the number/);
+    expect(whyPaymentCannotClose(split(withNote("", 50000)), true)).toMatch(/Type the number/);
   });
 
   it("needs an amount", () => {
-    expect(whyPaymentCannotClose(split(withNote(NOTE.number, 0)), true, BILL)).toMatch(
+    expect(whyPaymentCannotClose(split(withNote(NOTE.number, 0)), true)).toMatch(
       /how much of/,
     );
   });
@@ -202,7 +202,7 @@ describe("what a note row must say before the bill closes", () => {
       ],
     });
 
-    expect(whyPaymentCannotClose(split(twice), true, BILL)).toMatch(/on this bill twice/);
+    expect(whyPaymentCannotClose(split(twice), true)).toMatch(/on this bill twice/);
   });
 
   it("takes two different notes on one bill", () => {
@@ -216,7 +216,7 @@ describe("what a note row must say before the bill closes", () => {
 
     const resolved = split(two, BILL, [NOTE, second]);
 
-    expect(whyPaymentCannotClose(resolved, false, BILL)).toBe("");
+    expect(whyPaymentCannotClose(resolved, false)).toBe("");
     expect(notesSpentBy(toTenders(resolved))).toEqual(
       new Map([
         [NOTE.number, 25000],

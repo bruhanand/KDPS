@@ -31,10 +31,11 @@ from django.db.models.functions import Coalesce
 from core.documents import DocStatus
 from sell.models import ReturnLine, SaleLine
 
-#: What `with_returned_qty` annotates. Named here because two readers use it -
-#: the bill's read shape, and any screen deciding what is still returnable - and
-#: a string spelled twice is a rename waiting to break one of them.
+#: What `with_returned` annotates. Named here because two readers use them - the
+#: bill's read shape, and the counter deciding what a piece is worth back - and a
+#: string spelled twice is a rename waiting to break one of them.
 RETURNED_QTY = "returned_qty"
+RETURNED_PAISE = "returned_paise"
 
 
 def returned_so_far(original: SaleLine) -> tuple[int, int]:
@@ -60,39 +61,51 @@ def returned_so_far(original: SaleLine) -> tuple[int, int]:
     )
 
 
-def with_returned_qty(lines: QuerySet[SaleLine]) -> QuerySet[SaleLine]:
-    """`lines` with each one's already-given-back quantity worked out in SQL.
+def with_returned(lines: QuerySet[SaleLine]) -> QuerySet[SaleLine]:
+    """`lines` with what has already come back off each one - pieces and paise.
 
     The read-only twin of `returned_so_far`, and the only other place the "both
     tables, neither cancelled" rule is spelled. It exists because a *list* of
-    lines must not pay two queries a row for a number the screen only needs in
-    order to say "1 of 2 still returnable" - and because the fix for that must
-    not be a third copy of the rule.
+    lines must not pay four queries a row for two numbers - and because the fix
+    for that must not be a third copy of the rule.
 
-    Deliberately no lock: this is what a person is shown, not what a refund is
-    decided against. The decision locks (`returned_so_far`), which is what makes
-    the screen's figure advisory and the refusal authoritative.
+    Both numbers, not just the count, and the paise are the load-bearing one. The
+    counter works out what an exchange leg is worth back **offline**, and the
+    server checks that figure to the paisa before it will take the bill: the last
+    piece of a line settles the remainder of what has not been given back yet
+    (`entitled_refund`), so a till that knew only how many pieces had gone would
+    get the second partial return of a line wrong - and would find out after the
+    receipt had printed.
+
+    Deliberately no lock: this is what a person is shown and what a counter prices
+    from, not what a refund is finally decided against. The decision locks
+    (`returned_so_far`), which is what makes the screen's figure advisory and the
+    refusal authoritative.
     """
-    legs = (
-        SaleLine.objects.filter(original_line=OuterRef("pk"), direction=SaleLine.Direction.RETURN)
-        .exclude(sale__docstatus=DocStatus.CANCELLED)
-        .values("original_line")
-        .annotate(total=Sum("qty"))
-        .values("total")
+
+    def _off(model: type[SaleLine] | type[ReturnLine], cancelled: str, amount: str) -> QuerySet:
+        return (
+            model.objects.filter(original_line=OuterRef("pk"))
+            .exclude(**{cancelled: DocStatus.CANCELLED})
+            .values("original_line")
+            .annotate(qty_total=Sum("qty"), paise_total=Sum(amount))
+        )
+
+    legs = _off(SaleLine, "sale__docstatus", "net_paise").filter(
+        direction=SaleLine.Direction.RETURN
     )
-    plain = (
-        ReturnLine.objects.filter(original_line=OuterRef("pk"))
-        .exclude(return_doc__docstatus=DocStatus.CANCELLED)
-        .values("original_line")
-        .annotate(total=Sum("qty"))
-        .values("total")
-    )
+    plain = _off(ReturnLine, "return_doc__docstatus", "refund_paise")
     return lines.annotate(
         **{
-            RETURNED_QTY: Coalesce(Subquery(legs, output_field=IntegerField()), Value(0))
-            + Coalesce(Subquery(plain, output_field=IntegerField()), Value(0))
+            RETURNED_QTY: _summed(legs, "qty_total") + _summed(plain, "qty_total"),
+            RETURNED_PAISE: _summed(legs, "paise_total") + _summed(plain, "paise_total"),
         }
     )
+
+
+def _summed(rows: QuerySet, column: str) -> Coalesce:
+    """One column of a per-original-line aggregate, as nought where there is none."""
+    return Coalesce(Subquery(rows.values(column), output_field=IntegerField()), Value(0))
 
 
 def entitled_refund(original: SaleLine, qty: int) -> int:

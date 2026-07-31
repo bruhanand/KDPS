@@ -55,6 +55,28 @@ const PROMOTIONS: ReportModule = { name: "Promotions & EOSS", stage: "later" };
 const HRMS: ReportModule = { name: "HRMS & Payroll", stage: "later" };
 const ANALYTICS: ReportModule = { name: "Reports & Analytics", stage: "later" };
 
+/**
+ * The client report's own module strip, whole.
+ *
+ * Listed rather than derived from `PLANNED_PAGES`, because a module does not
+ * leave the report when its last screen is built: POS & Billing is on the strip
+ * and has nothing planned under it since #184 landed the last of Sell's four
+ * screens. Deriving the strip from what is unbuilt would quietly drop a module
+ * from the client's report the moment we finished it, which is the opposite of
+ * what finishing it should do.
+ */
+export const REPORT_MODULES: ReportModule[] = [
+  GOODS_RECEIPT,
+  TRANSFERS,
+  POS,
+  ACCOUNTS,
+  INVENTORY,
+  ADMINISTRATION,
+  PROMOTIONS,
+  HRMS,
+  ANALYTICS,
+];
+
 export interface PlannedScreen {
   /** One line: what the screen is for, in the words its user would use. */
   summary: string;
@@ -69,21 +91,14 @@ export interface PlannedScreen {
 
 export const PLANNED_PAGES: Record<string, PlannedScreen> = {
   // ---- Sell ---------------------------------------------------------------
-  // Billing is built (#181) - a screen with a promise on this list would be a
-  // promise nobody can reach, and `plannedPages.test.ts` says so.
-  "/sell/returns": {
-    summary: "A customer brings something back, or swaps it for another size.",
-    contains: [
-      "Customer returns against the original bill",
-      "Exchange for another size, colour or style",
-      "Stock and money both corrected by the return document — never by hand",
-    ],
-    notes: ["A return needs the original bill, so this comes with billing."],
-    module: POS,
-  },
-  // Customers is built too (#185) - search, the bill read-only, and Print again.
-  // The stores' own wording from the 25 July note, "re-print only, no editing",
-  // is what shipped: there is no writer behind that screen to edit with.
+  // Nothing. Every screen under Sell is built - Billing (#181), Return &
+  // Exchange (#184), Customers (#185) and Till & Sync (#180) - and a promise on
+  // this list for a screen somebody can already open would be a promise nobody
+  // can reach, which `plannedPages.test.ts` says out loud.
+  //
+  // The stores' own wording from the 25 July note about Customers, "re-print
+  // only, no editing", is what shipped: there is no writer behind that screen to
+  // edit with.
 
   // ---- Receive Goods ------------------------------------------------------
   "/receive/upload-bill": {

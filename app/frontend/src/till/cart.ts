@@ -31,6 +31,8 @@
 // revenue and no tax against a garment that left the shop.
 
 import { normaliseGstin, taxKindFor } from "./gstin";
+import { refundTotals, whyExchangeCannotClose } from "./exchange";
+import type { Exchange } from "./exchange";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
 import { covers, kindsOf, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
@@ -101,11 +103,20 @@ export interface Cart {
   /** The manager who authorised whatever on this bill needed authorising, as
    *  established by their PIN at this counter (#182). */
   authorisation: Authorisation | null;
+  /** A piece being given back on this same bill (#184, grill Q7). Null on an
+   *  ordinary sale, which is almost all of them.
+   *
+   *  It is not a `CartLine` with a minus on it, and that is deliberate: an
+   *  exchange leg is priced at what the customer *paid* on another bill, carries
+   *  no offer, no salesman and no discount, and reaches no rulebook. Folding it
+   *  into the line list would put a row through `priceLine` that every branch of
+   *  that function would have to be taught to skip. */
+  exchange: Exchange | null;
 }
 
 /** A bill with nothing on it yet. */
 export function emptyCart(): Cart {
-  return { lines: [], payment: emptyPayment(), authorisation: null };
+  return { lines: [], payment: emptyPayment(), authorisation: null, exchange: null };
 }
 
 export interface PricedLine extends CartLine {
@@ -133,6 +144,18 @@ export interface PricedBill {
   pieces: number;
   gross_paise: number;
   discount_paise: number;
+  /** The exchange on this bill, if there is one - carried through so the screen
+   *  and `toDraft` read one object rather than two. */
+  exchange: Exchange | null;
+  /** What the pieces coming back are worth, and the tax inside that. Both are
+   *  subtracted from the bill: the customer pays the difference, and a bill that
+   *  comes out negative hands the difference over as a credit note instead of
+   *  taking money (grill Q7). */
+  refund_paise: number;
+  refund_gst_paise: number;
+  /** What the customer is owed when the returns outweigh the sales - the face
+   *  value of the note the bill will issue. Nought on every ordinary bill. */
+  credit_note_paise: number;
   /** Gifts this bill has earned - a trolley at a token price, and the like. The
    *  counter scans them as ordinary lines; this is the prompt to do so. */
   entitlements: Entitlement[];
@@ -299,10 +322,18 @@ export function priceCart(
 
   const gross = lines.reduce((n, l) => n + l.gross_paise, 0);
   const discount = lines.reduce((n, l) => n + l.disc_paise + l.offer_paise, 0);
-  const subtotal = lines.reduce((n, l) => n + l.net_paise, 0);
+  // What is given back comes off before the rounding, so the rupee-rounding line
+  // is about the figure the customer actually settles - which is what the server
+  // re-derives (`_check_totals`).
+  const refunds = refundTotals(cart.exchange?.lines ?? []);
+  const subtotal = lines.reduce((n, l) => n + l.net_paise, 0) - refunds.refund_paise;
   const round = roundingOf(subtotal);
   const net = subtotal + round;
-  const split = splitOf(cart.payment, net, world.creditNotes, day);
+  // A bill that owes the customer money takes nothing at all: no tender, and the
+  // difference leaves as a credit note (grill Q7). `splitOf` is asked for nought
+  // rather than for a negative, so the panel does not invite a cashier to pay
+  // out of the drawer.
+  const split = splitOf(cart.payment, Math.max(net, 0), world.creditNotes, day);
   const asks = asksOn(lines, split);
 
   return {
@@ -310,13 +341,18 @@ export function priceCart(
     pieces: lines.reduce((n, l) => n + l.qty, 0),
     gross_paise: gross,
     discount_paise: discount,
+    exchange: cart.exchange,
+    refund_paise: refunds.refund_paise,
+    refund_gst_paise: refunds.gst_paise,
+    credit_note_paise: Math.max(-net, 0),
     entitlements: rulebook.entitlements,
     subtotal_paise: subtotal,
     round_paise: round,
     net_paise: net,
     // Rounding is not a discount and moves no tax: the GST total is the lines'
-    // and nothing else, which is what the accept pipeline re-derives.
-    gst_paise: lines.reduce((n, l) => n + l.gst_paise, 0),
+    // less whatever the returned pieces gave back, which is what the accept
+    // pipeline re-derives (`_check_totals`).
+    gst_paise: lines.reduce((n, l) => n + l.gst_paise, 0) - refunds.gst_paise,
     // What staff quote across the counter is everything off the ticket price -
     // the rulebook's part and the cashier's - because that is the number the
     // customer is comparing with the tags in their hand.
@@ -481,7 +517,14 @@ export function changeFor(receivedPaise: number, cashPaise: number): number {
  * settles it. Being offline is not a reason either; that is the designed state.
  */
 export function whyItCannotClose(bill: PricedBill): string {
-  if (!bill.lines.length) return "Nothing on this bill yet. Scan a piece to start.";
+  if (!bill.lines.length && !bill.exchange) {
+    return "Nothing on this bill yet. Scan a piece to start.";
+  }
+  // The counter's own refusals about the pieces coming back, before anything
+  // about the ones going out: a leg worth nothing back is not something a
+  // cashier can fix by scanning harder (#184).
+  const exchange = whyExchangeCannotClose(bill.exchange);
+  if (exchange) return exchange;
 
   const unpriced = bill.lines.find((line) => line.mrp_paise <= 0);
   if (unpriced) {
@@ -521,7 +564,7 @@ export function whyItCannotClose(bill: PricedBill): string {
     return `Line ${unattributed.line_no} has no salesman. Pick who sold the piece.`;
   }
   const notesCovered = !bill.needsAuthorising.some((ask) => ask.kind === UNVERIFIED_NOTE);
-  return whyPaymentCannotClose(bill.split, notesCovered, bill.net_paise);
+  return whyPaymentCannotClose(bill.split, notesCovered);
 }
 
 export interface BillIdentity {
@@ -591,6 +634,28 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
   // identity rather than something a cashier can walk into.
   const storeState = identity.storeStateCode || null;
   const gstin = storeState ? normaliseGstin(identity.customer?.gstin ?? "") : "";
+  // The returned legs number on from the sold lines, because the server keys
+  // every line of a bill by `line_no` and refuses a bill that uses one twice.
+  const exchange = bill.exchange
+    ? {
+        original: { fy: bill.exchange.original.fy, till_seq: bill.exchange.original.till_seq },
+        lines: bill.exchange.lines.map((leg, index) => ({
+          line_no: lines.length + index + 1,
+          barcode: leg.barcode,
+          season: leg.season,
+          qty: leg.qty,
+          // What the customer paid on the original bill, and the tax inside it at
+          // the rate that bill charged (D2). The server recomputes both and
+          // refuses a bill where either is a paisa out.
+          refund_paise: leg.refund_paise,
+          gst_rate: leg.gst_rate,
+          gst_paise: leg.gst_paise,
+          reason: leg.reason,
+          condition: leg.condition,
+          original_line: leg.original_line,
+        })),
+      }
+    : undefined;
   return {
     billed_at: identity.billedAt,
     customer: {
@@ -605,6 +670,11 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     // is "none".
     b2b_tax_kind: taxKindFor(gstin, storeState ?? ""),
     lines,
+    ...(exchange ? { exchange } : {}),
+    // A bill that owes the customer money takes nothing: `splitOf` was asked
+    // about nought, so there is nothing here to filter out, and the server
+    // checks the same identity from the other side (`_check_totals` expects the
+    // tenders to come to `max(net, 0)`).
     tenders: toTenders(bill.split),
     totals: {
       gross_paise: bill.gross_paise,

@@ -145,7 +145,12 @@ export const SECTIONS: NavSectionDef[] = [
       // carries it: this screen bills, and every endpoint behind it is gated at
       // `sell: operate`.
       { label: "Billing", to: "/sell", minCapability: "operate" },
-      { label: "Return & Exchange", to: "/sell/returns", planned: true },
+      // Taking a piece back (#184). `operate`, the same rung as billing and for
+      // the same reason: an exchange *is* a bill, and `POST /api/sell/returns`
+      // is gated at `sell: operate` too. The second pair of eyes on a plain
+      // return is not a rung at all - it is a named manager of this store,
+      // asked for on every single one.
+      { label: "Return & Exchange", to: "/sell/returns", minCapability: "operate" },
       // Finding an old bill and printing it again (#185). `view`, not `operate`:
       // `GET /api/sell/sales` is gated at `sell: view` and this screen cannot
       // write, so an owner or an accountant reaching a customer's bill is the

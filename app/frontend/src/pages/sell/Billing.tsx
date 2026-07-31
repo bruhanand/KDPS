@@ -10,6 +10,7 @@ import {
   Plus,
   Printer,
   Search,
+  Undo2,
   X,
 } from "lucide-react";
 
@@ -29,18 +30,19 @@ import {
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
+import { takeParkedExchange } from "../../till/exchange";
+import type { Exchange } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
 import { tillToday } from "../../till/pricing";
 import { describeGstin, storeStateCodeOf, TAX_KIND_WORDS, taxKindFor } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
-import { whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
-import type { Ask, Authorisation, AuthorisationKind } from "../../till/pin";
+import type { Ask } from "../../till/pin";
 import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
 import { newNote } from "../../till/tender";
 import type { NoteStanding, Payment } from "../../till/tender";
 import type { TillSnapshot } from "../../till/engine";
-import type { QueuedBill, TillCustomer, TillItem, TillManager } from "../../till/types";
+import type { QueuedBill, TillCustomer, TillItem } from "../../till/types";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
@@ -48,6 +50,7 @@ import { useTillWorld } from "../../till/useTillWorld";
 import "../Booking.css";
 import { newUuid } from "../../till/uuid";
 import { HeldBills } from "./HeldBills";
+import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
 // ---------------------------------------------------------------------------
@@ -96,6 +99,13 @@ import "./Billing.css";
 // queued. Picking one up prices it again from today's world, because a bill kept
 // overnight is sold at tomorrow's prices and offers, not at the ones it happened
 // to be parked under.
+//
+// **A piece coming back rides on the bill** (#184, grill Q7). The Return &
+// Exchange screen picks which lines of an old bill are being given back and parks
+// them; this screen picks them up and nets them against whatever is being bought
+// instead. The refund is what the customer *paid*, never today's price, and a
+// bill that ends up owing them money takes no payment at all - the difference
+// leaves as a credit note, and cash never comes out of the drawer.
 //
 // **A scan that finds nothing never sends the customer away** (#186, grill Q5).
 // The tag is in their hand, so the counter offers to bill it off the tag: a line
@@ -152,17 +162,11 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Open when a manager is being asked for their PIN, carrying exactly what
    *  they are being shown - which is also what their approval will cover. */
   const [asking, setAsking] = useState<Ask[] | null>(null);
-  /**
-   * Wrong PINs at this counter, and when the pause they earned runs out.
-   *
-   * Held here rather than inside the modal, which is the whole point: a count
-   * that lived in the modal would be cleared by closing it, and closing it is
-   * one click - so three tries per half minute would become three tries per
-   * click, which is no limit at all. It is still only a speed bump; the hash is
-   * on this device by design (grill Q1), so what it buys is somebody guessing
-   * having to stand at the counter visibly doing nothing.
-   */
-  const [wrongPins, setWrongPins] = useState(0);
+  /** Wrong PINs at this counter, and the pause they earn (`useWrongPins`). Only
+   *  a speed bump: the hash is on this device by design (grill Q1), so what it
+   *  buys is somebody guessing having to stand at the counter visibly doing
+   *  nothing. */
+  const pins = useWrongPins();
   // The hold list opens on demand, and opens itself when the Dashboard's "bills
   // on hold" row sent somebody here to clear them (`/sell?holds=1`). Read once,
   // into state: after that the panel is the cashier's to open and close, and a
@@ -173,12 +177,31 @@ function Counter({ storeName }: { storeName?: string }) {
   const world = useTillWorld(engine?.db ?? null, `${till?.syncedAt ?? ""}#${commits}`);
   const scan = useScanBox(world.loaded);
 
-  // The pause runs down on its own, whether or not the modal is open.
+  /**
+   * Pick up an exchange the Return & Exchange screen parked (#184).
+   *
+   * Taken exactly once, from the counter's own database rather than from router
+   * state: each Sell route mounts its own `TillProvider`, so there is no shared
+   * React between the two screens - and a customer standing at the counter
+   * mid-exchange should survive a reload with their pieces still on the bill.
+   *
+   * It lands on whatever is already on screen rather than replacing it, because
+   * that is the flow: the cashier picks the pieces coming back, then scans what
+   * the customer is taking instead - or the other way round.
+   */
   useEffect(() => {
-    if (wrongPins < WRONG_PINS_BEFORE_A_PAUSE) return;
-    const timer = setTimeout(() => setWrongPins(0), PAUSE_MS);
-    return () => clearTimeout(timer);
-  }, [wrongPins]);
+    if (!engine) return;
+    let taken = true;
+    void takeParkedExchange(engine.db).then((parked) => {
+      if (taken && parked) {
+        setCart((current) => ({ ...current, exchange: parked }));
+        setNote(`Exchange against ${parked.original.doc_number} is on this bill.`);
+      }
+    });
+    return () => {
+      taken = false;
+    };
+  }, [engine]);
 
   /**
    * Re-entering a printed bill from the machine this counter replaced (#189).
@@ -335,6 +358,22 @@ function Counter({ storeName }: { storeName?: string }) {
     editLine(key, { salesman });
     setLastPicked(salesman);
     if (salesman != null) void engine?.rememberSalesman(salesman);
+    scan.focus();
+  }
+
+  /** Take a piece back off the bill - the customer changed their mind about
+   *  giving it back, or the wrong line was picked. */
+  function removeLeg(key: string) {
+    setCart((current) => {
+      const legs = (current.exchange?.lines ?? []).filter((leg) => leg.key !== key);
+      return {
+        ...current,
+        // An exchange with no legs left is not an exchange: keeping the empty
+        // shell would leave the bill pointing at an original it gives nothing
+        // back against, and refusing to close (`whyExchangeCannotClose`).
+        exchange: legs.length && current.exchange ? { ...current.exchange, lines: legs } : null,
+      };
+    });
     scan.focus();
   }
 
@@ -658,6 +697,15 @@ function Counter({ storeName }: { storeName?: string }) {
         />
       )}
 
+      {bill.exchange && (
+        <ExchangeBack
+          exchange={bill.exchange}
+          refundPaise={bill.refund_paise}
+          locked={locked}
+          onRemove={removeLeg}
+        />
+      )}
+
       <div className="bill-body">
         <section className="bill-lines">
           <Lines
@@ -696,15 +744,15 @@ function Counter({ storeName }: { storeName?: string }) {
         <ManagerPin
           managers={world.managers}
           asks={asking}
-          wrong={wrongPins}
-          onWrong={() => setWrongPins((n) => n + 1)}
+          wrong={pins.wrong}
+          onWrong={pins.wasWrong}
           onClose={() => {
             setAsking(null);
             scan.focus();
           }}
           onAuthorised={(authorisation) => {
             setCart((current) => ({ ...current, authorisation }));
-            setWrongPins(0);
+            pins.clear();
             setAsking(null);
             setNote(`${authorisation.name} approved what this bill needed approving.`);
             scan.focus();
@@ -1422,6 +1470,93 @@ function RupeeInput({
   );
 }
 
+/**
+ * The pieces coming back on this bill (#184, D2).
+ *
+ * Its own block above the line grid rather than rows inside it, and that is the
+ * decision rather than the easy way out. A returned piece is priced at what the
+ * customer paid on *another* bill - it has no MRP here, no discount, no offer and
+ * no salesman - so seven of the grid's twelve columns would be blank on it, and
+ * the two rows a cashier has to keep straight (going out, coming back) would be
+ * interleaved in one list with a minus sign as the only thing telling them apart.
+ *
+ * The reason and the condition are the counter's to set, and the condition is the
+ * one that matters: a damaged piece goes to quarantine and never back on the
+ * shelf, which is a decision a person makes with the garment in their hand.
+ */
+function ExchangeBack({
+  exchange,
+  refundPaise,
+  locked,
+  onRemove,
+}: {
+  exchange: Exchange;
+  refundPaise: number;
+  locked: boolean;
+  onRemove: (key: string) => void;
+}) {
+  return (
+    <section className="card section-card bill-exchange" data-testid="bill-exchange">
+      <p className="eyebrow">
+        <Undo2 size={14} /> Coming back · against {exchange.original.doc_number}
+      </p>
+      <div className="table-wrap">
+        <table className="data" data-testid="bill-exchange-lines">
+          <thead>
+            <tr>
+              <th>Piece</th>
+              <th className="num">Qty</th>
+              <th>Reason</th>
+              <th>Condition</th>
+              <th className="num">Back</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {exchange.lines.map((leg) => (
+              <tr key={leg.key} data-testid={`bill-exchange-${leg.original_line}`}>
+                <td>
+                  {leg.description}
+                  <br />
+                  <span className="mono muted-cell">{leg.barcode}</span>
+                </td>
+                <td className="num">{leg.qty}</td>
+                <td>{leg.reason || "—"}</td>
+                <td>
+                  {leg.condition === "damaged" ? (
+                    <span className="bill-overcap">damaged · quarantine</span>
+                  ) : (
+                    "good · back on the shelf"
+                  )}
+                </td>
+                <td className="num">
+                  <Money paise={leg.refund_paise} />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="line-del"
+                    disabled={locked}
+                    data-testid={`bill-exchange-remove-${leg.original_line}`}
+                    aria-label={`Take the returned piece on line ${leg.original_line} off this bill`}
+                    onClick={() => onRemove(leg.key)}
+                  >
+                    <X size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted-cell" data-testid="bill-exchange-total">
+        Given back: <Money paise={refundPaise} /> - what the customer paid for these pieces, not
+        today&rsquo;s price.
+      </p>
+    </section>
+  );
+}
+
 // --- the payment panel -----------------------------------------------------
 
 /**
@@ -1446,6 +1581,26 @@ function PaymentPanel({
   onAsk: () => void;
 }) {
   const { split } = bill;
+  // An exchange whose returns outweigh its sales pays the *customer*, and it pays
+  // them in a credit note rather than out of the drawer (#184, grill Q7). The
+  // panel closes rather than showing a negative to collect: there is no amount to
+  // take, and a cash box a cashier could still type into is a drawer somebody
+  // could still open.
+  if (bill.credit_note_paise > 0) {
+    return (
+      <section className="card section-card bill-panel" data-testid="bill-owes-customer">
+        <p className="eyebrow">Owed to the customer</p>
+        <p className="bill-due" data-testid="bill-credit-note">
+          <Money paise={bill.credit_note_paise} />
+        </p>
+        <p className="muted-cell">
+          The pieces coming back are worth more than the ones going out. Save &amp; Print issues a
+          credit note for the difference, spendable at this shop - no cash comes out of the
+          drawer. Its number prints on the bill.
+        </p>
+      </section>
+    );
+  }
   return (
     <section className="card section-card bill-panel">
       <p className="eyebrow">To pay</p>
@@ -1681,170 +1836,6 @@ function formatClock(iso: string): string {
     : at.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** How many wrong PINs the modal takes before it makes somebody wait, and how
- *  long it makes them wait. */
-const WRONG_PINS_BEFORE_A_PAUSE = 3;
-const PAUSE_MS = 30_000;
-
-/** What each authorisation kind is called on the shop floor. */
-const KIND_WORDS: Record<AuthorisationKind, string> = {
-  [OVER_CAP_DISCOUNT]: "a discount past the cashier's limit",
-  [UNVERIFIED_NOTE]: "a credit note this counter cannot check",
-};
-
-/**
- * The manager's PIN (#182).
- *
- * Checked here, on the device, against the hash the dataset sent - the counter
- * may have had no line for a week. The manager types a PIN and not a name:
- * whose it is is what the PIN establishes, and it is what the bill records.
- *
- * No `alert`, no `confirm`, and Escape closes it. Everything else on this page
- * is a visible button (Anand's Phase-3 ruling) and so is everything here.
- */
-function ManagerPin({
-  managers,
-  asks,
-  wrong,
-  onWrong,
-  onClose,
-  onAuthorised,
-}: {
-  managers: TillManager[];
-  asks: Ask[];
-  /** Wrong PINs so far at this counter - held by the screen, not by this modal,
-   *  because a modal's own count is cleared by closing it, and closing it is one
-   *  click. See `Counter`. */
-  wrong: number;
-  onWrong: () => void;
-  onClose: () => void;
-  onAuthorised: (authorisation: Authorisation) => void;
-}) {
-  const [pin, setPin] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [refused, setRefused] = useState("");
-  const box = useRef<HTMLInputElement>(null);
-  const waiting = wrong >= WRONG_PINS_BEFORE_A_PAUSE;
-
-  useEffect(() => {
-    box.current?.focus();
-  }, []);
-
-  async function check() {
-    if (checking || waiting || !pin) return;
-    setChecking(true);
-    setRefused("");
-    try {
-      const attempt = await whoAuthorised(managers, pin, asks);
-      if (!attempt.authorisation) {
-        // A wrong PIN and a PIN belonging to a manager of another store are the
-        // same answer here, and telling them apart would be telling whoever is
-        // standing there which. A *shared* PIN is not - it is a thing an
-        // administrator has to fix, and no amount of retrying will help.
-        setRefused(
-          attempt.matched > 1
-            ? "More than one manager here uses that PIN, so the bill could not say which of them approved it. One of them has to change theirs."
-            : "That is not a manager's PIN for this store.",
-        );
-        onWrong();
-        setPin("");
-        box.current?.focus();
-        return;
-      }
-      onAuthorised(attempt.authorisation);
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  return (
-    <div className="modal-backdrop" data-testid="bill-pin-modal" onClick={onClose}>
-      <div
-        className="modal bill-pin"
-        role="dialog"
-        aria-label="Manager approval"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") onClose();
-        }}
-      >
-        <div className="modal-head">
-          <h3 className="h3">
-            <KeyRound size={17} style={{ verticalAlign: "-3px", marginRight: 6 }} />
-            Manager approval
-          </h3>
-          <button type="button" className="btn" data-testid="bill-pin-cancel" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-
-        <p className="lead">This bill needs approving:</p>
-        <ul className="bill-asks" data-testid="bill-pin-asks">
-          {asks.map((ask) => (
-            <li key={`${ask.kind}/${ask.ref}`}>
-              {ask.label} · {KIND_WORDS[ask.kind]} · <Money paise={ask.paise} />
-            </li>
-          ))}
-        </ul>
-
-        {managers.length === 0 ? (
-          <p className="warn-note" data-testid="bill-pin-nobody">
-            No manager of this store has a counter PIN yet. One is set from Till &amp; Sync, by
-            the manager themselves - and only somebody who may approve selling here can hold one.
-          </p>
-        ) : (
-          <>
-            <div className="field">
-              <label htmlFor="bill-pin">Manager PIN</label>
-              <input
-                ref={box}
-                id="bill-pin"
-                className="input"
-                data-testid="bill-pin"
-                type="password"
-                inputMode="numeric"
-                autoComplete="off"
-                disabled={checking || waiting}
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  void check();
-                }}
-              />
-            </div>
-            {refused && (
-              <p className="bill-alert" data-testid="bill-pin-refused">
-                <AlertTriangle size={15} />
-                {refused}
-              </p>
-            )}
-            {waiting && (
-              <p className="warn-note" data-testid="bill-pin-waiting">
-                Too many wrong PINs. This waits half a minute before it will take another.
-              </p>
-            )}
-            <p className="muted-cell">
-              The manager types it themselves. Their name, the time, and what they approved go
-              on the bill.
-            </p>
-            <button
-              type="button"
-              className="btn btn-cta"
-              data-testid="bill-pin-approve"
-              disabled={checking || waiting || !pin}
-              onClick={() => void check()}
-            >
-              {checking ? "Checking…" : "Approve"}
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * Who the bill is for - and, when they give a GSTIN, what kind of bill it is.
  *
@@ -1956,6 +1947,13 @@ function Totals({ bill }: { bill: ReturnType<typeof priceCart> }) {
           label="You saved"
           value={<Money paise={bill.saved_paise} />}
           testId="bill-saved"
+        />
+      )}
+      {bill.refund_paise > 0 && (
+        <Figure
+          label="Given back"
+          value={<Money paise={bill.refund_paise} />}
+          testId="bill-given-back"
         />
       )}
       {bill.round_paise !== 0 && (

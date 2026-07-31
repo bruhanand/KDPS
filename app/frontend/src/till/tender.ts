@@ -153,17 +153,14 @@ function doubtAbout(note: NoteTender, held: TillCreditNote | null, day: string):
  * a note nobody authorised. Catching them here is the difference between a
  * cashier fixing a figure and a store person unpicking a printed bill days later.
  */
-export function whyPaymentCannotClose(
-  split: TenderSplit,
-  authorised: boolean,
-  netPaise: number,
-): string {
-  if (netPaise < 0) {
-    // An exchange whose returns outweigh its sales pays the customer, and it
-    // pays them in a credit note rather than out of the drawer (grill Q7). That
-    // whole path is #184; until it exists this cannot be reached from the screen.
-    return "This bill owes the customer money. Exchanges and returns are not built yet.";
-  }
+export function whyPaymentCannotClose(split: TenderSplit, authorised: boolean): string {
+  // The bill's own total is deliberately **not** a parameter any more (#184).
+  // Everything below is about the *split* against a bill `splitOf` was already
+  // given, and the one thing the total used to decide - "this bill owes the
+  // customer money" - is no longer this function's question: an exchange whose
+  // returns outweigh its sales takes nothing at all and hands the difference over
+  // as a credit note (grill Q7), so the caller asks about `max(net, 0)` and there
+  // is no payment here to collect at all.
   const blank = split.notes.find((standing) => !standing.note.number);
   if (blank) return "Type the number of the credit note, or take the row off the bill.";
   const duplicate = duplicateNote(split.notes);

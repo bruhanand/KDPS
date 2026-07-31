@@ -37,6 +37,7 @@ import CashLedger from "./pages/CashLedger";
 import IrnQueue from "./pages/IrnQueue";
 import BillingPage from "./pages/sell/Billing";
 import CustomerSearchPage from "./pages/sell/CustomerSearch";
+import ReturnsExchangePage from "./pages/sell/ReturnsExchange";
 import TillPage from "./pages/sell/Till";
 import { TillProvider } from "./till/TillProvider";
 
@@ -114,6 +115,11 @@ const BUILT: Screen[] = [
   // number of times on one tab. The Dexie connection is a per-store singleton
   // and outlives the navigation either way.
   { id: "sell-billing", path: "/sell", element: withTill(<BillingPage />) },
+  // Taking a piece back (#184). `withTill`, because half of what it does is the
+  // counter's own: the bill the customer is holding may still be in this till's
+  // queue and nowhere else, the manager's PIN is checked against the cached
+  // hash, and an exchange is handed to Billing through the local database.
+  { id: "sell-returns", path: "/sell/returns", element: withTill(<ReturnsExchangePage />) },
   { id: "sell-till", path: "/sell/till", element: withTill(<TillPage />) },
   // Find a bill and print it again (#185). No `withTill`, and that is the whole
   // shape of the screen: it reads the *server's* bills, because the counter's

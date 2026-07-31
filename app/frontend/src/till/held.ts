@@ -124,7 +124,17 @@ export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
     };
   });
   return {
-    cart: { lines, payment: payload.payment ?? emptyPayment(), authorisation: null },
+    cart: {
+      lines,
+      payment: payload.payment ?? emptyPayment(),
+      authorisation: null,
+      // A hold carries no exchange, deliberately. A hold is a *cart* - what
+      // somebody is thinking about buying - and a piece the customer has handed
+      // back is not that: they are standing there with it, and parking the bill
+      // would leave a refund owed to somebody who has walked out. If they want to
+      // pause, the exchange comes off the bill and is picked again.
+      exchange: null,
+    },
     customer: {
       name: payload.customer?.name ?? "",
       mobile: payload.customer?.mobile ?? "",

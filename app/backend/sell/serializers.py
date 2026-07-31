@@ -332,10 +332,15 @@ class SaleLineReadSerializer(serializers.ModelSerializer[SaleLine]):
     salesman_name = serializers.CharField(source="salesman.name", read_only=True, default="")
     #: How much of this line has already been given back, by either route - an
     #: exchange leg inside a later bill, or a plain return (#184). Annotated by
-    #: `refunds.with_returned_qty` on the queryset, so it is one query for the
-    #: bill rather than two per line; `0` where nothing annotated it, which is
-    #: honest for a caller that did not ask.
+    #: `refunds.with_returned` on the queryset, so it is one query for the bill
+    #: rather than four per line; `0` where nothing annotated it, which is honest
+    #: for a caller that did not ask.
     returned_qty = serializers.IntegerField(read_only=True, default=0)
+    #: And what those pieces were worth back. The counter needs both to price an
+    #: exchange leg offline: the last piece of a line settles the remainder, so a
+    #: till that knew only the count would get the second partial return wrong -
+    #: and would find out after the receipt had printed. See `refunds`.
+    returned_paise = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = SaleLine
@@ -365,6 +370,7 @@ class SaleLineReadSerializer(serializers.ModelSerializer[SaleLine]):
             "return_reason",
             "condition",
             "returned_qty",
+            "returned_paise",
         ]
 
 
