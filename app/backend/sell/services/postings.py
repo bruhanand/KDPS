@@ -251,7 +251,7 @@ def post_sale_value(
     needs a minted `doc_number` to hang the legs on.
     """
     _post_money_event(sale, costed, tenders, actor)
-    _post_cost_event(sale, costed, actor)
+    post_cost_event(sale, costed, actor)
     _write_collections(sale, tenders, actor)
 
 
@@ -339,7 +339,9 @@ def _rounding_legs(sale: Sale) -> list[Leg]:
     return [side(GLAccount.ROUND_OFF, abs(rounding), memo="Bill rounding")]
 
 
-def _post_cost_event(sale: Sale, costed: list[CostedLine], actor: Any) -> None:
+def post_cost_event(
+    sale: Sale, costed: list[CostedLine], actor: Any, *, against_voucher: str = ""
+) -> bool:
     """Event B - what the pieces cost, out of the book that held them.
 
     Owned stock (Outright / Correction) comes out of INVENTORY at the cost frozen
@@ -352,20 +354,36 @@ def _post_cost_event(sale: Sale, costed: list[CostedLine], actor: Any) -> None:
     original's own frozen cost, reading both off the original line's own columns
     (`plan_from_original`): the piece is that piece, whatever the brand's terms
     have become since.
+
+    Called twice for some bills, which is why it is public. A line sold before its
+    paperwork has no cost to post on the day, and the sweep (#186) calls this again
+    when the PT prices it - a second balanced voucher under the same bill, written
+    on the day the price arrived. That voucher carries `against_voucher`, and it is
+    the only thing that tells the two apart: a COGS leg dated three days after the
+    bill it belongs to is otherwise indistinguishable from one posted with it, and
+    the difference is exactly what a books-health check has to be able to see.
+
+    Answers whether anything was written, so a caller acting on the posting (the
+    sweep marks its queue row) does not have to re-derive it.
     """
     postable = [line for line in costed if line.plan.postable and line.cost_paise]
     if not postable:
-        return
+        return False
     legs: list[Leg] = []
     for line in postable:
-        legs += _own_cost_legs(line) if line.plan.owned else _sor_cost_legs(line)
+        legs += (
+            _own_cost_legs(line, against_voucher)
+            if line.plan.owned
+            else _sor_cost_legs(line, against_voucher)
+        )
     post_entries(sale, legs, posted_by=actor)
     _accrue_sor_liability(sale, postable, actor)
+    return True
 
 
-def _own_cost_legs(line: CostedLine) -> list[Leg]:
+def _own_cost_legs(line: CostedLine, against_voucher: str = "") -> list[Leg]:
     """KDPS-owned: the value leaves our own inventory and becomes cost of sale."""
-    dims = _dims(line.row)
+    dims = {**_dims(line.row), "against_voucher": against_voucher}
     out, back = _sides(line)
     return [
         out(GLAccount.COGS, line.cost_paise, **dims),
@@ -373,7 +391,7 @@ def _own_cost_legs(line: CostedLine) -> list[Leg]:
     ]
 
 
-def _sor_cost_legs(line: CostedLine) -> list[Leg]:
+def _sor_cost_legs(line: CostedLine, against_voucher: str = "") -> list[Leg]:
     """Brand-owned: the liability accrues now, and the memo stock comes off.
 
     Four legs, two pairs. The first pair is the money that matters - cost of sale
@@ -381,7 +399,7 @@ def _sor_cost_legs(line: CostedLine) -> list[Leg]:
     inward raised so brand-owned pieces could be counted without being valued on
     our balance sheet; the piece has gone, so the memo goes with it.
     """
-    dims = _dims(line.row)
+    dims = {**_dims(line.row), "against_voucher": against_voucher}
     out, back = _sides(line)
     # A postable brand-owned plan names its vendor by construction; the posting
     # floor refuses the leg without one anyway (`core.floors`).

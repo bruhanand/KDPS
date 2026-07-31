@@ -59,6 +59,8 @@ function cartOf(over: Partial<Cart["lines"][number]> = {}): Cart {
         salesman: 3,
         alternatives: WORLD.items,
         stock: 3,
+        manual_desc: "",
+        sold_before_inward: false,
         ...over,
       },
     ],
@@ -175,6 +177,66 @@ describe("picking it up", () => {
 
     expect(restored.cart.lines[0].mrp_paise).toBe(149900);
     expect(restored.staleLines).toBe(1);
+  });
+
+  it("brings a sold-before-inward line back as one, and does not call it stale", async () => {
+    // A piece the books never knew is not a piece the shop stopped carrying, so
+    // the "check the lines the counter no longer stocks" warning is not about it.
+    const held = await park(db, {
+      payload: payloadOf(
+        cartOf({
+          barcode: "8909999999901",
+          season: "",
+          brand: "",
+          item: "",
+          hsn: "",
+          needs_price: true,
+          manual_desc: "Blue check shirt",
+          sold_before_inward: true,
+        }),
+      ),
+    });
+
+    const restored = restoreHold(held, WORLD);
+
+    expect(restored.cart.lines[0].manual_desc).toBe("Blue check shirt");
+    expect(restored.cart.lines[0].sold_before_inward).toBe(true);
+    expect(restored.staleLines).toBe(0);
+  });
+
+  it("stops calling it sold-before-inward once the paperwork has landed", async () => {
+    // The PT arrived while the bill was parked: the cohort prices it now, so it
+    // is an ordinary line and nothing goes into the costing queue (#186).
+    const held = await park(db, {
+      payload: payloadOf(
+        cartOf({
+          season: "",
+          brand: "",
+          needs_price: true,
+          manual_desc: "Blue check shirt",
+          sold_before_inward: true,
+        }),
+      ),
+    });
+
+    const restored = restoreHold(held, WORLD);
+
+    expect(restored.cart.lines[0].sold_before_inward).toBe(false);
+    expect(restored.cart.lines[0].brand).toBe("MUFTI");
+  });
+
+  it("takes a cart parked by a build that had no manual line in it", async () => {
+    // Holds outlive deploys, and `undefined` reaching the close check would be a
+    // description nobody typed.
+    const held = await park(db);
+    const line = held.payload.lines[0] as Record<string, unknown>;
+    delete line.manual_desc;
+    delete line.sold_before_inward;
+
+    const restored = restoreHold(held, WORLD);
+
+    expect(restored.cart.lines[0].manual_desc).toBe("");
+    expect(restored.cart.lines[0].sold_before_inward).toBe(false);
   });
 
   it("brings the customer back with the cart", async () => {

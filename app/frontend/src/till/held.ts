@@ -101,9 +101,19 @@ export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
   const lines: CartLine[] = (payload.lines ?? []).map((line) => {
     const found = resolveScan(line.barcode, world);
     const today = pieceInSeason(found.candidates, line.season);
-    if (!today) staleLines += 1;
+    // A sold-before-inward line is not a piece the shop stopped carrying - it is
+    // one the books never knew, and saying "check the lines the counter no longer
+    // stocks" about it would send somebody looking for a change that never
+    // happened (#186).
+    if (!today && !line.sold_before_inward) staleLines += 1;
     return {
       ...line,
+      // Holds outlive deploys: a cart parked by a build that had no manual line
+      // in it comes back without these two, and `undefined` would reach the
+      // close check as a description nobody typed. The type says they are always
+      // there; the IndexedDB row on a counter that synced last week does not.
+      manual_desc: line.manual_desc ?? "",
+      sold_before_inward: line.sold_before_inward ?? false,
       ...(today ? refreshed(today, line) : {}),
       alternatives: found.candidates,
       stock: found.stock,
@@ -138,6 +148,10 @@ function refreshed(today: TillItem, line: HeldLine): Partial<CartLine> {
     // the ticket price as the books have it today.
     mrp_paise: line.needs_price ? line.mrp_paise : (today.mrp_paise ?? 0),
     needs_price: line.needs_price || today.mrp_paise == null,
+    // The paperwork landed while the bill was parked, so this is an ordinary line
+    // now: the cohort prices it, the cost event posts with the bill, and nothing
+    // goes into the costing queue at all.
+    sold_before_inward: false,
   };
 }
 

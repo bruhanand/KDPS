@@ -983,11 +983,11 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """Five of the six have a producer and are asserted here or in the rulebook
-    suite (`offer_mismatch`, since #183). The last belongs to a slice that is not
-    built yet, and is named here so the gap is a recorded fact rather than
-    something to be noticed later: `aged_uncosted` needs the daily check that
-    ages a deferred line (#188).
+    """All six have a producer now, and each is asserted where it is raised: the
+    four counter ones here, `offer_mismatch` in the rulebook suite (#183), and
+    `aged_uncosted` in the deferred-costing suite (#186). The last is the only one
+    nothing on the accept path can raise - it is a fact about a queue that has not
+    drained, so it is raised by the nightly ageing pass and not by a bill.
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",

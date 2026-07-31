@@ -81,6 +81,15 @@ export interface CartLine {
   alternatives: TillItem[];
   /** What the counter's copy said was on the shelf when this was scanned. */
   stock: number;
+  /** What the cashier typed for a piece the counter has never heard of (#186).
+   *  Empty on every ordinary line: this is the description *instead of* a
+   *  cohort, not a note about one. */
+  manual_desc: string;
+  /** The scan found nothing at all, so this line is being billed off the physical
+   *  tag. Kept apart from `needs_price`, which is the milder case of a piece the
+   *  books *do* know and simply never priced: this one has no cost of record
+   *  either, and the server parks its cost event until the paperwork lands. */
+  sold_before_inward: boolean;
 }
 
 export interface Cart {
@@ -185,6 +194,50 @@ export function addPiece(
     salesman: null,
     alternatives: found.alternatives,
     stock: found.stock,
+    manual_desc: "",
+    sold_before_inward: false,
+  };
+}
+
+/**
+ * A piece the counter has never heard of, billed off the tag in its hand (#186).
+ *
+ * The whole of grill Q5 in one function: a scan that finds nothing is not a
+ * refused customer. The garment is real, the price is printed on it, and the
+ * books will catch up when the PT lands - so the line goes on the bill with a
+ * description somebody types and a price somebody reads, and the server parks its
+ * *cost* event rather than inventing one (Rule 5) or stopping the sale (Rule 8).
+ *
+ * Everything the books would normally supply is blank on purpose. No brand means
+ * no offer can reach it, which is right: a rulebook rule is written about a brand,
+ * an item or a design, and this line is none of them yet. No HSN means the tax
+ * falls to the general apparel slab, which is what an apparel shop's unknown
+ * garment is. And the barcode is kept exactly as scanned even though nothing
+ * matches it - it is how the sweep finds this line when the cohort is priced.
+ */
+export function addManualPiece(barcode: string, key = newKey()): CartLine {
+  return {
+    key,
+    barcode: barcode.trim(),
+    season: "",
+    design: "",
+    brand: "",
+    item: "",
+    size: "",
+    color: "",
+    hsn: "",
+    no_discount: false,
+    mrp_paise: 0,
+    // The price box is the point of this line, and it stays open: there is no
+    // recorded MRP to fall back on and never will be until the paperwork lands.
+    needs_price: true,
+    qty: 1,
+    disc_paise: 0,
+    salesman: null,
+    alternatives: [],
+    stock: 0,
+    manual_desc: "",
+    sold_before_inward: true,
   };
 }
 
@@ -432,6 +485,17 @@ export function whyItCannotClose(bill: PricedBill): string {
   if (unpriced) {
     return `Line ${unpriced.line_no} has no price. Type the price from the tag before saving.`;
   }
+  // `LINE_UNRESOLVED` (422) on the server, and a terminal one: a barcode the
+  // books cannot place and no words to say what it was is a bill the queue would
+  // halt on, taking every bill behind it - after the customer had paid and walked
+  // out with the receipt. The counter has to say what it sold (#186).
+  const undescribed = bill.lines.find((line) => line.sold_before_inward && !line.manual_desc.trim());
+  if (undescribed) {
+    return (
+      `Line ${undescribed.line_no} is not in the system. ` +
+      "Type what the garment is before saving."
+    );
+  }
   const negative = bill.lines.find((line) => line.net_paise < 0);
   if (negative) {
     return `Line ${negative.line_no} is discounted by more than it costs.`;
@@ -497,6 +561,10 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     salesman: line.salesman,
     offer_id: line.offer_id,
     offer_evidence: line.offer_evidence,
+    // What the cashier typed for a piece nothing could place. Sent on every line
+    // for one field's worth of noise and one fewer branch: the server reads it
+    // only when the barcode resolves to nothing, which is exactly when it is set.
+    manual_desc: line.manual_desc,
   }));
   return {
     billed_at: identity.billedAt,

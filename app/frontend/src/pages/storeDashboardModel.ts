@@ -45,9 +45,9 @@ export interface QueueRow {
 /** Key → the sentence and the screen. The server decides the order and which
  *  keys exist at all; this side only knows what each one means.
  *
- *  Two of the contract's nine keys read `sell` tables that do not exist yet
- *  (`uncosted_sale_lines`, `continuity_flags`), so they are not here either -
- *  they arrive with the screens that clear them, exactly as `held_bills` did. */
+ *  One of the contract's nine keys reads a `sell` table nothing fills yet
+ *  (`continuity_flags`), so it is not here either - it arrives with the screen
+ *  that clears it, exactly as `held_bills` and `uncosted_sale_lines` did. */
 const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   approvals_pending: { label: "Waiting for your approval", to: "/approvals" },
   // Not `/transfer/in-transit`: that screen is the *sender's*, scoped to the
@@ -66,6 +66,13 @@ const QUEUE_MEANING: Record<string, { label: string; to: string }> = {
   // picking a parked bill up *is* billing - so the row opens the counter with
   // the list already showing (#185).
   held_bills: { label: "Bills on hold", to: "/sell?holds=1" },
+  // Pieces sold before their paperwork (#186). The row goes to Goods Inward
+  // rather than to a list of the bills, and that is the honest destination:
+  // nobody clears this queue by looking at it - it clears itself the moment the
+  // PT that prices the piece is posted, so the work is *over there*. A screen
+  // listing the waiting lines belongs with the daily check (#188), which is what
+  // a person reads when the paperwork is not coming at all.
+  uncosted_sale_lines: { label: "Sold before inward", to: "/receive" },
 };
 
 /** The queue as rows to draw. A key this build has no screen for is dropped
