@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Bring a Sandcastle container to the point where `npm run ci` can actually run.
+# Bring a Sandcastle container to the point where the pipeline's agents can
+# build, run touched tests, and QA in a browser.
 #
 # Runs as the sandbox's `onSandboxReady` hook, once per sandbox, against the
 # freshly-created worktree (which is main plus nothing). Everything here is
 # idempotent, so re-running it is safe.
 #
-# Three things have to be true before the acceptance gate means anything:
+# Note the full acceptance gate (`npm run ci`) is deliberately NEVER run in a
+# sandbox — cloud CI runs it on push, and that is the pipeline's only CI. The
+# dependencies below exist so the builder can run the tests it touched, and so
+# the QA phase can boot the API + frontend and drive them in headless Chromium.
+#
 #   1. Postgres is up      — the kernel's append-only/FSM guarantees are DB
 #                            triggers, so pytest on anything else is theatre.
-#   2. Backend deps synced — ruff, mypy, import-linter and pytest all come from
-#                            app/backend's dev group via uv.
+#   2. Backend deps synced — pytest + mypy come from app/backend's dev group.
 #   3. Frontend deps synced — tsc + vitest live in app/frontend, via yarn.
+#   4. Playwright MCP registered — the QA agent's browser tools.
 #
 # Fails loudly. A sandbox that can't verify its own work is worse than no sandbox.
 set -euo pipefail
@@ -37,6 +42,17 @@ if [ -f "$CJSON" ]; then
 else
   printf '{"projects":{"/home/agent/workspace":{"hasTrustDialogAccepted":true}}}' > "$CJSON"
 fi
+
+# --- 0b. Playwright MCP for the browser-QA phase ------------------------------
+# User-scoped (written to ~/.claude.json) so no per-project approval gate gets
+# in the way. Pointed at Debian's chromium from the image; --no-sandbox because
+# Chromium's own sandbox cannot start in this rootless container, which is fine
+# — the whole container is the sandbox.
+say "Registering Playwright MCP (headless Chromium)"
+claude mcp remove --scope user playwright >/dev/null 2>&1 || true
+claude mcp add --scope user playwright -- playwright-mcp \
+  --browser chromium --executable-path /usr/bin/chromium \
+  --headless --no-sandbox
 
 # --- 1. Postgres -------------------------------------------------------------
 # The cluster was created by the Dockerfile at $PGDATA, owned by `agent`, with a
@@ -74,4 +90,4 @@ say "Syncing frontend dependencies (yarn)"
 cd "$ROOT/app/frontend"
 yarn install --frozen-lockfile
 
-say "Ready — 'npm run ci' will run from $ROOT"
+say "Ready — pipeline agents can build, test and QA from $ROOT"

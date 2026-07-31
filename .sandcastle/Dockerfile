@@ -34,6 +34,16 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
   && apt-get update && apt-get install -y gh \
   && rm -rf /var/lib/apt/lists/*
 
+# Headless Chromium + the Playwright MCP server, for the browser-QA phase.
+# Debian's chromium rather than a Playwright download, so the browser and its
+# system libraries stay in step on arm64; sandbox-setup.sh points the MCP
+# server at it explicitly. The Noto fonts keep ₹ and Devanagari from rendering
+# as tofu in screenshots.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium fonts-noto-core fonts-noto-ui-core \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g @playwright/mcp
+
 # Build-args for UID/GID alignment: sandcastle docker build-image
 # defaults these to the host user's UID/GID so image-built files
 # and bind-mounted files share an owner without runtime chown.
