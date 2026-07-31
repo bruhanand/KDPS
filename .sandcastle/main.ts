@@ -79,7 +79,10 @@ const REVIEW_MODELS = {
 const ITERATIONS = {
   loop: 1,
   planner: 1,
-  slicer: 2,
+  // The slicer gates the issue AND reads the corpus. On the first real run it
+  // finished on its second and last iteration, and a missing <gate> defaults to
+  // GO — so a harder issue would be waved through on a cap, not on a judgement.
+  slicer: 4,
   builder: 100,
   reviewer: 1,
   fixer: 3,
@@ -430,6 +433,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       console.error(
         `  ✗ ${issues[i]!.id} (${issues[i]!.branch}) crashed: ${outcome.reason}`,
       );
+      // A crashed pipeline is a failed run. Settling every pipeline keeps one
+      // failure from cancelling the others, but the process must not then exit
+      // 0 — unattended, that reads to a wrapper as a clean run that simply had
+      // nothing to do.
+      process.exitCode = 1;
     }
   }
 

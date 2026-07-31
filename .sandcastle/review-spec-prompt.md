@@ -43,7 +43,24 @@ Report three things, quoting the spec line for each finding:
 Write `{{ART_DIR}}/findings-spec.md` (create the directory if needed), **under
 400 words**. If the diff is faithful, write "No findings."
 
+# ALREADY-TRIAGED FINDINGS
+
+Before you report, read `{{ART_DIR}}/deviations.md` if it exists. The fixer
+writes it when it consciously leaves a finding alone, and the reasoning is
+usually the issue's own "Out of scope" section.
+
+A finding recorded there is **residual**, not actionable. Put it under a
+`## Residual` heading so the round reads as deliberate rather than missed, and
+do **not** let it decide your tag. The one exception: if you can show the
+deviation's stated reasoning is *wrong*, raise it as a normal finding and say
+why.
+
 Then output exactly one of:
 
 <findings>FOUND</findings>
 <findings>NONE</findings>
+
+Tag on what needs action **this round**, not on what the file mentions. If
+everything outstanding is residual, or the diff is clean, the tag is NONE —
+FOUND costs a whole extra fix round, and a fixer handed the same deferred
+finding twice may break scope to satisfy it.

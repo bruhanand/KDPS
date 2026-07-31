@@ -77,6 +77,11 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
   && uv python install 3.12
 
+# The repo's commit hooks. Without it every builder hits a failing commit and
+# installs it by hand mid-run — the same download, paid per issue instead of
+# once per image, from an agent improvising rather than following the slice.
+RUN uv tool install pre-commit
+
 # A Postgres cluster owned by `agent`, so the server starts in this rootless
 # container without sudo. Trust auth and a /tmp socket dir are safe because the
 # cluster is throwaway and reachable only from inside the sandbox.
