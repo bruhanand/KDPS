@@ -1,29 +1,44 @@
-// Parallel Planner with Review — four-phase orchestration loop
+// Pipeline orchestrator — the /implement dev process, run unattended.
 //
-// This template drives a multi-phase workflow:
-//   Phase 1 (Plan):             An opus agent analyzes open issues, builds a
-//                               dependency graph, and outputs a <plan> JSON
-//                               listing unblocked issues with branch names.
-//   Phase 2 (Execute + Review): For each issue, a sandbox is created via
-//                               createSandbox(). The implementer runs first.
-//                               If it produces commits, a reviewer runs in the
-//                               same sandbox on the same branch. How many issue
-//                               pipelines run at once is set by
-//                               MAX_CONCURRENT_ISSUES in the config block.
-//   Phase 3 (Publish):          A single agent verifies the gate and opens one
-//                               pull request per completed branch. It never
-//                               merges and never closes an issue — a human does
-//                               that, the same way /deliver stops at the PR.
+// The shape mirrors the interactive skills (.agents/skills/implement,
+// .agents/skills/code-review): many small fresh-context agents handing each
+// other files, instead of one 100-turn context doing everything. Each box
+// reads a small artifact, does one job, writes a small artifact.
 //
-// The outer loop repeats up to MAX_ITERATIONS times. Note that because nothing
-// is merged, a second cycle plans against a `main` that does not yet carry the
-// first cycle's work: keep MAX_ITERATIONS at 1 and run again after merging, or
-// accept that later cycles cannot build on earlier ones.
+//   Phase 1 (Plan):      One agent reads the ready-for-agent issues and groups
+//                        them into WAVES: wave 1 builds in parallel from
+//                        today's main; later waves are blocked by wave 1 and
+//                        are only reported (build them in a later run, after
+//                        wave 1's PRs merge — nothing merges here).
+//   Phase 2 (Pipeline):  Per wave-1 issue, one sandbox, one branch, and a
+//                        chain of fresh contexts:
+//                          slicer  — gates the issue (/implement's spec-and-
+//                                    currency checks), reads the design
+//                                    corpus, writes slice-plan.md. The ONLY
+//                                    agent that reads the corpus.
+//                          builder — reads slice-plan.md, TDD, touched tests
+//                                    only. Never runs the full gate.
+//                          review  — three axes in fresh contexts (Standards /
+//                                    Spec / Correctness & Money), each writing
+//                                    a findings file, like /code-review.
+//                          fixer   — reads the findings files, applies
+//                                    ESCALATION.md: quote-the-rule or hand
+//                                    back; money always hands back. Two
+//                                    review→fix rounds, then escalate.
+//                          QA      — boots the stack in the sandbox and drives
+//                                    the acceptance criteria in headless
+//                                    Chromium (Playwright MCP). Fail → fix →
+//                                    re-drive failed flows, twice at most.
+//   Phase 3 (Publish):   One agent pushes each branch and opens one PR
+//                        (draft if handed back). THE PUSH IS THE CI: cloud CI
+//                        runs the 16-minute gate on GitHub. `npm run ci` is
+//                        never run in a sandbox — that is deliberate.
 //
-// Usage:
-//   npx tsx .sandcastle/main.ts
-// Or add to package.json:
-//   "scripts": { "sandcastle": "npx tsx .sandcastle/main.ts" }
+// Agents talk through /artifacts (a host mount, ~/.cache/sandcastle-kdps/
+// artifacts), never through each other's transcripts. Control flow reads one
+// tag from stdout per run: <gate>, <findings>, <verdict>, <qa>.
+//
+// Usage:  npx tsx .sandcastle/main.ts   (or: npm run sandcastle)
 
 import { mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -37,71 +52,67 @@ import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 // ---------------------------------------------------------------------------
 
 // --- Models -----------------------------------------------------------------
-// One entry per phase, so any phase can be flipped without touching the loop.
-// Anything the Claude Code CLI accepts as --model works: a full id
-// ("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5-20251001") or an
-// alias ("opus", "sonnet", "haiku").
-//
-// Pick one per phase — uncomment exactly one line in each block.
+// One entry per role. Anything the Claude Code CLI accepts as --model works:
+// a full id ("claude-opus-4-8", "claude-sonnet-5") or an alias ("opus",
+// "sonnet", "haiku"). QA is Sonnet by policy (/implement sends a Sonnet).
 const MODELS = {
-  // planner — dependency analysis; benefits from deeper reasoning.
-  planner: "claude-sonnet-5",
-  // planner: "claude-opus-4-8",
-  // planner: "claude-haiku-4-5-20251001",
-
-  // implementer — writes code, runs tests, iterates. The workhorse.
-  implementer: "claude-sonnet-5",
-  // implementer: "claude-opus-4-8",
-  // implementer: "claude-haiku-4-5-20251001",
-
-  // reviewer — reviews the implementer's diff on the same branch.
-  reviewer: "claude-sonnet-5",
-  // reviewer: "claude-opus-4-8",
-  // reviewer: "claude-haiku-4-5-20251001",
-
-  // publisher — verifies the gate and opens a PR per branch. Never merges.
-  publisher: "claude-sonnet-5",
-  // publisher: "claude-opus-4-8",
-  // publisher: "claude-haiku-4-5-20251001",
+  planner: "claude-sonnet-5", // reads issues, emits waves
+  slicer: "claude-sonnet-5", //  gates the issue + reads the corpus → slice plan
+  builder: "claude-sonnet-5", // writes code from the slice plan. The workhorse.
+  reviewer: "claude-sonnet-5", // one axis per run, findings file out
+  fixer: "claude-sonnet-5", //   applies ESCALATION.md to the findings
+  qa: "claude-sonnet-5", //      drives the browser, <300-word report
+  publisher: "claude-sonnet-5", // pushes + opens PRs. Never merges.
 } as const;
 
-// --- Iteration counts -------------------------------------------------------
-// `loop` is the number of plan→execute→publish cycles before stopping; the rest
-// cap how many turns each agent gets inside a single cycle. The implementer is
-// the only one that needs a lot: it writes code, runs tests and iterates.
+// --- Iteration caps ---------------------------------------------------------
+// `loop` is plan→pipeline→publish cycles; the rest cap how many turns each
+// agent gets. The builder is the only one that needs a lot.
 const ITERATIONS = {
   loop: 1,
   planner: 1,
-  implementer: 100,
+  slicer: 2,
+  builder: 100,
   reviewer: 1,
-  publisher: 1,
+  fixer: 3,
+  qa: 2,
+  publisher: 2,
 } as const;
 
+// How many review→fix rounds before the fixer must hand back (mirrors
+// /implement: "Two rounds, then ESCALATION.md").
+const REVIEW_ROUNDS = 2;
+// How many QA re-drives after the first full drive (mirrors /implement:
+// "Two re-drives at most, then ESCALATION.md").
+const QA_REDRIVES = 2;
+
 // --- How the work is run ----------------------------------------------------
-// Two knobs. Uncomment exactly one line in each block.
-//
-// MAX_CONCURRENT_ISSUES — how many issue pipelines run at the same time in the
-// execute phase. A failing pipeline never cancels the others, whatever the
-// setting.
-const MAX_CONCURRENT_ISSUES: number = 1; // sequential — one issue start to finish, then the next
-// const MAX_CONCURRENT_ISSUES: number = 3;        // limited parallel — 3 in flight, a 4th starts as one finishes
-// const MAX_CONCURRENT_ISSUES: number = Infinity; // full parallel — every issue in the plan at once (stock behaviour)
+// MAX_CONCURRENT_ISSUES — how many wave-1 pipelines run at the same time. Each
+// has its own sandbox, its own Postgres and its own branch, so they never
+// share state. A failing pipeline never cancels the others.
+const MAX_CONCURRENT_ISSUES: number = 1; // sequential
+// const MAX_CONCURRENT_ISSUES: number = 3;        // limited parallel
+// const MAX_CONCURRENT_ISSUES: number = Infinity; // whole wave at once
 
-// MAX_ISSUES_PER_CYCLE — how many issues a single cycle takes from the plan,
-// regardless of how many the planner found unblocked. The leftovers are picked
-// up by the next cycle.
-const MAX_ISSUES_PER_CYCLE: number = 1; // one full plan→build→review→publish cycle per issue; always starts from fresh main
-// const MAX_ISSUES_PER_CYCLE: number = 3;        // three issues, then one publish pass
-// const MAX_ISSUES_PER_CYCLE: number = Infinity; // whole plan in one cycle, one publish pass at the end (stock behaviour)
+// MAX_ISSUES_PER_CYCLE — how many wave-1 issues one cycle takes, regardless of
+// how many the planner found. Leftovers surface in the next run's plan.
+const MAX_ISSUES_PER_CYCLE: number = 1;
+// const MAX_ISSUES_PER_CYCLE: number = Infinity;
 
-// Maximum number of plan→execute→publish cycles before stopping.
-// Raise this if your backlog is large; lower it for a quick smoke-test run.
 const MAX_ITERATIONS = ITERATIONS.loop;
 
 // ---------------------------------------------------------------------------
-// Runs `fn` over `items` with at most `limit` in flight, settling every one.
-// Results come back in `items` order, matching Promise.allSettled's shape.
+// Helpers
 // ---------------------------------------------------------------------------
+
+/** Extract `<name>…</name>` from an agent's stdout, trimmed, or undefined. */
+function tag(stdout: string, name: string): string | undefined {
+  return stdout
+    .match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]
+    ?.trim();
+}
+
+// Runs `fn` over `items` with at most `limit` in flight, settling every one.
 async function allSettledWithLimit<T, R>(
   items: T[],
   limit: number,
@@ -133,12 +144,8 @@ async function allSettledWithLimit<T, R>(
 // ---------------------------------------------------------------------------
 
 // config/settings.py reads these with os.environ[...] — a missing one is a
-// KeyError, not a default. On a dev machine they come from app/backend/.env,
-// but that file is gitignored, so it does not exist in a Sandcastle worktree
-// and the values have to be injected here instead.
-//
-// DATABASE_URL points at the throwaway cluster the Dockerfile created inside
-// the image. Every sandbox gets its own, so concurrent issues never share a DB.
+// KeyError, not a default. app/backend/.env is gitignored, so a Sandcastle
+// worktree never has it; the values are injected here instead.
 const SANDBOX_ENV: Record<string, string> = {
   DATABASE_URL: "postgres://kdps@localhost:5432/kdps_dev",
   DJANGO_SECRET_KEY: "sandcastle-sandbox-not-for-production",
@@ -147,32 +154,31 @@ const SANDBOX_ENV: Record<string, string> = {
   SEED_DEMO: "1",
   EMERGENT_LLM_KEY: "sandcastle-placeholder",
   GEMINI_MODEL: "gemini-2.5-flash",
-  // The live-API regression suites talk to the server over plain http, and a
-  // Secure cookie is never sent back over http — every cookie-authed request
-  // would 401. Cloud CI sets this for the same reason.
+  // Cookie-authed requests over plain http would 401 with a Secure cookie.
   JWT_COOKIE_SECURE: "0",
+  // The QA phase runs vite on 3000 against the API on 8001, cross-origin,
+  // exactly like scripts/dev.sh does on a dev machine.
   REACT_APP_BACKEND_URL: "http://localhost:8001",
+  VITE_LOCAL_DEV: "1",
 };
 
-// Package caches, shared across every sandbox and every run. Without these each
-// sandbox re-downloads the backend wheels and the frontend package tree from
-// scratch — several minutes per issue. Docker fails sandbox creation if a mount
-// source is missing, so create them before anything starts.
+// Package caches plus the /artifacts channel, shared across every sandbox and
+// every run. /artifacts is how the pipeline's fresh contexts talk to each
+// other (slice plan, findings, QA report, screenshots) and how the publisher —
+// which runs in its own sandbox — reads what the pipelines produced. It is
+// also where screenshots survive for the human after the run.
 const CACHE_ROOT = join(homedir(), ".cache", "sandcastle-kdps");
 const CACHES = [
   { hostPath: join(CACHE_ROOT, "uv"), sandboxPath: "/home/agent/.cache/uv" },
   { hostPath: join(CACHE_ROOT, "yarn"), sandboxPath: "/home/agent/.cache/yarn" },
+  { hostPath: join(CACHE_ROOT, "artifacts"), sandboxPath: "/artifacts" },
 ];
 for (const cache of CACHES) mkdirSync(cache.hostPath, { recursive: true });
 
 const sandboxProvider = () => docker({ env: SANDBOX_ENV, mounts: CACHES });
 
-// Hooks run inside the sandbox once it is up, before the agent starts.
-//
-// Two sets, because the phases need different things. The planner only reads
-// GitHub issues, so making it wait on a Postgres boot and two dependency trees
-// would waste minutes per cycle. Everything that compiles, tests or merges gets
-// the full environment.
+// The planner and publisher only need git + gh, so they skip the 20-minute
+// dependency boot. Everything that compiles or tests gets the full setup.
 const planHooks = {};
 const buildHooks = {
   sandbox: {
@@ -182,12 +188,163 @@ const buildHooks = {
   },
 };
 
-// Nothing is copied from the host into the worktree. The obvious candidates are
-// the two node_modules trees and app/backend/.venv, but the host is macOS/arm64
-// and the sandbox is Linux: copying them in imports darwin-only binaries
-// (esbuild, rollup) and a venv full of absolute host paths. The caches above
-// give the same speedup without the platform mismatch.
+// Nothing is copied from the host into the worktree — the host is macOS/arm64
+// and the sandbox is Linux; the caches above give the speedup without the
+// platform mismatch.
 const copyToWorktree: string[] = [];
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type Issue = { id: string; title: string; branch: string };
+
+type PipelineState =
+  | "ready" //        built, reviewed, QA passed — real PR
+  | "handed-back" //  a human must rule — draft PR, ready-for-human
+  | "spec-stopped" // failed the spec gate — no branch, no PR
+  | "no-commits"; //  builder produced nothing — no PR
+
+type PipelineResult = {
+  issue: Issue;
+  state: PipelineState;
+  note: string;
+  commits: unknown[];
+};
+
+// ---------------------------------------------------------------------------
+// The per-issue pipeline
+// ---------------------------------------------------------------------------
+
+async function runPipeline(issue: Issue): Promise<PipelineResult> {
+  const artDir = `/artifacts/issue-${issue.id}`;
+  const promptArgs = {
+    TASK_ID: issue.id,
+    ISSUE_TITLE: issue.title,
+    BRANCH: issue.branch,
+    ART_DIR: artDir,
+  };
+
+  const sandbox = await sandcastle.createSandbox({
+    branch: issue.branch,
+    sandbox: sandboxProvider(),
+    hooks: buildHooks,
+    copyToWorktree,
+  });
+
+  try {
+    // --- Slicer: gate the issue, read the corpus, write the slice plan -----
+    const slice = await sandbox.run({
+      name: `slice-${issue.id}`,
+      maxIterations: ITERATIONS.slicer,
+      agent: sandcastle.claudeCode(MODELS.slicer),
+      promptFile: "./.sandcastle/slice-prompt.md",
+      promptArgs,
+    });
+    const gate = tag(slice.stdout, "gate") ?? "GO";
+    if (gate.startsWith("STOP")) {
+      return { issue, state: "spec-stopped", note: gate, commits: [] };
+    }
+
+    // --- Builder: fresh context, sees only the slice plan ------------------
+    const build = await sandbox.run({
+      name: `build-${issue.id}`,
+      maxIterations: ITERATIONS.builder,
+      agent: sandcastle.claudeCode(MODELS.builder),
+      promptFile: "./.sandcastle/build-prompt.md",
+      promptArgs,
+    });
+    if (build.commits.length === 0) {
+      return {
+        issue,
+        state: "no-commits",
+        note: "builder produced no commits",
+        commits: [],
+      };
+    }
+    const commits: unknown[] = [...build.commits];
+
+    // --- Review → fix rounds (like /implement: two rounds, then escalate) --
+    // The three axes run sequentially — they share the sandbox's working tree
+    // and the claude CLI's home state, so concurrency inside one sandbox is
+    // not worth the race. Each is a fresh context; cost is the same either way.
+    let handedBack = false;
+    let note = "";
+    for (let round = 1; round <= REVIEW_ROUNDS; round++) {
+      let anyFindings = false;
+      for (const axis of ["standards", "spec", "correctness"] as const) {
+        const review = await sandbox.run({
+          name: `review-${axis}-r${round}`,
+          maxIterations: ITERATIONS.reviewer,
+          agent: sandcastle.claudeCode(MODELS.reviewer),
+          promptFile: `./.sandcastle/review-${axis}-prompt.md`,
+          promptArgs: { ...promptArgs, ROUND: String(round) },
+        });
+        if (tag(review.stdout, "findings") === "FOUND") anyFindings = true;
+      }
+      if (!anyFindings) break;
+
+      const fix = await sandbox.run({
+        name: `fix-r${round}`,
+        maxIterations: ITERATIONS.fixer,
+        agent: sandcastle.claudeCode(MODELS.fixer),
+        promptFile: "./.sandcastle/fix-prompt.md",
+        promptArgs: { ...promptArgs, MODE: "review", ROUND: String(round) },
+      });
+      commits.push(...fix.commits);
+      if (tag(fix.stdout, "verdict") === "HANDED_BACK") {
+        handedBack = true;
+        note = `review round ${round} handed back to a human`;
+        break;
+      }
+    }
+
+    // --- Browser QA (skipped once handed back — a human is already owed) ---
+    if (!handedBack) {
+      for (let attempt = 0; attempt <= QA_REDRIVES; attempt++) {
+        const qa = await sandbox.run({
+          name: attempt === 0 ? "qa" : `qa-redrive-${attempt}`,
+          maxIterations: ITERATIONS.qa,
+          agent: sandcastle.claudeCode(MODELS.qa),
+          promptFile: "./.sandcastle/qa-prompt.md",
+          promptArgs: {
+            ...promptArgs,
+            MODE: attempt === 0 ? "full" : "re-drive",
+          },
+        });
+        if (tag(qa.stdout, "qa") === "PASS") break;
+
+        if (attempt === QA_REDRIVES) {
+          handedBack = true;
+          note = `QA still failing after ${QA_REDRIVES} re-drives`;
+          break;
+        }
+        const fix = await sandbox.run({
+          name: `qa-fix-${attempt + 1}`,
+          maxIterations: ITERATIONS.fixer,
+          agent: sandcastle.claudeCode(MODELS.fixer),
+          promptFile: "./.sandcastle/fix-prompt.md",
+          promptArgs: { ...promptArgs, MODE: "qa", ROUND: String(attempt + 1) },
+        });
+        commits.push(...fix.commits);
+        if (tag(fix.stdout, "verdict") === "HANDED_BACK") {
+          handedBack = true;
+          note = "QA finding handed back to a human";
+          break;
+        }
+      }
+    }
+
+    return {
+      issue,
+      state: handedBack ? "handed-back" : "ready",
+      note: handedBack ? note : "built, reviewed, QA passed",
+      commits,
+    };
+  } finally {
+    await sandbox.close();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -196,60 +353,48 @@ const copyToWorktree: string[] = [];
 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS} ===\n`);
 
-  // -------------------------------------------------------------------------
-  // Phase 1: Plan
-  //
-  // The planning agent (opus, for deeper reasoning) reads the open issue list,
-  // builds a dependency graph, and selects the issues that can be worked in
-  // parallel right now (i.e., no blocking dependencies on other open issues).
-  //
-  // It outputs a <plan> JSON block — we parse that to drive Phase 2.
-  // -------------------------------------------------------------------------
+  // --- Phase 1: Plan --------------------------------------------------------
   const plan = await sandcastle.run({
     hooks: planHooks,
     sandbox: sandboxProvider(),
     name: "planner",
-    // One iteration is enough: the planner just needs to read and reason,
-    // not write code.
     maxIterations: ITERATIONS.planner,
-    // Opus for planning: dependency analysis benefits from deeper reasoning.
     agent: sandcastle.claudeCode(MODELS.planner),
     promptFile: "./.sandcastle/plan-prompt.md",
   });
 
-  // Extract the <plan>…</plan> block from the agent's stdout.
-  const planMatch = plan.stdout.match(/<plan>([\s\S]*?)<\/plan>/);
-  if (!planMatch) {
-    throw new Error(
-      "Planning agent did not produce a <plan> tag.\n\n" + plan.stdout,
-    );
+  const planJson = tag(plan.stdout, "plan");
+  if (!planJson) {
+    throw new Error("Planning agent did not produce a <plan> tag.\n\n" + plan.stdout);
   }
+  const { waves } = JSON.parse(planJson) as { waves: Issue[][] };
 
-  // The plan JSON contains an array of issues, each with id, title, branch.
-  const { issues: plannedIssues } = JSON.parse(planMatch[1]!) as {
-    issues: { id: string; title: string; branch: string }[];
-  };
-
-  // Honour the per-cycle cap; anything left over is picked up next cycle.
+  const waveOne = waves[0] ?? [];
   const issues =
     MAX_ISSUES_PER_CYCLE === Infinity
-      ? plannedIssues
-      : plannedIssues.slice(0, MAX_ISSUES_PER_CYCLE);
+      ? waveOne
+      : waveOne.slice(0, MAX_ISSUES_PER_CYCLE);
 
-  if (issues.length < plannedIssues.length) {
+  if (issues.length < waveOne.length) {
     console.log(
-      `Plan had ${plannedIssues.length} unblocked issue(s); taking ${issues.length} this cycle (MAX_ISSUES_PER_CYCLE).`,
+      `Wave 1 has ${waveOne.length} issue(s); taking ${issues.length} this cycle (MAX_ISSUES_PER_CYCLE).`,
     );
+  }
+  const deferred = waves.slice(1).flat();
+  if (deferred.length > 0) {
+    console.log(
+      `Deferred to a later run (blocked by wave 1, which must merge first):`,
+    );
+    for (const issue of deferred) console.log(`  ${issue.id}: ${issue.title}`);
   }
 
   if (issues.length === 0) {
-    // No unblocked work — either everything is done or everything is blocked.
-    console.log("No unblocked issues to work on. Exiting.");
+    console.log("No workable issues. Exiting.");
     break;
   }
 
   console.log(
-    `Planning complete. ${issues.length} issue(s) to work, ${
+    `Planning complete. ${issues.length} issue(s) this cycle, ${
       MAX_CONCURRENT_ISSUES === 1
         ? "one at a time"
         : `up to ${MAX_CONCURRENT_ISSUES} at a time`
@@ -259,134 +404,65 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     console.log(`  ${issue.id}: ${issue.title} → ${issue.branch}`);
   }
 
-  // -------------------------------------------------------------------------
-  // Phase 2: Execute + Review
-  //
-  // For each issue, create a sandbox via createSandbox() so the implementer
-  // and reviewer share the same sandbox instance per branch. The implementer
-  // runs first; if it produces commits, the reviewer runs in the same sandbox.
-  //
-  // How many pipelines run at once is MAX_CONCURRENT_ISSUES (1 by default, i.e.
-  // one issue at a time). Every pipeline settles — one failure doesn't cancel
-  // the others.
-  // -------------------------------------------------------------------------
-
+  // --- Phase 2: Pipelines ---------------------------------------------------
   const settled = await allSettledWithLimit(
     issues,
     MAX_CONCURRENT_ISSUES,
-    async (issue) => {
-      const sandbox = await sandcastle.createSandbox({
-        branch: issue.branch,
-        sandbox: sandboxProvider(),
-        hooks: buildHooks,
-        copyToWorktree,
-      });
-
-      try {
-        // Run the implementer
-        const implement = await sandbox.run({
-          name: "implementer",
-          maxIterations: ITERATIONS.implementer,
-          agent: sandcastle.claudeCode(MODELS.implementer),
-          promptFile: "./.sandcastle/implement-prompt.md",
-          promptArgs: {
-            TASK_ID: issue.id,
-            ISSUE_TITLE: issue.title,
-            BRANCH: issue.branch,
-          },
-        });
-
-        // Only review if the implementer produced commits
-        if (implement.commits.length > 0) {
-          const review = await sandbox.run({
-            name: "reviewer",
-            maxIterations: ITERATIONS.reviewer,
-            agent: sandcastle.claudeCode(MODELS.reviewer),
-            promptFile: "./.sandcastle/review-prompt.md",
-            promptArgs: {
-              BRANCH: issue.branch,
-            },
-          });
-
-          // Merge commits from both runs so the publish phase sees all of them.
-          // Each sandbox.run() only returns commits from its own run.
-          return {
-            ...review,
-            commits: [...implement.commits, ...review.commits],
-          };
-        }
-
-        return implement;
-      } finally {
-        await sandbox.close();
-      }
-    },
+    runPipeline,
   );
 
-  // Log any agents that threw (network error, sandbox crash, etc.).
+  const results: PipelineResult[] = [];
   for (const [i, outcome] of settled.entries()) {
-    if (outcome.status === "rejected") {
+    if (outcome.status === "fulfilled") {
+      results.push(outcome.value);
+      console.log(
+        `  ${outcome.value.state === "ready" ? "✓" : "•"} ${outcome.value.issue.id} — ${outcome.value.state}: ${outcome.value.note}`,
+      );
+    } else {
       console.error(
-        `  ✗ ${issues[i]!.id} (${issues[i]!.branch}) failed: ${outcome.reason}`,
+        `  ✗ ${issues[i]!.id} (${issues[i]!.branch}) crashed: ${outcome.reason}`,
       );
     }
   }
 
-  // Only pass branches that actually produced commits to the publish phase.
-  // An agent that ran successfully but made no commits has nothing to publish.
-  const completedIssues = settled
-    .map((outcome, i) => ({ outcome, issue: issues[i]! }))
-    .filter(
-      (entry) =>
-        entry.outcome.status === "fulfilled" &&
-        entry.outcome.value.commits.length > 0,
-    )
-    .map((entry) => entry.issue);
-
-  const completedBranches = completedIssues.map((i) => i.branch);
-
-  console.log(
-    `\nExecution complete. ${completedBranches.length} branch(es) with commits:`,
+  // Only branches with commits reach the publisher. Handed-back branches go
+  // too — as draft PRs, so the work and the open question are both preserved.
+  const publishable = results.filter(
+    (r) =>
+      (r.state === "ready" || r.state === "handed-back") && r.commits.length > 0,
   );
-  for (const branch of completedBranches) {
-    console.log(`  ${branch}`);
-  }
 
-  if (completedBranches.length === 0) {
-    // All agents ran but none made commits — nothing to publish this cycle.
-    console.log("No commits produced. Nothing to publish.");
+  if (publishable.length === 0) {
+    console.log("\nNothing to publish this cycle.");
     continue;
   }
 
-  // -------------------------------------------------------------------------
-  // Phase 3: Publish
-  //
-  // One agent verifies the gate on each completed branch and opens a pull
-  // request for it. Nothing is merged and no issue is closed. A branch whose
-  // issue the reviewer labelled `ready-for-human` gets a draft PR instead, so a
-  // flagged design or money finding cannot ride through to main unnoticed.
-  //
-  // The {{BRANCHES}} and {{ISSUES}} prompt arguments are lists that the agent
-  // uses to know which branches to publish and which issues they close.
-  // -------------------------------------------------------------------------
+  // --- Phase 3: Publish -----------------------------------------------------
+  // Runs with planHooks: pushing and opening PRs needs git + gh, not a
+  // 20-minute dependency boot. THE PUSH IS THE CI — cloud CI runs the full
+  // gate on GitHub for every branch pushed here.
   await sandcastle.run({
-    hooks: buildHooks,
+    hooks: planHooks,
     sandbox: sandboxProvider(),
     name: "publisher",
     maxIterations: ITERATIONS.publisher,
     agent: sandcastle.claudeCode(MODELS.publisher),
     promptFile: "./.sandcastle/publish-prompt.md",
     promptArgs: {
-      // A markdown list of branch names, one per line.
-      BRANCHES: completedBranches.map((b) => `- ${b}`).join("\n"),
-      // A markdown list of issue IDs and titles, one per line.
-      ISSUES: completedIssues
-        .map((i) => `- ${i.id}: ${i.title}`)
+      BRANCHES: publishable
+        .map(
+          (r) =>
+            `- ${r.issue.branch} — issue #${r.issue.id} — state: ${r.state}` +
+            ` (${r.note}) — artifacts: /artifacts/issue-${r.issue.id}`,
+        )
+        .join("\n"),
+      ISSUES: publishable
+        .map((r) => `- ${r.issue.id}: ${r.issue.title}`)
         .join("\n"),
     },
   });
 
-  console.log("\nPull requests opened.");
+  console.log("\nPull requests opened. Cloud CI is running on each push.");
 }
 
 console.log("\nAll done.");

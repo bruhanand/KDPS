@@ -29,16 +29,19 @@ An issue B is **blocked by** issue A if:
 - B and A modify overlapping files or modules, making concurrent work likely to produce merge conflicts
 - B's requirements depend on a decision or API shape that A will establish
 
-An issue is **unblocked** if it has zero blocking dependencies on other open issues.
-
-For each unblocked issue, assign a branch name using the format `sandcastle/issue-{id}-{slug}`.
-
 # OUTPUT
 
-Output your plan as a JSON object wrapped in `<plan>` tags:
+Group the workable issues into **waves**:
+
+- **Wave 1** — issues with no blocking edges among themselves. They can all be built in parallel from today's `main`, each on its own branch in its own sandbox.
+- **Wave 2 and later** — issues blocked by an earlier wave. Nothing merges during this run, so these cannot be built now; they are reported and picked up by a later run, after wave 1's PRs have merged.
+
+Assign every issue a branch name in the format `sandcastle/issue-{id}-{slug}`.
+
+Output the plan as a JSON object wrapped in `<plan>` tags — an array of waves, each wave an array of issues:
 
 <plan>
-{"issues": [{"id": "42", "title": "Fix auth bug", "branch": "sandcastle/issue-42-fix-auth-bug"}]}
+{"waves": [[{"id": "42", "title": "Fix auth bug", "branch": "sandcastle/issue-42-fix-auth-bug"}], [{"id": "57", "title": "Build on 42", "branch": "sandcastle/issue-57-build-on-42"}]]}
 </plan>
 
-Include only unblocked issues. If every issue is blocked, include the single highest-priority candidate (the one with the fewest or weakest dependencies).
+Include only workable issues. If every issue is blocked by another open issue, put the single best candidate (fewest or weakest dependencies) alone in wave 1.
