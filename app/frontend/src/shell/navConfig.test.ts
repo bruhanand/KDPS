@@ -56,6 +56,11 @@ function headings(rows: NavRow[]): string[] {
   );
 }
 
+/** The strip row for `section`, if the layout drew one. */
+function stripRow(rows: NavRow[], section: string) {
+  return rows.find((r) => r.kind === "strip" && r.strip.section === section);
+}
+
 describe("the thirteen sections", () => {
   it("are the operations KDPS named, in order", () => {
     expect(SECTIONS.map((s) => s.code)).toEqual([
@@ -445,7 +450,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       const rows = rowsFor("store_staff", STORE_CAPS);
       // Scoped to Sell: #229 gives the store persona nine other strips, so
       // "the first strip row" is no longer a safe way to find this one.
-      const sell = rows.find((r) => r.kind === "strip" && r.strip.section === "sell");
+      const sell = stripRow(rows, "sell");
       expect(sell?.kind === "strip" && sell.strip.section).toBe("sell");
       expect(sell?.kind === "strip" && sell.label).toBe("Sell");
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual([
@@ -479,7 +484,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       // One tab is not a choice, so the *strip* draws no tab row (the shell
       // checks the count) - but the section is still held, so the link stays.
       const rows = rowsFor("store_staff", { ...STORE_CAPS, sell: "view" });
-      const sell = rows.find((r) => r.kind === "strip" && r.strip.section === "sell");
+      const sell = stripRow(rows, "sell");
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual(["/sell/customers"]);
       expect(headings(rows)).toContain("Sell");
     });
@@ -576,8 +581,6 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
   // sidebar is exactly ten one-line links and nothing expands.
   describe("the store's other rows, as strips", () => {
     const rowsForStaff = (caps: Record<string, string> = STORE_CAPS) => rowsFor("store_staff", caps);
-    const stripRow = (rows: NavRow[], section: string) =>
-      rows.find((r) => r.kind === "strip" && r.strip.section === section);
 
     it("draws the four single-tab rows with a link and no tab row", () => {
       // Dashboard, Receive Goods, Booking and Attendance each list exactly one
