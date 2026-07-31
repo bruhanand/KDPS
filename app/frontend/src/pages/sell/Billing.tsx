@@ -889,11 +889,15 @@ function Lines({
           {lines.map((line) => (
             <Fragment key={line.key}>
             <tr data-testid={`bill-line-${line.line_no}`}>
-              <td>
+              <td colSpan={line.sold_before_inward ? 2 : 1}>
                 <ItemCell line={line} locked={locked} onEdit={onEdit} />
                 <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
               </td>
-              <td>{line.brand}</td>
+              {/* A sold-before-inward line has no brand - nothing has ever
+                  recorded one - so the description takes that column's width
+                  rather than leaving it blank beside a box too narrow to read
+                  what the cashier just typed in it (browser QA of #186). */}
+              {!line.sold_before_inward && <td>{line.brand}</td>}
               <td>
                 <span className="mono bill-barcode">{line.barcode}</span>
                 <br />
@@ -1024,6 +1028,10 @@ function ItemCell({ line, locked, onEdit }: CellProps) {
       aria-label={`What this piece is, line ${line.line_no}`}
       autoComplete="off"
       placeholder="What is it?"
+      // The box is still narrower than a sentence, and this line's description is
+      // the only record of what left the shop - so it is readable on hover as
+      // well as on the receipt.
+      title={line.manual_desc}
       disabled={locked}
       value={line.manual_desc}
       onChange={(e) => onEdit(line.key, { manual_desc: e.target.value })}
