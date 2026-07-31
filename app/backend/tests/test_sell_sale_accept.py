@@ -335,6 +335,8 @@ def test_the_manager_who_approved_it_is_recorded_on_the_line(counter):
 
     assert response.status_code == 201
     assert SaleLine.objects.get().override_by == counter["manager"]
+    # And on the bill, which is where an override with no line of its own lands.
+    assert Sale.objects.get().override_by == counter["manager"]
 
 
 def test_a_cashier_cannot_be_their_own_manager(counter):
@@ -472,6 +474,105 @@ def test_a_manager_may_take_an_unrecognised_note_and_it_is_flagged(counter):
     assert response.status_code == 201
     assert response.json()["flags"] == [ContinuityFlag.Kind.CN_UNVERIFIED]
     assert not CreditNoteRedemption.objects.exists()
+
+
+def test_the_manager_who_took_an_unrecognised_note_is_named_on_the_bill(counter):
+    """#182 - the override is the only evidence such a bill has.
+
+    A credit-note override has no line to hang the manager off: the tender is a
+    bill-level fact and the line it helped pay for is an ordinary line. Without
+    the bill carrying it, the daily check sees "somebody took an unknown note"
+    with no name against it, which is the exact evidence the counter's second eye
+    exists to leave.
+    """
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": "26-27/XXX/CRN/9"},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 50000},
+    ]
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "credit_note",
+        "at": "2026-07-30T12:29:00Z",
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    sale = Sale.objects.get()
+    assert sale.override_by == counter["manager"]
+    assert sale.override_kind == "credit_note"
+    assert sale.override_at.isoformat() == "2026-07-30T12:29:00+00:00"
+
+
+def test_a_bill_that_needed_two_things_approving_says_so_in_one_word(counter):
+    """The daily check groups on this value, so the pair has one spelling."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["tenders"] = [
+        {"mode": "credit_note", "amount_paise": 50000, "credit_note": "26-27/XXX/CRN/9"},
+        {"mode": "cash", "amount_paise": MRP_PAISE - 20000 - 50000},
+    ]
+    payload["override"] = {
+        "user_id": counter["manager"].id,
+        "kind": "over_cap_discount+credit_note",
+    }
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount+credit_note"
+
+
+def test_a_kind_nothing_recognises_is_refused(counter):
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "because I said so"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert not Sale.objects.exists()
+
+
+def test_what_was_authorised_is_what_the_server_found_not_what_the_till_said(counter):
+    """The daily check groups on this field, and the till is the party the
+    override constrains - so a bill cannot file an over-cap discount under
+    "credit_note" and have neither counted honestly."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["manager"].id, "kind": "credit_note"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201
+    assert Sale.objects.get().override_kind == "over_cap_discount"
+
+
+def test_a_bill_nobody_had_to_authorise_names_nobody(counter):
+    _shelf(counter["store"], 3)
+
+    response = _post(counter, bill_payload(counter["store"], counter["salesman"], till_seq=1))
+
+    assert response.status_code == 201
+    sale = Sale.objects.get()
+    assert sale.override_by is None
+    assert sale.override_kind == ""
+    assert sale.override_at is None
+
+
+def test_an_override_naming_somebody_who_is_not_a_manager_leaves_no_evidence(counter):
+    """A refused override is not evidence of anything - and the bill that carried
+    it does not exist, because the discount it was offered for is refused."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, disc_paise=20000)
+    payload["override"] = {"user_id": counter["cashier"].id, "kind": "over_cap_discount"}
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 422
+    assert not Sale.objects.exists()
 
 
 def test_one_note_cannot_be_tendered_twice_on_one_bill(counter):

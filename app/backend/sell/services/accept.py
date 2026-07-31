@@ -239,7 +239,7 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     tender_plan = _plan_tenders(data, store, override)  # step 7
     _guard_bill_number(data, store)  # step 4
 
-    sale = _write_sale(data, store, actor, original_bill, lines, override)  # step 9
+    sale = _write_sale(data, store, actor, original_bill, lines, override, tender_plan)  # step 9
     minted = sale.post()
 
     flags: list[str] = []
@@ -759,6 +759,26 @@ def _guard_bill_number(data: dict[str, Any], store: Store) -> None:
         raise _bill_number_taken(data)
 
 
+def _authorised_kind(lines: list[_PreparedLine], tenders: list[_TenderPlan]) -> str:
+    """What the manager's tap on this bill was actually for.
+
+    Derived from what the pipeline itself found, never taken from the payload's
+    `override.kind`. The till is the party the override constrains, so a bill
+    could otherwise file an over-cap discount under "credit_note" - and the daily
+    check, which groups on exactly this field, would count neither honestly.
+
+    The two are joined in one fixed order when a manager was asked both at once,
+    so the value a check groups on has one spelling
+    (`sell.serializers.OVERRIDE_KINDS`).
+    """
+    kinds = []
+    if any(line.override_needed for line in lines):
+        kinds.append("over_cap_discount")
+    if any(plan.unverified for plan in tenders):
+        kinds.append("credit_note")
+    return "+".join(kinds)
+
+
 def _write_sale(
     data: dict[str, Any],
     store: Store,
@@ -766,11 +786,16 @@ def _write_sale(
     original_bill: Sale | None,
     lines: list[_PreparedLine],
     override: Any,
+    tenders: list[_TenderPlan],
 ) -> Sale:
     """Step 9 - the draft and its lines, before a number exists."""
     customer = data.get("customer") or {}
     totals = data["totals"]
     buyer_gstin = (customer.get("gstin") or "").strip().upper()
+    # What the till said about the manager's tap. Only the *time* is taken from
+    # it - a clock this server does not have - and only when the pipeline
+    # recognised the person it named.
+    authorisation = (data.get("override") or {}) if override else {}
     sale = Sale.objects.create(
         idempotency_uuid=data["idempotency_uuid"],
         store=store,
@@ -793,6 +818,13 @@ def _write_sale(
         round_paise=totals["round_paise"],
         exchange_of=original_bill,
         salesman_default=next((line.salesman for line in lines if line.salesman), None),
+        # Only a manager the pipeline actually recognised is written here. An
+        # override naming somebody who is not a manager of this store has already
+        # been discarded by `manager_for_override`, and recording the id anyway
+        # would put a name on a bill that person never authorised.
+        override_by=override,
+        override_kind=_authorised_kind(lines, tenders) if override else "",
+        override_at=authorisation.get("at"),
         created_by=actor,
     )
     for line in lines:

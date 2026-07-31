@@ -16,6 +16,7 @@ from accounts.views import (
     RoleAccessView,
     RoleDetailView,
     RoleListCreateView,
+    TillPinView,
     UserDetailView,
     UserListCreateView,
 )
@@ -25,6 +26,9 @@ urlpatterns = [
     path("refresh", CookieRefreshView.as_view(), name="token-refresh"),
     path("logout", LogoutView.as_view(), name="logout"),
     path("me", MeView.as_view(), name="me"),
+    # A manager's own counter PIN (#182). Under `me/` because that is exactly its
+    # scope: this endpoint can only ever write the caller's own row.
+    path("me/till-pin", TillPinView.as_view(), name="me-till-pin"),
     path("admin/meta", AdminMetaView.as_view(), name="rbac-admin-meta"),
     # The access matrix (#173). The api-contract sketched these at
     # `/api/accounts/...`, a prefix this project does not mount - accounts has

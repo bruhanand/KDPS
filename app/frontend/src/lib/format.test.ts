@@ -15,6 +15,15 @@ describe("formatINR", () => {
     expect(formatINR(28500000)).toBe("₹2,85,000");
     expect(formatINR(122250)).toBe("₹1,222.50");
   });
+
+  it("puts the minus outside the rupee sign", () => {
+    // An overpaid bill shows what it owes back, and "₹-1" is not how money is
+    // written - `formatRupeeAmount` below has always agreed.
+    expect(formatINR(-100)).toBe("-₹1");
+    expect(formatINR(-122250)).toBe("-₹1,222.50");
+    expect(formatINR(-250000000, { short: true })).toBe("-₹25.00 L");
+    expect(formatINR(0)).toBe("₹0");
+  });
 });
 
 describe("formatRupeeAmount", () => {

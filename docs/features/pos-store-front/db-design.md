@@ -53,6 +53,10 @@ The reason is written next to the registration (same pattern as `REGISTERED_ROLE
 Constraints: `UniqueConstraint(store, fy, till_seq)` `uq_sale_store_fy_seq`; CHECK `net_paise >= 0` is NOT added (an exchange-heavy bill can net negative → credit note, see contract).
 Indexes: (store, billed_at), customer_mobile, (store, origin).
 
+**Amended 31 Jul 2026 (#182).** Three columns added: `override_by` (FK accounts.User SET_NULL, null), `override_kind` (CharField 40, blank), `override_at` (DateTimeField, null) - migration `sell.0005`.
+The manager's tap is recorded on the bill as well as on the line, because what a manager authorises is not always a line: an unrecognised credit note is a *tender*, and the lines it helped pay for are ordinary lines.
+See the api-contract's 31 Jul amendment for the `kind` vocabulary and for what one tap does and does not cover.
+
 ### `sell_saleline` (NEW)
 
 | Column | Type / constraint |
@@ -180,6 +184,7 @@ Index: (layer, starts_on, ends_on), brand.
 ## 9. `accounts` (CHANGED)
 
 - `User.till_pin_hash` CharField(128) blank (NEW) - the manager-override PIN verified at the till while offline; synced down as part of the dataset (hash only, manager-capability users of that store only).
+  **Amended 31 Jul 2026 (#182):** the column is written by `PUT /api/auth/me/till-pin` (new, self-service - see the api-contract), and hashed with PBKDF2-SHA256 rather than the project's default bcrypt, because a browser can verify the first offline and cannot verify the second. Who may hold one lives in `accounts/till_pin.py`, shared with the dataset's `managers` section so the two cannot drift.
 - Role matrix editing reuses `Role.section_access` + existing `AccessChange` log; no schema change.
 - The four floor rules live in code (`FLOORS` constant) - not rows, deliberately (grill Q8: floors are constitution).
 

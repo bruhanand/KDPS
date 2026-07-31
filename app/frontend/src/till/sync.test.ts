@@ -266,6 +266,52 @@ describe("the dataset landing", () => {
     expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
   });
 
+  it("does not hand back a credit note an unsynced bill already spent (#182)", async () => {
+    // The shelf's problem, in money. The server's `remaining_paise` counts only
+    // the redemptions it has received, so a bootstrap would restate a note the
+    // counter spent to nought this morning as worth ₹1,200 again - and it would
+    // pay for a second bill that head office refuses, by which time it has been
+    // printed twice.
+    const NOTE = { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" };
+    const { db, storeCode } = till();
+    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
+    await commitBill(
+      db,
+      storeCode,
+      draft({
+        tenders: [
+          { mode: "credit_note", amount_paise: 120000, credit_note: NOTE.number },
+          { mode: "cash", amount_paise: 29900 },
+        ],
+      }),
+    );
+
+    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
+
+    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(0);
+  });
+
+  it("takes the note where the server says once the bill has gone up", async () => {
+    const NOTE = { number: "26-27/DEO/CRN/4", remaining_paise: 120000, expires_on: "2027-01-30" };
+    const { db, storeCode } = till();
+    await applyDataset(db, dataset({ credit_notes: [NOTE] }));
+    await commitBill(
+      db,
+      storeCode,
+      draft({
+        tenders: [
+          { mode: "credit_note", amount_paise: 50000, credit_note: NOTE.number },
+          { mode: "cash", amount_paise: 99900 },
+        ],
+      }),
+    );
+    await drainQueue(db, fakeServer());
+
+    await applyDataset(db, dataset({ credit_notes: [{ ...NOTE, remaining_paise: 70000 }] }));
+
+    expect((await db.creditNotes.get(NOTE.number))?.remaining_paise).toBe(70000);
+  });
+
   it("asks from the cursor it was given, and takes a bootstrap when told to", async () => {
     const { db } = till();
     const server = fakeServer();

@@ -23,7 +23,8 @@ import { META, readMeta, writeMeta } from "./db";
 import type { TillDb } from "./db";
 import { TillHttpError } from "./transport";
 import type { TillTransport } from "./transport";
-import { fastForwardTo } from "./numbering";
+import { drawDownNotes, fastForwardTo } from "./numbering";
+import { notesSpentBy } from "./tender";
 import type { DatasetPayload, QueueHalt, RegisterPayload, TillPolicy } from "./types";
 
 /** What the counter assumes before a server has told it otherwise: no keyed-in
@@ -124,6 +125,7 @@ export async function applyDataset(db: TillDb, payload: DatasetPayload): Promise
       await db.creditNotes.bulkDelete(payload.deleted.credit_notes);
 
       await replayQueuedStock(db, payload);
+      await replayQueuedNotes(db, payload);
 
       await db.meta.bulkPut([
         { key: META.cursor, value: payload.cursor },
@@ -169,6 +171,36 @@ async function replayQueuedStock(db: TillDb, payload: DatasetPayload): Promise<v
     // this.
     if (row) await db.stock.put({ barcode, qty: row.qty + delta });
   }
+}
+
+/**
+ * Take the queue's credit-note spending back off the balances the dataset just
+ * re-stated - the shelf's problem again, in money (#182).
+ *
+ * The server's `remaining_paise` counts only the redemptions it has *received*,
+ * so every note row it sends is worth more than it really is by whatever this
+ * till has spent and not yet synced. Writing it straight over the local copy
+ * hands a customer their credit note back: a ₹1,200 note spent to nought this
+ * morning reads ₹1,200 again after the next sync, and pays for a second bill
+ * that head office will refuse - by which time it has been printed twice.
+ *
+ * Only notes this payload actually re-stated are adjusted, exactly as with
+ * stock: a delta that did not mention a note left the local row alone, and that
+ * row already carries the draw-down.
+ */
+async function replayQueuedNotes(db: TillDb, payload: DatasetPayload): Promise<void> {
+  const pending = await db.queue.toArray();
+  if (!pending.length) return;
+  const restated = new Set(payload.credit_notes.map((row) => row.number));
+
+  const spent = new Map<string, number>();
+  for (const bill of pending) {
+    for (const [number, amount] of notesSpentBy(bill.tenders)) {
+      if (!restated.has(number)) continue;
+      spent.set(number, (spent.get(number) ?? 0) + amount);
+    }
+  }
+  await drawDownNotes(db, spent);
 }
 
 /** Pull whatever has changed since the last cursor (everything, the first time). */

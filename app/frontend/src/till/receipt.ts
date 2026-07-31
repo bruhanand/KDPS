@@ -17,8 +17,9 @@ import { changeFor } from "./cart";
 import type { BillLine, QueuedBill, TillStoreIdentity } from "./types";
 
 export interface ReceiptOptions {
-  /** Cash the customer handed over, so the paper can show the change. */
-  tenderedPaise?: number;
+  /** Cash the customer physically handed over, so the paper can show the change.
+   *  Not what the bill *took* in cash - that is on the bill's own tender rows. */
+  cashReceivedPaise?: number;
   storeName?: string;
   /** How a line reads to a customer - "MUFTI Shirt · M · Navy".
    *
@@ -56,6 +57,14 @@ function esc(text: string): string {
   );
 }
 
+/** How each tender mode reads to a customer. */
+const TENDER_WORDS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  upi: "UPI",
+  credit_note: "Credit note",
+};
+
 function when(iso: string): string {
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? iso : at.toLocaleString("en-IN");
@@ -68,8 +77,13 @@ export function receiptHtml(
   options: ReceiptOptions = {},
 ): string {
   // The same function the screen quoted the customer, not a second copy of the
-  // sum: the printed change and the change on the display have to agree.
-  const change = changeFor(options.tenderedPaise ?? 0, bill.totals.net_paise);
+  // sum: the printed change and the change on the display have to agree. Change
+  // is against the *cash* the bill took, never the bill - a ₹1,000 note handed
+  // over on a half-carded bill is change on the cash half only.
+  const cashTaken = bill.tenders
+    .filter((tender) => tender.mode === "cash")
+    .reduce((n, tender) => n + tender.amount_paise, 0);
+  const change = changeFor(options.cashReceivedPaise ?? 0, cashTaken);
   const pieces = bill.lines.reduce((n, line) => n + line.qty, 0);
   const customer = bill.customer ?? {};
 
@@ -96,9 +110,21 @@ export function receiptHtml(
     .map(([label, value]) => `<div class="row"><span>${label}</span><span>${value}</span></div>`)
     .join("");
 
-  const tendered = options.tenderedPaise
-    ? `<div class="row"><span>Cash</span><span>${money(options.tenderedPaise)}</span></div>`
-    : "";
+  // How it was paid, mode by mode. A split bill's customer copy has to say which
+  // card was charged what, because that is the line they will query - and a
+  // credit note names itself so the paper shows what was spent off which note.
+  const tendered = bill.tenders
+    .map(
+      (tender) =>
+        `<div class="row"><span>${TENDER_WORDS[tender.mode] ?? esc(tender.mode)}${
+          tender.credit_note ? ` <span class="dim">${esc(tender.credit_note)}</span>` : ""
+        }</span><span>${money(tender.amount_paise)}</span></div>`,
+    )
+    .join("");
+  const received =
+    options.cashReceivedPaise && options.cashReceivedPaise !== cashTaken
+      ? `<div class="row"><span>Cash received</span><span>${money(options.cashReceivedPaise)}</span></div>`
+      : "";
   const changeRow = change
     ? `<div class="row"><span>Change</span><span>${money(change)}</span></div>`
     : "";
@@ -134,7 +160,7 @@ export function receiptHtml(
   <hr>
   ${totals}
   <div class="row due"><span>To pay</span><span>${money(bill.totals.net_paise)}</span></div>
-  ${tendered}${changeRow}
+  ${tendered}${received}${changeRow}
   <footer class="mid dim">
     ${bill.origin === "offline" ? "Billed offline &middot; will reach head office when the line is back<br>" : ""}
     Exchange within the store's policy, with this bill.<br>Thank you.

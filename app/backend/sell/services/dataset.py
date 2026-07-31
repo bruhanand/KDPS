@@ -52,9 +52,8 @@ from django.db.models import Q, QuerySet
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from accounts.models import ScopeType, User
-from accounts.permissions import user_can
-from accounts.sections import CAP_APPROVE
+from accounts.models import User
+from accounts.till_pin import STORE_BOUND_SCOPES, may_hold_till_pin
 from core.documents import DocStatus
 from masters.models import Cohort, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
@@ -76,14 +75,6 @@ from stockledger.models import StockOnHand
 #: The cost of the lap is a delta re-sending a quarter-hour of edits, which is a
 #: handful of rows the till upserts. That is the cheap side of an unfair trade.
 CURSOR_LAP = timedelta(minutes=15)
-
-#: Scopes whose boundary genuinely *is* a set of stores. A manager PIN hash goes
-#: down to a shop-floor device, so "this store's managers" is read as narrowly as
-#: it can honestly be read: somebody explicitly assigned to this store. A
-#: network-wide or entity-wide administrator whose matrix cell happens to say
-#: `sell: manage` is not one of this counter's people, and shipping their hash to
-#: fifty tills would be a worse answer than shipping nobody's.
-STORE_BOUND_SCOPES = (ScopeType.STORE, ScopeType.STORE_GROUP, ScopeType.REGION)
 
 
 class TillScopeError(Exception):
@@ -582,11 +573,16 @@ def _managers(store: Store) -> list[dict[str, Any]]:
     """Who may authorise an over-cap discount at this counter with the line cut.
 
     The narrowest list this can honestly be, because it is a set of credentials
-    that leaves the building: somebody explicitly assigned to *this* store, whose
-    boundary is stores at all, who holds `sell >= approve` on the **stored** matrix
-    (whatever an administrator has made it - #173), who is not the break-glass
-    superuser, and who has actually set a PIN. A blank hash is not a credential,
-    and a row carrying one would let the till compare against nothing.
+    that leaves the building: somebody explicitly assigned to *this* store who
+    `may_hold_till_pin` (their boundary is stores at all, they hold `sell >=
+    approve` on the **stored** matrix - whatever an administrator has made it,
+    #173 - and they are not the break-glass superuser), and who has actually set
+    one. A blank hash is not a credential, and a row carrying one would let the
+    till compare against nothing.
+
+    That sentence lives in `accounts.till_pin` rather than here, because the
+    endpoint a manager sets their PIN through has to refuse exactly the people
+    this list would refuse to ship.
 
     Sent whole every time and never deltaed: it is a handful of rows, and the one
     thing that must never happen is a till holding a stale copy - a rung
@@ -617,5 +613,5 @@ def _managers(store: Store) -> list[dict[str, Any]]:
             "till_pin_hash": user.till_pin_hash,
         }
         for user in candidates
-        if user_can(user, "sell", CAP_APPROVE)
+        if may_hold_till_pin(user)
     ]

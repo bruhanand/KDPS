@@ -2,6 +2,8 @@ import { useState } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
+import { useAuth } from "../../auth/AuthContext";
+import { api, apiErrorMessage } from "../../lib/api";
 import { Money, formatDateTime } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
@@ -171,8 +173,115 @@ export default function TillPage() {
         </div>
       )}
 
+      <CounterPin />
       <TestBill />
     </div>
+  );
+}
+
+/**
+ * A manager's own counter PIN (#182).
+ *
+ * It lives here rather than on the Billing screen because it is not part of
+ * selling: it is the credential that lets this person stand behind a cashier's
+ * exception, and it is set once and then left alone. Only somebody the counter
+ * could actually be asked to trust sees the card at all - the server decides
+ * that (`may_hold_till_pin`), and refuses the write besides.
+ *
+ * They type it themselves, and prove who they are with their own password. An
+ * administrator who could set a manager's PIN could authorise a discount in that
+ * manager's name, which would leave the evidence on a bill worth nothing.
+ */
+function CounterPin() {
+  const { user } = useAuth();
+  const [pin, setPin] = useState("");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [said, setSaid] = useState("");
+  const [failed, setFailed] = useState("");
+  // Held here rather than re-read from `/me`: the only thing it changes is a
+  // sentence, and the person who just set a PIN knows they have one.
+  const [hasPin, setHasPin] = useState(Boolean(user?.has_till_pin));
+
+  if (!user?.may_hold_till_pin) return null;
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    setSaid("");
+    setFailed("");
+    try {
+      await api.put("/auth/me/till-pin", { pin, current_password: password });
+      setPin("");
+      setPassword("");
+      setHasPin(true);
+      setSaid("Your counter PIN is set. The till picks it up on its next sync.");
+    } catch (error) {
+      setFailed(apiErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="card till-card till-pin-card">
+      <h2 className="h3">Your counter PIN</h2>
+      <p className="muted-cell">
+        {hasPin
+          ? "You have one. Setting a new one replaces it everywhere on the next sync."
+          : "Set one and a cashier here can call you over to approve a discount past their limit, or a credit note this counter cannot check - with the line down."}
+      </p>
+
+      <div className="field">
+        <label htmlFor="till-pin-new">New PIN (4 to 6 digits)</label>
+        <input
+          id="till-pin-new"
+          className="input"
+          data-testid="till-pin-new"
+          type="password"
+          inputMode="numeric"
+          autoComplete="off"
+          disabled={saving}
+          value={pin}
+          onChange={(e) => setPin(e.target.value)}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="till-pin-password">Your password</label>
+        <input
+          id="till-pin-password"
+          className="input"
+          data-testid="till-pin-password"
+          type="password"
+          autoComplete="current-password"
+          disabled={saving}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+
+      {failed && (
+        <p className="till-alert" data-testid="till-pin-failed">
+          <AlertTriangle size={15} />
+          {failed}
+        </p>
+      )}
+      {said && (
+        <p className="ok-note" data-testid="till-pin-said">
+          {said}
+        </p>
+      )}
+
+      <button
+        type="button"
+        className="btn"
+        data-testid="till-pin-save"
+        disabled={saving || !pin || !password}
+        onClick={() => void save()}
+      >
+        {saving ? "Setting…" : "Set my PIN"}
+      </button>
+    </section>
   );
 }
 

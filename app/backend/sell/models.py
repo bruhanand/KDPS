@@ -292,6 +292,34 @@ class Sale(Document):
     salesman_default = models.ForeignKey(
         Salesman, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
+    # The manager's tap at the counter (#182). It sits on the bill as well as on
+    # the line it excused, because what a manager authorises is not always a line:
+    # an unrecognised credit note is a *tender*, and the lines it helped pay for
+    # are ordinary lines. A daily check reading "somebody took an unknown note
+    # here" with no name against it would be looking at the one place the
+    # counter's second eye was supposed to leave a mark.
+    override_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sales_authorised",
+        help_text="The manager who authorised whatever on this bill needed it.",
+    )
+    override_kind = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: "
+        "over_cap_discount, credit_note, or over_cap_discount+credit_note when a "
+        "manager was asked both at once.",
+    )
+    override_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The till's clock when the manager's PIN was accepted, which is "
+        "not the same moment as Save & Print.",
+    )
     created_by = models.ForeignKey(
         "accounts.User", on_delete=models.PROTECT, related_name="sales_billed"
     )
