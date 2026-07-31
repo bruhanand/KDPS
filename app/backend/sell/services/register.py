@@ -25,6 +25,12 @@ The financial year here is the *server's*, and the till compares it with its own
 before believing any of the rest. The two clocks straddle 1 April for a few
 minutes each year, and a till that reconciled its brand-new counter against last
 year's numbers would jump to five thousand and never come back.
+
+The **handover** below is the deliberate half of the same story (#189). Boot
+reconciliation is automatic and silent because it happens every morning at every
+counter; moving a store's series onto a different machine is neither, so it takes
+a manager, a reason and an audit row - and it answers with the bills the old
+machine never sent, which somebody has to re-enter from their printed copies.
 """
 
 from __future__ import annotations
@@ -38,7 +44,7 @@ from django.db.models import Count, Max
 from core.documents import VoucherSeries
 from core.fiscal import financial_year
 from masters.models import Store
-from sell.models import SALE_DOC_TYPE, Sale
+from sell.models import SALE_DOC_TYPE, RegisterHandover, Sale
 
 #: How many holes a boot response will name. Enough to re-enter a bad afternoon
 #: from paper; not a dead till's whole year.
@@ -87,6 +93,53 @@ def register_state(store: Store) -> RegisterState:
         series_open=VoucherSeries.objects.filter(
             fy=fy, store_code=store.code, doc_type=SALE_DOC_TYPE
         ).exists(),
+    )
+
+
+@dataclass(frozen=True)
+class HandoverResult:
+    """What a new machine is told when it takes over a store's counter."""
+
+    resume_from_seq: int
+    unsynced_hint: list[int]
+    hole_count: int
+
+    def as_payload(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def record_handover(store: Store, actor: Any, reason: str) -> HandoverResult:
+    """Move `store`'s bill series onto a new machine, and say so out loud.
+
+    Two things happen, and only one of them is a change: the act is recorded, and
+    the state is read back. There is deliberately **no write to the counter** -
+    `VoucherSeries.next_seq` is not touched, because the till is what numbers a
+    bill and the server's series only ever accepts what arrives. Handing back
+    `resume_from_seq` is telling the new machine where to start; a server that
+    also moved its own counter would be a second opinion about a number nobody
+    has printed yet.
+
+    `unsynced_hint` is the same bounded hole list the boot call answers with, and
+    it means the same thing: these numbers were printed on the old machine and
+    never reached us. Every one of them is a receipt in a drawer that has to be
+    keyed back in under its original number (contract, step 3), which is why the
+    count travels beside the list - a till dead at bill 5,000 leaves more holes
+    than a response should carry, and a screen that showed 200 of them without
+    saying so would read as "that is all of them".
+    """
+    state = register_state(store)
+    RegisterHandover.objects.create(
+        store=store,
+        fy=state.fy,
+        reason=reason,
+        last_accepted_seq=state.last_accepted_seq,
+        hole_count=state.hole_count,
+        actor=actor,
+    )
+    return HandoverResult(
+        resume_from_seq=state.last_accepted_seq + 1,
+        unsynced_hint=state.holes,
+        hole_count=state.hole_count,
     )
 
 

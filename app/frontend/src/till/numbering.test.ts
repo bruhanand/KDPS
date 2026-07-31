@@ -11,7 +11,12 @@ import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { META, readMeta } from "./db";
-import { commitBill, previewNextNumber, renderBillNumber } from "./numbering";
+import {
+  commitBill,
+  previewNextNumber,
+  reenterPaperBill,
+  renderBillNumber,
+} from "./numbering";
 import { draft, freshTill, item } from "./testSupport";
 
 let close = () => undefined as void;
@@ -210,6 +215,107 @@ describe("the counter's own credit notes (#182)", () => {
     await commitBill(db, storeCode, paidWithNote(50000, "26-27/XXX/CRN/9"));
 
     expect(await db.creditNotes.count()).toBe(0);
+  });
+});
+
+describe("re-entering a bill from its printed copy (#189)", () => {
+  /** A counter that has already passed `seq` - which is what makes a hole a hole. */
+  async function counterPast(seq: number) {
+    const made = till();
+    for (let i = 0; i < seq; i += 1) await commitBill(made.db, made.storeCode, draft());
+    await made.db.queue.clear();
+    return made;
+  }
+
+  it("takes the number from the paper and leaves the counter alone", async () => {
+    // The whole point: this bill is *behind* the counter. A re-entry that
+    // advanced it would spend a number on a bill nobody has printed.
+    const { db, storeCode } = await counterPast(5);
+    const before = await previewNextNumber(db, storeCode);
+
+    const bill = await reenterPaperBill(db, storeCode, draft(), 3);
+
+    expect(bill.till_seq).toBe(3);
+    expect(bill.doc_number).toBe(renderBillNumber(bill.fy, storeCode, 3));
+    expect(await previewNextNumber(db, storeCode)).toBe(before);
+  });
+
+  it("stamps it as paper, whatever the draft said", async () => {
+    // `origin` is how the daily check tells a bill keyed in from a drawer from
+    // one somebody stood at this counter and rang up.
+    const { db, storeCode } = await counterPast(5);
+
+    const bill = await reenterPaperBill(db, storeCode, { ...draft(), origin: "online" }, 3);
+
+    expect(bill.origin).toBe("paper");
+  });
+
+  it("takes each number exactly once", async () => {
+    // Two people working through the same drawer. The server would refuse the
+    // second copy anyway, but only after it had printed nothing and halted the
+    // queue behind it.
+    const { db, storeCode } = await counterPast(5);
+    await reenterPaperBill(db, storeCode, draft(), 3);
+
+    await expect(reenterPaperBill(db, storeCode, draft(), 3)).rejects.toThrow(/already/);
+
+    expect(await db.queue.count()).toBe(1);
+  });
+
+  it("still refuses it after the bill has synced and left the queue", async () => {
+    // The one that matters, and the one a queue check alone would miss. A
+    // re-entered bill is gone from the queue the moment head office takes it -
+    // and the address that got somebody here still names it, so a reload would
+    // key the same receipt in again: the shelf comes down twice, and the server
+    // answers BILL_NO_TAKEN, which is terminal and stops the store's whole queue.
+    const { db, storeCode } = await counterPast(5);
+    await reenterPaperBill(db, storeCode, draft(), 3);
+    await db.queue.clear();
+
+    await expect(reenterPaperBill(db, storeCode, draft(), 3)).rejects.toThrow(/already/);
+
+    expect(await db.queue.count()).toBe(0);
+  });
+
+  it("remembers only this year's re-entries", async () => {
+    // The counter restarts at 1 every April, so last year's bill 3 and this
+    // year's are two different bills and one must not block the other.
+    const march = new Date("2027-03-31T10:00:00.000Z");
+    const april = new Date("2027-04-01T10:00:00.000Z");
+    const { db, storeCode } = till();
+    for (let i = 0; i < 5; i += 1) await commitBill(db, storeCode, draft(), march);
+    await db.queue.clear();
+    await reenterPaperBill(db, storeCode, draft(), 3, march);
+    for (let i = 0; i < 5; i += 1) await commitBill(db, storeCode, draft(), april);
+    await db.queue.clear();
+
+    const again = await reenterPaperBill(db, storeCode, draft(), 3, april);
+
+    expect(again.fy).toBe("27-28");
+    expect(again.till_seq).toBe(3);
+  });
+
+  it("refuses a number the counter has not reached", async () => {
+    // Not a bill from the old machine - a bill that does not exist. Accepting it
+    // would let somebody mint a number out of order and strand the one in between.
+    const { db, storeCode } = await counterPast(5);
+
+    await expect(reenterPaperBill(db, storeCode, draft(), 6)).rejects.toThrow(/not been printed/);
+    await expect(reenterPaperBill(db, storeCode, draft(), 0)).rejects.toThrow(/not a bill number/);
+    expect(await db.queue.count()).toBe(0);
+  });
+
+  it("takes the piece off this counter's shelf", async () => {
+    // The garment left the shop on the old machine, but this till's stock came
+    // from the server - which never heard about that bill - so its copy is still
+    // holding the piece.
+    const { db, storeCode } = await counterPast(5);
+    await db.items.put(item("8901000000011"));
+    await db.stock.put({ barcode: "8901000000011", qty: 3 });
+
+    await reenterPaperBill(db, storeCode, draft(), 2);
+
+    expect((await db.stock.get("8901000000011"))?.qty).toBe(2);
   });
 });
 

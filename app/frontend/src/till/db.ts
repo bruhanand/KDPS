@@ -92,6 +92,19 @@ export const META = {
   policy: "policy",
   /** The salesman the counter picked last, defaulted onto the next line. */
   lastSalesman: "lastSalesman",
+  /** The register handover this machine took over on, and the bills the old one
+   *  never sent - see `HandoverState`. A list somebody is working through, and
+   *  they may put it away when they are done. */
+  handover: "handover",
+  /** Which numbers this counter has keyed back in from a printed copy, for the
+   *  year it is counting in - see `PaperEntered`.
+   *
+   *  Deliberately **not** part of the handover row above, and the separation is
+   *  the whole point: the handover list is a job that gets put away, and this is
+   *  a fact about numbers that have been spent. A re-entry also leaves the queue
+   *  the moment the server takes it, so neither the queue nor the tick list on a
+   *  screen can be what stops the same receipt going in twice. */
+  paperEntered: "paperEntered",
 } as const;
 
 export class TillDb extends Dexie {

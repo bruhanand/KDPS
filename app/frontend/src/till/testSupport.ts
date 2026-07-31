@@ -13,6 +13,7 @@ import type {
   AcceptedBill,
   BillDraft,
   DatasetPayload,
+  HandoverPayload,
   QueuedBill,
   RegisterPayload,
 } from "./types";
@@ -172,6 +173,8 @@ export interface FakeServer extends TillTransport {
   asked: string[];
   /** Every held-bill push, in order - each one the whole list as it stood. */
   heldPushes: Record<string, unknown>[][];
+  /** Every register handover asked for, by reason (#189). */
+  handovers: string[];
 }
 
 /** A server that takes every bill, unless a test says otherwise. */
@@ -183,6 +186,7 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
     registers: [],
     asked: [],
     heldPushes: [],
+    handovers: [],
     answer: (bill) => ({ doc_number: bill.doc_number, id: bill.till_seq, flags: [] }),
     async dataset(since: string) {
       server.asked.push(since);
@@ -203,6 +207,13 @@ export function fakeServer(over: Partial<FakeServer> = {}): FakeServer {
     async putHeld(held: Record<string, unknown>[]) {
       server.heldPushes.push(held);
       return { count: held.length };
+    },
+    async handover(reason: string): Promise<HandoverPayload> {
+      server.handovers.push(reason);
+      const last = landed.length ? Math.max(...landed) : 0;
+      const holes = [];
+      for (let seq = 1; seq < last; seq += 1) if (!landed.includes(seq)) holes.push(seq);
+      return { resume_from_seq: last + 1, unsynced_hint: holes, hole_count: holes.length };
     },
     ...over,
   };

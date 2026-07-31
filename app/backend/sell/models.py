@@ -780,6 +780,54 @@ class HeldBill(TimeStampedModel):
         return f"{self.label or 'Held bill'} · {self.store_id}"
 
 
+class RegisterHandover(TimeStampedModel):
+    """A manager moving a store's bill series onto a different machine (#189).
+
+    The till owns its counter, so a dead or replaced machine takes the counter
+    with it (grill Q1). The recovery is deliberate rather than automatic: a named
+    manager says "this store is billing from a new device now", gives a reason,
+    and the server answers with the number to resume from and the bills it never
+    received - which the store re-enters from their printed copies.
+
+    Why the act is recorded at all, when the numbering would work without it:
+    every hole this leaves behind is a bill somebody has to go and find on paper,
+    and a store that cannot say *when* the machine changed cannot tell a hole
+    that has an explanation from one that does not. So this is an audit row in
+    the `AccessChange` sense - who, when, why, and what the frontier was at the
+    time - and nothing reads it back into a decision.
+
+    It is append-only in practice: nothing in the product updates or deletes a
+    row here, because a handover is something that happened.
+    """
+
+    store = models.ForeignKey(
+        "masters.Store", on_delete=models.PROTECT, related_name="register_handovers"
+    )
+    fy = models.CharField(max_length=7)
+    reason = models.CharField(max_length=240)
+    #: The frontier at the moment of the handover - what the server had accepted
+    #: from the old machine. Stored rather than recomputed: the whole value of the
+    #: row is that it says what was true then, and by tomorrow it will not be.
+    last_accepted_seq = models.IntegerField()
+    #: How many numbers below that frontier had never arrived. The list itself is
+    #: not stored - it is derivable, it can be five thousand long, and what a
+    #: person asks of this row a month later is "how bad was it".
+    hole_count = models.IntegerField(default=0)
+    actor = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="register_handovers"
+    )
+
+    class Meta:
+        db_table = "sell_register_handover"
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["store", "-created_at"], name="handover_store_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Handover {self.store_id} · {self.fy} · from {self.last_accepted_seq}"
+
+
 class IrnQueueItem(TimeStampedModel):
     """A B2B bill waiting for head office to raise its IRN (grill Q8).
 

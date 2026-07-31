@@ -17,7 +17,13 @@
 // halt a queue over a token.
 
 import { api, apiErrorMessage } from "../lib/api";
-import type { AcceptedBill, DatasetPayload, QueuedBill, RegisterPayload } from "./types";
+import type {
+  AcceptedBill,
+  DatasetPayload,
+  HandoverPayload,
+  QueuedBill,
+  RegisterPayload,
+} from "./types";
 
 /** A refusal the till has to reason about, stripped of the HTTP library. */
 export class TillHttpError extends Error {
@@ -49,6 +55,10 @@ export interface TillTransport {
   dataset(since: string): Promise<DatasetPayload>;
   /** `GET /api/sell/register` - what the server has accepted from this counter. */
   register(): Promise<RegisterPayload>;
+  /** `POST /api/sell/register/handover` - this store bills from this machine now
+   *  (#189). A manager's call, not the sync loop's: it is never retried, and a
+   *  refusal is shown to the person who asked rather than swallowed. */
+  handover(reason: string): Promise<HandoverPayload>;
   /** `POST /api/sell/sales`. A replay of the same `idempotency_uuid` answers 200
    *  with the original bill and writes nothing; a first arrival answers 201. The
    *  queue drops the bill either way, so the two are not distinguished here. */
@@ -67,6 +77,9 @@ export const httpTransport: TillTransport = {
   },
   async register() {
     return unwrap(api.get("/sell/register"));
+  },
+  async handover(reason: string) {
+    return unwrap(api.post("/sell/register/handover", { reason }));
   },
   async postSale(bill: QueuedBill) {
     return unwrap(api.post("/sell/sales", billBody(bill)));

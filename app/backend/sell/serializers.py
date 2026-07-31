@@ -240,6 +240,27 @@ class HeldBillsWriteSerializer(serializers.Serializer):
         return rows
 
 
+class RegisterHandoverWriteSerializer(serializers.Serializer):
+    """The one thing a handover asks for: why (#189).
+
+    Required, non-blank, and that is the whole of the validation. The reason is
+    the only part of the row a person writes, and it is what makes a handful of
+    unexplained holes in a store's bill series into "the counter machine died on
+    Tuesday" - so a handover with an empty one would leave exactly the audit
+    trail the row exists to prevent.
+    """
+
+    reason = serializers.CharField(max_length=240)
+
+    def validate_reason(self, value: str) -> str:
+        reason = value.strip()
+        if not reason:
+            raise serializers.ValidationError(
+                "Say why the counter is moving to a different machine."
+            )
+        return reason
+
+
 # --- read shapes -------------------------------------------------
 
 

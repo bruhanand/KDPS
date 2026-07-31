@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { AlertTriangle, Check, HardDriveDownload, RefreshCw, Replace } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
 import { api, apiErrorMessage } from "../../lib/api";
 import { Money, formatDateTime } from "../../lib/format";
+import { userCan } from "../../shell/navConfig";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
+import type { TillEngine, TillSnapshot } from "../../till/engine";
 import { slabFor, splitLine } from "../../till/pricing";
-import type { BillDraft } from "../../till/types";
+import type { BillDraft, HandoverState } from "../../till/types";
 import "./Till.css";
 
 // ---------------------------------------------------------------------------
@@ -24,6 +27,18 @@ import "./Till.css";
 // Nothing here is money the person can change. There is no edit affordance on a
 // queued bill by construction: it is printed, it is paid for, and the only two
 // honest outcomes are that the server takes it or that somebody is told about it.
+//
+// It is also where a counter is put back together (#189), which is why the two
+// recovery cards sit at the top rather than with the counts. Both of them move
+// the number the next customer's bill will carry, so both are buttons somebody
+// presses and neither happens on its own:
+//
+//   · **Recover this counter** - the browser threw the local database away, the
+//     till is refusing to bill, and this takes the whole dataset again and asks
+//     head office how far the store's series has got.
+//   · **Move the counter to this machine** - the deliberate handover. A manager's
+//     act, with a reason, and it hands back the bills the old machine never sent
+//     so the store can key them in from the printed copies.
 
 export default function TillPage() {
   const { engine, till } = useTill();
@@ -60,6 +75,13 @@ export default function TillPage() {
           {till.status.reason}
         </p>
       )}
+
+      {/* The page has already narrowed both to non-null, so the recovery cards
+          take them as props rather than reaching for the context again - one
+          way in, and no optional chaining over a value that cannot be null. */}
+      {till.storageLost && <RecoverCounter engine={engine} busy={till.busy} />}
+
+      <Handover engine={engine} till={till} />
 
       {till.halt && (
         <div className="card till-halt" data-testid="till-halt">
@@ -177,6 +199,298 @@ export default function TillPage() {
       <TestBill />
     </div>
   );
+}
+
+/**
+ * Putting a counter back together after the browser cleared its data (#189).
+ *
+ * Shown only when the till has actually noticed a loss, and it is the only way
+ * out of that state: until this succeeds the Billing screen will not take a
+ * bill, because a counter that does not know its own number would print one that
+ * is already on a posted bill.
+ *
+ * The card says what the counter will be on afterwards rather than merely "done",
+ * which is the whole of the acceptance criterion's "no silent counter reset" -
+ * the number a store's bills carry has moved, and somebody should read it.
+ */
+function RecoverCounter({ engine, busy }: { engine: TillEngine; busy: boolean }) {
+  const [failed, setFailed] = useState("");
+
+  async function recover() {
+    setFailed("");
+    try {
+      await engine.recover();
+    } catch (error) {
+      setFailed(messageOf(error));
+    }
+  }
+
+  return (
+    <section className="card till-recover" data-testid="till-recover">
+      <h2 className="h3">
+        <AlertTriangle size={16} /> This counter lost its local data
+      </h2>
+      <p className="till-halt-why">
+        The browser cleared what this till had stored - the price list, and the bill number it
+        was on. Nothing that had already synced is lost, but this device does not know where the
+        store&rsquo;s bill numbers have got to, so it will not take a bill until it has asked.
+      </p>
+      <p className="muted-cell">
+        Recovering takes the whole price list again and asks head office how far this
+        store&rsquo;s bills have got. The next bill number will move; the screen will say what
+        it moved to.
+      </p>
+      {failed && (
+        <p className="till-alert" data-testid="till-recover-failed">
+          <AlertTriangle size={15} />
+          {failed}
+        </p>
+      )}
+      <button
+        type="button"
+        className="btn btn-cta"
+        data-testid="till-recover-go"
+        disabled={busy}
+        onClick={() => void recover()}
+      >
+        <HardDriveDownload size={15} />
+        {busy ? "Recovering…" : "Recover this counter"}
+      </button>
+    </section>
+  );
+}
+
+/**
+ * The register handover, and the paper re-entry it leaves behind (#189, grill Q1).
+ *
+ * Two things in one card because they are one job with a gap in the middle: a
+ * manager moves the store's counter onto this machine, and then somebody works
+ * through the receipts the old machine printed and never sent.
+ *
+ * The list survives a reload and the ticks survive the queue draining, because
+ * the work does: a drawer of forty receipts is an afternoon, and a list that
+ * reset when a bill synced would have somebody keying the same one twice.
+ *
+ * The move itself is offered only to a manager - the same rung the server gates
+ * it at - and the list is shown to whoever is standing here, because keying a
+ * receipt back in is ordinary counter work.
+ */
+function Handover({ engine, till }: { engine: TillEngine; till: TillSnapshot }) {
+  const { user } = useAuth();
+  const [reason, setReason] = useState("");
+  const [failed, setFailed] = useState("");
+  const [said, setSaid] = useState("");
+  const [asking, setAsking] = useState(false);
+  const busy = till.busy;
+  const mayHandOver = userCan(user, "sell", "approve");
+  const handover = till.handover;
+
+  if (!mayHandOver && !handover) return null;
+
+  async function move() {
+    setFailed("");
+    setSaid("");
+    try {
+      await engine.handOver(reason.trim());
+      setReason("");
+      setAsking(false);
+      // The counter's own number, not the one the server suggested. They are the
+      // same in every ordinary case - and where they are not, it is because the
+      // two clocks disagree about the financial year and the till has declined
+      // to move (see `reconcileRegister`). Reporting the server's figure there
+      // would tell somebody the counter had gone somewhere it had not.
+      setSaid(
+        "This machine is now the counter for this store. The next bill is " +
+          `${engine.getSnapshot().nextNumber}.`,
+      );
+    } catch (error) {
+      setFailed(messageOf(error));
+    }
+  }
+
+  return (
+    <section className="card till-handover" data-testid="till-handover">
+      <h2 className="h3">Register handover</h2>
+
+      {mayHandOver && !asking && (
+        <>
+          <p className="muted-cell">
+            Use this when the counter machine has been replaced or will not come back. This
+            device takes over the store&rsquo;s bill numbers, and whatever the old machine
+            printed but never sent is listed here to be keyed back in from the printed copies.
+          </p>
+          <button
+            type="button"
+            className="btn"
+            data-testid="till-handover-open"
+            onClick={() => {
+              setAsking(true);
+              setSaid("");
+            }}
+          >
+            <Replace size={15} />
+            Move the counter to this machine
+          </button>
+        </>
+      )}
+
+      {mayHandOver && asking && (
+        <>
+          <p className="muted-cell">
+            Say what happened. It is recorded against your name, and it is what explains the
+            gap in this store&rsquo;s bill numbers to whoever asks later.
+          </p>
+          <div className="field">
+            <label htmlFor="till-handover-reason">Why is the counter moving?</label>
+            <input
+              id="till-handover-reason"
+              className="input"
+              data-testid="till-handover-reason"
+              autoComplete="off"
+              disabled={busy}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </div>
+          <div className="till-handover-actions">
+            <button
+              type="button"
+              className="btn btn-cta"
+              data-testid="till-handover-go"
+              disabled={busy || !reason.trim()}
+              onClick={() => void move()}
+            >
+              {busy ? "Moving…" : "Move the counter here"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => {
+                setAsking(false);
+                setFailed("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
+      {failed && (
+        <p className="till-alert" data-testid="till-handover-failed">
+          <AlertTriangle size={15} />
+          {failed}
+        </p>
+      )}
+      {said && (
+        <p className="ok-note" data-testid="till-handover-said">
+          {said}
+        </p>
+      )}
+
+      {handover && <PaperReentry engine={engine} till={till} handover={handover} />}
+    </section>
+  );
+}
+
+/**
+ * The drawer of printed bills the old machine never sent.
+ *
+ * Each one is a link into Billing rather than a form here: re-entering a bill is
+ * billing - the same lines, the same salesman, the same tender - and a second,
+ * simpler screen for it would be a second place where a bill can be got wrong.
+ *
+ * A number the response did not name is not a number nobody has to key in, so the
+ * count is shown beside the list whenever the two differ (a machine dead at bill
+ * 5,000 leaves more holes than a response should carry).
+ *
+ * The ticks come from what the till has actually keyed in, not from what is left
+ * in the queue: a re-entered bill leaves the queue the moment head office takes
+ * it, and a list that lost its ticks as the store worked would have somebody key
+ * the same receipt in twice.
+ */
+function PaperReentry({
+  engine,
+  till,
+  handover,
+}: {
+  engine: TillEngine;
+  till: TillSnapshot;
+  handover: HandoverState;
+}) {
+  const done = new Set(till.paperEntered);
+  // The frozen list the handover named **and** whatever head office is still
+  // missing now. Both, because neither alone is the job: the handover's list is
+  // capped at 200, so a machine that died at bill 5,000 would strand the rest
+  // out of reach - and the register's list is the live one, which drops a number
+  // the moment a re-entry syncs, taking its tick with it.
+  const outstanding = [...new Set([...handover.unsynced_hint, ...(till.register?.holes ?? [])])]
+    .sort((a, b) => a - b)
+    .filter((seq) => !done.has(seq));
+  const ticked = handover.unsynced_hint.filter((seq) => done.has(seq));
+  const listed = [...outstanding, ...ticked].sort((a, b) => a - b);
+  const stillHidden = Math.max(0, (till.register?.hole_count ?? 0) - outstanding.length);
+
+  return (
+    <div className="till-reentry" data-testid="till-reentry">
+      <h3 className="h3">Bills to key in from the printed copies</h3>
+      <p className="muted-cell">
+        Handed over {formatDateTime(handover.at)}. These numbers were printed on the old
+        machine and never reached head office. Find each printed copy and enter it again under
+        the same number - the customer keeps the one they have.
+        {stillHidden > 0 && (
+          <>
+            {" "}
+            {stillHidden} more are missing than can be listed at once; they appear here as these
+            are entered and sync.
+          </>
+        )}
+      </p>
+
+      {listed.length === 0 ? (
+        <p className="muted-cell" data-testid="till-reentry-none">
+          Nothing left to enter - head office has every bill this list named.
+        </p>
+      ) : (
+        <ul className="till-reentry-list">
+          {listed.map((seq) => (
+            <li key={seq} className={done.has(seq) ? "till-reentry-done" : ""}>
+              <span className="till-reentry-no">Bill {seq}</span>
+              {done.has(seq) ? (
+                <span className="ok-note" data-testid={`till-reentry-done-${seq}`}>
+                  <Check size={14} /> keyed in
+                </span>
+              ) : (
+                <Link className="btn" data-testid={`till-reentry-${seq}`} to={`/sell?paper=${seq}`}>
+                  Enter this bill
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <button
+        type="button"
+        className="btn"
+        data-testid="till-reentry-clear"
+        disabled={outstanding.length > 0}
+        title={
+          outstanding.length > 0
+            ? "There are still bills on this list to key in."
+            : "Put the list away - every bill on it has been entered."
+        }
+        onClick={() => void engine.clearHandover()}
+      >
+        {outstanding.length > 0 ? `${outstanding.length} still to enter` : "Put this list away"}
+      </button>
+    </div>
+  );
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /**

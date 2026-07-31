@@ -15,33 +15,39 @@
 // no-op. That matters because the triggers overlap by design: a till that comes
 // back online during its own retry backoff should sync at once, not wait.
 //
-// Two departures from `design.md`'s sketch of a separate `guard.ts`, both
-// deliberate and both recorded here rather than in a file that does not exist:
-//
-//   · **The storage sentinel is in `localStorage`, not in `meta`.** design.md
-//     lists `storageSentinel` as a `meta` row, and a sentinel that lives inside
-//     the database cannot survive the database being thrown away - which is the
-//     one event it exists to detect. It has to sit outside, and `localStorage` is
-//     the only other durable place a browser offers.
-//   · **There is no `navigator.locks` single-till lock.** It was there to stop a
-//     second tab double-writing the counter, and IndexedDB already does: two
-//     read-write transactions whose scopes overlap are serialised across every
-//     connection to the database, tabs included, so `commitBill`'s transaction is
-//     the lock. What the lock would still add is telling a person they have two
-//     tills open, which is a warning rather than an invariant, and it belongs
-//     with the rest of the PWA hardening in #189.
+// One departure from `design.md`'s sketch of `guard.ts` survives (#189 built the
+// rest of it): **the storage sentinel is in `localStorage`, not in `meta`**.
+// design.md lists `storageSentinel` as a `meta` row, and a sentinel that lives
+// inside the database cannot survive the database being thrown away - which is
+// the one event it exists to detect. It has to sit outside, and `localStorage` is
+// the only other durable place a browser offers. See `guard.ts`.
+
+import { financialYear } from "../lib/fiscal";
 
 import { META, readMeta, tillDb, writeMeta } from "./db";
 import type { HeldBill, TillDb } from "./db";
+import {
+  CounterLock,
+  askForPersistentStorage,
+  billingBlock,
+  detectStorageLoss,
+  markTillSeen,
+} from "./guard";
 import { dropHold, keepHold, listHolds, parkHold } from "./held";
 import type { HeldPayload } from "./held";
-import { commitBill, previewNextNumber } from "./numbering";
+import { commitBill, paperEntries, previewNextNumber, reenterPaperBill } from "./numbering";
 import { deriveStatus } from "./status";
 import type { SyncStatus } from "./status";
 import { clearHalt, drainQueue, forceBootstrap, pushHeld, reconcileRegister, syncDown } from "./sync";
 import { httpTransport } from "./transport";
 import type { TillTransport } from "./transport";
-import type { BillDraft, QueueHalt, QueuedBill, RegisterPayload } from "./types";
+import type {
+  BillDraft,
+  HandoverState,
+  QueueHalt,
+  QueuedBill,
+  RegisterPayload,
+} from "./types";
 
 /** How often the counter pulls new prices and offers while it is online. */
 export const DATASET_INTERVAL_MS = 5 * 60_000;
@@ -87,6 +93,21 @@ export interface TillSnapshot {
   lastFlags: string[];
   /** Why the last attempt did not finish, if it did not. */
   lastError: string;
+  /** Why this counter may not take a bill at all, or "" if it may (#189). The
+   *  Billing screen refuses Save & Print on it; see `guard.billingBlock`. */
+  blocked: string;
+  /** The browser threw the local database away and nobody has recovered it. */
+  storageLost: boolean;
+  /** This tab owns the store's counter (as opposed to being the second one). */
+  lockHeld: boolean;
+  /** The last register handover done on this machine (#189) - the list of bills
+   *  the old one never sent. Null until one happens, and again once the store
+   *  has put the list away. */
+  handover: HandoverState | null;
+  /** Numbers this counter has keyed back in from their printed copies, this
+   *  financial year. The screen's ticks, and the reason a receipt cannot go in
+   *  twice; unlike `handover`, nothing on a screen can clear it. */
+  paperEntered: number[];
 }
 
 const EMPTY_COUNTS: TillCounts = {
@@ -118,6 +139,11 @@ function initialSnapshot(storeCode: string): TillSnapshot {
     busy: false,
     lastFlags: [],
     lastError: "",
+    blocked: "",
+    storageLost: false,
+    lockHeld: true,
+    handover: null,
+    paperEntered: [],
   };
 }
 
@@ -129,6 +155,7 @@ export class TillEngine {
   private retry: ReturnType<typeof setTimeout> | null = null;
   private started = false;
   private storageLost = false;
+  private readonly lock: CounterLock;
   /** Bumped by every start and every stop, so a boot sequence that was
    *  interrupted half way through stops touching the engine it no longer owns. */
   private generation = 0;
@@ -136,8 +163,10 @@ export class TillEngine {
   constructor(
     readonly storeCode: string,
     private readonly transport: TillTransport = httpTransport,
+    lock?: CounterLock,
   ) {
     this.db = tillDb(storeCode);
+    this.lock = lock ?? new CounterLock(storeCode);
     this.snapshot = initialSnapshot(storeCode);
   }
 
@@ -166,6 +195,10 @@ export class TillEngine {
    *
    *   · **Persistent storage is requested.** Without it the browser may evict the
    *     database under pressure, and what it would be evicting is unsynced bills.
+   *   · **The counter is claimed.** One store bills from one place; a second tab
+   *     finds the lock taken and says so instead of billing beside the first
+   *     (#189). It asks again on the queue's interval, so closing the first tab
+   *     hands the counter over without a reload.
    *   · **A bootstrap is taken once a day.** The delta cursor laps a quarter of an
    *     hour behind the clock, which *bounds* a missed row rather than preventing
    *     one; a bootstrap cannot miss anything by construction, so taking one at
@@ -192,7 +225,9 @@ export class TillEngine {
       setInterval(() => void this.pushAndRefresh(), QUEUE_INTERVAL_MS),
     ];
 
-    await navigator.storage?.persist?.().catch(() => false);
+    await askForPersistentStorage();
+    if (generation !== this.generation) return;
+    await this.lock.acquire();
     if (generation !== this.generation) return;
     this.storageLost = await detectStorageLoss(this.db, this.storeCode);
     if (generation !== this.generation) return;
@@ -212,7 +247,11 @@ export class TillEngine {
    *
    *  Subscribers are left alone too: `useSyncExternalStore` unsubscribes itself,
    *  and dropping its listener here would freeze the screen on the last snapshot
-   *  it happened to see. */
+   *  it happened to see.
+   *
+   *  The counter lock **is** given up, unlike the database: a person walking off
+   *  the Sell pages is not using the counter, and holding it until the tab closes
+   *  would make a stray tab left open on the Dashboard look like a second till. */
   stop(): void {
     this.started = false;
     this.generation += 1;
@@ -222,6 +261,7 @@ export class TillEngine {
     this.timers = [];
     if (this.retry) clearTimeout(this.retry);
     this.retry = null;
+    this.lock.release();
   }
 
   private onOnline = (): void => {
@@ -281,10 +321,112 @@ export class TillEngine {
    *  the moment it is in the queue (grill Q2), and the counter must be ready for
    *  the next customer whether or not there is a network. */
   async commit(draft: BillDraft): Promise<QueuedBill> {
+    this.refuseIfBlocked();
     const bill = await commitBill(this.db, this.storeCode, draft);
     await this.refresh();
     void this.pushAndRefresh();
     return bill;
+  }
+
+  /**
+   * Key a printed bill from the old machine back in under its own number (#189).
+   *
+   * Goes through the same queue, the same shelf move and the same sync as any
+   * other bill - it *is* an ordinary bill, only an old one - and differs in the
+   * two ways `reenterPaperBill` enforces: it takes a number the counter has
+   * already passed, and it takes it once.
+   *
+   * The record of what has been keyed in is written inside that same
+   * transaction, so a screen's tick and the guard against a second entry are one
+   * fact rather than two that can disagree.
+   */
+  async reenterFromPaper(draft: BillDraft, seq: number): Promise<QueuedBill> {
+    this.refuseIfBlocked();
+    const bill = await reenterPaperBill(this.db, this.storeCode, draft, seq);
+    await this.refresh();
+    void this.pushAndRefresh();
+    return bill;
+  }
+
+  /** The one gate in front of both commit paths.
+   *
+   *  The screens disable their buttons on the same string, so this is belt to
+   *  their braces - but it is the belt that matters: a counter that does not know
+   *  its own bill number must not be able to reach the commit through a stale
+   *  render, a second tab left open, or anything else that got past the UI. */
+  private refuseIfBlocked(): void {
+    if (this.snapshot.blocked) throw new Error(this.snapshot.blocked);
+  }
+
+  /**
+   * Recover a counter whose local data the browser threw away (#189).
+   *
+   * Deliberately a button rather than something the boot sync does on its own.
+   * What has happened is that this device's bill counter went back to 1 while the
+   * store's series carried on without it, and the fix - taking the whole dataset
+   * again and asking the server how far it has got - moves the number the next
+   * customer's bill will carry. That is not a thing to do silently behind
+   * somebody's back (AC: "no silent counter reset"): a person asks for it, and is
+   * told what the counter now stands at.
+   *
+   * Both halves must land before the block lifts. A bootstrap without the
+   * register leaves the till pricing correctly and numbering from 1; the register
+   * without a bootstrap leaves it numbering correctly with no price list. Neither
+   * on its own is a counter.
+   */
+  async recover(): Promise<void> {
+    this.publish({ busy: true, lastError: "" });
+    try {
+      await forceBootstrap(this.db);
+      await syncDown(this.db, this.transport);
+      await reconcileRegister(this.db, this.transport);
+      this.storageLost = false;
+      markTillSeen(this.storeCode);
+      await writeMeta(this.db, META.bootstrapDay, new Date().toISOString().slice(0, 10));
+      await this.refresh();
+    } finally {
+      this.publish({ busy: false });
+    }
+  }
+
+  /**
+   * Move this store's counter onto this machine (#189, grill Q1).
+   *
+   * A manager's act, so it is not routed through `attempt` like the sync loop is:
+   * a handover that quietly failed would leave somebody believing the counter had
+   * moved when it had not, and the next bill would take a number the old machine
+   * has already printed. The refusal goes back to the caller and onto the screen.
+   *
+   * Moving the counter is left to `reconcileRegister`, which is the only thing in
+   * this layer that writes it from outside a commit - and which will not write it
+   * at all when the server's financial year and the till's disagree. Doing it
+   * again here from the handover's own `resume_from_seq` would step straight past
+   * that guard: a shop-floor clock a day out on 1 April would take a counter
+   * standing at 25-26 bill 305 and set it to 26-27 bill 1, and every bill after
+   * that would collide with one already posted.
+   */
+  async handOver(reason: string): Promise<HandoverState> {
+    this.publish({ busy: true, lastError: "" });
+    try {
+      const answer = await this.transport.handover(reason);
+      await reconcileRegister(this.db, this.transport);
+      const state: HandoverState = { ...answer, at: new Date().toISOString() };
+      await writeMeta(this.db, META.handover, state);
+      await this.refresh();
+      return state;
+    } finally {
+      this.publish({ busy: false });
+    }
+  }
+
+  /** Put this counter's paper re-entry list away - the store is finished with it.
+   *
+   *  Only the list. What has actually been keyed in stays where `numbering.ts`
+   *  wrote it, because that is what stops a receipt going in twice and it must
+   *  not be clearable from a screen. */
+  async clearHandover(): Promise<void> {
+    await writeMeta(this.db, META.handover, null);
+    await this.refresh();
   }
 
   // -- holds (#185, grill Q13) -----------------------------------------------
@@ -347,8 +489,12 @@ export class TillEngine {
       await syncDown(this.db, this.transport);
       // A dataset that landed is proof the database is alive, and the marker is
       // what a later session compares against to notice it was thrown away.
-      this.storageLost = false;
-      localStorage.setItem(seenKey(this.storeCode), "1");
+      //
+      // It does **not** clear a loss already noticed: that takes `recover`, on
+      // purpose. A sync lifting the block on its own would move the counter
+      // behind somebody's back, and the whole point of the red light is that a
+      // person is told which number this till has jumped to.
+      if (!this.storageLost) markTillSeen(this.storeCode);
     });
   }
 
@@ -420,9 +566,14 @@ export class TillEngine {
     const halt = await readMeta<QueueHalt | null>(this.db, META.halt, null);
     const register = await readMeta<RegisterPayload | null>(this.db, META.register, null);
     const syncedAt = await readMeta<string | null>(this.db, META.syncedAt, null);
+    const handover = await readMeta<HandoverState | null>(this.db, META.handover, null);
+    const paperEntered = await paperEntries(this.db, financialYear());
     const nextNumber = await previewNextNumber(this.db, this.storeCode);
     const online = navigator.onLine;
     const datasetReady = Boolean(syncedAt);
+    // Re-read rather than remembered: a second tab closing frees the counter, and
+    // the ask is cheap. `acquire` is a no-op once this tab holds it.
+    const lockHeld = this.lock.held() || (await this.lock.acquire());
 
     this.publish({
       ready: true,
@@ -432,38 +583,26 @@ export class TillEngine {
       pending: queue.length,
       halt,
       register,
+      handover,
+      paperEntered,
       syncedAt,
       nextNumber,
       online,
       datasetReady,
+      storageLost: this.storageLost,
+      lockHeld,
+      blocked: billingBlock({ storageLost: this.storageLost, lockHeld }),
       status: deriveStatus({
         datasetReady,
         pending: queue.length,
         halt,
         register,
         storageLost: this.storageLost,
+        lockHeld,
         online,
       }),
     });
   }
-}
-
-/** Has this device been a till before and lost the database since?
- *
- *  A best-effort detector, and honest about it: the marker lives in
- *  `localStorage`, which a browser clearing site data would take with it. What it
- *  does catch is the common case - IndexedDB evicted under storage pressure, or a
- *  "clear cached images and files" - where the counter would otherwise start
- *  again at bill 1 with no idea anything had happened. The register call fixes the
- *  numbering; this is what makes the light go red so somebody knows to make it. */
-async function detectStorageLoss(db: TillDb, storeCode: string): Promise<boolean> {
-  const wasATill = localStorage.getItem(seenKey(storeCode)) === "1";
-  if (!wasATill) return false;
-  return (await db.meta.count()) === 0;
-}
-
-function seenKey(storeCode: string): string {
-  return `kdps-till-seen-${storeCode}`;
 }
 
 function messageOf(error: unknown): string {
