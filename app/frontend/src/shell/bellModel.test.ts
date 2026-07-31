@@ -45,7 +45,7 @@ describe("unreadAlerts", () => {
   ];
 
   it("counts everything for a person who has never opened the tab", () => {
-    // No stamp is not "nothing unread" — it is a new person meeting a feed
+    // No stamp is not "nothing unread" - it is a new person meeting a feed
     // that has been filling up without them.
     expect(unreadAlerts(feed, null)).toBe(3);
   });
@@ -67,7 +67,7 @@ describe("unreadAlerts", () => {
 });
 
 describe("sinceFor", () => {
-  // Half past eleven at night in Deoghar — the hour that catches a UTC date.
+  // Half past eleven at night in Deoghar - the hour that catches a UTC date.
   const evening = new Date(2026, 6, 31, 23, 30);
 
   it("maps every range to a day on the counter's own calendar", () => {
@@ -106,7 +106,7 @@ describe("groupResolvedByDay", () => {
   });
 
   it("keeps an evening resolution on the day it happened locally", () => {
-    // 19:00 IST on 31 July is 13:30 UTC — the same day either way. 00:30 IST on
+    // 19:00 IST on 31 July is 13:30 UTC - the same day either way. 00:30 IST on
     // 1 August is 19:00 UTC on 31 July, and reading the ISO string would file it
     // under July.
     const groups = groupResolvedByDay([alert(1, "2026-07-31T04:00:00Z", "2026-07-31T19:00:00Z")]);

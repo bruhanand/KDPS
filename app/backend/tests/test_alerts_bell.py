@@ -3,12 +3,12 @@
 The bell stops being a link to `/approvals` and becomes a two-tab popup, so it
 needs three things the server did not offer before:
 
-- **A read cursor.** Approvals clear by *deciding* — a fact the server already
+- **A read cursor.** Approvals clear by *deciding* - a fact the server already
   holds. Alerts clear by *reading*, which nothing recorded, so an alerts badge
   had nowhere to count from. One stamp per person, on the server's clock, so it
   survives a logout and follows the person to the next device.
 - **Resolved alerts.** The open feed filters to `open` by design; History is the
-  other half of the same lifecycle, scoped identically — nobody sees a store in
+  other half of the same lifecycle, scoped identically - nobody sees a store in
   history they cannot see live.
 - **Decided approvals in a window.** The audit list already exists; it grows two
   filters so the popup can ask for "decisions, recently" without pulling every
@@ -50,7 +50,7 @@ def _client(user: User) -> APIClient:
 def bell(db):
     """Two stores, a brand, and the four people who read the bell: HO (sees the
     network), each store's manager (sees their own), and a role that reaches
-    nothing at all — the fail-closed case the gate has to answer 403 to."""
+    nothing at all - the fail-closed case the gate has to answer 403 to."""
     entity = LegalEntity.objects.create(code="be-ent", name="Bell Entity", pan="AAACB1234C")
     gstin = Gstin.objects.create(
         gstin="10AAACB1234C1ZS", state_code="10", state_name="Bihar", legal_entity=entity
@@ -146,7 +146,7 @@ def _approval(bell, *, status, days_ago=0, title="BE/STO/26-27/1"):
 
 
 def test_a_person_who_has_never_opened_the_tab_has_no_stamp(bell):
-    """No row means "never seen", which the client reads as all-unread — the
+    """No row means "never seen", which the client reads as all-unread - the
     right cold start for everyone who exists today."""
     resp = _client(bell["manager"]).get(SEEN)
     assert resp.status_code == 200, resp.data
@@ -237,7 +237,7 @@ def test_history_is_scoped_like_the_live_feed(bell):
 
 @pytest.mark.parametrize("bad", ["yesterday", "2026-02-30", "31-07-2026", "2026-7"])
 def test_history_refuses_a_since_that_is_not_a_date(bell, bad):
-    """Both of `parse_date`'s refusals — nonsense, and well-shaped impossible —
+    """Both of `parse_date`'s refusals - nonsense, and well-shaped impossible -
     are one 400 with one code, never a 500."""
     resp = _client(bell["ho"]).get(HISTORY, {"since": bad})
     assert resp.status_code == 400, resp.data
@@ -266,7 +266,7 @@ def test_resolved_at_joins_the_alert_shape_without_disturbing_the_open_feed(bell
 
 
 def test_decided_keeps_only_what_a_person_decided(bell):
-    """`not_required` is a real row — "auto-cleared, logged" — and it belongs on
+    """`not_required` is a real row - "auto-cleared, logged" - and it belongs on
     the full screen, not in a history of decisions nobody made."""
     _approval(bell, status=ApprovalStatus.APPROVED, title="approved")
     _approval(bell, status=ApprovalStatus.REJECTED, title="rejected")
@@ -309,7 +309,7 @@ def test_the_audit_list_is_unchanged_without_the_new_params(bell):
 
 @pytest.mark.parametrize("bad", ["yesterday", "2026-02-30"])
 def test_approvals_refuses_a_since_that_is_not_a_date(bell, bad):
-    """The same code and the same shape as the alerts history — one behaviour
+    """The same code and the same shape as the alerts history - one behaviour
     the popup can handle in one place."""
     resp = _client(bell["ho"]).get(APPROVALS, {"since": bad})
     assert resp.status_code == 400, resp.data
@@ -325,6 +325,6 @@ def test_approvals_history_stays_store_scoped(bell):
 
 
 def _days_back(days: int) -> str:
-    """A `since` value `days` before today, on the store's calendar (IST) — the
+    """A `since` value `days` before today, on the store's calendar (IST) - the
     same calendar the server filters on."""
     return (timezone.localdate() - timedelta(days=days)).isoformat()

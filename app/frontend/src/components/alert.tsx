@@ -1,6 +1,6 @@
 // The alert bits shared between the Alerts screen and the bell (#77, #226).
 // The shape mirrors `AlertReadSerializer`; the helpers are the ones both
-// surfaces have to agree on — a deadline that reads "3 days left" in the popup
+// surfaces have to agree on - a deadline that reads "3 days left" in the popup
 // and "overdue" on the screen would be two different answers to one question.
 import { Link } from "react-router-dom";
 import { Link2 } from "lucide-react";
@@ -21,11 +21,11 @@ export interface AlertT {
   status: string;
   created_at: string;
   /** When the condition stopped being true. Null on everything the open feed
-   *  carries — history is the only place it is ever set (#226). */
+   *  carries - history is the only place it is ever set (#226). */
   resolved_at: string | null;
 }
 
-// kind → the document behind it, when there is one — the same idea as
+// kind → the document behind it, when there is one - the same idea as
 // `approvalDocPath`, one entry smaller: a return-window alert names a holding,
 // not a document, so it has no page of its own to open.
 const KIND_ROUTE: Record<string, string> = {
@@ -48,7 +48,7 @@ export function fmtAlertWhen(iso: string): string {
 }
 
 /** Red once the deadline is blown past, amber inside the last week, else the
- *  screen doesn't need to shout — the same "amber inside the last fortnight"
+ *  screen doesn't need to shout - the same "amber inside the last fortnight"
  *  idea the return-to-brand screen already uses. */
 export function daysLeftTone(days: number | null): string {
   if (days === null) return "grey";

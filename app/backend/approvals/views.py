@@ -30,7 +30,7 @@ from approvals.services import (
     decide,
     inbox_for,
 )
-from core.dates import parse_day, since_refusal
+from core.dates import bad_since, parse_day
 from core.textsearch import search_term, text_filter
 from masters.scoping import scope_by_entitlement_or_brand, scope_by_store_or_brand
 
@@ -65,7 +65,7 @@ class ApprovalListView(generics.ListAPIView[Approval]):
     """History across every document type, store-scoped (ADR-0003). Includes the
     caller's own requests — the maker must be able to watch their own decision.
 
-    The bell's Approvals History reads this with ``?decided=1&since=`` (#226) —
+    The bell's Approvals History reads this with ``?decided=1&since=`` (#226) -
     two narrowings on the same list rather than an endpoint of its own, because
     "decisions, lately" is a question this view was already shaped to answer.
     """
@@ -75,12 +75,13 @@ class ApprovalListView(generics.ListAPIView[Approval]):
     pagination_class = None
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # Parsed before the queryset is built: `get_queryset` has no way to
+        # Checked before the queryset is built: `get_queryset` has no way to
         # answer a refusal, and a bad date must be a sentence with a code rather
-        # than an empty list that reads like "no approvals ever".
-        asked = (request.query_params.get("since") or "").strip()
-        if asked and parse_day(asked) is None:
-            return Response(since_refusal(asked), status=status.HTTP_400_BAD_REQUEST)
+        # than an empty list that reads like "no approvals ever". The same
+        # `bad_since` the alerts history uses, so the popup meets one behaviour.
+        refusal = bad_since((request.query_params.get("since") or "").strip())
+        if refusal:
+            return Response(refusal, status=status.HTTP_400_BAD_REQUEST)
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self) -> Any:
@@ -97,8 +98,8 @@ class ApprovalListView(generics.ListAPIView[Approval]):
         kind = self.request.query_params.get("kind")
         if kind:
             qs = qs.filter(kind=kind)
-        # Only what a *person* decided (#226). `not_required` is a real row —
-        # "auto-adjust, logged" — but nobody decided it, so it belongs on the
+        # Only what a *person* decided (#226). `not_required` is a real row -
+        # "auto-adjust, logged" - but nobody decided it, so it belongs on the
         # full screen (reachable through `status`) rather than in a history of
         # decisions.
         if self.request.query_params.get("decided") == "1":

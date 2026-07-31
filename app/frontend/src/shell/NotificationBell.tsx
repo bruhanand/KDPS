@@ -1,7 +1,7 @@
 // The bell: two feeds, one popup, with history behind each (#226).
 //
 // It used to be a link to `/approvals` with a count of undecided documents on
-// it. That left the other half of "things that want you" — the alerts feed —
+// it. That left the other half of "things that want you" - the alerts feed -
 // with no presence in the top bar at all, reachable only from a dashboard card
 // somebody had to be standing on Home to see.
 //
@@ -22,13 +22,8 @@ import { AlertTriangle, Bell, ChevronDown, ChevronRight, History, Inbox } from "
 
 import { api } from "../lib/api";
 import { Money } from "../lib/format";
+import { fmtApprovalWhenShort, type ApprovalT } from "../components/approval";
 import {
-  approvalDocPath,
-  fmtApprovalWhenShort,
-  type ApprovalT,
-} from "../components/approval";
-import {
-  AlertTitle,
   alertWhere,
   daysLeftLabel,
   daysLeftTone,
@@ -61,7 +56,7 @@ type TabKey = "alerts" | "approvals";
 
 /** What a fetch said. `null` on either feed means the request failed and the tab
  *  shows a quiet line rather than an empty list, which would read as "all
- *  clear" — the most dangerous thing an alerts panel can say wrongly. */
+ *  clear" - the most dangerous thing an alerts panel can say wrongly. */
 type Feed<T> = T[] | null;
 
 // ---------------------------------------------------------------------------
@@ -189,8 +184,13 @@ function AlertsTab({ alerts, onNavigate }: { alerts: Feed<AlertT>; onNavigate: (
                   {daysLeftLabel(a.days_left)}
                 </span>
               </p>
+              {/* Into the full screen, not the document behind the alert: the
+                  popup is a reader and a launcher (grill s2), and `/alerts` is
+                  where the row sits beside its deadline and its own link on. */}
               <p className="bell-row-title">
-                <AlertTitle alert={a} onNavigate={onNavigate} />
+                <Link to="/alerts" className="link-cell" onClick={onNavigate}>
+                  {a.title}
+                </Link>
               </p>
               <p className="bell-row-meta">
                 {alertWhere(a)} · {fmtAlertWhen(a.created_at)}
@@ -266,15 +266,12 @@ function ApprovalsTab({
                   </span>
                 )}
               </p>
+              {/* Into the inbox, never the document and never a decision here:
+                  the step trail and the reason box live on `/approvals`, and a
+                  decision taken without them is the thing maker-checker exists
+                  to prevent (grill s2, design assumption 5). */}
               <p className="bell-row-title">
-                {/* Into the full screen, never a decision here: the step trail
-                    and the reason box live there, and a decision taken without
-                    them is the thing maker-checker exists to prevent. */}
-                <Link
-                  to={approvalDocPath(a) ?? "/approvals"}
-                  className="link-cell mono"
-                  onClick={onNavigate}
-                >
+                <Link to="/approvals" className="link-cell mono" onClick={onNavigate}>
                   {a.title}
                 </Link>
               </p>
@@ -322,12 +319,30 @@ export function NotificationBell() {
   const [tab, setTab] = useState<TabKey>("alerts");
   const [approvals, setApprovals] = useState<Feed<ApprovalT>>([]);
   const [alerts, setAlerts] = useState<Feed<AlertT>>([]);
-  // `null` is "the stamp has not come back yet", which is not the same as a
-  // stamp of `null` ("never read"). Told apart so the badge does not flash the
-  // whole feed as unread for the moment before the server answers.
-  const [seen, setSeen] = useState<{ at: string | null } | null>(null);
+  // One plain stamp, `null` meaning "no stamp" - which is what the contract
+  // says an absent row means, and so also the honest answer while the read is
+  // in flight or after it fails. It errs towards showing the count: a bell that
+  // silently says "nothing waiting" because a request failed is the one wrong
+  // answer an alerting surface must not give.
+  const [seenAt, setSeenAt] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const { pathname } = useLocation();
+
+  const loadAlerts = useCallback(
+    () =>
+      api
+        .get("/alerts")
+        .then((r) => {
+          const rows = (r.data ?? []) as AlertT[];
+          setAlerts(rows);
+          return rows;
+        })
+        .catch(() => {
+          setAlerts(null);
+          return null;
+        }),
+    [],
+  );
 
   // Re-counted on every navigation *and* whenever a decision is made, not once
   // per session: clearing the last item used to leave the bell insisting one
@@ -337,17 +352,12 @@ export function NotificationBell() {
       .get("/approvals/inbox")
       .then((r) => setApprovals(r.data ?? []))
       .catch(() => setApprovals(null));
-    api
-      .get("/alerts")
-      .then((r) => setAlerts(r.data ?? []))
-      .catch(() => setAlerts(null));
+    void loadAlerts();
     api
       .get("/alerts/seen")
-      .then((r) => setSeen({ at: r.data?.seen_at ?? null }))
-      // A stamp that would not load must not be read as "everything unread" —
-      // that is a badge shouting about a server problem. Leave it unknown.
-      .catch(() => setSeen(null));
-  }, []);
+      .then((r) => setSeenAt(r.data?.seen_at ?? null))
+      .catch(() => setSeenAt(null));
+  }, [loadAlerts]);
 
   useEffect(() => {
     refresh();
@@ -355,26 +365,42 @@ export function NotificationBell() {
     return () => window.removeEventListener(APPROVALS_CHANGED, refresh);
   }, [refresh, pathname]);
 
-  const unread = seen === null ? 0 : unreadAlerts(alerts ?? [], seen.at);
+  const unread = unreadAlerts(alerts ?? [], seenAt);
   const undecided = approvals?.length ?? 0;
   const total = unread + undecided;
 
-  /** Opening the Alerts tab is what "reading" means, so it stamps. The badge
-   *  clears at once rather than waiting for the round trip — the server is the
-   *  truth and the next refresh will confirm it, but a count that lingers for
-   *  half a second after the person has plainly read the list feels broken. */
-  const stampSeen = useCallback(() => {
-    api
-      .post("/alerts/seen")
-      .then((r) => setSeen({ at: r.data?.seen_at ?? new Date().toISOString() }))
-      .catch(() => {
-        /* The badge is not worth a message; the next open tries again. */
-      });
-  }, []);
+  /**
+   * Opening the Alerts tab is what "reading" means, so it stamps - but only
+   * over a list that was actually just fetched.
+   *
+   * The feeds otherwise refresh on navigation, so a popup opened after an hour
+   * on one screen would stamp "read as of now" across alerts raised in that
+   * hour and never shown. `unreadAlerts` is strictly-after, so those would
+   * never surface again: exactly the wrong direction for an alerting surface.
+   * Hence refetch first, and do not stamp at all if the refetch failed.
+   *
+   * The badge zeroes locally the moment the tab opens rather than waiting for
+   * the round trip, and goes back to what it was if the stamp did not land -
+   * clearing a count the server never recorded would be the same silence.
+   */
+  const openAlertsTab = useCallback(() => {
+    const previous = seenAt;
+    setSeenAt(new Date().toISOString());
+    void loadAlerts().then((rows) => {
+      if (rows === null) {
+        setSeenAt(previous);
+        return;
+      }
+      api
+        .post("/alerts/seen")
+        .then((r) => setSeenAt(r.data?.seen_at ?? new Date().toISOString()))
+        .catch(() => setSeenAt(previous));
+    });
+  }, [loadAlerts, seenAt]);
 
   function openTab(next: TabKey) {
     setTab(next);
-    if (next === "alerts") stampSeen();
+    if (next === "alerts") openAlertsTab();
   }
 
   function toggle() {
@@ -410,7 +436,7 @@ export function NotificationBell() {
 
   const label = total
     ? `${total} thing${total === 1 ? "" : "s"} want your attention`
-    : "Notifications — nothing waiting for you";
+    : "Notifications - nothing waiting for you";
 
   return (
     <div className="bell-wrap" ref={wrap}>

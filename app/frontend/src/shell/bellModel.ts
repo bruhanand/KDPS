@@ -10,7 +10,7 @@ import type { AlertT } from "../components/alert";
 
 /** How many open alerts this person has not seen yet (`api-contract.md` s3).
  *
- *  No stamp means never opened, and that counts as *everything* unread — the
+ *  No stamp means never opened, and that counts as *everything* unread - the
  *  right cold start, since the feed has been filling up without them.
  *
  *  Strictly after the stamp: an alert bearing exactly the stamped moment was on
@@ -56,7 +56,7 @@ export function sinceFor(range: RangeKey, now: Date = new Date()): string {
 }
 
 export interface AlertDay {
-  /** `YYYY-MM-DD` on the reader's calendar — the group key and its sort order. */
+  /** `YYYY-MM-DD` on the reader's calendar - the group key and its sort order. */
   day: string;
   alerts: AlertT[];
 }

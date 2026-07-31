@@ -1,17 +1,17 @@
-"""Alerts API — the one feed Home's Alerts surface and the bell read (#77, #226).
+"""Alerts API - the one feed Home's Alerts surface and the bell read (#77, #226).
 
     GET  /api/alerts          everything open, scoped to *me*
     GET  /api/alerts/history  everything resolved in a window, same scope
     GET  /api/alerts/seen     where my read cursor stands
     POST /api/alerts/seen     move it to now
 
-No decide endpoint: an alert is not approved or rejected, it is just read —
+No decide endpoint: an alert is not approved or rejected, it is just read -
 the job that raised it is also the job that resolves it once it stops being
 true (``alerts.checks``). "Read", though, is a fact somebody has to record, and
 that is the whole of ``AlertSeen``: the bell's unread badge counts open alerts
 newer than the caller's stamp, so without one there is nothing to count from.
 
-All four sit behind the same gate, ``home: view`` — history and the cursor
+All four sit behind the same gate, ``home: view`` - history and the cursor
 interpret the very feed they guard, and a second, looser door onto the same rows
 is how a store person ends up reading another store's history.
 """
@@ -30,14 +30,16 @@ from rest_framework.views import APIView
 
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
-from core.dates import parse_day, since_refusal
+from core.dates import bad_since, parse_day
 from masters.scoping import scope_by_store_or_brand
 
 from .models import Alert, AlertSeen, AlertStatus
 from .serializers import AlertReadSerializer
 
-#: How far History looks back when nobody says — the popup's own default range,
-#: named once so the client's "7 days" button and a bare call agree.
+#: How far History looks back when the caller names no window. It matches the
+#: popup's own default range, which the client computes for itself - the two are
+#: the same number by agreement, not by import, since the client also has to
+#: label the button "7 days".
 DEFAULT_HISTORY_DAYS = 7
 
 
@@ -60,7 +62,7 @@ class AlertHistoryView(APIView):
     """Resolved alerts, newest first, within a window (#226).
 
     The other half of the same lifecycle the inbox shows, through the *same*
-    scope call — history that answered a wider question than the live feed would
+    scope call - history that answered a wider question than the live feed would
     let a store person read another store's problems a day late, which is the
     same leak with a delay on it.
 
@@ -72,11 +74,11 @@ class AlertHistoryView(APIView):
 
     def get(self, request: Request) -> Response:
         asked = (request.query_params.get("since") or "").strip()
-        if asked:
-            since = parse_day(asked)
-            if since is None:
-                return Response(since_refusal(asked), status=status.HTTP_400_BAD_REQUEST)
-        else:
+        refusal = bad_since(asked)
+        if refusal:
+            return Response(refusal, status=status.HTTP_400_BAD_REQUEST)
+        since = parse_day(asked) if asked else None
+        if since is None:
             since = timezone.localdate() - timedelta(days=DEFAULT_HISTORY_DAYS)
         rows = Alert.objects.filter(
             status=AlertStatus.RESOLVED, resolved_at__date__gte=since
@@ -100,7 +102,7 @@ class AlertSeenView(APIView):
         return Response({"seen_at": row.seen_at if row else None})
 
     def post(self, request: Request) -> Response:
-        # Idempotent by design — the tab is opened a dozen times a day, and each
+        # Idempotent by design - the tab is opened a dozen times a day, and each
         # opening simply moves the one row forward.
         row, _ = AlertSeen.objects.update_or_create(
             user=request.user, defaults={"seen_at": timezone.now()}

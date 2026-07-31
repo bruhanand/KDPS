@@ -139,7 +139,7 @@ class AlertSeen(TimeStampedModel):
     logout, and "you have eleven unread" would be a different sentence on the
     phone and on the desk.
 
-    Living in `alerts` rather than as a column on `accounts.User` is ADR-0002 —
+    Living in `alerts` rather than as a column on `accounts.User` is ADR-0002 -
     the stamp is alerts semantics, and `accounts` should not grow a cursor for
     every module that wants one. There is no backfill: an absent row means
     "never read", which is exactly right for everyone who exists today.
@@ -152,7 +152,7 @@ class AlertSeen(TimeStampedModel):
         help_text="One stamp per person; it dies with the account.",
     )
     seen_at = models.DateTimeField(
-        help_text="Server clock at the moment they opened the Alerts tab — a "
+        help_text="Server clock at the moment they opened the Alerts tab - a "
         "client clock is not trusted to decide what counts as unread."
     )
 

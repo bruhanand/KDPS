@@ -263,7 +263,7 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
   /* A 380px popup anchored to a bell near the right edge would hang off a
-     phone. On mobile it is a full-width sheet under the top bar instead —
+     phone. On mobile it is a full-width sheet under the top bar instead -
      CSS only; the component is the same one (#226). */
   .bell-popup {
     position: fixed; left: 8px; right: 8px; top: calc(var(--topbar-h) + 4px);
