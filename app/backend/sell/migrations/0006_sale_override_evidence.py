@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('sell', '0004_saleline_cost_book_saleline_cost_vendor'),
+        ('sell', '0005_saleline_offer_alter_saleline_offer_evidence'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
@@ -26,6 +26,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='sale',
             name='override_kind',
-            field=models.CharField(blank=True, default='', help_text='What was authorised - over_cap_discount, credit_note.', max_length=40),
+            field=models.CharField(blank=True, default='', help_text='What was authorised - one of `sell.serializers.OVERRIDE_KINDS`: over_cap_discount, credit_note, or over_cap_discount+credit_note when a manager was asked both at once.', max_length=40),
         ),
     ]
