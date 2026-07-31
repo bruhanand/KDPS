@@ -333,6 +333,25 @@ Four things about the `override` block, and one new endpoint that had to exist f
   The server still asks only "is `override.user_id` a manager of this store" - and cannot honestly ask more, because the till composes the payload and the PIN is verified on the device by design (grill Q1).
   The server-side floor is therefore *a named manager*, and the per-exception binding is a property of the screen; the daily check is what audits the pair.
 
+**Amended 31 Jul 2026, after building the B2B corner (#187).** Three things about step 11.
+
+- **A seventh flag kind exists: `gstin_invalid`.**
+  db-design lists six, and the ticket asks for the buyer's GSTIN to be "validated softly (flag, not block)" - a thing none of the six means.
+  Folding it into `gst_mismatch` would put "a character of this registration is mistyped" and "the tax on this bill is not the dated slab's" in one bucket, and head office answers those two with entirely different work.
+  The check is the real one (`sell/gstin.py`): fifteen characters, the PAN shape, a state code the GSTN actually issues, and the mod-36 check digit.
+  The checksum is what earns it - structure alone passes a transposed pair of digits, which is the commonest way a GSTIN is mistyped and the one that quietly costs the customer their input credit.
+  It refuses nothing. The customer is standing at the counter holding the garment.
+
+- **The split is derived from the two characters as typed, even when the GSTIN is malformed.**
+  The till printed the customer's copy from those same two characters, offline, minutes earlier (`till/gstin.ts` is a character-for-character mirror of `sell/gstin.py`), and a server that quietly chose differently would put one tax on the paper and another in the books.
+  A bad registration is flagged for a human; it is never silently re-taxed.
+
+- **`b2b_tax_kind` rides on every bill the till sends, including B2C ones, where it is `"none"`.**
+  Step 11 compares what the till *printed* against what the server derives, which only works if the till says what it printed.
+  It is evidence about a piece of paper, not an instruction.
+
+The tax split is presentation, not posting: a single `OUTPUT_GST` account posts whatever the split says, so CGST and SGST on the paper are two halves of one liability (the odd paise goes to SGST, and the two always add back to what the bill charged).
+
 ### PUT `/api/auth/me/till-pin` (NEW, #182)
 
 The counter PIN had no way to be set: `db-design.md` §9 adds the column and the dataset ships the hash, and nothing anywhere wrote one - so the manager list was empty by construction and no override could ever be verified.
@@ -479,6 +498,48 @@ Errors: `VALIDATION`/400 (no criterion), `SCOPE_DENIED`/403, `NOT_FOUND`/404 (de
 **Amended 31 Jul 2026, after building the screen (#185).** The detail carries `store_gstin`.
 A reprint reached from customer search has no till behind it to borrow a registration from - the dataset is a *counter's* copy, and whoever is looking an old bill up may not be standing at one - and a tax invoice without a GSTIN on it is not a tax invoice.
 Nothing else about the read shape moved, and it is still read-only: there is no writer in `sell/views.py` for a screen to call.
+
+**Amended 31 Jul 2026 again, after building the B2B corner (#187).** The detail carries `irn`.
+It reads off the queue row beside the bill (`sell_irnqueue.irn`) and is blank on every B2C bill and on a B2B bill head office has not raised yet - which is most of a bill's first month.
+A reprint prints the reference when there is one and "IRN to follow" when there is not, which is what the counter's own copy said when it came off the printer.
+
+---
+
+## Step 5a - The IRN queue (NEW, #187)
+
+Not in the original contract, which recorded the queue as a table (`db-design.md` §`sell_irnqueue`, "surfaces in an HO work queue") and gave it no endpoint.
+A queue nothing can read and nothing can leave is a table, not a queue, so the two calls below are what make grill Q8's thirty-day clock a duty somebody can actually discharge.
+
+### GET `/api/sell/irn-queue`
+
+Auth: **`require_section("money", CAP_MANAGE)`** - and that is the one gate in `sell` that is not the `sell` section's.
+Raising an IRN is a statutory filing, not shop-floor work, and the `sell` ladder cannot express that audience: `sell: operate` is the *store*, which would put a GST duty on a cashier's sidebar, and `sell: manage` is the IT administrator alone, who holds no money at all on the ratified sheet.
+`money: manage` is exactly Owner and Accounts, the people who file the returns. Nothing on the ratified sheet moves to make this true.
+
+Store-scoped by the bill's own store (`scope_by_store` on `sale__store_id`), so the top-bar unit switcher narrows it exactly as every other document list.
+Query: `status=pending` (default) | `generated` | `failed` | `all`.
+
+Response 200: `{"today": "2026-07-31", "rows": [...], "pending_count": 3, "overdue_count": 1}`.
+Each row: `id, doc_number, store_code, store_name, billed_at, buyer_gstin, customer_name, b2b_tax_kind, net_paise, gst_paise, due_on, days_left, status, irn, handled_by_name, handled_at`.
+Ordered by `due_on` then id - the oldest deadline is the next thing to do.
+`days_left` is computed against the response's single `today` rather than per row, so thirty rows cannot disagree about what day it is because the clock ticked over mid-response; it is negative once the deadline has gone by.
+Both counts are over the *pending* rows whatever is being listed: they are the header a clerk reads to know whether anything is on fire, and a filter must not move it.
+The pending list is never truncated (it is the work); the settled tail behind it is capped at 200 (it is history, and history is what gets long).
+
+Errors: `VALIDATION`/400 (a status nothing recognises), capability refusal 403 (DRF's `{"detail": ...}`, as every sibling gate).
+
+### PUT `/api/sell/irn-queue/{id}`
+
+Body: `{"status": "generated"|"failed", "irn": "..."}`; sets `handled_by`/`handled_at` from the caller and the clock.
+One way only: `pending`/`failed` -> `generated` or `failed`, never back to `pending` - "we tried and it did not work" is a fact worth keeping.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | not one of the two statuses, or `generated` with no reference |
+| NOT_FOUND | 404 | the row is outside the caller's stores (a 403 would confirm the bill exists) |
+| IRN_ALREADY_RECORDED | 409 | the row already carries an IRN |
+
+Nothing here can touch the Sale (A7). The row beside it is a fact about a filing, not a fact about a sale.
 
 ---
 

@@ -108,7 +108,9 @@ Replaced wholesale by each till push; no ledger, no document, no number.
 
 ### `sell_continuityflag` (NEW, exception rows)
 
-kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/aged_uncosted` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · resolved_by/at.
+kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/gstin_invalid/aged_uncosted` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · resolved_by/at.
+
+*`gstin_invalid` added 31 Jul 2026 while building #187* - the B2B ticket asks for the buyer's GSTIN to be validated softly, and none of the original six means that. See the api-contract's step-11 amendment for why it is its own kind rather than another `gst_mismatch`.
 This is the sell face of the exception-queue pattern (`TransferReceiptException`/`ReviewItem` precedent); the daily reconciliation and the Dashboard action queue read it.
 
 ### `sell_deferredcosting` (NEW)
