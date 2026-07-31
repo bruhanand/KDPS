@@ -262,11 +262,12 @@ class _ReturnLineWriteSerializer(serializers.Serializer):
     qty = serializers.IntegerField(min_value=1)
     reason = serializers.CharField(max_length=40, allow_blank=True, required=False, default="")
     #: Where the piece goes: back on the shelf, or into quarantine until somebody
-    #: looks at it (D3). Defaulted to `good` rather than required, because that is
-    #: the ordinary case and the screen makes damaged an explicit choice.
-    condition = serializers.ChoiceField(
-        choices=SaleLine.Condition.values, required=False, default=SaleLine.Condition.GOOD
-    )
+    #: looks at it (D3). **Required**, with no default, because the two defaults
+    #: available are both wrong: `good` puts a damaged garment back on the shelf
+    #: for the next customer whenever the field is dropped, and `damaged`
+    #: quarantines saleable stock. The screen always asks, so a body that does not
+    #: say is a caller with a bug, and the honest answer to it is 400.
+    condition = serializers.ChoiceField(choices=SaleLine.Condition.values)
 
 
 class _ReturnOverrideWriteSerializer(serializers.Serializer):

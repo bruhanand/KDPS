@@ -29,12 +29,20 @@ from sell.models import Return, ReturnLine, Sale, SaleLine
 from stockledger.models import StockLedgerEntry
 from stockledger.projections import post_on_hand_movement, post_quarantine_movement
 
-#: Either shape of line that moves stock: a bill's own line (sold, or an exchange
-#: leg coming back) and a plain return's line, which is always coming back.
-MovedLine = SaleLine | ReturnLine
+#: Either shape of line a bill or a return is made of: a `SaleLine` (sold, or an
+#: exchange leg coming back) and a `ReturnLine`, which is always coming back.
+#:
+#: Declared once, here, and imported by `postings` rather than spelled again -
+#: the two modules ask the same three questions of a line (is this coming back,
+#: what did it cost, what is it), and a second alias would be a second thing to
+#: keep in step.
+SellLine = SaleLine | ReturnLine
+
+#: Either document those lines hang off, and either document value posts under.
+SellDocument = Sale | Return
 
 
-def movement_of(row: MovedLine) -> str:
+def movement_of(row: SellLine) -> str:
     """Which of the three things a line does to stock."""
     if not row.is_return:
         return "sold"
@@ -52,7 +60,7 @@ MOVEMENTS = {
 }
 
 
-def post_stock_move(doc: Sale | Return, store: Any, row: MovedLine, actor: Any) -> StockLedgerEntry:
+def post_stock_move(doc: SellDocument, store: Any, row: SellLine, actor: Any) -> StockLedgerEntry:
     """Move one line's piece, at the cost frozen on the line.
 
     The row describes itself (Rule 9): the seven merchandising dims are

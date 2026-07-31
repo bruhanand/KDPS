@@ -510,6 +510,41 @@ Body: `{"idempotency_uuid": "...", "store": "DEO", "original": {"fy": "26-27", "
 | ALREADY_RETURNED | 422 | line already fully returned |
 | OVERRIDE_REQUIRED | 422 | manager evidence missing (any plain return) or window exceeded without window_override |
 
+**Amended 31 Jul 2026, after building it (#184).** Seven things.
+
+- **The manager may not be the person taking the return.**
+  Step 5 asks for "a manager of this store" and stops there, which lets a store manager raise a return and authorise it in the same act - a second pair of eyes that are their own.
+  That is floor rule 1, "nobody approves their own document", so `override.user_id` must differ from the caller and `OVERRIDE_REQUIRED` is the refusal.
+  It bites at a shop where the manager *is* the counter: a return there now needs somebody else on the floor.
+  That is the intended cost of a floor - the alternative is a rule that switches itself off for exactly the person best placed to abuse it - but **whether a lone-manager store should be able to take one alone is Anand's ruling**, and it is the second open item this feature has left him after the `sell: approve` rung itself.
+
+- **The manager's tap is not routed through the approvals machinery**, which `design.md` sketched (a `KINDS` entry and an `ApprovalPolicy` row, self-clearing).
+  Two things make that route the wrong one here, and the api-contract's own step 5 is what shipped instead.
+  An approval policy names *roles*, and no seeded role reaches `sell: approve` - so the policy would be unsatisfiable out of the box, and the gate that actually matters ("could this named person have been standing at this counter") is a question about one human and one store rather than about a rung.
+  And a return is decided and finished in one call at the counter: an inbox row would leave the customer holding no credit note while a document waited for somebody to open a screen.
+  What the approvals machinery was there to enforce - floor rule 1 - is enforced directly, above.
+
+- **`lines[].condition` is required**, not defaulted.
+  Both available defaults are wrong: `good` puts a damaged garment back on the shelf for the next customer whenever the field is dropped, and `damaged` quarantines saleable stock.
+
+- **The window is `SellPolicy.return_window_days`** (new, default 30), read as data exactly as the discount cap and the credit-note validity are (Rule 12).
+  Nothing in the corpus fixes a customer-facing window - the 60-120 days in the domain facts are the *brand's* return terms, a different clock - so 30 is a starting number head office moves without a release.
+  A late return that carries `window_override` lands and raises a `return_late` flag; the column on the document records that a manager answered, and the flag is what makes somebody read it.
+
+- **A piece given back before the books could ever price it raises `return_uncosted`**, and closes the sale's costing queue row where the whole line came back.
+  Sold before its paperwork (#186) and returned before the PT landed: the money reverses because the customer really paid it, and nothing costs because nothing was ever costed.
+  Without closing the queue row the sweep would post COGS days later for a garment standing on the shelf and take it out of stock a second time - with the trial balance at nought throughout.
+  Only a line returned *in full* can be settled that way, because the sweep posts a whole `SaleLine`'s cost rather than a queue row's quantity; a partial return leaves the row waiting and puts the quantity on the flag instead.
+  Note also what the flag is telling a store in both cases: the stock ledger refuses a movement at nought value (Rule 5), so a piece returned **damaged** is physically in the back room and counted in no bucket at all.
+
+- **`GET /api/sell/sales` and the detail are what the Return & Exchange screen finds a bill with**, in that order.
+  The detail is keyed by the whole `26-27/DEO/SAL/74` and what a person reads off the slip is "74", so the screen searches on what was typed and then reads the bill the search names.
+  The counter does not render the number itself: a series carries an editable prefix and suffix, and guessing them is how a screen finds nothing at a store that has one.
+
+- **The bill's read shape gains `returned_qty`, `returned_paise` and `exchange_of`.**
+  The first two are annotated per line (`sell.services.refunds.with_returned`) and the paise are the load-bearing half: an exchange leg is priced **offline** and the last piece of a line settles the remainder of what has not been given back, so a till that knew only how many pieces had gone would get a second partial return a paisa out - and find out after the receipt had printed.
+  `exchange_of` names the bill an exchange gave back against, which a reprint needs: a return leg rendered as an ordinary line puts a piece the customer *handed back* on their copy as one they bought, and the column of amounts then stops adding up to the total under it.
+
 ### GET `/api/sell/sales`
 
 Customer search / reprint (E1, E2). Auth: sell>=view; store-scoped.

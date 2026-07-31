@@ -45,6 +45,7 @@ from masters.scoping import actionable_store_ids
 from sell.models import (
     ContinuityFlag,
     CreditNote,
+    DeferredCosting,
     Return,
     ReturnLine,
     Sale,
@@ -146,7 +147,7 @@ def _replay(ret: Return) -> ReturnResult:
             {
                 flag.kind
                 for flag in ret.original_sale.flags.all()
-                if (flag.details or {}).get("return") == ret.doc_number
+                if (flag.details or {}).get(FLAG_RETURN_KEY) == ret.doc_number
             }
         ),
     )
@@ -164,18 +165,25 @@ def _accept_new(data: dict[str, Any], actor: Any) -> ReturnResult:
     store = _resolve_store(data["store"], actor)  # step 1
     original = _resolve_original(data, store)  # step 3
     manager = manager_for_override((data.get("override") or {}).get("user_id"), store)
-    _require_manager(manager)  # step 5
+    _require_manager(manager, actor)  # step 5
     lines = _prepare_lines(data, original)  # step 3
-    late = _check_window(original, bool(data.get("window_override")))  # step 4
+    late, days_old = _check_window(original)  # step 4
+    _check_window_override(late, days_old, bool(data.get("window_override")))
 
+    # The document, then its lines, then the number. Posting an empty document
+    # and filling it afterwards would leave a moment - inside this transaction,
+    # so nobody could ever see it, but a moment all the same - where the books
+    # held a numbered return of nothing. Everything that needs the number (the
+    # stock legs, the credit note, the value events) comes after it.
     ret = _write_return(data, store, original, manager, actor, late)  # step 6
-    ret.post()
     _write_lines(ret, lines)
+    ret.post()
     _write_stock_legs(ret, store, lines, actor)  # step 8, the stock half
+    _settle_uncosted(lines)
     note = _issue_credit_note(ret, store, original, lines, actor)  # step 7
     _post_value(ret, lines, actor)  # step 8, the value half
 
-    flags = _flag_late(ret, store, original, late)
+    flags = _flag_late(ret, store, original, late, days_old)
     flags += _flag_uncosted(ret, store, original, lines)
     return ReturnResult(ret=ret, created=True, credit_note=note, flags=sorted(set(flags)))
 
@@ -238,18 +246,35 @@ def _resolve_original(data: dict[str, Any], store: Store) -> Sale:
     return sale
 
 
-def _require_manager(manager: Any) -> None:
+def _require_manager(manager: Any, actor: Any) -> None:
     """Step 5 - the manager's tap, on every plain return without exception.
 
     Not a value band and not a rung the cashier might happen to hold: grill Q7 is
     explicit that *every* plain return takes the manager's tap, because a refund
     with no second pair of eyes is the shape internal refund fraud takes
     everywhere it has been studied.
+
+    **And the manager may not be the person taking the return.** That is floor
+    rule 1 - "nobody approves their own document" (`accounts.floors`) - and it is
+    the whole of what a second pair of eyes means: a store manager who could raise
+    a return and authorise it in the same act has a second pair of eyes that are
+    their own. It bites hardest at a shop where the manager *is* the counter, and
+    that is the intended cost - the alternative is a rule that switches itself off
+    for exactly the person best placed to abuse it. **Whether a lone-manager store
+    should be able to take a return with nobody else on the floor is Anand's to
+    rule on**; until then the ratified floor holds.
     """
     if manager is None:
         raise ReturnError(
             "OVERRIDE_REQUIRED",
             "Every return takes a manager of this store. Ask them to approve it at the counter.",
+            422,
+        )
+    if getattr(manager, "pk", None) == getattr(actor, "pk", object()):
+        raise ReturnError(
+            "OVERRIDE_REQUIRED",
+            "A return needs a second person. Somebody else who may approve returns at "
+            "this store has to put their PIN in.",
             422,
         )
 
@@ -269,6 +294,14 @@ def _prepare_lines(data: dict[str, Any], original: Sale) -> list[_PreparedLine]:
             )
         wanted[sold.id] = wanted.get(sold.id, 0) + int(payload["qty"])
         prepared.append(_PreparedLine(payload=payload, original=sold))
+    # **Locked in one fixed order, not in the order the payload happened to
+    # list them.** `returned_so_far` takes a row lock on each original line, and
+    # two returns against one bill naming the same two lines the opposite way
+    # round would each hold what the other waits for - a deadlock, which Postgres
+    # resolves by killing one of them with a 500 on a counter with a customer at
+    # it. Sorting by the line's own key makes every caller take the same locks in
+    # the same sequence, which is the whole of the cure.
+    prepared.sort(key=lambda line: line.original.pk)
     _check_quantities(prepared, wanted)
     for line in prepared:
         line.refund_paise = entitled_refund(line.original, line.qty)
@@ -307,29 +340,36 @@ def _tax_inside(refund_paise: int, rate: Decimal) -> int:
     return refund_paise - base_from_inclusive(refund_paise, Decimal(rate))
 
 
-def _check_window(original: Sale, window_override: bool) -> bool:
-    """Step 4 - is this inside the return window, and if not, did somebody say so?
+def _check_window(original: Sale) -> tuple[bool, int]:
+    """Step 4 - is this bill inside the return window, and how old is it?
 
     The window is data (grill Q7, `SellPolicy.return_window_days`), so head office
-    moves it without a release. Past it the return is not refused - the manager is
-    already standing there - but their *second*, explicit answer is required, and
-    the return lands flagged either way.
+    moves it without a release.
 
-    Answers whether this one was late, which is what the document records and the
-    flag reports.
+    Both answers come back together because both are needed twice over and neither
+    may be worked out a second time: the document records whether it was late, the
+    refusal quotes the age, and the flag quotes both. Re-deriving the age is a
+    second reading of the clock, and a return taken at one second to midnight
+    would then be described by two different numbers.
     """
     window = SellPolicy.current().return_window_days
     days = (timezone.localdate() - timezone.localdate(original.billed_at)).days
-    if days <= window:
-        return False
-    if not window_override:
-        raise ReturnError(
-            "OVERRIDE_REQUIRED",
-            f"That bill is {days} days old and this store takes returns back for "
-            f"{window}. A manager can still take it, but they have to say so.",
-            422,
-        )
-    return True
+    return days > window, days
+
+
+def _check_window_override(late: bool, days_old: int, window_override: bool) -> None:
+    """Past the window the return is not refused - the manager is already standing
+    there - but their *second*, explicit answer is required, and the return lands
+    flagged either way."""
+    if not late or window_override:
+        return
+    raise ReturnError(
+        "OVERRIDE_REQUIRED",
+        f"That bill is {days_old} days old and this store takes returns back for "
+        f"{SellPolicy.current().return_window_days}. A manager can still take it, but "
+        "they have to say so.",
+        422,
+    )
 
 
 def _write_return(
@@ -400,6 +440,37 @@ def _write_stock_legs(ret: Return, store: Store, lines: list[_PreparedLine], act
             post_stock_move(ret, store, line.row, actor)
 
 
+def _settle_uncosted(lines: list[_PreparedLine]) -> None:
+    """Close the sale's costing queue row for a piece the books never priced.
+
+    A sold-before-inward line (#186) leaves a `DeferredCosting` row waiting for
+    the PT that will price its cohort. If the *whole* line comes back before that
+    PT arrives, the cost event the sweep is waiting to post and this return's
+    reversal are the same figure in opposite directions - so the honest total of
+    the pair is nothing, and the row is closed rather than left to fire.
+
+    Without this the sweep would, days later, post COGS for a garment standing on
+    the shelf and take it out of stock a second time. The trial balance would stay
+    at nought and the subledger tie would still pass, which is exactly the class of
+    error that has to be prevented rather than detected.
+
+    **Only a line given back in full**, and the asymmetry is deliberate. The sweep
+    posts a whole `SaleLine`'s cost, not a queue row's quantity, so a partly
+    returned line cannot be settled by closing anything - it would need the sweep
+    to post a part, which is a wider change than this slice. The remainder goes in
+    front of a human instead (`_flag_uncosted`), with the quantity on it.
+    """
+    for line in lines:
+        original = line.original
+        if int(original.unit_cost_paise or 0) > 0:
+            continue
+        if returned_so_far(original)[0] < original.qty:  # part of it is still out there
+            continue
+        DeferredCosting.objects.filter(
+            sale_line=original, status=DeferredCosting.Status.WAITING
+        ).update(status=DeferredCosting.Status.RETURNED, updated_at=timezone.now())
+
+
 def _issue_credit_note(
     ret: Return, store: Store, original: Sale, lines: list[_PreparedLine], actor: Any
 ) -> CreditNote | None:
@@ -443,6 +514,13 @@ def _post_value(ret: Return, lines: list[_PreparedLine], actor: Any) -> None:
 # --- what a human is told about afterwards ---------------------------------
 
 
+#: Where a flag raised by a return names the return itself. `ContinuityFlag` has
+#: no column for one - it hangs off a `Sale` - so the number lives in the details,
+#: and it is spelled here because `_replay` reads it back out to tell one return's
+#: exceptions from another's on the same bill.
+FLAG_RETURN_KEY = "return"
+
+
 def _flag(ret: Return, store: Store, original: Sale, kind: str, details: dict[str, Any]) -> str:
     """One exception row, hung off the bill it is about.
 
@@ -455,30 +533,35 @@ def _flag(ret: Return, store: Store, original: Sale, kind: str, details: dict[st
         kind=kind,
         store=store,
         sale=original,
-        details={"return": ret.doc_number, **details},
+        details={FLAG_RETURN_KEY: ret.doc_number, **details},
     )
     return kind
 
 
-def _flag_late(ret: Return, store: Store, original: Sale, late: bool) -> list[str]:
+def _flag_late(ret: Return, store: Store, original: Sale, late: bool, days_old: int) -> list[str]:
     """A return taken past the window, on the store's morning queue.
 
     The `window_override` column already records that a manager answered for it.
     This is what makes somebody read it: the window is the one policy at this
     counter a manager sets aside on their own say-so, and grill Q7's whole
     argument is that returns are the thing to watch.
+
+    The age comes in from `_check_window` rather than being worked out again, so
+    the sentence the counter was shown and the number head office reads are the
+    same number.
     """
     if not late:
         return []
-    policy = SellPolicy.current()
-    days = (timezone.localdate() - timezone.localdate(original.billed_at)).days
     return [
         _flag(
             ret,
             store,
             original,
             ContinuityFlag.Kind.RETURN_LATE,
-            {"days_since_billed": days, "window_days": policy.return_window_days},
+            {
+                "days_since_billed": days_old,
+                "window_days": SellPolicy.current().return_window_days,
+            },
         )
     ]
 
@@ -490,29 +573,31 @@ def _flag_uncosted(
 
     Sold before its paperwork arrived and returned before the PT landed. The
     money reverses and the stock never moved either way, so the document is
-    honest - but the *sale's* cost event is still parked in `DeferredCosting`,
-    and when the PT finally prices the cohort the sweep will post a cost for a
-    piece that came back.
+    honest - and `_settle_uncosted` has already closed the sale's costing queue
+    row where the whole line came back, so the sweep will not post a cost for a
+    garment standing on the shelf.
 
-    It is flagged rather than queued because `DeferredCosting` hangs off a
-    `SaleLine` and a plain return has none. Making that table generic is a
-    schema change and its own ticket; posting a guess at what the piece cost is
-    the one outcome worse than telling somebody.
+    This is raised anyway, because two things remain true and are visible nowhere
+    else. **Nothing moved in the stock ledger**: it refuses a movement at nought
+    value (Rule 5), so a piece returned *damaged* is physically in the back room
+    and counted in no bucket at all - the store has to know. And where only part
+    of a line came back, the sale's queue row could not be settled either, so the
+    sweep will still post that line's whole cost when the PT lands.
     """
     unpriced = [
-        line.row.line_no for line in lines if line.row is not None and line.row.unit_cost_paise <= 0
+        {
+            "line": line.row.line_no,
+            "original_line": line.original.line_no,
+            "qty": line.row.qty,
+            "condition": line.row.condition,
+            "sale_cost_settled": returned_so_far(line.original)[0] >= line.original.qty,
+        }
+        for line in lines
+        if line.row is not None and line.row.unit_cost_paise <= 0
     ]
     if not unpriced:
         return []
-    return [
-        _flag(
-            ret,
-            store,
-            original,
-            ContinuityFlag.Kind.RETURN_UNCOSTED,
-            {"lines": unpriced},
-        )
-    ]
+    return [_flag(ret, store, original, ContinuityFlag.Kind.RETURN_UNCOSTED, {"lines": unpriced})]
 
 
 # --- what the daily check reads --------------------------------------------

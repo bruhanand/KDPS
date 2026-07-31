@@ -4,10 +4,10 @@ import { AlertTriangle, KeyRound, Search, Undo2 } from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { api, apiErrorMessage } from "../../lib/api";
-import { Money, formatDateTime } from "../../lib/format";
+import { Money, formatDateTime, formatINR } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
-import { legFor, parkExchange, refundFor, returnableQty } from "../../till/exchange";
+import { describeOriginal, legFor, parkExchange, refundFor, returnableQty } from "../../till/exchange";
 import type { Exchange, ExchangeLeg, OriginalLine } from "../../till/exchange";
 import { billSeqFrom, findQueuedBill, fromServer } from "../../till/original";
 import type { FoundBill, SaleDetail } from "../../till/original";
@@ -132,7 +132,36 @@ function Counter() {
         );
         return;
       }
-      const { data } = await api.get<SaleDetail>(`/sell/sales/${encodeURIComponent(String(seq))}`);
+      // **Search first, then read the bill it names.** The detail endpoint is
+      // keyed by the whole `26-27/DEO/SAL/74`, and what a person reads off the
+      // slip is "74" - so asking for the detail directly would 404 on every
+      // online lookup. The search is the endpoint built for exactly this ("a
+      // person reads 74 off the slip as often as the whole key", `sell/views.py`)
+      // and it renders the number from the series' own prefix and suffix, which
+      // the counter must not try to guess.
+      // Searched on what was actually **typed**, not on the sequence pulled out
+      // of it: the whole key is what narrows two financial years of one counter
+      // to the bill in the customer's hand, and it is printed on their copy.
+      const { data: matches } = await api.get<{ doc_number: string }[]>("/sell/sales", {
+        params: { doc: typed.trim() },
+      });
+      if (!matches.length) {
+        setFailed(`No bill ${typed.trim()} at this store.`);
+        return;
+      }
+      if (matches.length > 1) {
+        // Two financial years of the same counter, most likely - both series
+        // start at 1 every April. A screen that silently took the first would
+        // give back against last year's bill.
+        setFailed(
+          `More than one bill here matches "${typed.trim()}". Type the whole number from ` +
+            "the customer's copy.",
+        );
+        return;
+      }
+      const { data } = await api.get<SaleDetail>(
+        `/sell/sales/${encodeURIComponent(matches[0].doc_number)}`,
+      );
       setFound(fromServer(data));
     } catch (error) {
       setFailed(apiErrorMessage(error));
@@ -190,7 +219,7 @@ function Counter() {
         },
       );
       setNote(
-        `Taken back. Credit note ${data.credit_note} for ${rupees(data.value_paise)} - ` +
+        `Taken back. Credit note ${data.credit_note} for ${formatINR(data.value_paise)} - ` +
           "write the number on the customer's copy. No cash comes out of the drawer.",
       );
       reset();
@@ -434,9 +463,7 @@ function Lines({
             return (
               <tr key={line.line_no} data-testid={`rx-line-${line.line_no}`}>
                 <td>
-                  {[line.brand, line.item, line.design, line.size].filter(Boolean).join(" · ") ||
-                    line.manual_desc ||
-                    line.barcode}
+                  {describeOriginal(line)}
                   <br />
                   <span className="mono muted-cell">{line.barcode}</span>
                 </td>
@@ -492,7 +519,11 @@ function Lines({
                   </select>
                 </td>
                 <td className="num" data-testid={`rx-refund-${line.line_no}`}>
-                  {qty ? <Money paise={refundFor(line, qty)} /> : <span className="muted-cell">—</span>}
+                  {qty ? (
+                    <Money paise={refundFor(line, qty)} />
+                  ) : (
+                    <span className="muted-cell">nothing yet</span>
+                  )}
                 </td>
               </tr>
             );
@@ -515,10 +546,6 @@ export function wantedQty(typed: string, left: number): number {
   const whole = Math.trunc(Number(typed));
   if (!Number.isFinite(whole) || whole <= 0) return 0;
   return Math.min(whole, left);
-}
-
-function rupees(paise: number): string {
-  return `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 }
 
 function messageOf(error: unknown): string {

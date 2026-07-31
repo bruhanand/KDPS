@@ -99,12 +99,26 @@ export function returnableQty(line: OriginalLine): number {
   return Math.max(0, line.qty - line.returned_qty);
 }
 
+/** The five things a refund is worked out from - the same five
+ *  `sell.services.refunds.refund_share` takes, and the shape of a row in
+ *  `sell/vectors/refunds.json`. */
+export interface RefundInputs {
+  paid_paise: number;
+  line_qty: number;
+  returning: number;
+  returned_qty: number;
+  returned_paise: number;
+}
+
 /**
- * What `qty` pieces of a sold line are worth back, in whole paise (D2).
+ * What `returning` pieces of a line are worth back, in whole paise (D2).
  *
- * The mirror of `sell.services.refunds.entitled_refund`, and it has to agree with
+ * The mirror of `sell.services.refunds.refund_share`, and it has to agree with
  * it exactly: the server recomputes this figure and refuses the bill outright
- * where the two differ, on a receipt that is already in a customer's hand.
+ * where the two differ, on a receipt already in a customer's hand. Neither is
+ * the authority - `sell/vectors/refunds.json` is, and both suites read it, which
+ * is the "two engines, one set of golden files" shape the offer rulebook and the
+ * GSTIN checker already hold to.
  *
  * Two rules, and the second is the one that is easy to miss.
  *
@@ -116,10 +130,21 @@ export function returnableQty(line: OriginalLine): number {
  * The **last** piece of a line settles the remainder of what has not been given
  * back, so the parts always sum to what the customer actually paid.
  */
+export function refundShare(inputs: RefundInputs): number {
+  const { paid_paise, line_qty, returning, returned_qty, returned_paise } = inputs;
+  if (returned_qty + returning >= line_qty) return paid_paise - returned_paise;
+  return Math.floor((2 * paid_paise * returning + line_qty) / (2 * line_qty));
+}
+
+/** `refundShare` for one line of an old bill, told what has already come back. */
 export function refundFor(line: OriginalLine, qty: number): number {
-  const paid = line.net_paise;
-  if (line.returned_qty + qty >= line.qty) return paid - line.returned_paise;
-  return Math.floor((2 * paid * qty + line.qty) / (2 * line.qty));
+  return refundShare({
+    paid_paise: line.net_paise,
+    line_qty: line.qty,
+    returning: qty,
+    returned_qty: line.returned_qty,
+    returned_paise: line.returned_paise,
+  });
 }
 
 /** A line of the original bill as a leg on the bill being rung up now. */

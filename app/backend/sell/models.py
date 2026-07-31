@@ -895,6 +895,13 @@ class DeferredCosting(TimeStampedModel):
     class Status(models.TextChoices):
         WAITING = "waiting", "Waiting on inward"
         POSTED = "posted", "Posted"
+        # #184. The piece came back before anything ever priced it, so there is
+        # no cost to post and never will be: the sale's cost event and the
+        # return's reversal would be the same figure in opposite directions, and
+        # the honest total of the pair is nothing at all. Left as a row rather
+        # than deleted, because the queue is the record that a bill's cost was
+        # dealt with - and "given back" is one of the ways it can be.
+        RETURNED = "returned", "Given back before it could be priced"
 
     class Reason(models.TextChoices):
         """What the books are actually waiting for.

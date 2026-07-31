@@ -1521,7 +1521,7 @@ function ExchangeBack({
                   <span className="mono muted-cell">{leg.barcode}</span>
                 </td>
                 <td className="num">{leg.qty}</td>
-                <td>{leg.reason || "—"}</td>
+                <td>{leg.reason || <span className="muted-cell">not said</span>}</td>
                 <td>
                   {leg.condition === "damaged" ? (
                     <span className="bill-overcap">damaged · quarantine</span>

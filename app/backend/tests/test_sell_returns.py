@@ -51,7 +51,16 @@ from django.utils import timezone
 from core.documents import DocStatus, DocumentEditError
 from core.gl import GLAccount, GLEntry, trial_balance
 from finledger.models import CashLedgerEntry
-from sell.models import ContinuityFlag, CreditNote, Return, ReturnLine, Sale, SellPolicy
+from sell.models import (
+    ContinuityFlag,
+    CreditNote,
+    DeferredCosting,
+    Return,
+    ReturnLine,
+    Sale,
+    SellPolicy,
+)
+from sell.services.costing_sweep import sweep_deferred
 from sell.services.returns import returns_by_employee
 from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
 
@@ -230,6 +239,42 @@ def test_a_manager_from_another_store_is_not_a_manager_at_this_counter(counter):
 
     assert response.status_code == 422
     assert response.json()["code"] == "OVERRIDE_REQUIRED"
+
+
+def test_a_manager_cannot_approve_their_own_return(counter):
+    """Floor rule 1 - nobody approves their own document - and it is the whole of
+    what a second pair of eyes means.
+
+    The bite is real: at a shop where the manager *is* the counter, this makes a
+    return need somebody else on the floor. That is the intended cost of the
+    floor, and the alternative is a rule that switches itself off for exactly the
+    person best placed to abuse it. Whether a lone-manager store should be able to
+    take one alone is Anand's to rule on.
+    """
+    manager = counter["manager"]
+    original = _sell(counter)
+    payload = _return_payload(counter, original)
+
+    response = client_for(manager).post(RETURNS_URL, payload, format="json")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "OVERRIDE_REQUIRED"
+    assert "second person" in response.json()["error"]
+    assert not Return.objects.exists()
+
+
+def test_a_second_manager_may_approve_the_first_ones_return(counter):
+    """The other half of the same rule: two people is exactly what it asks for."""
+    second = build_manager(counter["store"], "deo_manager_2")
+    original = _sell(counter)
+    payload = _return_payload(counter, original)
+    payload["override"] = {"user_id": second.id}
+
+    response = client_for(counter["manager"]).post(RETURNS_URL, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    ret = Return.objects.get(pk=response.json()["id"])
+    assert ret.created_by == counter["manager"] and ret.override_by == second
 
 
 def test_the_manager_who_approved_it_is_named_on_the_document(counter):
@@ -434,6 +479,58 @@ def test_a_piece_the_books_never_priced_reverses_its_money_and_is_flagged(counte
     ).exists()
 
 
+def test_a_returned_uncosted_piece_stops_the_sweep_costing_it_later(counter):
+    """The quiet one. The sale parked a cost event waiting on the PT; the piece
+    then came back. Without settling the queue row, the sweep would post COGS for
+    a garment standing on the shelf and take it out of stock a second time - days
+    later, with the trial balance at nought throughout."""
+    payload = bill_payload(
+        counter["store"], counter["salesman"], till_seq=1, barcode="9999999999999"
+    )
+    payload["lines"][0]["manual_desc"] = "Blue kurta off the tag"
+    sold = counter["client"].post(SALES_URL, payload, format="json")
+    original = Sale.objects.get(pk=sold.json()["id"])
+    queued = DeferredCosting.objects.get(sale_line__sale=original)
+    assert queued.status == DeferredCosting.Status.WAITING
+
+    _take_back(counter, _return_payload(counter, original))
+
+    queued.refresh_from_db()
+    assert queued.status == DeferredCosting.Status.RETURNED
+    # And the sweep leaves it alone: the PT that finally prices the cohort posts
+    # nothing for a piece that is back in the shop.
+    assert sweep_deferred("9999999999999") == 0
+
+
+def test_part_of_an_uncosted_line_says_so_rather_than_settling_quietly(counter):
+    """The sweep posts a whole line's cost, not a queue row's quantity, so a
+    partly returned line cannot be settled by closing anything. The remainder
+    goes to a human with the quantity on it instead of being closed wrongly."""
+    payload = bill_payload(
+        counter["store"], counter["salesman"], till_seq=1, barcode="9999999999999", qty=2
+    )
+    payload["lines"][0]["manual_desc"] = "Blue kurta off the tag"
+    sold = counter["client"].post(SALES_URL, payload, format="json")
+    original = Sale.objects.get(pk=sold.json()["id"])
+
+    response = _take_back(counter, _return_payload(counter, original, qty=1))
+
+    assert response.json()["flags"] == [ContinuityFlag.Kind.RETURN_UNCOSTED]
+    assert DeferredCosting.objects.get(sale_line__sale=original).status == (
+        DeferredCosting.Status.WAITING
+    )
+    flag = ContinuityFlag.objects.get(kind=ContinuityFlag.Kind.RETURN_UNCOSTED)
+    assert flag.details["lines"] == [
+        {
+            "line": 1,
+            "original_line": 1,
+            "qty": 1,
+            "condition": "good",
+            "sale_cost_settled": False,
+        }
+    ]
+
+
 # --- what may be given back, and how much ----------------------------------
 
 
@@ -536,6 +633,19 @@ def test_a_piece_already_returned_cannot_also_be_exchanged(counter):
 
     assert response.status_code == 422
     assert response.json()["code"] == "ALREADY_RETURNED"
+
+
+def test_a_return_that_does_not_say_what_condition_the_piece_is_in_is_refused(counter):
+    """Both available defaults are wrong: `good` puts a damaged garment back on
+    the shelf for the next customer, and `damaged` quarantines saleable stock."""
+    original = _sell(counter)
+    payload = _return_payload(counter, original)
+    payload["lines"][0].pop("condition")
+
+    response = _take_back(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
 
 
 def test_a_line_the_bill_does_not_have_is_refused(counter):
@@ -651,7 +761,15 @@ def test_the_bill_reports_how_much_of_each_line_has_come_back(counter):
 
 def test_a_cancelled_return_gives_the_returnable_quantity_back(counter):
     """The books say that return never happened, and the customer is holding the
-    piece and the receipt again."""
+    piece and the receipt again.
+
+    Note what cancelling does *not* do: the credit note it issued stays live and
+    its ledger legs stay standing, so the piece can be given back a second time
+    while the first note is still spendable. That is a property of every money
+    document in the app rather than of this one - there is no cancel endpoint on
+    a sale or a return by design (A7), and the reversing half of "correct by
+    reversal" is unbuilt - and it is filed as #220.
+    """
     original = _sell(counter)
     body = _take_back(counter, _return_payload(counter, original)).json()
     Return.objects.get(pk=body["id"]).cancel()

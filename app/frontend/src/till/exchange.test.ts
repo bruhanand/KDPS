@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { describeOriginal, legFor, refundFor, returnableQty, whyExchangeCannotClose } from "./exchange";
+import { describeOriginal, legFor, returnableQty, whyExchangeCannotClose } from "./exchange";
 import type { Exchange, OriginalLine } from "./exchange";
 
-// What a piece is worth back, at the counter (#184, D2).
+// The counter's half of an exchange, minus the arithmetic (#184, D2).
 //
-// The arithmetic here is checked again by the server on a bill that has already
-// printed - `accept._check_return_refund` refuses the whole bill where the two
-// disagree by a single paisa, with the customer gone and the queue stopped
-// behind it. So these cases are the same cases `test_sell_returns.py` states on
-// the other side, and the two files are meant to be read together.
+// What a piece is *worth* back is not here: those cases live in
+// `sell/vectors/refunds.json` and are driven by `refund.vectors.test.ts` against
+// the very same file the server's suite reads, because a second hand-written
+// copy of that rule is the thing the pairing exists to prevent. What is here is
+// everything with no Python counterpart - the leg a refund becomes on the bill,
+// its tax, and why an exchange will not close.
 
 function line(over: Partial<OriginalLine> = {}): OriginalLine {
   return {
@@ -34,38 +35,8 @@ function line(over: Partial<OriginalLine> = {}): OriginalLine {
   };
 }
 
-describe("what a piece is worth back", () => {
-  it("gives back what the customer paid, not what the tag says", () => {
-    // The line was discounted to ₹1,049.30 from a ₹1,499 tag; that is what comes
-    // back, and today's ticket price has nothing to do with it.
-    expect(refundFor(line({ net_paise: 104930 }), 1)).toBe(104930);
-  });
-
-  it("rounds a share half-up, never down", () => {
-    // ₹29.99 over three pieces is 999.67 paise. Half-up is 1000; the banker's
-    // rounding a naive `round()` would do on a float is what the server refuses.
-    expect(refundFor(line({ qty: 3, net_paise: 2999 }), 1)).toBe(1000);
-  });
-
-  it("settles the remainder on the last piece, so the parts sum to what was paid", () => {
-    const whole = line({ qty: 3, net_paise: 2999 });
-    const first = refundFor(whole, 1);
-    const second = refundFor({ ...whole, returned_qty: 1, returned_paise: first }, 1);
-    const third = refundFor(
-      { ...whole, returned_qty: 2, returned_paise: first + second },
-      1,
-    );
-    expect([first, second, third]).toEqual([1000, 1000, 999]);
-    expect(first + second + third).toBe(2999);
-  });
-
-  it("gives the whole line back when the whole line comes back", () => {
-    expect(refundFor(line({ qty: 3, net_paise: 2999 }), 3)).toBe(2999);
-  });
-
+describe("how much of a line is still returnable", () => {
   it("counts what has already gone back, whichever way it went", () => {
-    // The paise matter as much as the count: a till that knew only that one of
-    // three had gone would settle the last two on the wrong remainder.
     expect(returnableQty(line({ qty: 3, returned_qty: 2 }))).toBe(1);
     expect(returnableQty(line({ qty: 3, returned_qty: 3 }))).toBe(0);
   });

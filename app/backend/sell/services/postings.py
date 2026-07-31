@@ -50,22 +50,13 @@ from core.gl import GLAccount
 from core.posting import Leg, cr, dr, post_entries
 from finledger.posting import post_sale_collection, post_sale_sor_liability
 from masters.ownership import brand_is_owned
-from sell.models import DeferredCosting, Return, ReturnLine, Sale, SaleLine, SaleTender
+from sell.models import DeferredCosting, Return, Sale, SaleLine, SaleTender
+from sell.services.movements import SellDocument, SellLine
 from stockledger.models import StockLedgerEntry
 from vendors.models import Vendor
 
 #: `core.posting.dr` or `core.posting.cr` - which side of a pair a leg goes on.
 LegWriter = Callable[..., Leg]
-
-#: Either shape of line the cost event can be asked about. A bill's own line and
-#: a plain return's line answer the same three questions - is this piece coming
-#: back, what did it cost, and what is it - so the cost event does not need to
-#: know which table it came out of (#184).
-CostedRow = SaleLine | ReturnLine
-
-#: Either document the two events post under. A sale is both events; a plain
-#: return is the reversal half of each.
-ValueDocument = Sale | Return
 
 
 @dataclass(frozen=True)
@@ -129,7 +120,7 @@ class CostPlan:
 class CostedLine:
     """One written line and the cost plan resolved for it."""
 
-    row: CostedRow
+    row: SellLine
     plan: CostPlan
 
     @property
@@ -357,7 +348,7 @@ def _post_money_event(
         post_entries(sale, legs, posted_by=actor)
 
 
-def _dims(row: CostedRow) -> dict[str, str]:
+def _dims(row: SellLine) -> dict[str, str]:
     """What every leg about this line is filed under (Rule 3, snapshotted).
 
     Brand and season, because they are what every margin question is asked by -
@@ -374,7 +365,7 @@ def _sides(line: CostedLine) -> tuple[LegWriter, LegWriter]:
     return (cr, dr) if line.is_return else (dr, cr)
 
 
-def _revenue_legs(side: LegWriter, row: CostedRow, base_paise: int) -> list[Leg]:
+def _revenue_legs(side: LegWriter, row: SellLine, base_paise: int) -> list[Leg]:
     """The revenue and tax legs for one line."""
     legs = []
     if base_paise:
@@ -399,7 +390,7 @@ def _rounding_legs(sale: Sale) -> list[Leg]:
 
 
 def post_cost_event(
-    doc: ValueDocument, costed: list[CostedLine], actor: Any, *, against_voucher: str = ""
+    doc: SellDocument, costed: list[CostedLine], actor: Any, *, against_voucher: str = ""
 ) -> bool:
     """Event B - what the pieces cost, out of the book that held them.
 
@@ -479,7 +470,7 @@ def _sor_cost_legs(line: CostedLine, against_voucher: str = "") -> list[Leg]:
     ]
 
 
-def _accrue_sor_liability(doc: ValueDocument, postable: list[CostedLine], actor: Any) -> None:
+def _accrue_sor_liability(doc: SellDocument, postable: list[CostedLine], actor: Any) -> None:
     """Mirror each vendor's accrual into the vendor subledger.
 
     One row per vendor per bill, netted: a bill that sells one of a brand's pieces

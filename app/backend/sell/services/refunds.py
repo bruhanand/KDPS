@@ -108,20 +108,48 @@ def _summed(rows: QuerySet, column: str) -> Coalesce:
     return Coalesce(Subquery(rows.values(column), output_field=IntegerField()), Value(0))
 
 
-def entitled_refund(original: SaleLine, qty: int) -> int:
-    """What `qty` of a sold line is worth back, in whole paise (D2).
+def refund_share(
+    *,
+    paid_paise: int,
+    line_qty: int,
+    returning: int,
+    returned_qty: int,
+    returned_paise: int,
+) -> int:
+    """What `returning` pieces of a line are worth back, in whole paise (D2).
 
-    Two rules, and the second is the one that is easy to miss. A share of a line
-    is rounded half-up, never by Python's `round()` - that is banker's rounding
-    on a float, so a ₹10.05 pair refunds ₹5.02 instead of ₹5.03 and the till's
-    correct figure is refused. And the *last* piece of a line is settled as the
-    remainder of what has not been given back yet, so the parts always sum to
-    exactly what the customer paid: three pieces at ₹10.00 refund 333 + 333 +
-    334, not 333 three times with a paisa left in the books forever.
+    Pure arithmetic, taking its five inputs rather than fetching them, because
+    **the counter computes this too** - offline, on a bill it is about to print -
+    and the two answers have to agree to the paisa or the accept pipeline refuses
+    the whole bill after the receipt is in a customer's hand. The cases live in
+    `sell/vectors/refunds.json` and `src/till/refund.vectors.test.ts` reads the
+    same file, which is the "two engines, one set of golden files" shape the
+    offer rulebook and the GSTIN checker already hold to.
+
+    Two rules, and the second is the one that is easy to miss.
+
+    A share is rounded **half-up**, never by Python's `round()` - that is
+    banker's rounding on a float, so a ₹10.05 pair refunds ₹5.02 instead of
+    ₹5.03 and the till's correct figure is the one refused.
+
+    The **last** piece of a line settles the remainder of what has not been given
+    back yet, so the parts always sum to exactly what the customer paid: three
+    pieces at ₹10.00 refund 333 + 333 + 334, not 333 three times with a paisa
+    left in the books for ever.
     """
-    returned_qty, returned_paise = returned_so_far(original)
-    paid = int(original.net_paise or 0)
-    if returned_qty + qty >= original.qty:  # the last of it - settle the remainder
-        return paid - returned_paise
-    share = Decimal(paid) * qty / original.qty
+    if returned_qty + returning >= line_qty:  # the last of it - settle the remainder
+        return paid_paise - returned_paise
+    share = Decimal(paid_paise) * returning / line_qty
     return int(share.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def entitled_refund(original: SaleLine, qty: int) -> int:
+    """`refund_share` for one sold line, told what has already come back off it."""
+    returned_qty, returned_paise = returned_so_far(original)
+    return refund_share(
+        paid_paise=int(original.net_paise or 0),
+        line_qty=original.qty,
+        returning=qty,
+        returned_qty=returned_qty,
+        returned_paise=returned_paise,
+    )
