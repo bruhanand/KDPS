@@ -39,5 +39,10 @@ class AlertReadSerializer(serializers.ModelSerializer[Alert]):
             "threshold_days",
             "status",
             "created_at",
+            # Null on everything the open feed carries, which is why adding it
+            # there costs its existing consumers nothing; on a history row it is
+            # the day the condition stopped being true, and what History groups
+            # by (#226).
+            "resolved_at",
         ]
         read_only_fields = fields
