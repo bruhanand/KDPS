@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { HostedPageContext } from "../components/PageHeader";
-import { api } from "../lib/api";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
+import { NotificationBell } from "./NotificationBell";
 import {
   headingOwning,
   isActiveFold,
@@ -150,55 +150,6 @@ function UserMenu() {
         </>
       )}
     </div>
-  );
-}
-
-/** Anyone who decides an approval says so here, so the bell can recount.
- *
- *  A DOM event rather than a store: the bell and the inbox are the only two
- *  things that care, they are never mounted together outside the shell, and one
- *  line beats a context for a fact this small. */
-export const APPROVALS_CHANGED = "kdps:approvals-changed";
-
-export function announceApprovalsChanged() {
-  window.dispatchEvent(new Event(APPROVALS_CHANGED));
-}
-
-/** The bell, told what it is ringing about.
- *
- *  It used to be a dead button with a permanent red dot: nothing to click, and a
- *  dot that said "something needs you" whether or not anything did. It now
- *  counts the documents actually waiting on this person's decision and opens the
- *  inbox — and shows nothing at all when there is nothing to show. */
-function ApprovalsBell() {
-  const [waiting, setWaiting] = useState<number | null>(null);
-  // Re-counted on every navigation *and* whenever a decision is made, not once
-  // per session: clearing the last item used to leave the bell insisting one
-  // document was still waiting, right beside a page saying nothing was.
-  const { pathname } = useLocation();
-  useEffect(() => {
-    function count() {
-      api
-        .get("/approvals/inbox")
-        .then((r) => setWaiting(r.data?.length ?? 0))
-        .catch(() => setWaiting(null));
-    }
-    count();
-    window.addEventListener(APPROVALS_CHANGED, count);
-    return () => window.removeEventListener(APPROVALS_CHANGED, count);
-  }, [pathname]);
-  const label = waiting
-    ? `${waiting} document${waiting === 1 ? "" : "s"} waiting for your approval`
-    : "Approvals inbox — nothing waiting for you";
-  return (
-    <Link to="/approvals" className="icon-btn" aria-label={label} title={label} data-testid="notifications">
-      <Bell size={18} />
-      {!!waiting && (
-        <span className="bell-count" data-testid="notifications-count">
-          {waiting > 9 ? "9+" : waiting}
-        </span>
-      )}
-    </Link>
   );
 }
 
@@ -571,7 +522,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
-            <ApprovalsBell />
+            <NotificationBell />
             <UserMenu />
           </div>
         </header>

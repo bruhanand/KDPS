@@ -24,7 +24,7 @@ import {
 } from "../components/approval";
 import "./Booking.css";
 import { PageHeader } from "../components/PageHeader";
-import { announceApprovalsChanged } from "../shell/AppShell";
+import { announceApprovalsChanged } from "../shell/NotificationBell";
 
 // ---------------------------------------------------------------------------
 // The inbox

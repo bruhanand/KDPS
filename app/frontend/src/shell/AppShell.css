@@ -108,6 +108,71 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 }
 .content { flex: 1; overflow-y: auto; }
 
+/* ---------- the bell popup (#226) ----------
+   Anchored to the bell rather than to the top bar, so it points at the thing
+   that was clicked. Every colour is a token: the whole popup inherits dark
+   mode with no override of its own. */
+.bell-wrap { position: relative; }
+.bell-popup {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 50;
+  width: 380px; max-height: min(70vh, 560px); display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  box-shadow: var(--shadow-hover); overflow: hidden;
+}
+.bell-tabs { display: flex; border-bottom: 1px solid var(--hairline); flex: none; }
+.bell-tab {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 11px 8px; border: none; background: transparent; cursor: pointer;
+  font-size: 13.5px; font-weight: 600; color: var(--muted);
+  border-bottom: 2px solid transparent; transition: color .12s, border-color .12s;
+}
+.bell-tab:hover { color: var(--ink); }
+.bell-tab.active { color: var(--rust); border-bottom-color: var(--rust); font-weight: 700; }
+.bell-tab-count {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--brand-red); color: #fff;
+  font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center;
+}
+.bell-body { overflow-y: auto; padding: 6px 10px 10px; }
+
+.bell-list { list-style: none; margin: 0; padding: 0; }
+.bell-row { padding: 9px 4px; border-bottom: 1px solid var(--hairline); }
+.bell-row:last-child { border-bottom: none; }
+.bell-row-head {
+  display: flex; align-items: center; gap: 6px; margin: 0 0 3px;
+  font-size: 11px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+  color: var(--caption);
+}
+.bell-row-head .chip, .bell-value { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.bell-value { font-size: 12px; font-weight: 700; color: var(--ink); }
+.bell-row-title { margin: 0; font-size: 13.5px; color: var(--ink); }
+.bell-row-meta { margin: 2px 0 0; font-size: 11.5px; color: var(--muted); }
+.bell-day-head {
+  margin: 10px 0 2px; font-size: 11px; font-weight: 700; letter-spacing: .4px;
+  text-transform: uppercase; color: var(--caption);
+}
+.bell-quiet { margin: 12px 4px; font-size: 13px; color: var(--muted); }
+.bell-all {
+  display: block; padding: 9px 4px 4px; font-size: 12.5px; font-weight: 600; color: var(--rust);
+}
+
+.bell-history { border-top: 1px solid var(--hairline); margin-top: 6px; padding-top: 6px; }
+.bell-history-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px 4px;
+  border: none; background: transparent; cursor: pointer;
+  font-size: 12.5px; font-weight: 700; color: var(--caption);
+}
+.bell-history-toggle:hover { color: var(--ink); }
+.bell-ranges { display: flex; gap: 4px; padding: 2px 0 6px; }
+.bell-range {
+  flex: 1; padding: 5px 6px; border: 1px solid var(--hairline); border-radius: 999px;
+  background: var(--inner); cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--muted);
+}
+.bell-range:hover { color: var(--ink); }
+.bell-range.active {
+  background: rgba(var(--rust-rgb), .12); border-color: var(--rust); color: var(--rust); font-weight: 700;
+}
+
 /* ---------- switcher / dropdowns ---------- */
 .switcher, .usermenu { position: relative; }
 .switcher-btn {
@@ -197,6 +262,13 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   .switcher-label { max-width: 74px; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
+  /* A 380px popup anchored to a bell near the right edge would hang off a
+     phone. On mobile it is a full-width sheet under the top bar instead —
+     CSS only; the component is the same one (#226). */
+  .bell-popup {
+    position: fixed; left: 8px; right: 8px; top: calc(var(--topbar-h) + 4px);
+    width: auto; max-height: calc(100vh - var(--topbar-h) - 16px);
+  }
 }
 
 /* Printing the transfer PT (#72) prints the document, not the application
