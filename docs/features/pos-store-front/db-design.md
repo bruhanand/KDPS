@@ -106,6 +106,18 @@ Till-authoritative; server copy exists only so the Dashboard can show holds (gri
 store FK · held_uuid UUID unique · label CharField(120) blank · payload JSONField (the cart) · held_at · expires_policy CharField choices `today/kept`.
 Replaced wholesale by each till push; no ledger, no document, no number.
 
+### `sell_registerhandover` (NEW, added 31 Jul 2026 with #189)
+
+The audit row the api-contract's handover step 2 calls for, as its own table rather than an `AccessChange`.
+`AccessChange` is a maker-checker *proposal* waiting for a second administrator to apply it; a handover is something that has already happened, and borrowing that row would have put a dead till in an approval queue.
+
+store FK PROTECT · fy CharField(7) · reason CharField(240) · last_accepted_seq Integer · hole_count Integer · actor FK User PROTECT · created_at/updated_at.
+Index (store, -created_at).
+
+`last_accepted_seq` and `hole_count` are **stored, not derived**: the whole value of the row is that it says what was true at the moment the machine changed, and by tomorrow neither will be.
+The hole *list* is not stored - it is derivable, it can be five thousand long, and what somebody asks of this row a month later is "how bad was it".
+Nothing updates or deletes a row here.
+
 ### `sell_continuityflag` (NEW, exception rows)
 
 kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/gstin_invalid/aged_uncosted` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · resolved_by/at.

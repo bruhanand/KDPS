@@ -413,6 +413,24 @@ The POST handover is unbuilt and belongs to #189; three things about the GET are
   The two clocks straddle 1 April for a few minutes each year, and a till that reconciled a brand-new counter against last year's frontier would jump to bill 5,001 and stay there.
   The `TILL_SCOPE` refusal is the dataset endpoint's, unchanged, for the same reason: one counter's numbering is only ever of use to that counter.
 
+**Amended 31 Jul 2026, after building the POST (#189).**
+Four things.
+
+- **The refusal is `TILL_SCOPE`, not `SCOPE_DENIED`.**
+  The endpoint shares `till_store` with the dataset and the register GET, so it shares their vocabulary - the same amendment the held-bills mirror recorded on 31 July.
+  The two refusals it can give are not the one the table above sketched: a **cashier** is refused by the section gate itself, at `sell: approve`, in DRF's `{"detail": …}` at 403, and a **login that can see more than one store** is refused with `TILL_SCOPE`, which means "this login will never be a counter" rather than "not here, not now".
+  `SCOPE_DENIED` is not emitted here either.
+- **The response carries `hole_count` as well as `unsynced_hint`**, for exactly the reason the GET's does: a machine that died at bill 5,000 leaves more receipts in a drawer than a response should carry, and a screen listing 200 without saying so would tell somebody they had finished when they had not.
+- **The handover writes nothing to `VoucherSeries`.**
+  It records the act and reads the state back; `resume_from_seq` is `last_accepted_seq + 1` handed to the new machine, not a counter the server moved.
+  The till numbers bills and the server only ever accepts them, so a server that advanced its own counter would be holding an opinion about a number nobody has printed - and the next straggler from the old machine would then look like a hole that had been jumped over rather than one being filled.
+- **The audit row is its own table**, `sell_registerhandover`, rather than an `AccessChange`.
+  `AccessChange` is a maker-checker *proposal* waiting for a second administrator, and a handover is a thing that has already happened; borrowing the row would have put a handover in an approval queue nobody watches. It is `AccessChange`-shaped in the sense the contract meant - actor, reason, and the frontier at the time - and nothing reads it back into a decision. See `db-design.md` §2.
+
+**Still deferred, and now past #189:** labelling the Dashboard's collections card with the till's last sync time.
+It was parked here as "PWA-shaped", and it is - but what it needs is the till layer mounted somewhere other than under the Sell routes, which would start a store's counter (and open its local database) on every screen that login opens.
+That is a change to when the till runs, not to how it is installed, and #189's four acceptance criteria do not touch it. It wants its own ticket and Anand's eye.
+
 ### PUT `/api/sell/held-bills`
 
 Best-effort mirror so the Dashboard sees holds (grill Q13); the till is authoritative.
