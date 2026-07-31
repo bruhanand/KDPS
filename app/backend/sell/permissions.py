@@ -20,7 +20,7 @@ about one human and one store rather than about a rung.
 from __future__ import annotations
 
 from accounts.permissions import require_section
-from accounts.sections import CAP_MANAGE, CAP_OPERATE, CAP_VIEW
+from accounts.sections import CAP_APPROVE, CAP_MANAGE, CAP_OPERATE, CAP_VIEW
 
 #: Reading a bill back is `view`; billing is `operate`. One view carries both
 #: because `GET`/`POST` on `/api/sell/sales` are the search and the till.
@@ -48,3 +48,11 @@ CanRunTill = require_section("sell", CAP_OPERATE)
 #: Accounts - so the gate follows the duty rather than the app the model happens
 #: to live in. Nothing on the ratified sheet moves to make this true.
 CanWorkIrnQueue = require_section("money", CAP_MANAGE)
+
+#: Moving a store's bill series onto a different machine (#189). `approve`, a rung
+#: above the till itself: a handover leaves holes in a numbered money series that
+#: somebody then has to fill from paper, and the cashier whose machine just died
+#: is exactly the person who should be fetching a manager rather than deciding.
+#: It is the same rung the counter's own manager-override PIN is built on, so the
+#: person a cashier calls over for a discount is the person who can do this too.
+CanHandOverTill = require_section("sell", CAP_APPROVE)

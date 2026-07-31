@@ -13,6 +13,7 @@ from sell.views import (
     HeldBillsView,
     IrnQueueItemView,
     IrnQueueView,
+    RegisterHandoverView,
     RegisterView,
     SaleDetailView,
     SaleListCreateView,
@@ -20,6 +21,7 @@ from sell.views import (
 
 urlpatterns = [
     path("dataset", DatasetView.as_view(), name="sell-dataset"),
+    path("register/handover", RegisterHandoverView.as_view(), name="sell-register-handover"),
     path("register", RegisterView.as_view(), name="sell-register"),
     path("held-bills", HeldBillsView.as_view(), name="sell-held-bills"),
     path("irn-queue", IrnQueueView.as_view(), name="sell-irn-queue"),

@@ -165,6 +165,31 @@ export interface RegisterPayload {
   series_open: boolean;
 }
 
+/** `POST /api/sell/register/handover` - what a new machine is told when it takes
+ *  over a store's counter (#189).
+ *
+ *  `unsynced_hint` is bounded at 200 and `hole_count` is not, deliberately: a
+ *  machine that died at bill 5,000 leaves more receipts than a response should
+ *  carry, and a screen listing 200 without saying so would tell somebody they
+ *  had finished when they had not. */
+export interface HandoverPayload {
+  resume_from_seq: number;
+  unsynced_hint: number[];
+  hole_count: number;
+}
+
+/** A handover as the counter remembers it: what the server said, and which of
+ *  the bills it named have since been keyed back in from paper. */
+export interface HandoverState extends HandoverPayload {
+  /** When the handover was done, ISO, by the till's own clock. */
+  at: string;
+  /** Numbers from `unsynced_hint` this counter has re-entered. Kept rather than
+   *  derived from the queue: a re-entered bill leaves the queue the moment the
+   *  server takes it, and the list somebody is working through must not lose its
+   *  ticks as they sync. */
+  reentered: number[];
+}
+
 export interface BillLine {
   line_no: number;
   direction: "sale" | "return";

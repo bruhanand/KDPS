@@ -92,6 +92,9 @@ export const META = {
   policy: "policy",
   /** The salesman the counter picked last, defaulted onto the next line. */
   lastSalesman: "lastSalesman",
+  /** The register handover this machine took over on, and the paper bills still
+   *  to be keyed back in under it - see `HandoverState`. */
+  handover: "handover",
 } as const;
 
 export class TillDb extends Dexie {

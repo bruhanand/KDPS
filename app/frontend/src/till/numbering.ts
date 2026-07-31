@@ -17,8 +17,10 @@
 //     one is refused for ever with `BILL_NO_TAKEN`, and two customers' purchases
 //     sit under one Tally key.
 //
-// So there is exactly one way in - `commitBill` - and the function that reads the
-// counter is not exported. Nothing outside this file can obtain a bill number.
+// So there are exactly two ways in - `commitBill`, which takes the next number,
+// and `reenterPaperBill` (#189), which fills a hole a dead machine left - and the
+// function that reads the counter is not exported. Nothing outside this file can
+// obtain a bill number.
 
 import { financialYear } from "../lib/fiscal";
 
@@ -103,11 +105,53 @@ export async function commitBill(
   draft: BillDraft,
   now: Date = new Date(),
 ): Promise<QueuedBill> {
+  return writeBill(db, storeCode, draft, financialYear(now), null);
+}
+
+/**
+ * Key a printed bill back in under the number it already carries (#189).
+ *
+ * The other half of a register handover. A machine that died holding six unsynced
+ * bills left six receipts in a drawer and six holes in the store's series; this is
+ * how those receipts become rows, on a machine that never issued their numbers.
+ *
+ * Three things make it different from an ordinary commit, and all three are the
+ * same worry from different sides - that this becomes a way to mint a number:
+ *
+ *   · **The number is given, not taken.** The counter does not move, because this
+ *     bill is *behind* the counter by definition.
+ *   · **It must be a hole.** A sequence at or past where the till is up to is not
+ *     a bill from a dead machine, it is a fresh one, and re-entering it here
+ *     would spend a number twice.
+ *   · **Once.** Two people working through the same drawer would otherwise queue
+ *     the same receipt twice; the second one is refused here rather than left for
+ *     the server to refuse with the whole queue behind it.
+ *
+ * The stock still moves. The pieces went out of the door on the old machine, but
+ * this counter's shelf was rebuilt from the server's figures - which never heard
+ * about these bills - so the local count is holding them and has to let go.
+ */
+export async function reenterPaperBill(
+  db: TillDb,
+  storeCode: string,
+  draft: BillDraft,
+  seq: number,
+  now: Date = new Date(),
+): Promise<QueuedBill> {
+  return writeBill(db, storeCode, { ...draft, origin: "paper" }, financialYear(now), seq);
+}
+
+async function writeBill(
+  db: TillDb,
+  storeCode: string,
+  draft: BillDraft,
+  fy: string,
+  atSeq: number | null,
+): Promise<QueuedBill> {
   // Generated outside the transaction because it is not state: the key exists to
   // make the *server* side idempotent, so a bill that rolls back here and is
   // retried by the cashier is a genuinely different bill and wants a new one.
   const idempotencyUuid = newUuid();
-  const fy = financialYear(now);
 
   // `items` is in scope because the shelf move asks it whether the piece is one
   // the counter has ever heard of. Read-only in practice, but a Dexie
@@ -117,7 +161,7 @@ export async function commitBill(
     "rw",
     [db.meta, db.queue, db.stock, db.items, db.creditNotes],
     async () => {
-      const seq = await nextBillNumber(db, fy);
+      const seq = atSeq === null ? await nextBillNumber(db, fy) : await claimHole(db, fy, atSeq);
       const bill: QueuedBill = {
         ...draft,
         idempotency_uuid: idempotencyUuid,
@@ -134,6 +178,28 @@ export async function commitBill(
       return bill;
     },
   );
+}
+
+/** Take a number the counter has already given out, and refuse anything else.
+ *
+ *  Inside `writeBill`'s transaction, so the check and the insert cannot be
+ *  separated by a second re-entry of the same receipt. */
+async function claimHole(db: TillDb, fy: string, seq: number): Promise<number> {
+  if (!Number.isInteger(seq) || seq < 1) {
+    throw new Error(`${seq} is not a bill number.`);
+  }
+  const counter = await counterFor(db, fy);
+  if (seq >= counter) {
+    throw new Error(
+      `Bill ${seq} has not been printed yet - this counter is on ${counter}. ` +
+        "Only a bill from the old machine is re-entered from paper.",
+    );
+  }
+  const queued = await db.queue.filter((bill) => bill.fy === fy && bill.till_seq === seq).count();
+  if (queued) {
+    throw new Error(`Bill ${seq} has already been re-entered and is waiting to sync.`);
+  }
+  return seq;
 }
 
 /**

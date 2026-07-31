@@ -15,6 +15,7 @@ const HEALTHY: StatusInput = {
   halt: null,
   register: { fy: "26-27", last_accepted_seq: 12, holes: [], hole_count: 0, series_open: true },
   storageLost: false,
+  lockHeld: true,
   online: true,
 };
 
@@ -49,6 +50,7 @@ describe("the sync light", () => {
       { ...HEALTHY, halt: HALT },
       { ...HEALTHY, datasetReady: false },
       { ...HEALTHY, storageLost: true },
+      { ...HEALTHY, lockHeld: false },
       { ...HEALTHY, register: { ...HEALTHY.register!, series_open: false } },
     ];
     for (const state of states) {
@@ -86,6 +88,16 @@ describe("the sync light", () => {
 
     expect(status.colour).toBe("red");
     expect(status.reason).toContain("bill number");
+  });
+
+  it("is red in the second tab, and says why (#189)", () => {
+    // One store bills from one place. The tab that holds the counter is green;
+    // this is what the other one says, and it is the only clue a person has that
+    // the two windows are not the same till.
+    const status = deriveStatus({ ...HEALTHY, lockHeld: false });
+
+    expect(status.colour).toBe("red");
+    expect(status.reason).toContain("another tab");
   });
 
   it("is red when head office has not opened this year's bill series", () => {

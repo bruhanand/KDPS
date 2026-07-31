@@ -33,18 +33,25 @@ from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_entitlement, scope_by_store
 from sell.models import HeldBill, IrnQueueItem, Sale, SaleLine
-from sell.permissions import CanReadOrBill, CanReadSales, CanRunTill, CanWorkIrnQueue
+from sell.permissions import (
+    CanHandOverTill,
+    CanReadOrBill,
+    CanReadSales,
+    CanRunTill,
+    CanWorkIrnQueue,
+)
 from sell.serializers import (
     HeldBillsWriteSerializer,
     IrnQueueRowSerializer,
     IrnQueueWriteSerializer,
+    RegisterHandoverWriteSerializer,
     SaleReadSerializer,
     SaleRowSerializer,
     SaleWriteSerializer,
 )
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
-from sell.services.register import register_state
+from sell.services.register import record_handover, register_state
 
 #: A search is for finding one customer's bill, not for exporting the day.
 SEARCH_LIMIT = 50
@@ -200,6 +207,43 @@ class RegisterView(APIView):
         if store is None:
             return refusal
         return Response(register_state(store).as_payload())
+
+
+class RegisterHandoverView(APIView):
+    """`POST /api/sell/register/handover` - this store bills from a new machine now.
+
+    The sibling of the GET, and everything it does differently follows from the
+    same sentence: boot reconciliation is a till talking to itself every morning,
+    while a handover is a person deciding that the machine holding this store's
+    bill counter is not coming back.
+
+    So it sits a rung higher (`sell: approve`), it will not run without a written
+    reason, and it leaves a row behind. What it answers with is the number the new
+    machine resumes at and the bills the old one never sent - each of which is a
+    printed receipt somebody has to key back in under its original number.
+
+    **It writes nothing to the counter.** The till numbers bills and the server
+    accepts them; a handover that also moved `VoucherSeries.next_seq` would be the
+    server forming an opinion about a number nobody has printed.
+    """
+
+    permission_classes = [IsAuthenticated, CanHandOverTill]
+
+    def post(self, request: Request) -> Response:
+        # The same one-store rule, and the same refusal word, as the two till
+        # endpoints: a handover is about one counter's numbering, so a login that
+        # can see three shops has no counter to hand over. `TILL_SCOPE` rather
+        # than the contract's sketched `SCOPE_DENIED` for the reason the dataset
+        # and register endpoints record - it means "this login will never be a
+        # till", which is a thing to fix in the account, not to retry.
+        store, refusal = till_store(request)
+        if store is None:
+            return refusal
+        form = RegisterHandoverWriteSerializer(data=request.data)
+        if not form.is_valid():
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
+        result = record_handover(store, request.user, form.validated_data["reason"])
+        return Response(result.as_payload())
 
 
 class HeldBillsView(APIView):
