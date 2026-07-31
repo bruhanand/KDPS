@@ -272,6 +272,16 @@ export const SECTIONS: NavSectionDef[] = [
       { label: "Store Targets", to: "/money/store-targets" },
       { label: "Vendor Ledger", to: "/money/vendor", minCapability: "manage" },
       { label: "Cash", to: "/money/cash", minCapability: "manage" },
+      // The B2B bills head office still owes an e-invoice reference (#187).
+      //
+      // Filed under Money rather than Sell, and that is the gate deciding the
+      // filing rather than the other way round. Raising an IRN is a statutory
+      // duty of the people who file the returns; `sell: operate` is the *store*,
+      // which would put it on a cashier's sidebar, and `sell: manage` is the IT
+      // administrator alone, who holds no money on the ratified sheet. The
+      // endpoint behind it is gated at `money: manage` for the same reason, so
+      // the sidebar and the API agree (#85).
+      { label: "IRN Queue", to: "/money/irn-queue", minCapability: "manage" },
       { label: "Bank", to: "/money/bank", planned: true, minCapability: "manage" },
       { label: "Collections", to: "/money/collections", planned: true, minCapability: "manage" },
       { label: "Expenses", to: "/money/expenses", planned: true },
