@@ -30,6 +30,7 @@ import {
 } from "./held";
 import type { HeldPayload } from "./held";
 import { freshTill, item, season } from "./testSupport";
+import { emptyPayment } from "./tender";
 
 const WORLD = {
   items: [item("8901000000011", "FW25", 149900)],
@@ -61,7 +62,8 @@ function cartOf(over: Partial<Cart["lines"][number]> = {}): Cart {
         ...over,
       },
     ],
-    tenderedPaise: 200000,
+    payment: { ...emptyPayment(), cash_received_paise: 200000 },
+    authorisation: null,
   };
 }
 
@@ -181,7 +183,7 @@ describe("picking it up", () => {
     const restored = restoreHold(held, WORLD);
 
     expect(restored.customer).toEqual({ name: "Mrs Sharma", mobile: "9876543210" });
-    expect(restored.cart.tenderedPaise).toBe(200000);
+    expect(restored.cart.payment.cash_received_paise).toBe(200000);
   });
 
   it("leaves the list when it is taken, and takes nothing else with it", async () => {

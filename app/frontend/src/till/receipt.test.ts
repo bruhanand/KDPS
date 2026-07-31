@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { postedReceiptHtml, receiptHtml } from "./receipt";
+import type { PostedBill } from "./receipt";
 import { draft } from "./testSupport";
 import type { QueuedBill } from "./types";
 
@@ -129,7 +130,7 @@ describe("the customer's copy", () => {
 });
 
 describe("reprinting a bill found by search (#185)", () => {
-  const posted = {
+  const posted: PostedBill = {
     doc_number: "26-27/DEO/SAL/74",
     billed_at: "2026-07-30T12:31:00.000Z",
     origin: "offline",

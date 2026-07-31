@@ -15,7 +15,7 @@
 
 import { changeFor } from "./cart";
 import { describePiece } from "./lookup";
-import type { BillLine, QueuedBill, TillStoreIdentity } from "./types";
+import type { BillLine, BillTender, QueuedBill, TillStoreIdentity } from "./types";
 
 export interface ReceiptOptions {
   /** Cash the customer physically handed over, so the paper can show the change.
@@ -206,7 +206,7 @@ export interface PostedBill {
   customer_name: string;
   customer_mobile: string;
   lines: PostedLine[];
-  tenders: { mode: string; amount_paise: number }[];
+  tenders: BillTender[];
   gross_paise: number;
   discount_paise: number;
   net_paise: number;
@@ -269,7 +269,7 @@ export function postedReceiptHtml(bill: PostedBill): string {
     { code: bill.store_code, gstin: bill.store_gstin, state_code: "" },
     {
       storeName: bill.store_name,
-      tenderedPaise: cash?.amount_paise ?? 0,
+      cashReceivedPaise: cash?.amount_paise ?? 0,
       // The server writes the brand, item and size onto every line at billing
       // (Rule 3), so unlike the till's own receipt this one is not lent a
       // description - it has the snapshot the bill was printed from.

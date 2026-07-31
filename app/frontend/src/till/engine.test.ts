@@ -24,6 +24,7 @@ beforeAll(installBrowserGlobals);
 const { TillEngine } = await import("./engine");
 const { commitBill } = await import("./numbering");
 const { dataset, fakeServer, freshTill, item, refuse } = await import("./testSupport");
+const { emptyPayment } = await import("./tender");
 
 /** Wait for something the engine does without being awaited - Save & Print hands
  *  the bill to the queue and lets the send happen behind the cashier. */
@@ -157,7 +158,13 @@ describe("what the screen is told", () => {
 });
 
 describe("bills on hold (#185)", () => {
-  const payload = { lines: [], customer: { name: "", mobile: "" }, tendered_paise: 0, net_paise: 0, pieces: 0 };
+  const payload = {
+    lines: [],
+    customer: { name: "", mobile: "" },
+    payment: emptyPayment(),
+    net_paise: 0,
+    pieces: 0,
+  };
 
   it("parks a cart without touching the counter or the queue", async () => {
     const { engine, server } = engineOn();

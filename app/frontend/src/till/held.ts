@@ -22,6 +22,8 @@ import type { Cart, CartLine } from "./cart";
 import type { HeldBill, TillDb } from "./db";
 import { resolveScan } from "./lookup";
 import type { ScanWorld } from "./lookup";
+import { emptyPayment } from "./tender";
+import type { Payment } from "./tender";
 import type { TillItem } from "./types";
 
 /** One parked line: the cart's row without anything the counter can work out
@@ -35,8 +37,8 @@ export type HeldLine = Omit<CartLine, "alternatives" | "stock">;
 export interface HeldPayload {
   lines: HeldLine[];
   customer: { name: string; mobile: string };
-  /** Cash the customer had held out, if the panel had got that far. */
-  tendered_paise: number;
+  /** Whatever the payment panel had on it, if the panel had got that far. */
+  payment: Payment;
   /** What it came to when it was parked - shown in the list, never billed from.
    *  A kept bill reprices on retrieval and this is what it is compared against
    *  so the counter can be told the price moved. */
@@ -64,7 +66,7 @@ export function heldPayload(
   return {
     lines: cart.lines.map(({ alternatives: _a, stock: _s, ...line }) => line),
     customer: { name: customer.name, mobile: customer.mobile },
-    tendered_paise: cart.tenderedPaise,
+    payment: cart.payment,
     net_paise: totals.net_paise,
     pieces: totals.pieces,
   };
@@ -108,7 +110,7 @@ export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
     };
   });
   return {
-    cart: { lines, tenderedPaise: payload.tendered_paise ?? 0 },
+    cart: { lines, payment: payload.payment ?? emptyPayment(), authorisation: null },
     customer: { name: payload.customer?.name ?? "", mobile: payload.customer?.mobile ?? "" },
     staleLines,
   };
