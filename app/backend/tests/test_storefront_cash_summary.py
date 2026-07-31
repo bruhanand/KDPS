@@ -34,6 +34,7 @@ from django.utils import timezone
 
 from accounts.models import ScopeType, User
 from core.documents import DocStatus
+from finledger.models import CashLedgerEntry
 from sell.models import ContinuityFlag, CreditNote, Sale, SaleTender
 
 URL = "/api/store/cash-summary"
@@ -305,3 +306,58 @@ def test_a_bill_that_owes_the_customer_hands_over_a_note_and_no_cash(counter):
     note = CreditNote.objects.get(source_sale__till_seq=2)
     assert body["credit_notes_issued_paise"] == int(note.value_paise) > 0
     assert body["modes"]["cash"] == MRP_PAISE * 2  # the first bill's takings, undisturbed
+
+
+def test_the_summary_ties_to_the_cash_ledger_as_well_as_to_the_tenders(counter):
+    """Two books, one figure. The tenders are what the summary reads (see
+    `storefront/day.py` for why), and `finledger` writes a receipt row per tender
+    beside them - so if the two ever part company, the number a store counts a
+    drawer against is wrong in a way nothing else would notice.
+
+    The credit note is deliberately not in the tie: it closes a liability rather
+    than filling a drawer, so it has a value leg and no cash row at all.
+    """
+    _bill(counter, 1)
+    _bill(
+        counter,
+        2,
+        tenders=[
+            {"mode": "card", "amount_paise": 100000},
+            {"mode": "upi", "amount_paise": MRP_PAISE - 100000},
+        ],
+    )
+    body = _summary(counter["cashier"], date=BILLED_DAY)
+
+    receipts = CashLedgerEntry.objects.filter(
+        kind=CashLedgerEntry.Kind.RECEIPT,
+        doc_number__in=list(
+            Sale.objects.filter(store=counter["store"]).values_list("doc_number", flat=True)
+        ),
+    )
+    per_account = {
+        row["account"]: int(row["total"])
+        for row in receipts.values("account").annotate(total=Sum("amount"))
+    }
+    assert per_account["CASH"] == body["modes"]["cash"]
+    assert per_account["CARD"] == body["modes"]["card"]
+    assert per_account["UPI"] == body["modes"]["upi"]
+
+
+def test_a_brand_scoped_reader_gets_no_store_at_all(counter):
+    """`visible_store_ids` answers `None` for a brand manager meaning "stores are
+    the wrong question", never "every store" - and the money tiles are exactly the
+    figure that must not fall out of that. The read-scope fail-open class this
+    codebase has shipped before."""
+    _bill(counter, 1)
+    brand_manager = User.objects.create_user(
+        username="cs_brand_scope",
+        password=TEST_PASSWORD,
+        role=make_role("owner", "Owner rung, brand boundary (cash summary tests)"),
+        scope_type=ScopeType.BRAND,
+    )
+
+    for url in ("/api/store/dashboard", URL):
+        response = client_for(brand_manager).get(url, {"store": counter["store"].code})
+        assert response.status_code == 403, url
+        assert response.json()["code"] == "SCOPE_DENIED"
+        assert "brand" in response.json()["error"]

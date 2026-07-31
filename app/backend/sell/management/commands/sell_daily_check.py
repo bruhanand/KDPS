@@ -18,8 +18,8 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
-from django.utils.dateparse import parse_date
 
+from core.dates import parse_day
 from sell.services.daily_check import run
 
 
@@ -39,10 +39,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         asked = (options["date"] or "").strip()
-        try:
-            day = parse_date(asked) if asked else None
-        except ValueError as exc:  # correctly shaped and impossible, e.g. 2026-02-30
-            raise CommandError(f"'{asked}' is not a date.") from exc
+        day = parse_day(asked) if asked else None
         if asked and day is None:
             raise CommandError(f"'{asked}' is not a date (use 2026-07-31).")
         report = run(day, (options["store"] or "").strip())

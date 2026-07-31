@@ -41,7 +41,7 @@ from core.documents import DocStatus, VoucherSeries
 from core.fiscal import financial_year
 from inbound.models import Grn
 from masters.models import Store, StoreTarget
-from masters.scoping import active_store_ids
+from masters.scoping import active_store_ids, is_brand_scoped
 from offers.models import Offer
 from offers.serializers import one_liner
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
@@ -104,7 +104,26 @@ def resolve_store(user: Any, requested_code: str) -> StorePick:
     A network person who has picked no unit gets no store either: "the store's
     Home" is a question about a store, and with fifty in view there is no honest
     answer, only an arbitrary one.
+
+    **A brand-scoped person gets no store at all**, and that is a fail-closed
+    branch rather than an omission. `visible_store_ids` answers `None` for a
+    brand manager, and `None` there means "stores are the wrong question" - not
+    "every store". Reading it as the second is the read-scope fail-open class
+    this codebase has shipped before, and it bites harder now that the tiles
+    carry real money: a brand manager naming any shop in `?store=` would have
+    read that shop's takings, bill count and tender split, none of which is a
+    fact about their brands. `actionable_store_ids` is the existing spelling of
+    the same refusal, and it is the one used here.
     """
+    # Asked before anything else, because it is the one refusal that does not
+    # depend on what was asked for: "which store is this screen about" is a claim
+    # about a *place*, and a boundary made of brands cannot support one.
+    if is_brand_scoped(user):
+        return StorePick(
+            None,
+            "This screen is one store's day. Your access is by brand, so there is "
+            "no store to open here.",
+        )
     try:
         ids = active_store_ids(user)
     except PermissionDenied as exc:

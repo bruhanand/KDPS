@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PROTECTED_ROUTES } from "../routes";
 import { matchRoutes } from "react-router-dom";
 import {
+  ALWAYS,
   KNOWN_QUEUE_KEYS,
   queueRows,
   shortDay,
@@ -58,7 +59,7 @@ describe("the action queue", () => {
     // A row for a key nothing can open is a number nobody could click through
     // and clear. Every one of the server's nine has a screen now, so what this
     // guards is the next one somebody adds server-side and forgets here.
-    const rows = queueRows(payload({ action_queue: [{ key: "some_new_thing", count: 4 }] }));
+    const rows = queueRows(payload({ action_queue: [{ key: "some_new_thing", count: 4 }] }), ALWAYS);
     expect(rows).toEqual([]);
   });
 
@@ -80,7 +81,7 @@ describe("the action queue", () => {
   it("sends pieces sold before their paperwork to where the paperwork lands", () => {
     // Nobody clears this queue by reading it: it clears itself when the PT that
     // prices the piece is posted, so the row goes to Goods Inward (#186).
-    const [row] = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }));
+    const [row] = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }), ALWAYS);
     expect(row.to).toBe("/receive");
     expect(row.count).toBe(4);
   });
@@ -88,17 +89,17 @@ describe("the action queue", () => {
   it("sends bills on hold to the counter that can pick them up", () => {
     // Not a list screen of its own: resuming a parked bill *is* billing, so the
     // row opens the counter with the hold list already showing (#185).
-    const [row] = queueRows(payload({ action_queue: [{ key: "held_bills", count: 2 }] }));
+    const [row] = queueRows(payload({ action_queue: [{ key: "held_bills", count: 2 }] }), ALWAYS);
     expect(row.to).toBe("/sell?holds=1");
     expect(row.count).toBe(2);
   });
 
   it("keeps the server's order", () => {
-    expect(queueRows(payload()).map((r) => r.key)).toEqual(SERVER_KEYS);
+    expect(queueRows(payload(), ALWAYS).map((r) => r.key)).toEqual(SERVER_KEYS);
   });
 
   it("gives every row a sentence and a count", () => {
-    for (const row of queueRows(payload())) {
+    for (const row of queueRows(payload(), ALWAYS)) {
       expect(row.label).not.toBe("");
       expect(typeof row.count).toBe("number");
     }
@@ -108,7 +109,7 @@ describe("the action queue", () => {
     // The acceptance criterion is "linking into the right section/tab" - a row
     // pointing at a URL with no route would be a dead end nobody notices until
     // a store person taps it.
-    for (const row of queueRows(payload())) {
+    for (const row of queueRows(payload(), ALWAYS)) {
       const [path] = row.to.split("?");
       expect(matchRoutes(PROTECTED_ROUTES, path), `${row.key} → ${row.to}`).toBeTruthy();
     }
@@ -120,7 +121,7 @@ describe("where a queue row goes", () => {
     // Found in browser QA: `/transfer/in-transit` is scoped to the *source*
     // store, so a store reading "1 carton to receive" clicked through and was
     // told nothing was on the road.
-    const row = queueRows(payload()).find((r) => r.key === "transfers_to_receive");
+    const row = queueRows(payload(), ALWAYS).find((r) => r.key === "transfers_to_receive");
     expect(row?.to).toBe("/transfer");
   });
 });

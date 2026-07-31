@@ -54,8 +54,10 @@ Business logic:
 1. Resolve store from scope narrowed by the switcher (above); reject anything else.
    -> no single store, or a store outside it -> `SCOPE_DENIED` (403)
 2. Aggregate today/last7 tiles from `sell_sale` + `sell_saletender` for the store (billed_at in store-local day).
-   **As built:** noughts, and a new top-level `"sales_live": false` beside them. `sell` does not exist until #177, and four zeros with nothing to read them against say "this store sold nothing today" when the truth is "this store cannot bill yet". The flag flips to `true` with the Sale document; nothing else about the block changes.
+   **As built (#174):** noughts, and a new top-level `"sales_live": false` beside them. `sell` did not exist until #177, and four zeros with nothing to read them against say "this store sold nothing today" when the truth is "this store cannot bill yet".
+   **Live as of #188**, off `storefront/day.py` - shared with the Money section's cash summary, so Home and Money cannot read one day two ways. `sales_live` stays and is now true wherever the year's `SAL` series row exists (the same reading the till's boot call takes), which is still the sentence a warehouse or an un-rolled-out shop needs. `vs_yesterday_pct` is `null` rather than nought when yesterday took nothing - there is no percentage change from nothing - and `manager.mtd_net_paise` is the month so far, first of the month to today inclusive.
 3. Build action_queue counts from: approvals (pending, store-scoped), in-transit transfers inbound, GRN/PT drafts, QuarantineStock, RTV windows, open count sessions, `sell_heldbill`, `sell_deferredcosting(waiting)`, `sell_continuityflag(open)`.
+   **All nine as of #188.** `continuity_flags` is the ninth and last; it is *not* date-scoped (it is a to-do list, and Tuesday's exception is still work on Thursday), and it is the one row the client drops for a caller whose sections cannot open where it links - it opens the Money section, and a count that lands somebody on a refusal is worse than no count.
    **As built:** the first six keys only. The last three read `sell` tables that #177-#186 create, and they are *absent* rather than reported as nought - the ticket's own words are "counting what already exists", and a row reading "0 bills on hold" is a sentence about a store's morning. `approvals_pending` is the caller's own inbox (`inbox_for`), not every pending approval at the store: a count that opens onto an empty screen is worse than no count. `quarantine_to_confirm` counts draft `MarkDamaged` (the flag awaiting confirmation, #138), and `rtb_windows_closing` counts open `alerts_alert(return_window)` rather than re-deriving the pool, so the card and the Alerts screen cannot drift.
 4. `live.offers` = offers where store in scope and today within dates and status live.
    **As built:** always `[]` - the rulebook is #183. Empty rather than absent: "no offers running" is a card a store reads every morning.
@@ -609,6 +611,65 @@ Nothing here can touch the Sale (A7). The row beside it is a fact about a filing
 Auth: `require_section("money", CAP_VIEW)`; store-scoped; `?date=` (default today).
 Response 200: `{"date": "2026-07-30", "modes": {"cash": 0, "card": 0, "upi": 0, "credit_note": 0}, "bills": 12, "returns": 1, "credit_notes_issued_paise": 0, "flags_open": 2}` - from CashLedgerEntry receipt rows + tender aggregates; read-only.
 The store's day-close confirmation (I3, store open/close) is deliberately NOT in this contract; it is its own designed flow, sequenced after.
+
+**Amended 31 Jul 2026, after building it (#188).** Six things.
+
+- **The source is `sell_saletender`, not `finledger`.**
+  The sketch names both, and only one of them can answer the question a store person is asking.
+  A cash row carries **no store** and its clock is the *server's* - stamped when the bill synced, not when the counter took the money - so a till that syncs Tuesday's bills on Wednesday morning would put Tuesday's cash on Wednesday's summary, which is precisely the figure being checked against a drawer counted on Tuesday night.
+  The tender hangs off the bill, and the bill carries the store and the till's own clock.
+  The cash rows are written *from* these same tenders (`post_sale_collection`), so the two agree by construction; a test asserts the tie per account rather than leaving it to the docstring.
+- **The body carries `store`** beside `date`, for the reason the Dashboard's does: the top-bar switcher decides which shop this is, and a screen that could not name the store it drew would leave somebody reading yesterday's Ranchi against tonight's Deoghar drawer.
+- **A cancelled bill is not a day's trade.** The kernel corrects by reversal, so a cancelled sale keeps its row and its tenders; counting them would leave a summary a drawer can never match again. Only numbered, non-cancelled bills count.
+- **`returns` is pieces, not documents.** The sketch's `"bills": 12, "returns": 1` reads as two document counts, and the honest figure is the one that answers "how much came back": a bill with two returned pieces is two pieces, not one return. Today they are exchange legs; the plain-return document (#184) joins the same count through the same lines when it lands. The screen labels it "Pieces back" so the wire and the words agree.
+- **`flags_open` is the day's**, where "the day" is `ContinuityFlag.for_day`: a flag about a bill belongs to the bill's day, and one about no bill (a hole, a seller's return count) says which day it is about in its details, because the nightly check runs in the small hours of the *next* morning and `created_at` would file it under the wrong day. The Dashboard's `continuity_flags` count is deliberately **not** date-scoped - it is a to-do list, and Tuesday's exception is still work on Thursday.
+- **`SCOPE_DENIED` now also refuses a brand-scoped caller**, on this endpoint and on the Dashboard, which share one resolver. `visible_store_ids` answers `None` for a brand manager meaning "stores are the wrong question", and reading that as "every store" is the read-scope fail-open class this project has shipped before - live money on the tiles is exactly the payload that must not fall out of it.
+
+### GET `/api/sell/flags` · PUT `/api/sell/flags/{id}` (NEW, #188)
+
+Not in the original contract, which recorded `sell_continuityflag` as a table the Dashboard counts and gave it no endpoint.
+A queue nothing can read and nothing can leave is a table, not a queue - and the ticket's third acceptance criterion is "flags land on the Dashboard queue with links; **resolving clears them**", which needs a door.
+
+Auth for both: **`require_section("money", CAP_VIEW, write_minimum=CAP_OPERATE)`** - the section the day summary answers to, since the exceptions are what that screen shows underneath the day by tender.
+Not `sell`, for the reason the IRN queue is not: `sell: view` is held by the brand manager, whose business a counter's exceptions are not, and no seeded role reaches `sell: approve` at all - a rung nobody holds is a list nobody could ever clear.
+On the ratified sheet `money: operate` is the store itself ("Expenses only (create)"), the warehouse, Owner and Accounts.
+
+GET query: `status=open` (default) | `resolved` | `ignored` | `all`; `date=` (optional, `ContinuityFlag.for_day`).
+Response 200: `{"rows": [...], "truncated": false, "open_count": 3}`.
+Each row: `id, kind, kind_label, status, store_code, doc_number, billed_at, details, created_at, cleared_note, resolved_by_name, resolved_at`.
+`doc_number` is the empty string on a flag about no particular bill, which is a fact rather than a gap.
+Store-scoped by `scope_by_store` on the flag's own store (the switcher narrows it); the write gate is `scope_by_entitlement` (ADR-0003 - what you are looking at must never decide what you may do).
+Open rows are never truncated - they are the work; the settled tail behind them is capped at 200.
+`open_count` is over the open rows whatever is being listed, so a filter cannot move the header.
+
+PUT body: `{"status": "resolved"|"ignored", "note": "..."}`.
+One way only: an open row goes to one of the two and never back. `note` is required on `ignored` and optional on `resolved` - "I dealt with it" is usually evidenced by the thing itself having changed, "this one is fine" by nothing at all unless a person says why.
+Nothing here can touch the Sale (A7); clearing an exception is a statement about somebody's attention.
+
+| code | HTTP | trigger |
+|---|---|---|
+| VALIDATION | 400 | a status nothing recognises, a bad date, `ignored` with no note |
+| NOT_FOUND | 404 | the row is outside the caller's stores (a 403 would confirm the bill exists) |
+| FLAG_ALREADY_CLEARED | 409 | somebody has already answered this one |
+
+### The daily check (NEW, #188)
+
+`sell_daily_check` - a management command, on the nightly cron that used to run `sell_age_deferred` (now one of its four steps).
+Defaults to **yesterday**: the questions are about a day that is over, and the cron fires at ~02:15 IST. `--date` and `--store` narrow it.
+
+Four steps, all idempotent, none of them posting anything:
+
+1. **Bill continuity.** One standing flag per store naming the numbers that never arrived, plus closing the accept-time `number_hole` flags whose gaps have since filled. The standing row's `day` is the day the gap first survived and never moves; an `ignored` row silences only the *same* set of missing numbers.
+2. **Applied-vs-rulebook and dated-slab reprice** of the day's bills, through the very functions the accept pipeline uses (`sell.services.recompute`) - so a bill passed at the counter and a bill reported at midnight are answering one question. What changes between the two askings is the *book*, not the bill: an offer authored after a counter had synced, a slab head office corrected on Wednesday for a rate that changed on Monday.
+3. **Ageing** the sold-before-inward queue (#186), folded in from its own schedule.
+4. **Returns per seller** (grill Q7), counted whether or not anybody crosses the dial, and flagged past `SellPolicy.return_review_count`. Attributed to the seller who served the customer on the bill the piece came back on - the control cited is refund fraud, which is about the person *processing* the return.
+
+A clean day raises nothing. That is the pilot's go/no-go gate, and it is why every finding has to be a real disagreement rather than a thing the design merely makes possible.
+
+**Open item, not a ruling: the fifth question this check does not ask.**
+Step 6's sketch pairs the summary with `CashLedgerEntry`, and the tie between the two books is asserted in tests rather than checked nightly in production.
+A store whose cash rows and tenders parted company would be found by a test on a fixture and by nothing on real data.
+That belongs with the D4 three-way audit (collected / banked / booked), which is where the other two legs of it live, and it is flagged here rather than bolted on.
 
 ---
 

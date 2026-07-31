@@ -950,8 +950,10 @@ class ContinuityFlag(TimeStampedModel):
         return rows.filter(
             models.Q(sale__billed_at__date=day)
             | models.Q(sale__isnull=True, **{f"details__{cls.DAY_KEY}": day.isoformat()})
-            | models.Q(sale__isnull=True, created_at__date=day)
-            & ~models.Q(details__has_key=cls.DAY_KEY)
+            | (
+                models.Q(sale__isnull=True, created_at__date=day)
+                & ~models.Q(details__has_key=cls.DAY_KEY)
+            )
         )
 
 

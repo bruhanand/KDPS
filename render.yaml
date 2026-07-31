@@ -137,7 +137,7 @@ services:
   # day that is over: did every bill arrive, was the customer charged what the
   # rulebook says, is anything still unpriced (the old `sell_age_deferred`
   # schedule, folded in as one of the four), and who took the returns. Writes
-  # exception rows only — it posts nothing and touches no document.
+  # exception rows only - it posts nothing and touches no document.
   # Idempotent: a bill already flagged is not flagged twice, a flag the store
   # chose to ignore stays ignored, and a hole that filled overnight is closed.
   # It defaults to **yesterday**, which is what this schedule is about: 20:45 UTC

@@ -183,29 +183,36 @@ export default function DaySummary() {
   // that class of bug already produced once.
   const day = params.get("date") || tillToday();
   const [summary, setSummary] = useState<SummaryT>();
-  const [flags, setFlags] = useState<FlagT[]>([]);
+  const [open, setOpen] = useState<FlagT[]>([]);
+  const [settled, setSettled] = useState<FlagT[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // **Open exceptions are never narrowed to the picked day; settled ones are.**
+  // They are the work, and this is the rule the IRN queue already holds to: a
+  // store with three unanswered exceptions from last Tuesday still has three
+  // today, and the Dashboard's own count says so with no date on it. Arriving
+  // from that row and being told "nothing to look at" because the picker had
+  // defaulted to this morning would be the card lying about itself. The picker
+  // still governs the money above and the history behind.
   const load = useCallback(() => {
     setLoading(true);
     setError("");
     Promise.all([
       api.get("/store/cash-summary", { params: { date: day } }),
+      api.get("/sell/flags", { params: { status: "open" } }),
       api.get("/sell/flags", { params: { date: day, status: "all" } }),
     ])
-      .then(([s, f]) => {
+      .then(([s, live, ofDay]) => {
         setSummary(s.data);
-        setFlags(f.data.rows);
+        setOpen(live.data.rows as FlagT[]);
+        setSettled((ofDay.data.rows as FlagT[]).filter((row) => row.status !== "open"));
       })
       .catch((e) => setError(apiErrorMessage(e)))
       .finally(() => setLoading(false));
   }, [day]);
 
   useEffect(load, [load]);
-
-  const open = flags.filter((f) => f.status === "open");
-  const settled = flags.filter((f) => f.status !== "open");
 
   return (
     <div className="page-pad">
@@ -255,14 +262,10 @@ export default function DaySummary() {
             <div className="day-counts" data-testid="day-counts">
               <span className="day-count">
                 <b className="mono">
-                  <Money
-                    paise={
-                      summary.modes.cash +
-                      summary.modes.card +
-                      summary.modes.upi +
-                      summary.modes.credit_note
-                    }
-                  />
+                  {/* Folded over `MODES` rather than adding the four by name:
+                      a fifth place the tender list is spelled is a fifth place
+                      it can fall out of step with the other four. */}
+                  <Money paise={MODES.reduce((sum, m) => sum + summary.modes[m.key], 0)} />
                 </b>
                 Taken in all
               </span>
@@ -289,16 +292,23 @@ export default function DaySummary() {
 
           <div className="card day-panel" data-testid="day-flags">
             <div className="day-panel-head">
-              <p className="eyebrow">Left open</p>
+              <p className="eyebrow">Exceptions</p>
               <h3 className="h3">
                 {open.length === 0 ? "Nothing to look at" : `${open.length} to look at`}
               </h3>
+              {/* Said out loud, because it is the one block on this screen the
+                  day picker does not govern - and a person who had just moved
+                  the picker would otherwise read these as that day's. */}
+              <p className="lead day-flags-scope">
+                Every exception still open at this store, whichever day it came from.
+                {settled.length > 0 && " Below them, what was answered on the day picked above."}
+              </p>
             </div>
 
             {open.length === 0 && settled.length === 0 ? (
               <p className="lead" data-testid="day-flags-empty">
-                <Receipt size={15} /> This day is clean - every bill arrived, and the tax and offers
-                agree with the rulebook.
+                <Receipt size={15} /> Nothing is waiting - every bill arrived, and the tax and
+                offers agree with the rulebook.
               </p>
             ) : (
               <div className="flag-list">

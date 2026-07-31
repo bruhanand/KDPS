@@ -52,6 +52,11 @@ export interface QueueRow {
  *  Home already holds to). */
 type Needs = { section: string; capability: Capability };
 
+/** "This person holds everything" - for callers that are asking about the
+ *  mapping rather than about anybody's access. Named rather than inlined so a
+ *  grep for it finds every place the gate has been stood down. */
+export const ALWAYS = (): boolean => true;
+
 /** Key → the sentence and the screen. The server decides the order and which
  *  keys exist at all; this side only knows what each one means.
  *
@@ -99,11 +104,13 @@ const QUEUE_MEANING: Record<string, { label: string; to: string; needs?: Needs }
  *  rather than rendered as a dead number - a count you cannot click is a count
  *  nobody can clear - and so is one whose screen this person may not open.
  *
- *  `may` defaults to yes so the pure tests can ask about the mapping without
- *  standing up a user; the screen passes `userCan`. */
+ *  `may` is required and has no permissive default on purpose: it is a
+ *  security-adjacent predicate, and a caller that forgot it would silently draw
+ *  a row somebody may not click. The screen passes `userCan`; a test that does
+ *  not care passes `ALWAYS`. */
 export function queueRows(
   payload: DashboardPayload,
-  may: (section: string, capability: Capability) => boolean = () => true,
+  may: (section: string, capability: Capability) => boolean,
 ): QueueRow[] {
   return payload.action_queue.flatMap((row) => {
     const meaning = QUEUE_MEANING[row.key];

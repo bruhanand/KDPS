@@ -118,7 +118,9 @@ def run(day: date | None = None, store_code: str = "") -> Report:
     # The costing queue is chain-wide and its own dial decides what is late, so it
     # is swept once rather than per store - and `day` rides in so a run about
     # Tuesday ages Tuesday's queue rather than tonight's.
-    aged = age_deferred(day)
+    # Store-scoped when the caller named one, so `--store DEO` does not report
+    # every other shop's unpriced lines under a single-store run.
+    aged = age_deferred(day, store=stores.first() if store_code else None)
     if aged:
         report.raised[ContinuityFlag.Kind.AGED_UNCOSTED] += aged
     return report
@@ -148,13 +150,27 @@ def _reconcile_holes(store: Store, day: date, report: Report) -> None:
     That is what makes a clean day clean: a till that was simply behind at six
     o'clock and caught up by midnight leaves nothing on anybody's list.
 
+    **There is at most one standing row per store, and its day never moves.** A
+    hole is not a fact about a day the way a seller's return count is - it is a
+    fact about a shop that goes on being true - so raising a fresh row every
+    night would put the same three missing bills on a person's list seven times
+    in a week. The `day` it carries is the day the gap first survived, which is
+    what the Money section files it under, and a run for an older date must not
+    drag it backwards out of the day somebody has been looking at it on.
+
+    **An ignored row does not silence a new hole.** `ignored` is the store having
+    looked at *these* missing numbers and said they need nothing - a till that
+    was reinstalled, a pad of test bills. When the missing set later changes, that
+    is a finding nobody has seen, so it gets a row of its own rather than being
+    written quietly into the one somebody already dismissed.
+
     Only the current financial year, because that is what the register knows - a
     hole in last year's series is a question for last year's books, and the year
     end is where it would be asked.
     """
     state = register_state(store)
     missing = set(state.holes)
-    open_flags = _open(store, ContinuityFlag.Kind.NUMBER_HOLE)
+    live = _open(store, ContinuityFlag.Kind.NUMBER_HOLE)
 
     # The hole *list* is capped (`register.HOLE_LIMIT`) and the count is not, so a
     # store with more than two hundred missing bills has a list that cannot be
@@ -162,7 +178,7 @@ def _reconcile_holes(store: Store, day: date, report: Report) -> None:
     # flag left standing costs somebody a second look, and one closed wrongly
     # costs a printed bill nobody ever goes to find.
     if state.hole_count == len(state.holes):
-        for flag in open_flags.filter(sale__isnull=False):
+        for flag in live.filter(sale__isnull=False, status=ContinuityFlag.Status.OPEN):
             # `count` numbers starting at `from_seq`, as accept wrote them. A gap
             # nothing is missing out of any more is a gap somebody has filled.
             start = int(flag.details.get("from_seq") or 0)
@@ -170,18 +186,35 @@ def _reconcile_holes(store: Store, day: date, report: Report) -> None:
             if start and not missing.intersection(span):
                 _resolve(flag, report)
 
-    standing = open_flags.filter(sale__isnull=True).first()
+    standing = live.filter(sale__isnull=True).order_by("-created_at").first()
     if not state.hole_count:
-        if standing is not None:
-            _resolve(standing, report)
+        # Every open standing row goes, whatever day it was raised on: nothing is
+        # missing any more, so there is nothing left for any of them to be about.
+        # An ignored one is left alone - it is already off every count, and
+        # "resolved" would claim somebody dealt with it.
+        for flag in live.filter(sale__isnull=True, status=ContinuityFlag.Status.OPEN):
+            _resolve(flag, report)
         return
+    named = state.holes[:HOLES_NAMED]
     details: dict[str, Any] = {
-        ContinuityFlag.DAY_KEY: day.isoformat(),
         "fy": state.fy,
         "count": state.hole_count,
-        "missing": state.holes[:HOLES_NAMED],
+        "missing": named,
         "last_accepted_seq": state.last_accepted_seq,
     }
+    if standing is not None and standing.status == ContinuityFlag.Status.IGNORED:
+        # Dismissed. Only a *different* set of missing numbers is news; the same
+        # ones are the thing the store already looked at.
+        if named == (standing.details or {}).get("missing"):
+            return
+        standing = None
+    if standing is not None:
+        # The day it first survived, kept - see the docstring.
+        details[ContinuityFlag.DAY_KEY] = (standing.details or {}).get(
+            ContinuityFlag.DAY_KEY, day.isoformat()
+        )
+    else:
+        details[ContinuityFlag.DAY_KEY] = day.isoformat()
     _raise_or_refresh(store, ContinuityFlag.Kind.NUMBER_HOLE, details, report, standing)
 
 
@@ -223,12 +256,21 @@ def _recheck_bills(store: Store, day: date, report: Report) -> None:
         )
 
 
-def _flag_bill(sale: Sale, kind: str, details: dict[str, Any], report: Report) -> None:
+def _flag_bill(
+    sale: Sale, kind: ContinuityFlag.Kind, details: dict[str, Any], report: Report
+) -> None:
     """Raise `kind` on this bill, unless there is nothing to say or somebody has
     already been told.
 
-    "Already been told" is deliberately narrow: only a live flag of this kind that
-    is about *lines* silences this. The B2B corner raises `gst_mismatch` for a
+    "Already been told" **includes a flag somebody has resolved**, and that is
+    what makes a re-run of the same day silent. A bill cannot change - the kernel
+    corrects by reversal, and there is no writer for a posted sale anywhere (A7) -
+    so a finding somebody has answered is answered for good. Treating `resolved`
+    as "say it again" would mean a cron retry after a partial night handed the
+    store back work it had already cleared.
+
+    It is deliberately narrow the other way: only a flag of this kind that is
+    about *lines* silences this. The B2B corner raises `gst_mismatch` for a
     different reason entirely - the split the till printed disagreeing with the
     one the server derives (#187) - and it carries no `lines`. Treating the two as
     one would let a printed-split disagreement hide a bill whose tax is simply not
@@ -236,12 +278,7 @@ def _flag_bill(sale: Sale, kind: str, details: dict[str, Any], report: Report) -
     """
     if not details["lines"]:
         return
-    if any(
-        flag.kind == kind
-        and flag.status != ContinuityFlag.Status.RESOLVED
-        and "lines" in (flag.details or {})
-        for flag in sale.flags.all()
-    ):
+    if any(flag.kind == kind and "lines" in (flag.details or {}) for flag in sale.flags.all()):
         return
     ContinuityFlag.objects.create(kind=kind, store=sale.store, sale=sale, details=details)
     report.raised[kind] += 1
@@ -294,14 +331,19 @@ def _check_returns_by_seller(store: Store, day: date, report: Report) -> None:
         ),
         key=lambda row: -int(row["returns"]),
     )
-    standing = (
-        _open(store, ContinuityFlag.Kind.EMPLOYEE_RETURNS)
-        .filter(**{f"details__{ContinuityFlag.DAY_KEY}": day.isoformat()})
-        .first()
-    )
+    # Keyed to *this day*, unlike the hole flag: "Ali took back six on Tuesday"
+    # is a fact about Tuesday and stays true whatever happens on Wednesday.
+    standing = _for_day(store, ContinuityFlag.Kind.EMPLOYEE_RETURNS, day).first()
     if not over:
-        if standing is not None:
+        # Nobody crossed the dial. A row from an earlier run of the same day was
+        # about a count that has since changed - a bill cancelled, the dial
+        # widened - so it is closed rather than left saying something untrue.
+        if standing is not None and standing.status == ContinuityFlag.Status.OPEN:
             _resolve(standing, report)
+        return
+    if standing is not None and standing.status != ContinuityFlag.Status.OPEN:
+        # Somebody has already answered this day's count. A re-run must not hand
+        # it back to them - see `_flag_bill` for the same rule about a bill.
         return
     details: dict[str, Any] = {
         ContinuityFlag.DAY_KEY: day.isoformat(),
@@ -314,21 +356,34 @@ def _check_returns_by_seller(store: Store, day: date, report: Report) -> None:
 # --- the two ways a store-level flag moves ----------------------------------
 
 
-def _open(store: Store, kind: str) -> QuerySet[ContinuityFlag]:
-    """This store's live flags of one kind.
+def _open(store: Store, kind: ContinuityFlag.Kind) -> QuerySet[ContinuityFlag]:
+    """This store's flags of one kind that nobody has answered `resolved`.
 
-    `ignored` is live: the store looked and said this one is fine, and re-raising
-    it every night would make the third state mean nothing. Only `resolved` -
-    the problem is gone - lets a new row be written.
+    `ignored` is in here: the store looked and said this one is fine, and
+    re-raising it every night would make the third state mean nothing. What each
+    caller then does with an ignored row is its own decision, because the two
+    findings differ - see `_reconcile_holes`.
     """
     return ContinuityFlag.objects.filter(store=store, kind=kind).exclude(
         status=ContinuityFlag.Status.RESOLVED
     )
 
 
+def _for_day(store: Store, kind: ContinuityFlag.Kind, day: date) -> QuerySet[ContinuityFlag]:
+    """This store's flags of one kind about `day`, whatever their status.
+
+    Every status, because a re-run of a day must be able to see that somebody has
+    already answered it - a `resolved` row this could not see would be a finding
+    handed straight back to the person who cleared it.
+    """
+    return ContinuityFlag.objects.filter(
+        store=store, kind=kind, **{f"details__{ContinuityFlag.DAY_KEY}": day.isoformat()}
+    ).order_by("-created_at")
+
+
 def _raise_or_refresh(
     store: Store,
-    kind: str,
+    kind: ContinuityFlag.Kind,
     details: dict[str, Any],
     report: Report,
     standing: ContinuityFlag | None,

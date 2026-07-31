@@ -23,7 +23,6 @@ from typing import Any
 from django.db import transaction
 from django.db.models import Prefetch, Q, QuerySet
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -31,6 +30,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from approvals.names import display_name
+from core.dates import parse_day
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_entitlement, scope_by_store
@@ -572,10 +572,7 @@ class StoreFlagsView(APIView):
             rows = rows.filter(status=wanted)
         asked = (request.query_params.get("date") or "").strip()
         if asked:
-            try:
-                day = parse_date(asked)
-            except ValueError:  # correctly shaped and impossible, e.g. 2026-02-30
-                day = None
+            day = parse_day(asked)
             if day is None:
                 return Response(
                     refusal_body("VALIDATION", f"'{asked}' is not a date (use 2026-07-31)."),

@@ -85,6 +85,10 @@
 
 /* --- the day's exceptions ---------------------------------------------- */
 
+/* The one line on the screen the day picker does not govern, said in the panel
+   head so nobody has to infer it from an empty list. */
+.day-flags-scope { margin: 6px 0 0; font-size: 12.5px; }
+
 .flag-list { display: flex; flex-direction: column; gap: 10px; }
 
 .flag-row {

@@ -128,10 +128,18 @@ Nothing updates or deletes a row here.
 
 ### `sell_continuityflag` (NEW, exception rows)
 
-kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/gstin_invalid/aged_uncosted` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · resolved_by/at.
+kind choices `number_hole/cn_unverified/return_orig_missing/offer_mismatch/gst_mismatch/gstin_invalid/aged_uncosted/employee_returns` · sale FK null · store FK · details JSONField · status `open/resolved/ignored` · **cleared_note CharField(240) blank** · resolved_by/at.
 
 *`gstin_invalid` added 31 Jul 2026 while building #187* - the B2B ticket asks for the buyer's GSTIN to be validated softly, and none of the original six means that. See the api-contract's step-11 amendment for why it is its own kind rather than another `gst_mismatch`.
+
+*`employee_returns` and `cleared_note` added 31 Jul 2026 with #188* (migration `sell.0011`).
+Grill Q7 asks for returns to be counted per employee in the daily check, and none of the seven existing kinds means "one seller took back an unusual number today"; it is deliberately its own because the finding is a pattern *across* bills, so there is no one bill to hang it on and no one bill that answers it.
+`cleared_note` is what the person who cleared a flag said about it, and it is a column rather than a key in `details` because `details` is the machine's finding - rewritten on every nightly run - and a person's sentence about it must not be something a later pass can overwrite.
+
+**Which day a flag belongs to** (`ContinuityFlag.DAY_KEY` / `for_day`, #188). Most flags are about a bill, and a bill has the day the counter printed it. The two the nightly check raises are about no bill - a hole is a bill that never arrived, and a return count is about a shop's afternoon - so they carry `day` in their details. The check runs in the small hours of the *next* morning, and `created_at` would file yesterday's finding under today. The hole flag's `day` is the day the gap first survived and never moves afterwards: it is a fact about a shop that goes on being true, not a fact about a day.
 This is the sell face of the exception-queue pattern (`TransferReceiptException`/`ReviewItem` precedent); the daily reconciliation and the Dashboard action queue read it.
+
+*`SellPolicy.return_review_count` added 31 Jul 2026 with #188* (same migration): how many pieces one seller may take back in a day before the daily check puts their name on the list. Five is a starting number in exactly the sense `uncosted_aging_days`' three days is - nothing in the corpus fixes one, and it is a dial so head office moves it rather than a store learning to ignore the list (Rule 12).
 
 ### `sell_deferredcosting` (NEW)
 

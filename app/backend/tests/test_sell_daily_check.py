@@ -391,3 +391,80 @@ def test_a_line_the_bill_never_wrote_cannot_reach_the_reprice(counter):
     assert len(flags) == 1
     assert flags[0].sale.till_seq == 1
     assert SaleLine.objects.filter(sale__till_seq=2).count() == 1
+
+
+# --- what a re-run must not do ----------------------------------------------
+
+
+def test_an_ignored_hole_does_not_silence_a_new_one(counter):
+    """`ignored` is the store having looked at *these* missing numbers. When the
+    set changes that is a finding nobody has seen, and writing it quietly into
+    the row somebody already dismissed would lose it."""
+    _bill(counter, 4)  # 1-3 missing
+    run(DAY)
+    ContinuityFlag.objects.filter(sale__isnull=True).update(status=ContinuityFlag.Status.IGNORED)
+
+    _bill(counter, 9)  # 5-8 missing too, and nobody has seen those
+
+    report = run(DAY)
+
+    assert report.raised[ContinuityFlag.Kind.NUMBER_HOLE] == 1
+    fresh = _open(ContinuityFlag.Kind.NUMBER_HOLE).get(sale__isnull=True)
+    assert fresh.details["missing"] == [1, 2, 3, 5, 6, 7, 8]
+
+
+def test_the_standing_hole_keeps_the_day_it_first_survived(counter):
+    """It is a fact about a shop, not about a day, so a run for an older date
+    must not drag it out of the day somebody has been looking at it on."""
+    _bill(counter, 4)
+    run(DAY)
+
+    run(DAY - timedelta(days=5))
+
+    standing = _open(ContinuityFlag.Kind.NUMBER_HOLE).get(sale__isnull=True)
+    assert standing.details["day"] == DAY_ISO
+    assert _open(ContinuityFlag.Kind.NUMBER_HOLE).filter(sale__isnull=True).count() == 1
+
+
+def test_a_finding_somebody_cleared_is_not_handed_back(counter):
+    """A cron retry after a partial night must not undo a morning's work. The
+    bill cannot change - there is no writer for a posted sale (A7) - so a finding
+    somebody answered is answered for good."""
+    _bill(counter, 1, gst_rate="18")
+    ContinuityFlag.objects.all().delete()
+    run(DAY)
+    ContinuityFlag.objects.update(status=ContinuityFlag.Status.RESOLVED, resolved_at=timezone.now())
+
+    assert run(DAY).total_raised == 0
+    assert ContinuityFlag.objects.filter(kind=ContinuityFlag.Kind.GST_MISMATCH).count() == 1
+
+
+def test_a_return_count_somebody_cleared_is_not_handed_back(counter):
+    original = _bill(counter, 1, qty=8)
+    _return_bill(counter, 2, original, 6)
+    run(DAY)
+    ContinuityFlag.objects.filter(kind=ContinuityFlag.Kind.EMPLOYEE_RETURNS).update(
+        status=ContinuityFlag.Status.RESOLVED, resolved_at=timezone.now()
+    )
+
+    assert run(DAY).raised[ContinuityFlag.Kind.EMPLOYEE_RETURNS] == 0
+    assert ContinuityFlag.objects.filter(kind=ContinuityFlag.Kind.EMPLOYEE_RETURNS).count() == 1
+
+
+def test_one_store_is_one_stores_run(counter):
+    """`--store DEO` must not report the shop next door's unpriced lines."""
+    other = build_store("SEL-RAN")
+    stock_in(other, 5)
+    other_cashier = build_cashier(other, username="ran_cashier")
+    other_salesman = build_salesman(other, code="RANE")
+    payload = bill_payload(other, other_salesman, till_seq=1)
+    payload["lines"][0]["barcode"] = "8909999999999"
+    payload["lines"][0]["manual_desc"] = "Navy shirt, tag says 1499"
+    assert client_for(other_cashier).post(SALES_URL, payload, format="json").status_code == 201
+    SellPolicy.objects.update(uncosted_aging_days=0)
+
+    mine = run(timezone.localdate(), counter["store"].code)
+
+    assert mine.total_raised == 0
+    assert _open(ContinuityFlag.Kind.AGED_UNCOSTED).count() == 0
+    assert run(timezone.localdate()).raised[ContinuityFlag.Kind.AGED_UNCOSTED] == 1

@@ -1,13 +1,13 @@
 """The store-facing read-only aggregator (D10 §2).
 
-No models, no writes. See `storefront/dashboard.py` for what the payload is made
-of and why three of the contract's action-queue keys are not in it yet.
+No models, no writes. See `storefront/dashboard.py` for what the Home payload is
+made of, and `storefront/day.py` for the day arithmetic the Dashboard and the
+Money section's cash summary share.
 """
 
 from __future__ import annotations
 
 from django.utils import timezone
-from django.utils.dateparse import parse_date
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import require_section
 from accounts.sections import CAP_VIEW
+from core.dates import parse_day
 from core.refusals import refusal_body
 from storefront.cash_summary import build as build_cash_summary
 from storefront.dashboard import build, resolve_store
@@ -65,14 +66,7 @@ class CashSummaryView(APIView):
 
     def get(self, request: Request) -> Response:
         asked = (request.query_params.get("date") or "").strip()
-        # Both failure shapes, which `parse_date` answers differently: it returns
-        # nothing for text that is not a date ("yesterday") and *raises* for text
-        # correctly shaped and impossible ("2026-02-30"). The same pair the till's
-        # cursor had to catch (#179).
-        try:
-            day = parse_date(asked) if asked else timezone.localdate()
-        except ValueError:
-            day = None
+        day = parse_day(asked) if asked else timezone.localdate()
         if day is None:
             return Response(
                 refusal_body("VALIDATION", f"'{asked}' is not a date (use 2026-07-31)."), status=400
