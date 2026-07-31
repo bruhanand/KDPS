@@ -132,6 +132,39 @@ services:
       - key: DJANGO_ALLOWED_HOSTS
         value: .onrender.com
 
+  # --- Uncosted-sale ageing cron ------------------------------------------------
+  # Daily: any line sold before its paperwork that has sat in the costing queue
+  # past the SellPolicy dial gets its bill flagged for the store (#186). The queue
+  # drains itself when the PT lands, so anything this catches is paperwork that is
+  # not coming. Idempotent — a bill already flagged is not flagged twice, and a
+  # flag the store chose to ignore stays ignored.
+  # Folds into `sell_daily_check` when #188 builds it; a schedule of its own until
+  # then, so the flag half of the design is actually live. Same free-tier caveat
+  # as the crons above: run by hand if not on a paid Render plan (see DEPLOY.md).
+  - type: cron
+    name: kdps-sell-age-deferred
+    runtime: python
+    branch: client-testing     # same code line as the alpha it checks
+    plan: starter
+    schedule: "45 20 * * *"    # 20:45 UTC daily (~02:15 IST, after the alerts cron)
+    region: singapore
+    rootDir: app/backend
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run python manage.py sell_age_deferred
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: DJANGO_SECRET_KEY
+        generateValue: true    # a management command signs nothing — any secret is fine
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kdps-db
+          property: connectionString
+      - key: DJANGO_ALLOWED_HOSTS
+        value: .onrender.com
+
   # --- React PWA (static) ----------------------------------------------------
   - type: web
     name: kdps-erp-web

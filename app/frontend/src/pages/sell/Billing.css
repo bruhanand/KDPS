@@ -21,11 +21,11 @@
    the two are one question asked in the right order: "did you mean one of
    these?" first, "bill it off the tag" second. */
 .bill-unknown { padding: 14px 16px; margin-bottom: 16px; }
-.bill-unknown-say {
+.bill-unknown-note {
   display: flex; align-items: center; gap: 8px;
   margin: 0 0 10px; font-size: 13px; color: var(--amber);
 }
-.bill-unknown-do { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.bill-unknown-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .bill-unknown .muted-cell { font-size: 11.5px; }
 
 .bill-suggest { padding: 14px 16px; margin-bottom: 16px; }

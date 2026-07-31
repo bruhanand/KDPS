@@ -49,7 +49,7 @@ from _sell import (
 from django.utils import timezone
 
 from core.gl import GLEntry, trial_balance
-from masters.models import Brand, Cohort, Sku
+from masters.models import Brand, Cohort, Season, Sku
 from sell.models import ContinuityFlag, DeferredCosting, Sale, SaleLine, SellPolicy
 from sell.services.costing_sweep import age_deferred, sweep_deferred
 from stockledger.models import StockLedgerEntry, StockOnHand
@@ -100,26 +100,28 @@ def _inward(*, model: str = "Outright", cost_paise: int = COST_PAISE) -> Cohort:
 GHOST = "GHOSTBRAND"
 
 
-def _inward_of_an_unknown_brand() -> Cohort:
+def _inward_of_an_unknown_brand(*, season: str = "FW25", cost_paise: int = COST_PAISE) -> Cohort:
     """A PT that prices the piece and names a brand nobody has set up.
 
     Realistic rather than contrived: a new label's first delivery arrives before
     anybody records its commercial terms, and the file says what it says.
     """
-    sku = Sku.objects.create(
+    sku, _ = Sku.objects.update_or_create(
         barcode=UNKNOWN,
-        design="SHIRT-99",
-        color="NAVY",
-        size="M",
-        brand=GHOST,
-        item="Shirt",
-        hsn="6205",
-        mrp_paise=MRP_PAISE,
+        defaults={
+            "design": "SHIRT-99",
+            "color": "NAVY",
+            "size": "M",
+            "brand": GHOST,
+            "item": "Shirt",
+            "hsn": "6205",
+            "mrp_paise": MRP_PAISE,
+        },
     )
     cohort, _ = Cohort.objects.update_or_create(
         barcode=UNKNOWN,
-        season="FW25",
-        defaults={"sku": sku, "unit_cost_paise": COST_PAISE, "mrp_paise": MRP_PAISE},
+        season=season,
+        defaults={"sku": sku, "unit_cost_paise": cost_paise, "mrp_paise": MRP_PAISE},
     )
     return cohort
 
@@ -429,7 +431,8 @@ def test_a_line_that_waits_too_long_becomes_somebody_s_job(counter):
     assert flag.kind == ContinuityFlag.Kind.AGED_UNCOSTED
     assert flag.sale == sale
     assert flag.store == counter["store"]
-    assert flag.details["reason"] == DeferredCosting.Reason.UNPRICED
+    assert flag.details["reasons"] == [DeferredCosting.Reason.UNPRICED]
+    assert flag.details["lines"] == [1]
 
 
 def test_ageing_the_same_queue_twice_does_not_flag_it_twice(counter):
@@ -466,22 +469,7 @@ def test_the_flag_closes_when_the_paperwork_finally_lands(counter):
 
 def test_a_bill_with_a_line_still_waiting_keeps_its_flag_open(counter):
     """Two pieces sold before inward, one PT: the bill is still waiting."""
-    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, barcode=UNKNOWN)
-    second = {**payload["lines"][0], "line_no": 2, "barcode": "8909999999902"}
-    payload["lines"] = [{**payload["lines"][0]}, second]
-    for line in payload["lines"]:
-        line["season"] = ""
-        line["manual_desc"] = "off the tag"
-    net = sum(line["net_paise"] for line in payload["lines"])
-    payload["tenders"] = [{"mode": "cash", "amount_paise": net}]
-    payload["totals"] = {
-        "gross_paise": sum(line["mrp_paise"] for line in payload["lines"]),
-        "discount_paise": 0,
-        "net_paise": net,
-        "gst_paise": sum(line["gst_paise"] for line in payload["lines"]),
-        "round_paise": 0,
-    }
-    assert counter["client"].post(SALES_URL, payload, format="json").status_code == 201
+    _two_unknown_lines(counter)
     _age(days=SellPolicy.current().uncosted_aging_days + 1)
     age_deferred()
 
@@ -519,3 +507,106 @@ def test_a_piece_the_books_know_but_the_shelf_says_nought_bills_normally(counter
     assert GLEntry.objects.filter(account="COGS").count() == 1
     assert SaleLine.objects.get().net_paise == MRP_PAISE
     assert trial_balance() == 0
+
+
+def test_the_flag_stops_naming_the_line_that_has_since_been_costed(counter):
+    """A bill whose three waiting lines become one has not stopped waiting - but
+    the two that posted are nobody's job now, and a flag still naming them sends
+    somebody after work that is done."""
+    _two_unknown_lines(counter)
+    _age(days=SellPolicy.current().uncosted_aging_days + 1)
+    age_deferred()
+    assert ContinuityFlag.objects.get().details["lines"] == [1, 2]
+
+    _inward()
+    age_deferred()
+
+    flag = ContinuityFlag.objects.get()
+    assert flag.status == ContinuityFlag.Status.OPEN
+    assert flag.details["lines"] == [2]
+
+
+def test_a_flag_the_store_chose_to_ignore_is_not_raised_again_tomorrow(counter):
+    """Otherwise "ignore" means nothing: the row is still on the Dashboard's
+    count either way, so re-raising it every night only wears the list out."""
+    _sell_unknown(counter)
+    _age(days=SellPolicy.current().uncosted_aging_days + 1)
+    age_deferred()
+    ContinuityFlag.objects.update(status=ContinuityFlag.Status.IGNORED)
+
+    assert age_deferred() == 0
+
+    assert ContinuityFlag.objects.count() == 1
+
+
+def test_a_line_billed_with_a_season_is_costed_out_of_that_season(counter):
+    """A re-ordered style sits in two seasons at two costs. The till said which
+    one it was selling, and the sweep honours it rather than re-running the scan
+    ladder - the ladder answers "what is the counter selling", which is not the
+    question a line that has already been sold is asking.
+    """
+    payload = bill_payload(
+        counter["store"], counter["salesman"], till_seq=1, barcode=UNKNOWN, season="SS26"
+    )
+    payload["lines"][0]["manual_desc"] = "Blue check shirt"
+    assert counter["client"].post(SALES_URL, payload, format="json").status_code == 201
+    Season.objects.get_or_create(
+        code="SS26", defaults={"name": "Spring/Summer 2026", "status": "open", "sort_order": 3}
+    )
+    # The older season is priced first and cheaper; the ladder would prefer it.
+    build_piece(barcode=UNKNOWN, season="FW25", cost_paise=40000)
+    assert DeferredCosting.objects.get().status == DeferredCosting.Status.WAITING
+
+    build_piece(barcode=UNKNOWN, season="SS26", cost_paise=90000)
+
+    line = SaleLine.objects.get()
+    assert line.season == "SS26"
+    assert line.unit_cost_paise == 90000
+    sold = StockLedgerEntry.objects.get(sku_code=UNKNOWN, kind=StockLedgerEntry.Kind.SALE_OUT)
+    assert sold.amount == -90000
+    assert sold.season == "SS26"
+    assert trial_balance() == 0
+
+
+def test_waking_a_dormant_supplier_releases_the_line_waiting_on_them(counter):
+    """`supplier_of` will only name an active vendor, and switching one back on
+    touches no brand link at all - so without a door of its own the queue would
+    have no way to hear about it."""
+    stock_in(counter["store"], 3, model="SOR")
+    vendor = build_supplier(Brand.objects.get(name="MUFTI"))
+    vendor.is_active = False
+    vendor.save()
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    response = counter["client"].post(SALES_URL, payload, format="json")
+    sale = Sale.objects.get(pk=response.json()["id"])
+    assert DeferredCosting.objects.get().reason == DeferredCosting.Reason.VENDOR_UNKNOWN
+
+    vendor.is_active = True
+    vendor.save()
+
+    assert DeferredCosting.objects.get().status == DeferredCosting.Status.POSTED
+    assert GLEntry.objects.filter(doc_number=sale.doc_number, account="VENDOR_PAYABLE").exists()
+    assert trial_balance() == 0
+
+
+def _two_unknown_lines(counter) -> Sale:
+    """One bill, two pieces nothing can place - and only one of them ever gets
+    a PT, which is how a bill can be part-costed."""
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1, barcode=UNKNOWN)
+    second = {**payload["lines"][0], "line_no": 2, "barcode": "8909999999902"}
+    payload["lines"] = [{**payload["lines"][0]}, second]
+    for line in payload["lines"]:
+        line["season"] = ""
+        line["manual_desc"] = "off the tag"
+    net = sum(line["net_paise"] for line in payload["lines"])
+    payload["tenders"] = [{"mode": "cash", "amount_paise": net}]
+    payload["totals"] = {
+        "gross_paise": sum(line["mrp_paise"] for line in payload["lines"]),
+        "discount_paise": 0,
+        "net_paise": net,
+        "gst_paise": sum(line["gst_paise"] for line in payload["lines"]),
+        "round_paise": 0,
+    }
+    response = counter["client"].post(SALES_URL, payload, format="json")
+    assert response.status_code == 201, response.json()
+    return Sale.objects.get(pk=response.json()["id"])

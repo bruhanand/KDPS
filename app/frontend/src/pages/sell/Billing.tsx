@@ -191,6 +191,16 @@ function Counter({ storeName }: { storeName?: string }) {
 
   const defaultSalesman = lastPicked ?? world.lastSalesman;
 
+  /** Empty the scan box and put down whatever it was asking about.
+   *
+   *  The two always move together: `unknown` is a question *about* what is in the
+   *  box, so a box that has been cleared and a question still on the screen is a
+   *  cashier being asked about a barcode they can no longer see. */
+  const clearScan = useCallback(() => {
+    setTyped("");
+    setUnknown("");
+  }, []);
+
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
       setCart((current) => ({
@@ -201,11 +211,10 @@ function Counter({ storeName }: { storeName?: string }) {
         ],
       }));
       setNote("");
-      setTyped("");
-      // Picking a real piece answers "was that tag mistyped?" - it was.
-      setUnknown("");
+      // Picking a real piece answers the "was that tag mistyped?" ask - it was.
+      clearScan();
     },
-    [defaultSalesman],
+    [clearScan, defaultSalesman],
   );
 
   /**
@@ -223,11 +232,10 @@ function Counter({ storeName }: { storeName?: string }) {
         lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
       }));
       setNote("");
-      setTyped("");
-      setUnknown("");
+      clearScan();
       scan.focus();
     },
-    [defaultSalesman, scan],
+    [clearScan, defaultSalesman, scan],
   );
 
   const applyScan = useCallback(
@@ -243,7 +251,6 @@ function Counter({ storeName }: { storeName?: string }) {
         setTyped(code.trim());
         return;
       }
-      setUnknown("");
       takePiece(found.chosen, found.candidates, found.stock);
     },
     [takePiece, world],
@@ -285,8 +292,7 @@ function Counter({ storeName }: { storeName?: string }) {
     setCustomer({ name: "", mobile: "" });
     setNote("");
     setPrintProblem("");
-    setTyped("");
-    setUnknown("");
+    clearScan();
     scan.focus();
   }
 
@@ -336,8 +342,7 @@ function Counter({ storeName }: { storeName?: string }) {
       });
       setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
-      setTyped("");
-      setUnknown("");
+      clearScan();
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
     } catch (error) {
@@ -414,8 +419,7 @@ function Counter({ storeName }: { storeName?: string }) {
       setLastBill({ bill: queued, receipt });
       setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
-      setTyped("");
-      setUnknown("");
+      clearScan();
       setNote(`Bill ${queued.doc_number} saved.`);
       await print(receipt);
     } catch (error) {
@@ -517,7 +521,7 @@ function Counter({ storeName }: { storeName?: string }) {
           locked={locked}
           onBill={() => takeUnknown(unknown)}
           onDismiss={() => {
-            setUnknown("");
+            clearScan();
             scan.focus();
           }}
         />
@@ -745,14 +749,14 @@ function NotInSystem({
 }) {
   return (
     <div className="card section-card bill-unknown" data-testid="bill-unknown">
-      <p className="bill-unknown-say">
+      <p className="bill-unknown-note">
         <AlertTriangle size={15} />
         Nothing on this counter is barcode <span className="mono">{barcode}</span>.
         {hasSuggestions
           ? " Check the list below first - a tag is misread far more often than a piece is new."
           : " Check the tag, or search by design number."}
       </p>
-      <div className="bill-unknown-do">
+      <div className="bill-unknown-actions">
         <button
           type="button"
           className="btn"
@@ -1039,7 +1043,7 @@ function SeasonCell({ line, locked, onEdit, onPicked }: CellProps & { onPicked: 
     // No season, because no cohort - and saying so is the point. This is the row
     // the Dashboard will be counting until the paperwork arrives (#186).
     return (
-      <span className="muted-cell" data-testid={`bill-unknown-line-${line.line_no}`}>
+      <span className="muted-cell" data-testid={`bill-not-in-system-${line.line_no}`}>
         Not in the system yet
       </span>
     );
