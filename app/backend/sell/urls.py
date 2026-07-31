@@ -15,12 +15,14 @@ from sell.views import (
     IrnQueueView,
     RegisterHandoverView,
     RegisterView,
+    ReturnCreateView,
     SaleDetailView,
     SaleListCreateView,
 )
 
 urlpatterns = [
     path("dataset", DatasetView.as_view(), name="sell-dataset"),
+    path("returns", ReturnCreateView.as_view(), name="sell-returns"),
     path("register/handover", RegisterHandoverView.as_view(), name="sell-register-handover"),
     path("register", RegisterView.as_view(), name="sell-register"),
     path("held-bills", HeldBillsView.as_view(), name="sell-held-bills"),

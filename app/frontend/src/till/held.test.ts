@@ -66,6 +66,7 @@ function cartOf(over: Partial<Cart["lines"][number]> = {}): Cart {
     ],
     payment: { ...emptyPayment(), cash_received_paise: 200000 },
     authorisation: null,
+    exchange: null,
   };
 }
 

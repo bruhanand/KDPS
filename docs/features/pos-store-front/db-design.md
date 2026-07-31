@@ -88,6 +88,14 @@ Plain return without exchange (grill Q7).
 store FK · original_sale FK Sale PROTECT · window_override BooleanField default false · override_by FK User null · credit_note FK CreditNote null (set at post) · created_by.
 Lines: `sell_returnline` - return FK CASCADE · original_line FK SaleLine PROTECT · qty CHECK `> 0` · reason CharField(40) · condition `good/damaged` · refund_paise MoneyField (what the customer actually paid, computed).
 
+**Amended 31 Jul 2026, after building it (#184).** Five things.
+
+- **The note points at the return, not the return at the note.** `credit_note FK ... (set at post)` would be a column on a *posted* document, and the FSM trigger refuses every change to one - so the link is `CreditNote.source_return`, the mirror of the `source_sale` the negative-net exchange already uses. Same fact, written on the row that is still being created when it becomes true.
+- **The line column is `return_doc`, not `return`.** `return` is a Python keyword, so `line.return` is not something any caller could write.
+- **A return line carries the same seven merchandising dims a bill line does**, plus `gst_rate`/`gst_paise` and the `unit_cost_paise`/`cost_book`/`cost_vendor` triple. All of them are snapshots off the original line (Rule 3): the ledger legs are filed by brand and season, the reversal gives back the tax the bill charged rather than today's slab, and the cost unwinds out of the book the *sale* posted to even if the brand's terms have changed since.
+- **`SellPolicy` gains `return_window_days`** (default 30) - see the api-contract's amendment for why 30 and why it is a dial.
+- **`sell_continuityflag.kind` gains `return_late` and `return_uncosted`**, and **`sell_deferredcosting.status` gains `returned`**. The first two are exceptions this document raises; the third is how a sold-before-inward line stops waiting for a cost that will never be owed, because the piece came back before anything priced it.
+
 ### `sell_creditnote` (NEW, subclasses Document, doc_type `CRN`)
 
 store FK (issuing store; redemption same-store only in v1, grill Q4) · customer_name/mobile · value_paise · remaining_paise CHECK `0 <= remaining <= value` · status choices `open/spent/expired/cancelled` · expires_on DateField (validity is data; default from policy) · source_return FK sell.Return null · source_sale FK Sale null (negative-net exchange).

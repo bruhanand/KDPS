@@ -195,6 +195,54 @@ describe("a B2B tax invoice (#187)", () => {
   });
 });
 
+/** One sold line of a posted bill, for the reprint fixtures below. */
+function postedLine() {
+  return {
+    line_no: 1,
+    direction: "sale",
+    barcode: "8901000000011",
+    season: "FW25",
+    brand: "MUFTI",
+    item: "Shirt",
+    design: "SHIRT-01",
+    size: "M",
+    color: "NAVY",
+    manual_desc: "",
+    salesman_code: "ALIE",
+    salesman_name: "Ali E.",
+    qty: 1,
+    mrp_paise: 149900,
+    disc_paise: 10000,
+    net_paise: 139900,
+    gst_rate: "5.00",
+    gst_paise: 6662,
+  };
+}
+
+function postedFixture(): PostedBill {
+  return {
+    doc_number: "26-27/DEO/SAL/74",
+    billed_at: "2026-07-30T12:31:00.000Z",
+    origin: "offline",
+    store_code: "DEO",
+    store_name: "Deoghar",
+    store_gstin: "10AAAAA0000A1Z5",
+    customer_name: "Mrs Sharma",
+    customer_mobile: "9876543210",
+    buyer_gstin: "",
+    b2b_tax_kind: "none",
+    irn: "",
+    exchange_of: null,
+    lines: [postedLine()],
+    tenders: [{ mode: "cash", amount_paise: 139900 }],
+    gross_paise: 149900,
+    discount_paise: 10000,
+    net_paise: 139900,
+    gst_paise: 6662,
+    round_paise: 0,
+  };
+}
+
 describe("reprinting a bill found by search (#185)", () => {
   const posted: PostedBill = {
     doc_number: "26-27/DEO/SAL/74",
@@ -208,6 +256,7 @@ describe("reprinting a bill found by search (#185)", () => {
     buyer_gstin: "",
     b2b_tax_kind: "none",
     irn: "",
+    exchange_of: null,
     lines: [
       {
         line_no: 1,
@@ -285,5 +334,124 @@ describe("reprinting a bill found by search (#185)", () => {
 
     expect(postedReceiptHtml(queued)).toContain("IRN to follow");
     expect(postedReceiptHtml({ ...queued, irn: "IRN-2026-0001" })).toContain("IRN IRN-2026-0001");
+  });
+});
+
+describe("a piece given back on the same bill (#184)", () => {
+  /** ₹1,499 out, ₹1,200 back - the customer pays the difference. */
+  function exchanged(over: Partial<QueuedBill> = {}): QueuedBill {
+    return bill({
+      exchange: {
+        original: { fy: "26-27", till_seq: 40 },
+        lines: [
+          {
+            line_no: 2,
+            barcode: "8901000000022",
+            qty: 1,
+            refund_paise: 120000,
+            gst_rate: "5.00",
+            gst_paise: 5714,
+            reason: "size",
+            condition: "good",
+            original_line: 1,
+          },
+        ],
+      },
+      totals: { ...draft().totals, net_paise: 29900, gst_paise: 1424 },
+      tenders: [{ mode: "cash", amount_paise: 29900 }],
+      ...over,
+    });
+  }
+
+  it("prints what came back, and against which bill", () => {
+    const html = receiptHtml(exchanged(), STORE);
+
+    expect(html).toContain("Given back against bill 40");
+    expect(html).toContain("8901000000022");
+    expect(html).toContain("size");
+  });
+
+  it("shows what the customer was credited, not what the tag says", () => {
+    // The half of the sum the customer cannot check for themselves: the pieces
+    // going out are priced off tags in their hand, and this one is priced off a
+    // bill from weeks ago (D2).
+    const html = receiptHtml(exchanged(), STORE);
+
+    expect(html).toContain("Given back");
+    expect(html).toContain("₹1,200.00");
+    expect(html).toContain("₹299.00");
+  });
+
+  it("promises a credit note, not cash, when the bill owes the customer", () => {
+    const owing = exchanged({
+      totals: { ...draft().totals, gross_paise: 0, net_paise: -70100, gst_paise: -3338 },
+      tenders: [],
+    });
+
+    const html = receiptHtml(owing, STORE);
+
+    expect(html).toContain("Credit note");
+    expect(html).toContain("₹701.00");
+    expect(html).toContain("No cash is paid out on a return");
+    // "Tax included ₹-655.78" is arithmetically right and not a sentence anybody
+    // would put on a customer's copy (browser QA of #184). A bill that gives back
+    // more than it sells gives the tax back too, and says so.
+    expect(html).toContain("Tax given back");
+    expect(html).toContain("₹33.38");
+    expect(html).not.toContain("-₹");
+    // Its number is head office's to allocate, so a counter printing offline
+    // cannot know it - and saying so is the truth rather than a blank.
+    expect(html).toContain("number follows");
+    expect(html).not.toContain("To pay");
+  });
+
+  it("leaves an ordinary bill exactly as it was", () => {
+    const html = receiptHtml(bill(), STORE);
+
+    expect(html).not.toContain("Given back");
+    expect(html).toContain("To pay");
+  });
+});
+
+describe("reprinting a bill that had a piece given back on it (#184)", () => {
+  /** The same bill, with one line sold and one given back against bill 40. */
+  const exchanged: PostedBill = {
+    ...postedFixture(),
+    exchange_of: { doc_number: "26-27/DEO/SAL/40", fy: "26-27", till_seq: 40 },
+    lines: [
+      postedLine(),
+      {
+        ...postedLine(),
+        line_no: 2,
+        direction: "return",
+        barcode: "8901000000022",
+        net_paise: 120000,
+        gst_paise: 5714,
+        return_reason: "size",
+        condition: "good",
+      },
+    ],
+    net_paise: 19900,
+    gst_paise: 948,
+    tenders: [{ mode: "cash", amount_paise: 19900 }],
+  };
+
+  it("prints the returned piece as one given back, not as one sold", () => {
+    // The defect this is here for: rendered as a sale line, a piece the customer
+    // *handed back* appears on their copy as one they bought, and the column of
+    // amounts no longer comes to the total under it.
+    const html = postedReceiptHtml(exchanged);
+
+    expect(html).toContain("Given back against bill 40");
+    expect(html).toContain("8901000000022");
+    expect(html).toContain("size");
+    expect(html).toContain("₹1,200.00");
+  });
+
+  it("still prints the sold line as a sale", () => {
+    const html = postedReceiptHtml(exchanged);
+
+    expect(html).toContain("MUFTI · Shirt · SHIRT-01 · M · NAVY");
+    expect(html).toContain("₹199.00");
   });
 });

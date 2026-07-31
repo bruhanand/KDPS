@@ -1054,17 +1054,22 @@ def test_the_database_itself_refuses_to_edit_a_posted_bill(counter):
 
 
 def test_every_flag_kind_the_contract_names_exists(counter):
-    """All seven have a producer now, and each is asserted where it is raised: the
+    """All nine have a producer now, and each is asserted where it is raised: the
     four counter ones here, `offer_mismatch` in the rulebook suite (#183),
     `aged_uncosted` in the deferred-costing suite (#186) - raised by the nightly
-    ageing pass on a queue that has not drained, not by a bill - and
-    `gstin_invalid` here too (#187).
+    ageing pass on a queue that has not drained, not by a bill - `gstin_invalid`
+    here too (#187), and the two return ones in the plain-return suite (#184).
 
-    `gstin_invalid` is the one kind db-design did not list. It is deliberately its
-    own: folding it into `gst_mismatch` would put "a character of this
-    registration is mistyped" and "the tax on this bill is not the dated slab's"
-    in one bucket, and head office answers those two with entirely different
-    work.
+    Three of the nine are kinds db-design did not list, and each is deliberately
+    its own rather than folded into a neighbour, because head office answers each
+    with entirely different work:
+
+    * `gstin_invalid` - "a character of this registration is mistyped", which is
+      not "the tax on this bill is not the dated slab's".
+    * `return_late` - a manager set the return window aside, which is the one
+      policy at a counter they can set aside on their own say-so.
+    * `return_uncosted` - a piece given back before the books could ever price it,
+      so there is a cost event still parked against a sale that has been reversed.
     """
     assert set(ContinuityFlag.Kind.values) == {
         "number_hole",
@@ -1074,6 +1079,8 @@ def test_every_flag_kind_the_contract_names_exists(counter):
         "gst_mismatch",
         "gstin_invalid",
         "aged_uncosted",
+        "return_late",
+        "return_uncosted",
     }
 
 

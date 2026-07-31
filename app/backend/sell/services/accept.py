@@ -28,11 +28,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from typing import Any
 
 from django.db import IntegrityError, transaction
-from django.db.models import Sum
 from django.utils import timezone
 
 from core.documents import DocStatus
@@ -70,6 +69,7 @@ from sell.services.recompute import (
     credit_from_cited_rule,
     resolve_bill,
 )
+from sell.services.refunds import entitled_refund, returned_so_far
 from sell.services.resolve import (
     ResolvedPiece,
     line_dims,
@@ -389,7 +389,9 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
 
     `ALREADY_RETURNED` is the contract's own code for this on the plain-return
     endpoint; the exchange leg is the same act inside a bill and answers the same
-    way, because the alternative is a refund path with no ceiling on it.
+    way, because the alternative is a refund path with no ceiling on it. The two
+    read one ledger (`sell.services.refunds`), so neither can give back what the
+    other already did.
     """
     wanted: dict[int, int] = {}
     for line in lines:
@@ -398,7 +400,7 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
     for line in lines:
         if not line.is_return or line.original is None:
             continue
-        already = _returned_so_far(line.original)[0]
+        already = returned_so_far(line.original)[0]
         if already + wanted[line.original.id] > line.original.qty:
             raise AcceptError(
                 "ALREADY_RETURNED",
@@ -406,30 +408,6 @@ def _check_return_quantities(lines: list[_PreparedLine]) -> None:
                 f"{line.original.qty - already} of that piece is still returnable.",
                 422,
             )
-
-
-def _returned_so_far(original: SaleLine) -> tuple[int, int]:
-    """`(quantity, paise)` already given back against one sold line.
-
-    The row is **locked** first, and that lock is the ceiling. Without it two
-    bills returning the last of a line run the aggregate concurrently, both read
-    the same "none returned yet", and both refund - a double refund that no
-    database constraint downstream would catch, because each bill is individually
-    valid. The credit-note path locks for the same reason.
-
-    A cancelled bill's returns are not counted: the books say that exchange never
-    happened, and the customer is still holding the piece and the receipt.
-    Counting them would close the refund path over a bill the books themselves
-    disown - the next legitimate return would be refused ALREADY_RETURNED, and
-    the remainder arithmetic below would under-pay the one after that.
-    """
-    SaleLine.objects.select_for_update().filter(pk=original.pk).first()
-    totals = (
-        SaleLine.objects.filter(original_line=original, direction=SaleLine.Direction.RETURN)
-        .exclude(sale__docstatus=DocStatus.CANCELLED)
-        .aggregate(qty=Sum("qty"), paise=Sum("net_paise"))
-    )
-    return int(totals["qty"] or 0), int(totals["paise"] or 0)
 
 
 def _check_line_arithmetic(lines: list[_PreparedLine]) -> None:
@@ -466,25 +444,6 @@ def _check_line_arithmetic(lines: list[_PreparedLine]) -> None:
             )
 
 
-def _entitled_refund(original: SaleLine, qty: int) -> int:
-    """What `qty` of a sold line is worth back, in whole paise (D2).
-
-    Two rules, and the second is the one that is easy to miss. A share of a line
-    is rounded half-up, never by Python's `round()` - that is banker's rounding
-    on a float, so a ₹10.05 pair refunds ₹5.02 instead of ₹5.03 and the till's
-    correct figure is refused. And the *last* piece of a line is settled as the
-    remainder of what has not been given back yet, so the parts always sum to
-    exactly what the customer paid: three pieces at ₹10.00 refund 333 + 333 +
-    334, not 333 three times with a paisa left in the books forever.
-    """
-    returned_qty, returned_paise = _returned_so_far(original)
-    paid = int(original.net_paise or 0)
-    if returned_qty + qty >= original.qty:  # the last of it - settle the remainder
-        return paid - returned_paise
-    share = Decimal(paid) * qty / original.qty
-    return int(share.quantize(Decimal(1), rounding=ROUND_HALF_UP))
-
-
 def _check_return_refund(line: _PreparedLine) -> None:
     """What comes back is what was paid (D2), never today's price.
 
@@ -495,7 +454,7 @@ def _check_return_refund(line: _PreparedLine) -> None:
     if line.original is None:
         return
     original = line.original
-    entitled = _entitled_refund(original, line.qty)
+    entitled = entitled_refund(original, line.qty)
     if entitled != line.value_paise:
         raise AcceptError(
             "TENDER_MISMATCH",

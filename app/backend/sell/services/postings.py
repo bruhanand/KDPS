@@ -50,7 +50,8 @@ from core.gl import GLAccount
 from core.posting import Leg, cr, dr, post_entries
 from finledger.posting import post_sale_collection, post_sale_sor_liability
 from masters.ownership import brand_is_owned
-from sell.models import DeferredCosting, Sale, SaleLine, SaleTender
+from sell.models import DeferredCosting, Return, Sale, SaleLine, SaleTender
+from sell.services.movements import SellDocument, SellLine
 from stockledger.models import StockLedgerEntry
 from vendors.models import Vendor
 
@@ -117,9 +118,9 @@ class CostPlan:
 
 @dataclass(frozen=True)
 class CostedLine:
-    """One written bill line and the cost plan resolved for it."""
+    """One written line and the cost plan resolved for it."""
 
-    row: SaleLine
+    row: SellLine
     plan: CostPlan
 
     @property
@@ -255,6 +256,55 @@ def post_sale_value(
     _write_collections(sale, tenders, actor)
 
 
+def post_return_value(ret: Return, costed: list[CostedLine], actor: Any) -> None:
+    """Both value events for a plain return (#184, api-contract §Postings).
+
+    The same two events a bill posts, each one running backwards, and one leg
+    fewer than a bill has.
+
+    **Event A' - the money side.** Revenue and the tax inside it go back at what
+    the customer actually paid (D2), and the whole of it becomes a credit-note
+    liability: the store now owes the customer that much, spendable here until it
+    expires. The identity that balances it is short precisely because of what is
+    missing::
+
+        Σ refunds - Σ revenue given back - Σ tax given back = 0
+
+    **There is no cash leg on this document, and there is no code path that could
+    write one** (grill Q7). Nothing here reads a tender, because a `Return` has no
+    tenders to read: returns are the best-documented theft channel at any POS, so
+    the money stays inside the system until it is spent on a real bill. That is a
+    property of the shape rather than of a check somebody could delete.
+
+    No rounding leg either, and for a reason worth stating: a refund is a share of
+    a figure the customer already paid to the paisa, so there is nothing to round
+    to a rupee. A rounding line here would be the books inventing a few paise of
+    income out of giving money back.
+
+    **Event B' - the cost side**, reversed per the *original* piece's own model
+    (`plan_from_original`, frozen onto the return line at draft time). A line the
+    books never priced posts nothing at all: there is no cost event to unwind,
+    and the caller flags it instead of guessing (Rule 5).
+    """
+    legs: list[Leg] = []
+    refunded = 0
+    for line in costed:
+        refunded += line.row.value_paise
+        base = line.row.value_paise - int(line.row.gst_paise or 0)
+        legs += _revenue_legs(dr, line.row, base)
+    if refunded:
+        legs.append(
+            cr(
+                GLAccount.CREDIT_NOTE_LIABILITY,
+                refunded,
+                memo=f"Credit note issued against {ret.doc_number}",
+            )
+        )
+    if legs:
+        post_entries(ret, legs, posted_by=actor)
+    post_cost_event(ret, costed, actor)
+
+
 def _post_money_event(
     sale: Sale, costed: list[CostedLine], tenders: list[SaleTender], actor: Any
 ) -> None:
@@ -282,7 +332,7 @@ def _post_money_event(
         # actually paid on the original line (D2) - never at today's price or
         # today's rate.
         side = dr if line.is_return else cr
-        base = int(line.row.net_paise or 0) - int(line.row.gst_paise or 0)
+        base = line.row.value_paise - int(line.row.gst_paise or 0)
         legs += _revenue_legs(side, line.row, base)
     net = int(sale.net_paise or 0)
     if net < 0:
@@ -298,7 +348,7 @@ def _post_money_event(
         post_entries(sale, legs, posted_by=actor)
 
 
-def _dims(row: SaleLine) -> dict[str, str]:
+def _dims(row: SellLine) -> dict[str, str]:
     """What every leg about this line is filed under (Rule 3, snapshotted).
 
     Brand and season, because they are what every margin question is asked by -
@@ -315,7 +365,7 @@ def _sides(line: CostedLine) -> tuple[LegWriter, LegWriter]:
     return (cr, dr) if line.is_return else (dr, cr)
 
 
-def _revenue_legs(side: LegWriter, row: SaleLine, base_paise: int) -> list[Leg]:
+def _revenue_legs(side: LegWriter, row: SellLine, base_paise: int) -> list[Leg]:
     """The revenue and tax legs for one line."""
     legs = []
     if base_paise:
@@ -340,7 +390,7 @@ def _rounding_legs(sale: Sale) -> list[Leg]:
 
 
 def post_cost_event(
-    sale: Sale, costed: list[CostedLine], actor: Any, *, against_voucher: str = ""
+    doc: SellDocument, costed: list[CostedLine], actor: Any, *, against_voucher: str = ""
 ) -> bool:
     """Event B - what the pieces cost, out of the book that held them.
 
@@ -376,8 +426,8 @@ def post_cost_event(
             if line.plan.owned
             else _sor_cost_legs(line, against_voucher)
         )
-    post_entries(sale, legs, posted_by=actor)
-    _accrue_sor_liability(sale, postable, actor)
+    post_entries(doc, legs, posted_by=actor)
+    _accrue_sor_liability(doc, postable, actor)
     return True
 
 
@@ -420,7 +470,7 @@ def _sor_cost_legs(line: CostedLine, against_voucher: str = "") -> list[Leg]:
     ]
 
 
-def _accrue_sor_liability(sale: Sale, postable: list[CostedLine], actor: Any) -> None:
+def _accrue_sor_liability(doc: SellDocument, postable: list[CostedLine], actor: Any) -> None:
     """Mirror each vendor's accrual into the vendor subledger.
 
     One row per vendor per bill, netted: a bill that sells one of a brand's pieces
@@ -435,9 +485,9 @@ def _accrue_sor_liability(sale: Sale, postable: list[CostedLine], actor: Any) ->
         post_sale_sor_liability(
             vendor,
             amount,
-            f"SOR/consignment accrual on {sale.doc_number}",
+            f"SOR/consignment accrual on {doc.doc_number}",
             actor,
-            reference=sale.doc_number or "",
+            reference=doc.doc_number or "",
         )
 
 

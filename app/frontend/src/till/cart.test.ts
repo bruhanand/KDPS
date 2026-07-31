@@ -12,6 +12,8 @@ import {
   whyItCannotClose,
 } from "./cart";
 import type { Cart } from "./cart";
+import { legFor } from "./exchange";
+import type { Exchange, OriginalLine } from "./exchange";
 import type { Ask, Authorisation } from "./pin";
 import { newNote } from "./tender";
 import type { Payment } from "./tender";
@@ -782,5 +784,125 @@ describe("a piece the counter has never heard of", () => {
     const drafted = toDraft(bill, { billedAt: "2026-07-30T12:31:00.000Z" });
 
     expect(drafted.lines[0].manual_desc).toBe("");
+  });
+});
+
+// --- an exchange on the bill (#184) ----------------------------------------
+//
+// Every figure here is checked again by `accept._check_totals` on a bill that
+// has already printed, so what these cases pin is the identity the server
+// re-derives:
+//
+//   gross    = Σ mrp × qty                (sold lines only)
+//   discount = Σ disc                     (sold lines only)
+//   net      = Σ sold net − Σ refunds + round
+//   GST      = Σ sold GST − Σ refund GST
+//   tenders  = max(net, 0)
+
+/** One line of an old bill, as the Return & Exchange screen read it back. */
+function sold(over: Partial<OriginalLine> = {}): OriginalLine {
+  return {
+    line_no: 1,
+    barcode: "8901000000011",
+    season: "FW25",
+    design: "SHIRT-01",
+    color: "NAVY",
+    size: "M",
+    brand: "MUFTI",
+    item: "Shirt",
+    hsn: "6205",
+    qty: 1,
+    net_paise: 120000,
+    gst_rate: "5.00",
+    gst_paise: 5714,
+    manual_desc: "",
+    direction: "sale",
+    returned_qty: 0,
+    returned_paise: 0,
+    ...over,
+  };
+}
+
+function exchangeOf(...lines: OriginalLine[]): Exchange {
+  return {
+    original: { fy: "26-27", till_seq: 40, doc_number: "26-27/DEO/SAL/40" },
+    lines: lines.map((line, index) => legFor(line, 1, `x${index + 1}`)),
+  };
+}
+
+function priced(cart: Cart) {
+  return priceCart(cart, WORLD, "2026-07-30");
+}
+
+describe("a piece coming back on the same bill", () => {
+  it("comes off the bill at what was paid, and takes its tax with it", () => {
+    const bill = priced({ ...cartOf(scanned(149900)), exchange: exchangeOf(sold()) });
+
+    expect(bill.refund_paise).toBe(120000);
+    // Gross and discount are about what is being *sold*; what comes back is not
+    // a discount on it.
+    expect(bill.gross_paise).toBe(149900);
+    expect(bill.discount_paise).toBe(0);
+    expect(bill.net_paise).toBe(149900 - 120000);
+    expect(bill.gst_paise).toBe(7138 - 5714);
+  });
+
+  it("takes no money at all when the returns outweigh the sales", () => {
+    // ₹1,200 back against a ₹499 shirt: the customer is owed ₹701, and it leaves
+    // as a credit note (grill Q7) rather than out of the drawer.
+    const bill = priced({ ...cartOf(scanned(49900)), exchange: exchangeOf(sold()) });
+
+    expect(bill.net_paise).toBe(49900 - 120000);
+    expect(bill.credit_note_paise).toBe(120000 - 49900);
+    expect(whyItCannotClose(bill)).toBe("");
+    expect(toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" }).tenders).toEqual([]);
+  });
+
+  it("is a bill even with nothing being bought", () => {
+    const bill = priced({ ...emptyCart(), exchange: exchangeOf(sold()) });
+
+    expect(whyItCannotClose(bill)).toBe("");
+    expect(bill.credit_note_paise).toBe(120000);
+  });
+
+  it("numbers the returned legs on from the sold lines", () => {
+    // The server keys every line of a bill by `line_no` and refuses one that is
+    // used twice, so a leg may not reuse a sold line's number.
+    const bill = priced({
+      ...cartOf(scanned(149900), scanned(49900)),
+      exchange: exchangeOf(sold(), sold({ line_no: 2 })),
+    });
+
+    const draft = toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" });
+    expect(draft.lines.map((l) => l.line_no)).toEqual([1, 2]);
+    expect(draft.exchange).toMatchObject({
+      original: { fy: "26-27", till_seq: 40 },
+      lines: [{ line_no: 3, original_line: 1 }, { line_no: 4, original_line: 2 }],
+    });
+  });
+
+  it("sends what the customer paid and the tax the bill charged", () => {
+    const bill = priced({ ...cartOf(scanned(149900)), exchange: exchangeOf(sold()) });
+
+    const draft = toDraft(bill, { billedAt: "2026-07-30T12:31:00Z" });
+    expect(draft.exchange).toMatchObject({
+      lines: [{ refund_paise: 120000, gst_rate: "5.00", gst_paise: 5714, condition: "good" }],
+    });
+  });
+
+  it("refuses to close while a leg gives back nothing", () => {
+    const bill = priced({
+      ...cartOf(scanned(149900)),
+      exchange: exchangeOf(sold({ net_paise: 0 })),
+    });
+
+    expect(whyItCannotClose(bill)).toMatch(/nothing to give back/);
+  });
+
+  it("leaves an ordinary bill with no exchange block on the wire", () => {
+    const draft = toDraft(priced(cartOf(scanned(149900))), {
+      billedAt: "2026-07-30T12:31:00Z",
+    });
+    expect(draft.exchange).toBeUndefined();
   });
 });

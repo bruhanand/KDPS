@@ -27,6 +27,21 @@ import type { BillTender, TillCreditNote } from "./types";
 
 export type TenderMode = "cash" | "card" | "upi" | "credit_note";
 
+/** How each mode reads to a person - on the customer's copy and on any screen
+ *  that lists what a bill was paid with.
+ *
+ *  Here rather than in `receipt.ts`, where it started, because a second reader
+ *  arrived: browser QA of #184 found the reprint screen showing a raw
+ *  `credit_note` where the paper says "Credit note". The words belong with the
+ *  modes, and one map means the paper and the screen cannot disagree about what
+ *  a customer paid with. */
+export const TENDER_WORDS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  upi: "UPI",
+  credit_note: "Credit note",
+};
+
 /** One credit note the customer handed over. */
 export interface NoteTender {
   /** Stable across edits, so React and the row's own inputs have something to
@@ -153,17 +168,14 @@ function doubtAbout(note: NoteTender, held: TillCreditNote | null, day: string):
  * a note nobody authorised. Catching them here is the difference between a
  * cashier fixing a figure and a store person unpicking a printed bill days later.
  */
-export function whyPaymentCannotClose(
-  split: TenderSplit,
-  authorised: boolean,
-  netPaise: number,
-): string {
-  if (netPaise < 0) {
-    // An exchange whose returns outweigh its sales pays the customer, and it
-    // pays them in a credit note rather than out of the drawer (grill Q7). That
-    // whole path is #184; until it exists this cannot be reached from the screen.
-    return "This bill owes the customer money. Exchanges and returns are not built yet.";
-  }
+export function whyPaymentCannotClose(split: TenderSplit, authorised: boolean): string {
+  // The bill's own total is deliberately **not** a parameter any more (#184).
+  // Everything below is about the *split* against a bill `splitOf` was already
+  // given, and the one thing the total used to decide - "this bill owes the
+  // customer money" - is no longer this function's question: an exchange whose
+  // returns outweigh its sales takes nothing at all and hands the difference over
+  // as a credit note (grill Q7), so the caller asks about `max(net, 0)` and there
+  // is no payment here to collect at all.
   const blank = split.notes.find((standing) => !standing.note.number);
   if (blank) return "Type the number of the credit note, or take the row off the bill.";
   const duplicate = duplicateNote(split.notes);

@@ -33,20 +33,42 @@ import type { TillManager } from "./types";
 const ALGORITHM = "pbkdf2_sha256";
 
 /**
- * What a manager may be asked to authorise on a bill.
+ * What a manager may be asked to authorise at the counter.
  *
- * A closed vocabulary, and closed for the same reason `BillTender.mode` is: the
- * value travels to the server as the contract's `override.kind` and is what the
- * daily check groups by, so a fifth string would be an exception nobody counts.
- * A return outside its window is the third and belongs with #184.
+ * Four kinds, in two groups, and the split matters.
+ *
+ * The **first two travel to the server** as the contract's `override.kind` on a
+ * bill, and are what the daily check groups by - so that pair is a closed
+ * vocabulary for the same reason `BillTender.mode` is: a fifth string there would
+ * be an exception nobody counts. `kindsOf` builds the wire word out of those two
+ * and only those two.
+ *
+ * The **second two never reach a wire at all** (#184). A plain return records its
+ * manager as a bare `user_id` and its late-ness as a boolean of its own, so the
+ * returns endpoint has no `kind` field to spell them into. They exist because the
+ * PIN modal is the same modal, and it has to be able to say what it is asking
+ * about.
  */
 /** A discount past what a cashier may give on their own (B2). */
 export const OVER_CAP_DISCOUNT = "over_cap_discount" as const;
 /** A credit note this counter cannot check - unknown, spent, or out of date.
  *  The wire word is the contract's, and it is the plain noun. */
 export const UNVERIFIED_NOTE = "credit_note" as const;
+/** Taking a piece back for a credit note - every one of them takes a manager
+ *  (grill Q7), which is what makes this a kind rather than a value band. */
+export const PLAIN_RETURN = "plain_return" as const;
+/** Taking one back after the return window has closed - the manager's *second*,
+ *  separate answer, and the one the store's morning queue is told about. */
+export const LATE_RETURN = "late_return" as const;
 
-export type AuthorisationKind = typeof OVER_CAP_DISCOUNT | typeof UNVERIFIED_NOTE;
+export type AuthorisationKind =
+  | typeof OVER_CAP_DISCOUNT
+  | typeof UNVERIFIED_NOTE
+  | typeof PLAIN_RETURN
+  | typeof LATE_RETURN;
+
+/** The kinds a *bill* can carry, which is what `override.kind` is spelled from. */
+export const WIRE_KINDS = [OVER_CAP_DISCOUNT, UNVERIFIED_NOTE] as const;
 
 /**
  * One thing on a bill that a manager has to agree to.
@@ -103,9 +125,7 @@ export function covers(authorisation: Authorisation | null, asks: Ask[]): boolea
 
 /** The kinds among a set of asks, in the fixed order they are always written. */
 export function kindsOf(asks: Ask[]): AuthorisationKind[] {
-  return [OVER_CAP_DISCOUNT, UNVERIFIED_NOTE].filter((kind) =>
-    asks.some((ask) => ask.kind === kind),
-  );
+  return WIRE_KINDS.filter((kind) => asks.some((ask) => ask.kind === kind));
 }
 
 /**

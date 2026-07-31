@@ -34,9 +34,12 @@ from core.money import MoneyField
 from masters.models import Gstin
 
 #: Doc types this app mints. `SAL` is till-assigned (see the kernel's
-#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` is an ordinary server-allocated counter.
+#: `EXTERNAL_NUMBER_DOC_TYPES`); `CRN` and `SRT` are ordinary server-allocated
+#: counters - a plain return needs the network by design (grill Q7), so there is
+#: nothing offline about its number.
 SALE_DOC_TYPE = "SAL"
 CREDIT_NOTE_DOC_TYPE = "CRN"
+RETURN_DOC_TYPE = "SRT"
 
 
 class SellPolicy(TimeStampedModel):
@@ -63,6 +66,15 @@ class SellPolicy(TimeStampedModel):
     which "the paperwork is on its way" stops being a fair description. Three days
     is a starting number, not a ruling: nothing in the corpus fixes one, and it is
     a dial precisely so head office can move it without a deploy (Rule 12).
+
+    ``return_window_days`` is how long after a bill a piece may be brought back
+    without a manager saying so explicitly (#184). Grill Q7 puts the window in
+    data rather than in code, and past it the return is not refused - it takes the
+    manager's *second* answer, the window override, and lands flagged. Thirty days
+    is a starting number for the same reason the one above is: nothing in the
+    corpus fixes a customer-facing window (the 60-120 days in the domain facts are
+    the *brand's* return terms, which are a different clock entirely), and head
+    office moves this one without a release.
     """
 
     SINGLETON_PK = 1
@@ -81,6 +93,11 @@ class SellPolicy(TimeStampedModel):
         default=3,
         help_text="How many days a sold-before-inward line may wait to be costed "
         "before the store's exception list carries it.",
+    )
+    return_window_days = models.IntegerField(
+        default=30,
+        help_text="How many days after a bill a piece comes back without a manager "
+        "having to override the window.",
     )
 
     class Meta:
@@ -101,13 +118,20 @@ class SellPolicy(TimeStampedModel):
                 condition=models.Q(uncosted_aging_days__gte=0),
                 name="ck_sellpolicy_aging_is_not_negative",
             ),
+            # Nought is a legitimate setting - "every return needs the window
+            # override" - so the floor is nought and not one.
+            models.CheckConstraint(
+                condition=models.Q(return_window_days__gte=0),
+                name="ck_sellpolicy_window_is_not_negative",
+            ),
         ]
 
     def __str__(self) -> str:
         return (
             f"cap {self.manual_discount_cap_percent}% · "
             f"credit notes valid {self.credit_note_validity_days}d · "
-            f"uncosted flagged after {self.uncosted_aging_days}d"
+            f"uncosted flagged after {self.uncosted_aging_days}d · "
+            f"returns inside {self.return_window_days}d"
         )
 
     @classmethod
@@ -183,6 +207,16 @@ class CreditNote(Document):
         on_delete=models.PROTECT,
         related_name="credit_notes_issued",
         help_text="The bill that issued it - an exchange whose returns exceeded its sales.",
+    )
+    source_return = models.ForeignKey(
+        "sell.Return",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="credit_notes_issued",
+        help_text="The plain return that issued it. Exactly one of the two sources "
+        "is ever set - a note is handed over either at the end of a bill or at the "
+        "end of a return, and never both.",
     )
     created_by = models.ForeignKey(
         "accounts.User", null=True, blank=True, on_delete=models.PROTECT, related_name="+"
@@ -538,6 +572,16 @@ class SaleLine(TimeStampedModel):
         return self.direction == self.Direction.RETURN
 
     @property
+    def value_paise(self) -> int:
+        """What this line is worth on the bill - the price paid, or the refund.
+
+        The same word a plain return's line answers to, so the posting engine can
+        take either without asking which table it came from (#184). `direction`
+        already carries the sign, so this is a magnitude on both.
+        """
+        return int(self.net_paise or 0)
+
+    @property
     def cost_paise(self) -> int:
         """What this line's pieces cost the books, at the rate frozen on it."""
         return int(self.unit_cost_paise or 0) * int(self.qty)
@@ -608,6 +652,166 @@ class CreditNoteRedemption(TimeStampedModel):
         return f"{self.credit_note_id} −{self.amount_paise}"
 
 
+class Return(Document):
+    """A piece brought back with nothing bought in its place (#184, grill Q7).
+
+    The sibling of the exchange, and everything that differs between the two
+    follows from one sentence: an exchange is a *bill*, and this is not. A bill
+    has a customer paying for something, so it can carry a return leg inside it
+    and net the two. A plain return has no sale to hide behind - the counter is
+    only giving value back - which makes it the best-documented theft channel at
+    any POS, and so:
+
+    * **No cash leg exists on this document by construction.** The customer takes
+      a credit note for what they actually paid, and the money stays inside the
+      system until it is spent on a real bill.
+    * **Every one of them takes a manager's tap.** `override_by` is not nullable
+      in practice - the pipeline refuses a return without a manager of this store
+      behind it - and the column is what a daily check reads.
+    * **The number comes from the server.** Returns are rare and risky, so the
+      till disables the whole flow while it is offline (the in-bill exchange still
+      works). There is nothing to number offline and no queue to replay.
+
+    `original_sale` is PROTECT rather than SET_NULL: what the customer is owed is
+    what they paid on that bill, so a return whose original had gone would be a
+    refund with nothing behind it.
+    """
+
+    store = models.ForeignKey("masters.Store", on_delete=models.PROTECT, related_name="returns")
+    fy = models.CharField(max_length=7)
+    original_sale = models.ForeignKey(Sale, on_delete=models.PROTECT, related_name="plain_returns")
+    returned_at = models.DateTimeField(help_text="When the counter took the piece back.")
+    customer_name = models.CharField(max_length=120, blank=True, default="")
+    customer_mobile = models.CharField(max_length=15, blank=True, default="")
+    window_override = models.BooleanField(
+        default=False,
+        help_text="The manager took this back past the return window in SellPolicy. "
+        "A second, explicit answer - not something the ordinary override covers.",
+    )
+    override_by = models.ForeignKey(
+        "accounts.User",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="returns_authorised",
+        help_text="The manager who stood behind this return. PROTECT because the "
+        "name is the evidence.",
+    )
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="returns_taken"
+    )
+
+    class Meta(Document.Meta):
+        db_table = "sell_return"
+        ordering = ["-returned_at", "-id"]
+        constraints = [*Document.Meta.constraints]
+        indexes = [
+            models.Index(fields=["store", "returned_at"], name="return_store_taken_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return self.doc_number or f"Return(draft #{self.pk})"
+
+    @property
+    def doc_type(self) -> str:
+        return RETURN_DOC_TYPE
+
+    @property
+    def gstin(self) -> Gstin:
+        """The registration the return posts under - the store's, as a sale's is.
+
+        `post_entries` snapshots this onto every leg, and Bihar and Jharkhand are
+        separate registered persons: a reversal of a Bihar sale has to land in
+        Bihar's books whichever counter it was taken at.
+        """
+        return self.store.gstin
+
+    def series_lookup(self) -> tuple[str, str, str]:
+        return self.fy, self.store.code, RETURN_DOC_TYPE
+
+
+class ReturnLine(TimeStampedModel):
+    """One piece off one bill, given back.
+
+    Everything money-shaped here is copied off the line it gives back rather than
+    worked out again (D2, Rule 3). What the customer gets is what they paid -
+    never today's price - and which book the cost came out of is the book the
+    *sale* posted to, whatever the brand's terms have become since.
+    """
+
+    return_doc = models.ForeignKey(Return, on_delete=models.CASCADE, related_name="lines")
+    line_no = models.IntegerField()
+    original_line = models.ForeignKey(
+        SaleLine, on_delete=models.PROTECT, related_name="plain_returned_by"
+    )
+    barcode = models.CharField(max_length=64, db_index=True)
+    season = models.CharField(max_length=120, blank=True, default="")
+    # The same seven merchandising dims a bill line snapshots, for the same
+    # reason: a ledger row read years later must not depend on the masters still
+    # saying what they said.
+    design = models.CharField(max_length=120, blank=True, default="")
+    color = models.CharField(max_length=60, blank=True, default="")
+    size = models.CharField(max_length=24, blank=True, default="")
+    brand = models.CharField(max_length=120, blank=True, default="")
+    item = models.CharField(max_length=120, blank=True, default="")
+    hsn = models.CharField(max_length=24, blank=True, default="")
+    qty = models.IntegerField()
+    refund_paise = MoneyField(
+        default=0, help_text="What the customer actually paid for this quantity (D2)."
+    )
+    gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    gst_paise = MoneyField(
+        default=0, help_text="The tax inside the refund, at the rate the bill charged."
+    )
+    unit_cost_paise = MoneyField(
+        default=0, help_text="The cost frozen on the original line. Zero when it was never priced."
+    )
+    cost_book = models.CharField(
+        max_length=8, choices=SaleLine.CostBook.choices, blank=True, default=""
+    )
+    cost_vendor = models.ForeignKey(
+        "vendors.Vendor",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="return_lines_reversed",
+    )
+    reason = models.CharField(max_length=40, blank=True, default="")
+    condition = models.CharField(
+        max_length=8, choices=SaleLine.Condition.choices, default=SaleLine.Condition.GOOD
+    )
+
+    class Meta:
+        db_table = "sell_return_line"
+        ordering = ["return_doc_id", "line_no"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["return_doc", "line_no"], name="uq_returnline_doc_line_no"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(qty__gt=0), name="ck_returnline_qty_positive"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.return_doc_id}/{self.line_no} · {self.barcode} × {self.qty}"
+
+    @property
+    def is_return(self) -> bool:
+        """Always. It exists so a return line and a bill's own exchange leg can be
+        handed to the same stock and costing code, which asks exactly this."""
+        return True
+
+    @property
+    def value_paise(self) -> int:
+        """What this line is worth - see `SaleLine.value_paise`."""
+        return int(self.refund_paise or 0)
+
+    @property
+    def cost_paise(self) -> int:
+        return int(self.unit_cost_paise or 0) * int(self.qty)
+
+
 class ContinuityFlag(TimeStampedModel):
     """Something a human should look at, on a bill that was taken anyway.
 
@@ -631,6 +835,24 @@ class ContinuityFlag(TimeStampedModel):
         # on this bill is not the dated slab's" in one bucket, and head office
         # answers those two with entirely different work.
         GSTIN_INVALID = "gstin_invalid", "The buyer's GSTIN is not well formed"
+        # #184. Two things a plain return can be that nothing else here means.
+        #
+        # A **late** return is one taken past the window in `SellPolicy`. The
+        # `window_override` column on the document says a manager answered for
+        # it; this row is what puts it on the store's morning queue, because the
+        # window is the one policy at this counter a manager can set aside on
+        # their own say-so and the whole point of grill Q7 is that returns are
+        # watched.
+        #
+        # An **uncosted** return is a piece given back before the books could
+        # ever price it - sold before its paperwork arrived (#186) and returned
+        # before the PT landed. The money reverses, the stock comes back, and
+        # there is no cost event to unwind because none was ever posted. It is
+        # flagged rather than deferred: `DeferredCosting` hangs off a `SaleLine`
+        # and a plain return has none, and posting a guess at what the piece cost
+        # is the one outcome worse than telling somebody.
+        RETURN_LATE = "return_late", "Taken back after the return window closed"
+        RETURN_UNCOSTED = "return_uncosted", "Given back before the books could price it"
 
     class Status(models.TextChoices):
         OPEN = "open", "Open"
@@ -673,6 +895,13 @@ class DeferredCosting(TimeStampedModel):
     class Status(models.TextChoices):
         WAITING = "waiting", "Waiting on inward"
         POSTED = "posted", "Posted"
+        # #184. The piece came back before anything ever priced it, so there is
+        # no cost to post and never will be: the sale's cost event and the
+        # return's reversal would be the same figure in opposite directions, and
+        # the honest total of the pair is nothing at all. Left as a row rather
+        # than deleted, because the queue is the record that a bill's cost was
+        # dealt with - and "given back" is one of the ways it can be.
+        RETURNED = "returned", "Given back before it could be priced"
 
     class Reason(models.TextChoices):
         """What the books are actually waiting for.

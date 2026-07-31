@@ -1,0 +1,98 @@
+{
+  "note": "What a piece is worth back (#184, D2), as one file two engines answer to. Python reads it from tests/test_sell_refund_vectors.py, TypeScript from src/till/refund.vectors.test.ts, and neither may be 'fixed' by editing this file - a case changes only when the rule changes, and then it changes for both at once. The reason is the same one the GSTIN vectors give: the counter works out a refund offline, on a bill it is about to print, and the accept pipeline then works it out again and refuses the whole bill where the two differ by a single paisa - with the customer gone and every bill behind it stopped in the queue.",
+
+  "rule": "refund(paid, line_qty, returning, returned_qty, returned_paise) = paid - returned_paise when returned_qty + returning >= line_qty (the last of a line settles the remainder), else round-half-up(paid * returning / line_qty). Half-up in integers, never a float and never banker's rounding.",
+
+  "cases": [
+    {
+      "why": "the whole of a single-piece line - what the customer paid, to the paisa",
+      "paid": 104930,
+      "line_qty": 1,
+      "returning": 1,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 104930
+    },
+    {
+      "why": "the whole of a multi-piece line at once",
+      "paid": 2999,
+      "line_qty": 3,
+      "returning": 3,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 2999
+    },
+    {
+      "why": "one of three, where the share does not divide - 999.67 rounds half-up to 1000, and banker's rounding on a float would pay 999",
+      "paid": 2999,
+      "line_qty": 3,
+      "returning": 1,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 1000
+    },
+    {
+      "why": "the second of the same three - still a share, still rounded up",
+      "paid": 2999,
+      "line_qty": 3,
+      "returning": 1,
+      "returned_qty": 1,
+      "returned_paise": 1000,
+      "refund": 1000
+    },
+    {
+      "why": "the last of the three settles the remainder, so the parts sum to exactly what was paid rather than leaving a paisa in the books for ever",
+      "paid": 2999,
+      "line_qty": 3,
+      "returning": 1,
+      "returned_qty": 2,
+      "returned_paise": 2000,
+      "refund": 999
+    },
+    {
+      "why": "an exact half - 5.5 paise a piece - goes up, which is the rounding the shop floor uses and the rounding banker's would not",
+      "paid": 1005,
+      "line_qty": 2,
+      "returning": 1,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 503
+    },
+    {
+      "why": "two of five at once, sharing rather than settling",
+      "paid": 149900,
+      "line_qty": 5,
+      "returning": 2,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 59960
+    },
+    {
+      "why": "the rest of that line afterwards - the remainder, not three more shares",
+      "paid": 149900,
+      "line_qty": 5,
+      "returning": 3,
+      "returned_qty": 2,
+      "returned_paise": 59960,
+      "refund": 89940
+    },
+    {
+      "why": "a piece already partly given back by the *other* route - the exchange leg and the plain return share one ledger, so the arithmetic cannot tell them apart and must not try",
+      "paid": 100000,
+      "line_qty": 4,
+      "returning": 1,
+      "returned_qty": 3,
+      "returned_paise": 75000,
+      "refund": 25000
+    },
+    {
+      "why": "a line the books priced at nothing gives back nothing - a sold-before-inward piece the counter billed off the tag at nought would otherwise refund a garment nobody paid for",
+      "paid": 0,
+      "line_qty": 1,
+      "returning": 1,
+      "returned_qty": 0,
+      "returned_paise": 0,
+      "refund": 0
+    }
+  ]
+}
