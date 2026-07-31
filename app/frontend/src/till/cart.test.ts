@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  addManualPiece,
   addPiece,
   capFor,
   changeFor,
@@ -643,5 +644,91 @@ describe("what the chips on a line say", () => {
     expect(bill.lines[0].offer_credits).toEqual([
       { offer_id: 9, offer_name: "Monsoon extra 10", layer: "storewide", saved_paise: 14990 },
     ]);
+  });
+});
+
+describe("a piece the counter has never heard of", () => {
+  /** A manual line, credited to somebody and priced off the tag - which is how
+   *  one reaches Save & Print. */
+  function offTheTag(over: Partial<Cart["lines"][number]> = {}) {
+    return {
+      ...addManualPiece("8909999999901"),
+      salesman: 1,
+      manual_desc: "Blue check shirt",
+      mrp_paise: 149900,
+      ...over,
+    };
+  }
+
+  it("keeps the barcode that found nothing", () => {
+    // It is not decoration: the server parks the line's cost against this
+    // barcode, and the sweep releases it when the PT prices that cohort (#186).
+    expect(addManualPiece(" 8909999999901 ").barcode).toBe("8909999999901");
+  });
+
+  it("carries no brand, no season and no price, because nothing recorded any", () => {
+    const line = addManualPiece("8909999999901");
+
+    expect(line.sold_before_inward).toBe(true);
+    expect(line.needs_price).toBe(true);
+    expect(line.mrp_paise).toBe(0);
+    expect([line.brand, line.season, line.hsn, line.item]).toEqual(["", "", "", ""]);
+  });
+
+  it("is taxed at the general apparel slab, having no HSN of its own", () => {
+    const bill = priceCart(cartOf(offTheTag()), WORLD, "2026-07-30");
+
+    expect(bill.lines[0].gst_rate).toBe("5.00");
+    expect(bill.lines[0].gst_paise).toBe(7138);
+  });
+
+  it("no brand rule can reach, because it has no brand yet to be written about", () => {
+    // Not a special case anywhere: `item_scope` simply does not match a line with
+    // nothing in it. A *storewide* rule still reaches it, and should - "10% off
+    // everything today" is a sentence about the shop, not about a cohort.
+    const bill = priceCart(cartOf(offTheTag()), RULEBOOK, "2026-07-30");
+
+    expect(bill.lines[0].offer_paise).toBe(0);
+    expect(bill.lines[0].offer_credits).toEqual([]);
+  });
+
+  it("refuses to close until somebody says what it is", () => {
+    // `LINE_UNRESOLVED` on the server, and it arrives after the receipt has
+    // printed - halting every bill queued behind it.
+    const bill = priceCart(cartOf(offTheTag({ manual_desc: "  " })), WORLD, "2026-07-30");
+
+    expect(whyItCannotClose(bill)).toContain("not in the system");
+  });
+
+  it("still refuses to close until somebody types the price off the tag", () => {
+    const bill = priceCart(cartOf(offTheTag({ mrp_paise: 0 })), WORLD, "2026-07-30");
+
+    expect(whyItCannotClose(bill)).toContain("no price");
+  });
+
+  it("closes once it has a description, a price and a salesman", () => {
+    const cart = paying(cartOf(offTheTag()), { cash_received_paise: 149900 });
+
+    expect(whyItCannotClose(priceCart(cart, WORLD, "2026-07-30"))).toBe("");
+  });
+
+  it("sends the typed description up with the bill", () => {
+    const bill = priceCart(cartOf(offTheTag()), WORLD, "2026-07-30");
+    const drafted = toDraft(bill, { billedAt: "2026-07-30T12:31:00.000Z" });
+
+    expect(drafted.lines[0].manual_desc).toBe("Blue check shirt");
+    expect(drafted.lines[0].barcode).toBe("8909999999901");
+    // And it is an ordinary sale line in every other way, so the arithmetic the
+    // server re-derives holds on it too.
+    expect(drafted.lines[0].mrp_paise * drafted.lines[0].qty - drafted.lines[0].disc_paise).toBe(
+      drafted.lines[0].net_paise,
+    );
+  });
+
+  it("says nothing about a description on an ordinary scanned line", () => {
+    const bill = priceCart(cartOf(scanned(149900)), WORLD, "2026-07-30");
+    const drafted = toDraft(bill, { billedAt: "2026-07-30T12:31:00.000Z" });
+
+    expect(drafted.lines[0].manual_desc).toBe("");
   });
 });

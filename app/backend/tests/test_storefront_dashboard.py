@@ -39,10 +39,11 @@ from sell.models import HeldBill
 
 URL = "/api/store/dashboard"
 
-#: The seven keys this build can honestly count. The other two in the contract
-#: (`uncosted_sale_lines`, `continuity_flags`) read `sell` tables that #186 and
-#: #188 create; see `storefront/dashboard.py` for why they are absent rather than
-#: nought. `held_bills` joined the list when the hold itself did (#185).
+#: The eight keys this build can honestly count. The last one in the contract
+#: (`continuity_flags`) reads a `sell` table that #188 fills; see
+#: `storefront/dashboard.py` for why it is absent rather than nought.
+#: `held_bills` joined the list when the hold itself did (#185), and
+#: `uncosted_sale_lines` when the costing sweep did (#186).
 QUEUE_KEYS = [
     "approvals_pending",
     "transfers_to_receive",
@@ -51,6 +52,7 @@ QUEUE_KEYS = [
     "rtb_windows_closing",
     "open_count_session",
     "held_bills",
+    "uncosted_sale_lines",
 ]
 
 
@@ -269,8 +271,8 @@ def test_the_sparkline_has_seven_dated_points_before_it_has_any_values(cashier):
 
 
 def test_every_queue_row_is_a_key_this_build_can_actually_count(cashier):
-    """The three `sell` keys are absent, not nought: nothing can be put on hold
-    until there is a till, and "0 bills on hold" is a sentence about a morning."""
+    """The key whose table is not built yet is absent, not nought: a row reading
+    "0 exceptions" is a sentence about a morning, and would be a false one."""
     body = cashier.get(URL).json()
     assert [row["key"] for row in body["action_queue"]] == QUEUE_KEYS
 

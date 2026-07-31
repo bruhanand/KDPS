@@ -42,8 +42,8 @@ CREDIT_NOTE_DOC_TYPE = "CRN"
 class SellPolicy(TimeStampedModel):
     """The shop floor's money dials, as data rather than as constants (Rule 12).
 
-    One row, because both dials are one decision head office makes for the chain
-    and neither varies by store today. It is read on every accept, so it is
+    One row, because each dial is one decision head office makes for the chain and
+    none of them varies by store today. It is read on every accept, so it is
     deliberately tiny.
 
     ``manual_discount_cap_percent`` is the B2 rule: a discount the rulebook did
@@ -56,6 +56,13 @@ class SellPolicy(TimeStampedModel):
 
     ``credit_note_validity_days`` is how long a note issued here stays spendable.
     Six months is the Indian norm and the grill recorded it as data, not a rule.
+
+    ``uncosted_aging_days`` is how long a line sold before its paperwork may sit in
+    the costing queue before somebody is told about it (#186). The queue drains
+    itself when the PT lands, so the dial is not a deadline - it is the point past
+    which "the paperwork is on its way" stops being a fair description. Three days
+    is a starting number, not a ruling: nothing in the corpus fixes one, and it is
+    a dial precisely so head office can move it without a deploy (Rule 12).
     """
 
     SINGLETON_PK = 1
@@ -69,6 +76,11 @@ class SellPolicy(TimeStampedModel):
     credit_note_validity_days = models.IntegerField(
         default=180,
         help_text="How many days a credit note issued at the counter stays spendable.",
+    )
+    uncosted_aging_days = models.IntegerField(
+        default=3,
+        help_text="How many days a sold-before-inward line may wait to be costed "
+        "before the store's exception list carries it.",
     )
 
     class Meta:
@@ -85,12 +97,17 @@ class SellPolicy(TimeStampedModel):
                 condition=models.Q(credit_note_validity_days__gt=0),
                 name="ck_sellpolicy_validity_is_positive",
             ),
+            models.CheckConstraint(
+                condition=models.Q(uncosted_aging_days__gte=0),
+                name="ck_sellpolicy_aging_is_not_negative",
+            ),
         ]
 
     def __str__(self) -> str:
         return (
             f"cap {self.manual_discount_cap_percent}% · "
-            f"credit notes valid {self.credit_note_validity_days}d"
+            f"credit notes valid {self.credit_note_validity_days}d · "
+            f"uncosted flagged after {self.uncosted_aging_days}d"
         )
 
     @classmethod
@@ -661,14 +678,19 @@ class DeferredCosting(TimeStampedModel):
         only the value is missing, so re-posting the movement would take the piece
         out twice.
 
-        They also drain differently, and only the first one drains today. An
-        `unpriced` row is released by the PT that prices its cohort, which is the
-        hook #186 builds. The other two are waiting on **master data**, not on an
-        inward - somebody adding the brand, or naming its supplier - so no PT will
-        ever release them and #186 needs a masters-side trigger as well. Until it
-        has one they sit in the queue: visible, aged by the daily check, and
-        deliberately not posted, because a guess about whose stock it was is the
-        one outcome worse than a wait.
+        They also drain through different doors, which is why `sell.signals` has
+        two. An `unpriced` row is released by the PT that prices its cohort. The
+        other two are waiting on **master data**, not on an inward - somebody
+        adding the brand, or naming its supplier - so no PT will ever release them
+        and a brand or supplier edit is what does. Until one arrives they sit in
+        the queue: visible, aged by the daily check, and deliberately not posted,
+        because a guess about whose stock it was is the one outcome worse than a
+        wait.
+
+        A reason is not a fact about the past, either. A line waiting for its price
+        can be priced by a PT and still not be placeable, at which point the sweep
+        re-labels it as waiting on the masters instead. What the row *has* moved is
+        never read off here - see `sell.services.costing_sweep`.
         """
 
         UNPRICED = "unpriced", "No cost of record - sold before inward"

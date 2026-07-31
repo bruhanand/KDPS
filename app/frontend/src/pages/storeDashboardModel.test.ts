@@ -11,7 +11,7 @@ import {
   type DashboardPayload,
 } from "./storeDashboardModel";
 
-/** The seven keys `storefront/dashboard.py` sends today, in its order. Kept as a
+/** The eight keys `storefront/dashboard.py` sends today, in its order. Kept as a
  *  literal on purpose: if the server adds a key this side has never heard of,
  *  the row silently disappears, and this is the test that says so. */
 const SERVER_KEYS = [
@@ -22,6 +22,7 @@ const SERVER_KEYS = [
   "rtb_windows_closing",
   "open_count_session",
   "held_bills",
+  "uncosted_sale_lines",
 ];
 
 function payload(over: Partial<DashboardPayload> = {}): DashboardPayload {
@@ -52,12 +53,20 @@ describe("the action queue", () => {
   });
 
   it("draws no key it has no screen for", () => {
-    // The last two `sell` keys land with #186 and #188; until then a row would be
-    // a number nobody could click through and clear. `held_bills` is on the list
-    // now because #185 built the screen that clears it.
-    expect(KNOWN_QUEUE_KEYS).not.toContain("uncosted_sale_lines");
-    const rows = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }));
+    // The last `sell` key lands with #188; until then a row would be a number
+    // nobody could click through and clear. `held_bills` came off this list with
+    // #185 and `uncosted_sale_lines` with #186, each when its screen arrived.
+    expect(KNOWN_QUEUE_KEYS).not.toContain("continuity_flags");
+    const rows = queueRows(payload({ action_queue: [{ key: "continuity_flags", count: 4 }] }));
     expect(rows).toEqual([]);
+  });
+
+  it("sends pieces sold before their paperwork to where the paperwork lands", () => {
+    // Nobody clears this queue by reading it: it clears itself when the PT that
+    // prices the piece is posted, so the row goes to Goods Inward (#186).
+    const [row] = queueRows(payload({ action_queue: [{ key: "uncosted_sale_lines", count: 4 }] }));
+    expect(row.to).toBe("/receive");
+    expect(row.count).toBe(4);
   });
 
   it("sends bills on hold to the counter that can pick them up", () => {

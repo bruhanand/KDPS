@@ -11,8 +11,9 @@ just to draw a card (ADR-0002) - the same shape `search` already has.
 ticket at a time. A key is *absent* rather than reported as nought until its table
 is there: a row saying "0 bills on hold" would be a sentence about a store's
 morning, and what would actually be true is that nothing can be put on hold yet.
-`held_bills` joined the queue with the hold list itself (#185); the other two wait
-for `sell_deferredcosting` (#186) and the daily check (#188).
+`held_bills` joined the queue with the hold list itself (#185) and
+`uncosted_sale_lines` with the costing sweep (#186); `continuity_flags` waits for
+the daily check (#188).
 
 The same honesty runs through the money tiles, which the contract does fix at
 zero: `sales_live` says whether a Sale can exist at all, so the screen can label
@@ -42,7 +43,7 @@ from offers.models import Offer
 from offers.serializers import one_liner
 from outbound.models import CountStatus, MarkDamaged, Stocktake, StoreTransfer
 from ptmapper.models import PtFile
-from sell.models import HeldBill
+from sell.models import DeferredCosting, HeldBill
 
 #: How many in-transit cartons the "live in store" card names before it stops
 #: listing and the action-queue row carries the rest. Four fits the card; the
@@ -237,6 +238,22 @@ def _held_bills(store: Store) -> int:
     return int(HeldBill.objects.filter(store_id=store.id).count())
 
 
+def _uncosted_sale_lines(store: Store) -> int:
+    """Lines this store sold before the paperwork could price them (#186).
+
+    Counted per *line* rather than per bill, because a line is what the sweep
+    releases and what the daily check ages - a bill with two such lines is two
+    pieces the books cannot value, not one problem. Rows already posted drop out
+    the moment their PT lands, which is what makes this a queue rather than a
+    tally: it is meant to sit at nought.
+    """
+    return int(
+        DeferredCosting.objects.filter(
+            store_id=store.id, status=DeferredCosting.Status.WAITING
+        ).count()
+    )
+
+
 def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[str, Any]]:
     """The needs-your-action rows, in the contract's order.
 
@@ -244,7 +261,7 @@ def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[st
     a table that exists, so nought is a fact about the store and not about the
     build. The screen greys a nought row rather than hiding it - a queue that
     changes length as work is cleared is one you stop trusting to be the whole
-    list. The two keys still missing are the ones whose tables are (see the module
+    list. The one key still missing is the one whose table is (see the module
     docstring).
     """
     return [
@@ -255,6 +272,7 @@ def action_queue(user: Any, store: Store, in_transit_count: int) -> list[dict[st
         {"key": "rtb_windows_closing", "count": _rtb_windows_closing(store)},
         {"key": "open_count_session", "count": _open_count_session(store)},
         {"key": "held_bills", "count": _held_bills(store)},
+        {"key": "uncosted_sale_lines", "count": _uncosted_sale_lines(store)},
     ]
 
 

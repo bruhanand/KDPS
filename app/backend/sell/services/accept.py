@@ -53,6 +53,7 @@ from sell.models import (
     SellPolicy,
 )
 from sell.pricing import base_from_inclusive, split_line
+from sell.services.movements import post_stock_move
 from sell.services.postings import (
     CostedLine,
     CostPlan,
@@ -73,8 +74,6 @@ from sell.services.resolve import (
     resolve_piece,
     slab_for,
 )
-from stockledger.models import StockLedgerEntry
-from stockledger.projections import post_on_hand_movement, post_quarantine_movement
 
 #: How far a bill's tax may sit from the dated slab before it is worth a human's
 #: time - one rupee a line, per the daily applied-vs-rulebook check (B3, D5 Q10).
@@ -960,44 +959,16 @@ def _write_stock_legs(sale: Sale, store: Store, lines: list[_PreparedLine], acto
 
     A sold piece leaves the shelf; a returned one comes back to it, unless it
     comes back damaged, in which case it goes straight into quarantine and never
-    becomes sellable again without somebody looking at it (D3).
+    becomes sellable again without somebody looking at it (D3). Which of those a
+    line is, and where it lands, is `sell.services.movements` - shared with the
+    sweep so the two cannot answer it differently.
 
     A line the books cannot price writes nothing. That is not a gap: the piece was
     never inwarded, so there is no stock to take off a shelf it was never on, and
     the movement posts with the cost event when the paperwork lands (#186).
     """
     for row in _priced_rows(lines):
-        mover, kind, sign = _MOVEMENTS[_movement_of(row)]
-        mover(
-            store=store,
-            gstin=store.gstin,
-            sku_code=row.barcode,
-            source=row,
-            qty=sign * row.qty,
-            unit_cost_paise=row.unit_cost_paise,
-            kind=kind,
-            doc_number=sale.doc_number or "",
-            line_no=row.line_no,
-            posted_by=actor,
-        )
-
-
-def _movement_of(row: SaleLine) -> str:
-    """Which of the three things a bill line does to stock."""
-    if row.direction != SaleLine.Direction.RETURN:
-        return "sold"
-    return "returned_damaged" if row.condition == SaleLine.Condition.DAMAGED else "returned_good"
-
-
-#: The three movements a bill can make, each as `(writer, ledger kind, sign)`.
-#: One table rather than a pair of branches, so the bucket a piece lands in and
-#: the kind that names it can never be chosen by two different conditions and
-#: disagree - which is the failure that would put a damaged return on the shelf.
-_MOVEMENTS = {
-    "sold": (post_on_hand_movement, StockLedgerEntry.Kind.SALE_OUT, -1),
-    "returned_good": (post_on_hand_movement, StockLedgerEntry.Kind.SALE_RETURN_IN, 1),
-    "returned_damaged": (post_quarantine_movement, StockLedgerEntry.Kind.QUARANTINE_IN, 1),
-}
+        post_stock_move(sale, store, row, actor)
 
 
 def _priced_rows(lines: list[_PreparedLine]) -> list[SaleLine]:

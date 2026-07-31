@@ -9,6 +9,7 @@ import { Money, paiseToRupees, rupeesToPaise } from "../../lib/format";
 import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import {
+  addManualPiece,
   addPiece,
   emptyCart,
   priceCart,
@@ -84,8 +85,12 @@ import "./Billing.css";
 // overnight is sold at tomorrow's prices and offers, not at the ones it happened
 // to be parked under.
 //
-// What this slice does not do yet, by ticket: the sold-before-inward manual line
-// is #186. Absent rather than faked.
+// **A scan that finds nothing never sends the customer away** (#186, grill Q5).
+// The tag is in their hand, so the counter offers to bill it off the tag: a line
+// with a typed description and a typed price, no cohort behind it, and no cost of
+// record. The server takes the bill, posts the money, and parks the cost event
+// until the PT prices the piece - which is the only way Rule 5 (nothing at
+// nought) and Rule 8 (nothing blocked) can both hold at once.
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -112,6 +117,10 @@ function Counter({ storeName }: { storeName?: string }) {
   const [printProblem, setPrintProblem] = useState("");
   const [lastBill, setLastBill] = useState<{ bill: QueuedBill; receipt: string } | null>(null);
   const [typed, setTyped] = useState("");
+  /** A barcode this counter could not place, waiting on the cashier to say
+   *  whether it is a mistyped tag or a piece that arrived before its paperwork
+   *  (#186). Empty means nothing is being asked. */
+  const [unknown, setUnknown] = useState("");
   // The last salesman *picked*, which is not the same as the last one saved: a
   // bill often runs several lines before it closes, and the second piece should
   // land on the person who sold the first (D10 §4), not on whoever sold the
@@ -193,8 +202,32 @@ function Counter({ storeName }: { storeName?: string }) {
       }));
       setNote("");
       setTyped("");
+      // Picking a real piece answers "was that tag mistyped?" - it was.
+      setUnknown("");
     },
     [defaultSalesman],
+  );
+
+  /**
+   * A garment the counter has never heard of, onto the bill anyway (#186).
+   *
+   * Grill Q5's whole point: the customer is holding it, so the scan finding
+   * nothing is a thing the *shop* has to sort out, not a reason to send them
+   * away. The line carries what the cashier types and what the tag says, and the
+   * server parks its cost event until the paperwork lands.
+   */
+  const takeUnknown = useCallback(
+    (code: string) => {
+      setCart((current) => ({
+        ...current,
+        lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
+      }));
+      setNote("");
+      setTyped("");
+      setUnknown("");
+      scan.focus();
+    },
+    [defaultSalesman, scan],
   );
 
   const applyScan = useCallback(
@@ -203,14 +236,14 @@ function Counter({ storeName }: { storeName?: string }) {
       if (!found.barcode) return;
       if (!found.chosen) {
         // A2 / grill Q5: the customer is holding the garment, so this is a
-        // sentence rather than a refusal. Billing it as a manual line is #186.
-        setNote(
-          `Nothing on this counter is barcode ${found.barcode}. ` +
-            "Check the tag, or search by design number.",
-        );
+        // sentence and an offer rather than a refusal. The suggestion list is
+        // still worth a look first - the commonest reason a tag does not
+        // resolve is that it was mistyped, not that the piece is new.
+        setUnknown(found.barcode);
         setTyped(code.trim());
         return;
       }
+      setUnknown("");
       takePiece(found.chosen, found.candidates, found.stock);
     },
     [takePiece, world],
@@ -253,6 +286,7 @@ function Counter({ storeName }: { storeName?: string }) {
     setNote("");
     setPrintProblem("");
     setTyped("");
+    setUnknown("");
     scan.focus();
   }
 
@@ -303,6 +337,7 @@ function Counter({ storeName }: { storeName?: string }) {
       setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
       setTyped("");
+      setUnknown("");
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
     } catch (error) {
@@ -380,6 +415,7 @@ function Counter({ storeName }: { storeName?: string }) {
       setCart(emptyCart());
       setCustomer({ name: "", mobile: "" });
       setTyped("");
+      setUnknown("");
       setNote(`Bill ${queued.doc_number} saved.`);
       await print(receipt);
     } catch (error) {
@@ -471,6 +507,19 @@ function Counter({ storeName }: { storeName?: string }) {
           onResume={(hold) => void resumeHold(hold)}
           onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
           onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
+        />
+      )}
+
+      {unknown && (
+        <NotInSystem
+          barcode={unknown}
+          hasSuggestions={suggestions.length > 0}
+          locked={locked}
+          onBill={() => takeUnknown(unknown)}
+          onDismiss={() => {
+            setUnknown("");
+            scan.focus();
+          }}
         />
       )}
 
@@ -611,9 +660,15 @@ function messageOf(error: unknown): string {
  *  prints - a customer's copy with no GSTIN on it is better than no copy. */
 const FALLBACK_STORE = { code: "", gstin: "", state_code: "" };
 
-/** How a line reads on paper, from the cart the counter just billed. */
+/** How a line reads on paper, from the cart the counter just billed.
+ *
+ *  A sold-before-inward line has no brand and no item name, so what the cashier
+ *  typed is the only description that exists - and it is the one the customer
+ *  needs, because the alternative is a receipt line that is just a barcode. */
 function describeFrom(lines: PricedLine[]) {
-  const words = new Map(lines.map((line) => [line.line_no, describePiece(line)]));
+  const words = new Map(
+    lines.map((line) => [line.line_no, describePiece(line) || line.manual_desc.trim()]),
+  );
   return (line: { line_no: number; barcode: string }) => words.get(line.line_no) || line.barcode;
 }
 
@@ -659,6 +714,69 @@ function ScanBox({
         onSubmit(value);
       }}
     />
+  );
+}
+
+/**
+ * The scan found nothing: the two things that can mean, as two buttons (#186).
+ *
+ * Almost always the tag was mistyped, so the suggestion list underneath is the
+ * first answer and this says so. The other answer is that the garment really is
+ * new - it walked into the shop ahead of its paperwork - and grill Q5 is clear
+ * that the customer never waits for that. So the second button bills it off the
+ * tag: description and price typed here, cost posted when the PT lands.
+ *
+ * Not a modal. A dialogue over the line grid at the busiest moment of a sale is
+ * the thing D10 §4 keeps off this screen, and there is nothing here a cashier has
+ * to answer before they can carry on scanning.
+ */
+function NotInSystem({
+  barcode,
+  hasSuggestions,
+  locked,
+  onBill,
+  onDismiss,
+}: {
+  barcode: string;
+  hasSuggestions: boolean;
+  locked: boolean;
+  onBill: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="card section-card bill-unknown" data-testid="bill-unknown">
+      <p className="bill-unknown-say">
+        <AlertTriangle size={15} />
+        Nothing on this counter is barcode <span className="mono">{barcode}</span>.
+        {hasSuggestions
+          ? " Check the list below first - a tag is misread far more often than a piece is new."
+          : " Check the tag, or search by design number."}
+      </p>
+      <div className="bill-unknown-do">
+        <button
+          type="button"
+          className="btn"
+          data-testid="bill-unknown-bill"
+          disabled={locked}
+          onClick={onBill}
+        >
+          <Plus size={15} />
+          Bill it off the tag
+        </button>
+        <button
+          type="button"
+          className="btn"
+          data-testid="bill-unknown-dismiss"
+          onClick={onDismiss}
+        >
+          Not that
+        </button>
+      </div>
+      <p className="muted-cell">
+        The bill prints as usual. What the piece cost us is posted when its paperwork arrives,
+        and the store's Dashboard counts it until then.
+      </p>
+    </div>
   );
 }
 
@@ -768,8 +886,7 @@ function Lines({
             <Fragment key={line.key}>
             <tr data-testid={`bill-line-${line.line_no}`}>
               <td>
-                {line.item}
-                <br />
+                <ItemCell line={line} locked={locked} onEdit={onEdit} />
                 <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
               </td>
               <td>{line.brand}</td>
@@ -777,9 +894,11 @@ function Lines({
                 <span className="mono bill-barcode">{line.barcode}</span>
                 <br />
                 {/* The "Total Stock" readout staff use today (A3), against the
-                    barcode it is a count of rather than against the price. */}
+                    barcode it is a count of rather than against the price. A
+                    piece the books have never heard of has no count to show -
+                    "0 in stock" would read as "we have run out" (#186). */}
                 <span className="muted-cell" data-testid={`bill-stock-${line.line_no}`}>
-                  {line.stock} in stock
+                  {line.sold_before_inward ? "no count yet" : `${line.stock} in stock`}
                 </span>
               </td>
               <td>{line.design}</td>
@@ -873,6 +992,42 @@ interface CellProps {
 }
 
 /**
+ * What the piece is: the books' word for it, or the cashier's (#186).
+ *
+ * A sold-before-inward line has no item name because nothing has ever recorded
+ * one, so the cell becomes the box where somebody writes what left the shop. It
+ * is not optional and the bill will not close without it (`whyItCannotClose`):
+ * the server refuses a barcode it cannot place with no words beside it, and it
+ * refuses it *after* the receipt has printed, halting the queue behind it.
+ *
+ * The description is also the only thing this line will ever say about itself
+ * until the PT lands - it is what prints on the customer's copy and what the
+ * store reads when it goes looking for the piece.
+ */
+function ItemCell({ line, locked, onEdit }: CellProps) {
+  if (!line.sold_before_inward) {
+    return (
+      <>
+        {line.item}
+        <br />
+      </>
+    );
+  }
+  return (
+    <input
+      className="input bill-cell"
+      data-testid={`bill-desc-${line.line_no}`}
+      aria-label={`What this piece is, line ${line.line_no}`}
+      autoComplete="off"
+      placeholder="What is it?"
+      disabled={locked}
+      value={line.manual_desc}
+      onChange={(e) => onEdit(line.key, { manual_desc: e.target.value })}
+    />
+  );
+}
+
+/**
  * The season, and the one-tap ask when there is a choice (A2).
  *
  * Never a modal and never a blocker: the line is already on the bill at the
@@ -880,6 +1035,15 @@ interface CellProps {
  * only question this screen is allowed to ask mid-sale.
  */
 function SeasonCell({ line, locked, onEdit, onPicked }: CellProps & { onPicked: () => void }) {
+  if (line.sold_before_inward) {
+    // No season, because no cohort - and saying so is the point. This is the row
+    // the Dashboard will be counting until the paperwork arrives (#186).
+    return (
+      <span className="muted-cell" data-testid={`bill-unknown-line-${line.line_no}`}>
+        Not in the system yet
+      </span>
+    );
+  }
   if (line.alternatives.length < 2) {
     return <span className="muted-cell">{line.season}</span>;
   }
