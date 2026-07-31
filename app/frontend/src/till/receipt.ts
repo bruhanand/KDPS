@@ -131,15 +131,49 @@ export function receiptHtml(
           (part) => [`${part.label} included`, money(part.paise)] as [string, string],
         );
 
+  // What the customer handed back, and what it was worth to them (#184, D2).
+  // On the paper because it is the half of the sum they cannot otherwise check:
+  // the pieces going out are priced off tags they can read, and the pieces coming
+  // back are priced at what *they paid* on a bill from weeks ago.
+  const back = bill.exchange?.lines ?? [];
+  const givenBack = back.reduce((n, leg) => n + leg.refund_paise, 0);
+  const returnedRows = back
+    .map(
+      (leg) => `<tr>
+        <td>${esc(leg.barcode)}<br>
+          <span class="dim">given back${leg.reason ? ` \u00b7 ${esc(leg.reason)}` : ""}</span></td>
+        <td class="n">${leg.qty}</td>
+        <td class="n">&minus;${money(leg.refund_paise)}</td>
+      </tr>`,
+    )
+    .join("");
+  const returnedBlock = back.length
+    ? `<hr><p class="dim">Given back against bill ${esc(String(bill.exchange?.original.till_seq ?? ""))}</p>
+  <table><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Back</th></tr></thead>
+  <tbody>${returnedRows}</tbody></table>`
+    : "";
+
   const totals = [
     ["Pieces", String(pieces)],
     ["Gross", money(bill.totals.gross_paise)],
     ...(bill.totals.discount_paise ? [["You saved", money(bill.totals.discount_paise)]] : []),
+    ...(givenBack ? [["Given back", `\u2212${money(givenBack)}`]] : []),
     ...(bill.totals.round_paise ? [["Rounding", money(bill.totals.round_paise)]] : []),
     ...taxRows,
   ]
     .map(([label, value]) => `<div class="row"><span>${label}</span><span>${value}</span></div>`)
     .join("");
+
+  // A bill whose returns outweigh its sales pays the customer, and it pays them
+  // in a credit note (grill Q7). The note's *number* is head office's to
+  // allocate, so a counter printing offline cannot know it - and saying "to
+  // follow" is the truth rather than a blank. The store writes it on this slip
+  // when the bill syncs, exactly as it does with an IRN.
+  const owed = Math.max(-bill.totals.net_paise, 0);
+  const dueRow = owed
+    ? `<div class="row due"><span>Credit note</span><span>${money(owed)}</span></div>
+  <p class="dim">No cash is paid out on a return. This is a credit note for use at this shop; its number follows when the bill reaches head office.</p>`
+    : `<div class="row due"><span>To pay</span><span>${money(bill.totals.net_paise)}</span></div>`;
 
   // The buyer's own registration, on the paper, above the lines. Without it the
   // document is not a tax invoice and the customer cannot claim the credit the
@@ -199,9 +233,10 @@ export function receiptHtml(
   ${buyerBlock}
   <table><thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead>
   <tbody>${rows}</tbody></table>
+  ${returnedBlock}
   <hr>
   ${totals}
-  <div class="row due"><span>To pay</span><span>${money(bill.totals.net_paise)}</span></div>
+  ${dueRow}
   ${tendered}${received}${changeRow}
   <footer class="mid dim">
     ${bill.origin === "offline" ? "Billed offline &middot; will reach head office when the line is back<br>" : ""}
@@ -234,6 +269,9 @@ export interface PostedLine {
   net_paise: number;
   gst_rate: string;
   gst_paise: number;
+  /** Why it came back, and where it went - on a return leg only (#184). */
+  return_reason?: string;
+  condition?: string;
 }
 
 /** A bill as the *server* has it - `GET /api/sell/sales/{doc_number}`. */
@@ -255,6 +293,9 @@ export interface PostedBill {
   /** Blank until head office has raised one - which is most of a B2B bill's
    *  first month. Blank prints "IRN to follow", exactly as the original did. */
   irn: string;
+  /** The bill this one gave pieces back against, when it carries an exchange
+   *  (#184). Null on an ordinary sale. */
+  exchange_of: { doc_number: string; fy: string; till_seq: number } | null;
   lines: PostedLine[];
   tenders: BillTender[];
   gross_paise: number;
@@ -281,6 +322,15 @@ export interface PostedBill {
  */
 export function postedReceiptHtml(bill: PostedBill): string {
   const cash = bill.tenders.find((tender) => tender.mode === "cash");
+  // **A returned leg is not a sold line, and printing it as one is not a
+  // cosmetic slip** (#184). The posted bill keeps both kinds in one `lines`
+  // list with `direction` telling them apart; render them together and a piece
+  // the customer *handed back* appears on the paper as one they bought, the
+  // column of amounts no longer comes to the total under it, and a customer
+  // reading their own copy is told they were charged for a refund. So the legs
+  // are lifted out into the same exchange block the counter's own copy prints.
+  const sold = bill.lines.filter((line) => line.direction !== "return");
+  const back = bill.lines.filter((line) => line.direction === "return");
   return receiptHtml(
     {
       idempotency_uuid: "",
@@ -299,9 +349,9 @@ export function postedReceiptHtml(bill: PostedBill): string {
         gstin: bill.buyer_gstin,
       },
       b2b_tax_kind: bill.b2b_tax_kind,
-      lines: bill.lines.map((line) => ({
+      lines: sold.map((line) => ({
         line_no: line.line_no,
-        direction: line.direction === "return" ? "return" : "sale",
+        direction: "sale" as const,
         barcode: line.barcode,
         season: line.season,
         qty: line.qty,
@@ -312,6 +362,32 @@ export function postedReceiptHtml(bill: PostedBill): string {
         gst_paise: line.gst_paise,
         manual_desc: line.manual_desc,
       })),
+      ...(back.length
+        ? {
+            exchange: {
+              // The original the bill gave back against. Nought where the books
+              // do not hold it - a paper-era return, which the accept pipeline
+              // takes and flags (`return_orig_missing`) - and the block then
+              // says "given back" without naming a bill, which is the truth.
+              original: {
+                fy: bill.exchange_of?.fy ?? "",
+                till_seq: bill.exchange_of?.till_seq ?? 0,
+              },
+              lines: back.map((line) => ({
+                line_no: line.line_no,
+                barcode: line.barcode,
+                season: line.season,
+                qty: line.qty,
+                refund_paise: line.net_paise,
+                gst_rate: line.gst_rate,
+                gst_paise: line.gst_paise,
+                reason: line.return_reason ?? "",
+                condition: line.condition === "damaged" ? ("damaged" as const) : ("good" as const),
+                original_line: line.line_no,
+              })),
+            },
+          }
+        : {}),
       tenders: bill.tenders,
       totals: {
         gross_paise: bill.gross_paise,

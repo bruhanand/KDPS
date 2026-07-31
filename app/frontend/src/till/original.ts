@@ -106,16 +106,13 @@ function alreadyGivenBack(
 ): Map<number, { qty: number; paise: number }> {
   const given = new Map<number, { qty: number; paise: number }>();
   for (const bill of queue) {
-    const exchange = bill.exchange as
-      | { original?: { fy?: string; till_seq?: number }; lines?: Record<string, number>[] }
-      | undefined;
-    if (exchange?.original?.fy !== fy || exchange.original.till_seq !== seq) continue;
-    for (const leg of exchange.lines ?? []) {
-      const line = Number(leg.original_line ?? 0);
-      const seen = given.get(line) ?? { qty: 0, paise: 0 };
-      given.set(line, {
-        qty: seen.qty + Number(leg.qty ?? 0),
-        paise: seen.paise + Number(leg.refund_paise ?? 0),
+    const exchange = bill.exchange;
+    if (exchange?.original.fy !== fy || exchange.original.till_seq !== seq) continue;
+    for (const leg of exchange.lines) {
+      const seen = given.get(leg.original_line) ?? { qty: 0, paise: 0 };
+      given.set(leg.original_line, {
+        qty: seen.qty + leg.qty,
+        paise: seen.paise + leg.refund_paise,
       });
     }
   }

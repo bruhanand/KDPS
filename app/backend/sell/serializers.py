@@ -410,6 +410,14 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
     #: and answers `None` *before* it ever reaches `default`, so the API would
     #: send `null` where the contract and the TypeScript type both say a string.
     irn = serializers.SerializerMethodField()
+    #: The bill this one gave pieces back against, when it carries an exchange
+    #: (#184). Null on an ordinary sale. A method field for the reason `irn` is
+    #: one: DRF answers `None` for a traversal through a null FK *before* it ever
+    #: reaches `default`, so a `source=` would send `null` where the shape says a
+    #: string. A reprint needs it because a returned line on the paper has to say
+    #: which bill it came back against - otherwise it reads as a piece sold at a
+    #: negative price.
+    exchange_of = serializers.SerializerMethodField()
     lines = SaleLineReadSerializer(many=True, read_only=True)
     tenders = SaleTenderReadSerializer(many=True, read_only=True)
     flags = FlagReadSerializer(many=True, read_only=True)
@@ -435,6 +443,7 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
             "buyer_gstin",
             "b2b_tax_kind",
             "irn",
+            "exchange_of",
             "gross_paise",
             "discount_paise",
             "net_paise",
@@ -453,6 +462,16 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
     def get_irn(self, obj: Sale) -> str:
         queued = getattr(obj, "irn_queue_item", None)
         return queued.irn if queued else ""
+
+    def get_exchange_of(self, obj: Sale) -> dict[str, Any] | None:
+        original = obj.exchange_of
+        if original is None:
+            return None
+        return {
+            "doc_number": original.doc_number or "",
+            "fy": original.fy,
+            "till_seq": original.till_seq,
+        }
 
     def get_credit_notes_issued(self, obj: Sale) -> list[dict[str, Any]]:
         return [

@@ -79,7 +79,9 @@ def _sales(user: Any) -> QuerySet[Sale]:
         # `irn_queue_item` is joined rather than left to the serializer: the read
         # shape names it (#187), and a reverse one-to-one nobody joined is a
         # query per bill on a list of fifty.
-        Sale.objects.select_related("store", "created_by", "irn_queue_item").prefetch_related(
+        Sale.objects.select_related(
+            "store", "created_by", "irn_queue_item", "exchange_of"
+        ).prefetch_related(
             # Annotated rather than left to the serializer: what is still
             # returnable is what the Return & Exchange screen is *for*, and two
             # queries a line on a bill of twenty is a screen that pauses while

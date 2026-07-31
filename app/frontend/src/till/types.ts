@@ -220,6 +220,37 @@ export interface BillLine {
   override_by?: number | null;
 }
 
+/** One piece coming back on a bill, as the wire carries it (#184).
+ *
+ *  Everything money-shaped on it is what the *original* bill charged, not what
+ *  today's price list says: `refund_paise` is what the customer actually paid for
+ *  that quantity (D2) and `gst_rate`/`gst_paise` are the tax inside it at the
+ *  rate that bill was raised under. The server recomputes both and refuses the
+ *  whole bill where either is a paisa out. */
+export interface BillExchangeLine {
+  line_no: number;
+  barcode: string;
+  season?: string;
+  qty: number;
+  refund_paise: number;
+  gst_rate: string;
+  gst_paise: number;
+  reason: string;
+  /** Good goes back on the shelf; damaged goes to quarantine and never becomes
+   *  sellable again without somebody looking at it (D3). */
+  condition: "good" | "damaged";
+  /** Which line of the original bill this gives back. */
+  original_line: number;
+}
+
+/** The exchange block on a bill: which bill is being given back against, and
+ *  which of its lines. The server resolves the original from `(fy, till_seq)`
+ *  pinned to the billing store, so the pair is the whole reference. */
+export interface BillExchange {
+  original: { fy: string; till_seq: number };
+  lines: BillExchangeLine[];
+}
+
 export interface BillTender {
   /** The four trimmed modes and no others - `SaleTender.Mode` on the server, and
    *  a `ChoiceField` there, so a fifth string is a bill the queue halts on. */
@@ -265,7 +296,9 @@ export interface BillDraft {
   lines: BillLine[];
   tenders: BillTender[];
   totals: BillTotals;
-  exchange?: Record<string, unknown>;
+  /** A piece coming back on this same bill (#184). Absent on an ordinary sale,
+   *  which is almost all of them. */
+  exchange?: BillExchange;
   /** The manager's tap: who authorised the exceptions on this bill, what they
    *  were shown, and when they typed the PIN (which is not Save & Print). */
   override?: { user_id: number; kind: string; at: string };
