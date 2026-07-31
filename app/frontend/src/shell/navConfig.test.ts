@@ -277,7 +277,7 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     const staffRows = rowsFor("store_staff", STORE_CAPS);
     expect(headings(managerRows)).toEqual(TEN);
     expect(managerRows).toEqual(staffRows);
-    const hrmsStrip = managerRows.find((r) => r.kind === "strip" && r.strip.section === "hrms");
+    const hrmsStrip = stripRow(managerRows, "hrms");
     expect(hrmsStrip?.kind === "strip" && hrmsStrip.tabs.map((t) => t.label)).toEqual(["Attendance"]);
   });
 
