@@ -14,6 +14,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from approvals.names import display_name
 from sell.models import ContinuityFlag, HeldBill, IrnQueueItem, Sale, SaleLine, SaleTender
 
 
@@ -306,7 +307,12 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
     #: every B2C bill and on a B2B bill still in the queue - and the reprint
     #: prints "IRN to follow" for exactly that blank, because that is what the
     #: original said when it came off the counter's printer.
-    irn = serializers.CharField(source="irn_queue_item.irn", read_only=True, default="")
+    #:
+    #: A method field rather than `source="irn_queue_item.irn"`, which looks like
+    #: it would do: DRF catches the `RelatedObjectDoesNotExist` a B2C bill raises
+    #: and answers `None` *before* it ever reaches `default`, so the API would
+    #: send `null` where the contract and the TypeScript type both say a string.
+    irn = serializers.SerializerMethodField()
     lines = SaleLineReadSerializer(many=True, read_only=True)
     tenders = SaleTenderReadSerializer(many=True, read_only=True)
     flags = FlagReadSerializer(many=True, read_only=True)
@@ -346,6 +352,10 @@ class SaleReadSerializer(serializers.ModelSerializer[Sale]):
             "flags",
             "credit_notes_issued",
         ]
+
+    def get_irn(self, obj: Sale) -> str:
+        queued = getattr(obj, "irn_queue_item", None)
+        return queued.irn if queued else ""
 
     def get_credit_notes_issued(self, obj: Sale) -> list[dict[str, Any]]:
         return [
@@ -403,9 +413,10 @@ class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):
     b2b_tax_kind = serializers.CharField(source="sale.b2b_tax_kind", read_only=True)
     net_paise = serializers.IntegerField(source="sale.net_paise", read_only=True)
     gst_paise = serializers.IntegerField(source="sale.gst_paise", read_only=True)
-    handled_by_name = serializers.CharField(
-        source="handled_by.username", read_only=True, default=""
-    )
+    #: Who worked the row, as a person reads a person - `approvals.names` is the
+    #: one spelling of that in the project, and it falls back to the username on
+    #: an account nobody has given a full name.
+    handled_by_name = serializers.SerializerMethodField()
     days_left = serializers.SerializerMethodField()
 
     class Meta:
@@ -428,6 +439,9 @@ class IrnQueueRowSerializer(serializers.ModelSerializer[IrnQueueItem]):
             "handled_by_name",
             "handled_at",
         ]
+
+    def get_handled_by_name(self, obj: IrnQueueItem) -> str:
+        return display_name(obj.handled_by)
 
     def get_days_left(self, obj: IrnQueueItem) -> int:
         """Days to the deadline; negative once it has gone by.

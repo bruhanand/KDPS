@@ -17,7 +17,13 @@ import { changeFor } from "./cart";
 import { splitTax, taxKindFor } from "./gstin";
 import type { B2bTaxKind } from "./gstin";
 import { describePiece } from "./lookup";
-import type { BillLine, BillTender, QueuedBill, TillStoreIdentity } from "./types";
+import type {
+  BillLine,
+  BillTender,
+  QueuedBill,
+  TillCustomer,
+  TillStoreIdentity,
+} from "./types";
 
 export interface ReceiptOptions {
   /** Cash the customer physically handed over, so the paper can show the change.
@@ -96,7 +102,7 @@ export function receiptHtml(
     .reduce((n, tender) => n + tender.amount_paise, 0);
   const change = changeFor(options.cashReceivedPaise ?? 0, cashTaken);
   const pieces = bill.lines.reduce((n, line) => n + line.qty, 0);
-  const customer = bill.customer ?? {};
+  const customer: TillCustomer = bill.customer ?? { name: "", mobile: "", gstin: "" };
 
   const describe = options.describe ?? ((line: BillLine) => line.manual_desc || line.barcode);
   const rows = bill.lines

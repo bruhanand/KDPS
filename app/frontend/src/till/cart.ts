@@ -526,14 +526,15 @@ export function whyItCannotClose(bill: PricedBill): string {
 
 export interface BillIdentity {
   billedAt: string;
-  customer?: TillCustomer;
-  /** The shop's own state, off the dataset (`world.store.state_code`).
+  /** Partial rather than a whole `TillCustomer`: the screen hands over whatever
+   *  the strip has, and `toDraft` is what fills the three fields in. */
+  customer?: Partial<TillCustomer>;
+  /** The shop's own state (`storeStateCodeOf(world.store)`), or null when the
+   *  counter has no identity yet.
    *
-   *  Only ever used against the buyer's GSTIN, so a counter that has not synced
-   *  its identity yet simply reads as a different state - which is IGST, the
-   *  answer that at least does not claim the buyer is local. The bill is flagged
-   *  server-side either way; nothing here refuses to print. */
-  storeStateCode?: string;
+   *  Null is not "some other state" and must not be read as one - see `toDraft`,
+   *  which refuses to raise a tax invoice it cannot put a tax on. */
+  storeStateCode?: string | null;
 }
 
 /**
@@ -577,7 +578,19 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
   }));
   // Normalised here rather than at the field, so what prints on the paper, what
   // the split was derived from, and what the server stores are one string.
-  const gstin = normaliseGstin(identity.customer?.gstin ?? "");
+  //
+  // **A counter that does not know its own state does not raise a tax invoice.**
+  // The split is derived from the buyer's state against the shop's, so with no
+  // shop state there is no honest answer - and the two dishonest ones are both
+  // worse than dropping the registration: printing IGST because the comparison
+  // failed would put one tax on the customer's copy and another in the books,
+  // and printing CGST + SGST would do the same the other way round. Without it
+  // the bill is an ordinary retail sale, which is recoverable; a tax invoice
+  // charging the wrong tax is not. The screen keeps the field disabled in this
+  // state, so this is the backstop for a hold parked before the counter lost its
+  // identity rather than something a cashier can walk into.
+  const storeState = identity.storeStateCode || null;
+  const gstin = storeState ? normaliseGstin(identity.customer?.gstin ?? "") : "";
   return {
     billed_at: identity.billedAt,
     customer: {
@@ -590,7 +603,7 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     // preferring one (contract step 11) - which only works if the till says what
     // it printed, so this rides on every bill including the B2C ones, where it
     // is "none".
-    b2b_tax_kind: taxKindFor(gstin, identity.storeStateCode ?? ""),
+    b2b_tax_kind: taxKindFor(gstin, storeState ?? ""),
     lines,
     tenders: toTenders(bill.split),
     totals: {

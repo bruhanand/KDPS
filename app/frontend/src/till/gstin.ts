@@ -94,6 +94,27 @@ export function describeGstin(gstin: string): string {
 }
 
 /**
+ * The shop's own state, off whichever of its two fields is there.
+ *
+ * `state_code` is the dataset's field and is the answer whenever it has one.
+ * The fallback matters more than it looks: a store's own GSTIN *begins* with its
+ * state code, so a counter whose identity arrived without the separate field
+ * still knows perfectly well which state it is in - and the alternative,
+ * defaulting to a state code that matches nothing, would print IGST on a local
+ * buyer's tax invoice while the server posted CGST + SGST.
+ *
+ * Answers `null` - not `""` - when the counter has no identity at all, because
+ * "I do not know which state this shop is in" and "this shop is in state ''" are
+ * different statements and only one of them may be allowed to price a bill.
+ */
+export function storeStateCodeOf(
+  store: { gstin?: string; state_code?: string } | null | undefined,
+): string | null {
+  if (!store) return null;
+  return store.state_code || normaliseGstin(store.gstin ?? "").slice(0, 2) || null;
+}
+
+/**
  * Which tax split this bill carries.
  *
  * The buyer's state is the first two characters of their GSTIN. Same state as

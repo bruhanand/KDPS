@@ -407,6 +407,22 @@ describe("a GSTIN on the bill (#187)", () => {
     // The soft check lives on the screen; nothing in the money path refuses.
     expect(draftFor("10AABCU9603R1ZM").b2b_tax_kind).toBe("cgst_sgst");
   });
+
+  it("will not raise a tax invoice a counter cannot put a tax on", () => {
+    // No shop state means no honest split, and both dishonest ones charge the
+    // wrong tax on a printed customer copy: guessing IGST because the comparison
+    // failed, or guessing CGST + SGST because it did not. A retail bill is
+    // recoverable; a tax invoice charging the wrong tax is not. The screen keeps
+    // the field disabled in this state; this is the backstop behind it.
+    const drafted = toDraft(priceCart(cart, WORLD, "2026-07-30"), {
+      billedAt: "2026-07-30T12:31:00.000Z",
+      customer: { name: "Sharma Traders", mobile: "", gstin: "10AABCU9603R1Z2" },
+      storeStateCode: null,
+    });
+
+    expect(drafted.customer?.gstin).toBe("");
+    expect(drafted.b2b_tax_kind).toBe("none");
+  });
 });
 
 describe("the bill's split, as the till hands it over", () => {

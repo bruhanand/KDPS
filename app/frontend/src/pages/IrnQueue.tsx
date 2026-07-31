@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, FileCheck2, Link2Off, ReceiptText } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
+import { TAX_KIND_WORDS } from "../till/gstin";
+import type { B2bTaxKind } from "../till/gstin";
 import { Money } from "../lib/format";
 import { PageHeader } from "../components/PageHeader";
 import "./Booking.css";
@@ -29,14 +31,14 @@ interface IrnRowT {
   billed_at: string;
   buyer_gstin: string;
   customer_name: string;
-  b2b_tax_kind: string;
+  b2b_tax_kind: B2bTaxKind;
   net_paise: number;
   gst_paise: number;
   due_on: string;
   /** Negative once the deadline has gone by. Worked out server-side against one
    *  reading of the clock, so thirty rows cannot disagree about what day it is. */
   days_left: number;
-  status: string;
+  status: IrnStatus;
   irn: string;
   handled_by_name: string;
   handled_at: string | null;
@@ -45,20 +47,22 @@ interface IrnRowT {
 interface QueueT {
   today: string;
   rows: IrnRowT[];
+  /** The settled tail is capped at 200; pending rows never are. Said out loud
+   *  because a list that stopped and did not mention it reads as "that is all". */
+  truncated: boolean;
   pending_count: number;
   overdue_count: number;
 }
 
-const TABS = [
+/** The three states a queue row can be in - `IrnQueueItem.Status` on the server,
+ *  and a `ChoiceField` there, so a fourth string is a 400. */
+type IrnStatus = "pending" | "failed" | "generated";
+
+const TABS: { key: IrnStatus; label: string }[] = [
   { key: "pending", label: "To raise" },
   { key: "failed", label: "Failed" },
   { key: "generated", label: "Raised" },
-] as const;
-
-const SPLIT_WORDS: Record<string, string> = {
-  cgst_sgst: "CGST + SGST",
-  igst: "IGST",
-};
+];
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", {
@@ -149,7 +153,7 @@ function RecordPanel({ row, onDone }: { row: IrnRowT; onDone: () => void }) {
 }
 
 export default function IrnQueue() {
-  const [tab, setTab] = useState<string>("pending");
+  const [tab, setTab] = useState<IrnStatus>("pending");
   const [queue, setQueue] = useState<QueueT>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -245,7 +249,7 @@ export default function IrnQueue() {
                     <span className="mono">{row.buyer_gstin}</span>
                     {row.customer_name ? <div className="muted-cell">{row.customer_name}</div> : null}
                   </td>
-                  <td>{SPLIT_WORDS[row.b2b_tax_kind] ?? "—"}</td>
+                  <td>{TAX_KIND_WORDS[row.b2b_tax_kind] || "—"}</td>
                   <td className="num">
                     <Money paise={row.net_paise} />
                   </td>
@@ -279,6 +283,13 @@ export default function IrnQueue() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {queue?.truncated && (
+        <p className="muted-cell" data-testid="irn-truncated" style={{ marginTop: 10 }}>
+          Older settled bills are not shown. Everything still waiting is on this list; nothing
+          pending is ever cut.
+        </p>
       )}
     </div>
   );

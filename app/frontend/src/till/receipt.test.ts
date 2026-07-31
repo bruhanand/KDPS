@@ -113,7 +113,7 @@ describe("the customer's copy", () => {
 
   it("escapes whatever a customer typed, so a name cannot become markup", () => {
     const html = receiptHtml(
-      bill({ customer: { name: "<script>alert(1)</script>", mobile: "" } }),
+      bill({ customer: { name: "<script>alert(1)</script>", mobile: "", gstin: "" } }),
       STORE,
     );
 

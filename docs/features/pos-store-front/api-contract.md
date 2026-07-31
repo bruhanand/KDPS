@@ -350,7 +350,11 @@ Four things about the `override` block, and one new endpoint that had to exist f
   Step 11 compares what the till *printed* against what the server derives, which only works if the till says what it printed.
   It is evidence about a piece of paper, not an instruction.
 
-The tax split is presentation, not posting: a single `OUTPUT_GST` account posts whatever the split says, so CGST and SGST on the paper are two halves of one liability (the odd paise goes to SGST, and the two always add back to what the bill charged).
+**Open item, not a ruling: the split prints but does not post.**
+§Postings has credited one `OUTPUT_GST` account on every bill since this contract was written, and #187 did not change it - so on the paper a bill says CGST + SGST or IGST, and in the ledger an IGST invoice and a CGST/SGST one are indistinguishable.
+That is enough for the counter and the customer, and it is **not** obviously enough for the GSTR-1 and the Tally voucher, where the two are separate heads.
+The split is recorded on the document (`Sale.b2b_tax_kind`) so the breakdown is derivable whenever it is needed, and the halving is only presentation (the odd paise goes to SGST; the two always add back to what the bill charged).
+Whether `OUTPUT_GST` must become three accounts is a question for **the CA ruling and the D6/Tally-sync slice**, alongside the five money-critical items already gated there. It is flagged here rather than settled here, because a build-time footnote is not where a chart of accounts gets decided.
 
 ### PUT `/api/auth/me/till-pin` (NEW, #182)
 

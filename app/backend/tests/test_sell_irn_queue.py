@@ -61,8 +61,8 @@ def _bill(counter, *, till_seq: int, gstin: str = BIHAR_BUYER, billed_at: str | 
     return Sale.objects.get(till_seq=till_seq, fy=FY)
 
 
-def _queue(user, **params):
-    return client_for(user).get(QUEUE_URL, params)
+def _queue(user, headers=None, **params):
+    return client_for(user).get(QUEUE_URL, params, headers=headers)
 
 
 # --- what lands on it ------------------------------------------------------
@@ -138,6 +138,32 @@ def test_a_queue_status_nothing_recognises_is_refused(counter):
     assert response.json()["code"] == "VALIDATION"
 
 
+def test_a_pending_bill_is_never_dropped_off_the_bottom_of_the_list(counter, monkeypatch):
+    """The settled tail is capped; the work is not.
+
+    A bill cut off this list is a tax invoice nobody raises and a customer who
+    loses their credit, so the cap may only ever bite on the history behind it.
+    """
+    monkeypatch.setattr("sell.views.SETTLED_LIMIT", 1)
+    for seq in (1, 2, 3):
+        sale = _bill(counter, till_seq=seq, billed_at=f"2026-07-0{seq}T10:00:00Z")
+        if seq < 3:
+            IrnQueueItem.objects.filter(sale=sale).update(status=IrnQueueItem.Status.GENERATED)
+
+    body = _queue(build_accountant(), status="all").json()
+
+    assert body["truncated"] is True
+    # One settled row (the cap) plus the pending one, which was never at risk.
+    assert len(body["rows"]) == 2
+    assert "26-27/SEL-DEO/SAL/3" in [row["doc_number"] for row in body["rows"]]
+
+
+def test_a_short_list_does_not_claim_to_be_cut(counter):
+    _bill(counter, till_seq=1)
+
+    assert _queue(build_accountant(), status="all").json()["truncated"] is False
+
+
 # --- working it ------------------------------------------------------------
 
 
@@ -179,6 +205,23 @@ def test_a_generated_row_is_reported_on_the_bill_itself(counter):
 
 def test_a_bill_with_no_irn_yet_reports_a_blank_one(counter):
     sale = _bill(counter, till_seq=1)
+
+    body = client_for(build_accountant()).get(f"{SALES_URL}/{sale.doc_number}").json()
+
+    assert body["irn"] == ""
+
+
+def test_a_b2c_bill_reports_a_blank_irn_rather_than_a_null(counter):
+    """A B2C bill has no queue row at all, and the read shape still says a string.
+
+    `source="irn_queue_item.irn"` looks like it would do this and does not: DRF
+    catches the `RelatedObjectDoesNotExist` and answers `None` before it reaches
+    `default`, so the API sent `null` where the contract and the TypeScript type
+    both promise `""`.
+    """
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    counter["client"].post(SALES_URL, payload, format="json")
+    sale = Sale.objects.get()
 
     body = client_for(build_accountant()).get(f"{SALES_URL}/{sale.doc_number}").json()
 
@@ -253,6 +296,59 @@ def test_the_counter_cannot_record_an_irn_either(counter):
     )
 
     assert response.status_code == 403
+
+
+def test_two_clerks_recording_the_same_row_cannot_both_win(counter):
+    """The 409 is the UPDATE's own WHERE clause, not a read followed by a write.
+
+    Only one may write. An IRN is the invoice's identity at the GSTN, and two of
+    them is two documents claiming to be this bill.
+
+    Driven sequentially, which pins the rule but not the concurrency: what holds
+    it under two simultaneous requests is that the guard is a condition on the
+    UPDATE rather than a status read into Python, so there is no window between
+    the check and the act for a second writer to slip through.
+    """
+    sale = _bill(counter, till_seq=1)
+    row = IrnQueueItem.objects.get(sale=sale)
+    first, second = build_accountant(), build_accountant(username="sell_accounts_2")
+
+    outcomes = [
+        client_for(who)
+        .put(f"{QUEUE_URL}/{row.id}", {"status": "generated", "irn": irn}, format="json")
+        .status_code
+        for who, irn in ((first, "IRN-A"), (second, "IRN-B"))
+    ]
+
+    assert sorted(outcomes) == [200, 409]
+    row.refresh_from_db()
+    assert row.irn == "IRN-A"
+    assert row.handled_by == first
+
+
+def test_the_unit_switcher_does_not_decide_which_bill_may_be_worked(counter):
+    """ADR-0003: what you are looking at must never decide what you may do.
+
+    An accountant narrowing the list to one shop to work through it must still be
+    able to record the IRN on another shop's bill - a 404 there would read as
+    "no such bill" and would be the switcher stripping a granted right.
+    """
+    elsewhere = build_store(code="SEL-RAN", state="20")
+    sale = _bill(counter, till_seq=1)
+    row = IrnQueueItem.objects.get(sale=sale)
+    accountant = build_accountant()
+
+    response = client_for(accountant).put(
+        f"{QUEUE_URL}/{row.id}",
+        {"status": "generated", "irn": "IRN-X"},
+        format="json",
+        # The top bar is on the *other* shop while this bill is being worked.
+        headers={"X-KDPS-Unit": elsewhere.code},
+    )
+
+    assert response.status_code == 200
+    # And the reading gate still obeys it, which is the point of the split.
+    assert _queue(accountant, headers={"X-KDPS-Unit": elsewhere.code}).json()["rows"] == []
 
 
 def test_a_row_outside_the_callers_stores_is_not_found_rather_than_forbidden(counter):

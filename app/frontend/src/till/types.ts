@@ -219,7 +219,7 @@ export interface TillCustomer {
 export interface BillDraft {
   billed_at: string;
   origin?: "offline" | "online" | "paper";
-  customer?: { name?: string; mobile?: string; gstin?: string };
+  customer?: TillCustomer;
   /** The split the customer's copy was printed with. The server derives its own
    *  from the same GSTIN and flags a disagreement rather than preferring either
    *  (contract step 11) - so this is evidence about the paper, not an
