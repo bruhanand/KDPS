@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import type { RouteObject } from "react-router-dom";
 
 import { PlannedPage } from "./pages/PlannedPage";
+import { LegacyRedirect } from "./shell/LegacyRedirect";
 import { NAV_ITEMS, itemPath } from "./shell/navConfig";
 import { Home } from "./pages/Home";
 import { BrandsPage, GstinsPage, SeasonsPage, StoreTargetsPage, StoresPage, UsersRolesPage, VendorsPage } from "./pages/MasterPages";
@@ -162,4 +163,17 @@ const PLANNED: Screen[] = NAV_ITEMS.filter((i) => i.planned && !i.deepLink).map(
   element: <PlannedPage />,
 }));
 
-export const PROTECTED_ROUTES: Screen[] = [...BUILT, ...PLANNED];
+// A legacy URL that sits where a document id lives. `/receive/upload-bill` (the
+// stub #228 deleted) matches `/receive/:id`, so it would open "GRN number
+// upload-bill" and never reach App's catch-all, where every other old address is
+// redirected. Given a route of its own it redirects like the rest — and because
+// a static segment outranks a dynamic one, it wins over `/receive/:id` whatever
+// the order here.
+const SHADOWED_LEGACY = ["/receive/upload-bill"];
+const LEGACY: Screen[] = SHADOWED_LEGACY.map((path) => ({
+  id: `legacy:${path}`,
+  path,
+  element: <LegacyRedirect />,
+}));
+
+export const PROTECTED_ROUTES: Screen[] = [...BUILT, ...PLANNED, ...LEGACY];

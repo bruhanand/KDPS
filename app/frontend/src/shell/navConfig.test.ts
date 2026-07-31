@@ -94,6 +94,17 @@ describe("the thirteen sections", () => {
     }
   });
 
+  it("name the receive screen plainly, and offer no second door to it", () => {
+    // #228. "Receive (GRN)" put the document's name in the menu line; GRN stays
+    // where it belongs, on the number and the table column. And "Upload Bill" is
+    // gone for every role - the bill goes up inside "New receipt", so a separate
+    // entry was a promise the built screen already keeps.
+    const receive = NAV_ITEMS.filter((i) => itemPath(i) === "/receive");
+    expect(receive.map((i) => i.label)).toEqual(["Receive"]);
+    expect(NAV_ITEMS.map((i) => i.label)).not.toContain("Upload Bill");
+    expect(NAV_ITEMS.map(itemPath)).not.toContain("/receive/upload-bill");
+  });
+
   it("list the approvals inbox once, inside Home", () => {
     const approvals = NAV_ITEMS.filter((i) => itemPath(i) === "/approvals");
     expect(approvals).toHaveLength(1);
@@ -110,7 +121,7 @@ describe("the thirteen sections", () => {
 describe("the highlighted menu line", () => {
   // One screen has one URL (#87), so one URL lights one line. React Router's
   // own NavLink matching is prefix-based and lit every ancestor too: on
-  // /receive/pt both "Receive (GRN)" and "PT Files" were rust, and on
+  // /receive/pt both "Receive" and "PT Files" were rust, and on
   // /stock/history a *third* line lit in another section — Return to Brand's
   // "Damage / Quarantine", whose /stock?view=quarantine matches on path alone.
 
@@ -514,6 +525,8 @@ describe("legacy URLs", () => {
     "/masters/seasons",
     "/masters/gstins",
     "/masters/users",
+    // Not a pre-#87 address but a deleted one: the Upload Bill stub (#228).
+    "/receive/upload-bill",
     "/store/sell",
     "/store/receive",
     "/store/count",

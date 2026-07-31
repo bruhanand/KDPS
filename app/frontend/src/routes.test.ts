@@ -103,6 +103,17 @@ describe("the route table", () => {
     }
   });
 
+  it("redirects the deleted Upload Bill stub instead of reading it as a GRN id", () => {
+    // The one legacy path that cannot be left to the catch-all (#228): it sits
+    // exactly where `/receive/:id` looks for a document number, so without its
+    // own route the old link opens "GRN number upload-bill" — a spinner and a
+    // 404 — rather than the Receive screen.
+    expect(screenAt("/receive/upload-bill")).toBe("legacy:/receive/upload-bill");
+    expect(resolveLegacyPath("/receive/upload-bill")).toBe("/receive");
+    // And the screen it lands on is still the one that owns the address.
+    expect(screenAt("/receive")).toBe("grn-list");
+  });
+
   it("has one route per URL", () => {
     const paths = PROTECTED_ROUTES.map((r) => r.path);
     expect(new Set(paths).size).toBe(paths.length);
