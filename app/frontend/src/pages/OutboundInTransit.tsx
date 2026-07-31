@@ -19,6 +19,7 @@ import { useDoc, useList } from "../lib/hooks";
 import { Money } from "../lib/format";
 import { canCloseTransferGap } from "../lib/outbound-rbac";
 import { isCleared } from "../components/approval";
+import { PageHeader } from "../components/PageHeader";
 import {
   GapStatePill,
   ReceiptExceptions,
@@ -310,17 +311,10 @@ export function InTransitPage() {
 
   return (
     <div className="page-pad">
-      <div className="toolbar">
-        <div>
-          <p className="eyebrow">Transfer · In-Transit</p>
-          <h1 className="h1 h2-rust">In transit &amp; gaps</h1>
-          <p className="lead">
-            Stock that has left one location and not yet arrived at another. The sender is
-            answerable for it until the receiver scans it in — so a carton lost on the bus is
-            visible here, not vanished.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="In transit & gaps"
+        lead="Stock that has left one location and not yet arrived at another. The sender is answerable for it until the receiver scans it in — so a carton lost on the bus is visible here, not vanished."
+      />
 
       {/* Gaps first: these are the ones somebody has to act on. */}
       <h2 className="h2" style={{ marginBottom: 12 }}>
