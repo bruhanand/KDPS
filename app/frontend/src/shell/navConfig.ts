@@ -431,6 +431,11 @@ const LEGACY_PREFIXES: [from: string, to: string][] = [
   ["/edges/config", "/setup/settings"],
 ].sort((a, b) => b[0].length - a[0].length) as [string, string][];
 
+/** Every address the manifest has moved away from. The route table reads it to
+ *  spot the one that a dynamic route would otherwise claim (see routes.tsx),
+ *  so which paths are legacy is stated once, here. */
+export const LEGACY_PATHS: string[] = LEGACY_PREFIXES.map(([from]) => from);
+
 /** Does `pathname` sit at or under `prefix`? (`/stock` ≠ `/stock-count`.) */
 export function underPrefix(pathname: string, prefix: string): boolean {
   return pathname === prefix || pathname.startsWith(prefix + "/");

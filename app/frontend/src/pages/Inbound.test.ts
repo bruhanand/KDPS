@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { activeFlow, receiveFlows } from "./Inbound";
 
 /** The unit payload the switcher hands the screen, trimmed to what the rule
- *  reads. Nothing here is inferred from a role — only from the unit itself. */
+ *  reads. Nothing here is inferred from a role - only from the unit itself. */
 const store = { store_type: "store" };
 const warehouse = { store_type: "warehouse" };
 
@@ -24,8 +24,15 @@ describe("the Receive screen's flows", () => {
     expect(receiveFlows(null)).toEqual(["branded", "nonbranded"]);
   });
 
+  it("gives a unit type nobody has invented yet the narrower screen", () => {
+    // The rule reads "a warehouse gets both", not "a store loses one". If KDPS
+    // ever adds an office unit, it must inherit the branded-only screen rather
+    // than a Non-branded tab that would 400 the moment it was used.
+    expect(receiveFlows({ store_type: "office" })).toEqual(["branded"]);
+  });
+
   it("draws no toggle at a store, and one at a warehouse", () => {
-    // The screen draws the toggle on `flows.length > 1` — the single-flow unit
+    // The screen draws the toggle on `flows.length > 1` - the single-flow unit
     // gets the flow itself, not a one-button switch.
     expect(receiveFlows(store).length > 1).toBe(false);
     expect(receiveFlows(warehouse).length > 1).toBe(true);

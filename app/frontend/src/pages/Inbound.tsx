@@ -95,13 +95,18 @@ export type ReceiveFlow = "branded" | "nonbranded";
 
 /** The receive flows the unit you are standing in actually has (#228).
  *
- *  Only branded goods arrive at a store — the server refuses a non-branded
- *  receipt anywhere but a warehouse — so at a store the choice is not hidden,
+ *  Only branded goods arrive at a store - the server refuses a non-branded
+ *  receipt anywhere but a warehouse - so at a store the choice is not hidden,
  *  it does not exist. A warehouse takes both. No single active unit (an owner
  *  on "All units") keeps both too: the choice is still real there, and the
- *  server decides the rest at the store the receipt names. */
+ *  server decides the rest at the store the receipt names.
+ *
+ *  Written as "only a warehouse gets the second flow", not "only a store loses
+ *  it": KDPS has two unit types today, and a third one added later (an office)
+ *  must inherit the narrower screen, not the wider one. */
 export function receiveFlows(activeStore: { store_type: string } | null): ReceiveFlow[] {
-  return activeStore?.store_type === "store" ? ["branded"] : ["branded", "nonbranded"];
+  if (!activeStore) return ["branded", "nonbranded"];
+  return activeStore.store_type === "warehouse" ? ["branded", "nonbranded"] : ["branded"];
 }
 
 /** The flow the URL asks for, clamped to the ones this unit has. Clamped rather

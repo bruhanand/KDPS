@@ -74,7 +74,7 @@ describe("the report's own sequence", () => {
     // carry the report's third column ("Planned") rather than a chip that
     // promises motion nobody has started. (Goods Receipt keeps its place on the
     // strip with nothing planned left under it, since #228 deleted the Upload
-    // Bill stub — the same case as POS & Billing below.)
+    // Bill stub - the same case as POS & Billing below.)
     const expected: Record<string, string> = {
       "POS & Billing": "next",
       "Accounts & Payments": "then",
