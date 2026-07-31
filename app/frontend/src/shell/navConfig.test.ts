@@ -20,6 +20,7 @@ import {
   sectionTabsFor,
   sectionsIn,
   sidebarRows,
+  stripLabel,
   stripOwning,
   stripTabs,
   testId,
@@ -352,7 +353,22 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     const entries = new Set(NAV_ITEMS.map((i) => i.to));
     for (const layout of Object.values(PERSONA_LAYOUTS)) {
       for (const row of layout) {
-        if (typeof row === "string" || isStripRow(row)) continue;
+        if (typeof row === "string") continue;
+        if (isStripRow(row)) {
+          // A strip names its own section's entries by their `to`, and the two
+          // can drift apart in silence: rename an entry and its tab quietly
+          // disappears, rename them all and the row vanishes from the sidebar
+          // with the whole suite still green. A strip may list *fewer* entries
+          // than its section holds (an action-shaped screen reached from inside
+          // another one is nobody's tab), never one that does not exist.
+          expect(codes.has(row.section), row.section).toBe(true);
+          const own = new Set(
+            NAV_ITEMS.filter((i) => i.section === row.section && !i.action).map((i) => i.to),
+          );
+          for (const to of row.tabs) expect(own.has(to), `${row.section}: ${to}`).toBe(true);
+          expect(new Set(row.tabs).size).toBe(row.tabs.length);
+          continue;
+        }
         expect(codes.has(row.heading.toLowerCase())).toBe(false);
         expect(claimed(row.to), row.to).toBe(false);
         for (const code of row.sections) expect(codes.has(code), code).toBe(true);
@@ -448,13 +464,26 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       expect(stripOwning("/sell", "store_manager")).toBe(SELL_STRIP);
     });
 
-    it("claims only the URLs it draws", () => {
+    it("claims the URLs its section owns, and nothing else", () => {
+      // Including a bill under Billing: the row stays lit on a document, the
+      // same way the sidebar's own highlight does.
       for (const url of ["/sell", "/sell/returns", "/sell/customers", "/sell/till", "/sell/9"]) {
         expect(stripOwning(url, "store_staff"), url).toBe(SELL_STRIP);
       }
       for (const url of ["/", "/receive", "/inventory", "/stock", "/selling-elsewhere"]) {
         expect(stripOwning(url, "store_staff"), url).toBeNull();
       }
+    });
+
+    it("takes this persona's name for the row when the layout gives it one", () => {
+      // #229 renames two rows for the store persona alone (Home ⇒ "Dashboard",
+      // HRMS ⇒ "Attendance"); the override lives on the layout row, never in
+      // SECTIONS, so no other persona's sidebar can change word.
+      const sections = visibleSections(user("store_staff", STORE_CAPS));
+      expect(stripLabel(SELL_STRIP, sections)).toBe("Sell");
+      expect(stripLabel({ ...SELL_STRIP, label: "Counter" }, sections)).toBe("Counter");
+      // A section the server did not send falls back to the manifest's label.
+      expect(stripLabel(SELL_STRIP, [])).toBe("Sell");
     });
 
     it("lights the tab the URL is under, child URLs included", () => {

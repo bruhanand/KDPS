@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Bell, ChevronDown, LayoutDashboard, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { Bell, ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -14,12 +14,12 @@ import {
   isActiveFold,
   isActiveItem,
   itemPath,
-  sectionDef,
   sectionTabsFor,
   sidebarRows,
+  stripOwning,
   testId,
 } from "./navConfig";
-import type { NavFoldDef, NavItem, NavStripDef, VisibleSection } from "./navConfig";
+import type { NavFoldDef, NavItem, NavRow, VisibleSection } from "./navConfig";
 import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
@@ -417,16 +417,17 @@ function Sidebar({
   /** A strip: one link into the section's own first screen. Its other screens
    *  are the tab row `SectionTabsProvider` puts on those screens - so, like a
    *  fold, the dividing happens inside the page and never here (D10 §1). */
-  function renderStrip(row: { key: string; strip: NavStripDef; label: string; tabs: NavItem[] }) {
-    const def = sectionDef(row.strip.section);
+  function renderStrip(row: Extract<NavRow, { kind: "strip" }>) {
     return oneLineRow({
       key: row.key,
-      icon: def?.icon ?? LayoutDashboard,
-      layer: def?.layer ?? "home",
+      icon: row.def.icon,
+      layer: row.def.layer,
       // The first tab this person can see - never a screen access already hid.
       to: row.tabs[0].to,
       label: row.label,
-      active: row.tabs.some((i) => isActiveItem(i, pathname)),
+      // Lit wherever this persona's sidebar draws the screen under this row -
+      // including a screen of the section the strip lists no tab for.
+      active: stripOwning(pathname, roleCode) === row.strip,
       testId: `nav-strip-${row.strip.section}`,
     });
   }
