@@ -1,0 +1,55 @@
+"""The nightly reconciliation, run once a night (#188).
+
+Four questions that can only be asked once a day is over - did every bill arrive,
+was the customer charged what the rulebook says, is anything still unpriced, and
+who took the returns. See `sell.services.daily_check` for what each one means and
+why every one of them is idempotent.
+
+It replaces `sell_age_deferred`, which was the ageing step on a schedule of its
+own while this did not exist; that step is now one of the four. Anything the old
+command would have flagged tonight, this flags tonight.
+
+**A clean day prints nothing new**, which is the point: this is the pilot's
+go/no-go gate, so a run that finds something is a run that found something real.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from django.core.management.base import BaseCommand, CommandError
+from django.utils.dateparse import parse_date
+
+from sell.services.daily_check import run
+
+
+class Command(BaseCommand):
+    help = "Reconcile a trading day: bill continuity, reprice, ageing, returns per seller."
+
+    def add_arguments(self, parser: Any) -> None:
+        parser.add_argument(
+            "--date",
+            default="",
+            help="The day to check (YYYY-MM-DD). Default: yesterday - the day the "
+            "nightly run is about, since the cron fires in the small hours.",
+        )
+        parser.add_argument(
+            "--store", default="", help="One store code. Default: every active store."
+        )
+
+    def handle(self, *args: Any, **options: Any) -> None:
+        asked = (options["date"] or "").strip()
+        try:
+            day = parse_date(asked) if asked else None
+        except ValueError as exc:  # correctly shaped and impossible, e.g. 2026-02-30
+            raise CommandError(f"'{asked}' is not a date.") from exc
+        if asked and day is None:
+            raise CommandError(f"'{asked}' is not a date (use 2026-07-31).")
+        report = run(day, (options["store"] or "").strip())
+        for line in report.lines():
+            self.stdout.write(line)
+        self.stdout.write(
+            self.style.WARNING(f"{report.total_raised} new exception(s).")
+            if report.total_raised
+            else self.style.SUCCESS("Clean day - nothing new on any store's list.")
+        )

@@ -15,27 +15,25 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from django.db.models import Q
+from django.db.models import QuerySet
 
 from masters.models import Store
 from sell.models import ContinuityFlag
 from storefront.day import money_for
 
 
-def open_flags(store: Store, day: date) -> Any:
+def open_flags(store: Store, day: date) -> QuerySet[ContinuityFlag]:
     """This store's unresolved exceptions belonging to `day`.
 
-    A flag belongs to the day of the **bill** it is about; one about no
-    particular bill - a hole is a bill that never arrived, so there is nothing to
-    hang it on - belongs to the day it was raised. Both readings are "the day
-    this became somebody's problem", which is what a person scanning a day
-    summary is asking.
+    Which day a flag belongs to is `ContinuityFlag.for_day` - the model's rule,
+    not this screen's, because the Dashboard's queue counts the same rows without
+    the date and the two must not drift.
 
-    `ignored` rows are not here and that is the point of the state: the store has
-    looked and said this one is fine. They stay countable on the bill itself.
+    `ignored` rows are not here, and that is the point of the third state: the
+    store has looked and said this one is fine. They stay readable on the bill.
     """
-    return ContinuityFlag.objects.filter(store=store, status=ContinuityFlag.Status.OPEN).filter(
-        Q(sale__billed_at__date=day) | Q(sale__isnull=True, created_at__date=day)
+    return ContinuityFlag.for_day(
+        ContinuityFlag.objects.filter(store=store, status=ContinuityFlag.Status.OPEN), day
     )
 
 

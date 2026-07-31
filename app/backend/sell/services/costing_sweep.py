@@ -337,6 +337,10 @@ def age_deferred(today: date | None = None) -> int:
     bill whose three waiting lines become one has not stopped waiting, but the two
     that posted are no longer anybody's job, and a flag still naming them sends
     somebody after work that is done.
+
+    Called by the nightly `sell_daily_check` (#188) as one of its four steps. It
+    had a schedule of its own until that existed; `today` is passed in so a run
+    about Tuesday ages Tuesday's queue rather than tonight's.
     """
     day = today or timezone.localdate()
     cutoff = day - timedelta(days=SellPolicy.current().uncosted_aging_days)
