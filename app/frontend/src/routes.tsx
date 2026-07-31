@@ -34,6 +34,7 @@ import StockOnHand from "./pages/StockOnHand";
 import CrossStoreSearch from "./pages/CrossStoreSearch";
 import VendorLedger from "./pages/VendorLedger";
 import CashLedger from "./pages/CashLedger";
+import IrnQueue from "./pages/IrnQueue";
 import BillingPage from "./pages/sell/Billing";
 import CustomerSearchPage from "./pages/sell/CustomerSearch";
 import TillPage from "./pages/sell/Till";
@@ -132,6 +133,7 @@ const BUILT: Screen[] = [
   { id: "store-targets", path: "/money/store-targets", element: <StoreTargetsPage /> },
   { id: "vendor-ledger", path: "/money/vendor", element: <VendorLedger /> },
   { id: "cash-ledger", path: "/money/cash", element: <CashLedger /> },
+  { id: "irn-queue", path: "/money/irn-queue", element: <IrnQueue /> },
   // Setup
   { id: "setup-stores", path: "/setup/stores", element: <StoresPage /> },
   { id: "setup-brands", path: "/setup/brands", element: <BrandsPage /> },

@@ -40,6 +40,9 @@ from masters.models import Sku, Store
 from masters.scoping import actionable_store_ids
 from offers.models import Offer
 from offers.resolution import Resolution
+from sell.gstin import describe as gstin_describe
+from sell.gstin import normalise as gstin_normalise
+from sell.gstin import state_code as gstin_state_code
 from sell.models import (
     ContinuityFlag,
     CreditNote,
@@ -790,7 +793,7 @@ def _write_sale(
     """Step 9 - the draft and its lines, before a number exists."""
     customer = data.get("customer") or {}
     totals = data["totals"]
-    buyer_gstin = (customer.get("gstin") or "").strip().upper()
+    buyer_gstin = gstin_normalise(customer.get("gstin") or "")
     # What the till said about the manager's tap. Only the *time* is taken from
     # it - a clock this server does not have - and only when the pipeline
     # recognised the person it named.
@@ -1074,10 +1077,16 @@ def _b2b_tax_kind(buyer_gstin: str, store: Store) -> str:
     store's registration means CGST + SGST; a different one means IGST. Bihar and
     Jharkhand are separate registrations, so this is an everyday branch here and
     not a corner case.
+
+    The characters are taken as typed - a GSTIN that fails `gstin.describe` still
+    gets a split out of its first two, and is flagged for a human rather than
+    re-taxed. The till printed the customer's copy from these same two characters
+    minutes ago (`till/gstin.ts`), and a server that quietly chose differently
+    would put one tax on the paper and another in the books.
     """
     if not buyer_gstin:
         return Sale.B2bTaxKind.NONE
-    if buyer_gstin[:2] == store.gstin.state_code:
+    if gstin_state_code(buyer_gstin) == store.gstin.state_code:
         return Sale.B2bTaxKind.CGST_SGST
     return Sale.B2bTaxKind.IGST
 
@@ -1090,26 +1099,43 @@ def _apply_b2b(sale: Sale, store: Store, data: dict[str, Any]) -> list[str]:
     their input credit. The store cannot do that and should not be asked to: the
     deadline rides as data into a head-office queue (Rule 11).
 
-    The split itself was derived before the bill was posted. What is checked here
-    is whether the till printed the same thing on the customer's copy - where it
-    did not, the bill still lands and the disagreement is flagged.
+    The split itself was derived before the bill was posted. Two things are
+    checked here, and neither of them can stop a bill that is already paid for:
+
+    * **Is the registration well formed at all** (#187). A cashier mistyping one
+      character of fifteen has made a tax invoice head office must correct - it
+      still lands, and the flag carries the reason so a clerk can ring the
+      customer or fix a typo without re-deriving the check.
+    * **Did the till print the same split**. Where it did not, the bill lands and
+      the disagreement is flagged for the daily check.
     """
     if not sale.buyer_gstin:
         return []
     IrnQueueItem.objects.create(
         sale=sale, due_on=timezone.localdate(sale.billed_at) + timedelta(days=IRN_DUE_DAYS)
     )
+    flags = []
+    malformed = gstin_describe(sale.buyer_gstin)
+    if malformed:
+        flags.append(
+            _flag(
+                sale,
+                store,
+                ContinuityFlag.Kind.GSTIN_INVALID,
+                {"gstin": sale.buyer_gstin, "reason": malformed},
+            )
+        )
     declared = data.get("b2b_tax_kind") or ""
     if declared and declared != sale.b2b_tax_kind:
-        return [
+        flags.append(
             _flag(
                 sale,
                 store,
                 ContinuityFlag.Kind.GST_MISMATCH,
                 {"printed_split": declared, "derived_split": sale.b2b_tax_kind},
             )
-        ]
-    return []
+        )
+    return flags
 
 
 def _advisory_gst_check(sale: Sale, store: Store, lines: list[_PreparedLine]) -> list[str]:

@@ -30,6 +30,7 @@
 // bill until a human types the price off the tag, because a nought would post no
 // revenue and no tax against a garment that left the shop.
 
+import { normaliseGstin, taxKindFor } from "./gstin";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
 import { covers, kindsOf, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
@@ -45,6 +46,7 @@ import type {
   StackedCredit,
   TillCreditNote,
   TillGstSlab,
+  TillCustomer,
   TillItem,
   TillOffer,
   TillSeason,
@@ -524,7 +526,15 @@ export function whyItCannotClose(bill: PricedBill): string {
 
 export interface BillIdentity {
   billedAt: string;
-  customer?: { name?: string; mobile?: string; gstin?: string };
+  /** Partial rather than a whole `TillCustomer`: the screen hands over whatever
+   *  the strip has, and `toDraft` is what fills the three fields in. */
+  customer?: Partial<TillCustomer>;
+  /** The shop's own state (`storeStateCodeOf(world.store)`), or null when the
+   *  counter has no identity yet.
+   *
+   *  Null is not "some other state" and must not be read as one - see `toDraft`,
+   *  which refuses to raise a tax invoice it cannot put a tax on. */
+  storeStateCode?: string | null;
 }
 
 /**
@@ -566,13 +576,34 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
     // only when the barcode resolves to nothing, which is exactly when it is set.
     manual_desc: line.manual_desc,
   }));
+  // Normalised here rather than at the field, so what prints on the paper, what
+  // the split was derived from, and what the server stores are one string.
+  //
+  // **A counter that does not know its own state does not raise a tax invoice.**
+  // The split is derived from the buyer's state against the shop's, so with no
+  // shop state there is no honest answer - and the two dishonest ones are both
+  // worse than dropping the registration: printing IGST because the comparison
+  // failed would put one tax on the customer's copy and another in the books,
+  // and printing CGST + SGST would do the same the other way round. Without it
+  // the bill is an ordinary retail sale, which is recoverable; a tax invoice
+  // charging the wrong tax is not. The screen keeps the field disabled in this
+  // state, so this is the backstop for a hold parked before the counter lost its
+  // identity rather than something a cashier can walk into.
+  const storeState = identity.storeStateCode || null;
+  const gstin = storeState ? normaliseGstin(identity.customer?.gstin ?? "") : "";
   return {
     billed_at: identity.billedAt,
     customer: {
       name: identity.customer?.name ?? "",
       mobile: identity.customer?.mobile ?? "",
-      gstin: identity.customer?.gstin ?? "",
+      gstin,
     },
+    // What the *customer's copy* says the tax split is. The server derives its
+    // own from the same GSTIN and flags a disagreement rather than silently
+    // preferring one (contract step 11) - which only works if the till says what
+    // it printed, so this rides on every bill including the B2C ones, where it
+    // is "none".
+    b2b_tax_kind: taxKindFor(gstin, storeState ?? ""),
     lines,
     tenders: toTenders(bill.split),
     totals: {

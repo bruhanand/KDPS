@@ -24,7 +24,7 @@ import { resolveScan } from "./lookup";
 import type { ScanWorld } from "./lookup";
 import { emptyPayment } from "./tender";
 import type { Payment } from "./tender";
-import type { TillItem } from "./types";
+import type { TillCustomer, TillItem } from "./types";
 
 /** One parked line: the cart's row without anything the counter can work out
  *  again. `alternatives` and `stock` are read off today's world on retrieval, so
@@ -36,7 +36,7 @@ export type HeldLine = Omit<CartLine, "alternatives" | "stock">;
  *  reads so a person can tell one parked customer from another. */
 export interface HeldPayload {
   lines: HeldLine[];
-  customer: { name: string; mobile: string };
+  customer: TillCustomer;
   /** Whatever the payment panel had on it, if the panel had got that far. */
   payment: Payment;
   /** What it came to when it was parked - shown in the list, never billed from.
@@ -60,12 +60,16 @@ export function localDay(at: Date = new Date()): string {
 /** The cart, as it goes into a hold. */
 export function heldPayload(
   cart: Cart,
-  customer: { name: string; mobile: string },
+  customer: TillCustomer,
   totals: { net_paise: number; pieces: number },
 ): HeldPayload {
   return {
     lines: cart.lines.map(({ alternatives: _a, stock: _s, ...line }) => line),
-    customer: { name: customer.name, mobile: customer.mobile },
+    // The GSTIN rides along with the name and the mobile (#187): a bill parked
+    // half-billed and picked up ten minutes later is the same customer's, and a
+    // hold that dropped it would turn their tax invoice back into a retail bill
+    // without anybody at the counter noticing.
+    customer: { name: customer.name, mobile: customer.mobile, gstin: customer.gstin },
     payment: cart.payment,
     net_paise: totals.net_paise,
     pieces: totals.pieces,
@@ -74,7 +78,7 @@ export function heldPayload(
 
 export interface RestoredHold {
   cart: Cart;
-  customer: { name: string; mobile: string };
+  customer: TillCustomer;
   /** How many lines name a piece the counter no longer stocks - the price on
    *  those is the one that was parked, and the screen says so rather than
    *  pretending it is today's. */
@@ -121,7 +125,11 @@ export function restoreHold(hold: HeldBill, world: ScanWorld): RestoredHold {
   });
   return {
     cart: { lines, payment: payload.payment ?? emptyPayment(), authorisation: null },
-    customer: { name: payload.customer?.name ?? "", mobile: payload.customer?.mobile ?? "" },
+    customer: {
+      name: payload.customer?.name ?? "",
+      mobile: payload.customer?.mobile ?? "",
+      gstin: payload.customer?.gstin ?? "",
+    },
     staleLines,
   };
 }

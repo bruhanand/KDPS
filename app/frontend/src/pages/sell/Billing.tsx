@@ -1,7 +1,17 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertTriangle, Gift, KeyRound, PauseCircle, Plus, Printer, Search, X } from "lucide-react";
+import {
+  AlertTriangle,
+  FileText,
+  Gift,
+  KeyRound,
+  PauseCircle,
+  Plus,
+  Printer,
+  Search,
+  X,
+} from "lucide-react";
 
 import { PageHeader } from "../../components/PageHeader";
 import { useAuth } from "../../auth/AuthContext";
@@ -21,6 +31,7 @@ import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
 import { tillToday } from "../../till/pricing";
+import { describeGstin, storeStateCodeOf, TAX_KIND_WORDS, taxKindFor } from "../../till/gstin";
 import { describePiece, resolveScan, searchPieces } from "../../till/lookup";
 import { whoAuthorised, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "../../till/pin";
 import type { Ask, Authorisation, AuthorisationKind } from "../../till/pin";
@@ -28,7 +39,7 @@ import { browserPrintAdapter } from "../../till/print";
 import { receiptHtml } from "../../till/receipt";
 import { newNote } from "../../till/tender";
 import type { NoteStanding, Payment } from "../../till/tender";
-import type { QueuedBill, TillItem, TillManager } from "../../till/types";
+import type { QueuedBill, TillCustomer, TillItem, TillManager } from "../../till/types";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
@@ -92,6 +103,12 @@ import "./Billing.css";
 // until the PT prices the piece - which is the only way Rule 5 (nothing at
 // nought) and Rule 8 (nothing blocked) can both hold at once.
 
+/** A fresh bill's customer strip. Spelled once because it is cleared from four
+ *  places - New Bill, Hold, Save & Print, and the reset after a hold is parked -
+ *  and a literal in one of them that forgot a field would leave the last
+ *  customer's GSTIN on the next customer's tax invoice. */
+const NO_CUSTOMER: TillCustomer = { name: "", mobile: "", gstin: "" };
+
 export default function BillingPage() {
   const { user } = useAuth();
   const { engine, till } = useTill();
@@ -110,7 +127,7 @@ function Counter({ storeName }: { storeName?: string }) {
   const { engine, till } = useTill();
   const [params] = useSearchParams();
   const [cart, setCart] = useState<Cart>(emptyCart);
-  const [customer, setCustomer] = useState({ name: "", mobile: "" });
+  const [customer, setCustomer] = useState<TillCustomer>(NO_CUSTOMER);
   const [saving, setSaving] = useState(false);
   const [holding, setHolding] = useState(false);
   const [note, setNote] = useState("");
@@ -163,6 +180,10 @@ function Counter({ storeName }: { storeName?: string }) {
   }, [wrongPins]);
 
   const today = useMemo(() => tillToday(), []);
+  // Which state this shop is registered in - the other half of every B2B tax
+  // split. Null until the counter's identity has synced, and null is *not* a
+  // state code: see `storeStateCodeOf` and `toDraft`.
+  const storeState = storeStateCodeOf(world.store);
   const bill = useMemo(
     () =>
       priceCart(cart, world, today, {
@@ -289,7 +310,7 @@ function Counter({ storeName }: { storeName?: string }) {
 
   function newBill() {
     setCart(emptyCart());
-    setCustomer({ name: "", mobile: "" });
+    setCustomer(NO_CUSTOMER);
     setNote("");
     setPrintProblem("");
     clearScan();
@@ -341,7 +362,7 @@ function Counter({ storeName }: { storeName?: string }) {
         }),
       });
       setCart(emptyCart());
-      setCustomer({ name: "", mobile: "" });
+      setCustomer(NO_CUSTOMER);
       clearScan();
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
@@ -408,7 +429,11 @@ function Counter({ storeName }: { storeName?: string }) {
     setPrintProblem("");
     try {
       const queued = await engine.commit(
-        toDraft(bill, { billedAt: new Date().toISOString(), customer }),
+        toDraft(bill, {
+          billedAt: new Date().toISOString(),
+          customer,
+          storeStateCode: storeState,
+        }),
       );
       setCommits((n) => n + 1);
       const receipt = receiptHtml(queued, world.store ?? FALLBACK_STORE, {
@@ -418,7 +443,7 @@ function Counter({ storeName }: { storeName?: string }) {
       });
       setLastBill({ bill: queued, receipt });
       setCart(emptyCart());
-      setCustomer({ name: "", mobile: "" });
+      setCustomer(NO_CUSTOMER);
       clearScan();
       setNote(`Bill ${queued.doc_number} saved.`);
       await print(receipt);
@@ -563,7 +588,12 @@ function Counter({ storeName }: { storeName?: string }) {
             // old one whole.
             onAsk={() => setAsking(bill.asks)}
           />
-          <CustomerStrip value={customer} locked={locked} onChange={setCustomer} />
+          <CustomerStrip
+            value={customer}
+            storeStateCode={storeState}
+            locked={locked}
+            onChange={setCustomer}
+          />
         </aside>
       </div>
 
@@ -1679,15 +1709,40 @@ function ManagerPin({
   );
 }
 
+/**
+ * Who the bill is for - and, when they give a GSTIN, what kind of bill it is.
+ *
+ * A GSTIN turns a retail sale into a full tax invoice (#187, grill Q8): the
+ * split printed on the customer's copy is derived here, offline, from the
+ * buyer's state against the shop's, because it prints minutes before head office
+ * hears about the bill and cannot wait for anybody.
+ *
+ * The check on what they typed is *soft*, and visibly so. The counter says the
+ * registration looks wrong and the bill closes anyway - the customer is standing
+ * there holding the garment, and a mistyped character is a tax invoice head
+ * office corrects, not a sale to decline. Saying it here is still worth doing,
+ * because here is the one moment the customer can read their card out again.
+ */
 function CustomerStrip({
   value,
+  storeStateCode,
   locked,
   onChange,
 }: {
-  value: { name: string; mobile: string };
+  value: TillCustomer;
+  /** Null when the counter has not learned which state it is in - see below. */
+  storeStateCode: string | null;
   locked: boolean;
-  onChange: (v: { name: string; mobile: string }) => void;
+  onChange: (v: TillCustomer) => void;
 }) {
+  // A counter that does not know its own state cannot say which tax a business
+  // bill carries, and there is no safe guess: one wrong answer prints IGST on a
+  // local buyer's copy while the books post CGST + SGST, and the other does it
+  // the other way round. So the field closes and says why, rather than taking a
+  // registration it would then charge the wrong tax on.
+  const canBillB2b = storeStateCode !== null;
+  const kind = canBillB2b ? taxKindFor(value.gstin, storeStateCode) : "none";
+  const malformed = canBillB2b ? describeGstin(value.gstin) : "";
   return (
     <section className="card section-card bill-panel">
       <p className="eyebrow">Customer</p>
@@ -1715,7 +1770,42 @@ function CustomerStrip({
           onChange={(e) => onChange({ ...value, name: e.target.value })}
         />
       </div>
-      <p className="muted-cell">The bill works without either.</p>
+      <div className="field">
+        <label htmlFor="bill-gstin">GSTIN (for a business bill)</label>
+        <input
+          id="bill-gstin"
+          className="input mono"
+          data-testid="bill-gstin"
+          autoComplete="off"
+          maxLength={15}
+          spellCheck={false}
+          disabled={locked || !canBillB2b}
+          value={value.gstin}
+          // Upper-cased as it is typed, so what the cashier reads back is what
+          // prints and what the server stores - a GSTIN differing from itself by
+          // case would flag every second business bill.
+          onChange={(e) => onChange({ ...value, gstin: e.target.value.toUpperCase() })}
+        />
+      </div>
+      {!canBillB2b && (
+        <p className="bill-alert" data-testid="bill-gstin-unavailable">
+          <AlertTriangle size={15} /> This counter has not synced its own registration yet, so it
+          cannot say whether a buyer is in this state. Sync from Till &amp; Sync to bill a
+          business; a retail bill is unaffected.
+        </p>
+      )}
+      {kind !== "none" && (
+        <p className="ok-note" data-testid="bill-tax-kind">
+          <FileText size={15} /> Tax invoice · {TAX_KIND_WORDS[kind]}
+          {kind === "igst" ? " (buyer is out of state)" : ""}
+        </p>
+      )}
+      {malformed && (
+        <p className="bill-alert" data-testid="bill-gstin-warning">
+          <AlertTriangle size={15} /> {malformed} The bill will still close - check the card.
+        </p>
+      )}
+      <p className="muted-cell">The bill works without any of these.</p>
     </section>
   );
 }

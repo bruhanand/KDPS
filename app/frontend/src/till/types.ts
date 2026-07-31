@@ -7,6 +7,8 @@
 // api-contract.md`, step 3, including its 30 Jul amendment), and the fields the
 // amendment made nullable are nullable here.
 
+import type { B2bTaxKind } from "./gstin";
+
 /** One piece as the counter knows it: a barcode in a season, at a ticket price. */
 export interface TillItem {
   barcode: string;
@@ -197,13 +199,32 @@ export interface BillTotals {
   round_paise: number;
 }
 
+/** Who the bill is for, as the counter has them.
+ *
+ *  All three are optional to a *sale* and none is asked for: the mobile is for
+ *  finding the bill again, the name reads on the paper, and a GSTIN is what
+ *  turns a retail bill into a B2B tax invoice with a thirty-day clock on head
+ *  office behind it (#187, grill Q8). Spelled once because the cart, the hold
+ *  and the wire all carry the same three fields, and a fourth added to two of
+ *  the three would be a hold that quietly lost it. */
+export interface TillCustomer {
+  name: string;
+  mobile: string;
+  gstin: string;
+}
+
 /** A bill as the screen hands it to the till: everything except its identity.
  *  The number, the financial year and the idempotency key are the till layer's
  *  to assign, and assigning them is the commit (see `numbering.ts`). */
 export interface BillDraft {
   billed_at: string;
   origin?: "offline" | "online" | "paper";
-  customer?: { name?: string; mobile?: string; gstin?: string };
+  customer?: TillCustomer;
+  /** The split the customer's copy was printed with. The server derives its own
+   *  from the same GSTIN and flags a disagreement rather than preferring either
+   *  (contract step 11) - so this is evidence about the paper, not an
+   *  instruction. "none" on every B2C bill. */
+  b2b_tax_kind?: B2bTaxKind;
   lines: BillLine[];
   tenders: BillTender[];
   totals: BillTotals;

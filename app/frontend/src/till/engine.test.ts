@@ -160,7 +160,7 @@ describe("what the screen is told", () => {
 describe("bills on hold (#185)", () => {
   const payload = {
     lines: [],
-    customer: { name: "", mobile: "" },
+    customer: { name: "", mobile: "", gstin: "" },
     payment: emptyPayment(),
     net_paise: 0,
     pieces: 0,
