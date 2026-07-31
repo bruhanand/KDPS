@@ -112,11 +112,21 @@ def _release(rows: Any, actor: Any) -> int:
     posting the same barcode at once is an ordinary Tuesday, and without the lock
     both would read the same `waiting` row and post the cost twice. The trial
     balance would still be nought, which is exactly why the lock is here and not
-    left to a later check to notice.
+    left to a later check to notice. `of="self"` keeps it to the queue rows -
+    locking the joined bills and stores as well would put a PT post in the way of
+    a counter that is still selling.
+
+    Nothing is caught. This runs inside whatever transaction released it, so a
+    failure here takes the PT down with it - which is the right way round: every
+    reachable failure is a defect (the legs balance by construction, the cost is
+    non-nought by the check above, the actor is the bill's own), and a PT that
+    posted while quietly failing to cost a sale is a hole nothing downstream
+    would find.
     """
     posted = 0
     with transaction.atomic():
-        for row in rows.select_for_update().select_related("sale_line__sale", "store"):
+        locked = rows.select_for_update(of=("self",)).select_related("sale_line__sale", "store")
+        for row in locked:
             if _release_one(row, actor):
                 posted += 1
     return posted
