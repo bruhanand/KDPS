@@ -14,6 +14,7 @@
 // have this bill yet.
 
 import { changeFor } from "./cart";
+import { TENDER_WORDS } from "./tender";
 import { splitTax, taxKindFor } from "./gstin";
 import type { B2bTaxKind } from "./gstin";
 import { describePiece } from "./lookup";
@@ -74,14 +75,6 @@ function esc(text: string): string {
   );
 }
 
-/** How each tender mode reads to a customer. */
-const TENDER_WORDS: Record<string, string> = {
-  cash: "Cash",
-  card: "Card",
-  upi: "UPI",
-  credit_note: "Credit note",
-};
-
 function when(iso: string): string {
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? iso : at.toLocaleString("en-IN");
@@ -124,11 +117,22 @@ export function receiptHtml(
   // on, so this is not a field to leave blank quietly.
   const buyerGstin = customer.gstin ?? "";
   const taxKind: B2bTaxKind = bill.b2b_tax_kind ?? taxKindFor(buyerGstin, store.state_code);
+  // "Tax included ₹-655.78" is what a return-only bill printed before browser QA
+  // of #184 read one: arithmetically right, and not a sentence anybody would put
+  // on a customer's copy. A bill that gives back more than it sells gives the tax
+  // back too, so it says so, and the figure is the amount rather than a minus.
+  const givesTaxBack = bill.totals.gst_paise < 0;
+  const taxLabel = givesTaxBack ? "Tax given back" : "Tax included";
+  const taxPaise = Math.abs(bill.totals.gst_paise);
   const taxRows =
     taxKind === "none"
-      ? [["Tax included", money(bill.totals.gst_paise)]]
-      : splitTax(bill.totals.gst_paise, taxKind).map(
-          (part) => [`${part.label} included`, money(part.paise)] as [string, string],
+      ? [[taxLabel, money(taxPaise)]]
+      : splitTax(taxPaise, taxKind).map(
+          (part) =>
+            [`${part.label} ${givesTaxBack ? "given back" : "included"}`, money(part.paise)] as [
+              string,
+              string,
+            ],
         );
 
   // What the customer handed back, and what it was worth to them (#184, D2).

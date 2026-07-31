@@ -8,6 +8,7 @@ import { withQuery } from "../../lib/query";
 import { Money, formatDateTime } from "../../lib/format";
 import { browserPrintAdapter } from "../../till/print";
 import { postedReceiptHtml } from "../../till/receipt";
+import { TENDER_WORDS } from "../../till/tender";
 import type { PostedBill } from "../../till/receipt";
 import "./CustomerSearch.css";
 
@@ -300,7 +301,7 @@ function BillDetail({ bill, onReprint }: { bill: PostedBill; onReprint: () => vo
         <Figure label="Tax included" paise={bill.gst_paise} />
         <Figure label="Paid" paise={bill.net_paise} strong />
         <span className="find-tenders" data-testid="find-detail-tenders">
-          {bill.tenders.map((tender) => `${tender.mode}`).join(" + ") || "—"}
+          {bill.tenders.map((t) => TENDER_WORDS[t.mode] ?? t.mode).join(" + ") || "Nothing taken"}
         </span>
       </div>
     </div>

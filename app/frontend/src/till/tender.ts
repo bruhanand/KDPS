@@ -27,6 +27,21 @@ import type { BillTender, TillCreditNote } from "./types";
 
 export type TenderMode = "cash" | "card" | "upi" | "credit_note";
 
+/** How each mode reads to a person - on the customer's copy and on any screen
+ *  that lists what a bill was paid with.
+ *
+ *  Here rather than in `receipt.ts`, where it started, because a second reader
+ *  arrived: browser QA of #184 found the reprint screen showing a raw
+ *  `credit_note` where the paper says "Credit note". The words belong with the
+ *  modes, and one map means the paper and the screen cannot disagree about what
+ *  a customer paid with. */
+export const TENDER_WORDS: Record<string, string> = {
+  cash: "Cash",
+  card: "Card",
+  upi: "UPI",
+  credit_note: "Credit note",
+};
+
 /** One credit note the customer handed over. */
 export interface NoteTender {
   /** Stable across edits, so React and the row's own inputs have something to

@@ -393,6 +393,12 @@ describe("a piece given back on the same bill (#184)", () => {
     expect(html).toContain("Credit note");
     expect(html).toContain("₹701.00");
     expect(html).toContain("No cash is paid out on a return");
+    // "Tax included ₹-655.78" is arithmetically right and not a sentence anybody
+    // would put on a customer's copy (browser QA of #184). A bill that gives back
+    // more than it sells gives the tax back too, and says so.
+    expect(html).toContain("Tax given back");
+    expect(html).toContain("₹33.38");
+    expect(html).not.toContain("-₹");
     // Its number is head office's to allocate, so a counter printing offline
     // cannot know it - and saying so is the truth rather than a blank.
     expect(html).toContain("number follows");
