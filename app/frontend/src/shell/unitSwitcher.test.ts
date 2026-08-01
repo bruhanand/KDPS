@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Brand, Store, User } from "../auth/AuthContext";
-import { contextKey, switcherModel, unitContextLabel } from "./unitSwitcher";
+import { contextKey, optionKey, switcherModel, unitContextLabel } from "./unitSwitcher";
 
 function store(code: string, name: string, state = "Jharkhand"): Store {
   return {
@@ -136,6 +136,33 @@ describe("what the switcher offers", () => {
     // client must believe the payload, not the label.
     const model = switcherModel(user({ scope_type: "all" }), null, null);
     expect(model.options).toEqual([]);
+  });
+});
+
+describe("what identifies a menu row", () => {
+  it("keeps two same-named units apart", () => {
+    // The real case this guards: KDPS has more than one unit per town name, and
+    // since the bar stopped saying the code a row's label is only the name. Two
+    // rows sharing a React key let React reuse the wrong one.
+    const MAIN_A = store("DEO", "Main Road");
+    const MAIN_B = store("RAN", "Main Road");
+    const model = switcherModel(user({ business_units: [MAIN_A, MAIN_B] }), null, null);
+    expect(model.options.map((o) => o.label)).toContain("Main Road");
+    const keys = model.options.map(optionKey);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps a unit and a brand of the same name apart", () => {
+    expect(optionKey({ kind: "unit", label: "Mufti", hint: "", store: DEO })).not.toBe(
+      optionKey({ kind: "brand", label: "Mufti", hint: "", brand: MUFTI }),
+    );
+  });
+
+  it("gives the two aggregates their own identities", () => {
+    expect(optionKey({ kind: "all-units", label: "All my business units", hint: "" })).toBe(
+      "all-units",
+    );
+    expect(optionKey({ kind: "all-brands", label: "All my brands", hint: "" })).toBe("all-brands");
   });
 });
 

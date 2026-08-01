@@ -82,6 +82,19 @@ function brandsModel(user: User, active: Brand | null): SwitcherModel {
   };
 }
 
+/** A stable identity for one menu row.
+ *
+ *  The label is not one. Since the bar stopped saying the code (ruled 1 Aug
+ *  2026) a unit's label is just its name, and KDPS really does run two units
+ *  with the same name in different towns - so keying the menu on the label
+ *  would hand React two rows with one key and let it reuse the wrong one. The
+ *  code is what the server keys on, so it is what the list keys on. */
+export function optionKey(option: SwitcherOption): string {
+  if (option.kind === "unit") return `unit:${option.store.code}`;
+  if (option.kind === "brand") return `brand:${option.brand.code}`;
+  return option.kind;
+}
+
 export function switcherModel(
   user: User,
   activeStore: Store | null,
