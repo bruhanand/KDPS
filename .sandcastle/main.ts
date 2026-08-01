@@ -407,7 +407,16 @@ async function runPipeline(
       promptArgs,
       logging: { type: "file", path: logPath("build") },
     });
-    if (build.commits.length === 0) {
+    // "No new commits" is only a failure when the branch holds nothing at all.
+    // A branch resumed from an earlier run (the work built, reviewed and
+    // synced to the host then) legitimately gives the builder nothing to do —
+    // measure the branch against main, not this run's commit count, or a
+    // finished branch spins as "no-commits" forever and its wave never merges
+    // (issue #240 on the second launch).
+    const branchAhead = Number(
+      git("rev-list", "--count", `main..${issue.branch}`),
+    );
+    if (build.commits.length === 0 && branchAhead === 0) {
       return {
         issue,
         state: "no-commits",
@@ -646,9 +655,12 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // exactly one `main` working tree to land on even though up to
   // MAX_CONCURRENT_ISSUES pipelines just finished at once. The real gate is
   // below: `npm run ci:fast` re-run on the MERGED main.
-  const mergeable = results.filter(
-    (r) => r.state === "ready" && r.commits.length > 0,
-  );
+  // "ready" is the whole test: the pipeline only returns it after review, QA
+  // and ci:fast all passed on whatever the branch holds. Requiring this run's
+  // commit count on top of that excluded branches resumed from an earlier
+  // run, where the work predates this process. The no-commits guard upstream
+  // already rejects branches with nothing on them at all.
+  const mergeable = results.filter((r) => r.state === "ready");
   const handedBack = results.filter((r) => r.state === "handed-back");
 
   // Relabel every hand-back from the host. The fixer only relabels on its
