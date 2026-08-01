@@ -44,6 +44,13 @@ TENDER_MODES: tuple[str, ...] = (
     SaleTender.Mode.CREDIT_NOTE,
 )
 
+#: Every way a UPI tender can be proven, spelled out the same way as
+#: `TENDER_MODES` so the split can't drift from the model either.
+UPI_STATES: tuple[str, ...] = (
+    SaleTender.UpiState.CONFIRMED,
+    SaleTender.UpiState.MANUAL,
+)
+
 
 @dataclass(frozen=True)
 class DayMoney:
@@ -55,7 +62,7 @@ class DayMoney:
     #: `collections["upi"]` by construction - both are read off the same tender
     #: rows in one query - and this is the day's only control on manual UPI: no
     #: manager PIN, just visibility the same evening.
-    upi_split: dict[str, int] = field(default_factory=lambda: {"confirmed": 0, "manual": 0})
+    upi_split: dict[str, int] = field(default_factory=lambda: {state: 0 for state in UPI_STATES})
     #: Bills the server has accepted for the day. A held cart is not a bill.
     bills: int = 0
     #: Pieces sold, net of nothing - the returns are counted separately, because
@@ -90,27 +97,41 @@ def sales_on(store: Store, day: date) -> QuerySet[Sale]:
     )
 
 
+def _sum_by(rows, group_field: str, defaults: dict[str, int]) -> dict[str, int]:
+    """Group `rows` (a `.values(group_field).annotate(total=Sum(...))` queryset)
+    into a dict seeded with `defaults`, so a key nobody used still renders.
+
+    A key `rows` yields that `defaults` has never heard of is dropped rather
+    than raising - see the comment this replaced in `money_for` on `collections`.
+    """
+    totals = dict(defaults)
+    for row in rows:
+        if row[group_field] in totals:
+            totals[row[group_field]] = int(row["total"] or 0)
+    return totals
+
+
 def money_for(store: Store, day: date) -> DayMoney:
     """`store`'s day, by tender."""
     bills = sales_on(store, day)
-    collections = {mode: 0 for mode in TENDER_MODES}
-    for row in (
-        SaleTender.objects.filter(sale__in=bills).values("mode").annotate(total=Sum("amount_paise"))
-    ):
-        # A mode the enum has never heard of cannot reach the database (the column
-        # is a choice field), so an unknown key here would be a migration in
-        # flight rather than data - and dropping it silently is better than a
-        # summary that renders a column nobody has a word for.
-        if row["mode"] in collections:
-            collections[row["mode"]] = int(row["total"] or 0)
-    upi_split = {"confirmed": 0, "manual": 0}
-    for row in (
+    # A mode/state the enum has never heard of cannot reach the database (the
+    # column is a choice field), so an unknown key here would be a migration in
+    # flight rather than data - and dropping it silently is better than a
+    # summary that renders a column nobody has a word for.
+    collections = _sum_by(
+        SaleTender.objects.filter(sale__in=bills)
+        .values("mode")
+        .annotate(total=Sum("amount_paise")),
+        "mode",
+        {mode: 0 for mode in TENDER_MODES},
+    )
+    upi_split = _sum_by(
         SaleTender.objects.filter(sale__in=bills, mode=SaleTender.Mode.UPI)
         .values("upi_state")
-        .annotate(total=Sum("amount_paise"))
-    ):
-        if row["upi_state"] in upi_split:
-            upi_split[row["upi_state"]] = int(row["total"] or 0)
+        .annotate(total=Sum("amount_paise")),
+        "upi_state",
+        {state: 0 for state in UPI_STATES},
+    )
     lines = SaleLine.objects.filter(sale__in=bills).values("direction").annotate(qty=Sum("qty"))
     pieces = {row["direction"]: int(row["qty"] or 0) for row in lines}
     return DayMoney(
