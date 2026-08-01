@@ -145,6 +145,10 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px;
   padding: 0 22px;
 }
+/* The two side groups: equal flexible halves, so the search box between them
+   sits centred against the window itself. `min-width: 0` lets either half
+   give way before the bar overflows. */
+.topbar-left { display: flex; align-items: center; gap: 16px; flex: 1 1 0; min-width: 0; }
 /* The lockup's own lettering and needle are `currentColor` (KdpsLogo.tsx), so
    this one declaration is what makes them navy here and pale in dark mode. */
 .topbar-brand { display: flex; align-items: center; flex: none; color: var(--navy); }
@@ -162,7 +166,9 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
      than mid-word, which reads as an accident. */
   text-overflow: ellipsis;
 }
-.topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+/* What wants you (Alerts, Approvals), then where you are (the unit chip),
+   pushed to the right corner. */
+.topbar-right { display: flex; align-items: center; gap: 12px; flex: 1 1 0; min-width: 0; justify-content: flex-end; }
 .icon-btn {
   position: relative; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--hairline);
   background: var(--surface); color: var(--navy); display: flex; align-items: center; justify-content: center;
@@ -365,11 +371,14 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar-rail-toggle { display: none; }
 
   .topbar { padding: 0 10px; gap: 8px; }
+  /* No room for equal halves on a phone: the groups shrink to their content
+     and the search box takes whatever is left - centring is a desktop line. */
+  .topbar-left { gap: 8px; flex: none; }
+  .topbar-right { gap: 8px; flex: none; }
   /* The full lockup would crowd the search box out of a phone's bar. */
   .topbar-logo-full { display: none; }
   .topbar-logo-mark { display: block; }
   .topbar-search { padding: 7px 12px; }
-  .topbar-right { gap: 8px; }
   .switcher-label { max-width: 74px; }
   /* A phone's bar has to shrink everything in it: the profile lives in the
      drawer now and the chip carries only the unit's name, so the label and

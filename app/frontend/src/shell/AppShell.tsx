@@ -813,32 +813,39 @@ export function AppShell({ children }: { children: ReactNode }) {
   // against a window that never scrolls.
   return (
     <div className="shell">
+      {/* The bar reads left to right as identity, then search, then what
+          wants you, then where you are (ruled 1 Aug 2026). The two side
+          groups flex equally from a zero basis, which is what keeps the
+          search box centred against the window rather than against whatever
+          the logo and the cluster happen to weigh. */}
       <header className="topbar">
-        <button
-          className="icon-btn menu-btn"
-          onClick={() => setMobileNavOpen((o) => !o)}
-          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-          data-testid="mobile-nav-toggle"
-        >
-          {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
-        {/* Two copies, one shown at a time: under 768px the full lockup would
-            crowd the search box out of the bar, so the ribbon mark stands in.
-            Both are decorative - the link carries the name. */}
-        <Link to="/" className="topbar-brand" aria-label="KDPS Operating System - home">
-          <KdpsLogo className="topbar-logo-full" height={30} title="" />
-          <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
-        </Link>
+        <div className="topbar-left">
+          <button
+            className="icon-btn menu-btn"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            data-testid="mobile-nav-toggle"
+          >
+            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          {/* Two copies, one shown at a time: under 768px the full lockup would
+              crowd the search box out of the bar, so the ribbon mark stands in.
+              Both are decorative - the link carries the name. */}
+          <Link to="/" className="topbar-brand" aria-label="KDPS Operating System - home">
+            <KdpsLogo className="topbar-logo-full" height={30} title="" />
+            <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
+          </Link>
+        </div>
         {/* The drawer's overlay (z-index 55/60) sits above these popups
             (40/50) by design (see MobileNavContext) - so whichever of the
             drawer and a popup opens second closes the other, in either
             order, rather than fighting for a higher layer. */}
         <MobileNavContext.Provider value={mobileNavCtx}>
-          <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
             <AlertsButton />
             <ApprovalsButton />
+            <UnitSwitcher />
           </div>
         </MobileNavContext.Provider>
       </header>
