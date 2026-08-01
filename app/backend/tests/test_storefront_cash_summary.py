@@ -28,6 +28,7 @@ from _sell import (
     build_store,
     client_for,
     stock_in,
+    upi_tender,
 )
 from django.db.models import Sum
 from django.utils import timezone
@@ -93,7 +94,7 @@ def test_the_day_by_mode_ties_to_the_tender_rows_to_the_paisa(counter):
         2,
         tenders=[
             {"mode": "card", "amount_paise": 100000},
-            {"mode": "upi", "amount_paise": MRP_PAISE - 100000},
+            upi_tender(MRP_PAISE - 100000),
         ],
     )
     body = _summary(counter["cashier"], date=BILLED_DAY)
@@ -110,10 +111,25 @@ def test_every_mode_is_present_even_on_a_day_nobody_used_it(counter):
     """A tile that vanishes when unused makes a store person wonder where it went."""
     body = _summary(counter["cashier"], date=BILLED_DAY)
     assert body["modes"] == {"cash": 0, "card": 0, "upi": 0, "credit_note": 0}
+    assert body["upi_split"] == {"confirmed": 0, "manual": 0}
     assert body["bills"] == 0
     assert body["returns"] == 0
     assert body["credit_notes_issued_paise"] == 0
     assert body["flags_open"] == 0
+
+
+def test_upi_split_ties_to_the_upi_total_by_construction(counter):
+    """Confirmed cannot legitimately reach the server yet (#248), but the
+    pipeline accepts it correctly, and the split has to be right the day it
+    starts arriving - so one bill sends each stamp."""
+    _bill(counter, 1, tenders=[upi_tender(MRP_PAISE, state="confirmed", reference="AXL999")])
+    _bill(counter, 2, tenders=[upi_tender(MRP_PAISE)])
+
+    body = _summary(counter["cashier"], date=BILLED_DAY)
+
+    assert body["upi_split"]["confirmed"] == MRP_PAISE
+    assert body["upi_split"]["manual"] == MRP_PAISE
+    assert body["upi_split"]["confirmed"] + body["upi_split"]["manual"] == body["modes"]["upi"]
 
 
 def test_another_day_is_not_this_day(counter):
@@ -323,7 +339,7 @@ def test_the_summary_ties_to_the_cash_ledger_as_well_as_to_the_tenders(counter):
         2,
         tenders=[
             {"mode": "card", "amount_paise": 100000},
-            {"mode": "upi", "amount_paise": MRP_PAISE - 100000},
+            upi_tender(MRP_PAISE - 100000),
         ],
     )
     body = _summary(counter["cashier"], date=BILLED_DAY)

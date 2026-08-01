@@ -51,6 +51,11 @@ class DayMoney:
 
     #: Paise per tender mode - every mode present, nought where unused.
     collections: dict[str, int] = field(default_factory=dict)
+    #: `collections["upi"]`, split by how the money was proven. The two sum to
+    #: `collections["upi"]` by construction - both are read off the same tender
+    #: rows in one query - and this is the day's only control on manual UPI: no
+    #: manager PIN, just visibility the same evening.
+    upi_split: dict[str, int] = field(default_factory=lambda: {"confirmed": 0, "manual": 0})
     #: Bills the server has accepted for the day. A held cart is not a bill.
     bills: int = 0
     #: Pieces sold, net of nothing - the returns are counted separately, because
@@ -98,10 +103,19 @@ def money_for(store: Store, day: date) -> DayMoney:
         # summary that renders a column nobody has a word for.
         if row["mode"] in collections:
             collections[row["mode"]] = int(row["total"] or 0)
+    upi_split = {"confirmed": 0, "manual": 0}
+    for row in (
+        SaleTender.objects.filter(sale__in=bills, mode=SaleTender.Mode.UPI)
+        .values("upi_state")
+        .annotate(total=Sum("amount_paise"))
+    ):
+        if row["upi_state"] in upi_split:
+            upi_split[row["upi_state"]] = int(row["total"] or 0)
     lines = SaleLine.objects.filter(sale__in=bills).values("direction").annotate(qty=Sum("qty"))
     pieces = {row["direction"]: int(row["qty"] or 0) for row in lines}
     return DayMoney(
         collections=collections,
+        upi_split=upi_split,
         bills=bills.count(),
         pieces=pieces.get(SaleLine.Direction.SALE, 0),
         returns=pieces.get(SaleLine.Direction.RETURN, 0),
