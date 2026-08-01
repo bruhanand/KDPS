@@ -82,6 +82,11 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
 # once per image, from an agent improvising rather than following the slice.
 RUN uv tool install pre-commit
 
+# The code graph. Same argument as pre-commit: paid once per image rather than
+# once per issue. sandbox-setup.sh builds the graph itself (that part depends on
+# the branch's code) and re-installs if this image is stale.
+RUN uv tool install graphifyy
+
 # A Postgres cluster owned by `agent`, so the server starts in this rootless
 # container without sudo. Trust auth and a /tmp socket dir are safe because the
 # cluster is throwaway and reachable only from inside the sandbox.

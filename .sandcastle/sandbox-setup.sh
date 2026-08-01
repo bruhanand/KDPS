@@ -90,4 +90,28 @@ say "Syncing frontend dependencies (yarn)"
 cd "$ROOT/app/frontend"
 yarn install --frozen-lockfile
 
+# --- 4. Code graph (graphify) -------------------------------------------------
+# The slicer and the reviewers spend most of their time answering "where does
+# this live and what touches it". On the #229 run the slicer ran 104 shell
+# commands — nearly all of them greps — to find one function. A graph answers
+# that in one call.
+#
+# `graphify update` is AST-only: deterministic, no LLM, no API key, ~10s over
+# app/. It is pointed at app/ and not the repo root deliberately — the root
+# would pull in the whole docs corpus, and markdown needs semantic (LLM)
+# extraction, which does not belong in an unattended shell script. The corpus
+# stays the slicer's job to read; the graph is for code.
+#
+# Built from inside app/ deliberately: graphify writes graphify-out/ relative to
+# the working directory as well as the target, so building from the repo root
+# leaves a second, half-populated graphify-out/ there that shadows the real one.
+# From app/, the graph is at app/graphify-out/ and graphify's own default path
+# resolves — which is why the prompts tell agents to `cd app` first.
+say "Building the code graph (graphify)"
+# The image ships graphify; this is the fallback for a stale image (the running
+# one predated `uv tool install pre-commit` by weeks). Idempotent either way.
+command -v graphify >/dev/null 2>&1 || uv tool install graphifyy
+cd "$ROOT/app"
+graphify update .
+
 say "Ready — pipeline agents can build, test and QA from $ROOT"

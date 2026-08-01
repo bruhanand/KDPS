@@ -76,19 +76,49 @@ const REVIEW_MODELS = {
 // --- Iteration caps ---------------------------------------------------------
 // `loop` is plan→pipeline→publish cycles; the rest cap how many turns each
 // agent gets. The builder is the only one that needs a lot.
+//
+// A cap is a SAFETY NET, not a schedule — every phase below also carries a
+// completion signal (see SIGNALS), so it stops the moment it emits its verdict
+// tag. Before signals were wired, each phase burned its whole cap re-doing
+// finished work: on the #229 run the slicer ran its 4th iteration, found the
+// plan file it had written itself on iteration 1, failed to recognise it, and
+// spent minutes re-verifying it. That alone was ~20 of the run's 83 minutes.
 const ITERATIONS = {
   loop: 1,
   planner: 1,
-  // The slicer gates the issue AND reads the corpus. On the first real run it
-  // finished on its second and last iteration, and a missing <gate> defaults to
-  // GO — so a harder issue would be waved through on a cap, not on a judgement.
-  slicer: 4,
+  // The slicer gates the issue AND reads the corpus. Two is the net: one to do
+  // the work, one to recover from a tool failure mid-way. A missing <gate>
+  // defaults to GO, so a cap must never be what decides an issue is workable —
+  // the signal is.
+  slicer: 2,
   builder: 100,
   reviewer: 1,
   fixer: 3,
   qa: 2,
   publisher: 2,
 } as const;
+
+// --- Completion signals ------------------------------------------------------
+// Sandcastle stops a run's iteration loop as soon as the agent's output
+// contains one of these substrings (default: "<promise>COMPLETE</promise>",
+// which only the builder and publisher prompts emit). Every other phase already
+// ends by printing a verdict tag that control flow reads — so the verdict tag
+// IS the completion signal. No prompt change, and no way to forget one.
+//
+// Matched with `includes`, so an agent that narrates the literal tag mid-work
+// would stop early. The prompts all say "output exactly one", and the caps
+// above remain the backstop.
+const SIGNALS = {
+  planner: ["</plan>"],
+  slicer: ["<gate>GO</gate>", "<gate>STOP"],
+  reviewer: ["<findings>FOUND</findings>", "<findings>NONE</findings>"],
+  fixer: [
+    "<verdict>CLEAN</verdict>",
+    "<verdict>FIXED</verdict>",
+    "<verdict>HANDED_BACK</verdict>",
+  ],
+  qa: ["<qa>PASS</qa>", "<qa>FAIL</qa>"],
+};
 
 // How many review→fix rounds before the fixer must hand back (mirrors
 // /implement: "Two rounds, then ESCALATION.md").
@@ -248,6 +278,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
     const slice = await sandbox.run({
       name: `slice-${issue.id}`,
       maxIterations: ITERATIONS.slicer,
+      completionSignal: SIGNALS.slicer,
       agent: sandcastle.claudeCode(MODELS.slicer),
       promptFile: "./.sandcastle/slice-prompt.md",
       promptArgs,
@@ -279,14 +310,22 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
     // The three axes run sequentially — they share the sandbox's working tree
     // and the claude CLI's home state, so concurrency inside one sandbox is
     // not worth the race. Each is a fresh context; cost is the same either way.
+    //
+    // The loop runs one round MORE than it fixes. Rounds 1..REVIEW_ROUNDS may
+    // review and then fix; the last round only reviews. Without it the final
+    // fix shipped unread: on the #229 run round 2 found something, the fixer
+    // changed code, and nothing looked at that change before QA. A finding that
+    // survives every fix round is a design signal, so it hands back rather than
+    // buying a third fix.
     let handedBack = false;
     let note = "";
-    for (let round = 1; round <= REVIEW_ROUNDS; round++) {
+    for (let round = 1; round <= REVIEW_ROUNDS + 1; round++) {
       let anyFindings = false;
       for (const axis of ["standards", "spec", "correctness"] as const) {
         const review = await sandbox.run({
           name: `review-${axis}-r${round}`,
           maxIterations: ITERATIONS.reviewer,
+          completionSignal: SIGNALS.reviewer,
           agent: sandcastle.claudeCode(REVIEW_MODELS[axis]),
           promptFile: `./.sandcastle/review-${axis}-prompt.md`,
           promptArgs: { ...promptArgs, ROUND: String(round) },
@@ -295,9 +334,16 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
       }
       if (!anyFindings) break;
 
+      if (round > REVIEW_ROUNDS) {
+        handedBack = true;
+        note = `findings still open after ${REVIEW_ROUNDS} fix rounds`;
+        break;
+      }
+
       const fix = await sandbox.run({
         name: `fix-r${round}`,
         maxIterations: ITERATIONS.fixer,
+        completionSignal: SIGNALS.fixer,
         agent: sandcastle.claudeCode(MODELS.fixer),
         promptFile: "./.sandcastle/fix-prompt.md",
         promptArgs: { ...promptArgs, MODE: "review", ROUND: String(round) },
@@ -316,6 +362,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
         const qa = await sandbox.run({
           name: attempt === 0 ? "qa" : `qa-redrive-${attempt}`,
           maxIterations: ITERATIONS.qa,
+          completionSignal: SIGNALS.qa,
           agent: sandcastle.claudeCode(MODELS.qa),
           promptFile: "./.sandcastle/qa-prompt.md",
           promptArgs: {
@@ -333,6 +380,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
         const fix = await sandbox.run({
           name: `qa-fix-${attempt + 1}`,
           maxIterations: ITERATIONS.fixer,
+          completionSignal: SIGNALS.fixer,
           agent: sandcastle.claudeCode(MODELS.fixer),
           promptFile: "./.sandcastle/fix-prompt.md",
           promptArgs: { ...promptArgs, MODE: "qa", ROUND: String(attempt + 1) },
@@ -370,6 +418,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     sandbox: sandboxProvider(),
     name: "planner",
     maxIterations: ITERATIONS.planner,
+    completionSignal: SIGNALS.planner,
     agent: sandcastle.claudeCode(MODELS.planner),
     promptFile: "./.sandcastle/plan-prompt.md",
   });

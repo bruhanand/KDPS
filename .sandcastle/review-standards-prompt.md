@@ -15,6 +15,27 @@ findings file.
 
 !`git log {{SOURCE_BRANCH}}..{{BRANCH}} --oneline`
 
+# WHAT ELSE TOUCHES THIS — ASK THE GRAPH
+
+`app/` is indexed as a code graph — every file, class and function, and what
+calls what, from the AST. Use it for blast radius: the diff shows what changed,
+the graph shows who depended on it. **Run these from `app/`** (`cd app`):
+
+```bash
+graphify explain "sidebarRows()"            # a changed symbol, its callers and callees
+graphify explain "navConfig.ts"             # a changed file's neighbours
+graphify path "Sidebar()" "sidebarRows()"   # how two things connect
+graphify query "what reads the RBAC matrix" # broad: where does this live
+```
+
+`explain` takes a **symbol or file name**, never a repo path; an ambiguous name
+prints the matching node ids, so pass one of those back. The graph was built
+when the sandbox came up, so it predates this branch's commits — if the diff
+adds or renames a symbol you want to trace, run `graphify update .` first
+(~10s, AST only). It indexes `app/` only, and it tells you *where to look*,
+never *what the code says* — open the file and read the line before you raise a
+finding on it.
+
 # WHAT TO CHECK
 
 Two sources, both in this repo:

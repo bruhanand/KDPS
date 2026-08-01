@@ -27,6 +27,26 @@ those too — the whole thing, not just the section that names this slice.
 Any check fails → comment on the issue saying which check and why, then output
 `<gate>STOP: <one-line reason></gate>` and finish. Write no plan.
 
+# FIND THE CODE — ASK THE GRAPH BEFORE YOU GREP
+
+`app/` is indexed as a code graph — every file, class and function, and what
+calls what, extracted from the AST. Grep makes you guess the right word; the
+graph does not. **Run these from `app/`** (`cd app`), where the graph lives:
+
+```bash
+graphify query "what builds the store sidebar"   # broad: where does this live
+graphify explain "sidebarRows()"                 # one symbol, its callers and callees
+graphify explain "navConfig.ts"                  # a whole file's neighbours
+graphify path "Sidebar()" "sidebarRows()"        # how two things connect
+```
+
+`explain` takes a **symbol or file name**, never a repo path; an ambiguous name
+prints the matching node ids, so pass one of those back. Two limits, both
+important: it indexes **`app/` only** — code, never the design corpus below,
+which you still read yourself — and it tells you *where to look*, never *what
+the code says*. Open the file and read the line before you quote it or build a
+plan on it. Grep is the fallback for whatever it does not answer.
+
 # READ THE CORPUS
 
 In this order:
