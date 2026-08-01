@@ -26,6 +26,7 @@ decides *what happened*; that one decides what it is worth and where it posts.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -35,7 +36,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.documents import DocStatus
-from masters.models import Sku, Store
+from masters.models import Customer, Sku, Store
 from masters.scoping import actionable_store_ids
 from offers.models import Offer
 from offers.resolution import Resolution
@@ -55,6 +56,7 @@ from sell.models import (
     SellPolicy,
 )
 from sell.pricing import base_from_inclusive
+from sell.services.customers import upsert_customer
 from sell.services.movements import post_stock_move
 from sell.services.postings import (
     CostedLine,
@@ -77,6 +79,8 @@ from sell.services.resolve import (
     manager_for_override,
     resolve_piece,
 )
+
+logger = logging.getLogger(__name__)
 
 #: The e-invoice clock: a B2B bill must carry an IRN within 30 days (grill Q8).
 IRN_DUE_DAYS = 30
@@ -251,7 +255,26 @@ def _accept_new(data: dict[str, Any], actor: Any) -> AcceptResult:
     flags += _apply_b2b(sale, store, data)  # step 11
     flags += _advisory_gst_check(sale, store, lines)  # step 12
     flags += _advisory_offer_check(sale, store, lines, rulebook)  # step 12
+    transaction.on_commit(lambda: _upsert_customer(sale))  # step 6 (api-contract)
     return AcceptResult(sale=sale, created=True, flags=sorted(set(flags)))
+
+
+def _upsert_customer(sale: Sale) -> None:
+    """Step 6 (api-contract) - fired only once the sale has actually committed.
+
+    Never blocks: the bill is already printed and in the customer's hand, so a
+    master-data hiccup here must not refuse it (Rule 5). No error code exists
+    for this step by design - any failure is logged and swallowed.
+    """
+    try:
+        upsert_customer(
+            Customer,
+            mobile=sale.customer_mobile,
+            name=sale.customer_name,
+            gstin=sale.buyer_gstin,
+        )
+    except Exception:
+        logger.exception("customer upsert failed for sale %s", sale.doc_number)
 
 
 def _resolve_store(code: str, actor: Any) -> Store:
