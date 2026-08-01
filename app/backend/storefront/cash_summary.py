@@ -48,6 +48,7 @@ def build(store: Store, day: date) -> dict[str, Any]:
         "store": store.code,
         "date": day.isoformat(),
         "modes": dict(money.collections),
+        "upi_split": dict(money.upi_split),
         "bills": money.bills,
         "returns": money.returns,
         "credit_notes_issued_paise": money.credit_notes_issued_paise,
