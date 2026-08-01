@@ -46,9 +46,9 @@ import { useTillWorld } from "../../till/useTillWorld";
 import "../Booking.css";
 import { newUuid } from "../../till/uuid";
 import { Lines } from "./billing/BillGrid";
-import { CustomerStrip } from "./billing/CustomerCard";
+import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
-import { PaymentPanel } from "./billing/PaymentCard";
+import { PaymentPanel } from "./billing/PaymentPanel";
 import { ManagerPin, useWrongPins } from "./ManagerPin";
 import "./Billing.css";
 
