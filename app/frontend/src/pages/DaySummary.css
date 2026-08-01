@@ -57,6 +57,9 @@
 .day-num { font-size: 19px; font-weight: 700; color: var(--navy); }
 .day-label { font-size: 12px; color: var(--muted); }
 
+/* The UPI tile's only control: visibility, not a gate (#241). */
+.day-upi-split { font-size: 11px; color: var(--muted); }
+
 /* The counts behind the money - bills, pieces back, notes given. Secondary to
    the tiles above and separated by a rule, so the eye reads the money first. */
 .day-counts {
