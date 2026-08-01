@@ -34,8 +34,9 @@ Use RGR at the seams the plan names:
 3. REPEAT until the acceptance criteria are covered
 4. REFACTOR the code
 
-Model changes ship with their migration in the same commit — cloud CI runs
-`makemigrations --check`, so a missing migration fails the PR.
+Model changes ship with their migration in the same commit — the pipeline's
+CI gate runs `makemigrations --check`, so a missing migration blocks the
+merge.
 
 # CHECKS — touched only, never the full gate
 
@@ -48,8 +49,8 @@ While working, check **only what you touched**:
   if you touched the frontend
 
 **Never run `npm run ci`.** The full gate takes ~16 minutes; in this pipeline
-cloud CI — triggered by the publish phase's push — is the only CI. That is
-deliberate.
+a dedicated ci-check phase runs `npm run ci:fast` after QA, and the host runs
+it again on merged main. That is deliberate — your job is the touched files.
 
 Sandbox notes:
 

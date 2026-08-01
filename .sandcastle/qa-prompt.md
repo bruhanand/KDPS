@@ -72,7 +72,8 @@ After each meaningful action, assert three things:
   prop-type warnings count as findings.
 
 Screenshots go to `{{ART_DIR}}/screenshots/`, named for the flow. They persist
-on the run host after this sandbox closes — the PR references them.
+on the run host after this sandbox closes, for the human who reviews the
+merged work.
 
 # VERDICT
 

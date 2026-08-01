@@ -21,8 +21,11 @@ those too — the whole thing, not just the section that names this slice.
    holds the old spec is two specs, and the wrong one gets built. This has
    happened before.
 2. **Declared blockers are closed.**
-3. **No open PR already touches the same files for the same reason**
-   (`gh pr list -R bruhanand/KDPS --state open`).
+3. **No open PR or leftover `sandcastle/*` branch already covers the same
+   change** (`gh pr list -R bruhanand/KDPS --state open`, and
+   `git branch --list 'sandcastle/*'` — this pipeline merges locally without
+   PRs, so an unmerged sandcastle branch for another issue on the same files
+   means a human still owes it a ruling).
 
 Any check fails → comment on the issue saying which check and why, then output
 `<gate>STOP: <one-line reason></gate>` and finish. Write no plan.

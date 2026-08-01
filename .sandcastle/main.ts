@@ -29,10 +29,23 @@
 //                                    the acceptance criteria in headless
 //                                    Chromium (Playwright MCP). Fail → fix →
 //                                    re-drive failed flows, twice at most.
-//   Phase 3 (Publish):   One agent pushes each branch and opens one PR
-//                        (draft if handed back). THE PUSH IS THE CI: cloud CI
-//                        runs the 16-minute gate on GitHub. `npm run ci` is
-//                        never run in a sandbox — that is deliberate.
+//                          ci-check — runs `npm run ci:fast` (mypy, the
+//                                    migration/DB-drift checks, import-
+//                                    linter, both test suites — everything
+//                                    in `npm run ci` except ruff) inside the
+//                                    same sandbox, as the branch's pre-merge
+//                                    filter.
+//   Phase 3 (Merge):     Plain git on the host, no agent: every issue that
+//                        came out "ready" gets `git merge --no-ff` onto the
+//                        host's checked-out `main`, sequentially — then the
+//                        REAL gate runs: `npm run ci:fast` once more on the
+//                        merged main (individually-green branches have
+//                        broken main before — the #146 hotfix). Green →
+//                        issues close and branches delete, so the next
+//                        iteration's planner sees the progress. Red → main
+//                        resets to the pre-wave SHA and the run stops.
+//                        Nothing is pushed and no PR is opened — a human
+//                        reviews `git log` and pushes by hand when ready.
 //
 // Agents talk through /artifacts (a host mount, ~/.cache/sandcastle-kdps/
 // artifacts), never through each other's transcripts. Control flow reads one
@@ -40,7 +53,8 @@
 //
 // Usage:  npx tsx .sandcastle/main.ts   (or: npm run sandcastle)
 
-import { mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -61,7 +75,7 @@ const MODELS = {
   builder: "claude-sonnet-5", // writes code from the slice plan. The workhorse.
   fixer: "claude-sonnet-5", //   applies ESCALATION.md to the findings
   qa: "claude-sonnet-5", //      drives the browser, <300-word report
-  publisher: "claude-sonnet-5", // pushes + opens PRs. Never merges.
+  ciCheck: "claude-sonnet-5", // runs `npm run ci` in-sandbox, reports pass/fail
 } as const;
 
 // One model per review axis, not one for "the reviewer". Standards and Spec are
@@ -74,7 +88,7 @@ const REVIEW_MODELS = {
 } as const;
 
 // --- Iteration caps ---------------------------------------------------------
-// `loop` is plan→pipeline→publish cycles; the rest cap how many turns each
+// `loop` is plan→pipeline→merge cycles; the rest cap how many turns each
 // agent gets. The builder is the only one that needs a lot.
 //
 // A cap is a SAFETY NET, not a schedule — every phase below also carries a
@@ -84,7 +98,7 @@ const REVIEW_MODELS = {
 // plan file it had written itself on iteration 1, failed to recognise it, and
 // spent minutes re-verifying it. That alone was ~20 of the run's 83 minutes.
 const ITERATIONS = {
-  loop: 1,
+  loop: 6,
   planner: 1,
   // The slicer gates the issue AND reads the corpus. Two is the net: one to do
   // the work, one to recover from a tool failure mid-way. A missing <gate>
@@ -95,13 +109,13 @@ const ITERATIONS = {
   reviewer: 1,
   fixer: 3,
   qa: 2,
-  publisher: 2,
+  ciCheck: 2,
 } as const;
 
 // --- Completion signals ------------------------------------------------------
 // Sandcastle stops a run's iteration loop as soon as the agent's output
 // contains one of these substrings (default: "<promise>COMPLETE</promise>",
-// which only the builder and publisher prompts emit). Every other phase already
+// which only the builder prompt emits). Every other phase already
 // ends by printing a verdict tag that control flow reads — so the verdict tag
 // IS the completion signal. No prompt change, and no way to forget one.
 //
@@ -118,6 +132,7 @@ const SIGNALS = {
     "<verdict>HANDED_BACK</verdict>",
   ],
   qa: ["<qa>PASS</qa>", "<qa>FAIL</qa>"],
+  ciCheck: ["<ci>PASS</ci>", "<ci>FAIL"],
 };
 
 // How many review→fix rounds before the fixer must hand back (mirrors
@@ -131,14 +146,15 @@ const QA_REDRIVES = 2;
 // MAX_CONCURRENT_ISSUES — how many wave-1 pipelines run at the same time. Each
 // has its own sandbox, its own Postgres and its own branch, so they never
 // share state. A failing pipeline never cancels the others.
-const MAX_CONCURRENT_ISSUES: number = 1; // sequential
-// const MAX_CONCURRENT_ISSUES: number = 3;        // limited parallel
+// const MAX_CONCURRENT_ISSUES: number = 1;        // sequential
+const MAX_CONCURRENT_ISSUES: number = 3; //         limited parallel
 // const MAX_CONCURRENT_ISSUES: number = Infinity; // whole wave at once
 
 // MAX_ISSUES_PER_CYCLE — how many wave-1 issues one cycle takes, regardless of
 // how many the planner found. Leftovers surface in the next run's plan.
-const MAX_ISSUES_PER_CYCLE: number = 1;
-// const MAX_ISSUES_PER_CYCLE: number = Infinity;
+// const MAX_ISSUES_PER_CYCLE: number = 1;
+const MAX_ISSUES_PER_CYCLE: number = Infinity; // all of wave 1, throttled by
+// MAX_CONCURRENT_ISSUES above rather than deferred to a later cycle.
 
 const MAX_ITERATIONS = ITERATIONS.loop;
 
@@ -205,9 +221,8 @@ const SANDBOX_ENV: Record<string, string> = {
 
 // Package caches plus the /artifacts channel, shared across every sandbox and
 // every run. /artifacts is how the pipeline's fresh contexts talk to each
-// other (slice plan, findings, QA report, screenshots) and how the publisher —
-// which runs in its own sandbox — reads what the pipelines produced. It is
-// also where screenshots survive for the human after the run.
+// other (slice plan, findings, QA report, screenshots), and where screenshots
+// survive for the human after the run.
 const CACHE_ROOT = join(homedir(), ".cache", "sandcastle-kdps");
 const CACHES = [
   { hostPath: join(CACHE_ROOT, "uv"), sandboxPath: "/home/agent/.cache/uv" },
@@ -218,8 +233,8 @@ for (const cache of CACHES) mkdirSync(cache.hostPath, { recursive: true });
 
 const sandboxProvider = () => docker({ env: SANDBOX_ENV, mounts: CACHES });
 
-// The planner and publisher only need git + gh, so they skip the 20-minute
-// dependency boot. Everything that compiles or tests gets the full setup.
+// The planner only needs git + gh, so it skips the 20-minute dependency boot.
+// Everything that compiles or tests gets the full setup.
 const planHooks = {};
 const buildHooks = {
   sandbox: {
@@ -235,16 +250,105 @@ const buildHooks = {
 const copyToWorktree: string[] = [];
 
 // ---------------------------------------------------------------------------
+// Logging — one folder per invocation, one per loop iteration inside it, one
+// subfolder per issue inside that.
+// ---------------------------------------------------------------------------
+
+const REPO_ROOT = process.cwd();
+
+// Timestamped per-invocation root, so re-running the script never appends a
+// second run's summary into a previous run's main.log.
+const LOGS_ROOT = join(
+  REPO_ROOT,
+  ".sandcastle",
+  "logs",
+  new Date().toISOString().replace(/[:]/g, "-").slice(0, 19),
+);
+
+/** `.sandcastle/logs/<stamp>/run-<iteration>/`, created on first use. */
+function runLogDir(iteration: number): string {
+  const dir = join(LOGS_ROOT, `run-${iteration}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** `.sandcastle/logs/run-<iteration>/issue-<id>/`, created on first use. */
+function issueLogDir(runDir: string, issueId: string): string {
+  const dir = join(runDir, `issue-${issueId}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** Prints to stdout AND appends to `<runDir>/main.log` — the one file that
+ * carries the top-level plan/pipeline/merge summary a flat `console.log`
+ * would otherwise only ever put on the terminal. */
+function mainLog(runDir: string, message: string): void {
+  console.log(message);
+  appendFileSync(join(runDir, "main.log"), message + "\n");
+}
+
+// ---------------------------------------------------------------------------
+// Host git/gh plumbing
+// ---------------------------------------------------------------------------
+
+/** Run git in the host repo via execFile — no shell, so an LLM-authored
+ * branch name or issue title can never be interpreted as shell syntax. */
+function git(...args: string[]): string {
+  return execFileSync("git", args, {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+  }).trim();
+}
+
+/** gh bookkeeping (labels, closing issues) from the host. Logged, never
+ * fatal — a gh hiccup must not kill a run that already did the work, but a
+ * silent failure here would make the next iteration re-plan a finished
+ * issue, so every failure lands in main.log. */
+function gh(runDir: string, ...args: string[]): void {
+  try {
+    execFileSync("gh", [...args, "-R", "bruhanand/KDPS"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+    });
+  } catch (error) {
+    mainLog(runDir, `  (gh ${args.join(" ")} failed: ${error})`);
+  }
+}
+
+/** The host's checked-out branch must be `main` and clean — merges land
+ * straight on it. Called before the loop AND at the top of every iteration:
+ * checking once at startup is not enough, because anything that leaves the
+ * tree dirty mid-run (an interrupted merge, a stray edit) would otherwise
+ * poison every later wave silently. */
+function assertCleanMain(): void {
+  const currentBranch = git("rev-parse", "--abbrev-ref", "HEAD");
+  if (currentBranch !== "main") {
+    throw new Error(
+      `Host repo is on branch "${currentBranch}", not "main". Local merges ` +
+        `land on whatever is checked out here — switch to main first.`,
+    );
+  }
+  const dirty = git("status", "--porcelain");
+  if (dirty.length > 0) {
+    throw new Error(
+      "Host repo has uncommitted changes — commit or stash them, since " +
+        `every merge lands directly on this checked-out main:\n${dirty}`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 type Issue = { id: string; title: string; branch: string };
 
 type PipelineState =
-  | "ready" //        built, reviewed, QA passed — real PR
-  | "handed-back" //  a human must rule — draft PR, ready-for-human
-  | "spec-stopped" // failed the spec gate — no branch, no PR
-  | "no-commits"; //  builder produced nothing — no PR
+  | "ready" //        built, reviewed, QA passed, local `npm run ci:fast`
+  //                  green — mergeable
+  | "handed-back" //  a human must rule — branch kept, not merged
+  | "spec-stopped" // failed the spec gate — no branch, no commits
+  | "no-commits"; //  builder produced nothing
 
 type PipelineResult = {
   issue: Issue;
@@ -257,7 +361,10 @@ type PipelineResult = {
 // The per-issue pipeline
 // ---------------------------------------------------------------------------
 
-async function runPipeline(issue: Issue): Promise<PipelineResult> {
+async function runPipeline(
+  issue: Issue,
+  runDir: string,
+): Promise<PipelineResult> {
   const artDir = `/artifacts/issue-${issue.id}`;
   const promptArgs = {
     TASK_ID: issue.id,
@@ -265,6 +372,8 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
     BRANCH: issue.branch,
     ART_DIR: artDir,
   };
+  const logDir = issueLogDir(runDir, issue.id);
+  const logPath = (name: string) => join(logDir, `${name}.log`);
 
   const sandbox = await sandcastle.createSandbox({
     branch: issue.branch,
@@ -282,6 +391,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
       agent: sandcastle.claudeCode(MODELS.slicer),
       promptFile: "./.sandcastle/slice-prompt.md",
       promptArgs,
+      logging: { type: "file", path: logPath("slice") },
     });
     const gate = tag(slice.stdout, "gate") ?? "GO";
     if (gate.startsWith("STOP")) {
@@ -295,6 +405,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
       agent: sandcastle.claudeCode(MODELS.builder),
       promptFile: "./.sandcastle/build-prompt.md",
       promptArgs,
+      logging: { type: "file", path: logPath("build") },
     });
     if (build.commits.length === 0) {
       return {
@@ -329,6 +440,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
           agent: sandcastle.claudeCode(REVIEW_MODELS[axis]),
           promptFile: `./.sandcastle/review-${axis}-prompt.md`,
           promptArgs: { ...promptArgs, ROUND: String(round) },
+          logging: { type: "file", path: logPath(`review-${axis}-r${round}`) },
         });
         if (tag(review.stdout, "findings") === "FOUND") anyFindings = true;
       }
@@ -347,6 +459,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
         agent: sandcastle.claudeCode(MODELS.fixer),
         promptFile: "./.sandcastle/fix-prompt.md",
         promptArgs: { ...promptArgs, MODE: "review", ROUND: String(round) },
+        logging: { type: "file", path: logPath(`fix-review-r${round}`) },
       });
       commits.push(...fix.commits);
       if (tag(fix.stdout, "verdict") === "HANDED_BACK") {
@@ -359,8 +472,9 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
     // --- Browser QA (skipped once handed back — a human is already owed) ---
     if (!handedBack) {
       for (let attempt = 0; attempt <= QA_REDRIVES; attempt++) {
+        const qaName = attempt === 0 ? "qa" : `qa-redrive-${attempt}`;
         const qa = await sandbox.run({
-          name: attempt === 0 ? "qa" : `qa-redrive-${attempt}`,
+          name: qaName,
           maxIterations: ITERATIONS.qa,
           completionSignal: SIGNALS.qa,
           agent: sandcastle.claudeCode(MODELS.qa),
@@ -369,6 +483,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
             ...promptArgs,
             MODE: attempt === 0 ? "full" : "re-drive",
           },
+          logging: { type: "file", path: logPath(qaName) },
         });
         if (tag(qa.stdout, "qa") === "PASS") break;
 
@@ -384,6 +499,7 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
           agent: sandcastle.claudeCode(MODELS.fixer),
           promptFile: "./.sandcastle/fix-prompt.md",
           promptArgs: { ...promptArgs, MODE: "qa", ROUND: String(attempt + 1) },
+          logging: { type: "file", path: logPath(`qa-fix-${attempt + 1}`) },
         });
         commits.push(...fix.commits);
         if (tag(fix.stdout, "verdict") === "HANDED_BACK") {
@@ -394,10 +510,33 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
       }
     }
 
+    // --- Local CI gate (replaces cloud CI — nothing is pushed to GitHub) ---
+    // `npm run ci:fast` is `npm run ci` minus ruff (formatting is the
+    // Standards review axis's job): mypy on the money kernel, the
+    // migration/DB-drift checks, import-linter, and both test suites. This
+    // in-sandbox run is the branch's pre-merge filter; the host re-runs the
+    // same command on MERGED main before anything counts as landed, so a
+    // hallucinated PASS here cannot land broken code.
+    if (!handedBack) {
+      const ci = await sandbox.run({
+        name: "ci-check",
+        maxIterations: ITERATIONS.ciCheck,
+        completionSignal: SIGNALS.ciCheck,
+        agent: sandcastle.claudeCode(MODELS.ciCheck),
+        promptFile: "./.sandcastle/ci-check-prompt.md",
+        promptArgs,
+        logging: { type: "file", path: logPath("ci-check") },
+      });
+      if (tag(ci.stdout, "ci") !== "PASS") {
+        handedBack = true;
+        note = "local `npm run ci:fast` failed — see ci-check.log";
+      }
+    }
+
     return {
       issue,
       state: handedBack ? "handed-back" : "ready",
-      note: handedBack ? note : "built, reviewed, QA passed",
+      note: handedBack ? note : "built, reviewed, QA passed, ci:fast green",
       commits,
     };
   } finally {
@@ -409,8 +548,16 @@ async function runPipeline(issue: Issue): Promise<PipelineResult> {
 // Main loop
 // ---------------------------------------------------------------------------
 
+assertCleanMain();
+
 for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
-  console.log(`\n=== Iteration ${iteration}/${MAX_ITERATIONS} ===\n`);
+  const runDir = runLogDir(iteration);
+  mainLog(runDir, `\n=== Iteration ${iteration}/${MAX_ITERATIONS} ===\n`);
+
+  // Re-checked every iteration — a dirty or mid-merge main means nothing
+  // this wave builds could land, so stopping now is cheaper than finding
+  // out after three sandboxes ran for an hour.
+  assertCleanMain();
 
   // --- Phase 1: Plan --------------------------------------------------------
   const plan = await sandcastle.run({
@@ -421,6 +568,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     completionSignal: SIGNALS.planner,
     agent: sandcastle.claudeCode(MODELS.planner),
     promptFile: "./.sandcastle/plan-prompt.md",
+    logging: { type: "file", path: join(runDir, "planner.log") },
   });
 
   const planJson = tag(plan.stdout, "plan");
@@ -436,24 +584,27 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       : waveOne.slice(0, MAX_ISSUES_PER_CYCLE);
 
   if (issues.length < waveOne.length) {
-    console.log(
+    mainLog(
+      runDir,
       `Wave 1 has ${waveOne.length} issue(s); taking ${issues.length} this cycle (MAX_ISSUES_PER_CYCLE).`,
     );
   }
   const deferred = waves.slice(1).flat();
   if (deferred.length > 0) {
-    console.log(
+    mainLog(
+      runDir,
       `Deferred to a later run (blocked by wave 1, which must merge first):`,
     );
-    for (const issue of deferred) console.log(`  ${issue.id}: ${issue.title}`);
+    for (const issue of deferred) mainLog(runDir, `  ${issue.id}: ${issue.title}`);
   }
 
   if (issues.length === 0) {
-    console.log("No workable issues. Exiting.");
+    mainLog(runDir, "No workable issues. Exiting.");
     break;
   }
 
-  console.log(
+  mainLog(
+    runDir,
     `Planning complete. ${issues.length} issue(s) this cycle, ${
       MAX_CONCURRENT_ISSUES === 1
         ? "one at a time"
@@ -461,25 +612,25 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     }:`,
   );
   for (const issue of issues) {
-    console.log(`  ${issue.id}: ${issue.title} → ${issue.branch}`);
+    mainLog(runDir, `  ${issue.id}: ${issue.title} → ${issue.branch}`);
   }
 
   // --- Phase 2: Pipelines ---------------------------------------------------
-  const settled = await allSettledWithLimit(
-    issues,
-    MAX_CONCURRENT_ISSUES,
-    runPipeline,
+  const settled = await allSettledWithLimit(issues, MAX_CONCURRENT_ISSUES, (issue) =>
+    runPipeline(issue, runDir),
   );
 
   const results: PipelineResult[] = [];
   for (const [i, outcome] of settled.entries()) {
     if (outcome.status === "fulfilled") {
       results.push(outcome.value);
-      console.log(
+      mainLog(
+        runDir,
         `  ${outcome.value.state === "ready" ? "✓" : "•"} ${outcome.value.issue.id} — ${outcome.value.state}: ${outcome.value.note}`,
       );
     } else {
-      console.error(
+      mainLog(
+        runDir,
         `  ✗ ${issues[i]!.id} (${issues[i]!.branch}) crashed: ${outcome.reason}`,
       );
       // A crashed pipeline is a failed run. Settling every pipeline keeps one
@@ -490,44 +641,165 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     }
   }
 
-  // Only branches with commits reach the publisher. Handed-back branches go
-  // too — as draft PRs, so the work and the open question are both preserved.
-  const publishable = results.filter(
-    (r) =>
-      (r.state === "ready" || r.state === "handed-back") && r.commits.length > 0,
+  // --- Phase 3: Merge — local only, nothing pushed, no PR opened ------------
+  // Merging is plain git on the host, done sequentially because there is
+  // exactly one `main` working tree to land on even though up to
+  // MAX_CONCURRENT_ISSUES pipelines just finished at once. The real gate is
+  // below: `npm run ci:fast` re-run on the MERGED main.
+  const mergeable = results.filter(
+    (r) => r.state === "ready" && r.commits.length > 0,
   );
+  const handedBack = results.filter((r) => r.state === "handed-back");
 
-  if (publishable.length === 0) {
-    console.log("\nNothing to publish this cycle.");
+  // Relabel every hand-back from the host. The fixer only relabels on its
+  // own HANDED_BACK verdict — findings-exhausted, QA-exhausted and ci-check
+  // failures are decided here in main.ts, and without this the issue would
+  // keep `ready-for-agent`, get silently re-planned next iteration, and
+  // could merge unreviewed on the retry while a human was owed a ruling.
+  if (handedBack.length > 0) {
+    mainLog(runDir, "\nHanded back — branch kept, not merged, needs a human:");
+    for (const r of handedBack) {
+      mainLog(runDir, `  ${r.issue.branch} — issue #${r.issue.id}: ${r.note}`);
+      gh(
+        runDir,
+        "issue",
+        "edit",
+        r.issue.id,
+        "--add-label",
+        "ready-for-human",
+        "--remove-label",
+        "ready-for-agent",
+      );
+    }
+  }
+
+  if (mergeable.length === 0) {
+    mainLog(runDir, "\nNothing to merge this cycle.");
     continue;
   }
 
-  // --- Phase 3: Publish -----------------------------------------------------
-  // Runs with planHooks: pushing and opening PRs needs git + gh, not a
-  // 20-minute dependency boot. THE PUSH IS THE CI — cloud CI runs the full
-  // gate on GitHub for every branch pushed here.
-  await sandcastle.run({
-    hooks: planHooks,
-    sandbox: sandboxProvider(),
-    name: "publisher",
-    maxIterations: ITERATIONS.publisher,
-    agent: sandcastle.claudeCode(MODELS.publisher),
-    promptFile: "./.sandcastle/publish-prompt.md",
-    promptArgs: {
-      BRANCHES: publishable
-        .map(
-          (r) =>
-            `- ${r.issue.branch} — issue #${r.issue.id} — state: ${r.state}` +
-            ` (${r.note}) — artifacts: /artifacts/issue-${r.issue.id}`,
-        )
-        .join("\n"),
-      ISSUES: publishable
-        .map((r) => `- ${r.issue.id}: ${r.issue.title}`)
-        .join("\n"),
-    },
-  });
+  const preWaveSha = git("rev-parse", "HEAD");
+  const merged: PipelineResult[] = [];
 
-  console.log("\nPull requests opened. Cloud CI is running on each push.");
+  mainLog(runDir, `\nMerging ${mergeable.length} branch(es) into local main:`);
+  for (const r of mergeable) {
+    try {
+      git(
+        "merge",
+        "--no-ff",
+        r.issue.branch,
+        "-m",
+        `Merge ${r.issue.branch} (issue #${r.issue.id}: ${r.issue.title})`,
+      );
+      merged.push(r);
+      mainLog(runDir, `  ✓ ${r.issue.branch} (issue #${r.issue.id})`);
+    } catch (error) {
+      // git names the conflicted files on STDOUT — keep both streams, or the
+      // log records "merge failed" without the one detail a human needs.
+      const e = error as { stdout?: string; stderr?: string };
+      mainLog(
+        runDir,
+        `  ✗ ${r.issue.branch} (issue #${r.issue.id}) — merge failed:\n` +
+          `${e.stdout ?? ""}${e.stderr ?? ""}`,
+      );
+      // Abort immediately: a half-done merge leaves unmerged files that make
+      // every later merge fail and would poison the rest of the run. And a
+      // conflict means overlapping work, so the issue goes to a human rather
+      // than being rebuilt on a stale branch next iteration.
+      try {
+        git("merge", "--abort");
+      } catch {
+        // no merge in progress — nothing to abort
+      }
+      gh(
+        runDir,
+        "issue",
+        "edit",
+        r.issue.id,
+        "--add-label",
+        "ready-for-human",
+        "--remove-label",
+        "ready-for-agent",
+      );
+      gh(
+        runDir,
+        "issue",
+        "comment",
+        r.issue.id,
+        "--body",
+        `Sandcastle built this on branch ${r.issue.branch}, but it conflicts ` +
+          `with work that merged before it. The branch is kept locally — a ` +
+          `human needs to resolve the merge.`,
+      );
+      process.exitCode = 1;
+    }
+  }
+
+  if (merged.length === 0) {
+    mainLog(runDir, "\nNo branch survived the merge this cycle.");
+    continue;
+  }
+
+  // --- The real gate: ci:fast on MERGED main, on the host -------------------
+  // Each branch was green in its own sandbox against main-as-of-wave-start.
+  // That proves nothing about their combination — two individually green
+  // branches have broken main at the contract tests before (the #146
+  // hotfix), and two backend branches can each add a migration with the same
+  // parent, leaving merged main with two leaves that `migrate` refuses. One
+  // deterministic run here catches all of that, and is also the check on the
+  // in-sandbox ci agent's self-reported PASS.
+  mainLog(runDir, "\nRunning `npm run ci:fast` on merged main (host):");
+  try {
+    execFileSync("npm", ["run", "ci:fast"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    mainLog(runDir, "  ✓ merged main is green");
+  } catch (error) {
+    const e = error as { stdout?: string; stderr?: string };
+    const tail = ((e.stdout ?? "") + (e.stderr ?? ""))
+      .split("\n")
+      .slice(-60)
+      .join("\n");
+    mainLog(runDir, `  ✗ ci:fast FAILED on merged main. Last lines:\n${tail}`);
+    git("reset", "--hard", preWaveSha);
+    mainLog(
+      runDir,
+      `\nmain reset to ${preWaveSha}. This wave's branches are kept ` +
+        "unmerged for a human, and the run stops here — later waves would " +
+        "build on a main this gate cannot certify.",
+    );
+    process.exitCode = 1;
+    break;
+  }
+
+  // Bookkeeping only AFTER the gate: a closed issue is the signal the next
+  // iteration's planner (issue list) and slicer (blocker check) read, so it
+  // must only ever mean "this work is actually on main". Deleting the merged
+  // branch stops a later iteration from resurrecting a stale worktree on it.
+  for (const r of merged) {
+    gh(
+      runDir,
+      "issue",
+      "close",
+      r.issue.id,
+      "--comment",
+      `Merged to local main by sandcastle (branch ${r.issue.branch}; ` +
+        "`npm run ci:fast` green on merged main). Not yet pushed to GitHub.",
+    );
+    try {
+      git("branch", "-d", r.issue.branch);
+    } catch (error) {
+      mainLog(runDir, `  (branch -d ${r.issue.branch} failed: ${error})`);
+    }
+  }
+
+  mainLog(
+    runDir,
+    "\nMerged locally onto main, gate green, issues closed. Nothing was " +
+      "pushed to GitHub — review `git log` and push when ready.",
+  );
 }
 
 console.log("\nAll done.");

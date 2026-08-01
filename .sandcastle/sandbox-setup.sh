@@ -6,10 +6,12 @@
 # freshly-created worktree (which is main plus nothing). Everything here is
 # idempotent, so re-running it is safe.
 #
-# Note the full acceptance gate (`npm run ci`) is deliberately NEVER run in a
-# sandbox — cloud CI runs it on push, and that is the pipeline's only CI. The
-# dependencies below exist so the builder can run the tests it touched, and so
-# the QA phase can boot the API + frontend and drive them in headless Chromium.
+# Note the full acceptance gate (`npm run ci`) is deliberately NEVER run
+# during the build — the pipeline's ci-check phase runs `npm run ci:fast`
+# after QA, and the host re-runs it on merged main before anything counts as
+# landed. The dependencies below exist so the builder can run the tests it
+# touched, so ci-check can run the fast gate, and so the QA phase can boot
+# the API + frontend and drive them in headless Chromium.
 #
 #   1. Postgres is up      — the kernel's append-only/FSM guarantees are DB
 #                            triggers, so pytest on anything else is theatre.

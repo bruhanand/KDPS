@@ -33,7 +33,8 @@ it is the whole rulebook and it binds every decision here. The short form:
 What to fix, per axis (the /implement rules):
 
 - **Spec:** fix every finding, or record a deliberate deviation and its reason
-  in `{{ART_DIR}}/deviations.md` — the publisher puts it in the PR body.
+  in `{{ART_DIR}}/deviations.md` — it survives with the branch's artifacts
+  for the human who reviews the merged work.
 - **Correctness & Safety:** fix every critical.
 - **Standards:** fix every hard violation; judgement-call smells you
   consciously leave get named in `{{ART_DIR}}/deviations.md`.
@@ -41,8 +42,8 @@ What to fix, per axis (the /implement rules):
 # FIXING
 
 Check only what you touched — the test file, `uv run mypy core config`,
-`yarn typecheck`. **Never run `npm run ci`**: cloud CI, triggered by the
-publish phase's push, is the only CI in this pipeline.
+`yarn typecheck`. **Never run `npm run ci`**: a dedicated ci-check phase
+runs `npm run ci:fast` after QA, and the host runs it again on merged main.
 
 Commit in the repo's `scope: subject` style, quoting the rule you applied in
 the body.
@@ -59,8 +60,8 @@ code. Then:
 gh issue edit {{TASK_ID}} -R bruhanand/KDPS --add-label ready-for-human --remove-label ready-for-agent
 ```
 
-The publisher opens this branch's PR as a **draft** — your comment is what the
-human sees first.
+The branch is kept unmerged for the human — your comment is what they see
+first.
 
 # VERDICT
 
