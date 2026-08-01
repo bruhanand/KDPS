@@ -33,7 +33,9 @@ export interface HostedPage {
   crumb: string;
   /** The showing tab's name, which is this screen's title. */
   title: string;
-  /** The tab strip, drawn under the title row. */
+  /** The tab strip, drawn above the title row (ruled 1 Aug 2026): the tabs
+   *  are where you can go, the title is where you are, and the choice reads
+   *  before its consequence. */
   tabs: ReactNode;
 }
 
@@ -65,6 +67,7 @@ export function PageHeader({
 
   return (
     <>
+      {hosted?.tabs}
       <div className="toolbar">
         <div>
           <p className="eyebrow" data-testid="page-crumb">
@@ -86,7 +89,6 @@ export function PageHeader({
         <div className="spacer" />
         {actions}
       </div>
-      {hosted?.tabs}
     </>
   );
 }
