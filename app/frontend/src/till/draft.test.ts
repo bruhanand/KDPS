@@ -83,6 +83,19 @@ describe("writing the draft through", () => {
     expect(failing).toHaveBeenCalled();
     expect(logged).toHaveBeenCalled();
   });
+
+  it("logs and carries on rather than reporting a held or committed bill as failed", async () => {
+    // Clearing follows a hold or a commit that has already gone through - a
+    // storage error here must not read back to the cashier as that sale
+    // having failed.
+    const failing = vi.spyOn(db.draft, "delete").mockRejectedValue(new Error("storage full"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(clearDraft(db)).resolves.toBeUndefined();
+
+    expect(failing).toHaveBeenCalled();
+    expect(logged).toHaveBeenCalled();
+  });
 });
 
 describe("landing the read back on screen (the mount race)", () => {

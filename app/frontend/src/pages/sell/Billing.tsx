@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
@@ -8,6 +8,7 @@ import {
   PauseCircle,
   Plus,
   Printer,
+  RotateCcw,
   Search,
   Undo2,
   X,
@@ -20,14 +21,15 @@ import { SyncLight } from "../../till/SyncLight";
 import { useTill } from "../../till/TillProvider";
 import {
   addManualPiece,
-  addPiece,
   emptyCart,
   priceCart,
+  scanPiece,
   toDraft,
   whyItCannotClose,
 } from "../../till/cart";
 import type { Cart, CartLine, PricedLine } from "../../till/cart";
 import type { HeldBill } from "../../till/db";
+import { clearDraft, persistDraft, readDraft, restoredCart, restoredCustomer } from "../../till/draft";
 import { takeParkedExchange } from "../../till/exchange";
 import type { Exchange } from "../../till/exchange";
 import { heldPayload, holdsToReview, restoreHold } from "../../till/held";
@@ -40,6 +42,8 @@ import { receiptHtml } from "../../till/receipt";
 import type { Payment } from "../../till/tender";
 import type { TillSnapshot } from "../../till/engine";
 import type { QueuedBill, TillCustomer, TillItem } from "../../till/types";
+import { emptyUndo, popUndo, pushUndo } from "../../till/undo";
+import type { UndoStack } from "../../till/undo";
 import { useScanBox } from "../../till/useScanBox";
 import { useTillWorld } from "../../till/useTillWorld";
 // The house modal (`.modal-backdrop` / `.modal` / `.modal-head`), which every
@@ -168,6 +172,19 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Open when a manager is being asked for their PIN, carrying exactly what
    *  they are being shown - which is also what their approval will cover. */
   const [asking, setAsking] = useState<Ask[] | null>(null);
+  // --- cart safety: autosave and undo (#244) --------------------------------
+  /** One snapshot per cart action, oldest first - see `till/undo.ts`. */
+  const [undoStack, setUndoStack] = useState<UndoStack>(emptyUndo);
+  /** The draft read on mount has landed - whether or not it had anything to
+   *  restore. Autosave waits for this: writing the still-pristine cart the
+   *  instant this screen mounts would beat the read to the punch and clobber
+   *  the very draft it is about to look for. */
+  const [restored, setRestored] = useState(false);
+  /** Flipped once this screen has deliberately started a fresh bill - New
+   *  bill, a commit, or a hold. A restore that lands after that is a screen
+   *  the cashier has already moved on from, and must not resurrect it
+   *  (binding rule 6, "don't restore over a fresh bill"). */
+  const skipRestore = useRef(false);
   /** Wrong PINs at this counter, and the pause they earn (`useWrongPins`). Only
    *  a speed bump: the hash is on this device by design (grill Q1), so what it
    *  buys is somebody guessing having to stand at the counter visibly doing
@@ -210,6 +227,35 @@ function Counter({ storeName }: { storeName?: string }) {
   }, [engine]);
 
   /**
+   * Reopening Billing after a crash, a closed tab or a power cut (#244).
+   *
+   * Read exactly once, guarded the way `useTillWorld` guards its own reload: a
+   * read that loses the StrictMode/remount race is dropped rather than
+   * applied. `restoredCart`/`restoredCustomer` are the merge - whichever the
+   * screen already has by the time the read lands (a piece scanned before it
+   * came back, or the exchange hand-off above, in no guaranteed order against
+   * this one) wins over the saved draft, so neither can clobber the other.
+   * `skipRestore` is the third guard: a New bill, a commit or a hold started
+   * before this read landed means the cashier has already moved past what it
+   * would restore.
+   */
+  useEffect(() => {
+    if (!engine) return;
+    let alive = true;
+    void readDraft(engine.db).then((draft) => {
+      if (!alive) return;
+      if (draft && !skipRestore.current) {
+        setCart((current) => restoredCart(current, draft));
+        setCustomer((current) => restoredCustomer(current, draft));
+      }
+      setRestored(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [engine]);
+
+  /**
    * Re-entering a printed bill from the machine this counter replaced (#189).
    *
    * The number comes off the paper, from the list on Till & Sync, and so does the
@@ -235,6 +281,19 @@ function Counter({ storeName }: { storeName?: string }) {
    */
   const paper = useMemo(() => outstandingPaperSeq(params, till), [params, till]);
   const [paperAt, setPaperAt] = useState(() => localNow());
+
+  /**
+   * Write-through: every cart or customer-field change lands here (#244).
+   *
+   * Held off until the mount read above has landed - see `restored` - so this
+   * never races that read with a write of the still-empty cart this screen
+   * starts on. `persistDraft` never throws (flag, never block): a failed
+   * write is a console line, and the bill carries on regardless.
+   */
+  useEffect(() => {
+    if (!engine || !restored) return;
+    void persistDraft(engine.db, cart, customer, paper);
+  }, [engine, restored, cart, customer, paper]);
 
   const leavePaperMode = useCallback(() => {
     if (!params.has("paper")) return;
@@ -266,6 +325,10 @@ function Counter({ storeName }: { storeName?: string }) {
   // piece the customer paid for and the queue never heard of. Parking one is the
   // same read and the same hazard, one table down.
   const locked = saving || holding;
+
+  // Quiet, and only once there is a bill on screen worth saving - an empty
+  // counter has nothing autosave is protecting yet.
+  const draftSaved = restored && (cart.lines.length > 0 || Boolean(cart.exchange));
 
   const suggestions = useMemo(
     () =>
@@ -303,20 +366,24 @@ function Counter({ storeName }: { storeName?: string }) {
     setPrintProblem("");
   }, []);
 
+  /** Remember the cart as it stood before a mutator lands - one step for the
+   *  Undo button (#244). */
+  const pushCartUndo = useCallback((snapshot: Cart) => {
+    setUndoStack((stack) => pushUndo(stack, snapshot));
+  }, []);
+
   const takePiece = useCallback(
     (piece: TillItem, alternatives: TillItem[], stock: number) => {
-      setCart((current) => ({
-        ...current,
-        lines: [
-          ...current.lines,
-          { ...addPiece(piece, { stock, alternatives }), salesman: defaultSalesman },
-        ],
-      }));
+      pushCartUndo(cart);
+      // `scanPiece`, not a bare append: scanning a tag already on the bill
+      // bumps that line's quantity instead of laying a duplicate beside it
+      // (#244).
+      setCart((current) => scanPiece(current, piece, { stock, alternatives }, defaultSalesman));
       startingANewBill();
       // Picking a real piece answers the "was that tag mistyped?" ask - it was.
       clearScan();
     },
-    [clearScan, defaultSalesman, startingANewBill],
+    [cart, clearScan, defaultSalesman, pushCartUndo, startingANewBill],
   );
 
   /**
@@ -329,6 +396,7 @@ function Counter({ storeName }: { storeName?: string }) {
    */
   const takeUnknown = useCallback(
     (code: string) => {
+      pushCartUndo(cart);
       setCart((current) => ({
         ...current,
         lines: [...current.lines, { ...addManualPiece(code), salesman: defaultSalesman }],
@@ -337,7 +405,7 @@ function Counter({ storeName }: { storeName?: string }) {
       clearScan();
       scan.focus();
     },
-    [clearScan, defaultSalesman, scan, startingANewBill],
+    [cart, clearScan, defaultSalesman, pushCartUndo, scan, startingANewBill],
   );
 
   const applyScan = useCallback(
@@ -359,6 +427,7 @@ function Counter({ storeName }: { storeName?: string }) {
   );
 
   function editLine(key: string, patch: Partial<CartLine>) {
+    pushCartUndo(cart);
     setCart((current) => ({
       ...current,
       lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
@@ -383,6 +452,7 @@ function Counter({ storeName }: { storeName?: string }) {
   /** Take a piece back off the bill - the customer changed their mind about
    *  giving it back, or the wrong line was picked. */
   function removeLeg(key: string) {
+    pushCartUndo(cart);
     setCart((current) => {
       const legs = (current.exchange?.lines ?? []).filter((leg) => leg.key !== key);
       return {
@@ -397,7 +467,19 @@ function Counter({ storeName }: { storeName?: string }) {
   }
 
   function removeLine(key: string) {
+    pushCartUndo(cart);
     setCart((current) => ({ ...current, lines: current.lines.filter((l) => l.key !== key) }));
+    scan.focus();
+  }
+
+  /** Step the bill back one action (#244). Nothing here touches stock or
+   *  money - the whole safety of it is that this bill is not real until Save
+   *  & Print. */
+  function undo() {
+    const popped = popUndo(undoStack);
+    if (!popped) return;
+    setUndoStack(popped.stack);
+    setCart(popped.cart);
     scan.focus();
   }
 
@@ -406,10 +488,13 @@ function Counter({ storeName }: { storeName?: string }) {
   }
 
   function newBill() {
+    skipRestore.current = true;
     setCart(emptyCart());
     setCustomer(NO_CUSTOMER);
+    setUndoStack(emptyUndo());
     startingANewBill();
     clearScan();
+    if (engine) void clearDraft(engine.db);
     scan.focus();
   }
 
@@ -457,9 +542,12 @@ function Counter({ storeName }: { storeName?: string }) {
           pieces: bill.pieces,
         }),
       });
+      skipRestore.current = true;
       setCart(emptyCart());
       setCustomer(NO_CUSTOMER);
+      setUndoStack(emptyUndo());
       clearScan();
+      await clearDraft(engine.db);
       setNote("Bill held. Scan the next customer's first piece.");
       setShowHolds(false);
     } catch (error) {
@@ -547,9 +635,12 @@ function Counter({ storeName }: { storeName?: string }) {
         describe: describeFrom(bill.lines),
       });
       setLastBill({ bill: queued, receipt });
+      skipRestore.current = true;
       setCart(emptyCart());
       setCustomer(NO_CUSTOMER);
+      setUndoStack(emptyUndo());
       clearScan();
+      await clearDraft(engine.db);
       if (paper === null) {
         setNote(`Bill ${queued.doc_number} saved.`);
         await print(receipt);
@@ -622,7 +713,17 @@ function Counter({ storeName }: { storeName?: string }) {
           `auto` however many elements PageHeader itself renders. */}
       <div className="bill-top">
         <PageHeader
-          lead={`Next bill ${till?.nextNumber ?? ""}`}
+          lead={
+            <>
+              {`Next bill ${till?.nextNumber ?? ""}`}
+              {draftSaved && (
+                <span className="bill-draft-saved muted-cell" data-testid="bill-draft-saved">
+                  {" "}
+                  · Draft · saved
+                </span>
+              )}
+            </>
+          }
           actions={
             <div className="bill-head">
               <SyncLight />
@@ -654,6 +755,21 @@ function Counter({ storeName }: { storeName?: string }) {
                   onClick={() => setShowHolds((open) => !open)}
                 >
                   {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
+                </button>
+                {/* Undo lives in the lifecycle row rather than on the grid it
+                    steps back (#244): under #243's fixed frame `.bill-lines`
+                    is the band that scrolls, so a header inside it would
+                    scroll away exactly as the bill got long enough to want
+                    undoing. */}
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-undo"
+                  disabled={counterBlocked || !undoStack.length || locked}
+                  onClick={undo}
+                >
+                  <RotateCcw size={15} />
+                  Undo
                 </button>
                 <button
                   type="button"

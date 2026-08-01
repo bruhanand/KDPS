@@ -57,9 +57,18 @@ export async function readDraft(db: TillDb): Promise<DraftPayload | null> {
 }
 
 /** Cleared on commit success, New bill, and Hold - the three moments the
- *  screen in front of the cashier stops being the bill this row remembers. */
+ *  screen in front of the cashier stops being the bill this row remembers.
+ *
+ *  Never throws, the same as `persistDraft`: the bill this call follows has
+ *  already committed, held, or been deliberately cleared on screen, and a
+ *  storage error here must not turn into an error note on a sale that already
+ *  went through. */
 export async function clearDraft(db: TillDb): Promise<void> {
-  await db.draft.delete(DRAFT_KEY);
+  try {
+    await db.draft.delete(DRAFT_KEY);
+  } catch (error) {
+    console.error("clearDraft failed - the bill continues without a safety net", error);
+  }
 }
 
 // --- landing the read back on screen (the mount race, #244 binding rule 6) --

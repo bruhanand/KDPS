@@ -39,6 +39,11 @@
 .bill-scan { width: 300px; font-size: 15px; padding: 9px 12px; }
 .bill-lifecycle { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* The autosave indicator (#244) - quiet on purpose, beside the bill number
+   rather than a banner of its own: a bill that autosaves continuously has
+   nothing to announce loudly, only something to confirm is happening. */
+.bill-draft-saved { font-weight: 400; }
+
 .bill-alert {
   display: flex; align-items: center; gap: 8px;
   background: var(--amber-bg); border: 1px solid var(--amber-bd); color: var(--amber);
