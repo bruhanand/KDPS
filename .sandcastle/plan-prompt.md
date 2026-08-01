@@ -17,7 +17,12 @@ An issue can carry the label and still not be workable. Drop it from the plan, a
 1. **The body disagrees with the comments.** A ruling or decision left in a comment while the body still holds the old spec means the issue carries two specs, and an agent will faithfully build the wrong one. This has already happened once. Do not plan it — say which two disagree so a human can rewrite the body.
 2. **It already has an assignee.** Somebody, or some other session, is on it.
 3. **It is a PRD.** A `PRD` label means it is a parent holding a discussion, not a slice to build. Its children are the work.
-4. **A named blocker is still open.**
+4. **A named blocker is still open.** The issues-json above is filtered to
+   `ready-for-agent` only — a blocker missing from that list is not evidence of
+   anything; it could be closed, or open under a different label. Never infer
+   status from absence. For every named blocker, check its real state with
+   `gh issue view <N> -R bruhanand/KDPS --json state,stateReason`, and only
+   drop the issue if that call says the blocker is still open.
 
 # TASK
 
