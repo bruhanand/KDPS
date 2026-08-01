@@ -12,6 +12,7 @@ import {
   headingOwning,
   isActiveFold,
   isActiveItem,
+  isOneLineRow,
   isStripRow,
   itemOwning,
   itemPath,
@@ -673,6 +674,64 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
         sections.map((s) => ({ kind: "section", key: s.def.code, section: s })),
       );
     }
+  });
+});
+
+describe("isOneLineRow - does a row navigate, or open a flyout? (#230)", () => {
+  // The store persona's ten rows are all folds or strips (#229). The icon
+  // rail's own trap: drawing a flyout for any one of them is D10 §1's "no
+  // subsections in the sidebar, ever" breaking, on the rail rather than the
+  // expanded sidebar.
+  const STORE_CAPS: Record<string, string> = {
+    home: "view",
+    sell: "operate",
+    booking: "view",
+    receive_goods: "operate",
+    transfer: "operate",
+    stock_count: "operate",
+    return_to_brand: "operate",
+    stock: "view",
+    money: "operate",
+    offers_price: "view",
+    hrms: "operate",
+    reports: "view",
+  };
+
+  it("is true for a strip row and for the Inventory fold", () => {
+    const rows = sidebarRows(user("store_staff", STORE_CAPS));
+    const sell = stripRow(rows, "sell");
+    expect(sell).toBeDefined();
+    expect(isOneLineRow(sell!)).toBe(true);
+    const inventory = rows.find((r) => r.kind === "fold");
+    expect(inventory).toBeDefined();
+    expect(isOneLineRow(inventory!)).toBe(true);
+  });
+
+  it("is true for a section access has cut to exactly one visible item", () => {
+    // No persona layout for this role code, so Booking draws as a bare
+    // section - and at `view` only "Bookings" survives; "New Booking" needs
+    // `operate` (#130).
+    const rows = sidebarRows(user("area_manager", { booking: "view" }));
+    const booking = rows.find((r) => r.kind === "section" && r.section.def.code === "booking");
+    expect(booking).toBeDefined();
+    expect(booking?.kind === "section" && booking.section.items).toHaveLength(1);
+    expect(isOneLineRow(booking!)).toBe(true);
+  });
+
+  it("is false for a section with two or more visible items", () => {
+    const rows = sidebarRows(user("area_manager", { setup: "operate" }));
+    const setup = rows.find((r) => r.kind === "section" && r.section.def.code === "setup");
+    expect(setup).toBeDefined();
+    expect(setup?.kind === "section" && setup.section.items.length).toBeGreaterThan(1);
+    expect(isOneLineRow(setup!)).toBe(false);
+  });
+
+  it("is true for every one of the store persona's ten rows", () => {
+    // So the rail never draws a flyout for a store login - see the trap noted
+    // above.
+    const rows = sidebarRows(user("store_staff", STORE_CAPS));
+    expect(rows).toHaveLength(10);
+    for (const row of rows) expect(isOneLineRow(row), row.key).toBe(true);
   });
 });
 

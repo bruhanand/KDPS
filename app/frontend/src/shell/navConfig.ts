@@ -992,6 +992,19 @@ export function sectionsIn(rows: NavRow[]): VisibleSection[] {
   return rows.flatMap((r) => (r.kind === "section" ? [r.section] : []));
 }
 
+/** Does `row` draw as a single line - a link straight to a screen, rather than
+ *  a head with several items under it? True for a fold and a strip, whose
+ *  whole point is to be one line, and for a section access has cut to exactly
+ *  one visible item. This is the same question the sidebar's own
+ *  `renderSection` already answers to decide whether a section draws as
+ *  `oneLineRow` or as a toggle over `.nav-items` (#96) - and, since #230, the
+ *  question the icon rail asks to decide "navigate on click" versus "open a
+ *  flyout". One predicate, so the two can never draw a different answer for
+ *  the same row. */
+export function isOneLineRow(row: NavRow): boolean {
+  return row.kind !== "section" || row.section.items.length === 1;
+}
+
 /** Is the folded page where this person is standing? True on the fold's own URL
  *  and on any standalone screen it folds - so a store person who lands on
  *  `/stock` from the global search still sees which row they are on. */
