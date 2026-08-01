@@ -8,6 +8,7 @@ import {
   emptyCart,
   priceCart,
   qtyFrom,
+  scanPiece,
   toDraft,
   whyItCannotClose,
 } from "./cart";
@@ -70,6 +71,60 @@ function scanned(mrp: number | null, over: Partial<Cart["lines"][number]> = {}) 
     ...over,
   };
 }
+
+describe("a rescan of a piece already on the bill (#244, grill Q1)", () => {
+  const PIECE = item("8901", "FW25", 149900);
+
+  it("bumps the existing line's qty instead of adding a second one", () => {
+    const once = scanPiece(cartOf(), PIECE, { stock: 3, alternatives: [] }, 1);
+    const twice = scanPiece(once, PIECE, { stock: 3, alternatives: [] }, 1);
+
+    expect(twice.lines).toHaveLength(1);
+    expect(twice.lines[0].qty).toBe(2);
+  });
+
+  it("keeps the matched line's salesman, discount and rate untouched", () => {
+    // A second unit needing a different salesman is edited per line, as ruled -
+    // the rescan itself must never re-stamp today's default onto what is
+    // already there.
+    const first = scanPiece(cartOf(), PIECE, { stock: 3, alternatives: [] }, 1);
+    const withDiscount = {
+      ...first,
+      lines: [{ ...first.lines[0], disc_paise: 5000 }],
+    };
+
+    const rescanned = scanPiece(withDiscount, PIECE, { stock: 3, alternatives: [] }, 9);
+
+    expect(rescanned.lines[0].salesman).toBe(1);
+    expect(rescanned.lines[0].disc_paise).toBe(5000);
+    expect(rescanned.lines[0].mrp_paise).toBe(149900);
+  });
+
+  it("matches on the resolved (barcode, season) cohort, not the barcode alone", () => {
+    const fw25 = scanPiece(cartOf(), PIECE, { stock: 3, alternatives: [] }, 1);
+    const ss26 = scanPiece(fw25, item("8901", "SS26", 99900), { stock: 1, alternatives: [] }, 1);
+
+    expect(ss26.lines).toHaveLength(2);
+    expect(ss26.lines.map((l) => l.season)).toEqual(["FW25", "SS26"]);
+  });
+
+  it("never merges into an off-the-tag line, even with the same barcode", () => {
+    const manual = { ...cartOf(), lines: [{ ...addManualPiece("8901"), salesman: 1 }] };
+
+    const rescanned = scanPiece(manual, PIECE, { stock: 3, alternatives: [] }, 1);
+
+    expect(rescanned.lines).toHaveLength(2);
+    expect(rescanned.lines[1].sold_before_inward).toBe(false);
+    expect(rescanned.lines[1].qty).toBe(1);
+  });
+
+  it("credits a fresh line to the scanning salesman, as an ordinary scan does", () => {
+    const fresh = scanPiece(cartOf(), PIECE, { stock: 3, alternatives: [] }, 4);
+
+    expect(fresh.lines).toHaveLength(1);
+    expect(fresh.lines[0].salesman).toBe(4);
+  });
+});
 
 describe("what a line costs", () => {
   it("takes the tax out of the ticket price, never adds it on", () => {
