@@ -24,7 +24,7 @@ from _sell import (
 
 from masters.models import Customer
 from sell.models import Sale
-from sell.services.customers import backfill_customers, digits, upsert_customer
+from sell.services.customers import backfill_customers, normalise_mobile, upsert_customer
 
 
 @pytest.fixture
@@ -78,6 +78,27 @@ def test_backfill_takes_the_newest_bills_name(counter):
     assert Customer.objects.get(mobile="9876543210").name == "Mrs S Sharma"
 
 
+def test_backfill_keeps_the_older_name_when_the_newest_bill_is_blank(counter):
+    _bill(
+        counter,
+        1,
+        customer={"name": "Mrs Sharma", "mobile": "9876543210", "gstin": ""},
+        billed_at="2026-07-30T12:31:00Z",
+    )
+    _bill(
+        counter,
+        2,
+        customer={"name": "", "mobile": "9876543210", "gstin": ""},
+        billed_at="2026-07-30T12:35:00Z",
+    )
+
+    backfill_customers(Sale, Customer)
+
+    # The newest bill skipped the name field - the older, non-blank name wins
+    # (db-design.md's backfill algorithm and AC1 both say "non-blank").
+    assert Customer.objects.get(mobile="9876543210").name == "Mrs Sharma"
+
+
 def test_backfill_takes_the_newest_b2b_bills_gstin(counter):
     _bill(
         counter,
@@ -124,9 +145,20 @@ def test_backfill_is_idempotent(counter):
 # --- the shared rules, direct -------------------------------------------
 
 
-def test_digits_keeps_only_the_digits():
-    assert digits("+91 98765-43210") == "919876543210"
-    assert digits("") == ""
+def test_normalise_mobile_collapses_country_code_and_leading_zero():
+    assert normalise_mobile("+91 98765-43210") == "9876543210"
+    assert normalise_mobile("09876543210") == "9876543210"
+    assert normalise_mobile("9876543210") == "9876543210"
+    assert normalise_mobile("") == ""
+
+
+def test_upsert_customer_collapses_mobile_spellings_to_one_row(db):
+    upsert_customer(Customer, mobile="9876543210", name="Mrs Sharma", gstin="")
+    upsert_customer(Customer, mobile="+91 98765-43210", name="Mrs Sharma", gstin="")
+    upsert_customer(Customer, mobile="09876543210", name="Mrs Sharma", gstin="")
+
+    assert Customer.objects.count() == 1
+    assert Customer.objects.get().mobile == "9876543210"
 
 
 def test_upsert_customer_skips_a_blank_mobile(db):

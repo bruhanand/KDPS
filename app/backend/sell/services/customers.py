@@ -19,9 +19,15 @@ from __future__ import annotations
 from typing import Any
 
 
-def digits(value: str) -> str:
-    """Only the digits, so '+91 98765-43210' and '9876543210' are one customer."""
-    return "".join(ch for ch in (value or "") if ch.isdigit())
+def normalise_mobile(value: str) -> str:
+    """Digits only, then collapsed to the bare 10-digit Indian mobile, so
+    '+91 98765-43210', '09876543210' and '9876543210' are one customer."""
+    raw = "".join(ch for ch in (value or "") if ch.isdigit())
+    if len(raw) == 12 and raw.startswith("91"):
+        return raw[2:]
+    if len(raw) == 11 and raw.startswith("0"):
+        return raw[1:]
+    return raw
 
 
 def upsert_customer(customer_model: Any, *, mobile: str, name: str, gstin: str) -> None:
@@ -37,7 +43,7 @@ def upsert_customer(customer_model: Any, *, mobile: str, name: str, gstin: str) 
     skipped rather than raising, so a malformed historic row cannot crash the
     backfill (and, symmetrically, cannot fail a live bill either).
     """
-    mobile = digits(mobile)
+    mobile = normalise_mobile(mobile)
     if not mobile or len(mobile) > 15:
         return
     name = (name or "").strip()
