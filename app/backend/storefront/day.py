@@ -102,7 +102,7 @@ def _sum_by(rows, group_field: str, defaults: dict[str, int]) -> dict[str, int]:
     into a dict seeded with `defaults`, so a key nobody used still renders.
 
     A key `rows` yields that `defaults` has never heard of is dropped rather
-    than raising - see the comment this replaced in `money_for` on `collections`.
+    than raising.
     """
     totals = dict(defaults)
     for row in rows:
@@ -114,10 +114,6 @@ def _sum_by(rows, group_field: str, defaults: dict[str, int]) -> dict[str, int]:
 def money_for(store: Store, day: date) -> DayMoney:
     """`store`'s day, by tender."""
     bills = sales_on(store, day)
-    # A mode/state the enum has never heard of cannot reach the database (the
-    # column is a choice field), so an unknown key here would be a migration in
-    # flight rather than data - and dropping it silently is better than a
-    # summary that renders a column nobody has a word for.
     collections = _sum_by(
         SaleTender.objects.filter(sale__in=bills)
         .values("mode")
