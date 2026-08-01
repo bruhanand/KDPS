@@ -120,26 +120,114 @@ function UnitSwitcher() {
   );
 }
 
-function UserMenu() {
+/** The person, pinned to the foot of the sidebar card: the sidebar owns who
+ *  you are, the bar owns where you are (ruled 1 Aug 2026). Opens a panel with
+ *  the theme switch and Sign out - the same two actions the top-bar menu
+ *  offered, in a new place.
+ *
+ *  The panel is portaled to `document.body` and placed by measuring its
+ *  trigger, the same pattern as the rail flyout above and for the same
+ *  reason: the sidebar's own `overflow-y` would clip a normal descendant,
+ *  invisibly, exactly as it did for the flyout. */
+function ProfileSection({ rail }: { rail: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [panelAt, setPanelAt] = useState<{ top: number; left: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   useMobileNavExclusion(open, setOpen);
+
+  // Re-placed on scroll and resize, clamped against the panel's real height
+  // once it has mounted - the flyout's own rules (see `place` above).
+  const place = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+    const margin = 8;
+    const rect = trigger.getBoundingClientRect();
+    const height = panelRef.current?.offsetHeight ?? 0;
+    const maxTop = window.innerHeight - height - margin;
+    const top = Math.max(margin, Math.min(rect.top, maxTop));
+    const left = rect.right + margin;
+    setPanelAt((current) => (current && current.top === top && current.left === left ? current : { top, left }));
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setPanelAt(null);
+      return;
+    }
+    place();
+    window.addEventListener("resize", place);
+    document.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      document.removeEventListener("scroll", place, true);
+    };
+  }, [open, place]);
+
+  const panelMounted = useCallback(
+    (node: HTMLDivElement | null) => {
+      panelRef.current = node;
+      if (node) place();
+    },
+    [place],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const off = new AbortController();
+    const { signal } = off;
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        const target = e.target as Node;
+        if (triggerRef.current?.contains(target)) return;
+        if (panelRef.current?.contains(target)) return;
+        setOpen(false);
+      },
+      { signal },
+    );
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key === "Escape") setOpen(false);
+      },
+      { signal },
+    );
+    return () => off.abort();
+  }, [open]);
+
   if (!user) return null;
+
   return (
-    <div className="usermenu">
-      <button className="user-btn" onClick={() => setOpen((o) => !o)} data-testid="user-menu">
+    <div className="sidebar-profile">
+      <button
+        type="button"
+        ref={triggerRef}
+        className="profile-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={rail ? user.full_name || user.username : undefined}
+        data-testid="user-menu"
+      >
         <span className="avatar">{initials(user.full_name, user.username).toUpperCase()}</span>
-        <span className="user-meta">
-          <span className="user-name">{user.full_name || user.username}</span>
-          <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
-        </span>
-        <ChevronDown size={15} />
+        {!rail && (
+          <span className="user-meta">
+            <span className="user-name">{user.full_name || user.username}</span>
+            <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
+          </span>
+        )}
       </button>
-      {open && (
-        <>
-          <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
-          <div className="dropdown dropdown-right" data-testid="user-menu-dropdown">
+      {open &&
+        panelAt &&
+        createPortal(
+          <div
+            className="profile-panel"
+            ref={panelMounted}
+            style={{ top: panelAt.top, left: panelAt.left }}
+            data-testid="user-menu-dropdown"
+          >
             <div className="dropdown-head">{user.username} · {user.scope_label}</div>
             <div className="dropdown-theme" onClick={(e) => e.stopPropagation()}>
               <span>Theme</span>
@@ -156,9 +244,9 @@ function UserMenu() {
               <span>Sign out</span>
               <LogOut size={15} />
             </button>
-          </div>
-        </>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -616,6 +704,7 @@ function Sidebar({
               : renderStrip(row),
         )}
       </nav>
+      <ProfileSection rail={rail} />
     </aside>
   );
 }
@@ -750,7 +839,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="topbar-right">
             <AlertsButton />
             <ApprovalsButton />
-            <UserMenu />
           </div>
         </MobileNavContext.Provider>
       </header>
