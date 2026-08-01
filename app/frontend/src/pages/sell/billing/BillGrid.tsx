@@ -6,8 +6,6 @@ import { qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
 import { RupeeInput } from "./RupeeInput";
 
-// --- the line grid ---------------------------------------------------------
-
 /** Item · Brand · Barcode · Design · Size · Qty · Rate · Disc ₹ · GST ·
  *  Salesman · Net · remove. */
 const COLUMN_WIDTHS = [

@@ -6,8 +6,6 @@ import { newNote } from "../../../till/tender";
 import type { NoteStanding, Payment } from "../../../till/tender";
 import { RupeeInput } from "./RupeeInput";
 
-// --- the payment panel -----------------------------------------------------
-
 /**
  * The four trimmed modes, the notes among them, and what is still unpaid (#182).
  *
