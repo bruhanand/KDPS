@@ -134,22 +134,28 @@ describe("which one banner the counter shows", () => {
     ).toBe("blocked");
   });
 
-  it("keys in from paper outranks a stale price list or a note", () => {
+  it("an error note outranks keying in from paper", () => {
+    // save/holdBill/resumeHold/answerHold all report their failure through
+    // `note` - it must not go silent just because paper mode is also active.
     expect(pickBillAlert(noAlerts({ paper: true, noPriceList: true, note: true }))).toBe(
-      "paper",
+      "note",
     );
   });
 
+  it("keys in from paper still outranks a stale price list", () => {
+    expect(pickBillAlert(noAlerts({ paper: true, noPriceList: true }))).toBe("paper");
+  });
+
   it("follows the counter's own stacking order end to end", () => {
-    // blocked > paper > loading > no price list > print problem > note > gift
-    // > holds due - the order these banners used to stack in, top to bottom.
+    // blocked > note > paper > loading > no price list > print problem > gift
+    // > holds due - error notes moved second so a mode banner never hides one.
     const order: (keyof BillAlertFlags)[] = [
       "blocked",
+      "note",
       "paper",
       "loading",
       "noPriceList",
       "printProblem",
-      "note",
       "gift",
       "holdsDue",
     ];

@@ -974,14 +974,22 @@ export interface BillAlertFlags {
  * a lesser alert. It does not render *from* this line at all, in fact: the
  * blocked counter takes over the whole work area instead (see `Counter`),
  * which is the stronger treatment the rule asks for.
+ *
+ * `note` is second, ahead of `paper`/`loading`/`no-price-list`, because it is
+ * the one channel every failure on this screen reports through (`save`,
+ * `holdBill`, `resumeHold`, `answerHold` all funnel their catch block into it).
+ * Before the collapse these banners stacked, so an error note was never hidden
+ * behind a mode banner - a mode is a lesser alert than an error, not the other
+ * way round, and a cashier who does not see why Save failed either re-submits
+ * a bill that already went through or walks away thinking one never did.
  */
 export function pickBillAlert(flags: BillAlertFlags): BillAlertKind | null {
   if (flags.blocked) return "blocked";
+  if (flags.note) return "note";
   if (flags.paper) return "paper";
   if (flags.loading) return "loading";
   if (flags.noPriceList) return "no-price-list";
   if (flags.printProblem) return "print-problem";
-  if (flags.note) return "note";
   if (flags.gift) return "gift";
   if (flags.holdsDue) return "holds-due";
   return null;
