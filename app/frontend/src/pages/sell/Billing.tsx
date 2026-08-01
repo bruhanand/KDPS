@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RefObject } from "react";
+import type { MutableRefObject, RefObject } from "react";
+import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -45,6 +46,7 @@ import { useTillWorld } from "../../till/useTillWorld";
 // screen with a dialog on it borrows from the same place.
 import "../Booking.css";
 import { newUuid } from "../../till/uuid";
+import { usePositionedPopover } from "../../shell/usePositionedPopover";
 import { Lines } from "./billing/BillGrid";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
@@ -118,6 +120,11 @@ import "./Billing.css";
  *  and a literal in one of them that forgot a field would leave the last
  *  customer's GSTIN on the next customer's tax invoice. */
 const NO_CUSTOMER: TillCustomer = { name: "", mobile: "", gstin: "" };
+
+/** Stand-in width for the scan box's floating prompts, before either has ever
+ *  mounted (`usePositionedPopover`'s first clamp). Kept in step with
+ *  `.bill-float`'s width in Billing.css. */
+const SCAN_FLOAT_WIDTH = 380;
 
 export default function BillingPage() {
   const { user } = useAuth();
@@ -544,200 +551,298 @@ function Counter({ storeName }: { storeName?: string }) {
     }
   }
 
+  // Which one banner the frame's alert strip shows (#243) - see `pickBillAlert`.
+  // `blocked` never wins a line here: a blocked counter takes over the whole
+  // work area below instead, which is the stronger treatment Rule 5 asks for.
+  const alert = pickBillAlert({
+    blocked: Boolean(till?.blocked),
+    paper: paper !== null,
+    loading: !world.loaded,
+    noPriceList: world.loaded && !world.items.length,
+    printProblem: Boolean(printProblem),
+    note: Boolean(note),
+    gift: bill.entitlements.length > 0,
+    holdsDue: toReview.length > 0,
+  });
+
+  /** Dismissing the scan box's floating prompts (G-4) is the same act as
+   *  answering "not that" by hand: put down the question and give the cursor
+   *  back, whether the counter did it by clicking outside, pressing Escape, or
+   *  the button inside `NotInSystem`. */
+  const closeScanFloat = useCallback(() => {
+    clearScan();
+    scan.focus();
+  }, [clearScan, scan]);
+
+  // "Did you mean" and "bill it off the tag" both hang off the scan box as one
+  // floating panel (G-4: "nothing pushes the layout"), portaled out of the
+  // work area so neither can push the rail or the footer. `usePositionedPopover`
+  // already does measure/re-measure/clamp/outside-click - the scan box just
+  // needed the hook to accept an `<input>` and to hang the panel below rather
+  // than beside it, which is what the `<HTMLInputElement>` and `"below"` here
+  // are for.
+  const scanFloat = usePositionedPopover<HTMLInputElement>(
+    unknown || suggestions.length > 0 ? "scan" : null,
+    closeScanFloat,
+    SCAN_FLOAT_WIDTH,
+    "below",
+  );
+
   return (
     <div className="page-pad bill-page">
-      <PageHeader
-        lead={`Next bill ${till?.nextNumber ?? ""}`}
-        actions={
-          <div className="bill-head">
-            <SyncLight />
-            <ScanBox
-              boxRef={scan.ref}
-              value={typed}
+      {/* Top strip: bill identity and the "which bill am I on" actions (D10
+          §4's placement, regrouped per #243). Wrapped with the one-line alert
+          below rather than left as PageHeader's own sibling, because a
+          stripped-section persona has `PageHeader` draw a tab row above its
+          toolbar (`HostedPageContext`) - two elements for one conceptual
+          band. Wrapping them keeps `.bill-page`'s row template honest at
+          `auto` however many elements PageHeader itself renders. */}
+      <div className="bill-top">
+        <PageHeader
+          lead={`Next bill ${till?.nextNumber ?? ""}`}
+          actions={
+            <div className="bill-head">
+              <SyncLight />
+              <ScanBox
+                boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
+                value={typed}
+                disabled={locked}
+                onChange={setTyped}
+                onSubmit={applyScan}
+              />
+              <div className="bill-lifecycle">
+                {/* Finding an old bill is a different job with a different
+                    screen (#185, E1/E2), and it is read-only: nothing over
+                    there can change what was billed. */}
+                <Link className="btn" data-testid="bill-find" to="/sell/customers">
+                  <Search size={15} />
+                  Find a bill
+                </Link>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-holds-open"
+                  aria-expanded={showHolds}
+                  onClick={() => setShowHolds((open) => !open)}
+                >
+                  {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-hold"
+                  disabled={!cart.lines.length || saving}
+                  onClick={() => void holdBill()}
+                >
+                  <PauseCircle size={15} />
+                  Hold bill
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="bill-new"
+                  disabled={saving}
+                  onClick={newBill}
+                >
+                  New bill
+                </button>
+              </div>
+            </div>
+          }
+        />
+
+        {alert === "paper" && (
+          <div className="bill-paper" data-testid="bill-paper">
+            <div>
+              <strong>Entering printed bill {paper}</strong> - this one was rung up on the
+              machine this counter replaced and never reached head office. Enter it exactly as
+              the printed copy reads. It keeps its own number, and nothing prints.
+            </div>
+            <div className="field">
+              <label htmlFor="bill-paper-at">Date and time on the printed copy</label>
+              <input
+                id="bill-paper-at"
+                className="input"
+                data-testid="bill-paper-at"
+                type="datetime-local"
+                disabled={locked}
+                value={paperAt}
+                onChange={(e) => setPaperAt(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn"
+              data-testid="bill-paper-cancel"
               disabled={locked}
-              onChange={setTyped}
-              onSubmit={applyScan}
-            />
+              onClick={leavePaperMode}
+            >
+              <X size={15} /> Not this one
+            </button>
           </div>
-        }
-      />
+        )}
 
-      {/* The counter itself cannot bill (#189): its data was cleared, or this is
-          the second window on one till. Above everything else on the page,
-          because nothing below it can be acted on until this is dealt with. */}
-      {till?.blocked && (
-        <p className="bill-alert bill-alert-stop" data-testid="bill-counter-blocked">
-          <AlertTriangle size={15} />
-          {till.blocked}{" "}
-          <Link className="btn" to="/sell/till">
-            Open Till &amp; Sync
-          </Link>
-        </p>
-      )}
-
-      {paper !== null && (
-        <div className="bill-paper" data-testid="bill-paper">
-          <div>
-            <strong>Entering printed bill {paper}</strong> - this one was rung up on the machine
-            this counter replaced and never reached head office. Enter it exactly as the printed
-            copy reads. It keeps its own number, and nothing prints.
-          </div>
-          <div className="field">
-            <label htmlFor="bill-paper-at">Date and time on the printed copy</label>
-            <input
-              id="bill-paper-at"
-              className="input"
-              data-testid="bill-paper-at"
-              type="datetime-local"
-              disabled={locked}
-              value={paperAt}
-              onChange={(e) => setPaperAt(e.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className="btn"
-            data-testid="bill-paper-cancel"
-            disabled={locked}
-            onClick={leavePaperMode}
-          >
-            <X size={15} /> Not this one
-          </button>
-        </div>
-      )}
-
-      {!world.loaded && <p className="warn-note">Opening the counter…</p>}
-      {world.loaded && !world.items.length && (
-        <p className="warn-note" data-testid="bill-no-price-list">
-          This counter has no local price list yet. Sync from Till &amp; Sync before billing.
-        </p>
-      )}
-      {printProblem && (
-        <p className="bill-alert" data-testid="bill-print-problem">
-          <AlertTriangle size={15} />
-          {printProblem}
-        </p>
-      )}
-      {note && (
-        <p className="ok-note" data-testid="bill-note">
-          {note}
-        </p>
-      )}
-      {/* A gift is earned, not deducted: it takes nothing off any line, so
-          without this row the counter has no way of knowing the customer is owed
-          a trolley - and D5 Q11 is clear that it "only counts if it was actually
-          handed to the customer". Scanning it puts it on the bill at its token
-          price like any other piece. The out-of-stock fallback the engine also
-          supports has no control here yet; that needs a decline gesture and a
-          re-price, and it is its own ticket. */}
-      {bill.entitlements.map((gift) => (
-        <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
-          <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
-          {gift.token_price_paise > 0 ? (
-            <>
-              {" "}
-              at its token price of <Money paise={gift.token_price_paise} />
-            </>
-          ) : (
-            " free of charge"
-          )}
-          , and hand it over.
-        </p>
-      ))}
-
-      {/* Day close, until store open/close (I3) defines one properly: a bill
-          parked before today is put to the store, and stays parked until
-          somebody answers. Nothing expires on a timer (grill Q13). */}
-      {toReview.length > 0 && (
-        <p className="bill-alert" data-testid="bill-holds-due">
-          <AlertTriangle size={15} />
-          {toReview.length === 1
-            ? "1 bill has been on hold since before today."
-            : `${toReview.length} bills have been on hold since before today.`}{" "}
-          Keep each one for tomorrow or let it go.
-          <button type="button" className="btn" onClick={() => setShowHolds(true)}>
-            Review them
-          </button>
-        </p>
-      )}
-
-      {showHolds && (
-        <HeldBills
-          holds={holds}
-          toReview={toReview}
-          blocked={holdsBlocked}
-          onResume={(hold) => void resumeHold(hold)}
-          onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
-          onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
-        />
-      )}
-
-      {unknown && (
-        <NotInSystem
-          barcode={unknown}
-          hasSuggestions={suggestions.length > 0}
-          locked={locked}
-          onBill={() => takeUnknown(unknown)}
-          onDismiss={() => {
-            clearScan();
-            scan.focus();
-          }}
-        />
-      )}
-
-      {suggestions.length > 0 && (
-        <Suggestions
-          pieces={suggestions}
-          onPick={(piece) => {
-            const found = resolveScan(piece.barcode, world);
-            takePiece(piece, found.candidates, found.stock);
-            scan.focus();
-          }}
-        />
-      )}
-
-      {bill.exchange && (
-        <ExchangeBack
-          exchange={bill.exchange}
-          refundPaise={bill.refund_paise}
-          locked={locked}
-          onRemove={removeLeg}
-        />
-      )}
-
-      <div className="bill-body">
-        <section className="bill-lines">
-          <Lines
-            lines={bill.lines}
-            salesmen={world.salesmen}
-            locked={locked}
-            onEdit={editLine}
-            onSalesman={pickSalesman}
-            onPicked={scan.focus}
-            onRemove={removeLine}
-          />
-        </section>
-
-        <aside className="bill-pay">
-          <PaymentPanel
-            bill={bill}
-            payment={cart.payment}
-            locked={locked}
-            onChange={editPayment}
-            // Everything the bill asks for, not only the part still unapproved:
-            // a manager looking at a second exception should see the first one
-            // they agreed to as well, and the fresh authorisation replaces the
-            // old one whole.
-            onAsk={() => setAsking(bill.asks)}
-          />
-          <CustomerStrip
-            value={customer}
-            storeStateCode={storeState}
-            locked={locked}
-            onChange={setCustomer}
-          />
-        </aside>
+        {alert === "loading" && <p className="warn-note">Opening the counter…</p>}
+        {alert === "no-price-list" && (
+          <p className="warn-note" data-testid="bill-no-price-list">
+            This counter has no local price list yet. Sync from Till &amp; Sync before billing.
+          </p>
+        )}
+        {alert === "print-problem" && (
+          <p className="bill-alert" data-testid="bill-print-problem">
+            <AlertTriangle size={15} />
+            {printProblem}
+          </p>
+        )}
+        {alert === "note" && (
+          <p className="ok-note" data-testid="bill-note">
+            {note}
+          </p>
+        )}
+        {/* A gift is earned, not deducted: it takes nothing off any line, so
+            without this row the counter has no way of knowing the customer is
+            owed a trolley - and D5 Q11 is clear that it "only counts if it was
+            actually handed to the customer". Scanning it puts it on the bill
+            at its token price like any other piece. The out-of-stock fallback
+            the engine also supports has no control here yet; that needs a
+            decline gesture and a re-price, and it is its own ticket. */}
+        {alert === "gift" &&
+          bill.entitlements.map((gift) => (
+            <p className="ok-note" data-testid={`bill-gift-${gift.offer_id}`} key={gift.offer_id}>
+              <Gift size={15} /> This bill earns a gift: {gift.offer_name}. Scan it onto the bill
+              {gift.token_price_paise > 0 ? (
+                <>
+                  {" "}
+                  at its token price of <Money paise={gift.token_price_paise} />
+                </>
+              ) : (
+                " free of charge"
+              )}
+              , and hand it over.
+            </p>
+          ))}
+        {/* Day close, until store open/close (I3) defines one properly: a
+            bill parked before today is put to the store, and stays parked
+            until somebody answers. Nothing expires on a timer (grill Q13). */}
+        {alert === "holds-due" && (
+          <p className="bill-alert" data-testid="bill-holds-due">
+            <AlertTriangle size={15} />
+            {toReview.length === 1
+              ? "1 bill has been on hold since before today."
+              : `${toReview.length} bills have been on hold since before today.`}{" "}
+            Keep each one for tomorrow or let it go.
+            <button type="button" className="btn" onClick={() => setShowHolds(true)}>
+              Review them
+            </button>
+          </p>
+        )}
       </div>
+
+      {/* Work area: only `.bill-lines` scrolls (G-2/G-4). The counter itself
+          cannot bill (#189) - its data was cleared, or this is the second
+          window on one till - and Rule 5 says collapsing alerts to one line
+          must not soften that: rather than a thin banner above a bill nobody
+          can act on, a blocked counter takes over this whole band. */}
+      <div className="bill-work">
+        {till?.blocked ? (
+          <p
+            className="bill-alert bill-alert-stop bill-blocked-area"
+            data-testid="bill-counter-blocked"
+          >
+            <AlertTriangle size={18} />
+            {till.blocked}{" "}
+            <Link className="btn" to="/sell/till">
+              Open Till &amp; Sync
+            </Link>
+          </p>
+        ) : (
+          <>
+            <section className="bill-lines">
+              {showHolds && (
+                <HeldBills
+                  holds={holds}
+                  toReview={toReview}
+                  blocked={holdsBlocked}
+                  onResume={(hold) => void resumeHold(hold)}
+                  onKeep={(hold) => engine && void answerHold(engine.keepHold(hold.held_uuid))}
+                  onLetGo={(hold) => engine && void answerHold(engine.releaseHold(hold.held_uuid))}
+                />
+              )}
+              {bill.exchange && (
+                <ExchangeBack
+                  exchange={bill.exchange}
+                  refundPaise={bill.refund_paise}
+                  locked={locked}
+                  onRemove={removeLeg}
+                />
+              )}
+              <Lines
+                lines={bill.lines}
+                salesmen={world.salesmen}
+                locked={locked}
+                onEdit={editLine}
+                onSalesman={pickSalesman}
+                onPicked={scan.focus}
+                onRemove={removeLine}
+              />
+            </section>
+
+            <aside className="bill-pay">
+              <PaymentPanel
+                bill={bill}
+                payment={cart.payment}
+                locked={locked}
+                onChange={editPayment}
+                // Everything the bill asks for, not only the part still unapproved:
+                // a manager looking at a second exception should see the first one
+                // they agreed to as well, and the fresh authorisation replaces the
+                // old one whole.
+                onAsk={() => setAsking(bill.asks)}
+              />
+              <CustomerStrip
+                value={customer}
+                storeStateCode={storeState}
+                locked={locked}
+                onChange={setCustomer}
+              />
+            </aside>
+          </>
+        )}
+      </div>
+
+      {/* "Did you mean" and "bill it off the tag" (G-4): portaled to
+          `document.body` and placed by `usePositionedPopover`, so neither can
+          push the rail or the footer a pixel - they float over the grid
+          instead. */}
+      {scanFloat.at &&
+        createPortal(
+          <div
+            ref={scanFloat.popoverRef}
+            className="bill-float"
+            style={{ top: scanFloat.at.top, left: scanFloat.at.left }}
+          >
+            {unknown && (
+              <NotInSystem
+                barcode={unknown}
+                hasSuggestions={suggestions.length > 0}
+                locked={locked}
+                onBill={() => takeUnknown(unknown)}
+                onDismiss={closeScanFloat}
+              />
+            )}
+            {suggestions.length > 0 && (
+              <Suggestions
+                pieces={suggestions}
+                onPick={(piece) => {
+                  const found = resolveScan(piece.barcode, world);
+                  takePiece(piece, found.candidates, found.stock);
+                  scan.focus();
+                }}
+              />
+            )}
+          </div>,
+          document.body,
+        )}
 
       {asking && (
         <ManagerPin
@@ -759,6 +864,8 @@ function Counter({ storeName }: { storeName?: string }) {
         />
       )}
 
+      {/* Footer: pinned, visible from the first scan to the last. Reprint,
+          then Save & Print - the one visually primary button on the screen. */}
       <div className="bill-foot">
         <Totals bill={bill} />
         <div className="bill-actions">
@@ -767,15 +874,6 @@ function Counter({ storeName }: { storeName?: string }) {
               {blocked}
             </span>
           )}
-          <button
-            type="button"
-            className="btn btn-cta btn-lg"
-            data-testid="bill-save"
-            disabled={Boolean(blocked) || saving}
-            onClick={() => void save()}
-          >
-            {saving ? "Saving…" : paper === null ? "Save & Print" : `Save bill ${paper}`}
-          </button>
           <button
             type="button"
             className="btn"
@@ -788,38 +886,12 @@ function Counter({ storeName }: { storeName?: string }) {
           </button>
           <button
             type="button"
-            className="btn"
-            data-testid="bill-hold"
-            disabled={!cart.lines.length || saving}
-            onClick={() => void holdBill()}
+            className="btn btn-cta btn-lg"
+            data-testid="bill-save"
+            disabled={Boolean(blocked) || saving}
+            onClick={() => void save()}
           >
-            <PauseCircle size={15} />
-            Hold bill
-          </button>
-          <button
-            type="button"
-            className="btn"
-            data-testid="bill-holds-open"
-            aria-expanded={showHolds}
-            onClick={() => setShowHolds((open) => !open)}
-          >
-            {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
-          </button>
-          {/* The one navigation on this page. Finding an old bill is a different
-              job with a different screen (#185, E1/E2), and it is read-only:
-              nothing over there can change what was billed. */}
-          <Link className="btn" data-testid="bill-find" to="/sell/customers">
-            <Search size={15} />
-            Find a bill
-          </Link>
-          <button
-            type="button"
-            className="btn"
-            data-testid="bill-new"
-            disabled={saving}
-            onClick={newBill}
-          >
-            New bill
+            {saving ? "Saving…" : paper === null ? "Save & Print" : `Save bill ${paper}`}
           </button>
         </div>
       </div>
@@ -940,6 +1012,18 @@ function describeFrom(lines: PricedLine[]) {
   return (line: { line_no: number; barcode: string }) => words.get(line.line_no) || line.barcode;
 }
 
+/** One DOM node into two refs that each need it for a different reason: the
+ *  focus patrol's own ref (`useScanBox`) and the scan-box float's trigger ref
+ *  (`usePositionedPopover`), which cannot share a single `useRef` because they
+ *  come from two different hooks that each own theirs. */
+function mergeRefs<T>(...refs: RefObject<T>[]): (node: T | null) => void {
+  return (node) => {
+    refs.forEach((ref) => {
+      (ref as MutableRefObject<T | null>).current = node;
+    });
+  };
+}
+
 // --- the scan box ----------------------------------------------------------
 
 /**
@@ -959,7 +1043,7 @@ function ScanBox({
   onChange,
   onSubmit,
 }: {
-  boxRef: RefObject<HTMLInputElement>;
+  boxRef: (node: HTMLInputElement | null) => void;
   value: string;
   disabled: boolean;
   onChange: (v: string) => void;
