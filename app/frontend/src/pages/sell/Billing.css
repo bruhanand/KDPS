@@ -51,10 +51,16 @@
    `.bill-float` - so the two keep their own spacing but neither carries the
    bottom margin a stacked banner needed. */
 .bill-unknown { padding: 14px 16px; }
+/* The message is one wrapping text block, not four flex items (icon, three
+   text runs split by the barcode span) - `.bill-float`'s 380px is narrower
+   than the full page width this banner used to stack across, and letting the
+   sentence itself be a flex item put its icon, its first clause and its
+   barcode in three side-by-side columns instead of one wrapped paragraph. */
 .bill-unknown-note {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: flex-start; gap: 8px;
   margin: 0 0 10px; font-size: 13px; color: var(--amber);
 }
+.bill-unknown-note svg { flex-shrink: 0; margin-top: 2px; }
 .bill-unknown-actions { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .bill-unknown .muted-cell { font-size: 11.5px; }
 
@@ -157,8 +163,13 @@ table.data.bill-grid td { vertical-align: top; padding: 8px 7px; }
    and scroll safety net. Safe at the frame's own floor (1280px and up): the
    twelve columns are sized in fixed percentages precisely so the grid never
    needs its own horizontal scrollbar there (the comment above). Below that
-   floor the frame gives way and this reverts (media query, bottom of file). */
-.bill-grid-wrap { overflow: visible; }
+   floor the frame gives way and this reverts (media query, bottom of file).
+   `.table-wrap.bill-grid-wrap`, not `.bill-grid-wrap` alone: both classes are
+   on the one element (BillGrid.tsx), and a bare `.bill-grid-wrap` ties with
+   `.table-wrap` on specificity - same trap as `table.data th` above, same
+   answer, this time the loser was whichever file's bundle chunk happened to
+   land second rather than which rule "should" win by reading order. */
+.table-wrap.bill-grid-wrap { overflow: visible; }
 table.data.bill-grid thead th { position: sticky; top: 0; z-index: 2; }
 /* Figures never break: "₹3,4 / 99" over two lines is not money. Words may. */
 .bill-grid td.num, .bill-grid th.num { white-space: nowrap; }
@@ -203,11 +214,16 @@ select.bill-season { min-width: 0; }
   color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
 }
 
-/* Fixed content, not a second scrolling column: it sits at the top of
-   `.bill-work`'s row instead of stretching to the grid's full height (#243 -
-   the default `align-items: stretch` is right for `.bill-lines`, wrong for
-   this one, so only this column opts out). */
-.bill-pay { display: flex; flex-direction: column; gap: 16px; align-self: start; }
+/* The rail (#243): "both always visible" (design.md) holds whenever the
+   payment card plus the customer card fit the available height - true on
+   most counters, since neither is asked to grow here (#246/#249 are the
+   tickets that reshape their fields). When they do not fit - a laptop at the
+   1280px floor, or a persona whose stripped-section tab strip eats a row -
+   the column scrolls on its own rather than the alternative, which is worse:
+   its bottom half sliding under the footer with no way to reach it at all.
+   `.bill-lines` gets the same treatment (`min-height: 0` + its own
+   `overflow-y: auto`) for the identical reason. */
+.bill-pay { display: flex; flex-direction: column; gap: 16px; min-height: 0; overflow-y: auto; }
 .bill-panel { padding: 16px 18px; }
 .bill-panel .field { margin-top: 10px; }
 .bill-panel .muted-cell { display: block; margin-top: 10px; font-size: 12px; }
@@ -281,7 +297,9 @@ select.bill-season { min-width: 0; }
   .bill-top, .bill-work, .bill-foot { display: block; }
   .bill-work { min-height: auto; }
   .bill-lines { min-height: auto; overflow-y: visible; }
-  .bill-grid-wrap { overflow: auto; }
+  /* Same two-class selector as the desktop rule above, or this loses to it on
+     specificity regardless of which comes later in the cascade. */
+  .table-wrap.bill-grid-wrap { overflow: auto; }
   table.data.bill-grid thead th { position: static; }
   .bill-pay { margin-top: 16px; }
   .bill-scan { width: 220px; }

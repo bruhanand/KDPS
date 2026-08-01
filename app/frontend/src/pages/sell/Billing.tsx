@@ -1099,10 +1099,12 @@ function NotInSystem({
     <div className="card section-card bill-unknown" data-testid="bill-unknown">
       <p className="bill-unknown-note">
         <AlertTriangle size={15} />
-        Nothing on this counter is barcode <span className="mono">{barcode}</span>.
-        {hasSuggestions
-          ? " Check the list below first - a tag is misread far more often than a piece is new."
-          : " Check the tag, or search by design number."}
+        <span>
+          Nothing on this counter is barcode <span className="mono">{barcode}</span>.
+          {hasSuggestions
+            ? " Check the list below first - a tag is misread far more often than a piece is new."
+            : " Check the tag, or search by design number."}
+        </span>
       </p>
       <div className="bill-unknown-actions">
         <button
