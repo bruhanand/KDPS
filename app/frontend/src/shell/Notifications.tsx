@@ -1,24 +1,24 @@
-// The bell: two feeds, one popup, with history behind each (#226).
+// Alerts and Approvals: two buttons, each with its own count and its own
+// popup, each with history behind its live list (#226, reshaped 1 Aug 2026).
 //
-// It used to be a link to `/approvals` with a count of undecided documents on
-// it. That left the other half of "things that want you" - the alerts feed -
-// with no presence in the top bar at all, reachable only from a dashboard card
-// somebody had to be standing on Home to see.
+// They began as one bell with one combined count, which could not say which of
+// the two feeds wanted you - and opening it to read approvals put the alerts
+// feed on screen too, entangling "I read my approvals" with "I read my
+// alerts". Split, each button owns its feed, its count and its popup, and
+// opening one cannot touch the other's state: `ApprovalsButton` simply has no
+// read-stamp to call.
 //
-// So the bell now opens rather than navigates. Two tabs, Alerts first because
-// it is the one nobody was watching, Approvals second because it already had a
-// screen. Each tab shows its live list and, behind a button, its history.
+// Two things the popups deliberately do *not* do:
 //
-// Two things it deliberately does *not* do:
-//
-// * **It does not decide.** A row links into `/approvals`, where the decision
+// * **They do not decide.** A row links into `/approvals`, where the decision
 //   sits beside its step trail. A popup that approved things would be a second
 //   place maker-checker happens, and the trail would not be on screen.
-// * **It does not replace the dashboard cards.** The bell is a second path to
-//   the same two places (grill s3), so Home is untouched.
+// * **They do not replace the dashboard cards.** The buttons are a second path
+//   to the same two places (grill s3), so Home is untouched.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlertTriangle, Bell, ChevronDown, ChevronRight, History, Inbox } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { api } from "../lib/api";
 import { Money } from "../lib/format";
@@ -34,6 +34,7 @@ import {
   DEFAULT_RANGE,
   RANGE_KEYS,
   RANGE_LABELS,
+  badgeLabel,
   dayHeading,
   groupResolvedByDay,
   sinceFor,
@@ -52,8 +53,6 @@ export const APPROVALS_CHANGED = "kdps:approvals-changed";
 export function announceApprovalsChanged() {
   window.dispatchEvent(new Event(APPROVALS_CHANGED));
 }
-
-type TabKey = "alerts" | "approvals";
 
 /** What a fetch said. `null` on either feed means the request failed and the tab
  *  shows a quiet line rather than an empty list, which would read as "all
@@ -312,98 +311,36 @@ function ApprovalsTab({
 }
 
 // ---------------------------------------------------------------------------
-// The bell itself
+// The two buttons
 // ---------------------------------------------------------------------------
 
-export function NotificationBell() {
+/** The shell both buttons share: an icon button wearing its count, and a popup
+ *  with a title row over the feed. The popup closes on outside click and Esc,
+ *  the two ways every other popup in this shell closes - and because each
+ *  button owns its own instance, opening one cannot close (or stamp) the
+ *  other. */
+function NoticeButton({
+  icon: Icon,
+  title,
+  label,
+  count,
+  testId,
+  onOpen,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  /** The button's spoken line - title and tooltip - which says the count. */
+  label: string;
+  count: number;
+  testId: string;
+  /** Called when the popup opens, never when it closes. */
+  onOpen?: () => void;
+  children: (onNavigate: () => void) => React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<TabKey>("alerts");
-  const [approvals, setApprovals] = useState<Feed<ApprovalT>>([]);
-  const [alerts, setAlerts] = useState<Feed<AlertT>>([]);
-  // One plain stamp, `null` meaning "no stamp" - which is what the contract
-  // says an absent row means, and so also the honest answer while the read is
-  // in flight or after it fails. It errs towards showing the count: a bell that
-  // silently says "nothing waiting" because a request failed is the one wrong
-  // answer an alerting surface must not give.
-  const [seenAt, setSeenAt] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const { pathname } = useLocation();
   useMobileNavExclusion(open, setOpen);
-
-  const loadAlerts = useCallback(
-    () =>
-      api
-        .get("/alerts")
-        .then((r) => {
-          const rows = (r.data ?? []) as AlertT[];
-          setAlerts(rows);
-          return rows;
-        })
-        .catch(() => {
-          setAlerts(null);
-          return null;
-        }),
-    [],
-  );
-
-  // Re-counted on every navigation *and* whenever a decision is made, not once
-  // per session: clearing the last item used to leave the bell insisting one
-  // document was still waiting, right beside a page saying nothing was.
-  const refresh = useCallback(() => {
-    api
-      .get("/approvals/inbox")
-      .then((r) => setApprovals(r.data ?? []))
-      .catch(() => setApprovals(null));
-    void loadAlerts();
-    api
-      .get("/alerts/seen")
-      .then((r) => setSeenAt(r.data?.seen_at ?? null))
-      .catch(() => setSeenAt(null));
-  }, [loadAlerts]);
-
-  useEffect(() => {
-    refresh();
-    window.addEventListener(APPROVALS_CHANGED, refresh);
-    return () => window.removeEventListener(APPROVALS_CHANGED, refresh);
-  }, [refresh, pathname]);
-
-  const unread = unreadAlerts(alerts ?? [], seenAt);
-  const undecided = approvals?.length ?? 0;
-  const total = unread + undecided;
-
-  /**
-   * Opening the Alerts tab is what "reading" means, so it stamps - but only
-   * over a list that was actually just fetched.
-   *
-   * The feeds otherwise refresh on navigation, so a popup opened after an hour
-   * on one screen would stamp "read as of now" across alerts raised in that
-   * hour and never shown. `unreadAlerts` is strictly-after, so those would
-   * never surface again: exactly the wrong direction for an alerting surface.
-   * Hence refetch first, and do not stamp at all if the refetch failed.
-   *
-   * The badge zeroes locally the moment the tab opens rather than waiting for
-   * the round trip, and goes back to what it was if the stamp did not land -
-   * clearing a count the server never recorded would be the same silence.
-   */
-  const openAlertsTab = useCallback(() => {
-    const previous = seenAt;
-    setSeenAt(new Date().toISOString());
-    void loadAlerts().then((rows) => {
-      if (rows === null) {
-        setSeenAt(previous);
-        return;
-      }
-      api
-        .post("/alerts/seen")
-        .then((r) => setSeenAt(r.data?.seen_at ?? new Date().toISOString()))
-        .catch(() => setSeenAt(previous));
-    });
-  }, [loadAlerts, seenAt]);
-
-  function openTab(next: TabKey) {
-    setTab(next);
-    if (next === "alerts") openAlertsTab();
-  }
 
   function toggle() {
     if (open) {
@@ -411,10 +348,9 @@ export function NotificationBell() {
       return;
     }
     setOpen(true);
-    openTab("alerts");
+    onOpen?.();
   }
 
-  // Outside click and Esc, the two ways every other popup in this shell closes.
   useEffect(() => {
     if (!open) return;
     const off = new AbortController();
@@ -436,9 +372,7 @@ export function NotificationBell() {
     return () => off.abort();
   }, [open]);
 
-  const label = total
-    ? `${total} thing${total === 1 ? "" : "s"} want your attention`
-    : "Notifications - nothing waiting for you";
+  const badge = badgeLabel(count);
 
   return (
     <div className="bell-wrap" ref={wrap}>
@@ -449,52 +383,151 @@ export function NotificationBell() {
         aria-label={label}
         aria-expanded={open}
         title={label}
-        data-testid="notifications"
+        data-testid={testId}
       >
-        <Bell size={18} />
-        {!!total && (
-          <span className="bell-count" data-testid="notifications-count">
-            {total > 9 ? "9+" : total}
+        <Icon size={18} />
+        {badge && (
+          <span className="bell-count" data-testid={`${testId}-count`}>
+            {badge}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="bell-popup" data-testid="notifications-popup">
-          <div className="bell-tabs" role="tablist">
-            {(
-              [
-                ["alerts", "Alerts", unread],
-                ["approvals", "Approvals", undecided],
-              ] as [TabKey, string, number][]
-            ).map(([key, text, count]) => (
-              <button
-                key={key}
-                type="button"
-                role="tab"
-                aria-selected={tab === key}
-                className={`bell-tab ${tab === key ? "active" : ""}`}
-                onClick={() => openTab(key)}
-                data-testid={`bell-tab-${key}`}
-              >
-                {text}
-                {!!count && (
-                  <span className="bell-tab-count" data-testid={`bell-tab-count-${key}`}>
-                    {count > 9 ? "9+" : count}
-                  </span>
-                )}
-              </button>
-            ))}
+        <div className="bell-popup" data-testid={`${testId}-popup`}>
+          <div className="bell-title">
+            {title}
+            {badge && <span className="bell-title-count">{badge}</span>}
           </div>
-          <div className="bell-body">
-            {tab === "alerts" ? (
-              <AlertsTab alerts={alerts} onNavigate={() => setOpen(false)} />
-            ) : (
-              <ApprovalsTab approvals={approvals} onNavigate={() => setOpen(false)} />
-            )}
-          </div>
+          <div className="bell-body">{children(() => setOpen(false))}</div>
         </div>
       )}
     </div>
+  );
+}
+
+export function AlertsButton() {
+  const [alerts, setAlerts] = useState<Feed<AlertT>>([]);
+  // One plain stamp, `null` meaning "no stamp" - which is what the contract
+  // says an absent row means, and so also the honest answer while the read is
+  // in flight or after it fails. It errs towards showing the count: a button
+  // that silently says "nothing waiting" because a request failed is the one
+  // wrong answer an alerting surface must not give.
+  const [seenAt, setSeenAt] = useState<string | null>(null);
+  const { pathname } = useLocation();
+
+  const loadAlerts = useCallback(
+    () =>
+      api
+        .get("/alerts")
+        .then((r) => {
+          const rows = (r.data ?? []) as AlertT[];
+          setAlerts(rows);
+          return rows;
+        })
+        .catch(() => {
+          setAlerts(null);
+          return null;
+        }),
+    [],
+  );
+
+  // Re-counted on every navigation, not once per session.
+  useEffect(() => {
+    void loadAlerts();
+    api
+      .get("/alerts/seen")
+      .then((r) => setSeenAt(r.data?.seen_at ?? null))
+      .catch(() => setSeenAt(null));
+  }, [loadAlerts, pathname]);
+
+  /**
+   * Opening the popup is what "reading" means, so it stamps - but only over a
+   * list that was actually just fetched.
+   *
+   * The feed otherwise refreshes on navigation, so a popup opened after an
+   * hour on one screen would stamp "read as of now" across alerts raised in
+   * that hour and never shown. `unreadAlerts` is strictly-after, so those
+   * would never surface again: exactly the wrong direction for an alerting
+   * surface. Hence refetch first, and do not stamp at all if the refetch
+   * failed.
+   *
+   * The badge zeroes locally the moment the popup opens rather than waiting
+   * for the round trip, and goes back to what it was if the stamp did not
+   * land - clearing a count the server never recorded would be the same
+   * silence.
+   */
+  const openAndStamp = useCallback(() => {
+    const previous = seenAt;
+    setSeenAt(new Date().toISOString());
+    void loadAlerts().then((rows) => {
+      if (rows === null) {
+        setSeenAt(previous);
+        return;
+      }
+      api
+        .post("/alerts/seen")
+        .then((r) => setSeenAt(r.data?.seen_at ?? new Date().toISOString()))
+        .catch(() => setSeenAt(previous));
+    });
+  }, [loadAlerts, seenAt]);
+
+  const unread = unreadAlerts(alerts ?? [], seenAt);
+  const label = unread
+    ? `${unread} unread alert${unread === 1 ? "" : "s"}`
+    : "Alerts - nothing unread";
+
+  return (
+    <NoticeButton
+      icon={Bell}
+      title="Alerts"
+      label={label}
+      count={unread}
+      testId="alerts-button"
+      onOpen={openAndStamp}
+    >
+      {(onNavigate) => <AlertsTab alerts={alerts} onNavigate={onNavigate} />}
+    </NoticeButton>
+  );
+}
+
+export function ApprovalsButton() {
+  const [approvals, setApprovals] = useState<Feed<ApprovalT>>([]);
+  const { pathname } = useLocation();
+
+  // Re-counted on every navigation *and* whenever a decision is made, not once
+  // per session: clearing the last item used to leave the old bell insisting
+  // one document was still waiting, right beside a page saying nothing was.
+  const refresh = useCallback(() => {
+    api
+      .get("/approvals/inbox")
+      .then((r) => setApprovals(r.data ?? []))
+      .catch(() => setApprovals(null));
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    window.addEventListener(APPROVALS_CHANGED, refresh);
+    return () => window.removeEventListener(APPROVALS_CHANGED, refresh);
+  }, [refresh, pathname]);
+
+  const waiting = approvals?.length ?? 0;
+  const label = waiting
+    ? `${waiting} approval${waiting === 1 ? "" : "s"} waiting`
+    : "Approvals - nothing waiting";
+
+  // No `onOpen` and no read-stamp anywhere in this component, structurally:
+  // reading your approvals says nothing about whether you have read your
+  // alerts, and the one endpoint that stamps is called only by AlertsButton.
+  return (
+    <NoticeButton
+      icon={Inbox}
+      title="Approvals"
+      label={label}
+      count={waiting}
+      testId="approvals-button"
+    >
+      {(onNavigate) => <ApprovalsTab approvals={approvals} onNavigate={onNavigate} />}
+    </NoticeButton>
   );
 }

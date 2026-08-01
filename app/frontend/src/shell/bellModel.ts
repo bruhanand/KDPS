@@ -23,6 +23,15 @@ export function unreadAlerts(alerts: AlertT[], seenAt: string | null): number {
   return alerts.filter((a) => new Date(a.created_at).getTime() > seen).length;
 }
 
+/** What a count badge reads, or `null` for no badge at all: zero is the
+ *  absence of a badge, not a badge saying "0", and past nine the exact number
+ *  stops mattering. One function, because the same cap written inline in
+ *  three places is how a badge and its popup end up disagreeing. */
+export function badgeLabel(count: number): string | null {
+  if (count <= 0) return null;
+  return count > 9 ? "9+" : String(count);
+}
+
 /** The four windows History offers. Order is display order; `7d` is the
  *  default, and sits second so the common choice is next to the narrowest. */
 export const RANGE_KEYS = ["today", "7d", "30d", "1y"] as const;

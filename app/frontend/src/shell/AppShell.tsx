@@ -11,7 +11,7 @@ import { HostedPageContext } from "../components/PageHeader";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
 import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
-import { NotificationBell } from "./NotificationBell";
+import { AlertsButton, ApprovalsButton } from "./Notifications";
 import {
   headingOwning,
   isActiveFold,
@@ -748,7 +748,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
-            <NotificationBell />
+            <AlertsButton />
+            <ApprovalsButton />
             <UserMenu />
           </div>
         </MobileNavContext.Provider>

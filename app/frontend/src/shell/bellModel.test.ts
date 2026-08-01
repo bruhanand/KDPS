@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   RANGE_KEYS,
   RANGE_LABELS,
+  badgeLabel,
   dayHeading,
   groupResolvedByDay,
   sinceFor,
@@ -63,6 +64,23 @@ describe("unreadAlerts", () => {
 
   it("is zero on an empty feed however old the stamp", () => {
     expect(unreadAlerts([], null)).toBe(0);
+  });
+});
+
+describe("badgeLabel", () => {
+  it("renders no badge at all on a count of nothing", () => {
+    // Zero is the absence of a badge, not a badge saying "0".
+    expect(badgeLabel(0)).toBe(null);
+  });
+
+  it("says the number while it fits", () => {
+    expect(badgeLabel(1)).toBe("1");
+    expect(badgeLabel(9)).toBe("9");
+  });
+
+  it("caps at 9+ where an exact count stops mattering", () => {
+    expect(badgeLabel(10)).toBe("9+");
+    expect(badgeLabel(120)).toBe("9+");
   });
 });
 

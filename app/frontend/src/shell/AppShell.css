@@ -193,16 +193,14 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
   box-shadow: var(--shadow-hover); overflow: hidden;
 }
-.bell-tabs { display: flex; border-bottom: 1px solid var(--hairline); flex: none; }
-.bell-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 11px 8px; border: none; background: transparent; cursor: pointer;
-  font-size: 13.5px; font-weight: 600; color: var(--muted);
-  border-bottom: 2px solid transparent; transition: color .12s, border-color .12s;
+/* Each popup carries its own name: with one feed per popup there are no tabs,
+   and a popup with neither tabs nor a title is just a list of rows. */
+.bell-title {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 12px 14px 9px; border-bottom: 1px solid var(--hairline);
+  font-size: 13.5px; font-weight: 700; color: var(--ink);
 }
-.bell-tab:hover { color: var(--ink); }
-.bell-tab.active { color: var(--rust); border-bottom-color: var(--rust); font-weight: 700; }
-.bell-tab-count {
+.bell-title-count {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
   background: var(--brand-red); color: #fff;
   font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center;
