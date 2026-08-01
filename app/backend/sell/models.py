@@ -617,6 +617,10 @@ class SaleTender(TimeStampedModel):
         UPI = "upi", "UPI"
         CREDIT_NOTE = "credit_note", "Credit note"
 
+    class UpiState(models.TextChoices):
+        CONFIRMED = "confirmed", "Confirmed"
+        MANUAL = "manual", "Manual"
+
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="tenders")
     mode = models.CharField(max_length=12, choices=Mode.choices)
     amount_paise = MoneyField()
@@ -629,6 +633,16 @@ class SaleTender(TimeStampedModel):
         help_text="Set when the note was recognised. A note the till could not verify "
         "is taken on a manager's OK and flagged, so this stays empty there.",
     )
+    #: How the money was proven: `confirmed` (the bank answered, and the
+    #: acquirer's reference is stored alongside) or `manual` (the cashier vouched
+    #: - QR soundbox, static QR, no internet - and there is nothing trustworthy to
+    #: record). Blank on every non-UPI tender. `confirmed` cannot legitimately
+    #: reach the server yet - the QR charge card and its mock adapter are #248 -
+    #: but the pipeline accepts it correctly for when they land.
+    upi_state = models.CharField(max_length=10, choices=UpiState.choices, blank=True, default="")
+    #: The acquirer's transaction reference. Only ever set alongside `confirmed`
+    #: - a manual entry has nothing trustworthy to record.
+    upi_reference = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         db_table = "sell_sale_tender"
@@ -643,6 +657,25 @@ class SaleTender(TimeStampedModel):
             models.CheckConstraint(
                 condition=models.Q(credit_note__isnull=True) | models.Q(mode="credit_note"),
                 name="ck_saletender_note_only_on_note_mode",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(upi_state__in=["", "confirmed", "manual"]),
+                name="ck_saletender_upi_state_values",
+            ),
+            # Every UPI tender is stamped, no other tender is - said as an "iff"
+            # rather than two one-way rules so neither half can drift from the
+            # other.
+            models.CheckConstraint(
+                condition=(models.Q(mode="upi") & ~models.Q(upi_state=""))
+                | (~models.Q(mode="upi") & models.Q(upi_state="")),
+                name="ck_saletender_upi_state_iff_upi",
+            ),
+            # A reference can only ride a confirmed stamp. The required-when-
+            # confirmed half (an empty reference on a confirmed tender is also
+            # wrong) is enforced at the API layer, where the human message lives.
+            models.CheckConstraint(
+                condition=models.Q(upi_reference="") | models.Q(upi_state="confirmed"),
+                name="ck_saletender_reference_confirmed_only",
             ),
         ]
 
