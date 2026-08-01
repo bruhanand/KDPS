@@ -127,8 +127,8 @@ function UnitSwitcher() {
  *
  *  The panel is portaled to `document.body` and placed by measuring its
  *  trigger, the same pattern as the rail flyout above and for the same
- *  reason: the sidebar's own `overflow-y` would clip a normal descendant,
- *  invisibly, exactly as it did for the flyout. */
+ *  reason: the card's scroller would clip a normal descendant, invisibly,
+ *  exactly as it did for the flyout. */
 function ProfileSection({ rail }: { rail: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -315,12 +315,12 @@ function Sidebar({
   // ever set in rail mode - the mobile drawer and the expanded sidebar have no
   // flyout to close.
   const [openFlyout, setOpenFlyout] = useState<string | null>(null);
-  // Where the open flyout's popover renders, in viewport coordinates. `.sidebar`
-  // scrolls (`overflow-y: auto`), which per the CSS spec forces its `overflow-x`
-  // to compute as `auto` too - a popover positioned beside the rail would be
-  // clipped by that, invisibly, if it stayed a normal descendant. It is
-  // portaled to `document.body` instead and placed by measuring the trigger,
-  // so the sidebar's own scrolling can never clip it.
+  // Where the open flyout's popover renders, in viewport coordinates. The
+  // card's `.nav` scrolls (`overflow-y: auto`), which per the CSS spec forces
+  // its `overflow-x` to compute as `auto` too - a popover positioned beside
+  // the rail would be clipped by that, invisibly, if it stayed a normal
+  // descendant. It is portaled to `document.body` instead and placed by
+  // measuring the trigger, so the nav's own scrolling can never clip it.
   const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
   const flyoutTriggerRef = useRef<HTMLButtonElement>(null);
   const flyoutPopoverRef = useRef<HTMLDivElement | null>(null);

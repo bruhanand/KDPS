@@ -7,9 +7,16 @@
 .shell-body { flex: 1; display: flex; min-height: 0; }
 
 /* ---------- sidebar ---------- */
-/* A card that floats on the paper beside the page, with its own scroller. */
+/* A card that floats on the paper beside the page. It closes under its last
+   item rather than running to the floor: `align-self: flex-start` sizes it to
+   its content, the height cap keeps it on screen, and when the menu is longer
+   than the cap it is the *nav* that scrolls, inside a card whose head and
+   profile stay put. The width animates between rail and open - and stays out
+   of the way of a live drag, which must track the pointer exactly. */
 .sidebar {
   flex: none;
+  align-self: flex-start;
+  max-height: calc(100% - 24px);
   background: var(--sidebar);
   border: 1px solid var(--sidebar-border);
   border-radius: 18px;
@@ -17,18 +24,19 @@
   margin: 12px 0 12px 12px;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   position: relative;
+  transition: width .18s ease;
 }
+body.sidebar-resizing .sidebar { transition: none; }
 /* A thin rounded scrollbar, so a long menu scrolling inside the card does not
    put a system-width gutter through the card's rounded edge. */
-.sidebar::-webkit-scrollbar { width: 8px; }
-.sidebar::-webkit-scrollbar-thumb {
+.nav { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.nav::-webkit-scrollbar { width: 8px; }
+.nav::-webkit-scrollbar-thumb {
   background: rgba(var(--navy-rgb), .16); border-radius: 999px; border: 2px solid transparent;
   background-clip: content-box;
 }
-.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
+.nav::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
 
 /* The gutter between card and page *is* the resize handle: a flex sibling of
    the card, so it spans the full height and never scrolls with the menu. */
@@ -45,10 +53,10 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .sidebar.rail + .sidebar-resizer { pointer-events: none; }
 .sidebar.rail + .sidebar-resizer::after { display: none; }
 
-/* The collapse control, pinned to the top of the card's own scroller so it is
-   reachable however far the menu is scrolled. */
+/* The collapse control. Outside the nav's scroller, so it is under the hand
+   however far down the menu is scrolled. */
 .sidebar-head {
-  position: sticky; top: 0; z-index: 1; flex: none;
+  flex: none;
   display: flex; justify-content: flex-end; padding: 10px 10px 6px;
   background: var(--sidebar);
 }
@@ -264,11 +272,11 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ---------- the profile, at the foot of the sidebar card ----------
-   The sidebar owns who you are; the bar owns where you are. Sticky to the
-   card's own scroller, so a long menu scrolls behind it and the person - and
-   the way out - stay under the hand. */
+   The sidebar owns who you are; the bar owns where you are. Outside the
+   nav's scroller like the head, so a long menu scrolls between the two and
+   the person - and the way out - stay under the hand. */
 .sidebar-profile {
-  position: sticky; bottom: 0; margin-top: auto; flex: none;
+  margin-top: auto; flex: none;
   padding: 8px 10px 10px; background: var(--sidebar);
   border-top: 1px solid var(--sidebar-border);
 }
@@ -355,6 +363,9 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar {
     position: fixed; top: var(--topbar-h); bottom: 0; left: 0; z-index: 60;
     width: min(82vw, 300px) !important;
+    /* The drawer runs the full height whatever the menu holds - hugging is a
+       desktop card's behaviour. */
+    max-height: none;
     margin: 0; border-radius: 0 18px 18px 0; border-left: 0;
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
