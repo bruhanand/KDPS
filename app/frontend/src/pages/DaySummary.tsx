@@ -261,10 +261,10 @@ export default function DaySummary() {
                     <Money paise={summary.modes[mode.key]} />
                   </span>
                   <span className="day-label">{mode.label}</span>
-                  {mode.key === "upi" && (
+                  {mode.key === "upi" && summary.upi_split && (
                     <span className="day-upi-split" data-testid="day-upi-split">
-                      <Money paise={summary.upi_split?.confirmed ?? 0} /> confirmed ·{" "}
-                      <Money paise={summary.upi_split?.manual ?? 0} /> manual
+                      <Money paise={summary.upi_split.confirmed} /> confirmed ·{" "}
+                      <Money paise={summary.upi_split.manual} /> manual
                     </span>
                   )}
                 </div>
