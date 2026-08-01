@@ -92,6 +92,14 @@ export function switcherModel(
     : unitsModel(user, activeStore);
 }
 
+/** How the dashboard names the unit whose numbers are on screen. Code and
+ *  name - a report heading, not a chip - but the state stays off it, same as
+ *  the bar: the state a unit bills under is the page's fact to state where it
+ *  matters, not the chrome's. */
+export function unitContextLabel(activeStore: Store | null): string {
+  return activeStore ? `${activeStore.code} · ${activeStore.name}` : "All business units";
+}
+
 /** Key that changes whenever the working context changes — the shell remounts
  *  the page on it, so every screen refetches under the new unit instead of
  *  showing the previous one's numbers. */

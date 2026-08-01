@@ -20,6 +20,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../auth/AuthContext";
 import { Money } from "../lib/format";
 import { userCan } from "../shell/navConfig";
+import { unitContextLabel } from "../shell/unitSwitcher";
 import { StoreDashboard } from "./StoreDashboard";
 import "./Home.css";
 
@@ -500,7 +501,7 @@ export function Home() {
 
   if (!user) return null;
   const name = (user.full_name || user.username).split(" ")[0];
-  const ctx = activeStore ? `${activeStore.code} · ${activeStore.name}, ${activeStore.state_name}` : "All stores · network view";
+  const ctx = unitContextLabel(activeStore);
 
   function toggleDashboardCard(id: string) {
     const next = visibleCards.includes(id) ? visibleCards.filter((x) => x !== id) : [...visibleCards, id];

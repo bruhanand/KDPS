@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Brand, Store, User } from "../auth/AuthContext";
-import { contextKey, switcherModel } from "./unitSwitcher";
+import { contextKey, switcherModel, unitContextLabel } from "./unitSwitcher";
 
 function store(code: string, name: string, state = "Jharkhand"): Store {
   return {
@@ -136,6 +136,20 @@ describe("what the switcher offers", () => {
     // client must believe the payload, not the label.
     const model = switcherModel(user({ scope_type: "all" }), null, null);
     expect(model.options).toEqual([]);
+  });
+});
+
+describe("how the dashboard names the working unit", () => {
+  it("names an active unit by code and name, with no state", () => {
+    // The dashboard always says whose numbers these are (ruled 1 Aug 2026).
+    // Code and name here - the dashboard is a report heading, not a chip -
+    // but the state stays off it, same as the bar.
+    expect(unitContextLabel(DEO)).toBe("DEO · Deoghar");
+    expect(unitContextLabel(PAT)).not.toMatch(/bihar|jharkhand/i);
+  });
+
+  it("calls no active unit the aggregate, in business-unit language", () => {
+    expect(unitContextLabel(null)).toBe("All business units");
   });
 });
 
