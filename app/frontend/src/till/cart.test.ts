@@ -443,7 +443,7 @@ describe("the bill's split, as the till hands it over", () => {
     expect(drafted.tenders).toEqual([
       { mode: "cash", amount_paise: 29900 },
       { mode: "card", amount_paise: 50000 },
-      { mode: "upi", amount_paise: 50000 },
+      { mode: "upi", amount_paise: 50000, upi_state: "manual" },
       { mode: "credit_note", amount_paise: 20000, credit_note: NOTE.number },
     ]);
     expect(drafted.tenders.reduce((n, t) => n + t.amount_paise, 0)).toBe(drafted.totals.net_paise);

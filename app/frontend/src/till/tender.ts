@@ -224,7 +224,24 @@ export function toTenders(split: TenderSplit): BillTender[] {
       }),
     ),
   ];
-  return rows.filter((row) => row.amount_paise > 0);
+  return stampManualUpi(rows.filter((row) => row.amount_paise > 0));
+}
+
+/**
+ * Stamp `manual` on every UPI row missing a stamp, and leave everything else
+ * alone - a row already stamped (once `confirmed` exists, #248) and every
+ * non-UPI row.
+ *
+ * Two callers, both at the wire boundary (#241): `toTenders` stamps a bill as
+ * it is built, and `transport.billBody` runs this over a bill already sitting
+ * in the queue from before this build, which would otherwise halt on the
+ * server's new refusal (Rule 5, flag never block) - a queued bill is a printed
+ * bill, and a halted queue stays halted until a human clears it.
+ */
+export function stampManualUpi(tenders: BillTender[]): BillTender[] {
+  return tenders.map((tender) =>
+    tender.mode === "upi" && !tender.upi_state ? { ...tender, upi_state: "manual" } : tender,
+  );
 }
 
 /**
