@@ -45,6 +45,14 @@ Check only what you touched — the test file, `uv run mypy core config`,
 `yarn typecheck`. **Never run `npm run ci`**: a dedicated ci-check phase
 runs `npm run ci:fast` after QA, and the host runs it again on merged main.
 
+**A behaviour fix updates the spec docs in the same commit.** When your fix
+makes the code do more (or other) than what the feature folder's docs
+(`docs/features/<slug>/*.md`) literally say, sync those docs right there —
+a fix whose docs lag becomes next round's spec finding, and a finding born
+on the last round hands the whole issue back for what is really a two-line
+doc edit. This happened: #242's mobile-canonicalisation fix was correct,
+its doc lag cost the issue a human round-trip.
+
 Commit in the repo's `scope: subject` style, quoting the rule you applied in
 the body.
 

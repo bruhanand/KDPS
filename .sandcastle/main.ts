@@ -670,6 +670,22 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
         "--remove-label",
         "ready-for-agent",
       );
+      // The label alone leaves the human staring at an unexplained hand-back
+      // (issue #242 on the first run sat with no reason on it). Say why, and
+      // where the evidence lives.
+      gh(
+        runDir,
+        "issue",
+        "comment",
+        r.issue.id,
+        "--body",
+        `Sandcastle handed this back: ${r.note}.\n\n` +
+          `Branch \`${r.issue.branch}\` holds the work, unmerged. ` +
+          `Findings, QA report and deviations are in this run's artifacts ` +
+          `(\`.sandcastle/worktrees/\` + the run's log folder). ` +
+          `Rule on it, fold the ruling into the issue BODY (not just a comment), ` +
+          `and relabel \`ready-for-agent\` to re-queue.`,
+      );
     }
   }
 
