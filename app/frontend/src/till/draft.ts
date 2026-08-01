@@ -51,9 +51,16 @@ export async function persistDraft(
   }
 }
 
-/** The draft as it last stood, or null when there is nothing parked. */
+/** The draft as it last stood, or null when there is nothing parked. Never
+ *  throws, the same as `persistDraft`: a blocked or corrupt read must not
+ *  stop the bill from starting - it just starts without a restore. */
 export async function readDraft(db: TillDb): Promise<DraftPayload | null> {
-  return (await db.draft.get(DRAFT_KEY)) ?? null;
+  try {
+    return (await db.draft.get(DRAFT_KEY)) ?? null;
+  } catch (error) {
+    console.error("readDraft failed - starting the bill without a restore", error);
+    return null;
+  }
 }
 
 /** Cleared on commit success, New bill, and Hold - the three moments the

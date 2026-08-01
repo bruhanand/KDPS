@@ -242,14 +242,17 @@ function Counter({ storeName }: { storeName?: string }) {
   useEffect(() => {
     if (!engine) return;
     let alive = true;
-    void readDraft(engine.db).then((draft) => {
-      if (!alive) return;
-      if (draft && !skipRestore.current) {
-        setCart((current) => restoredCart(current, draft));
-        setCustomer((current) => restoredCustomer(current, draft));
-      }
-      setRestored(true);
-    });
+    void readDraft(engine.db)
+      .then((draft) => {
+        if (!alive) return;
+        if (draft && !skipRestore.current) {
+          setCart((current) => restoredCart(current, draft));
+          setCustomer((current) => restoredCustomer(current, draft));
+        }
+      })
+      .finally(() => {
+        if (alive) setRestored(true);
+      });
     return () => {
       alive = false;
     };
