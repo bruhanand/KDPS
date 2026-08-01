@@ -1,40 +1,68 @@
-.shell { display: flex; height: 100vh; overflow: hidden; }
+/* The shell is a column: one bar across the whole top, then a row holding the
+   sidebar card and the page (macOS System Settings, not an admin template).
+   `.shell` is the only box sized to the window and `.content` the only box
+   that scrolls - every popup cap in this app is written against a window that
+   never scrolls itself. */
+.shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.shell-body { flex: 1; display: flex; min-height: 0; }
 
 /* ---------- sidebar ---------- */
+/* A card that floats on the paper beside the page, with its own scroller. */
 .sidebar {
   flex: none;
   background: var(--sidebar);
-  border-right: 1px solid var(--sidebar-border);
+  border: 1px solid var(--sidebar-border);
+  border-radius: 18px;
+  box-shadow: var(--shadow-rest);
+  margin: 12px 0 12px 12px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overscroll-behavior: contain;
   position: relative;
 }
-.sidebar-resizer {
-  position: absolute; top: 0; right: -4px; width: 8px; height: 100%; cursor: col-resize; z-index: 5;
+/* A thin rounded scrollbar, so a long menu scrolling inside the card does not
+   put a system-width gutter through the card's rounded edge. */
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(var(--navy-rgb), .16); border-radius: 999px; border: 2px solid transparent;
+  background-clip: content-box;
 }
-.sidebar-resizer:hover { background: rgba(var(--rust-rgb), .16); }
-body.sidebar-resizing { cursor: col-resize; user-select: none; }
-.brand {
-  display: flex; align-items: center; gap: 11px;
-  padding: 18px 20px; border-bottom: 1px solid var(--sidebar-border);
-  position: sticky; top: 0; background: var(--sidebar); z-index: 1;
-}
-.brand-mark {
-  width: 34px; height: 34px; border-radius: 9px; background: var(--brand-red); color: #fff;
-  display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px;
-  box-shadow: var(--shadow-rest);
-}
-.brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-.brand-text b { font-size: 16px; color: var(--navy); letter-spacing: .3px; }
-.brand-text small { font-size: 11px; color: var(--muted); }
+.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
 
-.nav { padding: 12px 12px 28px; display: flex; flex-direction: column; gap: 4px; }
-.nav-group { padding: 4px 0; }
-.nav-group-head { display: flex; align-items: center; gap: 10px; padding: 7px 10px; }
+/* The gutter between card and page *is* the resize handle: a flex sibling of
+   the card, so it spans the full height and never scrolls with the menu. */
+.sidebar-resizer { flex: none; width: 12px; cursor: col-resize; position: relative; z-index: 5; }
+.sidebar-resizer::after {
+  content: ""; position: absolute; top: 50%; left: 4px; width: 4px; height: 52px;
+  transform: translateY(-50%); border-radius: 999px; background: transparent;
+  transition: background-color .15s;
+}
+.sidebar-resizer:hover::after { background: rgba(var(--rust-rgb), .3); }
+body.sidebar-resizing { cursor: col-resize; user-select: none; }
+body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb), .45); }
+/* Nothing to drag when the rail is at its fixed width. */
+.sidebar.rail + .sidebar-resizer { pointer-events: none; }
+.sidebar.rail + .sidebar-resizer::after { display: none; }
+
+/* The collapse control, pinned to the top of the card's own scroller so it is
+   reachable however far the menu is scrolled. */
+.sidebar-head {
+  position: sticky; top: 0; z-index: 1; flex: none;
+  display: flex; justify-content: flex-end; padding: 10px 10px 6px;
+  background: var(--sidebar);
+}
+.sidebar.rail .sidebar-head { justify-content: center; padding: 10px 8px 6px; }
+
+.nav { padding: 4px 12px 20px; display: flex; flex-direction: column; gap: 4px; }
+.nav-group { padding: 2px 0; }
+.nav-group-head {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+  border-radius: 10px; transition: background-color .12s;
+}
 .nav-group-toggle {
   width: 100%; background: none; border: 0; cursor: pointer; text-align: left;
-  border-radius: 9px; font: inherit; transition: background-color .12s;
+  font: inherit;
 }
 .nav-group-toggle:hover { background: rgba(var(--rust-rgb), .06); }
 .nav-group-toggle:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
@@ -50,36 +78,33 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   flex: none;
 }
 .nav-group-label { font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--caption); }
-.nav-grouplink {
-  font-size: 14.5px; font-weight: 600; color: var(--navy); border-radius: 8px; padding: 2px 4px;
-}
-.nav-grouplink.active { color: var(--rust); }
+/* A one-line row is a link the whole way across, so its pill covers the icon
+   too - the same shape a section head hovers into. */
+.nav-grouplink { font-size: 14.5px; font-weight: 600; color: var(--navy); }
+.nav-grouplink:hover { background: rgba(var(--rust-rgb), .08); }
+.nav-grouplink.active { background: rgba(var(--rust-rgb), .14); color: var(--rust); font-weight: 700; }
+.nav-grouplink.active .nav-ic { border-color: rgba(var(--rust-rgb), .35); }
 /* #96's grouping heading, which nested section heads one step in, is gone:
    D10 folds those sections onto one page instead, and a fold draws as a plain
    one-line section (`.nav-grouplink`). No subsections in the sidebar, ever. */
 .nav-items { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 2px 40px; }
 .nav-item {
-  font-size: 13.5px; color: var(--muted); padding: 7px 11px; border-radius: 8px;
+  font-size: 13.5px; color: var(--muted); padding: 7px 11px; border-radius: 10px;
   transition: background-color .12s, color .12s; position: relative;
 }
 .nav-item[draggable="true"] { cursor: grab; }
 .nav-item[draggable="true"]:active { cursor: grabbing; }
 .nav-item:hover { background: rgba(var(--rust-rgb), .08); color: var(--ink); }
+/* The tinted pill is the whole of "you are here". The left bar this row used
+   to carry as well was a second indicator for one state. */
 .nav-item.active { background: rgba(var(--rust-rgb), .14); color: var(--rust); font-weight: 700; }
-.nav-item.active::before {
-  content: ""; position: absolute; left: -2px; top: 7px; bottom: 7px; width: 3px;
-  background: var(--rust); border-radius: 2px;
-}
 
 /* ---------- icon rail (#230) ----------
    Rail mode swaps a row's own markup for an icon-only link or flyout trigger
    (AppShell.tsx) rather than hiding the labelled markup with CSS, so nothing
    here needs to un-hide text - only lay the icons out and style the two new
    controls. */
-.sidebar.rail .brand { justify-content: center; padding: 18px 10px; }
-.sidebar.rail .brand-text { display: none; }
-.sidebar.rail .nav { align-items: center; padding: 12px 8px 20px; }
-.sidebar.rail .sidebar-resizer { display: none; }
+.sidebar.rail .nav { align-items: center; padding: 4px 8px 20px; }
 
 .rail-link, .rail-flyout-trigger {
   display: flex; align-items: center; justify-content: center; width: 100%;
@@ -107,20 +132,23 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 
 .sidebar-rail-toggle {
   display: flex; align-items: center; justify-content: center; flex: none;
-  margin: 4px 12px 14px; padding: 8px; border: 1px solid var(--sidebar-border); border-radius: 9px;
+  padding: 7px; border: 1px solid var(--sidebar-border); border-radius: 9px;
   background: var(--surface); color: var(--muted); cursor: pointer; transition: background-color .12s;
 }
 .sidebar-rail-toggle:hover { background: var(--inner); color: var(--ink); }
 .rail-chev { transition: transform .16s ease; }
 .rail-chev.flipped { transform: rotate(180deg); }
 
-/* ---------- main / topbar ---------- */
-.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+/* ---------- topbar ---------- */
 .topbar {
   height: var(--topbar-h); flex: none; background: var(--surface);
   border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px;
   padding: 0 22px;
 }
+/* The lockup's own lettering and needle are `currentColor` (KdpsLogo.tsx), so
+   this one declaration is what makes them navy here and pale in dark mode. */
+.topbar-brand { display: flex; align-items: center; flex: none; color: var(--navy); }
+.topbar-logo-mark { display: none; }
 /* Sizing lives on .search-wrap (GlobalSearch.css) — it anchors the results
    panel; this rule is the pill itself. */
 .topbar-search {
@@ -130,6 +158,9 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 }
 .topbar-search input {
   border: none; background: transparent; outline: none; font-size: 14px; color: var(--ink); width: 100%;
+  /* Squeezed narrow on a phone, the placeholder ends in an ellipsis rather
+     than mid-word, which reads as an accident. */
+  text-overflow: ellipsis;
 }
 .topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .icon-btn {
@@ -149,7 +180,7 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   font-size: 10.5px; font-weight: 800; line-height: 17px; text-align: center;
   border: 1.5px solid var(--surface);
 }
-.content { flex: 1; overflow-y: auto; }
+.content { flex: 1; min-width: 0; overflow-y: auto; }
 
 /* ---------- the bell popup (#226) ----------
    Anchored to the bell rather than to the top bar, so it points at the thing
@@ -289,10 +320,15 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
 
 @media (max-width: 768px) {
   .menu-btn { display: flex; flex: none; }
-  .sidebar-backdrop { display: block; }
+  /* The drawer and its scrim start below the pinned top bar, so the bar stays
+     usable while the menu is open. Geometry, not z-index, deliberately:
+     lifting the bar above the drawer's 60 would also lift it above
+     `.modal-backdrop` (60), and modals would stop covering it. */
+  .sidebar-backdrop { display: block; top: var(--topbar-h); }
   .sidebar {
-    position: fixed; top: 0; bottom: 0; left: 0; z-index: 60;
+    position: fixed; top: var(--topbar-h); bottom: 0; left: 0; z-index: 60;
     width: min(82vw, 300px) !important;
+    margin: 0; border-radius: 0 18px 18px 0; border-left: 0;
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
   }
@@ -302,13 +338,30 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
      whenever the drawer opens (mobileOpen), so this is belt-and-braces - the
      drawer must never actually render at the rail's ~64px. */
   .sidebar.rail { width: min(82vw, 300px) !important; }
-  .sidebar.rail .brand-text { display: flex; }
+  /* Nothing to collapse to on a phone, so the strip that holds the control
+     would be an empty band above the menu. */
+  .sidebar-head { display: none; }
   .sidebar-rail-toggle { display: none; }
 
-  .topbar { padding: 0 12px; gap: 10px; }
+  .topbar { padding: 0 10px; gap: 8px; }
+  /* The full lockup would crowd the search box out of a phone's bar. */
+  .topbar-logo-full { display: none; }
+  .topbar-logo-mark { display: block; }
   .topbar-search { padding: 7px 12px; }
   .topbar-right { gap: 8px; }
   .switcher-label { max-width: 74px; }
+  /* A phone's bar has room for five controls, so everything in it has to be
+     shrinkable and nothing may be said twice: the unit's state chip is on the
+     page's own header and the user menu's chevron says only that a menu opens.
+     Without this the bar simply overflowed the screen and pushed the user
+     button off the right edge. */
+  .switcher, .usermenu, .switcher-btn { min-width: 0; }
+  .switcher-btn .chip { display: none; }
+  .user-btn > svg { display: none; }
+  /* The search box keeps a floor and the unit label gives way, not the other
+     way round: what you are typing has to stay readable, and the unit is named
+     again on the page's own header. */
+  .search-wrap { min-width: 76px; }
   .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
   /* A 380px popup anchored to a bell near the right edge would hang off a
@@ -320,13 +373,26 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   }
 }
 
+/* Below this the bar still cannot carry the mark, the switcher and a usable
+   search box at full size. The mark stays - the plan requires it down to
+   375px - so the switcher gives way instead: its label is named again on the
+   page's own header, while what you are typing into search is not shown
+   anywhere else. */
+@media (max-width: 480px) {
+  .switcher-label { display: none; }
+  .search-wrap { min-width: 64px; }
+}
+
 /* Printing the transfer PT (#72) prints the document, not the application
    around it. Scoped to a page that opts in with `.pt-print` rather than applied
    to every screen - what the other ~30 screens do on paper is their own
    question, and not one this slice was asked to answer. */
 @media print {
-  .shell:has(.pt-print) .sidebar, .shell:has(.pt-print) .topbar { display: none !important; }
-  .shell:has(.pt-print), .shell:has(.pt-print) .content {
+  .shell:has(.pt-print) .sidebar, .shell:has(.pt-print) .topbar,
+  .shell:has(.pt-print) .sidebar-resizer { display: none !important; }
+  /* `.shell-body` belongs in this reset as much as `.shell` does: left as a
+     flex row, the document would print in a column beside an empty gutter. */
+  .shell:has(.pt-print), .shell:has(.pt-print) .shell-body, .shell:has(.pt-print) .content {
     display: block !important; margin: 0 !important; padding: 0 !important; background: #fff !important;
   }
 }

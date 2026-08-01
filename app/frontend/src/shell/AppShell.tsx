@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -6,9 +6,11 @@ import { ChevronDown, ChevronLeft, Lock, LogOut, MapPin, Menu, Tag, X } from "lu
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
+import { KdpsLogo } from "../components/KdpsLogo";
 import { HostedPageContext } from "../components/PageHeader";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
+import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
 import { NotificationBell } from "./NotificationBell";
 import {
   headingOwning,
@@ -50,6 +52,7 @@ function initials(name: string, fallback: string): string {
 function UnitSwitcher() {
   const { user, activeStore, activeBrand, setActiveStore, setActiveBrand } = useAuth();
   const [open, setOpen] = useState(false);
+  useMobileNavExclusion(open, setOpen);
   if (!user) return null;
   const model = switcherModel(user, activeStore, activeBrand);
 
@@ -121,6 +124,7 @@ function UserMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  useMobileNavExclusion(open, setOpen);
   if (!user) return null;
   return (
     <div className="usermenu">
@@ -206,12 +210,10 @@ function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[
 
 function Sidebar({
   width,
-  onResizeStart,
   mobileOpen,
   onNavigate,
 }: {
   width: number;
-  onResizeStart: (e: React.PointerEvent<HTMLDivElement>) => void;
   mobileOpen: boolean;
   onNavigate: () => void;
 }) {
@@ -396,22 +398,22 @@ function Sidebar({
         </Link>
       );
     }
+    // The whole row is the link, not just its words: the row draws as a pill
+    // now, and a pill you can only hit on the label is a target that lies.
     return (
       <div className="nav-group" key={row.key}>
-        <div className="nav-group-head">
+        <Link
+          to={row.to}
+          onClick={onNavigate}
+          aria-current={row.active ? "page" : undefined}
+          className={`nav-group-head nav-grouplink ${row.active ? "active" : ""}`}
+          data-testid={row.testId}
+        >
           <span className="nav-ic" style={{ color: `var(--layer-${row.layer})` }}>
             <Icon size={16} />
           </span>
-          <Link
-            to={row.to}
-            onClick={onNavigate}
-            aria-current={row.active ? "page" : undefined}
-            className={`nav-grouplink ${row.active ? "active" : ""}`}
-            data-testid={row.testId}
-          >
-            {row.label}
-          </Link>
-        </div>
+          {row.label}
+        </Link>
       </div>
     );
   }
@@ -590,12 +592,20 @@ function Sidebar({
       style={{ width: rail ? RAIL_WIDTH : width }}
       data-testid="app-sidebar"
     >
-      <div className="brand">
-        <span className="brand-mark">K</span>
-        <span className="brand-text">
-          <b>KDPS</b>
-          <small>Operating System</small>
-        </span>
+      {/* Sticky inside the card's own scroller, so the collapse control is
+          under the hand however far down the menu you are. It used to sit at
+          the bottom of the sidebar, where a long menu scrolled it out of
+          reach; the logo it replaces has moved to the top bar. */}
+      <div className="sidebar-head">
+        <button
+          type="button"
+          className="sidebar-rail-toggle"
+          onClick={toggleRail}
+          aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
+          data-testid="sidebar-rail-toggle"
+        >
+          <ChevronLeft size={16} className={`rail-chev ${rail ? "flipped" : ""}`} />
+        </button>
       </div>
       <nav className="nav" data-testid="sidebar-nav">
         {rows.map((row) =>
@@ -606,16 +616,6 @@ function Sidebar({
               : renderStrip(row),
         )}
       </nav>
-      <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
-      <button
-        type="button"
-        className="sidebar-rail-toggle"
-        onClick={toggleRail}
-        aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
-        data-testid="sidebar-rail-toggle"
-      >
-        <ChevronLeft size={16} className={`rail-chev ${rail ? "flipped" : ""}`} />
-      </button>
     </aside>
   );
 }
@@ -671,6 +671,11 @@ export function SectionTabsProvider({ children }: { children: ReactNode }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { activeStore, activeBrand } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const mobileNavCtx = useMemo(
+    () => ({ open: mobileNavOpen, close: closeMobileNav }),
+    [mobileNavOpen, closeMobileNav],
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
     return Number.isFinite(saved) && saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 258;
@@ -712,34 +717,55 @@ export function AppShell({ children }: { children: ReactNode }) {
     setResizeFrom({ x: e.clientX, width: sidebarWidth });
   }
 
+  // One bar across the whole top, then a row beneath it holding the sidebar
+  // card and the page. `.shell` stays the only thing sized to the window and
+  // `.content` the only thing that scrolls - every popup cap in this app
+  // (`min(70vh, …)`, the rail flyout's `window.innerHeight` clamp) is written
+  // against a window that never scrolls.
   return (
     <div className="shell">
-      <Sidebar
-        width={sidebarWidth}
-        onResizeStart={startResize}
-        mobileOpen={mobileNavOpen}
-        onNavigate={() => setMobileNavOpen(false)}
-      />
-      {mobileNavOpen && (
-        <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} data-testid="sidebar-backdrop" />
-      )}
-      <div className="main">
-        <header className="topbar">
-          <button
-            className="icon-btn menu-btn"
-            onClick={() => setMobileNavOpen((o) => !o)}
-            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-            data-testid="mobile-nav-toggle"
-          >
-            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+      <header className="topbar">
+        <button
+          className="icon-btn menu-btn"
+          onClick={() => setMobileNavOpen((o) => !o)}
+          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+          data-testid="mobile-nav-toggle"
+        >
+          {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+        {/* Two copies, one shown at a time: under 768px the full lockup would
+            crowd the search box out of the bar, so the ribbon mark stands in.
+            Both are decorative - the link carries the name. */}
+        <Link to="/" className="topbar-brand" aria-label="KDPS Operating System - home">
+          <KdpsLogo className="topbar-logo-full" height={30} title="" />
+          <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
+        </Link>
+        {/* The drawer's overlay (z-index 55/60) sits above these popups
+            (40/50) by design (see MobileNavContext) - so whichever of the
+            drawer and a popup opens second closes the other, in either
+            order, rather than fighting for a higher layer. */}
+        <MobileNavContext.Provider value={mobileNavCtx}>
           <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
             <NotificationBell />
             <UserMenu />
           </div>
-        </header>
+        </MobileNavContext.Provider>
+      </header>
+      <div className="shell-body">
+        <Sidebar
+          width={sidebarWidth}
+          mobileOpen={mobileNavOpen}
+          onNavigate={() => setMobileNavOpen(false)}
+        />
+        {/* In the gutter between the card and the page, and a sibling of the
+            card rather than a child of it: inside the card's own scroller it
+            would slide out from under the pointer as the menu scrolls. */}
+        <div className="sidebar-resizer" onPointerDown={startResize} data-testid="sidebar-resizer" />
+        {mobileNavOpen && (
+          <div className="sidebar-backdrop" onClick={() => setMobileNavOpen(false)} data-testid="sidebar-backdrop" />
+        )}
         {/* Keyed on the working context: switching unit remounts the page, so
             every screen refetches under the new unit instead of leaving the
             previous store's numbers on screen. */}

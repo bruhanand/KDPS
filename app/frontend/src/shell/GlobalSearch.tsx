@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 
 import { api, apiErrorMessage } from "../lib/api";
 import { formatINR } from "../lib/format";
+import { useMobileNavExclusion } from "./MobileNavContext";
 import "./GlobalSearch.css";
 
 /**
@@ -75,6 +76,7 @@ export function GlobalSearch() {
   const [highlight, setHighlight] = useState(-1);
   // Answers can land out of order; only the newest query may paint.
   const seq = useRef(0);
+  useMobileNavExclusion(open, setOpen);
 
   const flat = useMemo(() => data?.groups.flatMap((g) => g.results) ?? [], [data]);
 
