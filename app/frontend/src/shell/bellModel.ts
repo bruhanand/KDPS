@@ -1,9 +1,9 @@
 // The bell's arithmetic, with no popup around it (#226).
 //
-// Three rules, each of which the badge and the tab beneath it must agree on.
-// They live here rather than inside `NotificationBell` because the badge is
-// read at a glance and trusted: a count computed in two places is a count that
-// eventually says two things at once.
+// Three rules, each of which a button's badge and the feed beneath it must
+// agree on. They live here rather than inside `Notifications` because the badge
+// is read at a glance and trusted: a count computed in two places is a count
+// that eventually says two things at once.
 
 import { tillToday } from "../till/pricing";
 import type { AlertT } from "../components/alert";
@@ -21,6 +21,15 @@ export function unreadAlerts(alerts: AlertT[], seenAt: string | null): number {
   if (!seenAt) return alerts.length;
   const seen = new Date(seenAt).getTime();
   return alerts.filter((a) => new Date(a.created_at).getTime() > seen).length;
+}
+
+/** What a count badge reads, or `null` for no badge at all: zero is the
+ *  absence of a badge, not a badge saying "0", and past nine the exact number
+ *  stops mattering. One function, because the same cap written inline in
+ *  three places is how a badge and its popup end up disagreeing. */
+export function badgeLabel(count: number): string | null {
+  if (count <= 0) return null;
+  return count > 9 ? "9+" : String(count);
 }
 
 /** The four windows History offers. Order is display order; `7d` is the

@@ -3,6 +3,10 @@
 Phase 3 artifact.
 Input: `grill-decisions.md` + `api-contract.md` + `db-design.md`, all approved 31 Jul 2026.
 
+> **Amended 1 Aug 2026.** Seven of the decisions this design was built from were changed by ruling after the feature shipped - the bell became two buttons, the page tabs moved above the title, the profile took the foot of the sidebar and the rail toggle its head, the top bar was reshaped and the unit chip stripped back.
+> Read **`grill-decisions.md` § Amendments - 1 August 2026** first; where the two disagree, the amendment wins.
+> Everything below is the 31 July design and is left as written, so what was built and what replaced it are both on the record.
+
 ## Summary
 
 Everything hangs off the navigation manifest, which is already the single source for the sidebar, the route guards, and page captions.

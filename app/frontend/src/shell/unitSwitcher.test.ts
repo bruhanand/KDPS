@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Brand, Store, User } from "../auth/AuthContext";
-import { contextKey, switcherModel } from "./unitSwitcher";
+import { contextKey, optionKey, switcherModel, unitContextLabel } from "./unitSwitcher";
 
 function store(code: string, name: string, state = "Jharkhand"): Store {
   return {
@@ -41,10 +41,12 @@ function user(payload: Partial<User>): User {
 }
 
 describe("what the switcher offers", () => {
-  it("locks a store person to their own store", () => {
+  it("locks a store person to their own store, named alone", () => {
+    // The bar says only where you are. The code is menu detail, the state is
+    // not the bar's to say at all (ruled 1 Aug 2026).
     const model = switcherModel(user({ business_units: [DEO] }), DEO, null);
     expect(model.locked).toBe(true);
-    expect(model.label).toBe("DEO · Deoghar");
+    expect(model.label).toBe("Deoghar");
     // No path to any other store, open or hidden.
     expect(model.options.filter((o) => o.kind === "unit")).toHaveLength(1);
   });
@@ -56,18 +58,43 @@ describe("what the switcher offers", () => {
       null,
     );
     expect(model.locked).toBe(false);
-    expect(model.label).toBe("All stores (network)");
+    expect(model.label).toBe("All business units");
     expect(model.options.map((o) => o.kind)).toEqual(["all-units", "unit", "unit"]);
   });
 
   it("never calls a two-store aggregate the network", () => {
     // Someone with two stores may look at both at once — that is just their own
-    // scope — but it is "all my stores", never the network they cannot see.
+    // scope — but it is "all my business units", never the network they cannot see.
     const model = switcherModel(user({ business_units: [DEO, PAT] }), null, null);
     const all = model.options.find((o) => o.kind === "all-units");
-    expect(all?.label).toBe("All my stores");
+    expect(all?.label).toBe("All my business units");
     expect(all?.label).not.toMatch(/network/i);
     expect(model.locked).toBe(false);
+  });
+
+  it("offers a unit's store code beside its name, not inside it", () => {
+    // The menu shows "Deoghar" with "DEO" as a hint the row draws separately —
+    // never fused into one string the chip would then have to carry.
+    const model = switcherModel(user({ business_units: [DEO, PAT] }), null, null);
+    const deo = model.options.find((o) => o.kind === "unit" && o.store.code === "DEO");
+    expect(deo?.label).toBe("Deoghar");
+    expect(deo?.hint).toBe("DEO");
+  });
+
+  it("lets no state name into anything the bar or menu can draw", () => {
+    // The state a unit bills under is a real fact, but the bar is not where it
+    // gets said (ruled 1 Aug 2026). Sweep every drawable string.
+    const models = [
+      switcherModel(user({ business_units: [DEO, PAT], all_business_units: true }), DEO, null),
+      switcherModel(user({ business_units: [DEO, PAT] }), PAT, null),
+      switcherModel(user({ business_units: [DEO] }), DEO, null),
+    ];
+    for (const model of models) {
+      const drawable = [model.label, ...model.options.flatMap((o) => [o.label, o.hint])];
+      for (const text of drawable) {
+        expect(text).not.toMatch(/bihar|jharkhand/i);
+      }
+    }
   });
 
   it("shows an empty, locked selector when there are no units (fail-closed)", () => {
@@ -109,6 +136,47 @@ describe("what the switcher offers", () => {
     // client must believe the payload, not the label.
     const model = switcherModel(user({ scope_type: "all" }), null, null);
     expect(model.options).toEqual([]);
+  });
+});
+
+describe("what identifies a menu row", () => {
+  it("keeps two same-named units apart", () => {
+    // The real case this guards: KDPS has more than one unit per town name, and
+    // since the bar stopped saying the code a row's label is only the name. Two
+    // rows sharing a React key let React reuse the wrong one.
+    const MAIN_A = store("DEO", "Main Road");
+    const MAIN_B = store("RAN", "Main Road");
+    const model = switcherModel(user({ business_units: [MAIN_A, MAIN_B] }), null, null);
+    expect(model.options.map((o) => o.label)).toContain("Main Road");
+    const keys = model.options.map(optionKey);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps a unit and a brand of the same name apart", () => {
+    expect(optionKey({ kind: "unit", label: "Mufti", hint: "", store: DEO })).not.toBe(
+      optionKey({ kind: "brand", label: "Mufti", hint: "", brand: MUFTI }),
+    );
+  });
+
+  it("gives the two aggregates their own identities", () => {
+    expect(optionKey({ kind: "all-units", label: "All my business units", hint: "" })).toBe(
+      "all-units",
+    );
+    expect(optionKey({ kind: "all-brands", label: "All my brands", hint: "" })).toBe("all-brands");
+  });
+});
+
+describe("how the dashboard names the working unit", () => {
+  it("names an active unit by code and name, with no state", () => {
+    // The dashboard always says whose numbers these are (ruled 1 Aug 2026).
+    // Code and name here - the dashboard is a report heading, not a chip -
+    // but the state stays off it, same as the bar.
+    expect(unitContextLabel(DEO)).toBe("DEO · Deoghar");
+    expect(unitContextLabel(PAT)).not.toMatch(/bihar|jharkhand/i);
+  });
+
+  it("calls no active unit the aggregate, in business-unit language", () => {
+    expect(unitContextLabel(null)).toBe("All business units");
   });
 });
 

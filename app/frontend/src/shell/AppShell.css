@@ -7,9 +7,16 @@
 .shell-body { flex: 1; display: flex; min-height: 0; }
 
 /* ---------- sidebar ---------- */
-/* A card that floats on the paper beside the page, with its own scroller. */
+/* A card that floats on the paper beside the page. It closes under its last
+   item rather than running to the floor: `align-self: flex-start` sizes it to
+   its content, the height cap keeps it on screen, and when the menu is longer
+   than the cap it is the *nav* that scrolls, inside a card whose head and
+   profile stay put. The width animates between rail and open - and stays out
+   of the way of a live drag, which must track the pointer exactly. */
 .sidebar {
   flex: none;
+  align-self: flex-start;
+  max-height: calc(100% - 24px);
   background: var(--sidebar);
   border: 1px solid var(--sidebar-border);
   border-radius: 18px;
@@ -17,18 +24,19 @@
   margin: 12px 0 12px 12px;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   position: relative;
+  transition: width .18s ease;
 }
+body.sidebar-resizing .sidebar { transition: none; }
 /* A thin rounded scrollbar, so a long menu scrolling inside the card does not
    put a system-width gutter through the card's rounded edge. */
-.sidebar::-webkit-scrollbar { width: 8px; }
-.sidebar::-webkit-scrollbar-thumb {
+.nav { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.nav::-webkit-scrollbar { width: 8px; }
+.nav::-webkit-scrollbar-thumb {
   background: rgba(var(--navy-rgb), .16); border-radius: 999px; border: 2px solid transparent;
   background-clip: content-box;
 }
-.sidebar::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
+.nav::-webkit-scrollbar-thumb:hover { background: rgba(var(--navy-rgb), .28); background-clip: content-box; }
 
 /* The gutter between card and page *is* the resize handle: a flex sibling of
    the card, so it spans the full height and never scrolls with the menu. */
@@ -45,10 +53,10 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .sidebar.rail + .sidebar-resizer { pointer-events: none; }
 .sidebar.rail + .sidebar-resizer::after { display: none; }
 
-/* The collapse control, pinned to the top of the card's own scroller so it is
-   reachable however far the menu is scrolled. */
+/* The collapse control. Outside the nav's scroller, so it is under the hand
+   however far down the menu is scrolled. */
 .sidebar-head {
-  position: sticky; top: 0; z-index: 1; flex: none;
+  flex: none;
   display: flex; justify-content: flex-end; padding: 10px 10px 6px;
   background: var(--sidebar);
 }
@@ -145,6 +153,10 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   border-bottom: 1px solid var(--hairline); display: flex; align-items: center; gap: 16px;
   padding: 0 22px;
 }
+/* The two side groups: equal flexible halves, so the search box between them
+   sits centred against the window itself. `min-width: 0` lets either half
+   give way before the bar overflows. */
+.topbar-left { display: flex; align-items: center; gap: 16px; flex: 1 1 0; min-width: 0; }
 /* The lockup's own lettering and needle are `currentColor` (KdpsLogo.tsx), so
    this one declaration is what makes them navy here and pale in dark mode. */
 .topbar-brand { display: flex; align-items: center; flex: none; color: var(--navy); }
@@ -162,7 +174,9 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
      than mid-word, which reads as an accident. */
   text-overflow: ellipsis;
 }
-.topbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+/* What wants you (Alerts, Approvals), then where you are (the unit chip),
+   pushed to the right corner. */
+.topbar-right { display: flex; align-items: center; gap: 12px; flex: 1 1 0; min-width: 0; justify-content: flex-end; }
 .icon-btn {
   position: relative; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--hairline);
   background: var(--surface); color: var(--navy); display: flex; align-items: center; justify-content: center;
@@ -193,16 +207,14 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
   box-shadow: var(--shadow-hover); overflow: hidden;
 }
-.bell-tabs { display: flex; border-bottom: 1px solid var(--hairline); flex: none; }
-.bell-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 11px 8px; border: none; background: transparent; cursor: pointer;
-  font-size: 13.5px; font-weight: 600; color: var(--muted);
-  border-bottom: 2px solid transparent; transition: color .12s, border-color .12s;
+/* Each popup carries its own name: with one feed per popup there are no tabs,
+   and a popup with neither tabs nor a title is just a list of rows. */
+.bell-title {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 12px 14px 9px; border-bottom: 1px solid var(--hairline);
+  font-size: 13.5px; font-weight: 700; color: var(--ink);
 }
-.bell-tab:hover { color: var(--ink); }
-.bell-tab.active { color: var(--rust); border-bottom-color: var(--rust); font-weight: 700; }
-.bell-tab-count {
+.bell-title-count {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
   background: var(--brand-red); color: #fff;
   font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center;
@@ -248,7 +260,7 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 }
 
 /* ---------- switcher / dropdowns ---------- */
-.switcher, .usermenu { position: relative; }
+.switcher { position: relative; }
 .switcher-btn {
   display: flex; align-items: center; gap: 9px; background: var(--inner);
   border: 1px solid var(--hairline); border-radius: 999px; padding: 7px 13px; cursor: pointer;
@@ -259,11 +271,32 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .switcher-btn.locked:hover { background: var(--inner); }
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.user-btn {
-  display: flex; align-items: center; gap: 10px; background: transparent; border: none;
-  cursor: pointer; padding: 4px 6px; border-radius: 10px; transition: background-color .15s;
+/* ---------- the profile, at the foot of the sidebar card ----------
+   The sidebar owns who you are; the bar owns where you are. Outside the
+   nav's scroller like the head, so a long menu scrolls between the two and
+   the person - and the way out - stay under the hand. */
+.sidebar-profile {
+  margin-top: auto; flex: none;
+  padding: 8px 10px 10px; background: var(--sidebar);
+  border-top: 1px solid var(--sidebar-border);
 }
-.user-btn:hover { background: var(--inner); }
+.profile-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: transparent; border: none; cursor: pointer;
+  padding: 6px 8px; border-radius: 12px; transition: background-color .15s;
+  text-align: left;
+}
+.profile-btn:hover { background: rgba(var(--rust-rgb), .06); }
+.profile-btn:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
+.sidebar.rail .sidebar-profile { padding: 8px 6px 10px; }
+.sidebar.rail .profile-btn { justify-content: center; padding: 6px 0; }
+/* Fixed and portaled, like the rail flyout and for the same reason: the
+   card's own overflow would clip it invisibly. */
+.profile-panel {
+  position: fixed; z-index: 50; min-width: 268px;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  box-shadow: var(--shadow-hover); padding: 7px;
+}
 .avatar {
   width: 34px; height: 34px; border-radius: 10px; background: var(--navy-fill); color: #fff;
   display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; flex: none;
@@ -290,6 +323,8 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 }
 .dropdown-item:hover { background: var(--inner); }
 .dropdown-item.active { background: rgba(var(--rust-rgb), .12); color: var(--rust); font-weight: 700; }
+/* The store code, beside the name rather than inside it. */
+.dropdown-hint { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--caption); }
 
 /* theme toggle — three-segment pill (Light / Dark / System) */
 .dropdown-theme {
@@ -328,6 +363,9 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar {
     position: fixed; top: var(--topbar-h); bottom: 0; left: 0; z-index: 60;
     width: min(82vw, 300px) !important;
+    /* The drawer runs the full height whatever the menu holds - hugging is a
+       desktop card's behaviour. */
+    max-height: none;
     margin: 0; border-radius: 0 18px 18px 0; border-left: 0;
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
@@ -344,26 +382,31 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar-rail-toggle { display: none; }
 
   .topbar { padding: 0 10px; gap: 8px; }
+  /* No room for equal halves on a phone: the groups shrink to their content
+     and the search box takes whatever is left - centring is a desktop line. */
+  .topbar-left { gap: 8px; flex: none; }
+  .topbar-right { gap: 8px; flex: none; }
   /* The full lockup would crowd the search box out of a phone's bar. */
   .topbar-logo-full { display: none; }
   .topbar-logo-mark { display: block; }
   .topbar-search { padding: 7px 12px; }
-  .topbar-right { gap: 8px; }
   .switcher-label { max-width: 74px; }
-  /* A phone's bar has room for five controls, so everything in it has to be
-     shrinkable and nothing may be said twice: the unit's state chip is on the
-     page's own header and the user menu's chevron says only that a menu opens.
-     Without this the bar simply overflowed the screen and pushed the user
-     button off the right edge. */
-  .switcher, .usermenu, .switcher-btn { min-width: 0; }
-  .switcher-btn .chip { display: none; }
-  .user-btn > svg { display: none; }
+  /* A phone's bar has to shrink everything in it: the profile lives in the
+     drawer now and the chip carries only the unit's name, so the label and
+     the search box are the two things left to negotiate over. */
+  .switcher, .switcher-btn { min-width: 0; }
   /* The search box keeps a floor and the unit label gives way, not the other
      way round: what you are typing has to stay readable, and the unit is named
      again on the page's own header. */
   .search-wrap { min-width: 76px; }
-  .user-meta { display: none; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
+  /* Beside a drawer that is already most of the screen there is no "beside":
+     the panel takes the viewport's width instead of the measured spot.
+     And it has to sit *above* the drawer (60), unlike every other popup in
+     this shell: the others are the drawer's rivals and give way to it
+     (MobileNavContext), but this one opens from a button inside the drawer, so
+     at the shared 50 the drawer it belongs to covers all but a sliver of it. */
+  .profile-panel { left: 12px !important; right: 12px; min-width: 0; z-index: 65; }
   /* A 380px popup anchored to a bell near the right edge would hang off a
      phone. On mobile it is a full-width sheet under the top bar instead -
      CSS only; the component is the same one (#226). */
@@ -381,6 +424,17 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 @media (max-width: 480px) {
   .switcher-label { display: none; }
   .search-wrap { min-width: 64px; }
+}
+
+/* ---------- reduced motion ----------
+   The shell animates three things that move a large part of the screen: the
+   card's width between rail and open, the drawer sliding in, and the chevrons
+   that turn with them. Someone who has asked their machine for less motion
+   gets the end state directly - the sidebar still collapses, the drawer still
+   opens, they simply arrive rather than travel. The colour and background
+   fades elsewhere are left alone: they move nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .nav-chev, .rail-chev { transition: none; }
 }
 
 /* Printing the transfer PT (#72) prints the document, not the application
@@ -403,17 +457,18 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
  * strip onto screens that never imported a stylesheet for it: a stripped
  * section's tabs must look the same on Billing as on the folded Inventory page.
  *
- * Deliberately not `.seg`, the pill strip a screen uses for its own groupings:
- * on the Stock on Hand tab the two strips stack, and two identical controls one
- * above the other read as a nesting accident. Tabs underline, groupings pill. */
-.page-tabs {
-  display: flex; gap: 2px; margin: 14px 0 4px;
-  border-bottom: 1px solid var(--hairline, #e7dfd3);
-}
+ * Above the title, drawn as buttons (ruled 1 Aug 2026): the tabs are where
+ * you can go, the title is where you are. Deliberately not `.seg`, the joined
+ * navy tray a screen uses for its own groupings - these are free-standing
+ * buttons, rust when active, so the two controls never read as one. */
+.page-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
 .page-tab {
-  padding: 9px 16px; font-size: 14px; font-weight: 600; color: var(--muted);
-  border-bottom: 2px solid transparent; margin-bottom: -1px;
-  transition: color .15s, border-color .15s;
+  padding: 7px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 10px;
+  transition: color .15s, background-color .15s, border-color .15s;
 }
-.page-tab:hover { color: var(--ink); }
-.page-tab.active { color: var(--rust); border-bottom-color: var(--rust); }
+.page-tab:hover { color: var(--ink); background: var(--inner); }
+.page-tab.active {
+  color: var(--rust); background: rgba(var(--rust-rgb), .12);
+  border-color: var(--rust); font-weight: 700;
+}

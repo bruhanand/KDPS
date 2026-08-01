@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronLeft, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -11,7 +11,7 @@ import { HostedPageContext } from "../components/PageHeader";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
 import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
-import { NotificationBell } from "./NotificationBell";
+import { AlertsButton, ApprovalsButton } from "./Notifications";
 import {
   headingOwning,
   isActiveFold,
@@ -24,8 +24,9 @@ import {
   testId,
 } from "./navConfig";
 import type { NavFoldDef, NavItem, NavRow, VisibleSection } from "./navConfig";
-import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
+import { contextKey, optionKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
+import { usePositionedPopover } from "./usePositionedPopover";
 import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
@@ -71,12 +72,13 @@ function UnitSwitcher() {
     return activeBrand === null;
   }
 
+  // The chip is a pin and a name, nothing else: no store code, no state pill,
+  // no lock. Locked just means no chevron and no menu (ruled 1 Aug 2026).
   if (model.locked) {
     return (
       <div className="switcher-btn locked" data-testid="store-switcher">
-        <Lock size={14} />
+        {model.mode === "brands" ? <Tag size={15} /> : <MapPin size={15} />}
         <span className="switcher-label">{model.label}</span>
-        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
       </div>
     );
   }
@@ -86,19 +88,18 @@ function UnitSwitcher() {
       <button className="switcher-btn" onClick={() => setOpen((o) => !o)} data-testid="store-switcher">
         {model.mode === "brands" ? <Tag size={15} /> : <MapPin size={15} />}
         <span className="switcher-label">{model.label}</span>
-        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
         <ChevronDown size={15} />
       </button>
       {open && (
         <>
           <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
-          <div className="dropdown" data-testid="store-switcher-menu">
+          <div className="dropdown dropdown-right" data-testid="store-switcher-menu">
             <div className="dropdown-head">
-              {model.mode === "brands" ? "Context · brand" : "Context · store & GSTIN"}
+              {model.mode === "brands" ? "Brand" : "Business unit"}
             </div>
             {model.options.map((option) => (
               <button
-                key={option.label}
+                key={optionKey(option)}
                 className={`dropdown-item ${isActive(option) ? "active" : ""}`}
                 onClick={() => pick(option)}
                 data-testid={
@@ -110,7 +111,7 @@ function UnitSwitcher() {
                 }
               >
                 <span>{option.label}</span>
-                <span className={`chip ${chipClass(option.chip)}`}>{option.chip}</span>
+                {option.hint && <span className="dropdown-hint">{option.hint}</span>}
               </button>
             ))}
           </div>
@@ -120,26 +121,61 @@ function UnitSwitcher() {
   );
 }
 
-function UserMenu() {
+/** The person, pinned to the foot of the sidebar card: the sidebar owns who
+ *  you are, the bar owns where you are (ruled 1 Aug 2026). Opens a panel with
+ *  the theme switch and Sign out - the same two actions the top-bar menu
+ *  offered, in a new place.
+ *
+ *  The panel is portaled to `document.body` and placed by measuring its
+ *  trigger, the same pattern as the rail flyout and for the same reason: the
+ *  card's scroller would clip a normal descendant, invisibly. Both go through
+ *  `usePositionedPopover`, which is that pattern written once.
+ *
+ *  No `useMobileNavExclusion` here, unlike every top-bar popup. That rule
+ *  exists because a top-bar popup and the drawer are rivals for the screen;
+ *  this panel opens *from inside* the drawer, so closing the drawer to show it
+ *  would take away the thing that was clicked. It stacks above the drawer
+ *  instead - see `.profile-panel`'s mobile `z-index` in AppShell.css. */
+function ProfileSection({ rail }: { rail: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  useMobileNavExclusion(open, setOpen);
+  const closePanel = useCallback(() => setOpen(false), []);
+  const { at: panelAt, triggerRef, popoverRef: panelMounted } = usePositionedPopover(
+    open ? "profile" : null,
+    closePanel,
+  );
+
   if (!user) return null;
+
   return (
-    <div className="usermenu">
-      <button className="user-btn" onClick={() => setOpen((o) => !o)} data-testid="user-menu">
+    <div className="sidebar-profile">
+      <button
+        type="button"
+        ref={triggerRef}
+        className="profile-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={rail ? user.full_name || user.username : undefined}
+        data-testid="user-menu"
+      >
         <span className="avatar">{initials(user.full_name, user.username).toUpperCase()}</span>
-        <span className="user-meta">
-          <span className="user-name">{user.full_name || user.username}</span>
-          <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
-        </span>
-        <ChevronDown size={15} />
+        {!rail && (
+          <span className="user-meta">
+            <span className="user-name">{user.full_name || user.username}</span>
+            <span className="user-role">{user.role?.name ?? (user.is_superuser ? "Administrator" : "")}</span>
+          </span>
+        )}
       </button>
-      {open && (
-        <>
-          <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
-          <div className="dropdown dropdown-right" data-testid="user-menu-dropdown">
+      {open &&
+        panelAt &&
+        createPortal(
+          <div
+            className="profile-panel"
+            ref={panelMounted}
+            style={{ top: panelAt.top, left: panelAt.left }}
+            data-testid="user-menu-dropdown"
+          >
             <div className="dropdown-head">{user.username} · {user.scope_label}</div>
             <div className="dropdown-theme" onClick={(e) => e.stopPropagation()}>
               <span>Theme</span>
@@ -156,9 +192,9 @@ function UserMenu() {
               <span>Sign out</span>
               <LogOut size={15} />
             </button>
-          </div>
-        </>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -227,15 +263,17 @@ function Sidebar({
   // ever set in rail mode - the mobile drawer and the expanded sidebar have no
   // flyout to close.
   const [openFlyout, setOpenFlyout] = useState<string | null>(null);
-  // Where the open flyout's popover renders, in viewport coordinates. `.sidebar`
-  // scrolls (`overflow-y: auto`), which per the CSS spec forces its `overflow-x`
-  // to compute as `auto` too - a popover positioned beside the rail would be
-  // clipped by that, invisibly, if it stayed a normal descendant. It is
-  // portaled to `document.body` instead and placed by measuring the trigger,
-  // so the sidebar's own scrolling can never clip it.
-  const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
-  const flyoutTriggerRef = useRef<HTMLButtonElement>(null);
-  const flyoutPopoverRef = useRef<HTMLDivElement | null>(null);
+  const closeFlyout = useCallback(() => setOpenFlyout(null), []);
+  // Portaled out of the card and placed against its trigger, because the
+  // card's own scroller would otherwise clip it invisibly - the whole of that
+  // reasoning, and the placement rules it implies, live in the hook. The
+  // section code is the open key, so moving straight from one section's flyout
+  // to the next re-places the popover rather than leaving it over the old row.
+  const {
+    at: flyoutAt,
+    triggerRef: flyoutTriggerRef,
+    popoverRef: popoverMounted,
+  } = usePositionedPopover(openFlyout, closeFlyout, FLYOUT_MAX_HEIGHT);
 
   // The mobile drawer must never inherit the rail, even when it is mounted
   // mid-collapse: this is the one expression that keeps AC4 true at both
@@ -248,79 +286,6 @@ function Sidebar({
     setRailCollapsed(next);
     setOpenFlyout(null);
   }
-
-  // Positioned from the trigger each time, not just once: `.sidebar` scrolls
-  // and the window resizes independently of React re-rendering, so a
-  // position measured only on open goes stale under the trigger. Clamped to
-  // the popover's own measured height so it never renders below the fold - a
-  // `position: fixed` box can't be scrolled into view. Before the popover has
-  // ever mounted (nothing to measure yet) `FLYOUT_MAX_HEIGHT` stands in as a
-  // conservative ceiling; `popoverMounted` below replaces it with the real
-  // height the moment the portal is in the DOM.
-  const place = useCallback(() => {
-    const trigger = flyoutTriggerRef.current;
-    if (!trigger) return;
-    const margin = 8;
-    const rect = trigger.getBoundingClientRect();
-    const height = flyoutPopoverRef.current?.offsetHeight ?? FLYOUT_MAX_HEIGHT;
-    const maxTop = window.innerHeight - height - margin;
-    const top = Math.max(margin, Math.min(rect.top, maxTop));
-    const left = rect.right + margin;
-    setFlyoutAt((current) => (current && current.top === top && current.left === left ? current : { top, left }));
-  }, []);
-
-  useEffect(() => {
-    if (!openFlyout) {
-      setFlyoutAt(null);
-      return;
-    }
-    place();
-    window.addEventListener("resize", place);
-    document.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      document.removeEventListener("scroll", place, true);
-    };
-  }, [openFlyout, place]);
-
-  // Fires once the popover actually mounts, so `place` can re-clamp against
-  // its real height instead of the `FLYOUT_MAX_HEIGHT` ceiling it had to
-  // guess with before anything existed to measure.
-  const popoverMounted = useCallback(
-    (node: HTMLDivElement | null) => {
-      flyoutPopoverRef.current = node;
-      if (node) place();
-    },
-    [place],
-  );
-
-  // Outside click and Esc close the open flyout - the same pattern every other
-  // popup in this shell uses (`NotificationBell`'s bell-wrap), checked against
-  // both halves of it: the trigger stayed in the sidebar, the popover is
-  // portaled out to `document.body`, and neither alone is "the flyout".
-  useEffect(() => {
-    if (!openFlyout) return;
-    const off = new AbortController();
-    const { signal } = off;
-    document.addEventListener(
-      "pointerdown",
-      (e) => {
-        const target = e.target as Node;
-        if (flyoutTriggerRef.current?.contains(target)) return;
-        if (flyoutPopoverRef.current?.contains(target)) return;
-        setOpenFlyout(null);
-      },
-      { signal },
-    );
-    document.addEventListener(
-      "keydown",
-      (e) => {
-        if (e.key === "Escape") setOpenFlyout(null);
-      },
-      { signal },
-    );
-    return () => off.abort();
-  }, [openFlyout]);
 
   // Landing inside a folded section unfolds it: the sidebar must always be able
   // to show where you are, however you got there (search, deep link, redirect).
@@ -616,6 +581,7 @@ function Sidebar({
               : renderStrip(row),
         )}
       </nav>
+      <ProfileSection rail={rail} />
     </aside>
   );
 }
@@ -724,32 +690,39 @@ export function AppShell({ children }: { children: ReactNode }) {
   // against a window that never scrolls.
   return (
     <div className="shell">
+      {/* The bar reads left to right as identity, then search, then what
+          wants you, then where you are (ruled 1 Aug 2026). The two side
+          groups flex equally from a zero basis, which is what keeps the
+          search box centred against the window rather than against whatever
+          the logo and the cluster happen to weigh. */}
       <header className="topbar">
-        <button
-          className="icon-btn menu-btn"
-          onClick={() => setMobileNavOpen((o) => !o)}
-          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-          data-testid="mobile-nav-toggle"
-        >
-          {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
-        {/* Two copies, one shown at a time: under 768px the full lockup would
-            crowd the search box out of the bar, so the ribbon mark stands in.
-            Both are decorative - the link carries the name. */}
-        <Link to="/" className="topbar-brand" aria-label="KDPS Operating System - home">
-          <KdpsLogo className="topbar-logo-full" height={30} title="" />
-          <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
-        </Link>
+        <div className="topbar-left">
+          <button
+            className="icon-btn menu-btn"
+            onClick={() => setMobileNavOpen((o) => !o)}
+            aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
+            data-testid="mobile-nav-toggle"
+          >
+            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+          {/* Two copies, one shown at a time: under 768px the full lockup would
+              crowd the search box out of the bar, so the ribbon mark stands in.
+              Both are decorative - the link carries the name. */}
+          <Link to="/" className="topbar-brand" aria-label="KDPS Operating System - home">
+            <KdpsLogo className="topbar-logo-full" height={30} title="" />
+            <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
+          </Link>
+        </div>
         {/* The drawer's overlay (z-index 55/60) sits above these popups
             (40/50) by design (see MobileNavContext) - so whichever of the
             drawer and a popup opens second closes the other, in either
             order, rather than fighting for a higher layer. */}
         <MobileNavContext.Provider value={mobileNavCtx}>
-          <UnitSwitcher />
           <GlobalSearch />
           <div className="topbar-right">
-            <NotificationBell />
-            <UserMenu />
+            <AlertsButton />
+            <ApprovalsButton />
+            <UnitSwitcher />
           </div>
         </MobileNavContext.Provider>
       </header>

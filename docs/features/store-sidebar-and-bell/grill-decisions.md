@@ -77,3 +77,44 @@ The menu line and page title become plain **"Receive"** (was "Receive (GRN)"); G
 ## Next phase
 
 Contract design is nearly empty for this slice (one field, one stamp endpoint, one history query param) - fold it into a light design note, then `/to-tickets`.
+
+---
+
+## Amendments - 1 August 2026
+
+The feature shipped, Anand used it, and the shell got a second look on the `logo-and-sidebar-revamp-v2` branch.
+Seven of the decisions above were changed by ruling on 1 August.
+They are recorded here rather than edited into the text above, so the 31 July record of what was decided - and the 1 August record of what replaced it - both survive.
+
+**1. The bell splits into two buttons** (amends decision 2).
+One bell carrying one combined count could not say which of its two feeds wanted you, and opening it to read approvals put the alerts list on screen as well.
+Alerts and Approvals are now two top-bar buttons, each with its own count, its own popup and its own title row where the tab strip used to be.
+Everything else in decision 2 stands: the counts still mean different things, "read" still lives server-side as one `alerts_seen_at` stamp, History still expands in place behind each live list, and the full screens still exist for deep links.
+The guarantee that reading approvals never marks alerts read is now structural rather than careful - `ApprovalsButton` has no stamping call to make.
+
+**2. Page tabs sit above the title, drawn as buttons** (amends the `SectionTabsProvider` row in `design.md`).
+The tabs are where you can go and the title is where you are, so the choice reads before its consequence.
+They are free-standing buttons, rust when active, deliberately not the joined navy `.seg` tray a screen uses for its own groupings - the two controls must never read as one.
+This moved one line in `PageHeader`, which fixes both call sites at once: the strip and the Inventory fold.
+
+**3. The profile moves to the foot of the sidebar card** (new).
+The sidebar owns who you are; the bar owns where you are.
+Avatar, name and role sit under the nav - the avatar alone in the rail - and open a panel with the theme switch and Sign out, the same two actions the old top-bar menu offered.
+
+**4. The rail toggle moves to the head of the card** (amends decision 7's "toggle button at the sidebar foot").
+The foot is now the profile's, and a control at the foot of a scrolling menu is a control you have to scroll to reach.
+Decision 7 otherwise stands unchanged.
+
+**5. The mobile drawer does change after all** (amends decision 7's "mobile keeps the existing hamburger drawer untouched").
+The profile lives in the sidebar now, and on a phone the sidebar *is* the drawer - so the drawer gains the profile row and the top bar loses the user menu.
+The rail itself is still desktop-only and the drawer still ignores rail state entirely, which is what that decision was actually protecting.
+
+**6. The top bar reads identity, search, what wants you, where you are** (new).
+Logo hard left; the search box centred against the window between two equal flexible halves; then Alerts, Approvals and the unit chip in the right corner.
+The chip carries the unit's name alone behind a pin - no store code, no state pill, no lock icon.
+The code moves into the menu as a hint beside each name, and the state a unit bills under is not the chrome's to say at all: it belongs to the page, where it matters.
+
+**7. `Home.tsx` gets the unit-context line** (amends decision 3's "`Home.tsx` / `StoreDashboard.tsx` are untouched by this feature").
+The dashboard names the unit whose numbers are on screen, as code and name - a report heading, not a chip - or "All business units" for the aggregate.
+That is one line, and it is the consequence of amendment 6: the state name came off the chrome, so the one screen that was reading the chip's old string had to be told what to say instead.
+Decision 3 itself is untouched - the Approvals and Alerts cards stay on the dashboard for every role, and the buttons remain a second path to the same two places.
