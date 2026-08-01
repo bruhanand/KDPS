@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -10,6 +10,7 @@ import { KdpsLogo } from "../components/KdpsLogo";
 import { HostedPageContext } from "../components/PageHeader";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { GlobalSearch } from "./GlobalSearch";
+import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
 import { NotificationBell } from "./NotificationBell";
 import {
   headingOwning,
@@ -51,6 +52,7 @@ function initials(name: string, fallback: string): string {
 function UnitSwitcher() {
   const { user, activeStore, activeBrand, setActiveStore, setActiveBrand } = useAuth();
   const [open, setOpen] = useState(false);
+  useMobileNavExclusion(open, setOpen);
   if (!user) return null;
   const model = switcherModel(user, activeStore, activeBrand);
 
@@ -122,6 +124,7 @@ function UserMenu() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  useMobileNavExclusion(open, setOpen);
   if (!user) return null;
   return (
     <div className="usermenu">
@@ -668,6 +671,11 @@ export function SectionTabsProvider({ children }: { children: ReactNode }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const { activeStore, activeBrand } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
+  const mobileNavCtx = useMemo(
+    () => ({ open: mobileNavOpen, close: closeMobileNav }),
+    [mobileNavOpen, closeMobileNav],
+  );
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
     return Number.isFinite(saved) && saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 258;
@@ -732,12 +740,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           <KdpsLogo className="topbar-logo-full" height={30} title="" />
           <KdpsLogo className="topbar-logo-mark" variant="mark" height={30} title="" />
         </Link>
-        <UnitSwitcher />
-        <GlobalSearch />
-        <div className="topbar-right">
-          <NotificationBell />
-          <UserMenu />
-        </div>
+        {/* The drawer's overlay (z-index 55/60) sits above these popups
+            (40/50) by design (see MobileNavContext) - so whichever of the
+            drawer and a popup opens second closes the other, in either
+            order, rather than fighting for a higher layer. */}
+        <MobileNavContext.Provider value={mobileNavCtx}>
+          <UnitSwitcher />
+          <GlobalSearch />
+          <div className="topbar-right">
+            <NotificationBell />
+            <UserMenu />
+          </div>
+        </MobileNavContext.Provider>
       </header>
       <div className="shell-body">
         <Sidebar

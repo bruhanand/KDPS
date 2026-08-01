@@ -40,6 +40,7 @@ import {
   unreadAlerts,
   type RangeKey,
 } from "./bellModel";
+import { useMobileNavExclusion } from "./MobileNavContext";
 
 /** Anyone who decides an approval says so here, so the bell can recount.
  *
@@ -327,6 +328,7 @@ export function NotificationBell() {
   const [seenAt, setSeenAt] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const { pathname } = useLocation();
+  useMobileNavExclusion(open, setOpen);
 
   const loadAlerts = useCallback(
     () =>

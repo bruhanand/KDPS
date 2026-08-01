@@ -37,10 +37,11 @@ not as a logo somebody has to squint at.
 
 The theming trick
 -----------------
-The four ribbon loops carry their literal brand hexes. The needle and the
-"KDPS LIFESTYLE" lettering are `currentColor`, so they take the colour of
-whatever they sit in: navy on the light shell, pale on dark, white on the navy
-login hero. One asset, no light/dark duplicates, no PNG to flash in.
+The four ribbon loops and the needle's black stroke carry their literal
+colours, matching the client's own artwork. Only the "KDPS LIFESTYLE"
+lettering is `currentColor`, so it takes the colour of whatever it sits in:
+navy on the light shell, pale on dark, white on the navy login hero. One
+asset, no light/dark duplicates, no PNG to flash in.
 
 Usage:  python3 code/scripts/trace-logo.py [--preview out.png]
 Needs:  Pillow (11.3 here). Deliberately no numpy / scikit-image / cairosvg -
@@ -85,6 +86,7 @@ MIN_AREA = 24.0
 
 PAPER = (250, 247, 242)  # --paper, the icons' background
 ICON_INK = (31, 45, 77)  # --navy, standing in for currentColor off-app
+NEEDLE_INK = "#333333"  # the source's own black stroke, sampled from its solid fill
 
 Point = tuple[float, float]
 Loop = list[Point]
@@ -107,7 +109,7 @@ CLASSES: tuple[ClassDef, ...] = (
     ClassDef("cyan", "#57b6dd", True),
     ClassDef("red", "#e44044", True),
     ClassDef("silver", "#b6b6b6", True),
-    ClassDef("needle", "currentColor", True),
+    ClassDef("needle", NEEDLE_INK, True),
     ClassDef("word", "currentColor", False),
 )
 
@@ -396,11 +398,12 @@ def write_component(traces: dict[str, list[Loop]]) -> None:
 
 /** The KDPS Lifestyle logo, as vector art traced from the client's own file.
  *
- *  The four ribbon loops keep their brand hexes. The needle and the "KDPS
- *  LIFESTYLE" lettering are `currentColor`, so the lockup takes the colour of
- *  whatever it sits in - navy on the light shell, pale in dark mode, white on
- *  the navy login hero. That is what makes one asset enough: the source PNG's
- *  lettering is pure white and would be invisible on our cream paper.
+ *  The four ribbon loops and the needle's black stroke keep their literal
+ *  colours. Only the "KDPS LIFESTYLE" lettering is `currentColor`, so the
+ *  lockup takes the colour of whatever it sits in - navy on the light shell,
+ *  pale in dark mode, white on the navy login hero. That is what makes one
+ *  asset enough: the source PNG's lettering is pure white and would be
+ *  invisible on our cream paper.
  *
  *  Sized like a `lucide-react` icon: give it a height and the width follows the
  *  artwork's own ratio. CSS wins over both, so a caller can set `width` and
@@ -458,11 +461,12 @@ export function KdpsLogo({{
 
 
 def write_mark_svg(traces: dict[str, list[Loop]]) -> None:
-    """The tab icon. `currentColor` has nothing to inherit from in a file loaded
-    as an image, so the root element carries an explicit navy for it to take."""
+    """The tab icon. The mark's classes (ribbons plus the needle) are all
+    literal colours - the lettering that themes with `currentColor` is not
+    part of the mark - so this file needs no colour to inherit."""
     MARK_SVG.write_text(
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87 87" width="87" height="87" '
-        f'color="#1f2d4d"><g fill-rule="evenodd">{svg_paths(traces, mark_only=True)}</g></svg>\n'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 87 87" width="87" height="87">'
+        f'<g fill-rule="evenodd">{svg_paths(traces, mark_only=True)}</g></svg>\n'
     )
 
 

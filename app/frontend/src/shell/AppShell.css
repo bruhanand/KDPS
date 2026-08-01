@@ -373,12 +373,14 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   }
 }
 
-/* Below this the bar cannot carry both the mark and a usable search box, and
-   search is the store person's most frequent action (GlobalSearch.css says the
-   same). The mark gives way - on a phone the app is opened from its own
-   installed icon, which is this same mark. */
+/* Below this the bar still cannot carry the mark, the switcher and a usable
+   search box at full size. The mark stays - the plan requires it down to
+   375px - so the switcher gives way instead: its label is named again on the
+   page's own header, while what you are typing into search is not shown
+   anywhere else. */
 @media (max-width: 480px) {
-  .topbar-brand { display: none; }
+  .switcher-label { display: none; }
+  .search-wrap { min-width: 64px; }
 }
 
 /* Printing the transfer PT (#72) prints the document, not the application
