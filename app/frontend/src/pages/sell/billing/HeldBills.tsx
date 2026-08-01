@@ -1,8 +1,8 @@
 import { Clock } from "lucide-react";
 
-import { Money } from "../../lib/format";
-import { describeHold, localDay } from "../../till/held";
-import type { HeldBill } from "../../till/db";
+import { Money } from "../../../lib/format";
+import { describeHold, localDay } from "../../../till/held";
+import type { HeldBill } from "../../../till/db";
 
 // The parked carts, as a list somebody standing at a counter can act on (#185).
 //
