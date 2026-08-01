@@ -38,7 +38,9 @@ One data migration after the table lands: seed from existing bills -
 
 ```
 one row per distinct non-blank customer_mobile in sell_sale,
-name = the customer_name of the newest bill carrying that mobile,
+name = the customer_name of the newest bill carrying that mobile whose name is
+  non-blank (a blank name never overwrites - same "latest non-blank wins" rule
+  as the live upsert, so the two paths cannot drift; AC1),
 gstin = the buyer_gstin of the newest B2B bill carrying it, else ''
 ```
 
