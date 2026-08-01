@@ -401,8 +401,12 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .search-wrap { min-width: 76px; }
   .dropdown { position: fixed; left: 12px; right: 12px; top: calc(var(--topbar-h) + 4px); min-width: 0; }
   /* Beside a drawer that is already most of the screen there is no "beside":
-     the panel takes the viewport's width instead of the measured spot. */
-  .profile-panel { left: 12px !important; right: 12px; min-width: 0; }
+     the panel takes the viewport's width instead of the measured spot.
+     And it has to sit *above* the drawer (60), unlike every other popup in
+     this shell: the others are the drawer's rivals and give way to it
+     (MobileNavContext), but this one opens from a button inside the drawer, so
+     at the shared 50 the drawer it belongs to covers all but a sliver of it. */
+  .profile-panel { left: 12px !important; right: 12px; min-width: 0; z-index: 65; }
   /* A 380px popup anchored to a bell near the right edge would hang off a
      phone. On mobile it is a full-width sheet under the top bar instead -
      CSS only; the component is the same one (#226). */
@@ -420,6 +424,17 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 @media (max-width: 480px) {
   .switcher-label { display: none; }
   .search-wrap { min-width: 64px; }
+}
+
+/* ---------- reduced motion ----------
+   The shell animates three things that move a large part of the screen: the
+   card's width between rail and open, the drawer sliding in, and the chevrons
+   that turn with them. Someone who has asked their machine for less motion
+   gets the end state directly - the sidebar still collapses, the drawer still
+   opens, they simply arrive rather than travel. The colour and background
+   fades elsewhere are left alone: they move nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .nav-chev, .rail-chev { transition: none; }
 }
 
 /* Printing the transfer PT (#72) prints the document, not the application

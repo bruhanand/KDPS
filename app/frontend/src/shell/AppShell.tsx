@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -24,8 +24,9 @@ import {
   testId,
 } from "./navConfig";
 import type { NavFoldDef, NavItem, NavRow, VisibleSection } from "./navConfig";
-import { contextKey, switcherModel } from "./unitSwitcher";
+import { contextKey, optionKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
+import { usePositionedPopover } from "./usePositionedPopover";
 import "./AppShell.css";
 
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
@@ -98,7 +99,7 @@ function UnitSwitcher() {
             </div>
             {model.options.map((option) => (
               <button
-                key={option.label}
+                key={optionKey(option)}
                 className={`dropdown-item ${isActive(option) ? "active" : ""}`}
                 onClick={() => pick(option)}
                 data-testid={
@@ -126,77 +127,24 @@ function UnitSwitcher() {
  *  offered, in a new place.
  *
  *  The panel is portaled to `document.body` and placed by measuring its
- *  trigger, the same pattern as the rail flyout above and for the same
- *  reason: the card's scroller would clip a normal descendant, invisibly,
- *  exactly as it did for the flyout. */
+ *  trigger, the same pattern as the rail flyout and for the same reason: the
+ *  card's scroller would clip a normal descendant, invisibly. Both go through
+ *  `usePositionedPopover`, which is that pattern written once.
+ *
+ *  No `useMobileNavExclusion` here, unlike every top-bar popup. That rule
+ *  exists because a top-bar popup and the drawer are rivals for the screen;
+ *  this panel opens *from inside* the drawer, so closing the drawer to show it
+ *  would take away the thing that was clicked. It stacks above the drawer
+ *  instead - see `.profile-panel`'s mobile `z-index` in AppShell.css. */
 function ProfileSection({ rail }: { rail: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [panelAt, setPanelAt] = useState<{ top: number; left: number } | null>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  useMobileNavExclusion(open, setOpen);
-
-  // Re-placed on scroll and resize, clamped against the panel's real height
-  // once it has mounted - the flyout's own rules (see `place` above).
-  const place = useCallback(() => {
-    const trigger = triggerRef.current;
-    if (!trigger) return;
-    const margin = 8;
-    const rect = trigger.getBoundingClientRect();
-    const height = panelRef.current?.offsetHeight ?? 0;
-    const maxTop = window.innerHeight - height - margin;
-    const top = Math.max(margin, Math.min(rect.top, maxTop));
-    const left = rect.right + margin;
-    setPanelAt((current) => (current && current.top === top && current.left === left ? current : { top, left }));
-  }, []);
-
-  useEffect(() => {
-    if (!open) {
-      setPanelAt(null);
-      return;
-    }
-    place();
-    window.addEventListener("resize", place);
-    document.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      document.removeEventListener("scroll", place, true);
-    };
-  }, [open, place]);
-
-  const panelMounted = useCallback(
-    (node: HTMLDivElement | null) => {
-      panelRef.current = node;
-      if (node) place();
-    },
-    [place],
+  const closePanel = useCallback(() => setOpen(false), []);
+  const { at: panelAt, triggerRef, popoverRef: panelMounted } = usePositionedPopover(
+    open ? "profile" : null,
+    closePanel,
   );
-
-  useEffect(() => {
-    if (!open) return;
-    const off = new AbortController();
-    const { signal } = off;
-    document.addEventListener(
-      "pointerdown",
-      (e) => {
-        const target = e.target as Node;
-        if (triggerRef.current?.contains(target)) return;
-        if (panelRef.current?.contains(target)) return;
-        setOpen(false);
-      },
-      { signal },
-    );
-    document.addEventListener(
-      "keydown",
-      (e) => {
-        if (e.key === "Escape") setOpen(false);
-      },
-      { signal },
-    );
-    return () => off.abort();
-  }, [open]);
 
   if (!user) return null;
 
@@ -315,15 +263,17 @@ function Sidebar({
   // ever set in rail mode - the mobile drawer and the expanded sidebar have no
   // flyout to close.
   const [openFlyout, setOpenFlyout] = useState<string | null>(null);
-  // Where the open flyout's popover renders, in viewport coordinates. The
-  // card's `.nav` scrolls (`overflow-y: auto`), which per the CSS spec forces
-  // its `overflow-x` to compute as `auto` too - a popover positioned beside
-  // the rail would be clipped by that, invisibly, if it stayed a normal
-  // descendant. It is portaled to `document.body` instead and placed by
-  // measuring the trigger, so the nav's own scrolling can never clip it.
-  const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
-  const flyoutTriggerRef = useRef<HTMLButtonElement>(null);
-  const flyoutPopoverRef = useRef<HTMLDivElement | null>(null);
+  const closeFlyout = useCallback(() => setOpenFlyout(null), []);
+  // Portaled out of the card and placed against its trigger, because the
+  // card's own scroller would otherwise clip it invisibly - the whole of that
+  // reasoning, and the placement rules it implies, live in the hook. The
+  // section code is the open key, so moving straight from one section's flyout
+  // to the next re-places the popover rather than leaving it over the old row.
+  const {
+    at: flyoutAt,
+    triggerRef: flyoutTriggerRef,
+    popoverRef: popoverMounted,
+  } = usePositionedPopover(openFlyout, closeFlyout, FLYOUT_MAX_HEIGHT);
 
   // The mobile drawer must never inherit the rail, even when it is mounted
   // mid-collapse: this is the one expression that keeps AC4 true at both
@@ -336,79 +286,6 @@ function Sidebar({
     setRailCollapsed(next);
     setOpenFlyout(null);
   }
-
-  // Positioned from the trigger each time, not just once: `.sidebar` scrolls
-  // and the window resizes independently of React re-rendering, so a
-  // position measured only on open goes stale under the trigger. Clamped to
-  // the popover's own measured height so it never renders below the fold - a
-  // `position: fixed` box can't be scrolled into view. Before the popover has
-  // ever mounted (nothing to measure yet) `FLYOUT_MAX_HEIGHT` stands in as a
-  // conservative ceiling; `popoverMounted` below replaces it with the real
-  // height the moment the portal is in the DOM.
-  const place = useCallback(() => {
-    const trigger = flyoutTriggerRef.current;
-    if (!trigger) return;
-    const margin = 8;
-    const rect = trigger.getBoundingClientRect();
-    const height = flyoutPopoverRef.current?.offsetHeight ?? FLYOUT_MAX_HEIGHT;
-    const maxTop = window.innerHeight - height - margin;
-    const top = Math.max(margin, Math.min(rect.top, maxTop));
-    const left = rect.right + margin;
-    setFlyoutAt((current) => (current && current.top === top && current.left === left ? current : { top, left }));
-  }, []);
-
-  useEffect(() => {
-    if (!openFlyout) {
-      setFlyoutAt(null);
-      return;
-    }
-    place();
-    window.addEventListener("resize", place);
-    document.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      document.removeEventListener("scroll", place, true);
-    };
-  }, [openFlyout, place]);
-
-  // Fires once the popover actually mounts, so `place` can re-clamp against
-  // its real height instead of the `FLYOUT_MAX_HEIGHT` ceiling it had to
-  // guess with before anything existed to measure.
-  const popoverMounted = useCallback(
-    (node: HTMLDivElement | null) => {
-      flyoutPopoverRef.current = node;
-      if (node) place();
-    },
-    [place],
-  );
-
-  // Outside click and Esc close the open flyout - the same pattern every other
-  // popup in this shell uses (`NotificationBell`'s bell-wrap), checked against
-  // both halves of it: the trigger stayed in the sidebar, the popover is
-  // portaled out to `document.body`, and neither alone is "the flyout".
-  useEffect(() => {
-    if (!openFlyout) return;
-    const off = new AbortController();
-    const { signal } = off;
-    document.addEventListener(
-      "pointerdown",
-      (e) => {
-        const target = e.target as Node;
-        if (flyoutTriggerRef.current?.contains(target)) return;
-        if (flyoutPopoverRef.current?.contains(target)) return;
-        setOpenFlyout(null);
-      },
-      { signal },
-    );
-    document.addEventListener(
-      "keydown",
-      (e) => {
-        if (e.key === "Escape") setOpenFlyout(null);
-      },
-      { signal },
-    );
-    return () => off.abort();
-  }, [openFlyout]);
 
   // Landing inside a folded section unfolds it: the sidebar must always be able
   // to show where you are, however you got there (search, deep link, redirect).
