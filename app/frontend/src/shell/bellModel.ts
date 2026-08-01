@@ -1,9 +1,9 @@
 // The bell's arithmetic, with no popup around it (#226).
 //
-// Three rules, each of which the badge and the tab beneath it must agree on.
-// They live here rather than inside `NotificationBell` because the badge is
-// read at a glance and trusted: a count computed in two places is a count that
-// eventually says two things at once.
+// Three rules, each of which a button's badge and the feed beneath it must
+// agree on. They live here rather than inside `Notifications` because the badge
+// is read at a glance and trusted: a count computed in two places is a count
+// that eventually says two things at once.
 
 import { tillToday } from "../till/pricing";
 import type { AlertT } from "../components/alert";

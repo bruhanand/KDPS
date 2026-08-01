@@ -54,13 +54,13 @@ export function announceApprovalsChanged() {
   window.dispatchEvent(new Event(APPROVALS_CHANGED));
 }
 
-/** What a fetch said. `null` on either feed means the request failed and the tab
- *  shows a quiet line rather than an empty list, which would read as "all
+/** What a fetch said. `null` on either feed means the request failed and the
+ *  popup shows a quiet line rather than an empty list, which would read as "all
  *  clear" - the most dangerous thing an alerts panel can say wrongly. */
 type Feed<T> = T[] | null;
 
 // ---------------------------------------------------------------------------
-// History, shared by both tabs
+// History, shared by both feeds
 // ---------------------------------------------------------------------------
 
 function RangePicker({ value, onChange }: { value: RangeKey; onChange: (r: RangeKey) => void }) {
@@ -150,10 +150,10 @@ function HistorySection<T>({
 }
 
 // ---------------------------------------------------------------------------
-// The two tabs
+// The two feeds
 // ---------------------------------------------------------------------------
 
-function AlertsTab({ alerts, onNavigate }: { alerts: Feed<AlertT>; onNavigate: () => void }) {
+function AlertsFeed({ alerts, onNavigate }: { alerts: Feed<AlertT>; onNavigate: () => void }) {
   const fetchHistory = useCallback(
     (since: string) =>
       api.get("/alerts/history", { params: { since } }).then((r) => r.data as AlertT[]),
@@ -225,7 +225,7 @@ function AlertsTab({ alerts, onNavigate }: { alerts: Feed<AlertT>; onNavigate: (
   );
 }
 
-function ApprovalsTab({
+function ApprovalsFeed({
   approvals,
   onNavigate,
 }: {
@@ -486,7 +486,7 @@ export function AlertsButton() {
       testId="alerts-button"
       onOpen={openAndStamp}
     >
-      {(onNavigate) => <AlertsTab alerts={alerts} onNavigate={onNavigate} />}
+      {(onNavigate) => <AlertsFeed alerts={alerts} onNavigate={onNavigate} />}
     </NoticeButton>
   );
 }
@@ -527,7 +527,7 @@ export function ApprovalsButton() {
       count={waiting}
       testId="approvals-button"
     >
-      {(onNavigate) => <ApprovalsTab approvals={approvals} onNavigate={onNavigate} />}
+      {(onNavigate) => <ApprovalsFeed approvals={approvals} onNavigate={onNavigate} />}
     </NoticeButton>
   );
 }
