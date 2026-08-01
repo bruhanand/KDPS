@@ -12,7 +12,8 @@ import { describe, expect, it } from "vitest";
 
 import type { TillSnapshot } from "../../till/engine";
 
-import { outstandingPaperSeq } from "./Billing";
+import { outstandingPaperSeq, pickBillAlert } from "./Billing";
+import type { BillAlertFlags } from "./Billing";
 
 /** Only the four fields this rule reads; the snapshot has two dozen. */
 function counter(over: Partial<TillSnapshot> = {}): TillSnapshot {
@@ -89,3 +90,77 @@ describe("which printed bill this screen is entering", () => {
     ).toBe(null);
   });
 });
+
+// The frame's alert strip (#243): every banner this screen can raise used to
+// stack, each pushing the totals further down the page. The frame gives them
+// one line, so something has to decide which one wins when several are true
+// at once - this is that rule, tested the way `outstandingPaperSeq` is: the
+// layout itself is browser QA, but which banner is chosen is not a layout
+// question at all.
+
+/** Every flag false - the caller sets only the ones under test. */
+function noAlerts(over: Partial<BillAlertFlags> = {}): BillAlertFlags {
+  return {
+    blocked: false,
+    paper: false,
+    loading: false,
+    noPriceList: false,
+    printProblem: false,
+    note: false,
+    gift: false,
+    holdsDue: false,
+    ...over,
+  };
+}
+
+describe("which one banner the counter shows", () => {
+  it("shows nothing when nothing is true", () => {
+    expect(pickBillAlert(noAlerts())).toBe(null);
+  });
+
+  it("shows the single true reason", () => {
+    expect(pickBillAlert(noAlerts({ holdsDue: true }))).toBe("holds-due");
+    expect(pickBillAlert(noAlerts({ gift: true }))).toBe("gift");
+    expect(pickBillAlert(noAlerts({ note: true }))).toBe("note");
+  });
+
+  it("a blocked counter outranks everything else, print problem included", () => {
+    // Rule 5: collapsing to one line must not soften the second-window hard
+    // block - it wins outright rather than taking turns with a lesser alert.
+    expect(
+      pickBillAlert(
+        noAlerts({ blocked: true, paper: true, printProblem: true, holdsDue: true }),
+      ),
+    ).toBe("blocked");
+  });
+
+  it("keys in from paper outranks a stale price list or a note", () => {
+    expect(pickBillAlert(noAlerts({ paper: true, noPriceList: true, note: true }))).toBe(
+      "paper",
+    );
+  });
+
+  it("follows the counter's own stacking order end to end", () => {
+    // blocked > paper > loading > no price list > print problem > note > gift
+    // > holds due - the order these banners used to stack in, top to bottom.
+    const order: (keyof BillAlertFlags)[] = [
+      "blocked",
+      "paper",
+      "loading",
+      "noPriceList",
+      "printProblem",
+      "note",
+      "gift",
+      "holdsDue",
+    ];
+    for (let i = 0; i < order.length; i++) {
+      const flags = noAlerts();
+      for (let j = i; j < order.length; j++) flags[order[j]] = true;
+      expect(pickBillAlert(flags), order[i]).toBe(kebabOf(order[i]));
+    }
+  });
+});
+
+function kebabOf(key: keyof BillAlertFlags): string {
+  return key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}

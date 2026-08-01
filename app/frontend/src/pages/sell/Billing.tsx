@@ -864,6 +864,57 @@ export function outstandingPaperSeq(
   return missing.includes(asked) ? asked : null;
 }
 
+/** Which one of the counter's eight possible banners to show (#243).
+ *
+ *  Every one of these used to be its own paragraph, stacking - a bill with a
+ *  gift earned, a note from an exchange, and holds waiting review could carry
+ *  three banners at once, each pushing the totals further down the page. The
+ *  frame gives them one line, so something has to decide which one wins when
+ *  several are true at once. */
+export type BillAlertKind =
+  | "blocked"
+  | "paper"
+  | "loading"
+  | "no-price-list"
+  | "print-problem"
+  | "note"
+  | "gift"
+  | "holds-due";
+
+export interface BillAlertFlags {
+  blocked: boolean;
+  paper: boolean;
+  loading: boolean;
+  noPriceList: boolean;
+  printProblem: boolean;
+  note: boolean;
+  gift: boolean;
+  holdsDue: boolean;
+}
+
+/**
+ * Precedence, not a boolean OR: the order these banners used to stack in, top
+ * to bottom, becomes the order they take turns in now that only one may show.
+ *
+ * `blocked` is first and wins outright over everything, including a print
+ * problem that is also true - Rule 5 says collapsing alerts to one line must
+ * not soften the second-window hard block, so it never shares this line with
+ * a lesser alert. It does not render *from* this line at all, in fact: the
+ * blocked counter takes over the whole work area instead (see `Counter`),
+ * which is the stronger treatment the rule asks for.
+ */
+export function pickBillAlert(flags: BillAlertFlags): BillAlertKind | null {
+  if (flags.blocked) return "blocked";
+  if (flags.paper) return "paper";
+  if (flags.loading) return "loading";
+  if (flags.noPriceList) return "no-price-list";
+  if (flags.printProblem) return "print-problem";
+  if (flags.note) return "note";
+  if (flags.gift) return "gift";
+  if (flags.holdsDue) return "holds-due";
+  return null;
+}
+
 /** Now, in the shape `<input type="datetime-local">` wants - which is local
  *  time with no zone on it, not an ISO instant. The till's own clock, because a
  *  bill's date is the store's day (see `tillToday`). */
