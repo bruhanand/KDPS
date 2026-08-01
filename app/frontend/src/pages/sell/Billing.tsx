@@ -623,6 +623,11 @@ function Counter({ storeName }: { storeName?: string }) {
                   className="btn"
                   data-testid="bill-holds-open"
                   aria-expanded={showHolds}
+                  // `HeldBills` lives inside `.bill-lines` (#243), which the
+                  // blocked-counter takeover replaces entirely - toggling this
+                  // while blocked would flip the label with nothing to show
+                  // for it, so it is disabled along with the actions below.
+                  disabled={Boolean(till?.blocked)}
                   onClick={() => setShowHolds((open) => !open)}
                 >
                   {showHolds ? "Hide held bills" : `Held bills (${holds.length})`}
@@ -631,7 +636,7 @@ function Counter({ storeName }: { storeName?: string }) {
                   type="button"
                   className="btn"
                   data-testid="bill-hold"
-                  disabled={!cart.lines.length || saving}
+                  disabled={Boolean(till?.blocked) || !cart.lines.length || saving}
                   onClick={() => void holdBill()}
                 >
                   <PauseCircle size={15} />
@@ -641,7 +646,7 @@ function Counter({ storeName }: { storeName?: string }) {
                   type="button"
                   className="btn"
                   data-testid="bill-new"
-                  disabled={saving}
+                  disabled={Boolean(till?.blocked) || saving}
                   onClick={newBill}
                 >
                   New bill
