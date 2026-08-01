@@ -61,14 +61,20 @@ from outbound.models import (
     ReturnType,
     StockAdjustment,
     StockAdjustmentLine,
+    StockRequest,
+    StockRequestLine,
+    StockRequestSource,
     StoreTransfer,
     TransferReason,
     TransferType,
     TransportMode,
     VFlip,
     VFlipLine,
+    WriteOff,
+    WriteOffLine,
 )
 from outbound.posting import (
+    fulfil_stock_request,
     mark_damaged,
     post_adjustment,
     post_gap_closure,
@@ -76,6 +82,7 @@ from outbound.posting import (
     post_transfer_dispatch,
     post_transfer_receipt,
     post_vflip,
+    post_writeoff,
     raise_gap_closure,
     resolve_line_identity,
 )
@@ -652,6 +659,8 @@ class Command(BaseCommand):
                     "superadmin",
                     "owner",
                     "ops1",
+                    "accounts1",
+                    "brand1",
                     "wh.patna",
                     "wh.ranchi",
                     "deo.manager",
@@ -677,7 +686,10 @@ class Command(BaseCommand):
         self._seed_adjustments()
         self._seed_vflip()
         self._seed_stocktakes()
+        self._seed_stock_requests()
+        self._seed_writeoffs()
         self._seed_money()
+        call_command("check_alerts")
 
         self.stdout.write(self.style.SUCCESS("\nDemo data seeded across all modules."))
         self.stdout.write("  Verify: GET /api/stockledger/on-hand, /api/finledger/health")
@@ -835,7 +847,10 @@ class Command(BaseCommand):
         )
         for i, row in enumerate(rows, start=1):
             PtRow.objects.create(pt_file=pt, line_no=i, data=row)
-        return post_pt_inward(pt, user, booking=booking)
+        # PT value-posting is a head-office-only act (Accounts or Owner) — the
+        # warehouse only ever receives and forwards the file (segregation-of-
+        # duties floor, core.posting.assert_pt_or_vflip_actor).
+        return post_pt_inward(pt, self.users["accounts1"], booking=booking)
 
     def _seed_inbound(self) -> None:
         wh_user = self.users["wh.ranchi"]
@@ -1086,6 +1101,10 @@ class Command(BaseCommand):
             created_by=ops1,
         )
         self._rtv_line(rtv1, deo, "PE-CHK-BLU-42", 2)
+        request_document_approval(rtv1, requested_by=ops1)
+        approval = approval_for(rtv1)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=self.users["brand1"], action="approve")
         post_rtv(rtv1, ops1)
         self.stdout.write(f"  RTV {rtv1.doc_number} @ DEO: defective, posted")
 
@@ -1102,6 +1121,10 @@ class Command(BaseCommand):
             created_by=ops1,
         )
         self._rtv_line(rtv2, banka, "BB-TROU-GRY-34", 3)
+        request_document_approval(rtv2, requested_by=ops1)
+        approval = approval_for(rtv2)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=self.users["owner"], action="approve")
         post_rtv(rtv2, ops1)
         self.stdout.write(f"  RTV {rtv2.doc_number} @ BANKA: seasonal, posted")
 
@@ -1115,7 +1138,8 @@ class Command(BaseCommand):
             created_by=ops1,
         )
         self._rtv_line(rtv3, hzb, "SPY-JEAN-GRY-32", 2)
-        self.stdout.write("  RTV draft @ HZB: unposted")
+        request_document_approval(rtv3, requested_by=ops1)
+        self.stdout.write("  RTV draft @ HZB: awaiting approval, unposted")
 
     # ------------------------------------------------------------------
     # 5. adjustments
@@ -1231,7 +1255,158 @@ class Command(BaseCommand):
         self.stdout.write("  Stocktake @ DUM: Jockey count in progress")
 
     # ------------------------------------------------------------------
-    # 8. money
+    # 8. stock requests (the cross-store search's ask, #74/#175)
+    # ------------------------------------------------------------------
+    def _stock_request(
+        self,
+        requesting: Store,
+        fulfilling: Store,
+        lines: list[tuple[str, int]],
+        user: User,
+        source: str = StockRequestSource.MANUAL,
+    ) -> StockRequest:
+        req = StockRequest.objects.create(
+            requesting_store=requesting,
+            fulfilling_store=fulfilling,
+            source=source,
+            created_by=user,
+        )
+        for sku, qty in lines:
+            on_hand = StockOnHand.objects.filter(store=fulfilling, sku_code=sku).first()
+            StockRequestLine.objects.create(
+                request=req,
+                sku_code=sku,
+                design=getattr(on_hand, "design", "") or "",
+                color=getattr(on_hand, "color", "") or "",
+                size=getattr(on_hand, "size", "") or "",
+                brand=getattr(on_hand, "brand", "") or "",
+                season=getattr(on_hand, "season", "") or "",
+                item=getattr(on_hand, "item", "") or "",
+                hsn=getattr(on_hand, "hsn", "") or "",
+                qty=qty,
+            )
+        request_document_approval(req, requested_by=user)
+        return req
+
+    def _seed_stock_requests(self) -> None:
+        ops1 = self.users["ops1"]
+        wh = self.stores["RAN-WH"]
+
+        # SR1: DUM asking the warehouse — still waiting on the approvals inbox.
+        sr1 = self._stock_request(
+            self.stores["DUM"],
+            wh,
+            [("PE-DNM-IND-32", 4)],
+            self.users["dum.manager"],
+            source=StockRequestSource.CROSS_STORE_SEARCH,
+        )
+        self.stdout.write(f"  Stock request {sr1.doc_number or '(draft)'}: DUM ← RAN-WH, pending")
+
+        # SR2: HZB asking the warehouse — approved, nothing fulfilled yet.
+        sr2 = self._stock_request(
+            self.stores["HZB"],
+            wh,
+            [("LP-TEE-NVY-M", 3)],
+            self.users["hzb.manager"],
+        )
+        approval = approval_for(sr2)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=ops1, action="approve")
+        self.stdout.write(f"  Stock request {sr2.doc_number}: HZB ← RAN-WH, approved")
+
+        # SR3: BKR asking the warehouse — declined by the Operations Head.
+        sr3 = self._stock_request(
+            self.stores["BKR"],
+            wh,
+            [("BB-SHRT-WHT-40", 3)],
+            self.users["bkr.manager"],
+        )
+        approval = approval_for(sr3)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(
+                approval,
+                actor=ops1,
+                action="reject",
+                reason="Warehouse cover for BB-SHRT-WHT-40 is thin — holding it back this week.",
+            )
+        self.stdout.write(f"  Stock request {sr3.doc_number}: BKR ← RAN-WH, declined")
+
+        # SR4: DUM asking the warehouse again — approved and a fulfilling
+        # transfer drafted (still awaiting the Operations Head's own gate, #137).
+        sr4 = self._stock_request(
+            self.stores["DUM"],
+            wh,
+            [("LP-CHN-KHA-34", 4)],
+            self.users["dum.manager"],
+            source=StockRequestSource.CROSS_STORE_SEARCH,
+        )
+        approval = approval_for(sr4)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=ops1, action="approve")
+        line = sr4.lines.first()
+        fulfil_stock_request(
+            sr4, [{"line_id": line.id, "qty": line.qty}], user=self.users["wh.ranchi"]
+        )
+        self.stdout.write(f"  Stock request {sr4.doc_number}: DUM ← RAN-WH, being fulfilled")
+
+        # SR5: BANKA asking the warehouse — approved, fulfilled and received in
+        # full, so the ask closes itself.
+        sr5 = self._stock_request(
+            self.stores["BANKA"],
+            wh,
+            [("PE-PLO-GRN-L", 3)],
+            self.users["banka.manager"],
+        )
+        approval = approval_for(sr5)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=ops1, action="approve")
+        line = sr5.lines.first()
+        transfer = fulfil_stock_request(
+            sr5, [{"line_id": line.id, "qty": line.qty}], user=self.users["wh.ranchi"]
+        )
+        t_approval = approval_for(transfer)
+        if t_approval is not None and t_approval.status == ApprovalStatus.PENDING:
+            decide(t_approval, actor=ops1, action="approve")
+        post_transfer_dispatch(transfer, {"PE-PLO-GRN-L": line.qty}, self.users["wh.ranchi"])
+        post_transfer_receipt(transfer, {"PE-PLO-GRN-L": line.qty}, self.users["banka.manager"])
+        self.stdout.write(f"  Stock request {sr5.doc_number}: BANKA ← RAN-WH, closed")
+
+    # ------------------------------------------------------------------
+    # 9. write-offs (dead stock exit)
+    # ------------------------------------------------------------------
+    def _seed_writeoffs(self) -> None:
+        ops1 = self.users["ops1"]
+
+        # WRO1: DEO — approved and posted, dead stock leaves the books.
+        deo = self.stores["DEO"]
+        wro1 = WriteOff.objects.create(
+            store=deo,
+            reason="Two blazers past a full season with no movement — write off as dead stock.",
+            created_by=self.users["deo.manager"],
+        )
+        identity = resolve_line_identity(deo.id, "VH-BLZR-GRY-40")
+        WriteOffLine.objects.create(writeoff=wro1, sku_code="VH-BLZR-GRY-40", qty=1, **identity)
+        request_document_approval(wro1, requested_by=self.users["deo.manager"])
+        approval = approval_for(wro1)
+        if approval is not None and approval.status == ApprovalStatus.PENDING:
+            decide(approval, actor=self.users["owner"], action="approve")
+        post_writeoff(wro1, user=ops1)
+        self.stdout.write(f"  Write-off {wro1.doc_number} @ DEO: posted")
+
+        # WRO2: BKR — sitting in the approvals inbox.
+        bkr = self.stores["BKR"]
+        wro2 = WriteOff.objects.create(
+            store=bkr,
+            reason="Jacket zip runner beyond repair — refused by the customer twice.",
+            created_by=self.users["bkr.manager"],
+        )
+        identity = resolve_line_identity(bkr.id, "KL-JKT-BLK-L")
+        WriteOffLine.objects.create(writeoff=wro2, sku_code="KL-JKT-BLK-L", qty=1, **identity)
+        request_document_approval(wro2, requested_by=self.users["bkr.manager"])
+        self.stdout.write("  Write-off @ BKR: awaiting approval")
+
+    # ------------------------------------------------------------------
+    # 11. money
     # ------------------------------------------------------------------
     def _seed_money(self) -> None:
         acct = self.users["ops1"]
