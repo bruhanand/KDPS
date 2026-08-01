@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -13,6 +14,7 @@ import {
   headingOwning,
   isActiveFold,
   isActiveItem,
+  isOneLineRow,
   itemPath,
   sectionTabsFor,
   sidebarRows,
@@ -27,8 +29,10 @@ import "./AppShell.css";
 const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
 const NAV_ORDER_KEY = "kdps-nav-item-order";
 const NAV_COLLAPSED_KEY = "kdps-nav-collapsed";
+const RAIL_KEY = "kdps-sidebar-rail";
 const MIN_SIDEBAR = 210;
 const MAX_SIDEBAR = 390;
+const RAIL_WIDTH = 64;
 
 type DraggedItem = { sectionCode: string; to: string } | null;
 type NavOrder = Record<string, string[]>;
@@ -175,6 +179,15 @@ function readCollapsed(): Record<string, true> {
   }
 }
 
+/** Rail state, remembered on this device (device-scoped, not per-person - the
+ *  issue's own AC, over `design.md`'s "new localStorage key" and the grill's
+ *  "per person": two of three agree and the AC is what QA drives). Separate
+ *  from `SIDEBAR_WIDTH_KEY`: collapsing must never overwrite the dragged
+ *  width, so expanding again restores it for free. */
+function readRailCollapsed(): boolean {
+  return localStorage.getItem(RAIL_KEY) === "1";
+}
+
 function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[] {
   const saved = order[code] ?? [];
   const known = new Set(items.map((i) => i.to));
@@ -201,6 +214,71 @@ function Sidebar({
   const [navOrder, setNavOrder] = useState<NavOrder>(() => readNavOrder());
   const [collapsed, setCollapsed] = useState<Record<string, true>>(() => readCollapsed());
   const [dragged, setDragged] = useState<DraggedItem>(null);
+  const [railCollapsed, setRailCollapsed] = useState<boolean>(() => readRailCollapsed());
+  // Which multi-item section's flyout is open, by section code, or none. Only
+  // ever set in rail mode - the mobile drawer and the expanded sidebar have no
+  // flyout to close.
+  const [openFlyout, setOpenFlyout] = useState<string | null>(null);
+  // Where the open flyout's popover renders, in viewport coordinates. `.sidebar`
+  // scrolls (`overflow-y: auto`), which per the CSS spec forces its `overflow-x`
+  // to compute as `auto` too - a popover positioned beside the rail would be
+  // clipped by that, invisibly, if it stayed a normal descendant. It is
+  // portaled to `document.body` instead and placed by measuring the trigger,
+  // so the sidebar's own scrolling can never clip it.
+  const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
+  const flyoutTriggerRef = useRef<HTMLButtonElement>(null);
+  const flyoutPopoverRef = useRef<HTMLDivElement>(null);
+
+  // The mobile drawer must never inherit the rail, even when it is mounted
+  // mid-collapse: this is the one expression that keeps AC4 true at both
+  // breakpoints, rather than leaving it to CSS to hide what the render kept.
+  const rail = railCollapsed && !mobileOpen;
+
+  function toggleRail() {
+    setRailCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem(RAIL_KEY, next ? "1" : "0");
+      return next;
+    });
+    setOpenFlyout(null);
+  }
+
+  useEffect(() => {
+    if (!openFlyout) {
+      setFlyoutAt(null);
+      return;
+    }
+    const rect = flyoutTriggerRef.current?.getBoundingClientRect();
+    setFlyoutAt(rect ? { top: rect.top, left: rect.right + 8 } : null);
+  }, [openFlyout]);
+
+  // Outside click and Esc close the open flyout - the same pattern every other
+  // popup in this shell uses (`NotificationBell`'s bell-wrap), checked against
+  // both halves of it: the trigger stayed in the sidebar, the popover is
+  // portaled out to `document.body`, and neither alone is "the flyout".
+  useEffect(() => {
+    if (!openFlyout) return;
+    const off = new AbortController();
+    const { signal } = off;
+    document.addEventListener(
+      "pointerdown",
+      (e) => {
+        const target = e.target as Node;
+        if (flyoutTriggerRef.current?.contains(target)) return;
+        if (flyoutPopoverRef.current?.contains(target)) return;
+        setOpenFlyout(null);
+      },
+      { signal },
+    );
+    document.addEventListener(
+      "keydown",
+      (e) => {
+        if (e.key === "Escape") setOpenFlyout(null);
+      },
+      { signal },
+    );
+    return () => off.abort();
+  }, [openFlyout]);
 
   // Landing inside a folded section unfolds it: the sidebar must always be able
   // to show where you are, however you got there (search, deep link, redirect).
@@ -248,7 +326,9 @@ function Sidebar({
   }
 
   /** A row that is simply a link: a section with one visible item, or a fold,
-   *  whose whole point is to be one line. */
+   *  whose whole point is to be one line. In the rail this draws as the icon
+   *  alone, with the row's name as a native tooltip (design.md:96-98: no
+   *  tooltip library) - the same link, the same gate, just narrower. */
   function oneLineRow(row: {
     key: string;
     icon: LucideIcon;
@@ -259,6 +339,23 @@ function Sidebar({
     testId: string;
   }) {
     const Icon = row.icon;
+    if (rail) {
+      return (
+        <Link
+          key={row.key}
+          to={row.to}
+          onClick={onNavigate}
+          aria-current={row.active ? "page" : undefined}
+          title={row.label}
+          className={`rail-link ${row.active ? "active" : ""}`}
+          data-testid={row.testId}
+        >
+          <span className="nav-ic" style={{ color: `var(--layer-${row.layer})` }}>
+            <Icon size={16} />
+          </span>
+        </Link>
+      );
+    }
     return (
       <div className="nav-group" key={row.key}>
         <div className="nav-group-head">
@@ -279,6 +376,65 @@ function Sidebar({
     );
   }
 
+  /** A multi-item section's rail row: an icon button that opens a flyout
+   *  beside the rail, listing exactly the items `renderSection` would have
+   *  drawn under the section head - `orderedItems`'s own output, never
+   *  re-derived (navConfig.ts:543-544). Only a non-store persona ever reaches
+   *  this: every store row is one-line (see the isOneLineRow test), so the
+   *  flyout never renders for a store login (D10 §1). */
+  function railFlyoutSection(s: VisibleSection, items: NavItem[], holdsActive: boolean) {
+    const Icon = s.def.icon;
+    const open = openFlyout === s.def.code;
+    return (
+      <div className="rail-flyout-wrap" key={s.def.code}>
+        <button
+          type="button"
+          ref={open ? flyoutTriggerRef : undefined}
+          className={`rail-link rail-flyout-trigger ${holdsActive ? "active" : ""}`}
+          title={s.label}
+          aria-expanded={open}
+          onClick={() => setOpenFlyout((current) => (current === s.def.code ? null : s.def.code))}
+          data-testid={`nav-section-${s.def.code}`}
+        >
+          <span className="nav-ic" style={{ color: `var(--layer-${s.def.layer})` }}>
+            <Icon size={16} />
+          </span>
+        </button>
+        {open &&
+          flyoutAt &&
+          createPortal(
+            <div
+              className="rail-flyout"
+              ref={flyoutPopoverRef}
+              style={{ top: flyoutAt.top, left: flyoutAt.left }}
+              data-testid={`nav-flyout-${s.def.code}`}
+            >
+              <div className="rail-flyout-head">{s.label}</div>
+              {items.map((it) => {
+                const active = isActiveItem(it, pathname);
+                return (
+                  <Link
+                    key={it.to}
+                    to={it.to}
+                    onClick={() => {
+                      setOpenFlyout(null);
+                      onNavigate();
+                    }}
+                    aria-current={active ? "page" : undefined}
+                    className={`nav-item ${active ? "active" : ""}`}
+                    data-testid={testId(s.def.code, it)}
+                  >
+                    {it.label}
+                  </Link>
+                );
+              })}
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
+  }
+
   /** One section: its head, plus its items when it has more than one. */
   function renderSection(s: VisibleSection) {
     const Icon = s.def.icon;
@@ -289,7 +445,8 @@ function Sidebar({
     // (`applyLayout` in the manifest), never this.
     const open = !collapsed[s.def.code];
     const holdsActive = items.some((i) => isActiveItem(i, pathname));
-    if (items.length === 1) {
+    const row: NavRow = { kind: "section", key: s.def.code, section: s };
+    if (isOneLineRow(row)) {
       return oneLineRow({
         key: s.def.code,
         icon: Icon,
@@ -300,6 +457,7 @@ function Sidebar({
         testId: `nav-${s.def.code}`,
       });
     }
+    if (rail) return railFlyoutSection(s, items, holdsActive);
     return (
       <div className="nav-group" key={s.def.code}>
         {(
@@ -384,7 +542,14 @@ function Sidebar({
   }
 
   return (
-    <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} style={{ width }} data-testid="app-sidebar">
+    <aside
+      className={`sidebar ${mobileOpen ? "mobile-open" : ""} ${rail ? "rail" : ""}`}
+      // Rail overrides only what this element renders at; `sidebarWidth` in
+      // AppShell is untouched, so expanding again restores the dragged width
+      // for free (design.md:98).
+      style={{ width: rail ? RAIL_WIDTH : width }}
+      data-testid="app-sidebar"
+    >
       <div className="brand">
         <span className="brand-mark">K</span>
         <span className="brand-text">
@@ -402,6 +567,15 @@ function Sidebar({
         )}
       </nav>
       <div className="sidebar-resizer" onPointerDown={onResizeStart} data-testid="sidebar-resizer" />
+      <button
+        type="button"
+        className="sidebar-rail-toggle"
+        onClick={toggleRail}
+        aria-label={rail ? "Expand sidebar" : "Collapse sidebar"}
+        data-testid="sidebar-rail-toggle"
+      >
+        <ChevronLeft size={16} className={`rail-chev ${rail ? "flipped" : ""}`} />
+      </button>
     </aside>
   );
 }

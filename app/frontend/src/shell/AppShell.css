@@ -71,6 +71,48 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   background: var(--rust); border-radius: 2px;
 }
 
+/* ---------- icon rail (#230) ----------
+   Rail mode swaps a row's own markup for an icon-only link or flyout trigger
+   (AppShell.tsx) rather than hiding the labelled markup with CSS, so nothing
+   here needs to un-hide text - only lay the icons out and style the two new
+   controls. */
+.sidebar.rail .brand { justify-content: center; padding: 18px 10px; }
+.sidebar.rail .brand-text { display: none; }
+.sidebar.rail .nav { align-items: center; padding: 12px 8px 20px; }
+.sidebar.rail .sidebar-resizer { display: none; }
+
+.rail-link, .rail-flyout-trigger {
+  display: flex; align-items: center; justify-content: center; width: 100%;
+  padding: 4px 0; border: 0; background: transparent; cursor: pointer; border-radius: 9px;
+}
+.rail-link:hover .nav-ic, .rail-flyout-trigger:hover .nav-ic { background: rgba(var(--rust-rgb), .08); }
+.rail-link.active .nav-ic, .rail-flyout-trigger.active .nav-ic {
+  background: rgba(var(--rust-rgb), .14); border-color: var(--rust);
+}
+
+.rail-flyout-wrap { position: relative; width: 100%; }
+/* Fixed, not absolute: portaled to document.body and placed by measuring the
+   trigger (AppShell.tsx), so the sidebar's own `overflow-y: auto` - which
+   forces its overflow-x to compute as `auto` too - can never clip it. */
+.rail-flyout {
+  position: fixed; z-index: 50; min-width: 210px; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--hairline); border-radius: 14px;
+  box-shadow: var(--shadow-hover); padding: 7px; overflow: hidden;
+}
+.rail-flyout-head {
+  font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase;
+  color: var(--caption); padding: 8px 10px 6px;
+}
+
+.sidebar-rail-toggle {
+  display: flex; align-items: center; justify-content: center; flex: none;
+  margin: 4px 12px 14px; padding: 8px; border: 1px solid var(--sidebar-border); border-radius: 9px;
+  background: var(--surface); color: var(--muted); cursor: pointer; transition: background-color .12s;
+}
+.sidebar-rail-toggle:hover { background: var(--inner); color: var(--ink); }
+.rail-chev { transition: transform .16s ease; }
+.rail-chev.flipped { transform: rotate(180deg); }
+
 /* ---------- main / topbar ---------- */
 .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .topbar {
@@ -255,6 +297,12 @@ body.sidebar-resizing { cursor: col-resize; user-select: none; }
   }
   .sidebar.mobile-open { transform: translateX(0); box-shadow: var(--drawer-shadow); }
   .sidebar-resizer { display: none; }
+  /* The rail is a desktop control; AppShell.tsx already forces `rail` false
+     whenever the drawer opens (mobileOpen), so this is belt-and-braces - the
+     drawer must never actually render at the rail's ~64px. */
+  .sidebar.rail { width: min(82vw, 300px) !important; }
+  .sidebar.rail .brand-text { display: flex; }
+  .sidebar-rail-toggle { display: none; }
 
   .topbar { padding: 0 12px; gap: 10px; }
   .topbar-search { padding: 7px 12px; }
