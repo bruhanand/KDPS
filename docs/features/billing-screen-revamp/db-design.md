@@ -13,7 +13,7 @@ Lives in `masters` because it is master data that will outlive the counter (loya
 | Column | Type | Constraints | Why |
 |---|---|---|---|
 | `id` | bigint | PK | House surrogate key |
-| `mobile` | varchar(15) | NOT NULL, **UNIQUE** | The natural key; stored as digits only, normalised at the accept boundary. One row per mobile - a changed number is a new customer row (v1 ruling) |
+| `mobile` | varchar(15) | NOT NULL, **UNIQUE** | The natural key; stored as digits only, canonicalised at the accept boundary to the bare 10-digit Indian form (leading `91` on 12 digits / leading `0` on 11 digits stripped, so `+91 98765-43210`, `09876543210` and `9876543210` are one row; other lengths pass through). One row per mobile - a changed number is a new customer row (v1 ruling) |
 | `name` | varchar(120) | NOT NULL, default `''` | Latest non-blank name wins (grill Q6) |
 | `gstin` | varchar(15) | NOT NULL, default `''` | Filled when a business bill supplies it; normalised uppercase |
 | `created_at` | timestamptz | NOT NULL (auto) | `TimeStampedModel` base |
