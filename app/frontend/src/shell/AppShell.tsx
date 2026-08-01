@@ -30,6 +30,8 @@ const SIDEBAR_WIDTH_KEY = "kdps-sidebar-width";
 const NAV_ORDER_KEY = "kdps-nav-item-order";
 const NAV_COLLAPSED_KEY = "kdps-nav-collapsed";
 const RAIL_KEY = "kdps-sidebar-rail";
+// Kept in step with `.rail-flyout`'s `max-height` in AppShell.css.
+const FLYOUT_MAX_HEIGHT = 420;
 const MIN_SIDEBAR = 210;
 const MAX_SIDEBAR = 390;
 const RAIL_WIDTH = 64;
@@ -185,7 +187,11 @@ function readCollapsed(): Record<string, true> {
  *  from `SIDEBAR_WIDTH_KEY`: collapsing must never overwrite the dragged
  *  width, so expanding again restores it for free. */
 function readRailCollapsed(): boolean {
-  return localStorage.getItem(RAIL_KEY) === "1";
+  try {
+    return localStorage.getItem(RAIL_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function orderedItems(code: string, items: NavItem[], order: NavOrder): NavItem[] {
@@ -235,21 +241,39 @@ function Sidebar({
   const rail = railCollapsed && !mobileOpen;
 
   function toggleRail() {
-    setRailCollapsed((current) => {
-      const next = !current;
-      localStorage.setItem(RAIL_KEY, next ? "1" : "0");
-      return next;
-    });
+    const next = !railCollapsed;
+    localStorage.setItem(RAIL_KEY, next ? "1" : "0");
+    setRailCollapsed(next);
     setOpenFlyout(null);
   }
 
+  // Positioned from the trigger each time, not just once: `.sidebar` scrolls
+  // and the window resizes independently of React re-rendering, so a
+  // position measured only on open goes stale under the trigger. Clamped to
+  // `FLYOUT_MAX_HEIGHT` (kept in step with `.rail-flyout`'s CSS max-height)
+  // so a flyout near the bottom of a short viewport never renders below the
+  // fold - a `position: fixed` box can't be scrolled into view.
   useEffect(() => {
     if (!openFlyout) {
       setFlyoutAt(null);
       return;
     }
-    const rect = flyoutTriggerRef.current?.getBoundingClientRect();
-    setFlyoutAt(rect ? { top: rect.top, left: rect.right + 8 } : null);
+    const place = () => {
+      const trigger = flyoutTriggerRef.current;
+      if (!trigger) return;
+      const margin = 8;
+      const rect = trigger.getBoundingClientRect();
+      const maxTop = window.innerHeight - FLYOUT_MAX_HEIGHT - margin;
+      const top = Math.min(rect.top, Math.max(margin, maxTop));
+      setFlyoutAt({ top, left: rect.right + margin });
+    };
+    place();
+    window.addEventListener("resize", place);
+    document.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      document.removeEventListener("scroll", place, true);
+    };
   }, [openFlyout]);
 
   // Outside click and Esc close the open flyout - the same pattern every other
