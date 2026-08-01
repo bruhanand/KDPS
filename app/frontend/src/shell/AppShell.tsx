@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -233,7 +233,7 @@ function Sidebar({
   // so the sidebar's own scrolling can never clip it.
   const [flyoutAt, setFlyoutAt] = useState<{ top: number; left: number } | null>(null);
   const flyoutTriggerRef = useRef<HTMLButtonElement>(null);
-  const flyoutPopoverRef = useRef<HTMLDivElement>(null);
+  const flyoutPopoverRef = useRef<HTMLDivElement | null>(null);
 
   // The mobile drawer must never inherit the rail, even when it is mounted
   // mid-collapse: this is the one expression that keeps AC4 true at both
@@ -250,23 +250,28 @@ function Sidebar({
   // Positioned from the trigger each time, not just once: `.sidebar` scrolls
   // and the window resizes independently of React re-rendering, so a
   // position measured only on open goes stale under the trigger. Clamped to
-  // `FLYOUT_MAX_HEIGHT` (kept in step with `.rail-flyout`'s CSS max-height)
-  // so a flyout near the bottom of a short viewport never renders below the
-  // fold - a `position: fixed` box can't be scrolled into view.
+  // the popover's own measured height so it never renders below the fold - a
+  // `position: fixed` box can't be scrolled into view. Before the popover has
+  // ever mounted (nothing to measure yet) `FLYOUT_MAX_HEIGHT` stands in as a
+  // conservative ceiling; `popoverMounted` below replaces it with the real
+  // height the moment the portal is in the DOM.
+  const place = useCallback(() => {
+    const trigger = flyoutTriggerRef.current;
+    if (!trigger) return;
+    const margin = 8;
+    const rect = trigger.getBoundingClientRect();
+    const height = flyoutPopoverRef.current?.offsetHeight ?? FLYOUT_MAX_HEIGHT;
+    const maxTop = window.innerHeight - height - margin;
+    const top = Math.max(margin, Math.min(rect.top, maxTop));
+    const left = rect.right + margin;
+    setFlyoutAt((current) => (current && current.top === top && current.left === left ? current : { top, left }));
+  }, []);
+
   useEffect(() => {
     if (!openFlyout) {
       setFlyoutAt(null);
       return;
     }
-    const place = () => {
-      const trigger = flyoutTriggerRef.current;
-      if (!trigger) return;
-      const margin = 8;
-      const rect = trigger.getBoundingClientRect();
-      const maxTop = window.innerHeight - FLYOUT_MAX_HEIGHT - margin;
-      const top = Math.min(rect.top, Math.max(margin, maxTop));
-      setFlyoutAt({ top, left: rect.right + margin });
-    };
     place();
     window.addEventListener("resize", place);
     document.addEventListener("scroll", place, true);
@@ -274,7 +279,18 @@ function Sidebar({
       window.removeEventListener("resize", place);
       document.removeEventListener("scroll", place, true);
     };
-  }, [openFlyout]);
+  }, [openFlyout, place]);
+
+  // Fires once the popover actually mounts, so `place` can re-clamp against
+  // its real height instead of the `FLYOUT_MAX_HEIGHT` ceiling it had to
+  // guess with before anything existed to measure.
+  const popoverMounted = useCallback(
+    (node: HTMLDivElement | null) => {
+      flyoutPopoverRef.current = node;
+      if (node) place();
+    },
+    [place],
+  );
 
   // Outside click and Esc close the open flyout - the same pattern every other
   // popup in this shell uses (`NotificationBell`'s bell-wrap), checked against
@@ -429,7 +445,7 @@ function Sidebar({
           createPortal(
             <div
               className="rail-flyout"
-              ref={flyoutPopoverRef}
+              ref={popoverMounted}
               style={{ top: flyoutAt.top, left: flyoutAt.left }}
               data-testid={`nav-flyout-${s.def.code}`}
             >
