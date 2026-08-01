@@ -53,7 +53,7 @@
 //
 // Usage:  npx tsx .sandcastle/main.ts   (or: npm run sandcastle)
 
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -817,9 +817,16 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
         "`npm run ci:fast` green on merged main). Not yet pushed to GitHub.",
     );
     try {
+      // The library parks each branch in .sandcastle/worktrees/<branch with
+      // slashes dashed>; git refuses to delete a branch a worktree holds, so
+      // the worktree goes first (this failed live on #240's merge).
+      const worktreePath = `.sandcastle/worktrees/${r.issue.branch.replace(/\//g, "-")}`;
+      if (existsSync(worktreePath)) {
+        git("worktree", "remove", "--force", worktreePath);
+      }
       git("branch", "-d", r.issue.branch);
     } catch (error) {
-      mainLog(runDir, `  (branch -d ${r.issue.branch} failed: ${error})`);
+      mainLog(runDir, `  (branch cleanup for ${r.issue.branch} failed: ${error})`);
     }
   }
 
