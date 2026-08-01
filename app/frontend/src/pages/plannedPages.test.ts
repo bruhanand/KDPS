@@ -68,13 +68,13 @@ describe("the report's own sequence", () => {
     // (Purchase Orders · Transfers & Returns) → Next (POS & Billing) → Then
     // (Accounts & Payments) → Later (HRMS · Promotions · Analytics).
     //
-    // The two "already moving" modules are the trap. Their in-build column names
-    // dispatch/receive, IGST, RTV and adjustments — not Stock Request,
-    // Distribution or In-Transit. So those screens are *not* in build, and must
-    // carry the report's third column ("Planned") rather than a chip that
-    // promises motion nobody has started. (Goods Receipt keeps its place on the
-    // strip with nothing planned left under it, since #228 deleted the Upload
-    // Bill stub - the same case as POS & Billing below.)
+    // The "already moving" module is the trap. Its in-build column names
+    // dispatch/receive, IGST, RTV and adjustments - not Stock Request or
+    // In-Transit. So those screens are *not* in build, and must carry the
+    // report's third column ("Planned") rather than a chip that promises motion
+    // nobody has started. (Goods Receipt, POS & Billing and, since #229 deleted
+    // the Distribution stub, Transfers & Returns all keep their place on the
+    // strip with nothing planned left under them.)
     const expected: Record<string, string> = {
       "POS & Billing": "next",
       "Accounts & Payments": "then",

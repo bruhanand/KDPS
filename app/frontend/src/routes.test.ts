@@ -64,10 +64,13 @@ describe("the route table", () => {
   });
 
   it("Transfer sub-screens do not swallow the Transfer document ids", () => {
-    // /transfer/distribution is still a planned page; /transfer/in-transit and
-    // /transfer/requests are now built (#71, #74) — all three sit where ids live.
+    // Distribution's stub is gone (#229); its address sits exactly where
+    // /transfer/:id looks for a document number, so it needs its own legacy
+    // route or it would open "transfer number distribution" — the same case
+    // #228 solved for Upload Bill. /transfer/in-transit and /transfer/requests
+    // are built (#71, #74) — all three sit where ids live.
     expect(screenAt("/transfer/requests")).toBe("stock-request-list");
-    expect(screenAt("/transfer/distribution")).toBe("planned:/transfer/distribution");
+    expect(screenAt("/transfer/distribution")).toBe("legacy:/transfer/distribution");
     expect(screenAt("/transfer/in-transit")).toBe("transfer-in-transit");
     expect(screenAt("/transfer/12")).toBe("transfer-detail");
     // The transfer's own PT hangs off the document, not off the section (#72).
