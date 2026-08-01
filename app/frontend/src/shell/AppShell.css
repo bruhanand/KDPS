@@ -290,6 +290,8 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 }
 .dropdown-item:hover { background: var(--inner); }
 .dropdown-item.active { background: rgba(var(--rust-rgb), .12); color: var(--rust); font-weight: 700; }
+/* The store code, beside the name rather than inside it. */
+.dropdown-hint { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--caption); }
 
 /* theme toggle — three-segment pill (Light / Dark / System) */
 .dropdown-theme {

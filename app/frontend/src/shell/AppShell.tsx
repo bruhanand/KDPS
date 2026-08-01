@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronLeft, Lock, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, LogOut, MapPin, Menu, Tag, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -24,7 +24,7 @@ import {
   testId,
 } from "./navConfig";
 import type { NavFoldDef, NavItem, NavRow, VisibleSection } from "./navConfig";
-import { chipClass, contextKey, switcherModel } from "./unitSwitcher";
+import { contextKey, switcherModel } from "./unitSwitcher";
 import type { SwitcherOption } from "./unitSwitcher";
 import "./AppShell.css";
 
@@ -71,12 +71,13 @@ function UnitSwitcher() {
     return activeBrand === null;
   }
 
+  // The chip is a pin and a name, nothing else: no store code, no state pill,
+  // no lock. Locked just means no chevron and no menu (ruled 1 Aug 2026).
   if (model.locked) {
     return (
       <div className="switcher-btn locked" data-testid="store-switcher">
-        <Lock size={14} />
+        {model.mode === "brands" ? <Tag size={15} /> : <MapPin size={15} />}
         <span className="switcher-label">{model.label}</span>
-        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
       </div>
     );
   }
@@ -86,15 +87,14 @@ function UnitSwitcher() {
       <button className="switcher-btn" onClick={() => setOpen((o) => !o)} data-testid="store-switcher">
         {model.mode === "brands" ? <Tag size={15} /> : <MapPin size={15} />}
         <span className="switcher-label">{model.label}</span>
-        <span className={`chip ${chipClass(model.chip)}`}>{model.chip}</span>
         <ChevronDown size={15} />
       </button>
       {open && (
         <>
           <div className="dropdown-backdrop" onClick={() => setOpen(false)} />
-          <div className="dropdown" data-testid="store-switcher-menu">
+          <div className="dropdown dropdown-right" data-testid="store-switcher-menu">
             <div className="dropdown-head">
-              {model.mode === "brands" ? "Context · brand" : "Context · store & GSTIN"}
+              {model.mode === "brands" ? "Brand" : "Business unit"}
             </div>
             {model.options.map((option) => (
               <button
@@ -110,7 +110,7 @@ function UnitSwitcher() {
                 }
               >
                 <span>{option.label}</span>
-                <span className={`chip ${chipClass(option.chip)}`}>{option.chip}</span>
+                {option.hint && <span className="dropdown-hint">{option.hint}</span>}
               </button>
             ))}
           </div>

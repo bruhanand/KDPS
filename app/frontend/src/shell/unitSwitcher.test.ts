@@ -41,10 +41,12 @@ function user(payload: Partial<User>): User {
 }
 
 describe("what the switcher offers", () => {
-  it("locks a store person to their own store", () => {
+  it("locks a store person to their own store, named alone", () => {
+    // The bar says only where you are. The code is menu detail, the state is
+    // not the bar's to say at all (ruled 1 Aug 2026).
     const model = switcherModel(user({ business_units: [DEO] }), DEO, null);
     expect(model.locked).toBe(true);
-    expect(model.label).toBe("DEO · Deoghar");
+    expect(model.label).toBe("Deoghar");
     // No path to any other store, open or hidden.
     expect(model.options.filter((o) => o.kind === "unit")).toHaveLength(1);
   });
@@ -56,18 +58,43 @@ describe("what the switcher offers", () => {
       null,
     );
     expect(model.locked).toBe(false);
-    expect(model.label).toBe("All stores (network)");
+    expect(model.label).toBe("All business units");
     expect(model.options.map((o) => o.kind)).toEqual(["all-units", "unit", "unit"]);
   });
 
   it("never calls a two-store aggregate the network", () => {
     // Someone with two stores may look at both at once — that is just their own
-    // scope — but it is "all my stores", never the network they cannot see.
+    // scope — but it is "all my business units", never the network they cannot see.
     const model = switcherModel(user({ business_units: [DEO, PAT] }), null, null);
     const all = model.options.find((o) => o.kind === "all-units");
-    expect(all?.label).toBe("All my stores");
+    expect(all?.label).toBe("All my business units");
     expect(all?.label).not.toMatch(/network/i);
     expect(model.locked).toBe(false);
+  });
+
+  it("offers a unit's store code beside its name, not inside it", () => {
+    // The menu shows "Deoghar" with "DEO" as a hint the row draws separately —
+    // never fused into one string the chip would then have to carry.
+    const model = switcherModel(user({ business_units: [DEO, PAT] }), null, null);
+    const deo = model.options.find((o) => o.kind === "unit" && o.store.code === "DEO");
+    expect(deo?.label).toBe("Deoghar");
+    expect(deo?.hint).toBe("DEO");
+  });
+
+  it("lets no state name into anything the bar or menu can draw", () => {
+    // The state a unit bills under is a real fact, but the bar is not where it
+    // gets said (ruled 1 Aug 2026). Sweep every drawable string.
+    const models = [
+      switcherModel(user({ business_units: [DEO, PAT], all_business_units: true }), DEO, null),
+      switcherModel(user({ business_units: [DEO, PAT] }), PAT, null),
+      switcherModel(user({ business_units: [DEO] }), DEO, null),
+    ];
+    for (const model of models) {
+      const drawable = [model.label, ...model.options.flatMap((o) => [o.label, o.hint])];
+      for (const text of drawable) {
+        expect(text).not.toMatch(/bihar|jharkhand/i);
+      }
+    }
   });
 
   it("shows an empty, locked selector when there are no units (fail-closed)", () => {

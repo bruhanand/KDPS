@@ -14,34 +14,31 @@
 import type { Brand, Store, User } from "../auth/AuthContext";
 
 export type SwitcherOption =
-  | { kind: "all-units"; label: string; chip: string }
-  | { kind: "unit"; label: string; chip: string; store: Store }
-  | { kind: "all-brands"; label: string; chip: string }
-  | { kind: "brand"; label: string; chip: string; brand: Brand };
+  | { kind: "all-units"; label: string; hint: string }
+  | { kind: "unit"; label: string; hint: string; store: Store }
+  | { kind: "all-brands"; label: string; hint: string }
+  | { kind: "brand"; label: string; hint: string; brand: Brand };
 
 export interface SwitcherModel {
   mode: "units" | "brands";
   /** Nothing to choose between — render a plain label, not a menu. */
   locked: boolean;
   label: string;
-  chip: string;
   options: SwitcherOption[];
 }
 
 const NO_UNIT = "No unit assigned";
 const NO_BRAND = "No brand assigned";
 
+// The bar says only the unit's name; the code is a hint the menu draws beside
+// it, and the state the unit bills under is not the bar's to say at all
+// (ruled 1 Aug 2026) — it belongs to the page, not the chrome.
 function unitOption(store: Store): SwitcherOption {
-  return {
-    kind: "unit",
-    label: `${store.code} · ${store.name}`,
-    chip: store.state_name,
-    store,
-  };
+  return { kind: "unit", label: store.name, hint: store.code, store };
 }
 
 function brandOption(brand: Brand): SwitcherOption {
-  return { kind: "brand", label: brand.name, chip: "Brand", brand };
+  return { kind: "brand", label: brand.name, hint: "", brand };
 }
 
 function unitsModel(user: User, active: Store | null): SwitcherModel {
@@ -52,20 +49,17 @@ function unitsModel(user: User, active: Store | null): SwitcherModel {
   // network-wide grant may call it the network.
   const network = Boolean(user.all_business_units);
   const aggregate = network || units.length > 1;
-  const allLabel = network ? "All stores (network)" : "All my stores";
+  const allLabel = network ? "All business units" : "All my business units";
   const options: SwitcherOption[] = [
-    ...(aggregate
-      ? [{ kind: "all-units" as const, label: allLabel, chip: network ? "Both states" : "All mine" }]
-      : []),
+    ...(aggregate ? [{ kind: "all-units" as const, label: allLabel, hint: "" }] : []),
     ...units.map(unitOption),
   ];
-  const label = active ? `${active.code} · ${active.name}` : options.length ? allLabel : NO_UNIT;
+  const label = active ? active.name : options.length ? allLabel : NO_UNIT;
   return {
     mode: "units",
     // One option is not a choice: a store person sees their store, full stop.
     locked: options.length <= 1,
     label,
-    chip: active ? active.state_name : options.length ? "Network" : "None",
     options,
   };
 }
@@ -75,7 +69,7 @@ function brandsModel(user: User, active: Brand | null): SwitcherModel {
   const options: SwitcherOption[] =
     brands.length > 1
       ? [
-          { kind: "all-brands", label: "All my brands", chip: "Brands" },
+          { kind: "all-brands", label: "All my brands", hint: "" },
           ...brands.map(brandOption),
         ]
       : brands.map(brandOption);
@@ -84,7 +78,6 @@ function brandsModel(user: User, active: Brand | null): SwitcherModel {
     mode: "brands",
     locked: options.length <= 1,
     label,
-    chip: brands.length ? "Brand" : "None",
     options,
   };
 }
@@ -97,13 +90,6 @@ export function switcherModel(
   return user.business_unit_mode === "brands"
     ? brandsModel(user, activeBrand)
     : unitsModel(user, activeStore);
-}
-
-/** Chip colour class, matching the states the business actually operates in. */
-export function chipClass(chip: string): string {
-  if (chip === "Bihar") return "chip-amber";
-  if (chip === "Jharkhand") return "chip-blue";
-  return "chip-navy";
 }
 
 /** Key that changes whenever the working context changes — the shell remounts
