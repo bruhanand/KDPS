@@ -186,6 +186,10 @@ function Counter({ storeName }: { storeName?: string }) {
    *  the cashier has already moved on from, and must not resurrect it
    *  (binding rule 6, "don't restore over a fresh bill"). */
   const skipRestore = useRef(false);
+  /** Which run of typing the undo stack is currently coalescing into. Bumped
+   *  by anything that is not more typing in the same box, so a run cannot span
+   *  an action that happened in the middle of it - see `editLine`. */
+  const runSeq = useRef(0);
   /** Whatever is really on screen the instant the draft read could land -
    *  kept in sync at the only places that can populate it before that
    *  happens: a scan (`takePiece`/`takeUnknown`), the exchange hand-off
@@ -314,6 +318,7 @@ function Counter({ storeName }: { storeName?: string }) {
         );
         return false;
       }
+      runSeq.current += 1;
       onScreenRef.current = { cart: payload.cart, customer: payload.customer };
       setCart(payload.cart);
       setCustomer(payload.customer);
@@ -426,7 +431,12 @@ function Counter({ storeName }: { storeName?: string }) {
     // (round-2 finding). Clearing: a cashier who deletes the last line by hand
     // takes no such path at all, and leaving the older row would offer to
     // restore the very lines they just took off.
-    if (!billStarted && paper === null) {
+    // Paper mode is no exception: a re-entry with nothing keyed into it yet is
+    // still an empty counter, and its number is in the address bar rather than
+    // the row. Exempting it left `newBill` writing a blank paper-claiming row
+    // straight back over its own `clearDraft` - the same ping-pong, confined
+    // to the one mode where a stray restore is most expensive.
+    if (!billStarted) {
       void clearDraft(engine.db);
       return;
     }
@@ -583,7 +593,14 @@ function Counter({ storeName }: { storeName?: string }) {
   function editLine(key: string, patch: Partial<CartLine>) {
     // One line's one field is one undo step, however many keystrokes it took:
     // the grid's cells fire this on every character (round-2 finding).
-    pushCartUndo(cart, `${key}:${Object.keys(patch).sort().join(",")}`);
+    //
+    // `runSeq` is what ends a run. Coalescing looks only at the top of the
+    // stack, so without it a qty edit, then something that pushes nothing
+    // (a payment or customer field, an Undo), then a *second* qty edit on the
+    // same line would fold into the first and lose the figure in between.
+    // Anything that is not more typing in this same box bumps the counter, and
+    // the next edit starts a step of its own.
+    pushCartUndo(cart, `${key}:${Object.keys(patch).sort().join(",")}#${runSeq.current}`);
     setCart((current) => ({
       ...current,
       lines: current.lines.map((line) => (line.key === key ? { ...line, ...patch } : line)),
@@ -634,18 +651,21 @@ function Counter({ storeName }: { storeName?: string }) {
   function undo() {
     const popped = popUndo(undoStack);
     if (!popped) return;
+    runSeq.current += 1;
     setUndoStack(popped.stack);
     setCart(popped.cart);
     scan.focus();
   }
 
   function editPayment(patch: Partial<Payment>) {
+    runSeq.current += 1;
     setCart((current) => ({ ...current, payment: { ...current.payment, ...patch } }));
   }
 
   /** The customer strip, typed into directly - the third source (with a scan
    *  and the exchange hand-off) that can race the mount-time draft read. */
   function editCustomer(next: TillCustomer) {
+    runSeq.current += 1;
     onScreenRef.current = { ...onScreenRef.current, customer: next };
     setCustomer(next);
   }
@@ -657,6 +677,19 @@ function Counter({ storeName }: { storeName?: string }) {
    *  machinery of its own is needed. */
   function resumePendingDraft() {
     if (!pendingDraft || !engine) return;
+    // Never over a bill already in progress. The notice now stands until it is
+    // answered rather than vanishing on the first scan (round-2 finding), so
+    // for the first time Resume can be pressed with a real cart on screen -
+    // and `applyDraft` replaces cart and customer wholesale and empties the
+    // undo stack, which would take a bill away from in front of a customer
+    // with no way back. Finishing or clearing what is on the counter is the
+    // cashier's own decision, so this asks rather than choosing for them.
+    if (billStarted) {
+      setNote(
+        "Finish or clear the bill on the counter first - resuming the saved one would replace it.",
+      );
+      return;
+    }
     applyDraft(pendingDraft.draft, engine.getSnapshot());
     scan.focus();
   }
@@ -685,6 +718,7 @@ function Counter({ storeName }: { storeName?: string }) {
    */
   function freshCounter() {
     skipRestore.current = true;
+    runSeq.current += 1;
     onScreenRef.current = { cart: emptyCart(), customer: NO_CUSTOMER };
     setCart(emptyCart());
     setCustomer(NO_CUSTOMER);
@@ -774,6 +808,7 @@ function Counter({ storeName }: { storeName?: string }) {
     // popping it onto a resumed hold would put the previous customer's lines
     // and prices on a bill that is about to be printed and posted.
     skipRestore.current = true;
+    runSeq.current += 1;
     onScreenRef.current = { cart: picked.cart, customer: picked.customer };
     setCart(picked.cart);
     setCustomer(picked.customer);
