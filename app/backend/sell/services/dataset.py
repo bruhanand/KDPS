@@ -55,7 +55,7 @@ from django.utils.dateparse import parse_datetime
 from accounts.models import User
 from accounts.till_pin import STORE_BOUND_SCOPES, may_hold_till_pin
 from core.documents import DocStatus
-from masters.models import Cohort, GstSlab, Season, Sku, Store
+from masters.models import Cohort, Customer, GstSlab, Season, Sku, Store
 from masters.scoping import actionable_store_ids
 from offers.models import Offer
 from sell.models import CreditNote, CreditNoteRedemption, Salesman, SellPolicy
@@ -178,6 +178,7 @@ def build_dataset(store: Store, since_raw: str) -> dict[str, Any]:
         "managers": _managers(store),
         "seasons": _seasons(),
         "policy": _policy(),
+        "customers": _customers(sync),
         "deleted": {
             "items": _withdrawn_items(sync),
             "offers": offers_withdrawn,
@@ -566,6 +567,39 @@ def _salesmen(sync: Sync) -> list[dict[str, Any]]:
         for pk, code, name, is_active in rows.order_by("code").values_list(
             "id", "code", "name", "is_active"
         )
+    ]
+
+
+def _customers(sync: Sync) -> list[dict[str, Any]]:
+    """Everybody KDPS has ever billed, by mobile - the counter's phone book (#245).
+
+    **Deliberately not narrowed to this store**, and it is the only section here
+    that is not. Every other store-owned list is scoped because shipping another
+    shop's shelf or its override PINs would be wrong; a customer is the opposite
+    case - a Deoghar regular walking into Ranchi has to be recognised there, so
+    the list is all-KDPS (grill Q6). Scoping it would look consistent with the
+    sections above it and quietly make the typeahead useless at the second store
+    somebody visits.
+
+    Three fields and no fourth: a mobile to find them by, a name to print, and a
+    GSTIN so a business bill does not have to be keyed in twice. No purchase
+    history rides down - the till is a device on a shop floor, and what a
+    customer has ever spent is not a question it should be able to answer.
+
+    Deltaed like items rather than sent whole like the salesmen, because this list
+    is the one that only ever grows: it is the whole business's customers, not a
+    handful of rows, and re-sending it every five minutes would cost every till
+    the entire book to learn about one new shopper. There is no `deleted` channel
+    to pair with the watermark and none is needed - a customer row is never
+    removed in v1 (db-design), so the only thing a delta can fail to say is a
+    thing that cannot happen.
+    """
+    rows = Customer.objects.all()
+    if not sync.is_bootstrap:
+        rows = rows.filter(updated_at__gt=sync.from_moment)
+    return [
+        {"mobile": mobile, "name": name, "gstin": gstin}
+        for mobile, name, gstin in rows.order_by("mobile").values_list("mobile", "name", "gstin")
     ]
 
 

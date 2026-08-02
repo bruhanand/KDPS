@@ -154,6 +154,7 @@ export default function TillPage() {
           <Row label="Salesmen" value={String(till.counts.salesmen)} />
           <Row label="Managers who can authorise" value={String(till.counts.managers)} />
           <Row label="Tax slabs" value={String(till.counts.gstSlabs)} />
+          <Row label="Customers known" value={String(till.counts.customers)} />
         </section>
       </div>
 
