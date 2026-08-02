@@ -150,12 +150,16 @@ export const SECTIONS: NavSectionDef[] = [
       // is gated at `sell: operate` too. The second pair of eyes on a plain
       // return is not a rung at all - it is a named manager of this store,
       // asked for on every single one.
-      { label: "Return & Exchange", to: "/sell/returns", minCapability: "operate" },
+      // The counter owns this flow now. The route remains until its direct
+      // handoff retires in slice 8, but it is no longer a published tab.
+      { label: "Return & Exchange", to: "/sell/returns", action: true, minCapability: "operate" },
       // Finding an old bill and printing it again (#185). `view`, not `operate`:
       // `GET /api/sell/sales` is gated at `sell: view` and this screen cannot
       // write, so an owner or an accountant reaching a customer's bill is the
       // matrix working rather than a hole in it.
-      { label: "Customers", to: "/sell/customers", minCapability: "view" },
+      // Find-bill remains a guarded route reached from the counter (F3), not a
+      // second public Sell destination.
+      { label: "Customers", to: "/sell/customers", action: true, minCapability: "view" },
       // The counter's own state: what it holds offline, and what it still owes
       // head office (#180). Listed after the screens a cashier uses all day,
       // because it is the page somebody opens when something looks wrong.
@@ -643,12 +647,12 @@ export const INVENTORY_FOLD: NavFoldDef = {
   ],
 };
 
-// Sell, as a strip (#227): one sidebar link landing on Billing, and its four
-// screens drawn as a tab row on the screens themselves. The mechanism is proven
-// here first; the rest of the store's rows follow it in #229.
+// Sell's published pair after the counter absorbed Return & Exchange and
+// Customers (#267). The hidden routes above retain their guard while slice 8
+// moves the real flow; they are deliberately not navigation tabs.
 export const SELL_STRIP: NavStripDef = {
   section: "sell",
-  tabs: ["/sell", "/sell/returns", "/sell/customers", "/sell/till"],
+  tabs: ["/sell", "/sell/till"],
 };
 
 // The store's own screen, as D10 decided it on 30 July 2026: ten sections, in

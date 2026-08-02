@@ -441,13 +441,13 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
     expect(new Set(handles).size).toBe(handles.length);
   });
 
-  // #227 - Sell is the first section drawn as a strip: one sidebar link, its
-  // four screens as a tab row on the screens themselves.
+  // #267 leaves Sell with its two published destinations. Return and customer
+  // lookup keep guarded routes while the counter absorbs their UI.
   describe("Sell, as a strip", () => {
     const sellTabs = (caps: Record<string, string>) =>
       stripTabs(SELL_STRIP, visibleSections(user("store_staff", caps))).map((i) => i.label);
 
-    it("draws one row landing on Billing, with the four screens as its tabs", () => {
+    it("draws one row landing on Billing, with the published pair as its tabs", () => {
       const rows = rowsFor("store_staff", STORE_CAPS);
       // Scoped to Sell: #229 gives the store persona nine other strips, so
       // "the first strip row" is no longer a safe way to find this one.
@@ -456,38 +456,31 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       expect(sell?.kind === "strip" && sell.label).toBe("Sell");
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual([
         "/sell",
-        "/sell/returns",
-        "/sell/customers",
         "/sell/till",
       ]);
       expect(sell?.kind === "strip" && sell.tabs.map((i) => i.label)).toEqual([
         "Billing",
-        "Return & Exchange",
-        "Customers",
         "Till & Sync",
       ]);
       // The row goes nowhere new: its link is the first tab's own canonical URL.
       expect(sell?.kind === "strip" && sell.tabs[0].to).toBe("/sell");
     });
 
-    it("shows no tab for a screen this person's rungs already hid", () => {
-      // Subtract-only, the same rule the fold obeys: Billing, Return & Exchange
-      // and Till & Sync all need `sell: operate`, so a `view` rung leaves the
-      // one screen the API would actually open.
-      expect(sellTabs({ ...STORE_CAPS, sell: "view" })).toEqual(["Customers"]);
+    it("shows no published Sell tab to a view-only person", () => {
+      // The find-bill route remains protected at `sell: view`, but it is a door
+      // inside the counter rather than a second public section destination.
+      expect(sellTabs({ ...STORE_CAPS, sell: "view" })).toEqual([]);
       // And with no Sell section at all there is no row to draw.
       const { sell: _noSell, ...withoutSell } = STORE_CAPS;
       expect(sellTabs(withoutSell)).toEqual([]);
       expect(headings(rowsFor("store_staff", withoutSell))).not.toContain("Sell");
     });
 
-    it("still draws the sidebar row when only one tab survives", () => {
-      // One tab is not a choice, so the *strip* draws no tab row (the shell
-      // checks the count) - but the section is still held, so the link stays.
+    it("does not draw a Sell row with no published destination", () => {
       const rows = rowsFor("store_staff", { ...STORE_CAPS, sell: "view" });
       const sell = stripRow(rows, "sell");
-      expect(sell?.kind === "strip" && sell.tabs.map((i) => i.to)).toEqual(["/sell/customers"]);
-      expect(headings(rows)).toContain("Sell");
+      expect(sell).toBeUndefined();
+      expect(headings(rows)).not.toContain("Sell");
     });
 
     it("belongs to the store persona alone - nobody else gets a second menu", () => {
@@ -530,11 +523,11 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       const tabs = stripTabs(SELL_STRIP, visibleSections(user("store_staff", STORE_CAPS)));
       const lit = (url: string) => activeStripTab(tabs, url)?.to;
       expect(lit("/sell")).toBe("/sell");
-      expect(lit("/sell/returns")).toBe("/sell/returns");
-      // A document under a tab keeps its parent tab lit rather than falling back
-      // to Billing, whose path is a prefix of every one of these.
-      expect(lit("/sell/returns/12")).toBe("/sell/returns");
-      expect(lit("/sell/customers/4")).toBe("/sell/customers");
+      // The transitional routes are not tabs, so the visible Billing door stays
+      // lit if a bookmark or the counter's lookup opens one.
+      expect(lit("/sell/returns")).toBe("/sell");
+      expect(lit("/sell/returns/12")).toBe("/sell");
+      expect(lit("/sell/customers/4")).toBe("/sell");
       // A bill under Billing itself, and a mixed-case bookmark.
       expect(lit("/sell/9")).toBe("/sell");
       expect(lit("/Sell/Till/")).toBe("/sell/till");
@@ -552,11 +545,9 @@ describe("a persona's sidebar shape (#96, folded by #170)", () => {
       expect(billing.active.to).toBe("/sell");
       expect(billing.tabs.map((t) => t.label)).toEqual([
         "Billing",
-        "Return & Exchange",
-        "Customers",
         "Till & Sync",
       ]);
-      expect(row("/sell/returns/12", STORE_CAPS)!.title).toBe("Return & Exchange");
+      expect(row("/sell/till", STORE_CAPS)!.title).toBe("Till & Sync");
 
       // No row: a persona whose sidebar still expands Sell...
       expect(row("/sell", WAREHOUSE_CAPS, "owner")).toBeNull();

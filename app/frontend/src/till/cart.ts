@@ -121,6 +121,18 @@ export function emptyCart(): Cart {
   return { lines: [], payment: emptyPayment(), authorisation: null, exchange: null };
 }
 
+/** Apply the bill-level actor to the lines that deliberately have nobody yet.
+ * A line-level choice is a fact the cashier made and always wins. */
+export function inheritBillSalesman(cart: Cart, salesman: number | null): Cart {
+  if (salesman === null) return cart;
+  return {
+    ...cart,
+    lines: cart.lines.map((line) =>
+      line.salesman === null ? { ...line, salesman } : line,
+    ),
+  };
+}
+
 export interface PricedLine extends CartLine {
   line_no: number;
   gross_paise: number;
