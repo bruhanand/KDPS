@@ -5,7 +5,6 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   Gift,
-  Plus,
   Printer,
   Undo2,
   X,
@@ -58,6 +57,7 @@ import { usePositionedPopover } from "../../shell/usePositionedPopover";
 import { Lines } from "./billing/BillGrid";
 import { BillBar } from "./billing/BillBar";
 import type { CounterMode } from "./billing/BillBar";
+import { ScanHero } from "./billing/ScanHero";
 import { CustomerStrip } from "./billing/CustomerStrip";
 import { HeldBills } from "./billing/HeldBills";
 import { PaymentPanel } from "./billing/PaymentPanel";
@@ -77,9 +77,9 @@ import "./Billing.css";
 //
 // Three things about it are decisions rather than taste.
 //
-// **Every action is a visible button.** No F-keys, no shortcuts, no key handlers
-// anywhere on this page beyond Enter in the scan box (Anand's Phase-3 ruling,
-// 31 Jul). The browser's own function keys are left alone.
+// **Every action is a visible button.** F2/F3/F4/F9 and Esc are accelerators,
+// never the only door (grill Q4, 2 Aug); `useCounterKeys` claims them from the
+// browser while the scan hero keeps Enter for a wedge scanner.
 //
 // **Save & Print is the commit point, and it commits locally.** The number, the
 // shelf and the queue move in one IndexedDB transaction (`commitBill`), the
@@ -531,6 +531,10 @@ function Counter({
           }))
         : [],
     [typed, world.items, world.stock],
+  );
+  const demoCodes = useMemo(
+    () => [...new Set(world.items.map((item) => item.barcode))].slice(0, 4),
+    [world.items],
   );
 
   /** Whether this counter makes a noise at all (#247, grill Q8) - set on Till &
@@ -1097,26 +1101,25 @@ function Counter({
           onLookup={() => navigate("/sell/customers")}
           onNewBill={newBill}
         />
-        <div className="bill-scan-row">
-          <ScanBox
+        <ScanHero
+            mode={mode}
             boxRef={mergeRefs(scan.ref, scanFloat.triggerRef)}
             value={typed}
             disabled={locked || counterBlocked}
             placeholder={mode === "sale" ? "Scan a tag, or type a design number" : "Scan a bill number"}
+            hasError={Boolean(unknown)}
+            errorBarcode={unknown}
+            demoCodes={demoCodes}
             onChange={setTyped}
             onSubmit={applyScan}
+            onLookup={() => navigate("/sell/customers")}
+            onDismissError={closeScanFloat}
+            onBillOffTag={() => unknown && takeUnknown(unknown)}
+            onDemoScan={(code) => {
+              applyScan(code);
+              scan.focus();
+            }}
           />
-          <button
-            type="button"
-            className="btn"
-            data-testid="bill-undo"
-            title="Undo (no keyboard shortcut)"
-            disabled={counterBlocked || !undoStack.length || locked}
-            onClick={undo}
-          >
-            <Undo2 size={15} /> Undo
-          </button>
-        </div>
 
         {paper !== null && (
           <div className="bill-paper" data-testid="bill-paper">
@@ -1292,6 +1295,9 @@ function Counter({
                 onSalesman={pickSalesman}
                 onPicked={scan.focus}
                 onRemove={removeLine}
+                onUndo={undo}
+                canUndo={undoStack.length > 0}
+                footer={<Totals bill={bill} taxKind={taxKind} />}
               />
             </section>
 
@@ -1349,7 +1355,6 @@ function Counter({
             {unknown && (
               <NotInSystem
                 barcode={unknown}
-                hasSuggestions={suggestions.length > 0}
                 locked={locked}
                 onBill={() => takeUnknown(unknown)}
                 onDismiss={closeScanFloat}
@@ -1408,7 +1413,6 @@ function Counter({
       {/* Footer: pinned, visible from the first scan to the last. Reprint,
           then Save & Print - the one visually primary button on the screen. */}
       <div className="bill-foot">
-        <Totals bill={bill} taxKind={taxKind} />
         <div className="bill-actions">
           {blocked && (
             <span className="bill-blocked" data-testid="bill-blocked">
@@ -1626,75 +1630,16 @@ function mergeRefs<T>(...refs: RefObject<T>[]): (node: T | null) => void {
   };
 }
 
-// --- the scan box ----------------------------------------------------------
-
-/**
- * One box, two jobs (D10 §4).
- *
- * A wedge scanner types a barcode into it and sends Enter; a person types a name
- * or a design number into it for the tag that will not scan. Which happened is
- * not a mode anybody picks - a code that resolves is a scan, and anything else
- * offers what it could have meant.
- *
- * The only key this page handles is Enter, and it handles it here.
- */
-function ScanBox({
-  boxRef,
-  value,
-  disabled,
-  placeholder,
-  onChange,
-  onSubmit,
-}: {
-  boxRef: (node: HTMLInputElement | null) => void;
-  value: string;
-  disabled: boolean;
-  placeholder: string;
-  onChange: (v: string) => void;
-  onSubmit: (v: string) => void;
-}) {
-  return (
-    <input
-      ref={boxRef}
-      className="input bill-scan mono"
-      data-testid="bill-scan"
-      autoComplete="off"
-      disabled={disabled}
-      placeholder={placeholder}
-      aria-label={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key !== "Enter") return;
-        e.preventDefault();
-        onSubmit(value);
-      }}
-    />
-  );
-}
-
-/**
- * The scan found nothing: the two things that can mean, as two buttons (#186).
- *
- * Almost always the tag was mistyped, so the suggestion list underneath is the
- * first answer and this says so. The other answer is that the garment really is
- * new - it walked into the shop ahead of its paperwork - and grill Q5 is clear
- * that the customer never waits for that. So the second button bills it off the
- * tag: description and price typed here, cost posted when the PT lands.
- *
- * Not a modal. A dialogue over the line grid at the busiest moment of a sale is
- * the thing D10 §4 keeps off this screen, and there is nothing here a cashier has
- * to answer before they can carry on scanning.
- */
+/** The Rule 5 recovery door stays a positioned float: the scanner's error card
+ * tells the cashier what happened, while this is the non-blocking action for a
+ * garment that arrived before its paperwork. */
 function NotInSystem({
   barcode,
-  hasSuggestions,
   locked,
   onBill,
   onDismiss,
 }: {
   barcode: string;
-  hasSuggestions: boolean;
   locked: boolean;
   onBill: () => void;
   onDismiss: () => void;
@@ -1704,36 +1649,17 @@ function NotInSystem({
       <p className="bill-unknown-note">
         <AlertTriangle size={15} />
         <span>
-          Nothing on this counter is barcode <span className="mono">{barcode}</span>.
-          {hasSuggestions
-            ? " Check the list below first - a tag is misread far more often than a piece is new."
-            : " Check the tag, or search by design number."}
+          Barcode <span className="mono">{barcode}</span> is not in this counter's copy.
         </span>
       </p>
       <div className="bill-unknown-actions">
-        <button
-          type="button"
-          className="btn"
-          data-testid="bill-unknown-bill"
-          disabled={locked}
-          onClick={onBill}
-        >
-          <Plus size={15} />
+        <button type="button" className="btn" disabled={locked} onClick={onBill}>
           Bill it off the tag
         </button>
-        <button
-          type="button"
-          className="btn"
-          data-testid="bill-unknown-dismiss"
-          onClick={onDismiss}
-        >
+        <button type="button" className="btn" onClick={onDismiss}>
           Not that
         </button>
       </div>
-      <p className="muted-cell">
-        The bill prints as usual. What the piece cost us is posted when its paperwork arrives,
-        and the store's Dashboard counts it until then.
-      </p>
     </div>
   );
 }

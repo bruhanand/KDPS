@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
@@ -7,27 +8,19 @@ import type { CartLine, PricedLine } from "../../../till/cart";
 import { hasSlab, ratePercent } from "../../../till/tax";
 import { RupeeInput } from "./RupeeInput";
 
-/** Item · Brand · Barcode · Design · Size · Qty · Rate · Disc ₹ · GST ·
- *  Salesman · Net · remove.
- *
- *  GST was eight per cent of a counter screen for a rate and a rupee figure on
- *  every line - twelve numbers to answer a question that gets asked once a bill,
- *  at the end, about the whole bill. Grill Q7 collapsed it to a badge and moved
- *  the answer behind the footer's figure; the three points it frees go where
- *  the ruling sent them - two to the item name, one to the discount box. */
+/** The counter's visible columns. Size folds into Item below 1440px, leaving a
+ * readable item column instead of a sideways scrollbar at the 1366px reference
+ * width. GST remains reachable through its badge and the footer breakup. */
 const COLUMN_WIDTHS = [
-  "13%",
-  "8%",
-  "12%",
-  "8%",
-  "5%",
-  "7%",
-  "8%",
-  "9%",
-  "5%",
-  "12%",
-  "9%",
-  "4%",
+  "24px",
+  "auto",
+  "52px",
+  "88px",
+  "76px",
+  "82px",
+  "88px",
+  "104px",
+  "28px",
 ] as const;
 
 /** The columns staff read today (D10 §4), in the order they read them. */
@@ -39,6 +32,9 @@ export function Lines({
   onSalesman,
   onPicked,
   onRemove,
+  onUndo,
+  canUndo,
+  footer,
 }: {
   lines: PricedLine[];
   salesmen: { id: number; code: string; name: string }[];
@@ -47,42 +43,43 @@ export function Lines({
   onSalesman: (key: string, salesman: number | null) => void;
   onPicked: () => void;
   onRemove: (key: string) => void;
+  onUndo: () => void;
+  canUndo: boolean;
+  footer: ReactNode;
 }) {
-  if (!lines.length) {
-    return (
-      <p className="muted-cell bill-empty" data-testid="bill-empty">
-        Scan the first piece. The cursor is already in the scan box.
-      </p>
-    );
-  }
   return (
-    // `bill-grid-wrap` (not just `.table-wrap`) so Billing.css can scope the
-    // sticky-header override to this table alone - the exchange table shares
-    // `.bill-lines` and keeps the generic wrap's own scroll/rounded-corner
-    // behaviour.
-    <div className="table-wrap bill-grid-wrap">
-      <table className="data bill-grid" data-testid="bill-lines">
+    <section className="bill-grid-card" data-testid="bill-grid-card">
+      <div className="bill-grid-scroll">
+        {!lines.length ? (
+          <div className="bill-empty" data-testid="bill-empty">
+            <BarcodeEmpty />
+            <strong>Ready to scan</strong>
+            <span>Pull the scanner trigger. The cursor stays in the scan bar, always.</span>
+          </div>
+        ) : (
+        <table className="bill-grid" data-testid="bill-lines">
         {/* Fixed widths, not content widths. All twelve columns D10 names have
             to be on the counter's screen at once - a Net column that scrolled
             off the right would be the one number the cashier reads aloud. */}
         <colgroup>
           {COLUMN_WIDTHS.map((width, i) => (
-            <col key={i} style={{ width }} />
+            <col
+              key={i}
+              className={i === 2 ? "bill-size-column" : undefined}
+              style={i === 1 ? undefined : { width }}
+            />
           ))}
         </colgroup>
         <thead>
           <tr>
+            <th>#</th>
             <th>Item</th>
-            <th>Brand</th>
-            <th>Barcode</th>
-            <th>Design</th>
-            <th>Size</th>
+            <th className="bill-size-column">Size</th>
             <th className="num">Qty</th>
             <th className="num">Rate</th>
-            <th className="num">Disc ₹</th>
-            <th className="num">GST</th>
-            <th>Salesman</th>
+            <th className="num">Discount</th>
             <th className="num">Net</th>
+            <th>Salesperson</th>
             <th />
           </tr>
         </thead>
@@ -90,43 +87,42 @@ export function Lines({
           {lines.map((line) => (
             <Fragment key={line.key}>
             <tr data-testid={`bill-line-${line.line_no}`}>
-              <td colSpan={line.sold_before_inward ? 2 : 1}>
-                <ItemCell line={line} locked={locked} onEdit={onEdit} />
-                <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
-              </td>
-              {/* A sold-before-inward line has no brand - nothing has ever
-                  recorded one - so the description takes that column's width
-                  rather than leaving it blank beside a box too narrow to read
-                  what the cashier just typed in it (browser QA of #186). */}
-              {!line.sold_before_inward && <td>{line.brand}</td>}
+              <td className="bill-line-number">{line.line_no}</td>
               <td>
-                <span className="mono bill-barcode">{line.barcode}</span>
-                <br />
-                {/* The "Total Stock" readout staff use today (A3), against the
-                    barcode it is a count of rather than against the price. A
-                    piece the books have never heard of has no count to show -
-                    "0 in stock" would read as "we have run out" (#186). */}
-                <span className="muted-cell" data-testid={`bill-stock-${line.line_no}`}>
-                  {line.sold_before_inward ? "no count yet" : `${line.stock} in stock`}
-                </span>
+                <ItemCell line={line} locked={locked} onEdit={onEdit} />
+                <div className="bill-item-meta">
+                  {!line.sold_before_inward && <span>{line.brand}</span>}
+                  {!line.sold_before_inward && <span className="bill-design">{line.design}</span>}
+                  {!line.sold_before_inward && <span className="bill-color">{line.color}</span>}
+                  <span className="mono bill-barcode">{line.barcode}</span>
+                  <SeasonCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
+                  {line.offer_credits.map((credit) => (
+                    <span className="bill-offer" key={credit.offer_id}>
+                      {credit.offer_name || "Offer"}
+                    </span>
+                  ))}
+                  {line.sold_before_inward && <span className="bill-tag">Off tag</span>}
+                  {line.no_discount && <span className="bill-tag">No discount</span>}
+                </div>
+                <span className="bill-size-fold mono">Size {line.size}</span>
               </td>
-              <td>{line.design}</td>
-              <td>{line.size}</td>
+              <td className="bill-size-column mono">{line.size}</td>
               <td className="num">
-                <QtyCell line={line} locked={locked} onEdit={onEdit} />
+                <QtyCell line={line} locked={locked} onEdit={onEdit} onPicked={onPicked} />
               </td>
               <td className="num">
                 <RateCell line={line} locked={locked} onEdit={onEdit} />
               </td>
-              <td className="num">
+              <td className={line.disc_paise > 0 ? "num bill-discount-carrying" : "num"}>
                 <DiscountCell line={line} locked={locked} onEdit={onEdit} />
               </td>
               <td className="num">
-                <GstBadge line={line} />
+                <Money paise={line.net_paise} />
+                <span className="bill-net-tax">incl GST <GstBadge line={line} /></span>
               </td>
               <td>
                 <select
-                  className="select bill-cell"
+                  className={line.salesman === null ? "select bill-cell bill-salesman-missing" : "select bill-cell"}
                   disabled={locked}
                   data-testid={`bill-salesman-${line.line_no}`}
                   aria-label={`Salesman, line ${line.line_no}`}
@@ -143,9 +139,6 @@ export function Lines({
                   ))}
                 </select>
               </td>
-              <td className="num">
-                <Money paise={line.net_paise} />
-              </td>
               <td>
                 <button
                   type="button"
@@ -159,34 +152,31 @@ export function Lines({
                 </button>
               </td>
             </tr>
-            {/* The offers on their own row, spanning the grid.
-                They sat in the Disc column at first, which is sixty pixels
-                wide - it holds "₹1,049.70" and nothing longer, so a rule's
-                *name* broke to one syllable a line and stood up as a tall thin
-                column. A rule is the one thing on this row a cashier has to
-                read aloud to a customer who asks why the shirt is cheaper, so
-                it gets the width to be read in. */}
-            {line.offer_credits.length > 0 && (
-              <tr className="bill-offer-row" data-testid={`bill-offers-${line.line_no}`}>
-                <td colSpan={COLUMN_WIDTHS.length}>
-                  {line.offer_credits.map((credit) => (
-                    <span
-                      className="bill-offer"
-                      data-testid={`bill-offer-${line.line_no}-${credit.offer_id}`}
-                      key={credit.offer_id}
-                    >
-                      {credit.offer_name || "Offer"} · <Money paise={credit.saved_paise} />
-                    </span>
-                  ))}
-                </td>
-              </tr>
-            )}
             </Fragment>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+        )}
+      </div>
+      <footer className="bill-grid-footer">
+        <div className="bill-grid-totals">{footer}</div>
+        <button
+          type="button"
+          className="btn bill-grid-undo"
+          data-testid="bill-undo"
+          title="Undo (no keyboard shortcut)"
+          disabled={!canUndo || locked}
+          onClick={onUndo}
+        >
+          Undo
+        </button>
+      </footer>
+    </section>
   );
+}
+
+function BarcodeEmpty() {
+  return <span className="bill-empty-barcode" aria-hidden="true">|||| ||| ||||</span>;
 }
 
 /**
@@ -242,12 +232,7 @@ interface CellProps {
  */
 function ItemCell({ line, locked, onEdit }: CellProps) {
   if (!line.sold_before_inward) {
-    return (
-      <>
-        {line.item}
-        <br />
-      </>
-    );
+    return <strong className="bill-item-name">{line.item || line.design}</strong>;
   }
   return (
     <input
@@ -386,7 +371,7 @@ function DiscountCell({ line, locked, onEdit }: CellProps) {
  * the cart gets - which truncates, so "1.5" is one piece and never 15 and never
  * a fraction on the write path.
  */
-function QtyCell({ line, locked, onEdit }: CellProps) {
+function QtyCell({ line, locked, onEdit, onPicked }: CellProps & { onPicked: () => void }) {
   const [text, setText] = useState(String(line.qty));
   const shown = useRef(line.qty);
 
@@ -396,23 +381,35 @@ function QtyCell({ line, locked, onEdit }: CellProps) {
     setText(String(line.qty));
   }, [line.qty]);
 
+  const step = (delta: number) => {
+    const qty = Math.max(1, line.qty + delta);
+    shown.current = qty;
+    setText(String(qty));
+    onEdit(line.key, { qty });
+    onPicked();
+  };
+
   return (
-    <input
-      className="input bill-cell"
-      inputMode="numeric"
-      disabled={locked}
-      data-testid={`bill-qty-${line.line_no}`}
-      aria-label={`Quantity, line ${line.line_no}`}
-      value={text}
-      onChange={(e) => {
-        setText(e.target.value);
-        const qty = qtyFrom(e.target.value);
-        shown.current = qty;
-        onEdit(line.key, { qty });
-      }}
-      // Whatever half-written thing is in the box, the count it actually billed
-      // is what the cashier should be looking at once they leave it.
-      onBlur={() => setText(String(line.qty))}
-    />
+    <span className="bill-qty-stepper">
+      <button type="button" disabled={locked || line.qty <= 1} onClick={() => step(-1)} aria-label={`Remove one, line ${line.line_no}`}>−</button>
+      <input
+        className="input bill-cell"
+        inputMode="numeric"
+        disabled={locked}
+        data-testid={`bill-qty-${line.line_no}`}
+        aria-label={`Quantity, line ${line.line_no}`}
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          const qty = qtyFrom(e.target.value);
+          shown.current = qty;
+          onEdit(line.key, { qty });
+        }}
+        // Whatever half-written thing is in the box, the count it actually billed
+        // is what the cashier should be looking at once they leave it.
+        onBlur={() => setText(String(line.qty))}
+      />
+      <button type="button" disabled={locked} onClick={() => step(1)} aria-label={`Add one, line ${line.line_no}`}>+</button>
+    </span>
   );
 }
