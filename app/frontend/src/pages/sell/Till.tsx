@@ -627,8 +627,8 @@ function ScanSounds({ engine, muted }: { engine: TillEngine; muted: boolean }) {
       <h2 className="h3">Scan sounds</h2>
       <p className="muted-cell">
         A short tick when a scan puts a piece on the bill, and a different, lower buzz when it
-        does not - an unknown tag, or a piece the counter needs told which season it is. Set on
-        this counter, and it stays set.
+        does not - an unknown tag, or a piece still waiting to be told which season it is. Set
+        on this counter, and it stays set.
       </p>
       <div className="till-sound-row">
         <button
