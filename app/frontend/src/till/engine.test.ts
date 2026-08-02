@@ -407,3 +407,32 @@ describe("bills on hold (#185)", () => {
     expect(engine.getSnapshot().counts.held).toBe(1);
   });
 });
+
+describe("the scan tones (#247, grill Q8)", () => {
+  it("stays muted after a reload", async () => {
+    // The whole of the acceptance criterion: a cashier who turned the noise off
+    // must not have to find the switch again every morning. So the answer lives
+    // in the counter's own database, and a reload is a fresh engine over it.
+    const { engine, server, storeCode } = engineOn();
+    await engine.start();
+    expect(engine.getSnapshot().muted).toBe(false);
+
+    await engine.setMuted(true);
+    expect(engine.getSnapshot().muted).toBe(true);
+
+    const reloaded = new TillEngine(storeCode, server);
+    await reloaded.refresh();
+    expect(reloaded.getSnapshot().muted).toBe(true);
+    reloaded.stop();
+  });
+
+  it("turns back on again", async () => {
+    const { engine } = engineOn();
+    await engine.start();
+
+    await engine.setMuted(true);
+    await engine.setMuted(false);
+
+    expect(engine.getSnapshot().muted).toBe(false);
+  });
+});

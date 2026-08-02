@@ -93,6 +93,11 @@ export const META = {
   policy: "policy",
   /** The salesman the counter picked last, defaulted onto the next line. */
   lastSalesman: "lastSalesman",
+  /** This counter has turned the scan tones off (#247, grill Q8). Here rather
+   *  than on the user, and here rather than in `policy`: it is a property of the
+   *  machine standing in the shop - one counter is beside the music, another is
+   *  in a back office - and head office has no business ruling on it. */
+  muted: "muted",
   /** The register handover this machine took over on, and the bills the old one
    *  never sent - see `HandoverState`. A list somebody is working through, and
    *  they may put it away when they are done. */
