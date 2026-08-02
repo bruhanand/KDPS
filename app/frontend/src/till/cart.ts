@@ -19,8 +19,8 @@
 // The offer engine (#183) sits inside `priceCart`, and its output is kept in a
 // field of its own rather than folded into `disc_paise`. That separation is the
 // whole point: `disc_paise` is what a *cashier* keyed in, and it is the thing
-// the cap measures. Adding a rulebook discount into it would trip
-// `OVERRIDE_REQUIRED` on every offer in the shop; keeping the rulebook's saving
+// the cap measures. Adding a rulebook discount into it would trip the manual
+// policy on every offer in the shop; keeping the rulebook's saving
 // out of it would understate the bill. So the line carries both, adds them for
 // the customer, and sends the sum as the line's discount with the evidence to
 // say where it came from.
@@ -35,7 +35,7 @@ import { refundTotals, whyExchangeCannotClose } from "./exchange";
 import type { Exchange } from "./exchange";
 import { resolveOffers } from "./offers";
 import type { Entitlement, LineOutcome, OfferCart } from "./offers";
-import { covers, kindsOf, OVER_CAP_DISCOUNT, UNVERIFIED_NOTE } from "./pin";
+import { covers, kindsOf, UNVERIFIED_NOTE } from "./pin";
 import type { Ask, Authorisation } from "./pin";
 import { rateHundredths, slabFor, splitLine } from "./pricing";
 import { emptyPayment, splitOf, toTenders, whyPaymentCannotClose } from "./tender";
@@ -150,7 +150,10 @@ export interface PricedLine extends CartLine {
   gst_paise: number;
   /** The most of this line a cashier may knock off on their own (B2). */
   cap_paise: number;
+  cap_percent: string;
   over_cap: boolean;
+  /** A rulebook discount locks manual entry unless HO's stacking dial is on. */
+  manual_discount_allowed: boolean;
 }
 
 export interface PricedBill {
@@ -201,10 +204,9 @@ export interface PricingWorld {
 }
 
 export interface PricingOptions {
-  /** `SellPolicy.manual_discount_cap_percent`, as it came down in the dataset.
-   *  Nought - no keyed-in discount without a manager - is the shipped default
-   *  and the safe end of the dial, so it is also the default here. */
+  /** `SellPolicy.manual_discount_cap_percent`, as it came down in the dataset. */
   capPercent?: string;
+  allowManualDiscountOnOfferLines?: boolean;
 }
 
 /** A scanned piece as a fresh line: one of it, no discount, no salesman yet. */
@@ -350,6 +352,11 @@ export function capFor(mrpPaise: number, qty: number, capPercent: string): numbe
   return Math.floor((mrpPaise * qty * rateHundredths(capPercent)) / 10_000);
 }
 
+/** The only manual value the counter writes from its discount cell. */
+export function clampManualDiscount(paise: number, capPaise: number): number {
+  return Math.min(Math.max(paise, 0), capPaise);
+}
+
 /**
  * Price the whole cart: the rulebook, then every line, then the bill.
  *
@@ -366,10 +373,19 @@ export function priceCart(
   options: PricingOptions = {},
 ): PricedBill {
   const capPercent = options.capPercent ?? "0.00";
+  const allowManualDiscountOnOfferLines = options.allowManualDiscountOnOfferLines ?? false;
   const rulebook = resolveOffers(offerCart(cart, day), world.offers ?? []);
   const byLine = new Map(rulebook.lines.map((outcome) => [outcome.line_no, outcome]));
   const lines = cart.lines.map((line, index) =>
-    priceLine(line, index + 1, world, day, capPercent, byLine.get(index + 1)),
+    priceLine(
+      line,
+      index + 1,
+      world,
+      day,
+      capPercent,
+      allowManualDiscountOnOfferLines,
+      byLine.get(index + 1),
+    ),
   );
 
   const gross = lines.reduce((n, l) => n + l.gross_paise, 0);
@@ -386,7 +402,7 @@ export function priceCart(
   // rather than for a negative, so the panel does not invite a cashier to pay
   // out of the drawer.
   const split = splitOf(cart.payment, Math.max(net, 0), world.creditNotes, day);
-  const asks = asksOn(lines, split);
+  const asks = asksOn(split);
 
   return {
     lines,
@@ -470,24 +486,11 @@ export function creditsOn(evidence: OfferEvidence | NoOffer): StackedCredit[] {
 /**
  * Everything on this bill a manager has to agree to, one entry per thing.
  *
- * Per line and per note rather than per kind, because that is the granularity a
- * manager actually agrees at: they look at a discount on line 3, or at a note
- * the counter cannot check, and say yes to that. `pin.covers` then holds the
- * cashier to it - a bigger discount on the same line, or a discount on another
- * line, is a thing nobody has looked at and asks again.
+ * Only an unverified credit note remains a bill-level manager ask. Manual
+ * discounts are constrained directly by the policy dials instead.
  */
-function asksOn(lines: PricedLine[], split: TenderSplit): Ask[] {
-  const asks: Ask[] = lines
-    .filter((line) => line.over_cap)
-    .map((line) => ({
-      kind: OVER_CAP_DISCOUNT,
-      // The line's own key, not its number: a line removed from the middle of a
-      // bill renumbers every line under it, and an authorisation that followed
-      // the *number* would slide onto a piece nobody approved.
-      ref: line.key,
-      paise: line.disc_paise,
-      label: `Line ${line.line_no}`,
-    }));
+function asksOn(split: TenderSplit): Ask[] {
+  const asks: Ask[] = [];
   for (const standing of split.notes) {
     if (!standing.doubt) continue;
     asks.push({
@@ -506,6 +509,7 @@ function priceLine(
   world: PricingWorld,
   day: string,
   capPercent: string,
+  allowManualDiscountOnOfferLines: boolean,
   offer: LineOutcome | undefined,
 ): PricedLine {
   const gross = line.mrp_paise * line.qty;
@@ -531,9 +535,11 @@ function priceLine(
     gst_rate: split.rate,
     gst_paise: split.gst_paise,
     cap_paise: cap,
+    cap_percent: capPercent,
     // The cap measures the cashier, so it measures `disc_paise` alone. An offer
     // is head office's decision and was never the counter's to authorise.
     over_cap: line.disc_paise > cap,
+    manual_discount_allowed: offerPaise === 0 || allowManualDiscountOnOfferLines,
   };
 }
 
@@ -597,11 +603,20 @@ export function whyItCannotClose(bill: PricedBill): string {
   if (negative) {
     return `Line ${negative.line_no} is discounted by more than it costs.`;
   }
-  const discount = bill.needsAuthorising.find((ask) => ask.kind === OVER_CAP_DISCOUNT);
-  if (discount) {
+  const overCap = bill.lines.find((line) => line.over_cap);
+  if (overCap) {
     return (
-      `${discount.label} discounts more than a cashier may on their own. ` +
-      "A manager of this store has to approve it."
+      `Line ${overCap.line_no} is above Head Office's ${overCap.cap_percent}% ` +
+      "manual discount limit."
+    );
+  }
+  const manualOnOffer = bill.lines.find(
+    (line) => !line.manual_discount_allowed && line.disc_paise > 0,
+  );
+  if (manualOnOffer) {
+    return (
+      `Line ${manualOnOffer.line_no} already has an offer; Head Office has turned ` +
+      "manual discount stacking off."
     );
   }
   // Found in browser QA of #185, and it is #181's rule rather than that ticket's:
@@ -739,12 +754,8 @@ export function toDraft(bill: PricedBill, identity: BillIdentity): BillDraft {
       ? {
           override: {
             user_id: bill.authorisation.user_id,
-            // A bill can need two things authorised at once, and the contract
-            // has one `kind` for them. They are joined with `+` in one fixed
-            // order - "over_cap_discount+credit_note" - so what is stored is
-            // always the same word for the same pair, and a check grouping on it
-            // never sees two spellings. The server takes those four values and
-            // no others.
+            // The remaining bill-level PIN path is an unverified credit note.
+            // `kindsOf` owns that closed wire vocabulary.
             kind: kindsOf(bill.asks).join("+"),
             at: bill.authorisation.at,
           },

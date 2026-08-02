@@ -35,13 +35,12 @@ const ALGORITHM = "pbkdf2_sha256";
 /**
  * What a manager may be asked to authorise at the counter.
  *
- * Four kinds, in two groups, and the split matters.
+ * Three kinds, in two groups, and the split matters.
  *
- * The **first two travel to the server** as the contract's `override.kind` on a
- * bill, and are what the daily check groups by - so that pair is a closed
- * vocabulary for the same reason `BillTender.mode` is: a fifth string there would
- * be an exception nobody counts. `kindsOf` builds the wire word out of those two
- * and only those two.
+ * The **first travels to the server** as the contract's `override.kind` on a
+ * bill, and is what the daily check groups by - so that closed
+ * vocabulary for the same reason `BillTender.mode` is: a second string would be
+ * an exception nobody counts. `kindsOf` builds the wire word from that one kind.
  *
  * The **second two never reach a wire at all** (#184). A plain return records its
  * manager as a bare `user_id` and its late-ness as a boolean of its own, so the
@@ -49,8 +48,6 @@ const ALGORITHM = "pbkdf2_sha256";
  * PIN modal is the same modal, and it has to be able to say what it is asking
  * about.
  */
-/** A discount past what a cashier may give on their own (B2). */
-export const OVER_CAP_DISCOUNT = "over_cap_discount" as const;
 /** A credit note this counter cannot check - unknown, spent, or out of date.
  *  The wire word is the contract's, and it is the plain noun. */
 export const UNVERIFIED_NOTE = "credit_note" as const;
@@ -62,13 +59,12 @@ export const PLAIN_RETURN = "plain_return" as const;
 export const LATE_RETURN = "late_return" as const;
 
 export type AuthorisationKind =
-  | typeof OVER_CAP_DISCOUNT
   | typeof UNVERIFIED_NOTE
   | typeof PLAIN_RETURN
   | typeof LATE_RETURN;
 
 /** The kinds a *bill* can carry, which is what `override.kind` is spelled from. */
-export const WIRE_KINDS = [OVER_CAP_DISCOUNT, UNVERIFIED_NOTE] as const;
+export const WIRE_KINDS = [UNVERIFIED_NOTE] as const;
 
 /**
  * One thing on a bill that a manager has to agree to.

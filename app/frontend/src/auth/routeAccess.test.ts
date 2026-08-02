@@ -101,6 +101,14 @@ describe("canAccess", () => {
     expect(canAccess("/setup/users", storePerson)).toBe(false);
   });
 
+  it("gates counter settings at sell:manage, even though the card uses a Setup URL", () => {
+    const sellManager = withSections({ home: "view", sell: "manage" });
+    expect(canAccess("/setup/settings", sellManager)).toBe(true);
+    expect(canAccess("/setup/settings", withSections({ home: "view", setup: "manage" }))).toBe(
+      false,
+    );
+  });
+
   it("Booking opens read-only for the store and stays shut to placing one", () => {
     // The ratified correction (#130): a store plans space and staff against the
     // goods headed to it, so the list opens at `booking: view`. Creating stays

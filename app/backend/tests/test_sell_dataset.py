@@ -308,7 +308,10 @@ def test_the_discount_cap_rides_down_so_the_counter_can_hold_it(till):
 
     body = till["client"].get(URL).json()
 
-    assert body["policy"] == {"manual_discount_cap_percent": "7.50"}
+    assert body["policy"] == {
+        "manual_discount_cap_percent": "7.50",
+        "manual_discount_on_offer_lines": False,
+    }
 
 
 def test_the_discount_cap_rides_down_on_a_delta_too(till):

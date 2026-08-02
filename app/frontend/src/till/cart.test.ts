@@ -4,6 +4,7 @@ import {
   addManualPiece,
   addPiece,
   capFor,
+  clampManualDiscount,
   changeFor,
   emptyCart,
   inheritBillSalesman,
@@ -226,21 +227,30 @@ describe("the cashier's discount cap", () => {
     expect(capFor(333, 1, "7.50")).toBe(24);
   });
 
-  it("is nothing at all until head office turns the dial", () => {
-    expect(capFor(200000, 1, "0.00")).toBe(0);
+  it("refuses a typed amount beyond the HO cap", () => {
+    expect(clampManualDiscount(20_000, 15_000)).toBe(15_000);
   });
 
-  it("marks a line the cashier may not discount on their own", () => {
+  it("blocks an old draft that exceeds the absolute cap without asking for a PIN", () => {
     const bill = priceCart(cartOf(scanned(200000, { disc_paise: 20000 })), WORLD, "2026-07-30", {
       capPercent: "7.50",
     });
 
     expect(bill.lines[0].cap_paise).toBe(15000);
     expect(bill.lines[0].over_cap).toBe(true);
-    expect(bill.needsAuthorising).toEqual([
-      { kind: "over_cap_discount", ref: bill.lines[0].key, paise: 20000, label: "Line 1" },
-    ]);
-    expect(whyItCannotClose(bill)).toMatch(/manager/i);
+    expect(bill.asks).toEqual([]);
+    expect(whyItCannotClose(bill)).toMatch(/head office/i);
+  });
+
+  it("blocks an old draft with manual discount on an offer line when stacking is off", () => {
+    const bill = priceCart(
+      cartOf(scanned(149900, { disc_paise: 5000 })),
+      RULEBOOK,
+      "2026-07-30",
+      { capPercent: "10.00" },
+    );
+
+    expect(whyItCannotClose(bill)).toMatch(/stacking off/i);
   });
 
   it("lets a discount inside the cap through without a word", () => {
@@ -249,79 +259,7 @@ describe("the cashier's discount cap", () => {
     });
 
     expect(bill.lines[0].over_cap).toBe(false);
-    expect(bill.needsAuthorising).toEqual([]);
     expect(whyItCannotClose(bill)).toBe("");
-  });
-
-  it("closes once a manager has approved the over-cap line", () => {
-    const cap = { capPercent: "7.50" };
-    const discounted = cartOf(scanned(200000, { disc_paise: 20000 }));
-    const cart = { ...discounted, authorisation: approved(...asksOf(discounted, cap)) };
-
-    const bill = priceCart(cart, WORLD, "2026-07-30", cap);
-
-    expect(bill.needsAuthorising).toEqual([]);
-    expect(whyItCannotClose(bill)).toBe("");
-  });
-
-  it("asks again when the cashier raises the discount the manager agreed to", () => {
-    // The hole this closes: a manager nods at ₹200 off, the cashier makes it
-    // ₹500, and the bill closes with the manager's name on it.
-    const cap = { capPercent: "7.50" };
-    const agreed = cartOf(scanned(200000, { disc_paise: 20000 }));
-    const raised = {
-      ...cartOf({ ...agreed.lines[0], disc_paise: 50000 }),
-      authorisation: approved(...asksOf(agreed, cap)),
-    };
-
-    const bill = priceCart(raised, WORLD, "2026-07-30", cap);
-
-    expect(bill.needsAuthorising).toHaveLength(1);
-    expect(whyItCannotClose(bill)).toMatch(/manager/i);
-  });
-
-  it("stands when the cashier takes some of that discount back off", () => {
-    const cap = { capPercent: "7.50" };
-    const agreed = cartOf(scanned(200000, { disc_paise: 50000 }));
-    const trimmed = {
-      ...cartOf({ ...agreed.lines[0], disc_paise: 20000 }),
-      authorisation: approved(...asksOf(agreed, cap)),
-    };
-
-    expect(whyItCannotClose(priceCart(trimmed, WORLD, "2026-07-30", cap))).toBe("");
-  });
-
-  it("asks again for a second over-cap line the manager never saw", () => {
-    const cap = { capPercent: "7.50" };
-    const first = cartOf(scanned(200000, { disc_paise: 20000 }));
-    const both = {
-      ...cartOf(first.lines[0], scanned(200000, { disc_paise: 20000 })),
-      authorisation: approved(...asksOf(first, cap)),
-    };
-
-    const bill = priceCart(both, WORLD, "2026-07-30", cap);
-
-    expect(bill.asks).toHaveLength(2);
-    expect(bill.needsAuthorising).toHaveLength(1);
-    expect(whyItCannotClose(bill)).toMatch(/Line 2/);
-  });
-
-  it("asks again for an exception of another kind entirely", () => {
-    // They approved the credit note and walked away; the cashier then keyed in a
-    // discount past the cap.
-    const cap = { capPercent: "7.50" };
-    const noted = paying(cartOf(scanned(200000)), {
-      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 20000 }],
-    });
-    const andDiscounted = {
-      ...paying(cartOf(scanned(200000, { disc_paise: 20000 })), noted.payment),
-      authorisation: approved(...asksOf(noted, cap)),
-    };
-
-    const bill = priceCart(andDiscounted, WORLD, "2026-07-30", cap);
-
-    expect(bill.needsAuthorising.map((ask) => ask.kind)).toEqual(["over_cap_discount"]);
-    expect(whyItCannotClose(bill)).toMatch(/manager/i);
   });
 });
 
@@ -539,36 +477,6 @@ describe("the bill's split, as the till hands it over", () => {
     });
   });
 
-  it("says both, in one order, when a bill needed two things approving", () => {
-    const cap = { capPercent: "7.50" };
-    const messy = paying(cartOf(scanned(200000, { salesman: 3, disc_paise: 20000 })), {
-      notes: [{ ...newNote(), number: "26-27/XXX/CRN/9", amount_paise: 20000 }],
-    });
-    const authorised = { ...messy, authorisation: approved(...asksOf(messy, cap)) };
-
-    const drafted = toDraft(priceCart(authorised, WORLD, "2026-07-30", cap), {
-      billedAt: "2026-07-30T12:31:00.000Z",
-    });
-
-    expect(drafted.override?.kind).toBe("over_cap_discount+credit_note");
-  });
-
-  it("leaves an authorisation off a bill that ended up asking for nothing", () => {
-    // The cashier took the discount back off after the manager approved it.
-    // Sending the override anyway would put a manager's name on an ordinary bill.
-    const cap = { capPercent: "7.50" };
-    const agreed = cartOf(scanned(200000, { salesman: 3, disc_paise: 20000 }));
-    const undone = {
-      ...cartOf({ ...agreed.lines[0], disc_paise: 0 }),
-      authorisation: approved(...asksOf(agreed, cap)),
-    };
-
-    const drafted = toDraft(priceCart(undone, WORLD, "2026-07-30", cap), {
-      billedAt: "2026-07-30T12:31:00.000Z",
-    });
-
-    expect(drafted.override).toBeUndefined();
-  });
 });
 
 // --- what the rulebook does to the money on the screen (#183) --------------
@@ -624,13 +532,18 @@ describe("the rulebook, on the line and on the bill", () => {
     expect(whyItCannotClose(bill)).toBe("");
   });
 
-  it("still caps what the cashier keyed in on top of an offer", () => {
+  it("locks manual entry on an offer line unless HO enables stacking", () => {
     const bill = priceCart(cartOf(scanned(149900, { disc_paise: 20000 })), RULEBOOK, "2026-07-30", {
       capPercent: "7.50",
     });
 
-    expect(bill.lines[0].over_cap).toBe(true);
-    expect(whyItCannotClose(bill)).toContain("more than a cashier may");
+    expect(bill.lines[0].manual_discount_allowed).toBe(false);
+    expect(
+      priceCart(cartOf(scanned(149900, { disc_paise: 5000 })), RULEBOOK, "2026-07-30", {
+        capPercent: "7.50",
+        allowManualDiscountOnOfferLines: true,
+      }).lines[0].manual_discount_allowed,
+    ).toBe(true);
   });
 
   it("stops a rule the day it stops, on the counter's own clock", () => {

@@ -4,7 +4,6 @@ import { AlertTriangle, KeyRound } from "lucide-react";
 import { Money } from "../../lib/format";
 import {
   LATE_RETURN,
-  OVER_CAP_DISCOUNT,
   PLAIN_RETURN,
   UNVERIFIED_NOTE,
   whoAuthorised,
@@ -60,7 +59,6 @@ export function useWrongPins(): { wrong: number; wasWrong: () => void; clear: ()
 
 /** What each authorisation kind is called on the shop floor. */
 const KIND_WORDS: Record<AuthorisationKind, string> = {
-  [OVER_CAP_DISCOUNT]: "a discount past the cashier's limit",
   [UNVERIFIED_NOTE]: "a credit note this counter cannot check",
   [PLAIN_RETURN]: "taking a piece back for a credit note",
   [LATE_RETURN]: "taking it back after the return window closed",
@@ -218,4 +216,3 @@ export function ManagerPin({
     </div>
   );
 }
-

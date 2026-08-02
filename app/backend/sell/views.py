@@ -34,10 +34,11 @@ from core.dates import parse_day
 from core.refusals import first_message, refusal_body
 from masters.models import Store
 from masters.scoping import scope_by_entitlement, scope_by_store
-from sell.models import ContinuityFlag, HeldBill, IrnQueueItem, Sale, SaleLine
+from sell.models import ContinuityFlag, HeldBill, IrnQueueItem, Sale, SaleLine, SellPolicy
 from sell.permissions import (
     CanHandOverTill,
     CanReadOrBill,
+    CanReadOrManagePolicy,
     CanReadSales,
     CanRunTill,
     CanTakeReturns,
@@ -55,6 +56,7 @@ from sell.serializers import (
     SaleReadSerializer,
     SaleRowSerializer,
     SaleWriteSerializer,
+    SellPolicyWriteSerializer,
 )
 from sell.services.accept import AcceptError, accept_sale
 from sell.services.dataset import TillScopeError, build_dataset, resolve_till_store
@@ -71,6 +73,27 @@ SEARCH_LIMIT = 50
 #: rather than scrolling. When the cap bites, the response says `truncated` and
 #: the screen says so out loud.
 SETTLED_LIMIT = 200
+
+
+class SellPolicyView(APIView):
+    """The chain-wide discount dials, read whole and written whole (#271)."""
+
+    permission_classes = [IsAuthenticated, CanReadOrManagePolicy]
+
+    def get(self, request: Request) -> Response:
+        return Response(SellPolicy.current().as_till_policy())
+
+    def put(self, request: Request) -> Response:
+        form = SellPolicyWriteSerializer(data=request.data)
+        if not form.is_valid():
+            return Response(refusal_body("VALIDATION", first_message(form.errors)), status=400)
+        policy = SellPolicy.current()
+        policy.manual_discount_cap_percent = form.validated_data["manual_discount_cap_percent"]
+        policy.manual_discount_on_offer_lines = form.validated_data[
+            "manual_discount_on_offer_lines"
+        ]
+        policy.save(update_fields=["manual_discount_cap_percent", "manual_discount_on_offer_lines"])
+        return Response(policy.as_till_policy())
 
 
 def _sales(user: Any) -> QuerySet[Sale]:

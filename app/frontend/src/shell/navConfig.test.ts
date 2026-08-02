@@ -127,6 +127,11 @@ describe("the thirteen sections", () => {
     expect(vflip?.section).toBe("stock");
     expect(vflip?.action).toBe(true);
   });
+
+  it("publishes counter settings with the Sell permission its API requires", () => {
+    const settings = itemOwning("/setup/settings");
+    expect(settings).toMatchObject({ section: "sell", minCapability: "manage" });
+  });
 });
 
 describe("the highlighted menu line", () => {

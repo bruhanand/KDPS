@@ -29,6 +29,8 @@ CanReadOrBill = require_section("sell", CAP_VIEW, write_minimum=CAP_OPERATE)
 #: Reading one bill for reprint.
 CanReadSales = require_section("sell", CAP_VIEW)
 
+CanReadOrManagePolicy = require_section("sell", CAP_VIEW, write_minimum=CAP_MANAGE)
+
 #: Pulling the till's dataset down (#179). `operate`, not `view`: it is not a
 #: report about selling but the working copy a counter bills from, and it carries
 #: this store's manager override PIN hashes. Somebody who may only read back

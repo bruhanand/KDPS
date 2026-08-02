@@ -400,24 +400,21 @@ def _seasons() -> list[dict[str, Any]]:
     ]
 
 
-def _policy() -> dict[str, str]:
-    """The dials the counter has to hold offline - today, just the discount cap.
+def _policy() -> dict[str, str | bool]:
+    """The dials the counter has to hold offline.
 
     The cap is B2: below it a manual discount is the cashier's to give, above it
     the bill will not close without a manager. Both ends of that rule have to
     agree, and only one of them is online. A till that did not know the number
-    would let a cashier key in a discount the accept pipeline refuses with
-    `OVERRIDE_REQUIRED` - days later, when the bill is printed, paid for and in a
-    customer's hand, and the only remaining move is a human unpicking it.
+    would let a cashier key in a discount the accept pipeline refuses - days later,
+    when the bill is printed, paid for and in a customer's hand.
 
     So it rides down whole on every response, and as a two-decimal **string** for
     the reason the tax rates are: the till multiplies by it, and a rate that
     arrived as 7.499999 would put the counter and the server on opposite sides of
     a cap.
     """
-    return {
-        "manual_discount_cap_percent": f"{SellPolicy.current().manual_discount_cap_percent:.2f}"
-    }
+    return SellPolicy.current().as_till_policy()
 
 
 def _offer_is_for(offer: Offer, store_code: str, today: date) -> bool:

@@ -18,11 +18,13 @@ from sell.views import (
     ReturnCreateView,
     SaleDetailView,
     SaleListCreateView,
+    SellPolicyView,
     StoreFlagsView,
     StoreFlagView,
 )
 
 urlpatterns = [
+    path("policy", SellPolicyView.as_view(), name="sell-policy"),
     path("dataset", DatasetView.as_view(), name="sell-dataset"),
     path("returns", ReturnCreateView.as_view(), name="sell-returns"),
     path("register/handover", RegisterHandoverView.as_view(), name="sell-register-handover"),

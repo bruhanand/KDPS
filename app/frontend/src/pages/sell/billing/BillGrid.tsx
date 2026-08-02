@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { X } from "lucide-react";
 
 import { formatINR, Money } from "../../../lib/format";
-import { qtyFrom } from "../../../till/cart";
+import { clampManualDiscount, qtyFrom } from "../../../till/cart";
 import type { CartLine, PricedLine } from "../../../till/cart";
 import { hasSlab, ratePercent } from "../../../till/tax";
 import { RupeeInput } from "./RupeeInput";
@@ -332,21 +332,25 @@ function RateCell({ line, locked, onEdit }: CellProps) {
  * offer.
  */
 function DiscountCell({ line, locked, onEdit }: CellProps) {
+  const lockedOnOffer = !line.manual_discount_allowed;
   return (
     <>
-      <RupeeInput
-        testId={`bill-disc-${line.line_no}`}
-        label={`Discount, line ${line.line_no}`}
-        paise={line.disc_paise}
-        locked={locked || line.cap_paise === 0}
-        placeholder="0"
-        onChange={(paise) => onEdit(line.key, { disc_paise: paise ?? 0 })}
-      />
-      {line.over_cap && (
-        <span className="bill-overcap" data-testid={`bill-overcap-${line.line_no}`}>
-          over the cap
-        </span>
-      )}
+      <span
+        title={
+          lockedOnOffer
+            ? "This line already has an offer; Head Office has turned manual stacking off."
+            : `Head Office allows up to ${line.cap_percent}% manual discount on this line.`
+        }
+      >
+        <RupeeInput
+          testId={`bill-disc-${line.line_no}`}
+          label={`Discount, line ${line.line_no}`}
+          paise={line.disc_paise}
+          locked={locked || line.cap_paise === 0 || lockedOnOffer}
+          placeholder="0"
+          onChange={(paise) => onEdit(line.key, { disc_paise: clampManualDiscount(paise ?? 0, line.cap_paise) })}
+        />
+      </span>
       {/* Information, not a gate - and deliberately so. The rulebook (#183) does
           obey this flag: no offer, of any layer, reaches a no-discount piece.
           But nothing in the corpus says a *cashier's* keyed-in discount is

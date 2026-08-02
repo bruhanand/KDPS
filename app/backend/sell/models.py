@@ -23,6 +23,7 @@ Two shapes here are worth reading before the rest:
 from __future__ import annotations
 
 from datetime import date
+from decimal import Decimal
 
 from django.db import models
 from django.db.models.functions import Coalesce
@@ -49,13 +50,9 @@ class SellPolicy(TimeStampedModel):
     none of them varies by store today. It is read on every accept, so it is
     deliberately tiny.
 
-    ``manual_discount_cap_percent`` is the B2 rule: a discount the rulebook did
-    not produce is a *manual* discount, and beyond the cap the bill will not close
-    without a manager's OK recorded on it. It ships at zero - no keyed-in discount
-    at all without a manager - because that is the safe end of the dial for a
-    number nobody has decided yet: the requirements register defers the exact
-    limits and the per-role grid to D4, which left them thin. Head office widens
-    it; nothing widens itself.
+    ``manual_discount_cap_percent`` is the absolute limit on the part of a line's
+    discount that the rulebook did not produce. Head office changes the dial; the
+    counter never routes around it through a manager PIN.
 
     ``credit_note_validity_days`` is how long a note issued here stays spendable.
     Six months is the Indian norm and the grill recorded it as data, not a rule.
@@ -91,8 +88,12 @@ class SellPolicy(TimeStampedModel):
     manual_discount_cap_percent = models.DecimalField(
         max_digits=5,
         decimal_places=2,
-        default=0,
-        help_text="Discount a cashier may key in without a manager, as a percent of MRP.",
+        default=Decimal("10.00"),
+        help_text="Maximum manual discount, as a percent of MRP.",
+    )
+    manual_discount_on_offer_lines = models.BooleanField(
+        default=False,
+        help_text="Whether a rulebook-discounted line may also carry a manual discount.",
     )
     credit_note_validity_days = models.IntegerField(
         default=180,
@@ -149,18 +150,26 @@ class SellPolicy(TimeStampedModel):
     def __str__(self) -> str:
         return (
             f"cap {self.manual_discount_cap_percent}% · "
+            f"manual on offers {'on' if self.manual_discount_on_offer_lines else 'off'} · "
             f"credit notes valid {self.credit_note_validity_days}d · "
             f"uncosted flagged after {self.uncosted_aging_days}d · "
             f"returns inside {self.return_window_days}d · "
             f"returns reviewed above {self.return_review_count} a seller a day"
         )
 
+    def as_till_policy(self) -> dict[str, str | bool]:
+        """The small, exact policy shape both policy readers publish."""
+        return {
+            "manual_discount_cap_percent": f"{self.manual_discount_cap_percent:.2f}",
+            "manual_discount_on_offer_lines": self.manual_discount_on_offer_lines,
+        }
+
     @classmethod
     def current(cls) -> SellPolicy:
         """The live dials, creating the row at its defaults if it is somehow gone.
 
-        Fail-safe rather than fail-closed on purpose: the defaults are the strict
-        end (no manual discount), so a missing row cannot loosen anything.
+        Fail-safe rather than fail-closed on purpose: the defaults are the ruled
+        chain policy, with manual-on-offer disabled.
         """
         row, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
         return row

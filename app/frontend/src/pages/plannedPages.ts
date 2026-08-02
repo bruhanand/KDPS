@@ -320,17 +320,4 @@ export const PLANNED_PAGES: Record<string, PlannedScreen> = {
     ],
     module: ADMINISTRATION,
   },
-  "/setup/settings": {
-    summary: "The knobs the system runs on, kept as settings rather than as code.",
-    contains: [
-      "Document numbering series",
-      "Approval limits and tolerances",
-      "Alert thresholds",
-      "Integrations — the POS sources and Tally",
-    ],
-    notes: [
-      "Who may see and do what is already data, not code, so changing access never needs a software release. It is managed today under Users & Roles.",
-    ],
-    module: ADMINISTRATION,
-  },
 };

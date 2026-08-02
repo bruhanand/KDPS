@@ -92,7 +92,7 @@ export function dataset(over: Partial<DatasetPayload> = {}): DatasetPayload {
     managers: [],
     seasons: [],
     customers: [],
-    policy: { manual_discount_cap_percent: "0.00" },
+    policy: { manual_discount_cap_percent: "10.00", manual_discount_on_offer_lines: false },
     deleted: { items: [], offers: [], credit_notes: [] },
     ...over,
   };
