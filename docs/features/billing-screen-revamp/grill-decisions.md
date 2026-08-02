@@ -4,12 +4,11 @@ Grilled 1-2 Aug 2026, Anand ruling on each.
 Eleven questions, all closed.
 These rulings are the spec; where they touch `docs/my-understanding/system-design/10-pos/billing-screen-revamp.html`, that doc has been updated to match.
 
-## Q1 · Keyboard: none at all (D-1)
+## Q1 · Keyboard: F-keys return (D-1, superseded 2 Aug 2026)
 
-**Ruling: no keyboard behaviours of any kind.**
-No F-keys (re-affirmed, emphatically), no Enter-on-empty-scan-box to jump to payment, no Esc-to-refocus.
-Everything is a scan or a click.
-The scan box keeps its existing auto-focus behaviour (cursor returns after every action); that is focus management, not a shortcut.
+**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q4.**
+The 1 August no-keyboard ruling no longer governs the counter. The current shortcuts are F2 Hold · F3 Look up / Find bill · F4 New bill · F9 Pay & Print · Esc back to scan (and dismiss error) · Enter for the next bill on the finish overlay. Each handler claims its key with `preventDefault`; each action also remains a visible button, with the shortcut shown only in its hover tooltip.
+The scan box keeps its existing auto-focus behaviour (cursor returns after every action), independently of the shortcuts.
 
 Anand's billing flow, confirmed against the design (all already present unless marked new):
 

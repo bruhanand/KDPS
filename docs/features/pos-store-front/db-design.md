@@ -1,5 +1,7 @@
 # pos-store-front - DB design (Phase 2)
 
+> **Superseded in part on 2 Aug 2026.** `docs/features/pos-counter-redesign/db-design.md` wins for counter returns and credit notes. `sell_creditnote`, `sell_return`, `sell_returnline`, and the `credit_note` tender enum remain only for append-only historical rows; the counter has no issue/redeem/plain-return path and exchanges are equal-or-up.
+
 Companion to `api-contract.md`.
 Everything is marked **NEW** (table/column that does not exist) or **CHANGED** (existing table extended).
 Money is integer paise (`MoneyField`); every ledger-adjacent row carries actor + timestamps per Rule 10.

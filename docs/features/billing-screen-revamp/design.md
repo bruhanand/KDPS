@@ -1,5 +1,7 @@
 # Billing screen revamp - Phase 3: technical design
 
+> **Later supersession (2 Aug 2026):** POS counter redesign grill Q4 restores F2/F3/F4/F9/Esc/Enter accelerators beside visible buttons; Q3/Q3b retire counter credit notes and standalone plain returns. Those later rulings win wherever this document preserves the earlier frame's behaviour.
+
 > **Amended 2 Aug 2026.** Issue #243's round-1 review found the payment + customer rail taller than the space available at 1366×768 - "the line list is the only `overflow-y: auto`" (line below) was not achievable without trimming the two rail cards, which is #246's and #249's scope, not #243's. Anand ruled: the rail gets its own **temporary** `overflow-y: auto` so nothing is ever unreachable (flag-don't-block); #246/#249 must shrink the cards until that scrollbar disappears, restoring the single-scroll rule this doc describes. Read **`grill-decisions.md` § Amendments - 2 August 2026** first; where the two disagree, the amendment wins.
 
 ## Summary

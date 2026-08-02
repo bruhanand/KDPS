@@ -1,5 +1,7 @@
 # pos-store-front - API contract (Phase 2)
 
+> **Superseded in part on 2 Aug 2026.** `docs/features/pos-counter-redesign/api-contract.md` wins for counter returns and tenders: exchanges are equal-or-up; `credit_note` is no longer an accepted tender; the standalone `POST /api/sell/returns` surface retires. The detailed CreditNote/SRT passages below describe the shipped historical contract, not current counter policy; their tables remain append-only history.
+
 Companion to `db-design.md`.
 Conventions used throughout (matching the existing backend):
 
@@ -481,11 +483,11 @@ Deterministic by construction: same cart, same rulebook -> same paise, at till a
 
 ---
 
-## Step 5 - Returns & customer search
+## Step 5 - Returns & customer search (historical return surface; superseded 2 Aug 2026)
 
 ### POST `/api/sell/returns`
 
-Plain return, no exchange: Return document + CreditNote, never cash (grill Q7).
+**Retired historical contract:** this endpoint formerly created a Return document + CreditNote. POS counter redesign Q3/Q3b removes the route; the current counter accepts only equal-or-up exchange legs inside a Sale.
 Auth: sell>=operate; **manager override mandatory on every plain return** (the manager's tap).
 
 Body: `{"idempotency_uuid": "...", "store": "DEO", "original": {"fy": "26-27", "till_seq": 40}, "lines": [{"original_line": 3, "qty": 1, "reason": "defect", "condition": "damaged"}], "override": {"user_id": 7}, "window_override": false}`.
@@ -748,13 +750,13 @@ Return leg: reverse of the original line - Stock `sale_return_in`; Dr SALES_REVE
 Sale legs: normal.
 One balanced document; net cash movement equals the customer's actual payment. Net negative -> the difference posts Cr CREDIT_NOTE_LIABILITY (a CRN is issued), cash never exits.
 
-### Plain Return (SRT, docstatus submitted)
+### Plain Return (SRT, docstatus submitted) — historical rows only; writer retired
 
 Stock `sale_return_in` (good -> available / damaged -> quarantine).
 Value: Dr SALES_REVENUE (contra) + Dr OUTPUT_GST · Cr CREDIT_NOTE_LIABILITY (the note issued); cost side reversed per the original piece's model exactly as the exchange return leg.
 No cash leg exists on this document by construction (grill Q7).
 
-### Credit note lifecycle
+### Credit note lifecycle — historical rows only; counter issue/redeem retired
 
 Issue (by Return/Exchange): the Cr CREDIT_NOTE_LIABILITY leg above; the CRN document carries value/remaining.
 Redeem (by a Sale tender): Dr CREDIT_NOTE_LIABILITY inside the Sale's event A.

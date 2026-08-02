@@ -1,5 +1,7 @@
 # Billing screen revamp - Phase 2: API contract
 
+> **Later supersession (2 Aug 2026):** `docs/features/pos-counter-redesign/api-contract.md` wins for tenders and returns. The counter no longer accepts or issues credit notes and has no standalone plain-return endpoint; the customer-master contract in this file remains current.
+
 Scope: the server-visible part of the revamp.
 Most of this feature is frontend (the fixed frame, payment card, autosave, undo, sounds, GST badge, floating prompts) and deliberately has **no API surface**; this contract covers the three endpoints that change and the seams that exist only on the till.
 Base behaviour of the touched endpoints is specified in `docs/features/pos-store-front/api-contract.md`; this document updates those endpoints in place - where the two disagree, this one wins.
@@ -86,7 +88,7 @@ Unchanged (the accepted bill; retry with the same idempotency key returns the sa
 3. (existing) tenders must sum to net -> VALIDATION (unchanged)
 4. (existing) plan tenders, write Sale, write SaleTender rows
    (new) each UPI tender row persists upi_state + upi_reference
-5. (existing) apply tenders, flags, credit notes, deferred costing - unchanged
+5. (existing in this slice) apply tenders, flags, credit notes, deferred costing - later superseded for credit notes by POS counter redesign Q3/Q3b
 6. (new, after the sale is committed) customer upsert - never blocks:
    a. mobile = digits of payload customer.mobile, collapsed to the bare
       10-digit Indian form (a leading `91` on a 12-digit value and a leading

@@ -1,8 +1,10 @@
 # pos-store-front - technical design (Phase 3)
 
+> **Superseded in part on 2 Aug 2026.** The POS counter redesign's grill/design/API/DB records win over this document for keyboard, returns, and tenders: F2/F3/F4/F9/Esc/Enter are accelerators beside visible buttons; exchanges are equal-or-up; counter credit notes and the standalone plain-return surface retire. CreditNote/Return passages below are an as-built historical record, not current design.
+
 Input: the approved `feature-analysis.md`, `grill-decisions.md`, `api-contract.md`, `db-design.md`.
 Money slice, so this phase is mandatory.
-Anand's Phase-3 rulings folded in: no F-key shortcuts (everything cursor-selectable), the Sell screen is a normal design-consistent page (no full-screen mode for now), RetailJI contributes skeleton placement only.
+Anand's Phase-3 rulings folded in. The original no-F-key decision was later superseded by POS counter redesign grill Q4; the Sell screen remains a normal design-consistent page, and RetailJI contributes skeleton placement only.
 
 ## Summary
 
@@ -62,8 +64,8 @@ Everything follows an existing traced pattern (Grn/StoreTransfer for documents, 
 
 ### Frontend - screens (all normal shell pages, existing UI kit, `data-testid` throughout)
 
-- `pages/sell/Billing.tsx` - the skeleton placement per D10 §4: scan/type-to-search box top-right (wedge capture via a `useWedgeScan` hook extracted from ScanScreen's sink + focus-keeper; ScanScreen itself is not reused - it is a full-screen count surface, wrong shape here), line grid centre (`.lines-table`), payment panel right (tender rows, split, tendered-cash/change), customer strip below, totals with "you saved", action row of plain buttons (Save & Print with lock+spinner, Print/Reprint, Hold Bill, Search, New Bill). **No keyboard shortcuts; every action is a visible button.** Salesman picker defaults to last-picked (one click to change). Over-cap discount opens the manager-PIN modal (verified against the cached hash offline). Sync light sits in the page header (green/amber+count/red), not a modified top bar.
-- `pages/sell/ReturnsExchange.tsx` - find original bill (local first, server when online), pick lines, reason + condition; exchange flows into the current bill; plain return is server-only and disabled offline with an explanatory note.
+- `pages/sell/Billing.tsx` - the skeleton placement per D10 §4: scan/type-to-search box top-right (wedge capture via a `useWedgeScan` hook extracted from ScanScreen's sink + focus-keeper; ScanScreen itself is not reused - it is a full-screen count surface, wrong shape here), line grid centre (`.lines-table`), payment panel right (tender rows, split, tendered-cash/change), customer strip below, totals with "you saved", action row of plain buttons (Save & Print with lock+spinner, Print/Reprint, Hold Bill, Search, New Bill). **Superseded keyboard clause:** POS counter redesign Q4 adds F2/F3/F4/F9/Esc/Enter accelerators while keeping every action as a visible button. Salesman picker defaults to last-picked (one click to change). Over-cap discount opens the manager-PIN modal (verified against the cached hash offline). Sync light sits in the page header (green/amber+count/red), not a modified top bar.
+- `pages/sell/ReturnsExchange.tsx` - historical first surface: find original bill (local first, server when online), pick lines, reason + condition. POS counter redesign Q2/Q3/Q3b later folds this into the counter, retires standalone/plain returns, and keeps only equal-or-up exchanges.
 - `pages/sell/CustomerSearch.tsx` - by mobile/name/bill number; read-only detail + Reprint. No edit affordance exists.
 - `pages/Home.tsx` (rebuilt) - the Dashboard cards from `GET /api/store/dashboard` per the contract shape; quick-actions row; held-bills count links into Billing's hold list; manager row rendered only when present in the payload.
 - `pages/CrossStoreSearch.tsx` - `GET /api/stock/availability` results size-by-size; "Request this" posts the StockRequest with `source: cross_store_search`.

@@ -24,17 +24,14 @@ Every bill is stamped `origin: offline` or `origin: online` at commit time - evi
 
 ### 3. Reference data auto-syncs; the offers notification informs, never gates
 
-The till pulls the offer rulebook and all reference data (items, prices, GST slabs, salesman list, credit notes) automatically whenever online, at a regular interval and immediately when the "new offers live" notification arrives.
+The till pulls the offer rulebook and all live reference data (items, prices, GST slabs, salesman list, customers) automatically whenever online, at a regular interval and immediately when the "new offers live" notification arrives. The earlier credit-note dataset clause is superseded by POS counter redesign grill Q3/Q3b (2 Aug 2026): the counter neither issues nor redeems notes.
 The notification still shows at the store so staff know what changed, and a "sync now" button exists, but no human step gates correctness.
 Every offer carries its start/end dates inside the synced data, so the till starts and stops offers on its own clock: staleness can only mean missing a new offer, never applying a dead one.
 
-### 4. Credit notes: same-store only in v1
+### 4. Credit notes: retired at the counter (superseded 2 Aug 2026)
 
-A credit note redeems only at the store that issued it.
-The till's local dataset carries this store's open credit notes (number, remaining value, expiry) via the same auto-sync.
-Offline redemption is allowed only against a cached open note; one till per store makes double-spend structurally impossible.
-An unrecognised note takes a manager override, flagged into the daily check.
-Cross-store redemption is a possible later addition and would simply require the network.
+**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q3/Q3b.**
+The same-store credit-note ruling no longer governs the counter. No return or short exchange issues a note, no sale redeems one, and the till dataset carries no open-note cache. Historical rows stay append-only history.
 
 ### 5. Offline-first from day one; Chrome-standard till; early printer spike
 
@@ -56,14 +53,10 @@ The flag lands on the Dashboard's action queue, and an aged sold-before-inward l
 The commoner case - inwarded stock whose local count shows zero - just bills normally and lets the count go negative locally, flagged for the next stock count.
 The GST-recognition side of sold-before-PT stays CA-gated as recorded in `CONTEXT.md`.
 
-### 7. Plain returns: credit note only, never cash (closes D-4)
+### 7. Returns: exchange only, equal-or-up (D-4 superseded 2 Aug 2026)
 
-A plain return creates a Return document (sibling of the Exchange, linked to the original bill, reason-coded, piece to shelf or quarantine) and hands the customer a credit note for what they actually paid.
-No cash leaves the drawer: returns are the best-documented theft channel at any POS, and credit notes keep the money inside the system until spent on a real bill.
-The return window and conditions live as data (Rule 12); outside the window needs the manager's override, recorded on the bill.
-Every plain return takes the manager's tap, and returns are counted per employee in the daily check.
-Credit-note validity is also data; 6 months is the Indian norm.
-Sources: [Pitney Bowes return-fraud guide](https://www.pitneybowes.com/us/blog/return-refund-fraud-guide.html), [Loss Prevention Media](https://losspreventionmedia.com/stopping-the-snowball-how-policies-and-technology-can-prevent-internal-refund-fraud/), [Andaaz Fashion policy](https://www.andaazfashion.com/return-policy.html) (credit-note practice).
+**Superseded by `docs/features/pos-counter-redesign/grill-decisions.md` Q3/Q3b.**
+There is no standalone/plain return and no refund of any kind. A customer can return a piece only inside an exchange linked to the original bill, with reason and condition recorded per return line; the outgoing pieces must be worth at least what the customer paid for the incoming pieces. Save &amp; Print hard-refuses a short exchange. The return window remains data, and a late exchange keeps its recorded manager-override path.
 
 ### 8. B2B corner: GSTIN + name at the till, IRN is HO's 30-day duty (closes D-5)
 

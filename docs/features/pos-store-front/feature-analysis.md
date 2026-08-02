@@ -1,9 +1,11 @@
 # Feature analysis — pos-store-front
 
+> **Superseded in part on 2 Aug 2026.** The POS counter redesign's Q3/Q3b/Q4 rulings are current: keyboard accelerators return; returns are exchange-only and equal-or-up; counter credit notes and standalone plain returns retire. Mentions below of credit-note tenders, plain returns, or an open refund question are historical inputs to the 30 July slice, not current policy.
+
 Phase 0 artifact of the dev process (`docs/agents/dev-process.md`).
 Confirmed by Anand on 30 July 2026.
 Phase 1 (the grill, `/grill-with-docs`) ran the same day and closed every open question below; its 14 decisions live in [`grill-decisions.md`](grill-decisions.md).
-The build order and open questions in this file are the post-grill versions.
+The build order and open questions in this file are the post-grill versions as of 30 July; the supersession notice above governs the later counter policy.
 
 ## Source
 
@@ -32,7 +34,7 @@ Out of this analysis: the undesigned D10 remainder (Return & Exchange tab, Custo
 
 | App | What changes | Why |
 |---|---|---|
-| `sell` (new) | The Sale document: scan-billing, per-line salesman, split tender (cash/card/UPI/credit-note), MRP back-calculation with GST breakup, snapshot-at-billing, exchange linkage, idempotency key, offline-origin tag. Post-grill additions: the plain Return document + credit notes (same-store, credit-note-only), buyer GSTIN capture with automatic CGST/SGST-vs-IGST derivation and a B2B flag feeding HO's 30-day IRN queue, and Hold Bill (till-local, no stock or money). | The core of the feature; no Sale model exists anywhere today. One module = one app (ADR-0002). |
+| `sell` (new) | Historical 30 July shape: Sale with cash/card/UPI/credit-note tender plus plain Return/CreditNote documents. **Superseded for the counter by redesign Q3/Q3b:** credit-note tender and standalone return retire; Sale keeps equal-or-up exchange legs. Buyer GSTIN, B2B IRN queue, idempotency and Hold Bill remain. | The core of the feature; the redesign preserves the Sale and its history while narrowing the counter surface. |
 | `core` | Sale rides the existing docstatus FSM + gap-free numbering; offline-created bills need per-store gap-free numbers assigned at the till and honoured at sync. | Offline gap-free numbering is a new kernel problem; one-POS-per-store makes the local counter authoritative. |
 | `stockledger` | Sale posts the stock decrement (new movement reason); auto-inward-on-scan (A10) adds a movement path if it survives the grill. | Documents write ledgers (Rule 2). |
 | `finledger` | Cash ledger postings per tender mode per bill; SOR/consignment vendor liability posts at the Sale. | D4 collections design + the locked liability-timing rule. CA-gated before live money (F9 single recognition). |
@@ -74,7 +76,7 @@ The grill's research overturned the online-first-then-offline sequence: the till
 2. **Cross-store search + request route.** Extends `StockRequest` + approvals (route as data); no money.
 3. **The till, offline-first.** One supervised money slice: local dataset with sync-down, the Sale document and its postings server-side, idempotent sync-up, till-owned numbering, printing. "Online" is the queue draining fast. Golden files.
 4. **The offer engine.** The D5 mechanism plus the three-layer resolution locked in grill Q11, auto-applying at the till. The pilot does not start without it.
-5. **Return & Exchange, Customer Search, credit notes.**
+5. **Historical plan:** Return & Exchange, Customer Search, credit notes. **Current replacement:** customer search + equal-or-up exchange on the counter; credit notes retire.
 6. **Cash Summary + the daily reconciliation gate** — the condition for the pilot store going live.
 
 Riders: the till device is standardised on Chrome with the PWA installed (Safari's 7-day storage eviction is unacceptable for an unsynced bill queue), and a receipt-printer hardware spike starts early (lead-time item, like the barcode spike).
@@ -86,7 +88,7 @@ The nine Phase-0 questions were all closed in [`grill-decisions.md`](grill-decis
 Still genuinely open:
 
 1. **The five CA-gated money questions** (SOR GST single-recognition F9, the 6-month deemed-supply clock, late freight, sold-before-PT recognition, slab sign-off) — the mechanisms are designed, live money waits for the rulings.
-2. **To the stores:** what is F10 "Approval / Order" actually used for, and do they ever refund cash at the counter or always a credit note?
+2. **To the stores:** what is F10 "Approval / Order" actually used for? The refund/credit-note question was later closed by counter redesign Q3/Q3b: neither; only equal-or-up exchange.
 3. **Pilot store choice** — one store, one counter, gated on the daily reconciliation running clean.
 4. **Printer route** (WebUSB/Web Serial vs QZ Tray agent) — decided by the hardware spike.
 5. **Expected-arrival time on cross-store requests** (route history vs staff-entered) — parked for the Transfer screen design.
