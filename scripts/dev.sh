@@ -7,7 +7,7 @@
 #   ./scripts/dev.sh --down       stop this workspace's Postgres (data kept)
 #   ./scripts/dev.sh --api        API only          --web   PWA only
 #   ./scripts/dev.sh --seed       re-seed demo data  --no-seed  never seed
-#   ./scripts/dev.sh --free-ports kill whatever holds this workspace's ports
+#   ./scripts/dev.sh --free-ports kill listeners on this workspace's web/API ports
 #   ./scripts/dev.sh --where      print this workspace's project name and ports
 #
 # TWO JOBS, ONE SCRIPT, AND THEY NEVER FIGHT.
@@ -354,22 +354,31 @@ for port_pair in "$API_PORT:API" "$WEB_PORT:PWA"; do
   port="${port_pair%%:*}"; label="${port_pair##*:}"
   [ "$label" = API ] && [ "$RUN_API" = 0 ] && continue
   [ "$label" = PWA ] && [ "$RUN_WEB" = 0 ] && continue
+  # Ask lsof for TCP *listeners*, not every process that mentions this number.
+  # A browser connected to the Django API also has the API port in `lsof` output;
+  # `lsof -ti:$port` returns both the API and that browser, so `--free-ports`
+  # used to offer to kill Chrome. Only a listener prevents us from starting a
+  # server, and only its PID is eligible for the explicit reclaim action.
   # `|| true`: lsof exits non-zero when the port is free, which would trip
   # `set -e`/pipefail - an empty result is the normal, expected case here.
-  holder="$(lsof -ti:"$port" 2>/dev/null | tr '\n' ' ' || true)"
+  holder="$(lsof -nP -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | tr '\n' ' ' || true)"
   holder="$(printf '%s' "$holder" | xargs)"   # trim to a clean space-joined PID list
   [ -n "$holder" ] || continue
   what="$(ps -o command= -p $holder 2>/dev/null | head -1)"
   if [ "$FREE_PORTS" = 1 ]; then
     warn "Port ${port} (${label}) held by PID ${holder} - freeing (--free-ports): ${what}"
     kill $holder 2>/dev/null || true
-    for _ in $(seq 1 10); do lsof -ti:"$port" >/dev/null 2>&1 || break; sleep 0.5; done
-    lsof -ti:"$port" >/dev/null 2>&1 && die "Port ${port} still in use after kill - free it manually."
+    for _ in $(seq 1 10); do
+      lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 || break
+      sleep 0.5
+    done
+    lsof -nP -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 \
+      && die "Port ${port} still has a listener after kill - free it manually."
   else
     die "Port ${port} (${label}) is already in use by PID ${holder} (${what}).
        This workspace owns that port, so it is probably its own leftover server.
        Reclaim it and start: ./scripts/dev.sh --free-ports
-       Or free it yourself: kill \$(lsof -ti:${port})"
+       Or stop this workspace safely: ./scripts/stop-stack.sh"
   fi
 done
 

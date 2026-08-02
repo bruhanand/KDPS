@@ -7,21 +7,22 @@
 // Both the word and the sentence behind it come from `deriveStatus`, so this
 // renders the light and decides nothing about it.
 //
-// It lives on the page rather than in the top bar (Anand's Phase-3 ruling): the
-// shell is shared with every screen in the system, and only a Sell screen has a
-// till behind it.
+// Billing lifts its till provider above the shell so this same light can live in
+// the top bar while the counter room is open. Other Sell screens keep their
+// route-local provider and render it where their own screen needs it.
 
 import { useTill } from "./TillProvider";
 
 /** The light itself. Renders nothing when this login has no counter. */
-export function SyncLight() {
+export function SyncLight({ counter = false }: { counter?: boolean } = {}) {
   const { till } = useTill();
   if (!till) return null;
   const { colour, label, reason } = till.status;
+  const visibleLabel = counter && label === "Offline" ? "Offline · will sync" : label;
   return (
     <span className="sync-light" data-testid="till-sync-light" data-colour={colour}>
       <span className={`chip chip-${colour}`} title={reason}>
-        {label}
+        {visibleLabel}
       </span>
     </span>
   );

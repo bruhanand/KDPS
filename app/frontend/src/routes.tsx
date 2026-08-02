@@ -44,7 +44,8 @@ import ReturnsExchangePage from "./pages/sell/ReturnsExchange";
 import TillPage from "./pages/sell/Till";
 import { TillProvider } from "./till/TillProvider";
 
-type Screen = RouteObject & { id: string; path: string };
+export type Room = "counter";
+type Screen = RouteObject & { id: string; path: string; room?: Room };
 
 /** A Sell screen, with the counter behind it. */
 function withTill(screen: ReactNode) {
@@ -110,14 +111,10 @@ const BUILT: Screen[] = [
   // manager PIN hashes, which a warehouse or head-office login has no business
   // carrying.
   //
-  // A provider each rather than the layout route this comment used to promise.
-  // The route table is flat by design - `App.tsx` maps it, and `routes.test.ts`
-  // asserts one route per URL over that flat list - and nesting it to save a
-  // remount would change both to buy nothing: only one of these renders at a
-  // time, and `TillEngine.start`/`stop` are a matched pair built to run any
-  // number of times on one tab. The Dexie connection is a per-store singleton
-  // and outlives the navigation either way.
-  { id: "sell-billing", path: "/sell", element: withTill(<BillingPage />) },
+  // Billing declares the counter room instead of wrapping itself here:
+  // ProtectedRoute lifts its provider above AppShell so the live sync light can
+  // occupy the top bar. The other Sell screens remain route-local providers.
+  { id: "sell-billing", path: "/sell", room: "counter", element: <BillingPage /> },
   // Taking a piece back (#184). `withTill`, because half of what it does is the
   // counter's own: the bill the customer is holding may still be in this till's
   // queue and nowhere else, the manager's PIN is checked against the cached
@@ -181,3 +178,10 @@ const LEGACY: Screen[] = LEGACY_PATHS.filter((path) => matchRoutes(CLAIMABLE, pa
 }));
 
 export const PROTECTED_ROUTES: Screen[] = [...CLAIMABLE, ...LEGACY];
+
+/** Resolve from the canonical table so shell chrome cannot drift into a second
+ *  pathname list with subtly different prefix rules. */
+export function roomAt(pathname: string): Room | undefined {
+  const matched = matchRoutes(PROTECTED_ROUTES, pathname);
+  return (matched?.[matched.length - 1]?.route as Screen | undefined)?.room;
+}

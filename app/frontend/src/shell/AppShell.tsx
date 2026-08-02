@@ -9,6 +9,8 @@ import { useAuth } from "../auth/AuthContext";
 import { KdpsLogo } from "../components/KdpsLogo";
 import { HostedPageContext } from "../components/PageHeader";
 import { ThemeToggle } from "../theme/ThemeToggle";
+import type { Room } from "../routes";
+import { SyncLight } from "../till/SyncLight";
 import { GlobalSearch } from "./GlobalSearch";
 import { MobileNavContext, useMobileNavExclusion } from "./MobileNavContext";
 import { AlertsButton, ApprovalsButton } from "./Notifications";
@@ -644,7 +646,7 @@ export function SectionTabsProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, room }: { children: ReactNode; room?: Room }) {
   const { activeStore, activeBrand } = useAuth();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const closeMobileNav = useCallback(() => setMobileNavOpen(false), []);
@@ -733,6 +735,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <AlertsButton />
             <ApprovalsButton />
             <UnitSwitcher />
+            {room === "counter" && (
+              <Link to="/sell/till" aria-label="Open Till & Sync" data-testid="counter-sync-link">
+                <SyncLight counter />
+              </Link>
+            )}
           </div>
         </MobileNavContext.Provider>
       </header>

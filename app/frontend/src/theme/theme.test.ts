@@ -57,7 +57,6 @@ function setupDom(opts: { stored?: string | null; systemDark?: boolean } = {}) {
   vi.stubGlobal("window", win);
   vi.stubGlobal("document", doc);
   vi.stubGlobal("localStorage", localStorage);
-
   return {
     setSystemDark: (v: boolean) => {
       systemDark = v;
@@ -137,5 +136,18 @@ describe("theme side effects", () => {
 
     dom.fireStorage("kdps-theme", "dark");
     expect(dom.dataTheme()).toBe("dark");
+  });
+
+  it("keeps counter browser chrome aligned with the app theme", async () => {
+    const dom = setupDom({ stored: "light", systemDark: false });
+    const m = await import("./theme");
+    m.initTheme();
+    document.documentElement.dataset.room = "counter";
+
+    m.refreshThemeColour();
+    expect(dom.metaColor()).toBe("#faf7f2");
+
+    m.setThemePreference("dark");
+    expect(dom.metaColor()).toBe("#201d18");
   });
 });

@@ -32,6 +32,7 @@ describe("the counter's service worker", () => {
       expect(glob).not.toContain(API_PREFIX);
       expect(glob, "JSON is what an API answers in").not.toMatch(/json/);
     }
+    expect(globs.some((glob) => glob.includes("woff2"))).toBe(true);
   });
 
   it("never answers an API request with the app shell", () => {

@@ -1,7 +1,7 @@
 import { matchRoutes } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
-import { PROTECTED_ROUTES } from "./routes";
+import { PROTECTED_ROUTES, roomAt } from "./routes";
 import { INVENTORY_FOLD, LEGACY_PATHS, NAV_ITEMS, itemPath, resolveLegacyPath } from "./shell/navConfig";
 
 /** Which screen does this URL actually open? */
@@ -11,6 +11,13 @@ function screenAt(url: string): string | null {
 }
 
 describe("the route table", () => {
+  it("puts only Billing in the counter room", () => {
+    expect(roomAt("/sell")).toBe("counter");
+    expect(roomAt("/sell/till")).toBeUndefined();
+    expect(roomAt("/sell/returns")).toBeUndefined();
+    expect(roomAt("/")).toBeUndefined();
+  });
+
   it("opens the screen each canonical URL names", () => {
     const cases: [string, string][] = [
       ["/", "home"],
