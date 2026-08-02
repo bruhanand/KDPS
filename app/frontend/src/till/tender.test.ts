@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  balanceStandingOf,
   cashChips,
   emptyPayment,
   newNote,
@@ -286,19 +287,19 @@ const REVAMP_BILL = 484800;
 
 describe("what a tender box takes when the cashier taps into it", () => {
   it("offers the whole bill on an untouched panel", () => {
-    expect(prefillFor(split(payment(), REVAMP_BILL), REVAMP_BILL)).toBe(REVAMP_BILL);
+    expect(prefillFor(split(payment(), REVAMP_BILL))).toBe(REVAMP_BILL);
   });
 
   it("offers what the filled rows leave - ₹2,000 on card leaves ₹2,848 for UPI", () => {
     const resolved = split(payment({ card_paise: 200000 }), REVAMP_BILL);
 
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(284800);
+    expect(prefillFor(resolved)).toBe(284800);
   });
 
   it("keeps offering the rest as the split grows - card and UPI leave ₹848 for cash", () => {
     const resolved = split(payment({ card_paise: 200000, upi_paise: 200000 }), REVAMP_BILL);
 
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(84800);
+    expect(prefillFor(resolved)).toBe(84800);
   });
 
   it("ignores the cash the panel is only *about* to take, or every box would offer nought", () => {
@@ -310,45 +311,45 @@ describe("what a tender box takes when the cashier taps into it", () => {
 
     expect(resolved.balance_paise).toBe(0);
     expect(resolved.explicit_paise).toBe(200000);
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(284800);
+    expect(prefillFor(resolved)).toBe(284800);
   });
 
   it("counts cash once the cashier has pinned it", () => {
     const resolved = split(payment({ cash_paise: 84800, card_paise: 200000 }), REVAMP_BILL);
 
     expect(resolved.explicit_paise).toBe(284800);
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(200000);
+    expect(prefillFor(resolved)).toBe(200000);
   });
 
   it("counts a credit note among the filled rows", () => {
     const resolved = split(withNote(NOTE.number, 50000), REVAMP_BILL);
 
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(REVAMP_BILL - 50000);
+    expect(prefillFor(resolved)).toBe(REVAMP_BILL - 50000);
   });
 
   it("never offers a negative - an over-tendered panel offers nothing", () => {
     const resolved = split(payment({ card_paise: REVAMP_BILL + 100 }), REVAMP_BILL);
 
-    expect(prefillFor(resolved, REVAMP_BILL)).toBe(0);
+    expect(prefillFor(resolved)).toBe(0);
   });
 
   it("offers nothing on a bill that owes the customer", () => {
-    expect(prefillFor(split(payment(), 0), 0)).toBe(0);
+    expect(prefillFor(split(payment(), 0))).toBe(0);
   });
 });
 
 describe("what an empty credit-note box takes", () => {
   it("takes the balance when the note is worth at least that much", () => {
-    const standing = split(withNote(NOTE.number, 0), 50000).notes[0];
+    const resolved = split(withNote(NOTE.number, 0), 50000);
 
-    expect(notePrefillFor(split(withNote(NOTE.number, 0), 50000), 50000, standing)).toBe(50000);
+    expect(notePrefillFor(resolved, resolved.notes[0])).toBe(50000);
   });
 
   it("never offers more than the note has left - that would only manufacture a doubt", () => {
     const resolved = split(withNote(NOTE.number, 0), REVAMP_BILL);
 
     // The bill wants ₹4,848; the note holds ₹1,200.
-    expect(notePrefillFor(resolved, REVAMP_BILL, resolved.notes[0])).toBe(NOTE.remaining_paise);
+    expect(notePrefillFor(resolved, resolved.notes[0])).toBe(NOTE.remaining_paise);
     expect(resolved.notes[0].doubt).toBe("");
   });
 
@@ -356,7 +357,7 @@ describe("what an empty credit-note box takes", () => {
     // Unknown already needs a manager, and the till has no figure to cap by.
     const resolved = split(withNote("26-27/XXX/CRN/9", 0), REVAMP_BILL);
 
-    expect(notePrefillFor(resolved, REVAMP_BILL, resolved.notes[0])).toBe(REVAMP_BILL);
+    expect(notePrefillFor(resolved, resolved.notes[0])).toBe(REVAMP_BILL);
   });
 });
 
@@ -391,7 +392,71 @@ describe("the quick-cash chips under the cash row", () => {
   });
 });
 
-describe("the one balance line the ticket's worked example ends on", () => {
+describe("the one balance line", () => {
+  it("is red while the bill is short", () => {
+    const standing = balanceStandingOf(split(payment({ cash_paise: 100000 }), REVAMP_BILL));
+
+    expect(standing).toEqual({ tone: "short", says: "Still to pay", paise: 384800 });
+  });
+
+  it("is red when the panel has taken more than the bill, never green", () => {
+    // whyPaymentCannotClose is about to refuse this; a green line would say the
+    // sale is fine.
+    const over = split(payment({ cash_paise: REVAMP_BILL + 100 }), REVAMP_BILL);
+    const standing = balanceStandingOf(over);
+
+    expect(standing).toEqual({ tone: "over", says: "Over by", paise: 100 });
+  });
+
+  it("is green only when there is cash to hand back", () => {
+    const standing = balanceStandingOf(
+      split(
+        payment({ cash_paise: 84800, card_paise: 400000, cash_received_paise: 100000 }),
+        REVAMP_BILL,
+      ),
+    );
+
+    expect(standing).toEqual({ tone: "change", says: "Change to give", paise: 15200 });
+  });
+
+  it("refuses to call a stranded cash-received figure change - the drawer took nothing", () => {
+    // The cashier tapped a chip, then put the whole bill on card. `change_paise`
+    // still reports the ₹1,000, and green would be an instruction to pay it out.
+    const standing = balanceStandingOf(
+      split(payment({ card_paise: REVAMP_BILL, cash_received_paise: 100000 }), REVAMP_BILL),
+    );
+
+    expect(standing.tone).toBe("stranded");
+    expect(standing.paise).toBe(100000);
+    expect(standing.says).toMatch(/takes none/);
+  });
+
+  it("is quiet when the bill is settled and nothing goes back", () => {
+    const standing = balanceStandingOf(split(payment(), REVAMP_BILL));
+
+    expect(standing).toEqual({ tone: "settled", says: "Nothing left to pay", paise: 0 });
+  });
+
+  it("never says two things at once - every split lands on exactly one tone", () => {
+    const splits = [
+      split(payment(), REVAMP_BILL),
+      split(payment({ cash_paise: 100000 }), REVAMP_BILL),
+      split(payment({ cash_paise: REVAMP_BILL + 1 }), REVAMP_BILL),
+      split(payment({ cash_received_paise: 500000 }), REVAMP_BILL),
+      split(payment({ card_paise: REVAMP_BILL, cash_received_paise: 100000 }), REVAMP_BILL),
+    ];
+
+    expect(splits.map((s) => balanceStandingOf(s).tone)).toEqual([
+      "settled",
+      "short",
+      "over",
+      "change",
+      "stranded",
+    ]);
+  });
+});
+
+describe("the split the ticket's worked example ends on", () => {
   it("closes to nought and hands back ₹152 of change", () => {
     // ₹4,848: ₹2,000 card, ₹2,000 UPI, ₹848 cash, a ₹1,000 note handed over.
     const resolved = split(

@@ -88,6 +88,15 @@ export interface TenderSplit {
    *  to the first box a cashier taps. What is still owed is the bill less what
    *  has been *said*, and this is that. */
   explicit_paise: number;
+  /** The bill this split was resolved against (#246).
+   *
+   *  Carried rather than asked for again, because the caller cannot be trusted
+   *  to reproduce it: `priceCart` resolves the split against `Math.max(net, 0)`,
+   *  since a bill that owes the customer takes no tender at all, and a prefill
+   *  computed from a raw `net_paise` on that bill would offer a figure the
+   *  close-validation then refused. One field here is one fewer thing every
+   *  caller has to remember. */
+  net_paise: number;
   /** Bill less tendered. Positive = unpaid, negative = over-tendered. */
   balance_paise: number;
   /** Cash back out of the drawer, against the cash *tender*, never the bill:
@@ -134,6 +143,7 @@ export function splitOf(
     notes,
     total_paise: total,
     explicit_paise: others + (payment.cash_paise ?? 0),
+    net_paise: netPaise,
     balance_paise: netPaise - total,
     change_paise: Math.max(0, payment.cash_received_paise - cash),
     unverified: notes.filter((s) => s.doubt).map((s) => s.note.number),
@@ -159,8 +169,8 @@ export function splitOf(
  * it did before. Cash keeps its `null`-means-the-rest semantics until a person
  * touches it, so the day-close numbers cannot shift.
  */
-export function prefillFor(split: TenderSplit, netPaise: number): number {
-  return Math.max(0, netPaise - split.explicit_paise);
+export function prefillFor(split: TenderSplit): number {
+  return Math.max(0, split.net_paise - split.explicit_paise);
 }
 
 /**
@@ -173,12 +183,8 @@ export function prefillFor(split: TenderSplit, netPaise: number): number {
  * invented. A note the counter has never been sent has no figure to cap by -
  * it already needs a manager on its own account, so the balance stands.
  */
-export function notePrefillFor(
-  split: TenderSplit,
-  netPaise: number,
-  standing: NoteStanding,
-): number {
-  const owed = prefillFor(split, netPaise);
+export function notePrefillFor(split: TenderSplit, standing: NoteStanding): number {
+  const owed = prefillFor(split);
   return standing.cached ? Math.min(owed, standing.cached.remaining_paise) : owed;
 }
 
@@ -207,6 +213,54 @@ export function cashChips(duePaise: number): number[] {
     if (!chips.includes(rounded)) chips.push(rounded);
   }
   return chips;
+}
+
+/** The five things the payment card's one balance line can be saying (#246). */
+export type BalanceTone = "short" | "over" | "stranded" | "change" | "settled";
+
+/** The one balance line, resolved: which of the five, in what words, on what
+ *  figure. The figure is always positive - the words carry the direction. */
+export interface BalanceStanding {
+  tone: BalanceTone;
+  says: string;
+  paise: number;
+}
+
+/**
+ * Where the money stands, as the one line under the tenders says it (#246).
+ *
+ * A rule rather than a rendering detail, and here rather than in the panel,
+ * because getting it wrong is not cosmetic: the green line is an *instruction*
+ * to open the drawer and hand notes back, and the only thing standing between a
+ * cashier and doing that is which branch this picks.
+ *
+ * The one that is easy to miss is `stranded`. `change_paise` is measured against
+ * the **cash tender**, so a bill whose cash row has fallen to nought - the
+ * cashier tapped a chip, then put the whole amount on card - still reports the
+ * whole `cash_received_paise` as change. Green there would tell a cashier to pay
+ * out of a drawer that took nothing. It is a figure to clear, not change to
+ * give, so it is red and says so.
+ *
+ * `over` is red for the same reason and one more: `whyPaymentCannotClose` is
+ * about to refuse the bill, and a green line would say the sale is fine.
+ */
+export function balanceStandingOf(split: TenderSplit): BalanceStanding {
+  if (split.balance_paise > 0) {
+    return { tone: "short", says: "Still to pay", paise: split.balance_paise };
+  }
+  if (split.balance_paise < 0) {
+    return { tone: "over", says: "Over by", paise: -split.balance_paise };
+  }
+  if (split.change_paise > 0) {
+    return split.cash_paise > 0
+      ? { tone: "change", says: "Change to give", paise: split.change_paise }
+      : {
+          tone: "stranded",
+          says: "Cash received, but this bill takes none",
+          paise: split.change_paise,
+        };
+  }
+  return { tone: "settled", says: "Nothing left to pay", paise: 0 };
 }
 
 /**

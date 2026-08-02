@@ -31,7 +31,7 @@ export function RupeeInput({
   locked: boolean;
   placeholder: string;
   /**
-   * What this box adopts if the cashier taps into it while it is standing empty
+   * What this box adopts if the cashier **taps** it while it is standing empty
    * - `null` when it is already filled, or when there is nothing left to offer
    * (#246: "tapping into an empty amount box pre-fills whatever is still owed").
    *
@@ -82,7 +82,15 @@ export function RupeeInput({
       disabled={locked}
       placeholder={placeholder}
       value={text}
-      onFocus={() => {
+      // `onClick`, deliberately not `onFocus`. Focus is not intent: a Tab
+      // through the panel, or any focus the page restores on its own, would
+      // otherwise put the whole balance into whichever box it landed on. On an
+      // all-cash bill that means Card silently takes the lot, cash falls to
+      // nought and is dropped from the tenders, the balance closes to zero and
+      // nothing flags it - a card sale posted for money that went in the
+      // drawer, found at the day close if at all. Grill Q1 settles it too:
+      // "everything is a scan or a click", and this is the click.
+      onClick={() => {
         if (locked || prefillPaise === null || prefillPaise <= 0) return;
         shown.current = prefillPaise;
         setText(paiseToRupees(prefillPaise));

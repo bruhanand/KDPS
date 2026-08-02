@@ -298,20 +298,30 @@ select.bill-season { min-width: 0; }
   letter-spacing: 0.04em; color: var(--caption);
 }
 
-/* The one balance line (#246). It says exactly one thing at a time - red while
-   the bill is short or over-tendered, green when there is change to hand back,
-   quiet when there is nothing to say - because the two rows it replaced were
-   both on screen reading ₹0 for most of a bill's life, which teaches a cashier
-   to stop looking at the one number that matters. Tokens only, per the dark
-   theme's standing constraint. */
+/* The one balance line (#246). It says exactly one thing at a time, because the
+   two rows it replaced were both on screen reading ₹0 for most of a bill's
+   life, which teaches a cashier to stop looking at the one number that matters.
+   Which of the five states it is in is `balanceStandingOf`'s decision (tender.ts,
+   where it has tests); this only paints them. Tokens only, per the dark theme's
+   standing constraint.
+
+   Three of the five are red, and they get three class names rather than one
+   shared one: `short`, `over` and `stranded` are different problems with
+   different fixes, and a class called `is-short` on an over-tendered bill would
+   be a lie the next person reading the DOM has to unpick. */
 .bill-balance-line {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
   margin: 12px 0 0; padding: 8px 11px; border-radius: 9px;
   font-size: 14px; font-weight: 700;
 }
-.bill-balance-line.is-short {
+.bill-balance-line.is-short,
+.bill-balance-line.is-over,
+.bill-balance-line.is-stranded {
   color: var(--red); background: var(--red-bg); border: 1px solid var(--red-bd);
 }
+/* The one red state whose words are a sentence rather than a label, so it is the
+   one that needs room to wrap in a 340px rail. */
+.bill-balance-line.is-stranded { font-size: 13px; align-items: center; }
 .bill-balance-line.is-change {
   color: var(--green); background: var(--green-bg); border: 1px solid var(--green-bd);
 }
