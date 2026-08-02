@@ -56,7 +56,7 @@ from sell.models import (
     SellPolicy,
 )
 from sell.pricing import base_from_inclusive
-from sell.services.customers import upsert_customer
+from sell.services.customers import normalise_mobile, upsert_customer
 from sell.services.movements import post_stock_move
 from sell.services.postings import (
     CostedLine,
@@ -784,7 +784,12 @@ def _write_sale(
         origin=data["origin"],
         billed_at=data["billed_at"],
         customer_name=(customer.get("name") or "").strip(),
-        customer_mobile=(customer.get("mobile") or "").strip(),
+        # Canonicalised here, not just in the master upsert: db-design links a
+        # bill to its customer by mobile at query time, over this indexed
+        # column, so a bill that snapshots '+91 98765-43210' as typed would
+        # never join to master row '9876543210'. Both sides of that join are
+        # written at this one boundary, so both get the same spelling.
+        customer_mobile=normalise_mobile(customer.get("mobile") or ""),
         buyer_gstin=buyer_gstin,
         # Derived here rather than after the number is minted, because a posted
         # document is immutable in the database: the FSM trigger lets a submitted

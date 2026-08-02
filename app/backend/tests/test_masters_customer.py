@@ -21,6 +21,8 @@ from _sell import (
     client_for,
     stock_in,
 )
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from masters.models import Customer
 from sell.models import Sale
@@ -185,3 +187,30 @@ def test_upsert_customer_overwrites_only_when_non_blank_and_different(db):
     customer = Customer.objects.get(mobile="9876543210")
     assert customer.name == "Mrs Sharma"
     assert customer.gstin == "10AABCU9603R1Z2"
+
+
+def test_upsert_customer_stores_the_gstin_upper_cased(db):
+    """The column says 'normalised uppercase'; the upsert must make that true
+    for any caller, not only for the accept path that happens to normalise
+    upstream."""
+    upsert_customer(Customer, mobile="9876543210", name="Mrs Sharma", gstin=" 10aabcu9603r1z2 ")
+
+    assert Customer.objects.get(mobile="9876543210").gstin == "10AABCU9603R1Z2"
+
+
+def test_a_bill_that_only_renames_never_writes_the_gstin_column(db):
+    """Two tills bill the same mobile at once, and the losing one holds a row it
+    read before the winner committed. Writing back every field would push that
+    stale blank over the gstin the other bill had just supplied, so a bill must
+    only ever write the columns it actually changes."""
+    upsert_customer(Customer, mobile="9876543210", name="Mrs Sharma", gstin="10AABCU9603R1Z2")
+
+    with CaptureQueriesContext(connection) as queries:
+        upsert_customer(Customer, mobile="9876543210", name="Mrs S Sharma", gstin="")
+
+    updates = [
+        q["sql"] for q in queries.captured_queries if q["sql"].lstrip().upper().startswith("UPDATE")
+    ]
+    assert len(updates) == 1
+    assert "gstin" not in updates[0]
+    assert Customer.objects.get(mobile="9876543210").gstin == "10AABCU9603R1Z2"

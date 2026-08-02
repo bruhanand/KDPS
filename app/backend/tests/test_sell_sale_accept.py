@@ -1296,6 +1296,24 @@ def test_a_blank_name_on_a_later_bill_never_wipes_the_stored_name(
     assert Customer.objects.get(mobile="9876543210").name == "Mrs Sharma"
 
 
+def test_the_bill_snapshots_the_mobile_in_the_same_spelling_as_the_master(
+    counter, django_capture_on_commit_callbacks
+):
+    """db-design links a bill to its customer by mobile at query time, over the
+    indexed `sell_sale.customer_mobile`. Canonicalising only the master's key
+    would leave that join with two spellings and no match."""
+    _shelf(counter["store"], 3)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["customer"] = {"name": "Mrs Sharma", "mobile": "+91 98765-43210", "gstin": ""}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        response = _post(counter, payload)
+
+    sale = Sale.objects.get(doc_number=response.json()["doc_number"])
+    assert sale.customer_mobile == "9876543210"
+    assert Customer.objects.get(mobile=sale.customer_mobile).name == "Mrs Sharma"
+
+
 def test_a_bill_with_no_mobile_creates_no_customer_row(counter, django_capture_on_commit_callbacks):
     _shelf(counter["store"], 3)
     payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)

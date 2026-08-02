@@ -28,6 +28,8 @@ Notes:
 
 - **No FK from `Sale`.**
   Bills keep snapshotting `customer_name`/`customer_mobile` as text (Rule 3); a later name correction on the master never rewrites a bill, and linkage for analytics is by mobile at query time (`sell_sale.customer_mobile` is already indexed).
+  For that join to land, the bill's `customer_mobile` is canonicalised by the same rule as the master's key, at the same accept boundary - both sides of the join are written there, so both carry one spelling.
+  The *name* is still snapshotted exactly as billed; only the mobile, which is the join key, is canonicalised.
 - **Provenance** (Rule 10): the row is only ever written by the sale-accept step, so "who touched it" is derivable from the bills carrying that mobile at that time; no actor columns on the row itself in v1.
 - **No SCD-2**: no money derives from customer history.
 - Rows are never deleted in v1; no soft-delete column until a merge/cleanup flow exists.
