@@ -322,6 +322,27 @@ def test_a_well_stamped_manual_upi_tender_is_accepted_and_reads_back(counter):
     assert tender.upi_reference == ""
 
 
+def test_a_confirmed_upi_tender_reads_back_its_acquirer_reference(counter):
+    """The reference is the reconciliation key against the bank file - a write
+    that silently drops it is a hole no DB constraint catches (a confirmed row
+    is allowed an empty reference by the same constraint that requires one on
+    a *different* combination)."""
+    _shelf(counter["store"], 1)
+    payload = bill_payload(
+        counter["store"],
+        counter["salesman"],
+        till_seq=1,
+        tenders=[upi_tender(MRP_PAISE, state="confirmed", reference="AXL999")],
+    )
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201, response.json()
+    tender = SaleTender.objects.get(sale_id=response.json()["id"])
+    assert tender.upi_state == "confirmed"
+    assert tender.upi_reference == "AXL999"
+
+
 # --- resolving what was scanned --------------------------------------------
 
 
