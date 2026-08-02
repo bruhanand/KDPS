@@ -23,8 +23,10 @@ that a drawer can never match again.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 from django.db.models import QuerySet, Sum
 from django.db.models.functions import TruncDate
@@ -97,7 +99,9 @@ def sales_on(store: Store, day: date) -> QuerySet[Sale]:
     )
 
 
-def _sum_by(rows, group_field: str, defaults: dict[str, int]) -> dict[str, int]:
+def _sum_by(
+    rows: Iterable[dict[str, Any]], group_field: str, defaults: dict[str, int]
+) -> dict[str, int]:
     """Group `rows` (a `.values(group_field).annotate(total=Sum(...))` queryset)
     into a dict seeded with `defaults`, so a key nobody used still renders.
 
