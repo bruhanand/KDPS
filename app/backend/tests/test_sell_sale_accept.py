@@ -38,6 +38,7 @@ from _sell import (
     client_for,
     gst_on,
     stock_in,
+    upi_tender,
 )
 
 from core.documents import DocStatus, VoucherSeries
@@ -51,6 +52,7 @@ from sell.models import (
     IrnQueueItem,
     Sale,
     SaleLine,
+    SaleTender,
     SellPolicy,
 )
 from stockledger.models import QuarantineStock, StockLedgerEntry, StockOnHand
@@ -242,6 +244,103 @@ def test_a_bill_with_no_lines_is_not_a_bill(counter):
 
     assert response.status_code == 400
     assert response.json()["code"] == "VALIDATION"
+
+
+# --- the UPI stamp (#241) ---------------------------------------------------
+
+
+def test_a_upi_tender_with_no_stamp_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "upi", "amount_paise": MRP_PAISE}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_stamp_on_a_non_upi_tender_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "cash", "amount_paise": MRP_PAISE, "upi_state": "manual"}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_confirmed_upi_tender_with_no_reference_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [{"mode": "upi", "amount_paise": MRP_PAISE, "upi_state": "confirmed"}]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_manual_upi_tender_carrying_a_reference_is_refused(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(counter["store"], counter["salesman"], till_seq=1)
+    payload["tenders"] = [
+        {
+            "mode": "upi",
+            "amount_paise": MRP_PAISE,
+            "upi_state": "manual",
+            "upi_reference": "AXL123456",
+        }
+    ]
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "VALIDATION"
+    assert not Sale.objects.exists()
+
+
+def test_a_well_stamped_manual_upi_tender_is_accepted_and_reads_back(counter):
+    _shelf(counter["store"], 1)
+    payload = bill_payload(
+        counter["store"],
+        counter["salesman"],
+        till_seq=1,
+        tenders=[upi_tender(MRP_PAISE)],
+    )
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201, response.json()
+    tender = SaleTender.objects.get(sale_id=response.json()["id"])
+    assert tender.mode == "upi"
+    assert tender.upi_state == "manual"
+    assert tender.upi_reference == ""
+
+
+def test_a_confirmed_upi_tender_reads_back_its_acquirer_reference(counter):
+    """The reference is the reconciliation key against the bank file - a write
+    that silently drops it is a hole no DB constraint catches (a confirmed row
+    is allowed an empty reference by the same constraint that requires one on
+    a *different* combination)."""
+    _shelf(counter["store"], 1)
+    payload = bill_payload(
+        counter["store"],
+        counter["salesman"],
+        till_seq=1,
+        tenders=[upi_tender(MRP_PAISE, state="confirmed", reference="AXL999")],
+    )
+
+    response = _post(counter, payload)
+
+    assert response.status_code == 201, response.json()
+    tender = SaleTender.objects.get(sale_id=response.json()["id"])
+    assert tender.upi_state == "confirmed"
+    assert tender.upi_reference == "AXL999"
 
 
 # --- resolving what was scanned --------------------------------------------
@@ -1113,3 +1212,22 @@ def test_an_unknown_idempotency_key_is_a_new_bill_not_a_replay(counter):
 
     assert second.status_code == 201
     assert Sale.objects.count() == 2
+
+
+# --- the database's own guard (#241) ----------------------------------------
+
+
+def test_the_database_refuses_a_upi_row_with_no_stamp(db):
+    """The API validates, and the table refuses independently - `ck_saletender_
+    upi_state_iff_upi` is the model's property of the data, not a rule that only
+    holds when this endpoint is the writer."""
+    from django.db.utils import IntegrityError
+
+    store = build_store()
+    cashier = build_cashier(store)
+    sale = Sale.objects.create(
+        store=store, fy=FY, till_seq=1, billed_at="2026-07-30T12:00:00Z", created_by=cashier
+    )
+
+    with pytest.raises(IntegrityError):
+        SaleTender.objects.create(sale=sale, mode="upi", amount_paise=100, upi_state="")

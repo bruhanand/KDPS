@@ -77,7 +77,8 @@ around it. Reject a change that does any of the following:
 
 - `scope: subject` in the imperative — `outbound: add in-transit stock bucket`.
   Scopes in use: `core`, `masters`, `inbound`, `outbound`, `ptmapper`,
-  `stockledger`, `finledger`, `frontend`, `agents`, `docs`, `ci`.
+  `stockledger`, `finledger`, `sell`, `storefront`, `frontend`, `agents`,
+  `docs`, `ci`.
 - One concern per commit. Say what changed and why; skip the file list, git has it.
 
 ## General

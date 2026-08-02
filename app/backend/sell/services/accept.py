@@ -989,6 +989,8 @@ def _apply_tenders(sale: Sale, store: Store, plans: list[_TenderPlan]) -> list[s
             mode=plan.payload["mode"],
             amount_paise=plan.payload["amount_paise"],
             credit_note=plan.note,
+            upi_state=plan.payload.get("upi_state") or "",
+            upi_reference=plan.payload.get("upi_reference") or "",
         )
         if plan.note is not None:
             CreditNoteRedemption.objects.create(

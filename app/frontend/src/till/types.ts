@@ -257,6 +257,12 @@ export interface BillTender {
   mode: "cash" | "card" | "upi" | "credit_note";
   amount_paise: number;
   credit_note?: string;
+  /** How the money was proven - required by the server on a UPI row, forbidden
+   *  on every other mode (#241). The till only ever sends `manual` until the QR
+   *  charge card (#248) lands. */
+  upi_state?: "confirmed" | "manual";
+  /** The acquirer's transaction reference. Only ever set alongside `confirmed`. */
+  upi_reference?: string;
 }
 
 export interface BillTotals {

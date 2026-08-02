@@ -43,6 +43,7 @@ from _sell import (
     client_for,
     gst_on,
     stock_in,
+    upi_tender,
 )
 
 from core.documents import DocStatus
@@ -167,7 +168,7 @@ def test_a_bill_paid_three_ways(counter):
         tenders=[
             {"mode": "cash", "amount_paise": 50000},
             {"mode": "card", "amount_paise": 60000},
-            {"mode": "upi", "amount_paise": net - 110000},
+            upi_tender(net - 110000),
         ],
     )
     response = counter["client"].post(SALES_URL, payload, format="json")
@@ -799,10 +800,10 @@ def test_the_books_tie_after_every_bill_shape(counter):
         [
             [{"mode": "cash", "amount_paise": MRP_PAISE}],
             [{"mode": "card", "amount_paise": MRP_PAISE}],
-            [{"mode": "upi", "amount_paise": MRP_PAISE}],
+            [upi_tender(MRP_PAISE)],
             [
                 {"mode": "cash", "amount_paise": 1},
-                {"mode": "upi", "amount_paise": MRP_PAISE - 1},
+                upi_tender(MRP_PAISE - 1),
             ],
         ],
         start=1,

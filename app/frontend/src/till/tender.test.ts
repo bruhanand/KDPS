@@ -7,6 +7,7 @@ import {
   newNote,
   notesSpentBy,
   splitOf,
+  stampManualUpi,
   toTenders,
   whyPaymentCannotClose,
 } from "./tender";
@@ -82,15 +83,51 @@ describe("a split across all four modes", () => {
     expect(toTenders(split(four))).toEqual([
       { mode: "cash", amount_paise: 29900 },
       { mode: "card", amount_paise: 50000 },
-      { mode: "upi", amount_paise: 50000 },
+      { mode: "upi", amount_paise: 50000, upi_state: "manual" },
       { mode: "credit_note", amount_paise: 20000, credit_note: "26-27/DEO/CRN/4" },
     ]);
   });
 
   it("leaves out the modes that took nothing", () => {
     expect(toTenders(split(payment({ upi_paise: BILL, cash_paise: 0 })))).toEqual([
-      { mode: "upi", amount_paise: BILL },
+      { mode: "upi", amount_paise: BILL, upi_state: "manual" },
     ]);
+  });
+});
+
+describe("the UPI stamp (#241)", () => {
+  it("toTenders stamps manual on the UPI row - the only thing the till can legitimately say until #248", () => {
+    const rows = toTenders(split(payment({ upi_paise: BILL, cash_paise: 0 })));
+
+    expect(rows).toEqual([{ mode: "upi", amount_paise: BILL, upi_state: "manual" }]);
+  });
+
+  it("stampManualUpi leaves an already-stamped row alone", () => {
+    const rows = stampManualUpi([
+      { mode: "upi", amount_paise: 50000, upi_state: "confirmed", upi_reference: "AXL1" },
+    ]);
+
+    expect(rows).toEqual([
+      { mode: "upi", amount_paise: 50000, upi_state: "confirmed", upi_reference: "AXL1" },
+    ]);
+  });
+
+  it("stampManualUpi leaves non-UPI rows unstamped", () => {
+    const rows = stampManualUpi([
+      { mode: "cash", amount_paise: 29900 },
+      { mode: "credit_note", amount_paise: 20000, credit_note: "26-27/DEO/CRN/4" },
+    ]);
+
+    expect(rows).toEqual([
+      { mode: "cash", amount_paise: 29900 },
+      { mode: "credit_note", amount_paise: 20000, credit_note: "26-27/DEO/CRN/4" },
+    ]);
+  });
+
+  it("stampManualUpi fills a legacy queued UPI row that never carried a stamp", () => {
+    const rows = stampManualUpi([{ mode: "upi", amount_paise: 50000 }]);
+
+    expect(rows).toEqual([{ mode: "upi", amount_paise: 50000, upi_state: "manual" }]);
   });
 });
 

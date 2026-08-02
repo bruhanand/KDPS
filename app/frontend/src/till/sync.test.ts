@@ -416,6 +416,28 @@ describe("draining the queue", () => {
     expect(Object.keys(bodies[0] as object)).toContain("idempotency_uuid");
   });
 
+  it("stamps a legacy queued UPI bill manual before it goes up, so a bill parked before this build does not halt the queue on the new refusal (#241, Rule 5)", async () => {
+    const { db, storeCode } = till();
+    // No `upi_state` at all - exactly what a bill committed by a till from
+    // before this build carries.
+    await commitBill(db, storeCode, draft({ tenders: [{ mode: "upi", amount_paise: 149900 }] }));
+    const bodies: Record<string, unknown>[] = [];
+    const server = fakeServer();
+    const inner = server.postSale;
+    server.postSale = async (bill) => {
+      const { billBody } = await import("./transport");
+      bodies.push(billBody(bill));
+      return inner(bill);
+    };
+
+    const result = await drainQueue(db, server);
+
+    expect(result.accepted).toBe(1);
+    expect(bodies[0].tenders).toEqual([
+      { mode: "upi", amount_paise: 149900, upi_state: "manual" },
+    ]);
+  });
+
   it("drops a bill the server recognises as a replay", async () => {
     // The server answers 200 with the original bill and writes nothing. Both
     // answers mean the same thing to the queue: this bill is on the books.

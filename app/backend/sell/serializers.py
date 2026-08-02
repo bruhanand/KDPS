@@ -112,6 +112,34 @@ class _TenderWriteSerializer(serializers.Serializer):
     credit_note = serializers.CharField(
         max_length=128, allow_blank=True, required=False, default=""
     )
+    #: How the money was proven - `confirmed` (the bank answered) or `manual`
+    #: (the cashier vouched: QR soundbox, static QR, no internet). Required on a
+    #: UPI tender, forbidden on every other mode.
+    upi_state = serializers.ChoiceField(
+        choices=SaleTender.UpiState.choices, allow_blank=True, required=False, default=""
+    )
+    #: The acquirer's transaction reference. Required when `upi_state` is
+    #: `confirmed` - a manual entry has nothing trustworthy to record - and
+    #: forbidden otherwise.
+    upi_reference = serializers.CharField(
+        max_length=64, allow_blank=True, required=False, default=""
+    )
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        is_upi = attrs["mode"] == SaleTender.Mode.UPI
+        state = attrs.get("upi_state") or ""
+        reference = attrs.get("upi_reference") or ""
+        if is_upi and not state:
+            raise serializers.ValidationError("A UPI tender needs upi_state (confirmed or manual).")
+        if not is_upi and state:
+            raise serializers.ValidationError("upi_state is only for a UPI tender.")
+        if state == SaleTender.UpiState.CONFIRMED and not reference:
+            raise serializers.ValidationError(
+                "A confirmed UPI tender needs the acquirer's reference."
+            )
+        if state != SaleTender.UpiState.CONFIRMED and reference:
+            raise serializers.ValidationError("upi_reference is only for a confirmed UPI tender.")
+        return attrs
 
 
 class _TotalsWriteSerializer(serializers.Serializer):

@@ -25,6 +25,11 @@ interface SummaryT {
   store: string;
   date: string;
   modes: { cash: number; card: number; upi: number; credit_note: number };
+  /** `modes.upi`, split by how the money was proven. The only control on manual
+   *  UPI: no manager PIN, just visibility the same evening. Optional because the
+   *  API and PWA are two independently-deployed Render services (`render.yaml`)
+   *  - a browser can hold the new bundle before the field ships. */
+  upi_split?: { confirmed: number; manual: number };
   bills: number;
   returns: number;
   credit_notes_issued_paise: number;
@@ -256,6 +261,12 @@ export default function DaySummary() {
                     <Money paise={summary.modes[mode.key]} />
                   </span>
                   <span className="day-label">{mode.label}</span>
+                  {mode.key === "upi" && summary.upi_split && (
+                    <span className="day-upi-split" data-testid="day-upi-split">
+                      <Money paise={summary.upi_split.confirmed} /> confirmed ·{" "}
+                      <Money paise={summary.upi_split.manual} /> manual
+                    </span>
+                  )}
                 </div>
               ))}
             </div>

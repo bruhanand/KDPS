@@ -267,6 +267,17 @@ def client_for(user: User) -> APIClient:
     return client
 
 
+def upi_tender(amount_paise: int, *, state: str = "manual", reference: str = "") -> dict[str, Any]:
+    """One UPI row, stamped - the shape every UPI-tender test starts from.
+
+    `manual` by default: it is the only stamp the till can legitimately send
+    until the QR charge card (#248) lands."""
+    row: dict[str, Any] = {"mode": "upi", "amount_paise": amount_paise, "upi_state": state}
+    if reference:
+        row["upi_reference"] = reference
+    return row
+
+
 def bill_payload(
     store: Store,
     salesman: Salesman,
