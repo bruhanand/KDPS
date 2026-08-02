@@ -204,6 +204,23 @@ describe("the number a customer is reading out (#249)", () => {
     ]);
   });
 
+  it("does not let one spelling of the number starve the other", async () => {
+    // `+91 983` searches `91983…` and `983…`. Read as one union window the
+    // `91983…` rows sort first and fill it, and the customer the cashier
+    // actually meant never appears - the book is deliberately the one
+    // unbounded all-KDPS table, so a full window is the normal case.
+    const db = await phoneBook([
+      ...Array.from({ length: 30 }, (_, i) => ({
+        mobile: `91983${String(i).padStart(5, "0")}`,
+        name: `Ninety One ${i}`,
+      })),
+      { mobile: "9839999999", name: "Sunita Devi" },
+    ]);
+
+    const found = await searchCustomers(db, "+91 983");
+    expect(found.map((c) => c.name)).toContain("Sunita Devi");
+  });
+
   it("shows five, because somebody reads this with a customer waiting", async () => {
     const db = await phoneBook(
       Array.from({ length: 20 }, (_, i) => ({

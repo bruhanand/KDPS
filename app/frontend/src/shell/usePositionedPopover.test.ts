@@ -76,6 +76,18 @@ describe("the Billing scan-box prompt (side: \"below\")", () => {
     });
   });
 
+  it("stays below rather than flip when neither half has room", () => {
+    // Both halves are cramped, so flipping would only move the problem: a
+    // `bottom`-anchored box with the 120px floor applied would have its top
+    // edge off the screen, and `position: fixed` cannot be scrolled back.
+    const trigger = { top: 100, bottom: 280, left: 100, right: 480 };
+    const viewport = { width: 1280, height: 300 };
+    const at = placePopover(trigger, viewport, 380, "below");
+    expect(at.top).toBe(288);
+    expect(at.bottom).toBeUndefined();
+    expect(at.maxHeight).toBe(120);
+  });
+
   it("floors maxHeight rather than emit a negative CSS length", () => {
     // A trigger scrolled clean off the bottom: nothing below, everything
     // above, so it flips - and the floor is what guards the other direction.

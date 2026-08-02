@@ -154,11 +154,9 @@ export function mobilePrefixes(typed: string): string[] {
  * each sale, worsening every month, at the one screen where a stall is a queue
  * of people (design.md, amended at #245).
  *
- * Rows with a name come first. A master built out of bills is full of mobiles
- * somebody never gave a name with, and five nameless numbers are a list that
- * answers nothing - so the window read from the index is wider than the five
- * shown, and the naming is settled here rather than by whichever number sorts
- * lowest.
+ * The window read from the index is wider than the five shown, so that which
+ * five a cashier sees is decided here (`namedFirst`, and the sharing-out
+ * below) rather than by whichever numbers happen to sort lowest.
  *
  * Never throws: a phone book that cannot be read is a typeahead that says
  * nothing, not a bill that stops (Rule 5).
@@ -171,20 +169,44 @@ export async function searchCustomers(
   const prefixes = mobilePrefixes(typed);
   if (!prefixes.length) return [];
   try {
-    const window = await db.customers
-      .where("mobile")
-      .startsWithAnyOf(prefixes)
-      .limit(limit * 5)
-      .toArray();
-    return window
-      .sort(
-        (a, b) =>
-          Number(Boolean(b.name)) - Number(Boolean(a.name)) || a.mobile.localeCompare(b.mobile),
-      )
-      .slice(0, limit);
+    // One read per candidate spelling, and then the five are shared out between
+    // them a row at a time rather than ranked in one heap.
+    //
+    // Both halves of that matter. A single union read takes the lowest keys of
+    // the whole match set, and every `91983…` sorts below every `983…` - so on
+    // a book big enough to fill the window, a cashier typing `+91 983` would
+    // get a screenful of numbers that merely start `91` and not one of the ones
+    // they meant. Ranking the merged rows afterwards does not fix it: the same
+    // ordering wins again. Sharing the list out does, and it is the honest
+    // answer to a genuinely ambiguous prefix - neither reading of what was
+    // typed is allowed to crowd the other off the screen.
+    const windows = await Promise.all(
+      prefixes.map(async (prefix) =>
+        (await db.customers.where("mobile").startsWith(prefix).limit(limit * 5).toArray()).sort(
+          namedFirst,
+        ),
+      ),
+    );
+    const picked = new Map<string, TillKnownCustomer>();
+    for (let depth = 0; picked.size < limit && depth < limit; depth += 1) {
+      for (const window of windows) {
+        const row = window[depth];
+        if (row && !picked.has(row.mobile)) picked.set(row.mobile, row);
+        if (picked.size === limit) break;
+      }
+    }
+    return [...picked.values()].sort(namedFirst);
   } catch {
     return [];
   }
+}
+
+/** A master built out of bills is full of mobiles nobody ever gave a name with,
+ *  and five nameless numbers are a list that answers nothing - so a row
+ *  somebody named comes first, and equals are ordered by the number itself so
+ *  the same three digits give the same five twice. */
+function namedFirst(a: TillKnownCustomer, b: TillKnownCustomer): number {
+  return Number(Boolean(b.name)) - Number(Boolean(a.name)) || a.mobile.localeCompare(b.mobile);
 }
 
 /**

@@ -81,6 +81,15 @@ export function CustomerStrip({
    *  opens it too - see `showGstin` - so this only has to carry the case where
    *  there is nothing to show yet. */
   const [askedForGstin, setAskedForGstin] = useState(false);
+  /** The phone-book row this card was last filled from. Held because a name and
+   *  a registration belong to a *number*, and the cashier can change the number
+   *  after picking - five near-identical mobiles are five chances to tap the
+   *  wrong one, and "that was my old number" is a sentence people say at
+   *  counters. Left alone, the previous customer's GSTIN would stay on the card
+   *  under somebody else's number, and a GSTIN is not decoration: it decides
+   *  whether the paper says CGST + SGST or IGST, and names the registered buyer
+   *  claiming credit against it. */
+  const [filled, setFilled] = useState<TillKnownCustomer | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   // A counter that does not know its own state cannot say which tax a business
@@ -116,13 +125,36 @@ export function CustomerStrip({
     "below",
   );
 
+  /** Still the row this card was filled from - not one the cashier has since
+   *  typed a different number over. */
+  const from = filled && filled.mobile === value.mobile ? filled : null;
+
   /** One tap fills the card whole, rather than merging with what is in it. A
    *  GSTIN left over from whoever the cashier was billing a moment ago is
    *  exactly the cross-customer bleed `NO_CUSTOMER` exists to prevent, and
    *  "this bill is for that person" is an answer about all three fields. */
   function pick(row: TillKnownCustomer) {
     onChange({ name: row.name, mobile: row.mobile, gstin: row.gstin });
+    setFilled(row);
     setAsking(false);
+  }
+
+  /** Retyping the number takes the phone book's answer back off with it - but
+   *  only the parts still standing as the book gave them. A name the cashier
+   *  typed over is theirs and survives; the name and registration that came
+   *  with the old number do not, because they belong to that number. */
+  function editMobile(mobile: string) {
+    setAsking(true);
+    if (!from || mobile === from.mobile) {
+      onChange({ ...value, mobile });
+      return;
+    }
+    setFilled(null);
+    onChange({
+      mobile,
+      name: value.name === from.name ? "" : value.name,
+      gstin: value.gstin === from.gstin ? "" : value.gstin,
+    });
   }
 
   return (
@@ -144,10 +176,7 @@ export function CustomerStrip({
             inputMode="tel"
             disabled={locked}
             value={value.mobile}
-            onChange={(e) => {
-              setAsking(true);
-              onChange({ ...value, mobile: e.target.value });
-            }}
+            onChange={(e) => editMobile(e.target.value)}
           />
         </div>
         <div className="field">
@@ -168,7 +197,7 @@ export function CustomerStrip({
       {!showGstin && (
         <button
           type="button"
-          className="btn bill-business-open"
+          className="btn bill-business-toggle"
           data-testid="bill-business-open"
           aria-expanded={false}
           disabled={locked}
@@ -204,7 +233,7 @@ export function CustomerStrip({
               cancelled. */}
           <button
             type="button"
-            className="btn bill-business-open"
+            className="btn bill-business-toggle"
             data-testid="bill-business-close"
             aria-expanded
             disabled={locked}
@@ -248,15 +277,10 @@ export function CustomerStrip({
             ref={float.popoverRef}
             className="card section-card bill-customer-float"
             data-testid="bill-customer-float"
-            // Both edges: the mobile field sits low on the rail, so the hook
-            // anchors this list by the field's *top* and it grows upward -
-            // only one of the two is ever set.
-            style={{
-              top: float.at.top,
-              bottom: float.at.bottom,
-              left: float.at.left,
-              maxHeight: float.at.maxHeight,
-            }}
+            // Applied whole, never field by field - see `PopoverPlacement`.
+            // The mobile field sits low on the rail, so this list is normally
+            // anchored by the field's *top* edge and grows upward.
+            style={{ ...float.at }}
           >
             {rows.length > 0 ? (
               <>

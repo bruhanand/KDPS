@@ -369,7 +369,7 @@ select.bill-season { min-width: 0; }
 .bill-panel .bill-customer-fields .field { margin-top: 0; }
 .bill-customer-fields .input { padding: 9px 11px; font-size: 14px; }
 /* The disclosure itself - quiet, because on most bills the answer is no. */
-.bill-business-open {
+.bill-business-toggle {
   margin-top: 10px; padding: 6px 11px; font-size: 12.5px; font-weight: 600;
   color: var(--muted);
 }

@@ -1282,14 +1282,11 @@ function Counter({ storeName }: { storeName?: string }) {
           <div
             ref={scanFloat.popoverRef}
             className="bill-float"
-            style={{
-              // Both edges: the hook anchors a `"below"` popover by whichever
-              // one leaves it room, and only one of the two is ever set.
-              top: scanFloat.at.top,
-              bottom: scanFloat.at.bottom,
-              left: scanFloat.at.left,
-              maxHeight: scanFloat.at.maxHeight,
-            }}
+            // Applied whole, never field by field: the hook anchors a `"below"`
+            // popover by whichever edge leaves it room, and a style that named
+            // only `top` would strand a flipped one where the last placement
+            // put it (`PopoverPlacement`).
+            style={{ ...scanFloat.at }}
           >
             {unknown && (
               <NotInSystem

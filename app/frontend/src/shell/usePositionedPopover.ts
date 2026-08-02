@@ -38,17 +38,35 @@ import type { RefObject } from "react";
  * sidebar flyout and the profile panel, which pass neither, get back exactly
  * the behaviour they had.
  */
+/** The least room worth placing a popover in - below its trigger or, once it
+ *  flips, above it. Also the floor on the emitted `maxHeight`, so a trigger
+ *  scrolled off the bottom of the page cannot produce a negative CSS length. */
+const MIN_ROOM = 120;
+
+/** Where a popover goes, in viewport coordinates: exactly one of `top` and
+ *  `bottom` is set, and a caller applies the object whole rather than picking
+ *  fields out of it - a `"below"` caller that applied only `top` would leave a
+ *  flipped popover wherever the last placement put it. */
+export interface PopoverPlacement {
+  top?: number;
+  bottom?: number;
+  left: number;
+  maxHeight?: number;
+}
+
 /** Pure placement math for {@link usePositionedPopover}, pulled out so it can
- *  be pinned down in a test without a DOM: the two bugs this has already had
- *  (round 2 clamped the wrong axis, round 3's `maxHeight` formula never fired)
- *  were both placement-formula mistakes a plain unit test would have caught. */
+ *  be pinned down in a test without a DOM: the three bugs this has already had
+ *  (round 2 clamped the wrong axis, round 3's `maxHeight` formula never fired,
+ *  and #249's field near the bottom of the rail got a hundred pixels to show
+ *  five rows in) were all placement-formula mistakes a plain unit test
+ *  catches. */
 export function placePopover(
   trigger: { top: number; bottom: number; left: number; right: number },
   viewport: { width: number; height: number },
   popoverSize: number,
   side: "right" | "below",
   margin = 8,
-): { top?: number; bottom?: number; left: number; maxHeight?: number } {
+): PopoverPlacement {
   if (side === "below") {
     const maxLeft = viewport.width - popoverSize - margin;
     const left = Math.max(margin, Math.min(trigger.left, maxLeft));
@@ -66,14 +84,16 @@ export function placePopover(
     // measured and nothing has to flash in the wrong place first - puts the
     // whole list on screen. This is the clamp promise the hook already makes
     // for the `"right"` side, kept for the other one.
-    if (above > below) {
-      return {
-        bottom: viewport.height - trigger.top + margin,
-        left,
-        maxHeight: Math.max(120, above),
-      };
+    //
+    // `above >= MIN_ROOM` as well as `above > below`, so the flip only happens
+    // when it actually buys something: on a viewport too short for either half,
+    // flipping to a `bottom` anchor with the floor applied would push the box's
+    // *top* edge off the screen, and a `position: fixed` node cannot be
+    // scrolled back into view. Cramped below beats unreachable above.
+    if (above > below && above >= MIN_ROOM) {
+      return { bottom: viewport.height - trigger.top + margin, left, maxHeight: above };
     }
-    return { top: trigger.bottom + margin, left, maxHeight: Math.max(120, below) };
+    return { top: trigger.bottom + margin, left, maxHeight: Math.max(MIN_ROOM, below) };
   }
   const maxTop = viewport.height - popoverSize - margin;
   const top = Math.max(margin, Math.min(trigger.top, maxTop));
@@ -97,7 +117,7 @@ export interface PositionedPopover<T extends HTMLElement = HTMLButtonElement> {
    *  trigger with more room above it than below is anchored by its top edge
    *  instead, and a caller passing only `top` would leave that popover
    *  wherever the last placement put it. `"right"` always sets `top`. */
-  at: { top?: number; bottom?: number; left: number; maxHeight?: number } | null;
+  at: PopoverPlacement | null;
   /** Goes on the control the popover hangs off. */
   triggerRef: RefObject<T>;
   /** Goes on the portaled popover. It holds the node for the outside-click
@@ -122,12 +142,7 @@ export function usePositionedPopover<T extends HTMLElement = HTMLButtonElement>(
    *  near the right edge of the page. */
   side: "right" | "below" = "right",
 ): PositionedPopover<T> {
-  const [at, setAt] = useState<{
-    top?: number;
-    bottom?: number;
-    left: number;
-    maxHeight?: number;
-  } | null>(null);
+  const [at, setAt] = useState<PopoverPlacement | null>(null);
   const triggerRef = useRef<T>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
