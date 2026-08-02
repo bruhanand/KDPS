@@ -841,8 +841,12 @@ function Counter({ storeName }: { storeName?: string }) {
       {/* "Did you mean" and "bill it off the tag" (G-4): portaled to
           `document.body` and placed by `usePositionedPopover`, so neither can
           push the rail or the footer a pixel - they float over the grid
-          instead. */}
-      {scanFloat.at &&
+          instead. The portal also escapes the blocked-counter takeover (AC5:
+          the block replaces the work area entirely), so it must gate on
+          `counterBlocked` itself - otherwise it can append lines to a cart
+          nobody can see. */}
+      {!counterBlocked &&
+        scanFloat.at &&
         createPortal(
           <div
             ref={scanFloat.popoverRef}
