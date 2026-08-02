@@ -7,16 +7,21 @@
 .shell-body { flex: 1; display: flex; min-height: 0; }
 
 /* ---------- sidebar ---------- */
-/* A card that floats on the paper beside the page. It closes under its last
-   item rather than running to the floor: `align-self: flex-start` sizes it to
-   its content, the height cap keeps it on screen, and when the menu is longer
-   than the cap it is the *nav* that scrolls, inside a card whose head and
-   profile stay put. The width animates between rail and open - and stays out
-   of the way of a live drag, which must track the pointer exactly. */
+/* A card that floats on the paper beside the page and runs the whole height of
+   the working area, whatever it holds. It used to close under its last item
+   (`align-self: flex-start`, macOS System Settings) - which left a cashier's
+   ten-item menu stopping half way down the window with bare page beneath it,
+   and put the profile in nobody's corner. Stretching is the default for a flex
+   item, so the card now simply fills the row between its margins.
+
+   The menu keeps its own size at the top and the space below it stays blank -
+   nothing is stretched or spread to fill the card. When the menu is longer than
+   the card it is the *nav* that scrolls, inside a card whose head and profile
+   stay put. The width animates between rail and open - and stays out of the way
+   of a live drag, which must track the pointer exactly. */
 .sidebar {
   flex: none;
-  align-self: flex-start;
-  max-height: calc(100% - 24px);
+  min-height: 0;
   background: var(--sidebar);
   border: 1px solid var(--sidebar-border);
   border-radius: 18px;
@@ -271,25 +276,35 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
 .switcher-btn.locked:hover { background: var(--inner); }
 .switcher-label { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ---------- the profile, at the foot of the sidebar card ----------
+/* ---------- the profile, in the bottom corner of the sidebar card ----------
    The sidebar owns who you are; the bar owns where you are. Outside the
    nav's scroller like the head, so a long menu scrolls between the two and
-   the person - and the way out - stay under the hand. */
+   the person - and the way out - stay under the hand. `margin-top: auto` is
+   what puts it in the corner: the card runs the full height now, so that
+   corner really is the bottom corner of the window.
+
+   A tile, not a row. It has its own surface, border and shadow and sits inside
+   the card with a margin all round, so it reads as a separate object you can
+   press rather than the hover-only strip it used to be. There is no hairline
+   above it - the margin is the separation. */
 .sidebar-profile {
   margin-top: auto; flex: none;
-  padding: 8px 10px 10px; background: var(--sidebar);
-  border-top: 1px solid var(--sidebar-border);
+  padding: 12px; background: var(--sidebar);
 }
 .profile-btn {
   display: flex; align-items: center; gap: 10px; width: 100%;
-  background: transparent; border: none; cursor: pointer;
-  padding: 6px 8px; border-radius: 12px; transition: background-color .15s;
+  background: var(--surface); border: 1px solid var(--sidebar-border); cursor: pointer;
+  padding: 11px 12px 11px 10px; border-radius: 14px; box-shadow: var(--shadow-rest);
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
   text-align: left;
 }
-.profile-btn:hover { background: rgba(var(--rust-rgb), .06); }
+.profile-btn:hover { border-color: rgba(var(--rust-rgb), .35); box-shadow: var(--shadow-hover); }
 .profile-btn:focus-visible { outline: 2px solid var(--rust); outline-offset: 1px; }
-.sidebar.rail .sidebar-profile { padding: 8px 6px 10px; }
-.sidebar.rail .profile-btn { justify-content: center; padding: 6px 0; }
+/* Pushed to the right edge of the tile, and gone in the rail, where the tile is
+   a square of initials with no room for it. */
+.profile-chev { margin-left: auto; flex: none; color: var(--caption); }
+.sidebar.rail .sidebar-profile { padding: 8px; }
+.sidebar.rail .profile-btn { justify-content: center; padding: 7px 0; }
 /* Fixed and portaled, like the rail flyout and for the same reason: the
    card's own overflow would clip it invisibly. */
 .profile-panel {
@@ -363,9 +378,8 @@ body.sidebar-resizing .sidebar-resizer::after { background: rgba(var(--rust-rgb)
   .sidebar {
     position: fixed; top: var(--topbar-h); bottom: 0; left: 0; z-index: 60;
     width: min(82vw, 300px) !important;
-    /* The drawer runs the full height whatever the menu holds - hugging is a
-       desktop card's behaviour. */
-    max-height: none;
+    /* The drawer already ran the full height before the card did, so height is
+       not the question here - the phone only gains the new profile tile. */
     margin: 0; border-radius: 0 18px 18px 0; border-left: 0;
     transform: translateX(-105%); transition: transform .2s ease;
     box-shadow: none;
